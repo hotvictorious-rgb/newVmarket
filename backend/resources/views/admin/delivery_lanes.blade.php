@@ -550,13 +550,29 @@
 
                     <!-- RIGHT COLUMN: ACTIVE CORRIDORS LIST & SEARCH -->
                     <div style="min-width: 0;">
+                        <!-- Tier Filter Tabs (Mockup Screen 1 Parity) -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                            <button type="button" class="btn-tier-filter active" data-tier="all" onclick="setLaneTierFilter('all')" style="padding: 6px 14px; font-size: 11.5px; border-radius: 999px; font-weight: 700; background: var(--adm-primary); color: #FFF; border: none; cursor: pointer; transition: all 0.15s ease;">
+                                🌐 All Corridors ({{ count($deliveryLanes) }})
+                            </button>
+                            <button type="button" class="btn-tier-filter" data-tier="tier_1" onclick="setLaneTierFilter('tier_1')" style="padding: 6px 14px; font-size: 11.5px; border-radius: 999px; font-weight: 700; background: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; cursor: pointer; transition: all 0.15s ease;">
+                                🟢 Tier 1: Municipal (Intra-LGA)
+                            </button>
+                            <button type="button" class="btn-tier-filter" data-tier="tier_2" onclick="setLaneTierFilter('tier_2')" style="padding: 6px 14px; font-size: 11.5px; border-radius: 999px; font-weight: 700; background: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; cursor: pointer; transition: all 0.15s ease;">
+                                🟣 Tier 2: Regional (Inter-LGA)
+                            </button>
+                            <button type="button" class="btn-tier-filter" data-tier="tier_3" onclick="setLaneTierFilter('tier_3')" style="padding: 6px 14px; font-size: 11.5px; border-radius: 999px; font-weight: 700; background: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; cursor: pointer; transition: all 0.15s ease;">
+                                🟠 Tier 3: Inter-State
+                            </button>
+                        </div>
+
                         <!-- Search and Quick Filter Bar -->
                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
                             <div style="position: relative; flex: 1; min-width: 200px;">
                                 <span style="position: absolute; left: 12px; top: 10px; font-size: 13px; color: #94A3B8;">🔍</span>
                                 <input type="text" id="vmLaneSearchInput" onkeyup="filterLaneRows()" placeholder="Filter corridors by LGA name or state..." style="width: 100%; padding: 9px 14px 9px 36px; border-radius: 8px; border: 1px solid var(--adm-border); font-size: 13px; outline: none; box-sizing: border-box;">
                             </div>
-                            <span class="dash-badge dash-badge-info" style="font-size: 11.5px; padding: 6px 12px; white-space: nowrap;">
+                            <span class="dash-badge dash-badge-info" id="vmCorridorCountBadge" style="font-size: 11.5px; padding: 6px 12px; white-space: nowrap;">
                                 {{ count($deliveryLanes) }} Custom Corridors
                             </span>
                         </div>
@@ -567,7 +583,7 @@
                                 <thead>
                                     <tr>
                                         <th>Directional Route</th>
-                                        <th>Type</th>
+                                        <th>Type &amp; Tier</th>
                                         <th>Base Fee</th>
                                         <th>Bulky Cargo</th>
                                         <th>Speed ETA</th>
@@ -577,7 +593,12 @@
                                 </thead>
                                 <tbody>
                                     @forelse($deliveryLanes as $lane)
-                                        <tr class="vm-lane-row" data-search="{{ strtolower(($lane->originLga->name ?? '') . ' ' . ($lane->destinationLga->name ?? '') . ' ' . ($lane->originLga->state->name ?? '') . ' ' . ($lane->destinationLga->state->name ?? '')) }}">
+                                        @php
+                                            $isMunicipal = ($lane->origin_lga_id === $lane->destination_lga_id);
+                                            $isRegional = !$isMunicipal && (($lane->originLga->state_id ?? 1) === ($lane->destinationLga->state_id ?? 1));
+                                            $laneTier = $isMunicipal ? 'tier_1' : ($isRegional ? 'tier_2' : 'tier_3');
+                                        @endphp
+                                        <tr class="vm-lane-row" data-tier="{{ $laneTier }}" data-search="{{ strtolower(($lane->originLga->name ?? '') . ' ' . ($lane->destinationLga->name ?? '') . ' ' . ($lane->originLga->state->name ?? '') . ' ' . ($lane->destinationLga->state->name ?? '')) }}">
                                             <td class="route-cell">
                                                 <div style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; flex-wrap: wrap;">
                                                     <span style="font-weight: 700; color: var(--adm-text);">{{ $lane->originLga->name ?? "LGA #{$lane->origin_lga_id}" }}</span>
@@ -591,15 +612,25 @@
                                                 </div>
                                             </td>
                                             <td>
-                                                @if($lane->is_bidirectional)
-                                                    <span class="dash-badge dash-badge-success" title="Bidirectional return corridor exists" style="font-size: 10px; cursor: help;">
-                                                        ⇄ Bidirectional
-                                                    </span>
-                                                @else
-                                                    <span class="dash-badge dash-badge-info" style="font-size: 10px;">
-                                                        &rarr; One-Way
-                                                    </span>
-                                                @endif
+                                                <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                                                    @if($lane->is_bidirectional)
+                                                        <span class="dash-badge dash-badge-success" title="Bidirectional return corridor exists" style="font-size: 10px; cursor: help;">
+                                                            ⇄ Bidirectional
+                                                        </span>
+                                                    @else
+                                                        <span class="dash-badge dash-badge-info" style="font-size: 10px;">
+                                                            &rarr; One-Way
+                                                        </span>
+                                                    @endif
+
+                                                    @if($laneTier === 'tier_1')
+                                                        <span class="dash-badge" style="background: #ECFDF5; color: #059669; font-size: 9.5px; padding: 1px 6px; border-radius: 4px;">Tier 1: Municipal</span>
+                                                    @elseif($laneTier === 'tier_2')
+                                                        <span class="dash-badge" style="background: #F5F3FF; color: #5E17EB; font-size: 9.5px; padding: 1px 6px; border-radius: 4px;">Tier 2: Regional</span>
+                                                    @else
+                                                        <span class="dash-badge" style="background: #FFFBEB; color: #D97706; font-size: 9.5px; padding: 1px 6px; border-radius: 4px;">Tier 3: Inter-State</span>
+                                                    @endif
+                                                </div>
                                             </td>
                                             <td>
                                                 <strong style="font-size: 13.5px; color: #047857;">&#8358;{{ number_format((float)$lane->base_fee, 2) }}</strong>
@@ -1156,6 +1187,51 @@
             if (modeBadge) {
                 modeBadge.textContent = 'LGA ⇄ LGA';
                 modeBadge.className = 'dash-badge dash-badge-purple';
+            }
+        };
+
+        // Corridor Tier Filtering & Search Mechanism (Mockup Screen 1 Parity)
+        let currentTierFilter = 'all';
+
+        window.setLaneTierFilter = function (tier) {
+            currentTierFilter = tier;
+            document.querySelectorAll('.btn-tier-filter').forEach(btn => {
+                if (btn.getAttribute('data-tier') === tier) {
+                    btn.style.background = 'var(--adm-primary)';
+                    btn.style.color = '#FFFFFF';
+                    btn.style.border = 'none';
+                } else {
+                    btn.style.background = '#F1F5F9';
+                    btn.style.color = '#475569';
+                    btn.style.border = '1px solid #CBD5E1';
+                }
+            });
+            window.filterLaneRows();
+        };
+
+        window.filterLaneRows = function () {
+            const searchVal = (document.getElementById('vmLaneSearchInput')?.value || '').toLowerCase().trim();
+            const rows = document.querySelectorAll('.vm-lane-row');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const rowSearch = row.getAttribute('data-search') || '';
+                const rowTier = row.getAttribute('data-tier') || '';
+
+                const matchesSearch = !searchVal || rowSearch.includes(searchVal);
+                const matchesTier = (currentTierFilter === 'all') || (rowTier === currentTierFilter);
+
+                if (matchesSearch && matchesTier) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            const countBadge = document.getElementById('vmCorridorCountBadge');
+            if (countBadge) {
+                countBadge.textContent = `${visibleCount} Corridor${visibleCount === 1 ? '' : 's'} Visible`;
             }
         };
 

@@ -118,7 +118,7 @@ class PortalWebTest extends TestCase
         ];
 
         $response = $this->post('/admin/delivery-lanes', $postData);
-        $response->assertRedirect('/admin/delivery-lanes');
+        $response->assertRedirect(route('admin.delivery_lanes.index', ['hub_lga_id' => $origin->id]));
 
         $this->assertDatabaseHas('delivery_lanes', [
             'origin_lga_id' => $origin->id,
@@ -150,7 +150,7 @@ class PortalWebTest extends TestCase
         ];
 
         $response = $this->post('/admin/delivery-lanes', $updateData);
-        $response->assertRedirect('/admin/delivery-lanes');
+        $response->assertRedirect(route('admin.delivery_lanes.index', ['hub_lga_id' => $lane->origin_lga_id]));
 
         $this->assertDatabaseHas('delivery_lanes', [
             'id' => $lane->id,

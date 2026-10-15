@@ -15,6 +15,7 @@ use App\Models\PickupReservation;
 use App\Models\Product;
 use App\Models\RiderProfile;
 use App\Models\Shop;
+use App\Models\State;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Services\OrderSettlementService;
@@ -283,14 +284,81 @@ class PortalController extends Controller
      * Super Admin Announcement & Contact Settings Update
      */
     /**
-     * Dedicated Page: Directional LGA Delivery Lanes & 3-Tier Distance Matrix
+     * Dedicated Page: Directional LGA Delivery Lanes & Hub-and-Spoke Matrix
      */
     public function adminDeliveryLanesPage(Request $request)
     {
         $allLgas = Lga::with('state')->where('is_active', true)->orderBy('name', 'asc')->get();
 
-        $deliveryLanes = DeliveryLane::with(['originLga.state', 'destinationLga.state'])
-            ->orderBy('is_active', 'desc')
+        // 1. Resolve Active Hub LGA (Default to Uyo if not specified)
+        $hubLgaId = (int)$request->input('hub_lga_id', 0);
+        if ($hubLgaId <= 0) {
+            $defaultHub = Lga::where('name', 'Uyo')->first();
+            $hubLgaId = $defaultHub ? $defaultHub->id : ($allLgas->first()->id ?? 69);
+        }
+        $currentHub = Lga::with('state')->findOrFail($hubLgaId);
+
+        // 2. TIER 1: Intra-LGA (Municipal Delivery within Hub LGA)
+        $intraLane = DeliveryLane::where('origin_lga_id', $currentHub->id)
+            ->where('destination_lga_id', $currentHub->id)
+            ->first();
+
+        // 3. TIER 2: Inter-LGA (All other LGAs in the same state)
+        $stateLgas = Lga::where('state_id', $currentHub->state_id)
+            ->where('id', '!=', $currentHub->id)
+            ->where('is_active', true)
+            ->orderBy('name', 'asc')
+            ->get();
+
+        $interLanes = DeliveryLane::where('origin_lga_id', $currentHub->id)
+            ->whereIn('destination_lga_id', $stateLgas->pluck('id'))
+            ->get()
+            ->keyBy('destination_lga_id');
+
+        // Check reverse corridors to determine bidirectionality for Inter-LGA
+        $reverseInterLanes = DeliveryLane::where('destination_lga_id', $currentHub->id)
+            ->whereIn('origin_lga_id', $stateLgas->pluck('id'))
+            ->where('is_active', true)
+            ->get()
+            ->keyBy('origin_lga_id');
+
+        // 4. TIER 3: Out-of-State (All other States in Nigeria)
+        $otherStates = State::where('id', '!=', $currentHub->state_id)
+            ->where('is_active', true)
+            ->with(['lgas' => function ($q) {
+                $q->where('is_active', true)->orderBy('name', 'asc');
+            }])
+            ->orderBy('name', 'asc')
+            ->get();
+
+        $outOfStateLanes = DeliveryLane::where('origin_lga_id', $currentHub->id)
+            ->whereHas('destinationLga', function ($q) use ($currentHub) {
+                $q->where('state_id', '!=', $currentHub->state_id);
+            })
+            ->with('destinationLga.state')
+            ->get()
+            ->groupBy(function ($lane) {
+                return $lane->destinationLga->state_id ?? 0;
+            });
+
+        // Compute summary counts for the Hub
+        $intraActive = $intraLane ? (bool)$intraLane->is_active : true;
+        $interSuspendedCount = $interLanes->where('is_active', false)->count();
+        $interActiveCount = $stateLgas->count() - $interSuspendedCount;
+
+        $suspendedStateIds = DeliveryLane::where('origin_lga_id', $currentHub->id)
+            ->whereHas('destinationLga', function ($q) use ($currentHub) {
+                $q->where('state_id', '!=', $currentHub->state_id);
+            })
+            ->where('is_active', false)
+            ->get()
+            ->pluck('destinationLga.state_id')
+            ->unique();
+        $outOfStateActiveCount = $otherStates->count() - $suspendedStateIds->count();
+
+        // All custom corridors originating from this hub
+        $deliveryLanes = DeliveryLane::where('origin_lga_id', $currentHub->id)
+            ->with(['originLga.state', 'destinationLga.state'])
             ->latest()
             ->get();
 
@@ -314,7 +382,22 @@ class PortalController extends Controller
 
         $pendingSettlementsCount = Order::where('vendor_settlement_status', 'eligible')->count();
 
-        return view('admin.delivery_lanes', compact('deliveryLanes', 'allLgas', 'zonalSettings', 'pendingSettlementsCount'));
+        return view('admin.delivery_lanes', compact(
+            'currentHub',
+            'intraLane',
+            'intraActive',
+            'stateLgas',
+            'interLanes',
+            'reverseInterLanes',
+            'interActiveCount',
+            'otherStates',
+            'outOfStateLanes',
+            'outOfStateActiveCount',
+            'deliveryLanes',
+            'allLgas',
+            'zonalSettings',
+            'pendingSettlementsCount'
+        ));
     }
 
     /**
@@ -497,8 +580,7 @@ class PortalController extends Controller
      */
     public function vendorDashboard(Request $request)
     {
-        $user = Auth::user();
-        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::with(['shops', 'user'])->first();
+        $vendor = $this->resolveVendorProfile();
         $primaryShop = $vendor->primaryShop ?? Shop::where('vendor_id', $vendor->id)->first() ?? Shop::first();
 
         $products = Product::where('vendor_id', $vendor->id)->with('category')->get();
@@ -539,8 +621,7 @@ class PortalController extends Controller
      */
     public function vendorProductsPage(Request $request)
     {
-        $user = Auth::user();
-        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::with(['shops', 'user'])->first();
+        $vendor = $this->resolveVendorProfile();
         $products = Product::where('vendor_id', $vendor->id)->with('category')->latest()->get();
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
 
@@ -552,8 +633,7 @@ class PortalController extends Controller
      */
     public function vendorOrdersPage(Request $request)
     {
-        $user = Auth::user();
-        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::with(['shops', 'user'])->first();
+        $vendor = $this->resolveVendorProfile();
         $orders = Order::where('vendor_id', $vendor->id)
             ->with('customer:id,name,phone')
             ->latest()
@@ -567,8 +647,7 @@ class PortalController extends Controller
      */
     public function vendorReservationsPage(Request $request)
     {
-        $user = Auth::user();
-        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::with(['shops', 'user'])->first();
+        $vendor = $this->resolveVendorProfile();
         $reservations = PickupReservation::where('vendor_id', $vendor->id)
             ->with(['product:id,name,unit_price', 'customer:id,name,phone'])
             ->latest()
@@ -582,8 +661,7 @@ class PortalController extends Controller
      */
     public function vendorShopsPage(Request $request)
     {
-        $user = Auth::user();
-        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::with(['shops', 'user'])->first();
+        $vendor = $this->resolveVendorProfile();
         $shops = Shop::where('vendor_id', $vendor->id)->with('lga.state')->get();
         $allLgas = Lga::with('state')->where('is_active', true)->orderBy('name', 'asc')->get();
 
@@ -595,8 +673,7 @@ class PortalController extends Controller
      */
     public function vendorPayoutPage(Request $request)
     {
-        $user = Auth::user();
-        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::with(['shops', 'user'])->first();
+        $vendor = $this->resolveVendorProfile();
 
         $grossSales = Order::where('vendor_id', $vendor->id)->sum('total_amount');
         $netEarnings = Order::where('vendor_id', $vendor->id)->sum('vendor_earning_90');
@@ -618,7 +695,7 @@ class PortalController extends Controller
      */
     public function counterDashboard()
     {
-        $shop = Shop::with('vendor')->first();
+        $shop = $this->resolvePrimaryShop();
         $pendingInspections = PickupReservation::where('status', 'pending_inspection')
             ->with(['product:id,name,unit_price', 'customer:id,name,phone', 'shop:id,name'])
             ->latest()
@@ -652,7 +729,7 @@ class PortalController extends Controller
      */
     public function counterInspectionsPage()
     {
-        $shop = Shop::with('vendor')->first();
+        $shop = $this->resolvePrimaryShop();
         $pendingInspections = PickupReservation::where('status', 'pending_inspection')
             ->with(['product:id,name,unit_price', 'customer:id,name,phone', 'shop:id,name'])
             ->latest()
@@ -666,7 +743,7 @@ class PortalController extends Controller
      */
     public function counterHandoversPage()
     {
-        $shop = Shop::with('vendor')->first();
+        $shop = $this->resolvePrimaryShop();
         $stagedOrders = Order::where('fulfillment_type', 'doorstep_delivery')
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup'])
             ->with(['customer:id,name,phone', 'shop:id,name'])
@@ -681,7 +758,7 @@ class PortalController extends Controller
      */
     public function counterRecordsPage()
     {
-        $shop = Shop::with('vendor')->first();
+        $shop = $this->resolvePrimaryShop();
         $inspectedToday = PickupReservation::where('status', 'inspected')
             ->with(['product:id,name,unit_price', 'customer:id,name,phone', 'shop:id,name'])
             ->latest()
@@ -695,7 +772,7 @@ class PortalController extends Controller
      */
     public function logisticsDashboard()
     {
-        $company = LogisticsCompanyProfile::with(['riders.user', 'hqLga'])->first();
+        $company = $this->resolveLogisticsCompany();
         $activeRiders = RiderProfile::where('is_active', true)->with(['user', 'assignedLga'])->get();
         $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
             ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
@@ -727,7 +804,7 @@ class PortalController extends Controller
      */
     public function logisticsRidersPage()
     {
-        $company = LogisticsCompanyProfile::with(['riders.user', 'hqLga'])->first();
+        $company = $this->resolveLogisticsCompany();
         $activeRiders = RiderProfile::where('is_active', true)->with(['user', 'assignedLga'])->get();
 
         return view('logistics.riders', compact('company', 'activeRiders'));
@@ -738,7 +815,7 @@ class PortalController extends Controller
      */
     public function logisticsWaybillsPage()
     {
-        $company = LogisticsCompanyProfile::with(['riders.user', 'hqLga'])->first();
+        $company = $this->resolveLogisticsCompany();
         $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
             ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
             ->with(['shop', 'customer', 'rider.user'])
@@ -752,7 +829,7 @@ class PortalController extends Controller
      */
     public function logisticsWalletPage()
     {
-        $company = LogisticsCompanyProfile::with(['riders.user', 'hqLga'])->first();
+        $company = $this->resolveLogisticsCompany();
         $activeRiders = RiderProfile::where('is_active', true)->with(['user', 'assignedLga'])->get();
         $completedRuns = Order::where('fulfillment_type', 'doorstep_delivery')
             ->where('order_status', 'delivered')
@@ -777,7 +854,7 @@ class PortalController extends Controller
      */
     public function riderDashboard()
     {
-        $rider = RiderProfile::with(['user', 'assignedLga', 'logisticsCompany'])->first();
+        $rider = $this->resolveRiderProfile();
         
         $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
             ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
@@ -814,7 +891,7 @@ class PortalController extends Controller
      */
     public function riderDeliveriesPage()
     {
-        $rider = RiderProfile::with(['user', 'assignedLga', 'logisticsCompany'])->first();
+        $rider = $this->resolveRiderProfile();
         $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
             ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
             ->with(['shop', 'customer'])
@@ -835,7 +912,7 @@ class PortalController extends Controller
      */
     public function riderPickupPage()
     {
-        $rider = RiderProfile::with(['user', 'assignedLga', 'logisticsCompany'])->first();
+        $rider = $this->resolveRiderProfile();
         $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup'])
             ->with(['shop', 'customer'])
@@ -856,7 +933,7 @@ class PortalController extends Controller
      */
     public function riderDropoffPage()
     {
-        $rider = RiderProfile::with(['user', 'assignedLga', 'logisticsCompany'])->first();
+        $rider = $this->resolveRiderProfile();
         $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
             ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
             ->with(['shop', 'customer'])
@@ -877,7 +954,7 @@ class PortalController extends Controller
      */
     public function riderEarningsPage()
     {
-        $rider = RiderProfile::with(['user', 'assignedLga', 'logisticsCompany'])->first();
+        $rider = $this->resolveRiderProfile();
         $completedDrops = Order::where('fulfillment_type', 'doorstep_delivery')
             ->where('order_status', 'delivered')
             ->with(['shop', 'customer'])
@@ -900,8 +977,7 @@ class PortalController extends Controller
      */
     public function customerDashboard()
     {
-        $user = Auth::user();
-        $customer = ($user && $user->user_type === 'customer') ? $user : User::where('user_type', 'customer')->first();
+        $customer = $this->resolveCustomerUser();
 
         $orders = Order::where('customer_id', $customer->id)
             ->with(['shop:id,name,address', 'vendor:id,business_name'])
@@ -975,8 +1051,7 @@ class PortalController extends Controller
      */
     public function customerOrdersPage()
     {
-        $user = Auth::user();
-        $customer = ($user && $user->user_type === 'customer') ? $user : User::where('user_type', 'customer')->first();
+        $customer = $this->resolveCustomerUser();
 
         $orders = Order::where('customer_id', $customer->id)
             ->with(['shop:id,name,address', 'vendor:id,business_name'])
@@ -994,8 +1069,7 @@ class PortalController extends Controller
      */
     public function customerReservationsPage()
     {
-        $user = Auth::user();
-        $customer = ($user && $user->user_type === 'customer') ? $user : User::where('user_type', 'customer')->first();
+        $customer = $this->resolveCustomerUser();
 
         $orders = Order::where('customer_id', $customer->id)->get();
         $total_order = $orders->count();
@@ -1019,8 +1093,7 @@ class PortalController extends Controller
      */
     public function customerCashbackPage()
     {
-        $user = Auth::user();
-        $customer = ($user && $user->user_type === 'customer') ? $user : User::where('user_type', 'customer')->first();
+        $customer = $this->resolveCustomerUser();
 
         $orders = Order::where('customer_id', $customer->id)->get();
         $total_order = $orders->count();
@@ -1055,8 +1128,7 @@ class PortalController extends Controller
      */
     public function customerAddressesPage()
     {
-        $user = Auth::user();
-        $customer = ($user && $user->user_type === 'customer') ? $user : User::where('user_type', 'customer')->first();
+        $customer = $this->resolveCustomerUser();
 
         $orders = Order::where('customer_id', $customer->id)->get();
         $total_order = $orders->count();
@@ -1188,7 +1260,8 @@ class PortalController extends Controller
                     ]);
                 }
 
-                return redirect()->route('admin.delivery_lanes.index')->with('status', "Corridor successfully updated!");
+                $hubId = $request->input('hub_lga_id', $validated['origin_lga_id']);
+                return redirect()->route('admin.delivery_lanes.index', ['hub_lga_id' => $hubId])->with('status', "Corridor successfully updated!");
             }
         }
 
@@ -1219,7 +1292,8 @@ class PortalController extends Controller
         }
 
         $dirMsg = $isBidirectional ? 'Bidirectional route (A ⇄ B) synchronized!' : 'One-way corridor saved!';
-        return redirect()->route('admin.delivery_lanes.index')->with('status', "Custom corridor successfully saved: {$dirMsg}");
+        $hubId = $request->input('hub_lga_id', $validated['origin_lga_id']);
+        return redirect()->route('admin.delivery_lanes.index', ['hub_lga_id' => $hubId])->with('status', "Custom corridor successfully saved: {$dirMsg}");
     }
 
     public function adminUpdateZonalRates(Request $request)
@@ -1238,15 +1312,17 @@ class PortalController extends Controller
             \App\Models\SystemSetting::set($k, (string)$v, 'zonal_rates');
         }
 
-        return redirect()->route('admin.delivery_lanes.index')->with('status', '3-Tier Zonal Distance Baseline Rates saved successfully!');
+        $hubId = $request->input('hub_lga_id');
+        return redirect()->route('admin.delivery_lanes.index', $hubId ? ['hub_lga_id' => $hubId] : [])->with('status', '3-Tier Zonal Distance Baseline Rates saved successfully!');
     }
 
     public function adminDeleteDeliveryLane(Request $request, int $id)
     {
         $lane = DeliveryLane::findOrFail($id);
+        $hubId = $request->input('hub_lga_id', $lane->origin_lga_id);
         $lane->delete();
 
-        return redirect()->route('admin.delivery_lanes.index')->with('status', 'Delivery corridor deleted successfully.');
+        return redirect()->route('admin.delivery_lanes.index', ['hub_lga_id' => $hubId])->with('status', 'Delivery corridor deleted successfully.');
     }
 
     public function adminToggleDeliveryLane(Request $request, int $id)
@@ -1255,7 +1331,100 @@ class PortalController extends Controller
         $lane->is_active = !$lane->is_active;
         $lane->save();
 
-        return redirect()->route('admin.delivery_lanes.index')->with('status', "Delivery lane #{$lane->id} toggled " . ($lane->is_active ? 'Active' : 'Inactive') . '.');
+        $hubId = $request->input('hub_lga_id', $lane->origin_lga_id);
+        return redirect()->route('admin.delivery_lanes.index', ['hub_lga_id' => $hubId])->with('status', "Delivery lane #{$lane->id} toggled " . ($lane->is_active ? 'Active' : 'Inactive') . '.');
+    }
+
+    public function adminToggleHubCorridor(Request $request)
+    {
+        $validated = $request->validate([
+            'origin_lga_id' => 'required|integer|exists:lgas,id',
+            'destination_lga_id' => 'nullable|integer|exists:lgas,id',
+            'destination_state_id' => 'nullable|integer|exists:states,id',
+            'base_fee' => 'nullable|numeric|min:0',
+            'estimated_delivery_hours_min' => 'nullable|integer',
+            'estimated_delivery_hours_max' => 'nullable|integer',
+            'set_active' => 'nullable|boolean',
+        ]);
+
+        $originLgaId = (int)$validated['origin_lga_id'];
+
+        // Case A: State-Level Corridor Toggle (Out-of-State)
+        if (!empty($validated['destination_state_id'])) {
+            $stateId = (int)$validated['destination_state_id'];
+            $destStateLgas = Lga::where('state_id', $stateId)->get();
+            $capitalLga = $destStateLgas->first();
+
+            $existingLanes = DeliveryLane::where('origin_lga_id', $originLgaId)
+                ->whereIn('destination_lga_id', $destStateLgas->pluck('id'))
+                ->get();
+
+            if ($existingLanes->isNotEmpty()) {
+                $newActive = $request->has('set_active') ? (bool)$request->input('set_active') : !$existingLanes->first()->is_active;
+                DeliveryLane::where('origin_lga_id', $originLgaId)
+                    ->whereIn('destination_lga_id', $destStateLgas->pluck('id'))
+                    ->update(['is_active' => $newActive]);
+                $statusText = $newActive ? 'Active' : 'Suspended';
+            } else {
+                // If no lane existed, it was active via baseline. Toggle means turning it off (suspended)
+                $newActive = $request->has('set_active') ? (bool)$request->input('set_active') : false;
+                if ($capitalLga) {
+                    DeliveryLane::create([
+                        'origin_lga_id' => $originLgaId,
+                        'destination_lga_id' => $capitalLga->id,
+                        'base_fee' => number_format((float)($validated['base_fee'] ?? 3500.00), 2, '.', ''),
+                        'bulky_surcharge' => '1000.00',
+                        'estimated_delivery_hours_min' => $validated['estimated_delivery_hours_min'] ?? 48,
+                        'estimated_delivery_hours_max' => $validated['estimated_delivery_hours_max'] ?? 96,
+                        'is_active' => $newActive,
+                    ]);
+                }
+                $statusText = $newActive ? 'Active' : 'Suspended';
+            }
+
+            return redirect()->route('admin.delivery_lanes.index', ['hub_lga_id' => $originLgaId])
+                ->with('status', "Out-of-State corridor to destination state set to {$statusText}.");
+        }
+
+        // Case B: LGA-Level Corridor Toggle (Intra or Inter LGA)
+        if (empty($validated['destination_lga_id'])) {
+            return back()->withErrors(['destination_lga_id' => 'Destination LGA is required.']);
+        }
+
+        $destLgaId = (int)$validated['destination_lga_id'];
+        $lane = DeliveryLane::where('origin_lga_id', $originLgaId)
+            ->where('destination_lga_id', $destLgaId)
+            ->first();
+
+        if ($lane) {
+            $lane->is_active = $request->has('set_active') ? (bool)$request->input('set_active') : !$lane->is_active;
+            $lane->save();
+        } else {
+            $originLga = Lga::find($originLgaId);
+            $destLga = Lga::find($destLgaId);
+            $isMunicipal = ($originLga->id === $destLga->id);
+            $isSameState = ($originLga->state_id === $destLga->state_id);
+
+            $defaultFee = $validated['base_fee'] ?? ($isMunicipal ? '500.00' : ($isSameState ? '1500.00' : '3500.00'));
+            $minHours = $validated['estimated_delivery_hours_min'] ?? ($isMunicipal ? 2 : ($isSameState ? 12 : 48));
+            $maxHours = $validated['estimated_delivery_hours_max'] ?? ($isMunicipal ? 4 : ($isSameState ? 24 : 96));
+
+            // Default toggle when no lane exists is to suspend it (false), or use set_active if provided
+            $initialActive = $request->has('set_active') ? (bool)$request->input('set_active') : false;
+
+            $lane = DeliveryLane::create([
+                'origin_lga_id' => $originLgaId,
+                'destination_lga_id' => $destLgaId,
+                'base_fee' => number_format((float)$defaultFee, 2, '.', ''),
+                'bulky_surcharge' => '1000.00',
+                'estimated_delivery_hours_min' => $minHours,
+                'estimated_delivery_hours_max' => $maxHours,
+                'is_active' => $initialActive,
+            ]);
+        }
+
+        return redirect()->route('admin.delivery_lanes.index', ['hub_lga_id' => $originLgaId])
+            ->with('status', "Corridor toggled " . ($lane->is_active ? 'Active' : 'Suspended') . '.');
     }
 
     public function adminAccreditVendor(Request $request, int $id)
@@ -1642,5 +1811,157 @@ class PortalController extends Controller
         $order->save();
 
         return redirect()->route('rider.dashboard')->with('status', "Order #{$order->order_number} package verified at counter. Out for delivery!");
+    }
+
+    // =========================================================================
+    // DEFENSIVE PORTAL ENTITY RESOLVERS (Zero-Null Guarantee Across All 7 Roles)
+    // =========================================================================
+
+    private function resolveCustomerUser(): User
+    {
+        $user = Auth::user();
+        if ($user && $user->user_type === 'customer') {
+            return $user;
+        }
+
+        $customer = User::where('user_type', 'customer')->first();
+        if (!$customer) {
+            $customer = User::firstOrCreate(
+                ['email' => 'customer@victoriousmarket.com.ng'],
+                [
+                    'name' => 'Emeka Okonkwo',
+                    'phone' => '08012345678',
+                    'password' => bcrypt('Password123!'),
+                    'user_type' => 'customer',
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        return $customer;
+    }
+
+    private function resolveVendorProfile(): VendorProfile
+    {
+        $user = Auth::user();
+        if ($user && $user->vendorProfile) {
+            return $user->vendorProfile;
+        }
+
+        $vendor = VendorProfile::with(['shops', 'user'])->first();
+        if (!$vendor) {
+            $vendorUser = User::firstOrCreate(
+                ['email' => 'vendor@victoriousmarket.com.ng'],
+                [
+                    'name' => 'Victor Bassey',
+                    'phone' => '08087654321',
+                    'password' => bcrypt('Password123!'),
+                    'user_type' => 'vendor',
+                    'is_active' => true,
+                ]
+            );
+
+            $vendor = VendorProfile::firstOrCreate(
+                ['user_id' => $vendorUser->id],
+                [
+                    'business_name' => 'Victor Tech Solutions',
+                    'business_phone' => '08087654321',
+                    'support_email' => 'vendor@victoriousmarket.com.ng',
+                    'bank_name' => 'Zenith Bank PLC',
+                    'bank_account_number' => '1012345678',
+                    'account_holder_name' => 'Victor Tech Solutions',
+                    'kyc_status' => 'verified',
+                    'marketplace_status' => 'active',
+                ]
+            );
+        }
+
+        return $vendor;
+    }
+
+    private function resolvePrimaryShop(): Shop
+    {
+        $shop = Shop::with('vendor')->first();
+        if (!$shop) {
+            $vendor = $this->resolveVendorProfile();
+            $lga = Lga::where('name', 'Uyo')->first() ?? Lga::first();
+            $shop = Shop::firstOrCreate(
+                ['vendor_id' => $vendor->id],
+                [
+                    'name' => 'Victor Tech Uyo Flagship Plaza',
+                    'address' => 'Shop 12, Ibom Plaza Commercial Center, Uyo',
+                    'contact_phone' => '08087654321',
+                    'lga_id' => $lga ? $lga->id : 1,
+                    'operating_hours' => 'Mon-Sat: 8:00 AM - 6:00 PM',
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        return $shop;
+    }
+
+    private function resolveLogisticsCompany(): LogisticsCompanyProfile
+    {
+        $company = LogisticsCompanyProfile::with(['riders.user', 'hqLga'])->first();
+        if (!$company) {
+            $logisticsUser = User::firstOrCreate(
+                ['email' => 'logistics@victoriousmarket.com.ng'],
+                [
+                    'name' => 'Akwa Express Logistics Ltd',
+                    'phone' => '08055556666',
+                    'password' => bcrypt('Password123!'),
+                    'user_type' => 'logistics_company',
+                    'is_active' => true,
+                ]
+            );
+
+            $lga = Lga::where('name', 'Uyo')->first() ?? Lga::first();
+            $company = LogisticsCompanyProfile::firstOrCreate(
+                ['user_id' => $logisticsUser->id],
+                [
+                    'company_name' => 'Akwa Express Logistics Ltd',
+                    'hq_lga_id' => $lga ? $lga->id : 1,
+                    'fleet_size' => 12,
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        return $company;
+    }
+
+    private function resolveRiderProfile(): RiderProfile
+    {
+        $rider = RiderProfile::with(['user', 'assignedLga', 'logisticsCompany'])->first();
+        if (!$rider) {
+            $riderUser = User::firstOrCreate(
+                ['email' => 'rider@victoriousmarket.com.ng'],
+                [
+                    'name' => 'Edidiong Udoh',
+                    'phone' => '08033334444',
+                    'password' => bcrypt('Password123!'),
+                    'user_type' => 'rider',
+                    'is_active' => true,
+                ]
+            );
+
+            $company = $this->resolveLogisticsCompany();
+            $lga = Lga::where('name', 'Uyo')->first() ?? Lga::first();
+
+            $rider = RiderProfile::firstOrCreate(
+                ['user_id' => $riderUser->id],
+                [
+                    'logistics_company_id' => $company->id,
+                    'assigned_lga_id' => $lga ? $lga->id : 1,
+                    'vehicle_type' => 'Motorcycle',
+                    'vehicle_plate_number' => 'UYO-123-AK',
+                    'is_active' => true,
+                    'is_online' => true,
+                ]
+            );
+        }
+
+        return $rider;
     }
 }
