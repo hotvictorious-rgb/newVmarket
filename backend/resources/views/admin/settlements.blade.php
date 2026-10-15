@@ -1,8 +1,8 @@
 @extends('layouts.dashboard')
 
-@section('title', '90/5/5 Sovereign Escrow & Settlement Desk')
-@section('role_title', 'Super Admin')
-@section('page_title', '90/5/5 Settlement Desk')
+@section('title', 'Dual-Commission Escrow & Settlement Desk — Super Admin')
+@section('role_title', 'Super Admin Command Tower')
+@section('page_title', 'Dual-Commission & Corporate Settlement Desk')
 @section('role_badge', 'SUPER ADMIN')
 @section('role_badge_class', 'role-badge-super-admin')
 
@@ -19,7 +19,7 @@
                 <span>90/5/5 Sovereign Escrow &amp; Settlement Desk</span>
             </h1>
             <p class="page-header-subtitle">
-                Merchant 90% payout release, 24-hour dispute buffer management, and mathematical invariant reconciliation (&Delta; = &#8358;0.00).
+                Dual-Commission Escrow &amp; Corporate Settlement Desk &mdash; Merchant 90% payout release, Logistics Fleet 90% corporate delivery payout release, and Victorious Market Dual Commission Ledger (5% Vendor + 10% Delivery). Zero-drift guarantee (&Delta; = &#8358;0.00).
             </p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -32,24 +32,44 @@
         </div>
     </div>
 
-    <!-- 4 Financial Metrics -->
+    @if(session('status'))
+        <div style="margin-bottom: 20px; padding: 12px 18px; border-radius: 8px; background: rgba(16, 185, 129, 0.1); border: 1px solid #10B981; color: #047857; font-weight: 600; font-size: 13px;">
+            ✅ {{ session('status') }}
+        </div>
+    @endif
+    @if(session('error'))
+        <div style="margin-bottom: 20px; padding: 12px 18px; border-radius: 8px; background: rgba(239, 68, 68, 0.1); border: 1px solid #EF4444; color: #B91C1C; font-weight: 600; font-size: 13px;">
+            ⚠️ {{ session('error') }}
+        </div>
+    @endif
+
+    <!-- 4 Financial Metrics (Dual Revenue Streams) -->
     <div class="stat-grid-4" style="margin-bottom: 24px;">
+        <div class="stat-card stat-card-border-purple">
+            <div class="stat-card-info">
+                <span class="stat-card-label">VMarket Total Commission</span>
+                <span class="stat-card-value">&#8358;{{ number_format((float)($totalVMarketEarnings ?? 0), 2) }}</span>
+                <span class="stat-card-subtext" style="color: var(--adm-primary);">5% Vendor + 10% Delivery Cuts</span>
+            </div>
+            <div class="stat-card-icon-box icon-box-purple">💼</div>
+        </div>
+
         <div class="stat-card stat-card-border-emerald">
             <div class="stat-card-info">
-                <span class="stat-card-label">Eligible for Disbursal</span>
+                <span class="stat-card-label">Eligible Merchant Escrows</span>
                 <span class="stat-card-value">{{ count($pendingSettlements) }}</span>
-                <span class="stat-card-subtext" style="color: var(--adm-success);">Verified Handover / Delivery</span>
+                <span class="stat-card-subtext" style="color: var(--adm-success);">Verified OTP Releases</span>
             </div>
-            <div class="stat-card-icon-box icon-box-emerald">✅</div>
+            <div class="stat-card-icon-box icon-box-emerald">🏬</div>
         </div>
 
         <div class="stat-card stat-card-border-blue">
             <div class="stat-card-info">
-                <span class="stat-card-label">Held in 24h Buffer</span>
-                <span class="stat-card-value">{{ $heldSettlementsCount ?? 0 }}</span>
-                <span class="stat-card-subtext" style="color: var(--adm-info);">Dispute Protection Window</span>
+                <span class="stat-card-label">Fleet Payout Requests</span>
+                <span class="stat-card-value">{{ count($pendingLogisticsPayouts->where('status', 'pending')) }}</span>
+                <span class="stat-card-subtext" style="color: var(--adm-info);">&#8358;{{ number_format((float)($totalLogisticsEscrowBalance ?? 0), 2) }} Fleet Escrow</span>
             </div>
-            <div class="stat-card-icon-box icon-box-blue">⏳</div>
+            <div class="stat-card-icon-box icon-box-blue">🚚</div>
         </div>
 
         <div class="stat-card stat-card-border-gold">
@@ -60,15 +80,6 @@
             </div>
             <div class="stat-card-icon-box icon-box-gold">🪙</div>
         </div>
-
-        <div class="stat-card stat-card-border-purple">
-            <div class="stat-card-info">
-                <span class="stat-card-label">Mathematical Invariant</span>
-                <span class="stat-card-value">&Delta; = &#8358;0.00</span>
-                <span class="stat-card-subtext" style="color: var(--adm-primary);">100% Balanced Ledger</span>
-            </div>
-            <div class="stat-card-icon-box icon-box-purple">⚖️</div>
-        </div>
     </div>
 
     <!-- Mathematical Invariant Explanation Banner -->
@@ -76,37 +87,118 @@
         <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
             <div>
                 <strong style="font-size: 14.5px; color: var(--adm-text); display: flex; align-items: center; gap: 8px;">
-                    <span>⚖️</span> Sovereign 90/5/5 Mathematical Split Formula
+                    <span>⚖️</span> Sovereign 90/5/5 Mathematical Split Formula &amp; Dual Commission Architecture
                 </strong>
-                <p style="font-size: 12.5px; color: var(--adm-text-muted); margin-top: 4px; max-width: 780px;">
-                    Every customer order paid via Paystack or Digital Gateway is atomically split with zero precision loss using BCMath exact arithmetic:
+                <p style="font-size: 12.5px; color: var(--adm-text-muted); margin-top: 4px; max-width: 880px;">
+                    Every customer order paid via Paystack or Digital Gateway cleanly segregates the <strong>Products Amount</strong> from the <strong>Delivery Fee</strong>:
                 </p>
                 <div style="display: flex; gap: 14px; margin-top: 10px; flex-wrap: wrap;">
-                    <span class="dash-badge dash-badge-success" style="font-size: 12px; padding: 5px 12px;">
-                        🏬 <strong>90% Merchant Escrow:</strong> Disbursed to seller's verified bank account upon OTP handover or delivery.
+                    <span class="dash-badge dash-badge-success" style="font-size: 12px; padding: 6px 14px;">
+                        🏬 <strong>Products Subtotal:</strong> 90% Vendor Net &bull; 5% Shopper Cashback &bull; 5% VMarket Vendor Commission
                     </span>
-                    <span class="dash-badge dash-badge-info" style="font-size: 12px; padding: 5px 12px;">
-                        🚚 <strong>5% Platform Logistics:</strong> Sustains rider fleet dispatch and directional waybill routing.
+                    <span class="dash-badge dash-badge-info" style="font-size: 12px; padding: 6px 14px;">
+                        🚚 <strong>Delivery Fee:</strong> 90% Logistics Company Fleet Net &bull; 10% VMarket Delivery Commission
                     </span>
-                    <span class="dash-badge dash-badge-gold" style="font-size: 12px; padding: 5px 12px;">
-                        🪙 <strong>5% Shopper Cashback:</strong> Automatically credited into customer wallet for recurring shopping.
+                    <span class="dash-badge dash-badge-gold" style="font-size: 12px; padding: 6px 14px;">
+                        🛡️ <strong>Zero Drift Proof:</strong> 100% Closed System (&Delta; = &#8358;0.00 via BCMath)
                     </span>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Settlement Queue Desk Card -->
+    <!-- SECTION 1: Logistics Fleet Corporate Payout Requests -->
+    <div class="dash-card" style="margin-bottom: 28px;" id="logistics-payout-desk">
+        <div class="dash-card-header">
+            <div class="dash-card-title">
+                <span>🚚</span>
+                <div>
+                    <div>Logistics Fleet Corporate Withdrawal Queue ({{ count($pendingLogisticsPayouts->where('status', 'pending')) }} Pending)</div>
+                    <span class="dash-card-subtitle">Logistics operators requesting bank payout from their verified 90% delivery fee earnings.</span>
+                </div>
+            </div>
+            <span class="dash-badge dash-badge-info">Fleet Escrow</span>
+        </div>
+
+        <div class="dash-table-responsive">
+            <table class="dash-table">
+                <thead>
+                    <tr>
+                        <th>Request Date</th>
+                        <th>Fleet Operator</th>
+                        <th>Requested Amount</th>
+                        <th>Verified Corporate Bank</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($pendingLogisticsPayouts as $payout)
+                        <tr>
+                            <td>
+                                <strong style="font-size: 13px; color: var(--adm-primary);">REQ-#{{ str_pad($payout->id, 5, '0', STR_PAD_LEFT) }}</strong>
+                                <div style="font-size: 11.5px; color: var(--adm-text-muted);">{{ $payout->created_at->format('d M, Y H:i') }}</div>
+                            </td>
+                            <td>
+                                <strong style="font-size: 13px; color: var(--adm-text);">{{ $payout->company->company_name ?? 'Logistics Fleet' }}</strong>
+                                <div style="font-size: 11px; color: var(--adm-text-muted);">{{ $payout->company->contact_phone ?? 'N/A' }}</div>
+                            </td>
+                            <td>
+                                <strong style="font-size: 14.5px; color: #047857;">&#8358;{{ number_format((float)$payout->amount, 2) }}</strong>
+                                <div style="font-size: 10.5px; color: var(--adm-text-muted);">90% delivery cut</div>
+                            </td>
+                            <td>
+                                <div style="font-weight: 700; color: var(--adm-text);">{{ $payout->bank_name }}</div>
+                                <div style="font-family: monospace; font-size: 12px; color: #475569;">{{ $payout->account_number }}</div>
+                                <div style="font-size: 11px; color: var(--adm-text-muted);">Acct: {{ $payout->account_name }}</div>
+                            </td>
+                            <td>
+                                @if($payout->status === 'approved')
+                                    <span class="dash-badge dash-badge-success">✅ Disbursed</span>
+                                    <div style="font-size: 10.5px; color: var(--adm-text-muted); margin-top: 2px;">{{ $payout->disbursed_at ? $payout->disbursed_at->format('d M, H:i') : '' }}</div>
+                                @elseif($payout->status === 'pending')
+                                    <span class="dash-badge dash-badge-amber">⏳ Pending Review</span>
+                                @else
+                                    <span class="dash-badge dash-badge-danger">❌ Rejected</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if($payout->status === 'pending')
+                                    <form method="POST" action="{{ route('admin.disburse.logistics_payout') }}" style="margin: 0;" onsubmit="return confirm('Confirm disbursement of &#8358;{{ number_format((float)$payout->amount, 2) }} to {{ $payout->company->company_name }} ({{ $payout->bank_name }} - {{ $payout->account_number }})?');">
+                                        @csrf
+                                        <input type="hidden" name="payout_id" value="{{ $payout->id }}">
+                                        <button type="submit" class="btn-dash btn-dash-success" style="padding: 6px 12px; font-size: 12px; font-weight: 700;">
+                                            ✓ Disburse Corporate Payout
+                                        </button>
+                                    </form>
+                                @else
+                                    <span style="font-size: 11px; color: var(--adm-text-muted);">Settled</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 24px; color: var(--adm-text-muted);">
+                                No fleet corporate payout requests currently recorded.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- SECTION 2: Merchant Merchandise Escrow Queue -->
     <div class="dash-card" id="settlement-desk">
         <div class="dash-card-header">
             <div class="dash-card-title">
-                <span>💰</span>
+                <span>🏬</span>
                 <div>
-                    <div>Pending Escrow Disbursals Queue</div>
-                    <span class="dash-card-subtitle">Orders completed and verified by branch staff or rider handshake. Ready for bank transfer release.</span>
+                    <div>Merchant 90% Merchandise Escrow Queue ({{ count($pendingSettlements) }} Orders Ready)</div>
+                    <span class="dash-card-subtitle">Orders completed and verified by in-shop staff or customer delivery OTP handshake.</span>
                 </div>
             </div>
-            <span class="dash-badge dash-badge-success">Escrow Protected</span>
+            <span class="dash-badge dash-badge-success">Merchant Escrow</span>
         </div>
 
         <div class="dash-table-responsive">
@@ -115,7 +207,7 @@
                     <tr>
                         <th>Order Ref</th>
                         <th>Merchant &amp; Store</th>
-                        <th>Escrow Total</th>
+                        <th>Merchandise Subtotal</th>
                         <th>90% Merchant Share</th>
                         <th>Settlement Bank Account</th>
                         <th>Verification Status</th>
@@ -134,10 +226,10 @@
                                 <div style="font-size: 11.5px; color: var(--adm-text-muted);">Paid via {{ ucfirst(str_replace('_', ' ', $order->payment_method ?? 'paystack')) }}</div>
                             </td>
                             <td>
-                                <strong style="font-size: 13.5px; color: var(--adm-text);">&#8358;{{ number_format((float)$order->order_amount, 2) }}</strong>
+                                <strong style="font-size: 13.5px; color: var(--adm-text);">&#8358;{{ number_format((float)($order->merchandise_subtotal ?? $order->order_amount), 2) }}</strong>
                             </td>
                             <td>
-                                <strong style="font-size: 14px; color: #047857;">&#8358;{{ number_format((float)$order->vendor_settlement_amount, 2) }}</strong>
+                                <strong style="font-size: 14px; color: #047857;">&#8358;{{ number_format((float)($order->vendor_net_90 ?? $order->vendor_settlement_amount), 2) }}</strong>
                                 <div style="font-size: 10.5px; color: var(--adm-text-muted);">90.00% exact split</div>
                             </td>
                             <td>
@@ -150,7 +242,7 @@
                                 <div style="font-size: 11px; color: var(--adm-text-muted); margin-top: 2px;">Handover Verified</div>
                             </td>
                             <td>
-                                <form method="POST" action="{{ route('admin.disburse.settlement') }}" style="margin: 0;" onsubmit="return confirm('Release 90% payout of &#8358;{{ number_format((float)$order->vendor_settlement_amount, 2) }} to {{ $order->vendor->business_name ?? 'Vendor' }}?');">
+                                <form method="POST" action="{{ route('admin.disburse.settlement') }}" style="margin: 0;" onsubmit="return confirm('Release 90% payout of &#8358;{{ number_format((float)($order->vendor_net_90 ?? $order->vendor_settlement_amount), 2) }} to {{ $order->vendor->business_name ?? 'Vendor' }}?');">
                                     @csrf
                                     <input type="hidden" name="order_id" value="{{ $order->id }}">
                                     <button type="submit" class="btn-dash btn-dash-success" style="padding: 6px 12px; font-size: 12px; font-weight: 700;">

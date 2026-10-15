@@ -71,6 +71,7 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/orders', [PortalController::class, 'adminOrdersPage'])->name('admin.orders.index');
 
     Route::post('/disburse-settlement', [PortalController::class, 'adminDisburseSettlement'])->name('admin.disburse.settlement');
+    Route::post('/disburse-logistics-payout', [PortalController::class, 'adminDisburseLogisticsPayout'])->name('admin.disburse.logistics_payout');
     Route::post('/settings/announcement', [PortalController::class, 'adminUpdateAnnouncementSettings'])->name('admin.settings.announcement');
 });
 
@@ -115,6 +116,8 @@ Route::middleware(['role:logistics_company'])->prefix('logistics')->group(functi
     Route::post('/collection-points', [PortalController::class, 'logisticsStoreCollectionPoint'])->name('logistics.collection_points.store');
     Route::post('/collection-points/{id}/toggle', [PortalController::class, 'logisticsToggleCollectionPoint'])->name('logistics.collection_points.toggle');
     Route::delete('/collection-points/{id}', [PortalController::class, 'logisticsDeleteCollectionPoint'])->name('logistics.collection_points.delete');
+    Route::post('/bank', [PortalController::class, 'logisticsUpdateBank'])->name('logistics.bank.update');
+    Route::post('/payout-request', [PortalController::class, 'logisticsRequestPayout'])->name('logistics.payout.request');
 });
 
 // 6. Delivery Rider Dispatch Cockpit

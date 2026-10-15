@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\Banner;
 use App\Models\Category;
 use App\Models\CustomerCashbackLedger;
 use App\Models\DeliveryLane;
@@ -20,6 +21,9 @@ use App\Models\State;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Models\VendorEmployeeProfile;
+use App\Models\LogisticsPayoutRequest;
+use App\Models\AdminAuditLog;
+use App\Services\BcMathService;
 use App\Services\OrderSettlementService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -145,10 +149,15 @@ class PortalController extends Controller
             ]);
         }
 
+        // Dynamic Cached Storefront Banners
+        $heroBanners = Banner::getActiveHeroBanners();
+        $promoBanners = Banner::getActivePromoBanners();
+
         return view('storefront.index', compact(
             'categories', 'products', 'latestProducts', 'shops', 'lgas',
             'activeCity', 'activeState', 'selectedLgaId', 'activeLanes',
-            'coverageStatus', 'statusBadge', 'previewStatus', 'isFallbackCatalog'
+            'coverageStatus', 'statusBadge', 'previewStatus', 'isFallbackCatalog',
+            'heroBanners', 'promoBanners'
         ));
     }
 
@@ -416,12 +425,147 @@ class PortalController extends Controller
         $totalCashbackIssued = CustomerCashbackLedger::sum('amount') ?? '0.00';
         $pendingSettlementsCount = $pendingSettlements->count();
 
-        return view('admin.settlements', compact('pendingSettlements', 'heldSettlementsCount', 'totalCashbackIssued', 'pendingSettlementsCount'));
+        // Dual Revenue Stream Calculations
+        $totalVendorCommission = Order::where('order_status', 'delivered')->sum('platform_margin_5');
+        $totalDeliveryCommission = Order::where('order_status', 'delivered')->sum('platform_delivery_fee');
+        $totalVMarketEarnings = BcMathService::add((string)$totalVendorCommission, (string)$totalDeliveryCommission);
+
+        // Logistics Corporate Payout Requests
+        $pendingLogisticsPayouts = LogisticsPayoutRequest::with('company')->latest()->get();
+        $totalLogisticsEscrowBalance = LogisticsCompanyProfile::sum('wallet_balance');
+
+        return view('admin.settlements', compact(
+            'pendingSettlements',
+            'heldSettlementsCount',
+            'totalCashbackIssued',
+            'pendingSettlementsCount',
+            'totalVendorCommission',
+            'totalDeliveryCommission',
+            'totalVMarketEarnings',
+            'pendingLogisticsPayouts',
+            'totalLogisticsEscrowBalance'
+        ));
     }
 
     /**
      * Dedicated Page: Storefront Announcement Bar & Customer Care Desk
      */
+    
+    // ==========================================
+    // STOREFRONT BANNER MANAGEMENT (Super Admin)
+    // ==========================================
+
+    public function adminBannersPage()
+    {
+        $banners = Banner::orderBy('banner_type', 'asc')->orderBy('sort_order', 'asc')->orderBy('id', 'desc')->get();
+        $heroBannersCount = $banners->where('banner_type', 'hero_slider')->count();
+        $promoBannersCount = $banners->where('banner_type', 'promo_strip')->count();
+        $activeBannersCount = $banners->where('is_active', true)->count();
+
+        return view('admin.banners', compact('banners', 'heroBannersCount', 'promoBannersCount', 'activeBannersCount'));
+    }
+
+    public function adminStoreBanner(Request $request)
+    {
+        $validated = $request->validate([
+            'banner_type' => 'required|string|in:hero_slider,promo_strip,category_banner,popup_modal',
+            'title' => 'required|string|max:255',
+            'subtitle' => 'nullable|string|max:255',
+            'badge_text' => 'nullable|string|max:100',
+            'image' => 'nullable|image|max:3072',
+            'image_path' => 'nullable|string|max:255',
+            'bg_gradient' => 'nullable|string|max:255',
+            'text_color' => 'nullable|string|max:50',
+            'cta_text' => 'nullable|string|max:100',
+            'cta_url' => 'nullable|string|max:255',
+            'sort_order' => 'nullable|integer|min:0',
+            'is_active' => 'nullable',
+        ]);
+
+        $imagePath = $validated['image_path'] ?? 'assets/img/vm_icon.jpg';
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('banners', 'public');
+            $imagePath = 'storage/' . $path;
+        }
+
+        Banner::create([
+            'banner_type' => $validated['banner_type'],
+            'title' => trim($validated['title']),
+            'subtitle' => $validated['subtitle'] ? trim($validated['subtitle']) : null,
+            'badge_text' => $validated['badge_text'] ? trim($validated['badge_text']) : 'VERIFIED OMNICHANNEL MARKET',
+            'image_path' => $imagePath,
+            'bg_gradient' => $validated['bg_gradient'] ?: 'linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%)',
+            'text_color' => $validated['text_color'] ?: '#0F172A',
+            'cta_text' => $validated['cta_text'] ?: 'Shop Verified Items',
+            'cta_url' => $validated['cta_url'] ?: '#catalog',
+            'sort_order' => (int)($validated['sort_order'] ?? 0),
+            'is_active' => $request->has('is_active'),
+        ]);
+
+        return redirect()->route('admin.banners.index')->with('status', 'Promotional storefront banner published successfully!');
+    }
+
+    public function adminUpdateBanner(Request $request, int $id)
+    {
+        $banner = Banner::findOrFail($id);
+
+        $validated = $request->validate([
+            'banner_type' => 'required|string|in:hero_slider,promo_strip,category_banner,popup_modal',
+            'title' => 'required|string|max:255',
+            'subtitle' => 'nullable|string|max:255',
+            'badge_text' => 'nullable|string|max:100',
+            'image' => 'nullable|image|max:3072',
+            'image_path' => 'nullable|string|max:255',
+            'bg_gradient' => 'nullable|string|max:255',
+            'text_color' => 'nullable|string|max:50',
+            'cta_text' => 'nullable|string|max:100',
+            'cta_url' => 'nullable|string|max:255',
+            'sort_order' => 'nullable|integer|min:0',
+            'is_active' => 'nullable',
+        ]);
+
+        $imagePath = $banner->image_path;
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('banners', 'public');
+            $imagePath = 'storage/' . $path;
+        } elseif (!empty($validated['image_path'])) {
+            $imagePath = $validated['image_path'];
+        }
+
+        $banner->update([
+            'banner_type' => $validated['banner_type'],
+            'title' => trim($validated['title']),
+            'subtitle' => $validated['subtitle'] ? trim($validated['subtitle']) : null,
+            'badge_text' => $validated['badge_text'] ? trim($validated['badge_text']) : 'VERIFIED OMNICHANNEL MARKET',
+            'image_path' => $imagePath,
+            'bg_gradient' => $validated['bg_gradient'] ?: 'linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%)',
+            'text_color' => $validated['text_color'] ?: '#0F172A',
+            'cta_text' => $validated['cta_text'] ?: 'Shop Verified Items',
+            'cta_url' => $validated['cta_url'] ?: '#catalog',
+            'sort_order' => (int)($validated['sort_order'] ?? 0),
+            'is_active' => $request->has('is_active'),
+        ]);
+
+        return redirect()->route('admin.banners.index')->with('status', "Banner #{$banner->id} updated successfully!");
+    }
+
+    public function adminToggleBanner(Request $request, int $id)
+    {
+        $banner = Banner::findOrFail($id);
+        $banner->is_active = !$banner->is_active;
+        $banner->save();
+
+        $statusText = $banner->is_active ? 'Activated' : 'Paused';
+        return redirect()->route('admin.banners.index')->with('status', "Banner #{$banner->id} is now {$statusText}.");
+    }
+
+    public function adminDeleteBanner(Request $request, int $id)
+    {
+        $banner = Banner::findOrFail($id);
+        $banner->delete();
+
+        return redirect()->route('admin.banners.index')->with('status', 'Banner removed from storefront catalog.');
+    }
     public function adminAnnouncementsPage(Request $request)
     {
         $announcementSettings = [
@@ -842,13 +986,19 @@ class PortalController extends Controller
 
         $totalRevenue = (float)($company->wallet_balance ?? 0);
 
+        $payoutRequests = LogisticsPayoutRequest::where('logistics_company_id', $company->id)
+            ->latest()
+            ->take(10)
+            ->get();
+
         $fleetMetrics = [
             'active_riders' => $activeRiders->count(),
             'on_road' => $activeRiders->where('is_online', true)->count(),
             'accumulated_fees' => $totalRevenue,
+            'payouts_count' => $payoutRequests->count(),
         ];
 
-        return view('logistics.wallet', compact('company', 'completedRuns', 'fleetMetrics'));
+        return view('logistics.wallet', compact('company', 'completedRuns', 'fleetMetrics', 'payoutRequests'));
     }
 
     /**
@@ -1229,6 +1379,107 @@ class PortalController extends Controller
         $result = $settlementService->disburseVendorSettlement($order, $admin, $proof);
 
         return back()->with('status', $result['message']);
+    }
+
+    /**
+     * Interactive Action: Admin disburses corporate delivery fee payout to Logistics Company
+     */
+    public function adminDisburseLogisticsPayout(Request $request)
+    {
+        $request->validate([
+            'payout_id' => 'required|exists:logistics_payout_requests,id',
+            'notes' => 'nullable|string',
+        ]);
+
+        $payout = LogisticsPayoutRequest::with('company')->findOrFail($request->input('payout_id'));
+        if ($payout->status !== 'pending') {
+            return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
+        }
+
+        $admin = auth()->user() ?? User::where('user_type', 'super_admin')->first();
+        $payout->status = 'approved';
+        $payout->approved_by_admin_id = $admin->id;
+        $payout->disbursed_at = Carbon::now();
+        $payout->settlement_proof_path = 'storage/payouts/fleet_' . $payout->id . '_' . time() . '.png';
+        $payout->admin_notes = $request->input('notes', 'Direct corporate NUBAN transfer confirmed.');
+        $payout->save();
+
+        // Multi-channel Treasury WhatsApp & SMS Alert to Fleet HQ
+        \App\Services\NotificationDispatchService::dispatchPayoutDisbursed($payout);
+
+        AdminAuditLog::create([
+            'user_id' => $admin->id,
+            'action' => 'logistics_payout_disbursed',
+            'entity_type' => 'LogisticsPayoutRequest',
+            'entity_id' => $payout->id,
+            'description' => "Disbursed ₦" . number_format((float)$payout->amount, 2) . " corporate delivery fee payout to " . ($payout->company->company_name ?? 'Logistics Fleet'),
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+        ]);
+
+        return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " corporate delivery fee to {$payout->company->company_name}!");
+    }
+
+    /**
+     * Interactive Action: Logistics Company updates corporate bank account
+     */
+    public function logisticsUpdateBank(Request $request)
+    {
+        $company = $this->resolveLogisticsCompany();
+
+        $validated = $request->validate([
+            'bank_name' => 'required|string|max:100',
+            'account_number' => 'required|string|size:10',
+            'account_name' => 'required|string|max:150',
+        ]);
+
+        $company->bank_name = $validated['bank_name'];
+        $company->bank_code = $request->input('bank_code', '000');
+        $company->account_number = $validated['account_number'];
+        $company->account_name = $validated['account_name'];
+        $company->bank_updated_at = Carbon::now();
+        $company->save();
+
+        return back()->with('status', 'Corporate bank account details updated successfully. 48-Hour Security Cooldown is now active.');
+    }
+
+    /**
+     * Interactive Action: Logistics Company requests withdrawal from accumulated 90% wallet balance
+     */
+    public function logisticsRequestPayout(Request $request)
+    {
+        $company = $this->resolveLogisticsCompany();
+
+        $request->validate([
+            'amount' => 'required|numeric|min:500',
+        ]);
+
+        if (empty($company->account_number) || empty($company->bank_name)) {
+            return back()->with('error', 'Please configure your verified corporate bank account before requesting withdrawal.');
+        }
+
+        if ($company->isWithinBankCooldown()) {
+            return back()->with('error', 'Security Cooldown Active: Bank account was recently updated. For fraud prevention, withdrawals are locked for 48 hours following bank detail modifications.');
+        }
+
+        $amount = number_format((float)$request->input('amount'), 2, '.', '');
+        if (bccomp((string)$company->wallet_balance, $amount, 2) < 0) {
+            return back()->with('error', "Insufficient wallet balance. Available balance: ₦" . number_format((float)$company->wallet_balance, 2));
+        }
+
+        // Atomically debit company corporate wallet
+        $company->debitWallet($amount);
+
+        // Record payout request
+        LogisticsPayoutRequest::create([
+            'logistics_company_id' => $company->id,
+            'amount' => $amount,
+            'status' => 'pending',
+            'bank_name' => $company->bank_name,
+            'account_number' => $company->account_number,
+            'account_name' => $company->account_name ?? $company->company_name,
+        ]);
+
+        return back()->with('status', "Withdrawal request for ₦" . number_format((float)$amount, 2) . " submitted! Super Admin will review and disburse to {$company->bank_name} ({$company->account_number}).");
     }
 
     /**
@@ -1895,6 +2146,9 @@ class PortalController extends Controller
             'matures_at' => Carbon::now()->addHours(24),
             'expires_at' => Carbon::now()->addDays(90),
         ]);
+
+        // Multi-channel SMS & WhatsApp alert for new order & pickup OTP
+        \App\Services\NotificationDispatchService::dispatchOrderPlaced($order);
 
         return redirect()->route('order.status', ['order_number' => $order->order_number])->with('status', 'Payment verified! Your order has been placed successfully.');
     }

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Banner;
 use App\Models\AdminEmployeeProfile;
 use App\Models\Category;
 use App\Models\Country;
@@ -129,8 +130,23 @@ class EcosystemDemoSeeder extends Seeder
             'contact_phone' => '+2348044440001',
             'lga_id' => $uyo ? $uyo->id : 1,
             'fleet_size' => 15,
-            'wallet_balance' => '0.00',
+            'wallet_balance' => '54000.00',
+            'bank_name' => 'Zenith Bank PLC',
+            'bank_code' => '057',
+            'account_number' => '1019283746',
+            'account_name' => 'Akwa Express Logistics Ltd',
+            'bank_updated_at' => Carbon::now()->subDays(3),
             'status' => 'active',
+        ]);
+
+        \App\Models\LogisticsPayoutRequest::updateOrCreate([
+            'logistics_company_id' => $baseLogistics->id,
+            'amount' => '15000.00',
+            'status' => 'pending',
+        ], [
+            'bank_name' => 'Zenith Bank PLC',
+            'account_number' => '1019283746',
+            'account_name' => 'Akwa Express Logistics Ltd',
         ]);
 
         // Designated Collection Points per LGA for Inter-LGA / Inter-State lanes
@@ -397,6 +413,69 @@ class EcosystemDemoSeeder extends Seeder
             'matures_at' => Carbon::now()->subDays(2),
             'expires_at' => Carbon::now()->addDays(363),
         ]);
+
+                // =========================================================================
+        // 6. STOREFRONT BANNERS (Hero Slider & Promotional Strip)
+        // =========================================================================
+        Banner::updateOrCreate(
+            ['title' => 'Seamless Shopping, Swift Logistics', 'banner_type' => 'hero_slider'],
+            [
+                'subtitle' => "Akwa Ibom's Premier Omnichannel Platform • Physical In-Shop Inspection • Escrow Protected",
+                'badge_text' => 'VERIFIED OMNICHANNEL MARKET',
+                'bg_gradient' => 'linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%)',
+                'text_color' => '#0F172A',
+                'cta_text' => 'Shop Verified Items',
+                'cta_url' => '#catalog',
+                'is_active' => true,
+                'sort_order' => 1,
+                'image_path' => 'assets/img/vm_icon.jpg',
+            ]
+        );
+
+        Banner::updateOrCreate(
+            ['title' => 'Directional LGA Transit Across Akwa Ibom', 'banner_type' => 'hero_slider'],
+            [
+                'subtitle' => 'Same-Day Corridor Shuttles connecting Uyo Plaza, Eket, Ikot Ekpene, and Oron commercial hubs',
+                'badge_text' => 'CORRIDOR DISPATCH SPECIAL',
+                'bg_gradient' => 'linear-gradient(135deg, #EFF6FF 0%, #F5F3FF 100%)',
+                'text_color' => '#0F172A',
+                'cta_text' => 'Explore Delivery Corridors',
+                'cta_url' => '#catalog',
+                'is_active' => true,
+                'sort_order' => 2,
+                'image_path' => 'assets/img/vm_icon.jpg',
+            ]
+        );
+
+        Banner::updateOrCreate(
+            ['title' => 'Certified 7-Day Vendor Stock Freshness', 'banner_type' => 'hero_slider'],
+            [
+                'subtitle' => 'Direct from local merchants with physical inspection sign-off and instant 5% cashback rewards',
+                'badge_text' => '7-DAY FRESHNESS GUARANTEED',
+                'bg_gradient' => 'linear-gradient(135deg, #ECFDF5 0%, #FFFFFF 100%)',
+                'text_color' => '#0F172A',
+                'cta_text' => 'Browse Fresh Catalog',
+                'cta_url' => '#catalog',
+                'is_active' => true,
+                'sort_order' => 3,
+                'image_path' => 'assets/img/vm_icon.jpg',
+            ]
+        );
+
+        Banner::updateOrCreate(
+            ['title' => '5% Customer Cashback Reward on Every Prepaid Order', 'banner_type' => 'promo_strip'],
+            [
+                'subtitle' => 'Auto-credited to your rewards wallet with 24-hour escrow protection',
+                'badge_text' => 'SOVEREIGN 5% CASHBACK',
+                'bg_gradient' => 'linear-gradient(135deg, #1E1B4B 0%, #311042 100%)',
+                'text_color' => '#FFFFFF',
+                'cta_text' => 'Claim Rewards',
+                'cta_url' => '#catalog',
+                'is_active' => true,
+                'sort_order' => 1,
+                'image_path' => 'assets/img/vm_icon.jpg',
+            ]
+        );
 
         $this->command->info('✅ Seeded Super Admin strictly from ENV + Base standard accounts + 18 Demo Personas across all 6 roles.');
     }

@@ -65,6 +65,9 @@ class OrderSettlementService
             }
             $lockedOrder->save();
 
+            // Multi-channel SMS & WhatsApp alert to customer with secret OTP
+            NotificationDispatchService::dispatchRiderArrived($lockedOrder);
+
             return [
                 'success' => true,
                 'message' => 'Arrival signaled! Handshake prompt is now active on the customer\'s phone.',
@@ -162,6 +165,9 @@ class OrderSettlementService
                 'matures_at' => $lockedOrder->refund_window_expires_at,
                 'expires_at' => $lockedOrder->refund_window_expires_at->copy()->addDays(365),
             ]);
+
+            // Multi-channel notifications to Logistics Fleet, Customer, and Vendor
+            NotificationDispatchService::dispatchOrderDelivered($lockedOrder);
 
             return [
                 'success' => true,
