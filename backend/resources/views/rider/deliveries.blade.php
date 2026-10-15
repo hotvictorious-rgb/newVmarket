@@ -76,19 +76,37 @@
                                 @if($order->order_status === 'processing' || $order->order_status === 'ready_for_pickup')
                                     <span class="dash-badge dash-badge-gold">Step 1: Plaza Pickup</span>
                                 @elseif($order->order_status === 'out_for_delivery')
-                                    <span class="dash-badge dash-badge-info">Step 2: Doorstep Transit</span>
+                                    @if($order->hasRiderArrived())
+                                        <span class="dash-badge" style="background: #FEF3C7; color: #92400E; border: 1px solid #FCD34D; font-weight: 700;">⏳ Awaiting Customer PIN</span>
+                                    @else
+                                        <span class="dash-badge dash-badge-info">Step 2: In Transit</span>
+                                    @endif
                                 @else
                                     <span class="dash-badge dash-badge-success">Completed</span>
                                 @endif
                             </td>
                             <td>
-                                <div style="display: flex; gap: 6px;">
-                                    <a href="{{ route('rider.pickup.index') }}" class="btn-dash btn-dash-outline" style="padding: 4px 10px; font-size: 11.5px;">
-                                        Step 1 &rarr;
-                                    </a>
-                                    <a href="{{ route('rider.dropoff.index') }}" class="btn-dash btn-dash-primary" style="padding: 4px 10px; font-size: 11.5px;">
-                                        Step 2 &rarr;
-                                    </a>
+                                <div style="display: flex; gap: 6px; align-items: center;">
+                                    @if($order->order_status === 'processing' || $order->order_status === 'ready_for_pickup')
+                                        <a href="{{ route('rider.pickup.index') }}" class="btn-dash btn-dash-outline" style="padding: 4px 10px; font-size: 11.5px;">
+                                            Step 1 &rarr;
+                                        </a>
+                                    @elseif($order->order_status === 'out_for_delivery' && !$order->hasRiderArrived())
+                                        <form method="POST" action="{{ route('rider.order.arrived') }}" style="display: inline; margin: 0;">
+                                            @csrf
+                                            <input type="hidden" name="order_id" value="{{ $order->id }}">
+                                            <button type="submit" class="btn-dash" style="background: #2563EB; color: #FFFFFF; padding: 4px 8px; font-size: 11px; font-weight: 700; cursor: pointer;">
+                                                📍 Arrived
+                                            </button>
+                                        </form>
+                                        <a href="{{ route('rider.dropoff.index') }}" class="btn-dash btn-dash-primary" style="padding: 4px 10px; font-size: 11.5px;">
+                                            Step 2 &rarr;
+                                        </a>
+                                    @else
+                                        <a href="{{ route('rider.dropoff.index') }}" class="btn-dash btn-dash-primary" style="padding: 4px 10px; font-size: 11.5px;">
+                                            Step 2 &rarr;
+                                        </a>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
