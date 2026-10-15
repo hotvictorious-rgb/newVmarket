@@ -23,7 +23,8 @@ class WebAuthController extends Controller
         if (Auth::check() && Auth::user()->isCustomer()) {
             return redirect()->route('customer.dashboard');
         }
-        return view('auth.customer-login');
+        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+        return view('auth.customer-login', compact('lgas'));
     }
 
     public function loginCustomer(Request $request)
