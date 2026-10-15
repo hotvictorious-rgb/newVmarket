@@ -86,4 +86,45 @@ class PortalWebTest extends TestCase
         $response->assertSee('5% Sovereign Cashback Rewards Wallet');
         $response->assertSee('5% Victorious Cashback Guarantee');
     }
+    public function test_super_admin_delivery_lanes_page_loads_successfully(): void
+    {
+        $response = $this->get('/admin/delivery-lanes');
+        $response->assertStatus(200);
+        $response->assertSee('Directional LGA Delivery Lanes &amp; 3-Tier Distance Matrix', false);
+        $response->assertSee('Tier 1: Municipal (Intra-LGA)');
+        $response->assertSee('Tier 2: Regional (Inter-LGA)');
+        $response->assertSee('Tier 3: Inter-State Freight');
+    }
+
+    public function test_super_admin_settlements_page_loads_successfully(): void
+    {
+        $response = $this->get('/admin/settlements');
+        $response->assertStatus(200);
+        $response->assertSee('90/5/5 Sovereign Escrow &amp; Settlement Desk', false);
+        $response->assertSee('Sovereign 90/5/5 Mathematical Split Formula');
+    }
+
+    public function test_super_admin_announcements_page_loads_successfully(): void
+    {
+        $response = $this->get('/admin/announcements');
+        $response->assertStatus(200);
+        $response->assertSee('Storefront Announcement Bar &amp; Customer Care Desk', false);
+        $response->assertSee('CUSTOMER CARE PHONE');
+    }
+
+    public function test_super_admin_merchants_page_loads_successfully(): void
+    {
+        $response = $this->get('/admin/merchants');
+        $response->assertStatus(200);
+        $response->assertSee('Merchant Accreditation &amp; KYC Governance Desk', false);
+        $response->assertSee('Accredited Merchant KYC &amp; Banking Desk', false);
+    }
+
+    public function test_super_admin_orders_page_loads_successfully(): void
+    {
+        $response = $this->get('/admin/orders');
+        $response->assertStatus(200);
+        $response->assertSee('Platform Escrow Orders &amp; Fulfillment Ledger', false);
+        $response->assertSee('Master Platform Orders Ledger');
+    }
 }

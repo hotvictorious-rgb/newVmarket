@@ -13,6 +13,12 @@
     
     <!-- Admin Master Design System referencing vmarket v1 -->
     <link rel="stylesheet" href="{{ asset('assets/css/vmarket-admin.css') }}">
+    <script>
+        // Check sidebar state early to avoid layout shift
+        if (localStorage.getItem('vm_sidebar_collapsed') === '1' && window.innerWidth > 992) {
+            document.documentElement.classList.add('sidebar-collapsed');
+        }
+    </script>
     @stack('css')
 </head>
 <body class="admin-body">
@@ -20,17 +26,22 @@
 <div class="admin-wrapper">
     <!-- Collapsible Sidebar -->
     <aside class="admin-sidebar" id="adminSidebar">
-        <!-- Brand Header -->
-        <a href="{{ url('/') }}" class="sidebar-brand">
-            <img src="{{ asset('assets/img/vm_icon.jpg') }}" alt="Victorious MARKET" class="brand-icon">
-            <div class="brand-title">
-                <span class="brand-name-gold">Victorious</span>
-                <span class="brand-name-white">MARKET</span>
-                <span class="sidebar-role-badge @yield('role_badge_class', 'role-badge-super-admin')">
-                    @yield('role_badge', 'PORTAL')
-                </span>
-            </div>
-        </a>
+        <!-- Brand Header with Close/Collapse Button -->
+        <div class="sidebar-brand-container" style="display: flex; align-items: center; justify-content: space-between; padding: 0 16px; height: var(--adm-header-height); border-bottom: 1px solid var(--adm-sidebar-border); background: rgba(0, 0, 0, 0.2);">
+            <a href="{{ url('/') }}" class="sidebar-brand" style="border: none; padding: 0; background: none;">
+                <img src="{{ asset('assets/img/vm_icon.jpg') }}" alt="Victorious MARKET" class="brand-icon">
+                <div class="brand-title">
+                    <span class="brand-name-gold">Victorious</span>
+                    <span class="brand-name-white">MARKET</span>
+                    <span class="sidebar-role-badge @yield('role_badge_class', 'role-badge-super-admin')">
+                        @yield('role_badge', 'PORTAL')
+                    </span>
+                </div>
+            </a>
+            <button type="button" class="btn-sidebar-close" id="sidebarCloseBtn" aria-label="Close Sidebar" title="Collapse Sidebar (Ctrl+B)">
+                ✕
+            </button>
+        </div>
 
         <!-- Menu Quick Filter -->
         <div class="sidebar-search-box">
@@ -63,12 +74,15 @@
         </div>
     </aside>
 
+    <!-- Mobile Backdrop Overlay -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
     <!-- Main Content Canvas -->
     <div class="admin-main">
         <!-- Sticky Header Bar -->
         <header class="admin-header">
             <div class="header-left">
-                <button type="button" class="btn-sidebar-toggle" id="sidebarToggleBtn" aria-label="Toggle Menu">
+                <button type="button" class="btn-sidebar-toggle" id="sidebarToggleBtn" aria-label="Toggle Menu" title="Toggle Sidebar (Ctrl+B)">
                     ☰
                 </button>
                 <div class="breadcrumb-trail">
@@ -102,10 +116,10 @@
                             <span>📋</span> <span>Admin Staff Support</span>
                         </a>
                         <a href="{{ route('vendor.dashboard') }}" class="role-switcher-item">
-                            <span>🏪</span> <span>Vendor Merchant</span>
+                            <span>🏬</span> <span>Vendor Merchant</span>
                         </a>
                         <a href="{{ route('counter.dashboard') }}" class="role-switcher-item">
-                            <span>🏬</span> <span>Branch Counter Staff</span>
+                            <span>🏪</span> <span>Branch Counter Staff</span>
                         </a>
                         <a href="{{ route('logistics.dashboard') }}" class="role-switcher-item">
                             <span>🚚</span> <span>Logistics Fleet Desk</span>
@@ -140,14 +154,67 @@
 </div>
 
 <script>
-    // Mobile Sidebar Toggle
+    // Closeable Sidebar System (Desktop & Mobile)
     const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+    const sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
+    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
     const adminSidebar = document.getElementById('adminSidebar');
-    if (sidebarToggleBtn && adminSidebar) {
-        sidebarToggleBtn.addEventListener('click', () => {
+
+    function toggleSidebar() {
+        if (window.innerWidth > 992) {
+            // Desktop Collapse
+            document.body.classList.toggle('sidebar-collapsed');
+            const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+            localStorage.setItem('vm_sidebar_collapsed', isCollapsed ? '1' : '0');
+        } else {
+            // Mobile Offcanvas
             adminSidebar.classList.toggle('sidebar-open');
-        });
+            if (sidebarBackdrop) {
+                sidebarBackdrop.classList.toggle('active', adminSidebar.classList.contains('sidebar-open'));
+            }
+        }
     }
+
+    function closeSidebar() {
+        if (window.innerWidth > 992) {
+            document.body.classList.add('sidebar-collapsed');
+            localStorage.setItem('vm_sidebar_collapsed', '1');
+        } else {
+            adminSidebar.classList.remove('sidebar-open');
+            if (sidebarBackdrop) {
+                sidebarBackdrop.classList.remove('active');
+            }
+        }
+    }
+
+    if (sidebarToggleBtn) {
+        sidebarToggleBtn.addEventListener('click', toggleSidebar);
+    }
+    if (sidebarCloseBtn) {
+        sidebarCloseBtn.addEventListener('click', closeSidebar);
+    }
+    if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener('click', closeSidebar);
+    }
+
+    // Keyboard Shortcut (Ctrl+B or Cmd+B to toggle, Esc to close)
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+            e.preventDefault();
+            toggleSidebar();
+        } else if (e.key === 'Escape') {
+            if (window.innerWidth <= 992 && adminSidebar.classList.contains('sidebar-open')) {
+                closeSidebar();
+            }
+        }
+    });
+
+    // Apply saved desktop state to body on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        if (localStorage.getItem('vm_sidebar_collapsed') === '1' && window.innerWidth > 992) {
+            document.body.classList.add('sidebar-collapsed');
+        }
+    });
 
     // Sidebar Menu Live Search Filter
     const filterInput = document.getElementById('sidebarMenuFilter');

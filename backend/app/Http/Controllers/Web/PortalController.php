@@ -282,6 +282,105 @@ class PortalController extends Controller
     /**
      * Super Admin Announcement & Contact Settings Update
      */
+    /**
+     * Dedicated Page: Directional LGA Delivery Lanes & 3-Tier Distance Matrix
+     */
+    public function adminDeliveryLanesPage(Request $request)
+    {
+        $allLgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+
+        $deliveryLanes = DeliveryLane::with(['originLga', 'destinationLga'])
+            ->orderBy('is_active', 'desc')
+            ->latest()
+            ->get();
+
+        $allLanePairs = DeliveryLane::where('is_active', true)->get();
+        foreach ($deliveryLanes as $l) {
+            $hasReverse = $allLanePairs->contains(function ($item) use ($l) {
+                return $item->origin_lga_id === $l->destination_lga_id && $item->destination_lga_id === $l->origin_lga_id;
+            });
+            $l->is_bidirectional = $hasReverse;
+        }
+
+        $zonalSettings = [
+            'zone_intra_lga_fee' => \App\Models\SystemSetting::get('zone_intra_lga_fee', '500.00'),
+            'zone_intra_lga_eta' => \App\Models\SystemSetting::get('zone_intra_lga_eta', '2-4 hours'),
+            'zone_inter_lga_fee' => \App\Models\SystemSetting::get('zone_inter_lga_fee', '1500.00'),
+            'zone_inter_lga_eta' => \App\Models\SystemSetting::get('zone_inter_lga_eta', 'Same day / 12-24 hours'),
+            'zone_inter_state_fee' => \App\Models\SystemSetting::get('zone_inter_state_fee', '3500.00'),
+            'zone_inter_state_eta' => \App\Models\SystemSetting::get('zone_inter_state_eta', '2-4 business days'),
+            'zone_bulky_cargo_surcharge' => \App\Models\SystemSetting::get('zone_bulky_cargo_surcharge', '1000.00'),
+        ];
+
+        $pendingSettlementsCount = Order::where('vendor_settlement_status', 'eligible')->count();
+
+        return view('admin.delivery_lanes', compact('deliveryLanes', 'allLgas', 'zonalSettings', 'pendingSettlementsCount'));
+    }
+
+    /**
+     * Dedicated Page: 90/5/5 Sovereign Escrow & Settlement Desk
+     */
+    public function adminSettlementsPage(Request $request)
+    {
+        $pendingSettlements = Order::where('vendor_settlement_status', 'eligible')
+            ->with(['vendor:id,business_name,bank_name,account_number', 'customer:id,name'])
+            ->latest()
+            ->get();
+
+        $heldSettlementsCount = Order::where('vendor_settlement_status', 'held')->count();
+        $totalCashbackIssued = CustomerCashbackLedger::sum('amount') ?? '0.00';
+        $pendingSettlementsCount = $pendingSettlements->count();
+
+        return view('admin.settlements', compact('pendingSettlements', 'heldSettlementsCount', 'totalCashbackIssued', 'pendingSettlementsCount'));
+    }
+
+    /**
+     * Dedicated Page: Storefront Announcement Bar & Customer Care Desk
+     */
+    public function adminAnnouncementsPage(Request $request)
+    {
+        $announcementSettings = [
+            'support_phone' => \App\Models\SystemSetting::get('support_phone', '09118949035'),
+            'support_whatsapp' => \App\Models\SystemSetting::get('support_whatsapp', '09118949035'),
+            'support_email' => \App\Models\SystemSetting::get('support_email', 'support@victoriousmarket.com'),
+            'announcement_type' => \App\Models\SystemSetting::get('announcement_type', 'phone_order'),
+            'announcement_badge' => \App\Models\SystemSetting::get('announcement_badge', '💬'),
+            'announcement_text' => \App\Models\SystemSetting::get('announcement_text', 'Call or Whatsapp 09118949035 to order'),
+            'announcement_bg_color' => \App\Models\SystemSetting::get('announcement_bg_color', '#0F172A'),
+            'announcement_link' => \App\Models\SystemSetting::get('announcement_link', 'https://wa.me/2349118949035'),
+            'announcement_is_active' => (bool)\App\Models\SystemSetting::get('announcement_is_active', true),
+        ];
+
+        $pendingSettlementsCount = Order::where('vendor_settlement_status', 'eligible')->count();
+
+        return view('admin.announcements', compact('announcementSettings', 'pendingSettlementsCount'));
+    }
+
+    /**
+     * Dedicated Page: Merchant Accreditation & KYC Desk
+     */
+    public function adminMerchantsPage(Request $request)
+    {
+        $allVendors = VendorProfile::with(['user', 'shops'])->latest()->get();
+        $pendingSettlementsCount = Order::where('vendor_settlement_status', 'eligible')->count();
+
+        return view('admin.merchants', compact('allVendors', 'pendingSettlementsCount'));
+    }
+
+    /**
+     * Dedicated Page: Platform Escrow Orders & Fulfillment Ledger
+     */
+    public function adminOrdersPage(Request $request)
+    {
+        $recentOrders = Order::with(['customer:id,name', 'vendor:id,business_name', 'shop:id,name'])
+            ->latest()
+            ->get();
+
+        $pendingSettlementsCount = Order::where('vendor_settlement_status', 'eligible')->count();
+
+        return view('admin.orders', compact('recentOrders', 'pendingSettlementsCount'));
+    }
+
     public function adminUpdateAnnouncementSettings(Request $request)
     {
         $validated = $request->validate([
@@ -672,7 +771,7 @@ class PortalController extends Controller
         }
 
         $dirMsg = $isBidirectional ? 'Bidirectional route (A ⇄ B) synchronized!' : 'One-way corridor saved!';
-        return redirect()->to(route('admin.dashboard') . '#delivery-lanes')->with('status', "Custom corridor successfully saved: {$dirMsg}");
+        return redirect()->route('admin.delivery_lanes.index')->with('status', "Custom corridor successfully saved: {$dirMsg}");
     }
 
     public function adminUpdateZonalRates(Request $request)
@@ -691,7 +790,7 @@ class PortalController extends Controller
             \App\Models\SystemSetting::set($k, (string)$v, 'zonal_rates');
         }
 
-        return redirect()->to(route('admin.dashboard') . '#delivery-lanes')->with('status', '3-Tier Zonal Distance Baseline Rates saved successfully!');
+        return redirect()->route('admin.delivery_lanes.index')->with('status', '3-Tier Zonal Distance Baseline Rates saved successfully!');
     }
 
     public function adminDeleteDeliveryLane(Request $request, int $id)
@@ -699,7 +798,7 @@ class PortalController extends Controller
         $lane = DeliveryLane::findOrFail($id);
         $lane->delete();
 
-        return redirect()->to(route('admin.dashboard') . '#delivery-lanes')->with('status', 'Delivery corridor deleted successfully.');
+        return redirect()->route('admin.delivery_lanes.index')->with('status', 'Delivery corridor deleted successfully.');
     }
 
     public function adminToggleDeliveryLane(Request $request, int $id)
@@ -708,7 +807,7 @@ class PortalController extends Controller
         $lane->is_active = !$lane->is_active;
         $lane->save();
 
-        return redirect()->to(route('admin.dashboard') . '#delivery-lanes')->with('status', "Delivery lane #{$lane->id} toggled " . ($lane->is_active ? 'Active' : 'Inactive') . '.');
+        return redirect()->route('admin.delivery_lanes.index')->with('status', "Delivery lane #{$lane->id} toggled " . ($lane->is_active ? 'Active' : 'Inactive') . '.');
     }
 
     public function adminAccreditVendor(Request $request, int $id)
@@ -728,7 +827,7 @@ class PortalController extends Controller
         }
         $vendor->save();
 
-        return redirect()->to(route('admin.dashboard') . '#merchants-desk')->with('status', $msg);
+        return redirect()->route('admin.merchants.index')->with('status', $msg);
     }
 
     // ==========================================

@@ -61,6 +61,12 @@ Route::post('/logout', [WebAuthController::class, 'logout'])->name('logout');
 // 1. Super Admin Command Tower
 Route::prefix('admin')->group(function () {
     Route::get('/', [PortalController::class, 'adminDashboard'])->name('admin.dashboard');
+    Route::get('/delivery-lanes', [PortalController::class, 'adminDeliveryLanesPage'])->name('admin.delivery_lanes.index');
+    Route::get('/settlements', [PortalController::class, 'adminSettlementsPage'])->name('admin.settlements.index');
+    Route::get('/announcements', [PortalController::class, 'adminAnnouncementsPage'])->name('admin.announcements.index');
+    Route::get('/merchants', [PortalController::class, 'adminMerchantsPage'])->name('admin.merchants.index');
+    Route::get('/orders', [PortalController::class, 'adminOrdersPage'])->name('admin.orders.index');
+
     Route::post('/disburse-settlement', [PortalController::class, 'adminDisburseSettlement'])->name('admin.disburse.settlement');
     Route::post('/settings/announcement', [PortalController::class, 'adminUpdateAnnouncementSettings'])->name('admin.settings.announcement');
 });

@@ -395,13 +395,29 @@ body.admin-body *::-webkit-scrollbar-thumb {
 }
 
 .btn-sidebar-toggle {
-    display: none;
-    background: none;
-    border: none;
-    font-size: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: #FFFFFF;
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius-sm);
+    font-size: 16px;
     color: var(--adm-text-muted);
     cursor: pointer;
-    padding: 4px;
+    padding: 0;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+.btn-sidebar-toggle:hover {
+    background: var(--adm-primary-light);
+    color: var(--adm-primary);
+    border-color: rgba(94, 23, 235, 0.3);
+    box-shadow: 0 2px 6px rgba(94, 23, 235, 0.12);
+}
+.btn-sidebar-toggle:active {
+    transform: scale(0.95);
 }
 
 .breadcrumb-trail {
@@ -838,4 +854,126 @@ body.admin-body *::-webkit-scrollbar-thumb {
     .stat-grid-4, .stat-grid-3 {
         grid-template-columns: 1fr;
     }
+}
+
+
+/* Sidebar Close Button */
+.btn-sidebar-close {
+    width: 28px;
+    height: 28px;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #94A3B8;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.btn-sidebar-close:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #FCA5A5;
+}
+
+/* Sidebar Backdrop on Mobile */
+.sidebar-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(2px);
+    z-index: 950;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+.sidebar-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Desktop Sidebar Collapsing */
+@media (min-width: 993px) {
+    .admin-sidebar {
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .admin-main {
+        transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    body.sidebar-collapsed .admin-sidebar,
+    html.sidebar-collapsed .admin-sidebar {
+        transform: translateX(-100%);
+    }
+    body.sidebar-collapsed .admin-main,
+    html.sidebar-collapsed .admin-main {
+        margin-left: 0 !important;
+    }
+}
+
+/* Module Launchpad Cards for Command Tower Overview */
+.module-launchpad-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 18px;
+    margin-bottom: 28px;
+}
+.module-card {
+    background: var(--adm-surface);
+    border: 1px solid var(--adm-border);
+    border-radius: var(--adm-radius-md);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: var(--adm-shadow-sm);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+.module-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--adm-shadow-md);
+    border-color: rgba(94, 23, 235, 0.3);
+}
+.module-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.module-card-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+}
+.module-card-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--adm-text);
+    margin-bottom: 4px;
+}
+.module-card-desc {
+    font-size: 12.5px;
+    color: var(--adm-text-muted);
+    line-height: 1.45;
+    margin-bottom: 16px;
+}
+.module-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 14px;
+    border-top: 1px solid var(--adm-border-light);
 }
