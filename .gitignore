@@ -1,0 +1,24 @@
+# Cloned legacy reference repository
+reference-v1/
+
+# System & Editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Laravel backend dependencies and dynamic caches
+backend/.env
+backend/.env.backup
+backend/.env.production
+backend/vendor/
+backend/node_modules/
+backend/public/build/
+backend/public/hot/
+backend/public/storage/
+backend/storage/*.key
+backend/storage/logs/*.log
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/.phpunit.result.cache
