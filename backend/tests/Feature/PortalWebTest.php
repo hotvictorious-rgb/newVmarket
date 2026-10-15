@@ -352,4 +352,40 @@ class PortalWebTest extends TestCase
         $this->assertFalse((bool)$admin->is_demo);
         $this->assertEquals(config('auth.superadmin.email'), $admin->email);
     }
+
+    public function test_super_admin_can_manage_products_and_toggle_flagship_badge(): void
+    {
+        $admin = User::where('user_type', 'super_admin')->first();
+        $product = \App\Models\Product::first();
+        $this->assertNotNull($product, 'A product should exist');
+
+        // 1. Super Admin can view /admin/products page
+        $response = $this->actingAs($admin)->get('/admin/products');
+        $response->assertStatus(200);
+        $response->assertSee('Product Catalog &amp; Flagship Badge Governance', false);
+        $response->assertSee($product->name);
+
+        // 2. Super Admin toggles Flagship badge
+        $initialState = (bool)$product->is_vmarket_flagship;
+        $toggleResponse = $this->actingAs($admin)->post('/admin/products/' . $product->id . '/toggle-flagship');
+        $toggleResponse->assertRedirect();
+
+        $product->refresh();
+        $this->assertEquals(!$initialState, (bool)$product->is_vmarket_flagship);
+
+        // 3. Toggle back
+        $this->actingAs($admin)->post('/admin/products/' . $product->id . '/toggle-flagship');
+        $product->refresh();
+        $this->assertEquals($initialState, (bool)$product->is_vmarket_flagship);
+    }
+
+    public function test_non_admin_cannot_toggle_product_flagship_badge(): void
+    {
+        $customer = User::where('user_type', 'customer')->first();
+        $product = \App\Models\Product::first();
+
+        // Customer cannot access /admin/products or toggle flagship
+        $this->actingAs($customer)->get('/admin/products')->assertStatus(403);
+        $this->actingAs($customer)->post('/admin/products/' . $product->id . '/toggle-flagship')->assertStatus(403);
+    }
 }

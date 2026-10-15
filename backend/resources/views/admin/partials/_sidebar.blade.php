@@ -49,6 +49,12 @@
     </a>
 </li>
 <li class="sidebar-nav-item">
+    <a href="{{ route('admin.products.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.products.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">⭐</span>
+        <span>Flagship Products Catalog</span>
+    </a>
+</li>
+<li class="sidebar-nav-item">
     <a href="{{ route('vendor.dashboard') }}" class="sidebar-nav-link">
         <span class="nav-link-icon">🏬</span>
         <span>Inspect Merchant Desk</span>

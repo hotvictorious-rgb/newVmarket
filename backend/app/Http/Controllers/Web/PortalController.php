@@ -623,6 +623,74 @@ class PortalController extends Controller
         return view('admin.orders', compact('recentOrders', 'pendingSettlementsCount'));
     }
 
+    /**
+     * Dedicated Page: Platform Product Catalog & Flagship Badge Assignment
+     */
+    public function adminProductsPage(Request $request)
+    {
+        $query = Product::with(['shop.lga', 'vendor', 'category']);
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('sku', 'like', "%{$search}%")
+                  ->orWhereHas('shop', fn($sq) => $sq->where('name', 'like', "%{$search}%"))
+                  ->orWhereHas('vendor', fn($vq) => $vq->where('business_name', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($request->filled('flagship')) {
+            if ($request->input('flagship') === '1') {
+                $query->where('is_vmarket_flagship', true);
+            } elseif ($request->input('flagship') === '0') {
+                $query->where('is_vmarket_flagship', false);
+            }
+        }
+
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->input('category_id'));
+        }
+
+        $products = $query->latest()->paginate(25)->withQueryString();
+        $categories = Category::orderBy('name', 'asc')->get();
+        $totalProducts = Product::count();
+        $flagshipCount = Product::where('is_vmarket_flagship', true)->count();
+        $pendingSettlementsCount = Order::where('vendor_settlement_status', 'eligible')->count();
+
+        return view('admin.products', compact(
+            'products',
+            'categories',
+            'totalProducts',
+            'flagshipCount',
+            'pendingSettlementsCount'
+        ));
+    }
+
+    /**
+     * Toggle Flagship Badge on any Vendor Product
+     */
+    public function adminToggleProductFlagship(Request $request, int $id)
+    {
+        $product = Product::findOrFail($id);
+        $product->is_vmarket_flagship = !$product->is_vmarket_flagship;
+        $product->save();
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'is_flagship' => $product->is_vmarket_flagship,
+                'message' => $product->is_vmarket_flagship
+                    ? "Product '{$product->name}' is now assigned the ★ FLAGSHIP badge."
+                    : "Flagship badge removed from '{$product->name}'.",
+            ]);
+        }
+
+        return redirect()->back()->with('status', $product->is_vmarket_flagship
+            ? "Product '{$product->name}' is now assigned the ★ FLAGSHIP badge."
+            : "Flagship badge removed from '{$product->name}'.");
+    }
+
     public function adminUpdateAnnouncementSettings(Request $request)
     {
         $validated = $request->validate([

@@ -74,6 +74,8 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::delete('/banners/{id}', [PortalController::class, 'adminDeleteBanner'])->name('admin.banners.destroy');
     Route::get('/merchants', [PortalController::class, 'adminMerchantsPage'])->name('admin.merchants.index');
     Route::get('/orders', [PortalController::class, 'adminOrdersPage'])->name('admin.orders.index');
+    Route::get('/products', [PortalController::class, 'adminProductsPage'])->name('admin.products.index');
+    Route::post('/products/{id}/toggle-flagship', [PortalController::class, 'adminToggleProductFlagship'])->name('admin.products.toggle_flagship');
 
     Route::post('/disburse-settlement', [PortalController::class, 'adminDisburseSettlement'])->name('admin.disburse.settlement');
     Route::post('/disburse-logistics-payout', [PortalController::class, 'adminDisburseLogisticsPayout'])->name('admin.disburse.logistics_payout');
