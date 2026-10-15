@@ -14,11 +14,21 @@ class Banner extends Model
     public const CACHE_KEY_PROMO = 'storefront_active_banners_promo_strip';
     public const CACHE_KEY_ALL = 'storefront_all_active_banners';
 
+    public const TEMPLATE_LUXURY_SPLIT = 'luxury_split';
+    public const TEMPLATE_FULL_COVER = 'full_cover';
+    public const TEMPLATE_FLASH_URGENCY = 'flash_urgency';
+    public const TEMPLATE_MINIMAL_BENTO = 'minimal_bento';
+    public const TEMPLATE_FRESH_MARKET = 'fresh_market';
+    public const TEMPLATE_BRAND_PRESTIGE = 'brand_prestige';
+
     protected $fillable = [
         'banner_type',
+        'template_style',
         'title',
         'subtitle',
         'badge_text',
+        'discount_tag',
+        'feature_tags',
         'image_path',
         'bg_gradient',
         'text_color',
@@ -79,6 +89,14 @@ class Banner extends Model
     public function scopePromo($query)
     {
         return $query->where('banner_type', 'promo_strip');
+    }
+
+    public function getFeatureTagsListAttribute(): array
+    {
+        if (empty($this->feature_tags)) {
+            return [];
+        }
+        return array_values(array_filter(array_map('trim', explode(',', $this->feature_tags))));
     }
 
     /**

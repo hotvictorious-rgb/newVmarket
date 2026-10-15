@@ -416,14 +416,18 @@ class EcosystemDemoSeeder extends Seeder
 
                 // =========================================================================
         // 6. STOREFRONT BANNERS (Hero Slider & Promotional Strip)
+        // Multi-Template Studio System (Zero Designer Needed)
         // =========================================================================
         Banner::updateOrCreate(
             ['title' => 'Seamless Shopping, Swift Logistics', 'banner_type' => 'hero_slider'],
             [
-                'subtitle' => "Akwa Ibom's Premier Omnichannel Platform • Physical In-Shop Inspection • Escrow Protected",
-                'badge_text' => 'VERIFIED OMNICHANNEL MARKET',
-                'bg_gradient' => 'linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%)',
-                'text_color' => '#0F172A',
+                'template_style' => 'brand_prestige',
+                'subtitle' => "Akwa Ibom's Official Omnichannel Platform • Physical In-Shop Inspection • Escrow Protected",
+                'badge_text' => '👑 OFFICIAL FLAGSHIP MARKETPLACE',
+                'discount_tag' => '★ OFFICIAL PLATFORM',
+                'feature_tags' => 'Physical In-Shop Inspection, Escrow Protected, Dual-OTP Handshake',
+                'bg_gradient' => 'linear-gradient(135deg, #2E0854 0%, #4C1D95 100%)',
+                'text_color' => '#FFFFFF',
                 'cta_text' => 'Shop Verified Items',
                 'cta_url' => '#catalog',
                 'is_active' => true,
@@ -435,11 +439,14 @@ class EcosystemDemoSeeder extends Seeder
         Banner::updateOrCreate(
             ['title' => 'Directional LGA Transit Across Akwa Ibom', 'banner_type' => 'hero_slider'],
             [
+                'template_style' => 'minimal_bento',
                 'subtitle' => 'Same-Day Corridor Shuttles connecting Uyo Plaza, Eket, Ikot Ekpene, and Oron commercial hubs',
-                'badge_text' => 'CORRIDOR DISPATCH SPECIAL',
-                'bg_gradient' => 'linear-gradient(135deg, #EFF6FF 0%, #F5F3FF 100%)',
+                'badge_text' => 'LOGISTICS CORRIDOR SPECIAL',
+                'discount_tag' => 'FROM ₦1,500',
+                'feature_tags' => 'Same-Day Shuttles, Uyo ↔ Eket Corridor, Ikot Ekpene Hub',
+                'bg_gradient' => 'linear-gradient(135deg, #F8FAFC 0%, #EDE9FE 100%)',
                 'text_color' => '#0F172A',
-                'cta_text' => 'Explore Delivery Corridors',
+                'cta_text' => 'Explore Corridors',
                 'cta_url' => '#catalog',
                 'is_active' => true,
                 'sort_order' => 2,
@@ -450,10 +457,13 @@ class EcosystemDemoSeeder extends Seeder
         Banner::updateOrCreate(
             ['title' => 'Certified 7-Day Vendor Stock Freshness', 'banner_type' => 'hero_slider'],
             [
-                'subtitle' => 'Direct from local merchants with physical inspection sign-off and instant 5% cashback rewards',
-                'badge_text' => '7-DAY FRESHNESS GUARANTEED',
-                'bg_gradient' => 'linear-gradient(135deg, #ECFDF5 0%, #FFFFFF 100%)',
-                'text_color' => '#0F172A',
+                'template_style' => 'fresh_market',
+                'subtitle' => 'Direct from local farmers & merchants with physical inspection sign-off and instant rewards',
+                'badge_text' => '🌱 100% FARM FRESH GUARANTEE',
+                'discount_tag' => '+5% CASHBACK',
+                'feature_tags' => '7-Day Freshness, Local Farm Direct, Verified Akwa Ibom Sellers',
+                'bg_gradient' => 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)',
+                'text_color' => '#064E3B',
                 'cta_text' => 'Browse Fresh Catalog',
                 'cta_url' => '#catalog',
                 'is_active' => true,
@@ -463,11 +473,32 @@ class EcosystemDemoSeeder extends Seeder
         );
 
         Banner::updateOrCreate(
+            ['title' => 'Midnight Tech & Electronics Flash Drop', 'banner_type' => 'hero_slider'],
+            [
+                'template_style' => 'flash_urgency',
+                'subtitle' => 'Save up to 45% on authentic smartphones, audio gear, and laptops with in-shop counter warranty',
+                'badge_text' => '🔥 FLASH DEAL • LIVE NOW',
+                'discount_tag' => 'SAVE 45%',
+                'feature_tags' => 'Limited Stock, Genuine Warranty, Instant Rider Dispatch',
+                'bg_gradient' => 'linear-gradient(135deg, #0F172A 0%, #311042 100%)',
+                'text_color' => '#FFFFFF',
+                'cta_text' => 'Claim Tech Deals',
+                'cta_url' => '#catalog',
+                'is_active' => true,
+                'sort_order' => 4,
+                'image_path' => 'assets/img/vm_icon.jpg',
+            ]
+        );
+
+        Banner::updateOrCreate(
             ['title' => '5% Customer Cashback Reward on Every Prepaid Order', 'banner_type' => 'promo_strip'],
             [
+                'template_style' => 'luxury_split',
                 'subtitle' => 'Auto-credited to your rewards wallet with 24-hour escrow protection',
                 'badge_text' => 'SOVEREIGN 5% CASHBACK',
-                'bg_gradient' => 'linear-gradient(135deg, #1E1B4B 0%, #311042 100%)',
+                'discount_tag' => '₦ REWARD',
+                'feature_tags' => 'Auto-Credited, Zero Fee, Instant Redemption',
+                'bg_gradient' => 'linear-gradient(135deg, #1E1B4B 0%, #4C1D95 100%)',
                 'text_color' => '#FFFFFF',
                 'cta_text' => 'Claim Rewards',
                 'cta_url' => '#catalog',

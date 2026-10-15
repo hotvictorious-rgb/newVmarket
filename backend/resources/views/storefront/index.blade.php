@@ -95,43 +95,7 @@
 
                 <div class="vm-hero-slides-track" id="vmHeroSliderTrack">
                     @foreach($activeHeroBanners as $index => $banner)
-                        <div class="vm-hero-slide-item {{ $index === 0 ? 'active' : '' }}" 
-                             style="{{ $index !== 0 ? 'display: none;' : 'display: flex;' }} background: {{ $banner->bg_gradient ?? 'linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%)' }}; border: 1px solid rgba(94, 23, 235, 0.12); border-radius: 14px; padding: 28px 32px; box-shadow: var(--vm-shadow-xs); position: relative; overflow: hidden; justify-content: space-between; align-items: center; min-height: 220px;"
-                             data-slide-index="{{ $index }}">
-                            <div style="max-width: 580px; position: relative; z-index: 2;">
-                                
-                                @if(!empty($banner->badge_text))
-                                    <div class="vm-hero-badge-pill" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 3px 10px; border-radius: 999px; background: #FFFBE6; color: #D97706; margin-bottom: 12px;">
-                                        <span class="vm-badge-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #D97706;"></span>
-                                        <span>{{ $banner->badge_text }}</span>
-                                    </div>
-                                @endif
-
-                                <h2 class="vm-hero-title" style="font-size: clamp(22px, 3.5vw, 32px); font-weight: 800; color: {{ $banner->text_color ?? '#0F172A' }}; line-height: 1.22; margin-bottom: 8px; letter-spacing: -0.5px;">
-                                    {{ $banner->title }}
-                                </h2>
-
-                                @if(!empty($banner->subtitle))
-                                    <p class="vm-hero-subtitle" style="font-size: clamp(12.5px, 2vw, 14.5px); color: #64748B; margin-bottom: 18px; line-height: 1.45;">
-                                        {{ $banner->subtitle }}
-                                    </p>
-                                @endif
-
-                                <div class="vm-hero-actions" style="display: flex; gap: 12px; align-items: center;">
-                                    <a href="{{ $banner->cta_url ?? '#catalog' }}" class="vm-hero-cta-btn" style="display: inline-flex; align-items: center; gap: 6px; background: var(--vm-gold); color: #0F172A; font-weight: 800; font-size: 13.5px; padding: 10px 22px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 14px rgba(255, 215, 0, 0.35); transition: all 0.2s ease;">
-                                        <span>{{ $banner->cta_text ?? 'Shop Verified Items' }}</span>
-                                        <span>→</span>
-                                    </a>
-                                </div>
-                            </div>
-
-                            <!-- Brand Emblem Pedestal -->
-                            <div class="vm-hero-pedestal-wrap" style="display: flex; align-items: center; justify-content: center; position: relative; margin-left: 16px; flex-shrink: 0;">
-                                <div style="width: 110px; height: 110px; border-radius: 24px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 28px rgba(94, 23, 235, 0.14); border: 2px solid rgba(255, 215, 0, 0.45);">
-                                    <img src="{{ asset($banner->image_path ?: 'assets/img/vm_icon.jpg') }}" alt="Victorious MARKET" style="width: 90px; height: 90px; border-radius: 18px; object-fit: cover;">
-                                </div>
-                            </div>
-                        </div>
+                        @include('storefront.partials._banner_renderer', ['banner' => $banner, 'index' => $index])
                     @endforeach
                 </div>
 
@@ -454,26 +418,8 @@
             <!-- Dynamic Promotional Strip (Configurable via Admin Panel) -->
     @if(isset($promoBanners) && $promoBanners->isNotEmpty())
         @php $promo = $promoBanners->first(); @endphp
-        <div class="vm-promo-strip-banner" style="background: {{ $promo->bg_gradient ?? 'linear-gradient(135deg, #1E1B4B 0%, #311042 100%)' }}; border-radius: 14px; padding: 20px 28px; margin-bottom: 30px; color: {{ $promo->text_color ?? '#FFFFFF' }}; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 18px rgba(30, 27, 75, 0.12); flex-wrap: wrap; gap: 16px;">
-            <div style="max-width: 650px;">
-                @if(!empty($promo->badge_text))
-                    <span style="display: inline-block; background: #F59E0B; color: #0F172A; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.4px;">
-                        {{ $promo->badge_text }}
-                    </span>
-                @endif
-                <h3 style="font-size: clamp(17px, 2.5vw, 21px); font-weight: 800; margin: 0 0 4px; line-height: 1.25;">
-                    {{ $promo->title }}
-                </h3>
-                @if(!empty($promo->subtitle))
-                    <p style="font-size: 13px; opacity: 0.9; margin: 0; line-height: 1.4;">
-                        {{ $promo->subtitle }}
-                    </p>
-                @endif
-            </div>
-            <a href="{{ $promo->cta_url ?? '#catalog' }}" style="background: #F59E0B; color: #0F172A; font-size: 13px; font-weight: 800; padding: 10px 22px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35); flex-shrink: 0; transition: all 0.2s ease;">
-                <span>{{ $promo->cta_text ?? 'Claim Rewards' }}</span>
-                <span>→</span>
-            </a>
+        <div class="vm-promo-strip-container" style="margin-bottom: 30px;">
+            @include('storefront.partials._banner_renderer', ['banner' => $promo, 'index' => 0])
         </div>
     @endif
 
