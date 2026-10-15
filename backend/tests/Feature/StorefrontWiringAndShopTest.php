@@ -107,13 +107,77 @@ class StorefrontWiringAndShopTest extends TestCase
 
     public function test_checkout_handles_missing_product_id_gracefully()
     {
-        // When user visits /checkout without params, it shouldn't 404 or 500
-        $response = $this->get('/checkout');
+        // When authenticated customer visits /checkout without params, it shouldn't 404 or 500
+        $customer = User::where('user_type', 'customer')->firstOrFail();
+        $response = $this->actingAs($customer)->get('/checkout');
 
         // Either renders checkout with eligible product or redirects to storefront with message
         $this->assertTrue(in_array($response->status(), [200, 302]));
         if ($response->status() === 200) {
             $response->assertSee('Order Summary');
         }
+    }
+
+    public function test_unauthenticated_user_checkout_redirects_to_login_with_return_url()
+    {
+        $response = $this->get('/checkout');
+        $response->assertStatus(302);
+        $response->assertRedirect();
+        $this->assertTrue(str_contains($response->headers->get('Location'), '/customer/login') || str_contains($response->headers->get('Location'), '/login'));
+        $response->assertSessionHas('info');
+    }
+
+    public function test_unauthenticated_user_cannot_process_checkout_without_account()
+    {
+        $product = Product::firstOrFail();
+        $response = $this->post(route('checkout.process'), [
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'fulfillment_type' => 'in_shop_pickup',
+            'customer_name' => 'Guest Visitor',
+            'customer_phone' => '08012345678',
+        ]);
+
+        $response->assertStatus(302);
+        $this->assertTrue(str_contains($response->headers->get('Location'), '/customer/login') || str_contains($response->headers->get('Location'), '/login'));
+        $response->assertSessionHas('error');
+    }
+
+    public function test_unauthenticated_user_cannot_create_in_shop_reservation_without_account()
+    {
+        $product = Product::firstOrFail();
+        $response = $this->post(route('reservation.create'), [
+            'product_id' => $product->id,
+            'shop_id' => $product->shop_id,
+            'quantity' => 1,
+            'customer_name' => 'Guest Visitor',
+            'customer_phone' => '08012345678',
+        ]);
+
+        $response->assertStatus(302);
+        $this->assertTrue(str_contains($response->headers->get('Location'), '/customer/login') || str_contains($response->headers->get('Location'), '/login'));
+        $response->assertSessionHas('info');
+    }
+
+    public function test_authenticated_customer_can_access_checkout_successfully()
+    {
+        $customer = User::where('user_type', 'customer')->firstOrFail();
+        $product = Product::firstOrFail();
+
+        $response = $this->actingAs($customer)->get('/checkout?product_id=' . $product->id);
+        $response->assertStatus(200);
+        $response->assertSee('Order Summary');
+        $response->assertSee($product->name);
+        $response->assertSee($customer->name);
+    }
+
+    public function test_storefront_contains_auth_checkout_modal_and_grid_ids()
+    {
+        $response = $this->get('/');
+        $response->assertStatus(200);
+        $response->assertSee('id="vmAuthCheckoutModal"', false);
+        $response->assertSee('id="vmShopsGridContainer"', false);
+        $response->assertSee('Customer Account Required');
+        $response->assertSee('vmOpenAuthModal');
     }
 }

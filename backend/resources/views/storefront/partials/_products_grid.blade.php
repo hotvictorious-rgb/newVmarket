@@ -95,16 +95,46 @@
 
     </div>
 @empty
-    <div style="grid-column: 1 / -1; text-align: center; padding: 48px 20px; background: #FFFFFF; border: 1px dashed var(--vm-border); border-radius: 16px;">
-        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(94, 23, 235, 0.08); color: var(--vm-primary, #5E17EB); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; font-size: 24px;">
-            📍
+    @if(request('search'))
+        <div style="grid-column: 1 / -1; text-align: center; padding: 48px 20px; background: #FFFFFF; border: 1.5px dashed #CBD5E1; border-radius: 16px;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: #FEF3C7; color: #D97706; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; font-size: 26px;">
+                🔍
+            </div>
+            <h4 style="font-size: 17px; font-weight: 800; color: #0F172A; margin: 0 0 6px;">No products found matching "{{ request('search') }}"</h4>
+            <p style="font-size: 13.5px; color: #64748B; max-width: 440px; margin: 0 auto 18px; line-height: 1.5;">
+                We couldn't find any items matching your search keyword. Check your spelling or browse all verified marketplace items.
+            </p>
+            <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                <a href="{{ route('storefront') }}#catalog" style="background: var(--vm-primary, #5E17EB); color: #FFFFFF; text-decoration: none; border-radius: 8px; padding: 10px 20px; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                    ✕ Clear Search Filter
+                </a>
+            </div>
         </div>
-        <h4 style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0 0 6px;">No Direct Local Merchants in {{ $activeCity }} Yet</h4>
-        <p style="font-size: 13px; color: #64748B; max-width: 420px; margin: 0 auto 16px; line-height: 1.5;">
-            We are actively onboarding physical plaza vendors in {{ $activeCity }}. In the meantime, you can explore products delivering from our Uyo Flagship Plaza.
-        </p>
-        <button type="button" onclick="vmSelectLga('Uyo', 'Akwa Ibom', 69)" style="background: var(--vm-primary, #5E17EB); color: #FFFFFF; border: none; border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 600; cursor: pointer;">
-            Switch to Uyo Plaza
-        </button>
-    </div>
+    @elseif(request('category'))
+        <div style="grid-column: 1 / -1; text-align: center; padding: 48px 20px; background: #FFFFFF; border: 1.5px dashed #CBD5E1; border-radius: 16px;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: #EDE9FE; color: #5E17EB; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; font-size: 26px;">
+                🏷️
+            </div>
+            <h4 style="font-size: 17px; font-weight: 800; color: #0F172A; margin: 0 0 6px;">No products found in this category</h4>
+            <p style="font-size: 13.5px; color: #64748B; max-width: 440px; margin: 0 auto 18px; line-height: 1.5;">
+                Merchants currently have no active listings under "{{ ucwords(str_replace('-', ' ', request('category'))) }}". Explore all marketplace products.
+            </p>
+            <a href="{{ route('storefront') }}#catalog" style="background: var(--vm-primary, #5E17EB); color: #FFFFFF; text-decoration: none; border-radius: 8px; padding: 10px 20px; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                ✕ View All Products
+            </a>
+        </div>
+    @else
+        <div style="grid-column: 1 / -1; text-align: center; padding: 48px 20px; background: #FFFFFF; border: 1px dashed var(--vm-border); border-radius: 16px;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(94, 23, 235, 0.08); color: var(--vm-primary, #5E17EB); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; font-size: 24px;">
+                📍
+            </div>
+            <h4 style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0 0 6px;">No Direct Local Merchants in {{ $activeCity }} Yet</h4>
+            <p style="font-size: 13px; color: #64748B; max-width: 420px; margin: 0 auto 16px; line-height: 1.5;">
+                We are actively onboarding physical plaza vendors in {{ $activeCity }}. In the meantime, you can explore products delivering from our Uyo Flagship Plaza.
+            </p>
+            <button type="button" onclick="vmSelectLga('Uyo', 'Akwa Ibom', 69)" style="background: var(--vm-primary, #5E17EB); color: #FFFFFF; border: none; border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                Switch to Uyo Plaza
+            </button>
+        </div>
+    @endif
 @endforelse

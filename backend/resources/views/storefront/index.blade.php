@@ -100,6 +100,14 @@
                 </div>
 
                 @if($activeHeroBanners->count() > 1)
+                    <!-- Prev & Next Arrow Controls -->
+                    <button type="button" onclick="vmPrevHeroSlide()" aria-label="Previous Slide" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(4px); border: 1px solid rgba(226, 232, 240, 0.9); color: #0F172A; font-size: 18px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 5; transition: all 0.15s ease;">
+                        &#8249;
+                    </button>
+                    <button type="button" onclick="vmNextHeroSlide()" aria-label="Next Slide" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(4px); border: 1px solid rgba(226, 232, 240, 0.9); color: #0F172A; font-size: 18px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 5; transition: all 0.15s ease;">
+                        &#8250;
+                    </button>
+
                     <!-- Slider Navigation Dots -->
                     <div style="display: flex; justify-content: center; gap: 6px; margin-top: 10px;">
                         @foreach($activeHeroBanners as $idx => $b)
@@ -358,19 +366,34 @@
         </div>
         
         <div class="vm-categories-grid" style="display: flex; gap: 14px; flex-wrap: wrap;">
+            @php
+                $catIcons = [
+                    'electronics-gadgets' => ['icon' => '📱', 'bg' => 'linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)', 'color' => '#4F46E5'],
+                    'home-appliances' => ['icon' => '🔌', 'bg' => 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)', 'color' => '#D97706'],
+                    'groceries-farm-produce' => ['icon' => '🌾', 'bg' => 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)', 'color' => '#059669'],
+                    'fashion-apparel' => ['icon' => '👗', 'bg' => 'linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%)', 'color' => '#DB2777'],
+                    'health-beauty' => ['icon' => '💄', 'bg' => 'linear-gradient(135deg, #FAF5FF 0%, #F3E8FF 100%)', 'color' => '#9333EA'],
+                    'automobile-parts' => ['icon' => '🚗', 'bg' => 'linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)', 'color' => '#DC2626'],
+                    'books-stationery' => ['icon' => '📚', 'bg' => 'linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)', 'color' => '#0284C7'],
+                    'solar-power' => ['icon' => '⚡', 'bg' => 'linear-gradient(135deg, #FEFCE8 0%, #FEF08A 100%)', 'color' => '#CA8A04'],
+                ];
+            @endphp
             @forelse($categories as $category)
-                <a href="{{ route('storefront', ['category' => $category->slug]) }}" class="vm-category-card" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 10px; padding: 16px 22px; display: inline-flex; flex-direction: column; align-items: center; gap: 10px; text-decoration: none; min-width: 110px; box-shadow: var(--vm-shadow-xs); transition: transform 0.2s ease;">
-                    <div style="width: 46px; height: 46px; border-radius: 8px; background: #F8FAFC; border: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: center;">
-                        <img src="{{ asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="{{ $category->name }}" style="width: 28px; height: 28px; opacity: 0.5;">
+                @php
+                    $catTheme = $catIcons[$category->slug] ?? ['icon' => '🏷️', 'bg' => '#F1F5F9', 'color' => '#5E17EB'];
+                @endphp
+                <a href="{{ route('storefront', ['category' => $category->slug]) }}#catalog" class="vm-category-card" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; padding: 14px 18px; display: inline-flex; flex-direction: column; align-items: center; gap: 8px; text-decoration: none; min-width: 105px; box-shadow: var(--vm-shadow-xs); transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);">
+                    <div style="width: 48px; height: 48px; border-radius: 12px; background: {{ $catTheme['bg'] }}; border: 1px solid rgba(0,0,0,0.04); display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                        {{ $catTheme['icon'] }}
                     </div>
-                    <span class="vm-category-name" style="font-size: 12.5px; font-weight: 600; color: #334155;">{{ $category->name }}</span>
+                    <span class="vm-category-name" style="font-size: 12.5px; font-weight: 700; color: #1E293B; text-align: center;">{{ $category->name }}</span>
                 </a>
             @empty
-                <div class="vm-category-card" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 10px; padding: 16px 22px; display: inline-flex; flex-direction: column; align-items: center; gap: 10px; min-width: 110px;">
-                    <div style="width: 46px; height: 46px; border-radius: 8px; background: #F8FAFC; border: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: center;">
-                        <img src="{{ asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="Electronics" style="width: 28px; height: 28px; opacity: 0.5;">
+                <div class="vm-category-card" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; padding: 14px 18px; display: inline-flex; flex-direction: column; align-items: center; gap: 8px; min-width: 105px;">
+                    <div style="width: 48px; height: 48px; border-radius: 12px; background: #EEF2FF; border: 1px solid #E0E7FF; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+                        📱
                     </div>
-                    <span class="vm-category-name" style="font-size: 12.5px; font-weight: 600; color: #334155;">Electronics</span>
+                    <span class="vm-category-name" style="font-size: 12.5px; font-weight: 700; color: #1E293B;">Electronics</span>
                 </div>
             @endforelse
         </div>
@@ -386,7 +409,7 @@
             <a href="#merchants" class="vm-section-link" style="font-size: 13px; font-weight: 700; color: var(--vm-info); text-decoration: none;">All Stores →</a>
         </div>
 
-        <div class="vm-merchants-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+        <div class="vm-merchants-grid" id="vmShopsGridContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
             @forelse($shops as $shop)
                 <a href="{{ route('shop.storefront', $shop->slug) }}" class="vm-merchant-box" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 14px; box-shadow: var(--vm-shadow-xs); text-decoration: none; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);">
                     <div style="width: 56px; height: 56px; border-radius: 10px; background: #F8FAFC; border: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;">
@@ -429,6 +452,33 @@
 
     <!-- 5. Latest Products in Market (Filtered Dynamically by Active Location) -->
     <div class="vm-section-block" id="catalog">
+        
+        <!-- Active Filter Indicator Banner (Gap 3 Fix) -->
+        @if(request('category') || request('search'))
+            <div style="background: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 12px; padding: 12px 18px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px;">
+                    <strong style="color: #0F172A; font-weight: 700;">Filtered Results:</strong>
+                    @if(request('category'))
+                        <span style="background: #EDE9FE; border: 1px solid #DDD6FE; color: #5E17EB; padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                            <span>🏷️</span>
+                            <span>Category: {{ ucwords(str_replace('-', ' ', request('category'))) }}</span>
+                            <a href="{{ route('storefront', array_filter(['search' => request('search')])) }}#catalog" style="color: #5E17EB; text-decoration: none; font-weight: 900; margin-left: 2px; font-size: 14px;" title="Remove category filter">&times;</a>
+                        </span>
+                    @endif
+                    @if(request('search'))
+                        <span style="background: #FEF3C7; border: 1px solid #FDE68A; color: #92400E; padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                            <span>🔍</span>
+                            <span>Keyword: "{{ request('search') }}"</span>
+                            <a href="{{ route('storefront', array_filter(['category' => request('category')])) }}#catalog" style="color: #92400E; text-decoration: none; font-weight: 900; margin-left: 2px; font-size: 14px;" title="Remove search filter">&times;</a>
+                        </span>
+                    @endif
+                </div>
+                <a href="{{ route('storefront') }}#catalog" style="font-size: 12.5px; font-weight: 700; color: #EF4444; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; background: #FEF2F2;">
+                    <span>✕ Clear All Filters</span>
+                </a>
+            </div>
+        @endif
+
         <div class="vm-section-header" style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px;">
             <div style="border-left: 4px solid var(--vm-info); padding-left: 12px;">
                 <h2 class="vm-section-title" style="font-size: 19px; font-weight: 800; color: #0F172A; margin: 0; line-height: 1.2;">
@@ -450,17 +500,19 @@
 
 @push('scripts')
 <script>
-    // Hero Slider Carousel Script
+    // Hero Slider Carousel Script (Gap 6 Enhanced)
     let currentHeroSlide = 0;
+    let heroSliderTimer = null;
     const heroSlides = document.querySelectorAll('.vm-hero-slide-item');
     const heroDots = document.querySelectorAll('.vm-hero-dot');
+    const heroTrack = document.getElementById('vmHeroSliderTrack');
 
     window.vmSwitchHeroSlide = function(index) {
         if (!heroSlides || heroSlides.length <= 1) return;
-        currentHeroSlide = index;
+        currentHeroSlide = (index + heroSlides.length) % heroSlides.length;
 
         heroSlides.forEach((slide, idx) => {
-            if (idx === index) {
+            if (idx === currentHeroSlide) {
                 slide.style.display = 'flex';
                 slide.classList.add('active');
             } else {
@@ -470,7 +522,7 @@
         });
 
         heroDots.forEach((dot, idx) => {
-            if (idx === index) {
+            if (idx === currentHeroSlide) {
                 dot.style.width = '24px';
                 dot.style.background = '#5E17EB';
             } else {
@@ -480,12 +532,34 @@
         });
     };
 
-    // Auto rotate every 6 seconds if multiple slides exist
-    if (heroSlides && heroSlides.length > 1) {
-        setInterval(() => {
-            currentHeroSlide = (currentHeroSlide + 1) % heroSlides.length;
-            window.vmSwitchHeroSlide(currentHeroSlide);
-        }, 6000);
+    window.vmNextHeroSlide = function() {
+        window.vmSwitchHeroSlide(currentHeroSlide + 1);
+    };
+
+    window.vmPrevHeroSlide = function() {
+        window.vmSwitchHeroSlide(currentHeroSlide - 1);
+    };
+
+    function startHeroSlider() {
+        if (heroSlides && heroSlides.length > 1 && !heroSliderTimer) {
+            heroSliderTimer = setInterval(() => {
+                window.vmNextHeroSlide();
+            }, 6000);
+        }
+    }
+
+    function stopHeroSlider() {
+        if (heroSliderTimer) {
+            clearInterval(heroSliderTimer);
+            heroSliderTimer = null;
+        }
+    }
+
+    startHeroSlider();
+
+    if (heroTrack) {
+        heroTrack.addEventListener('mouseenter', stopHeroSlider);
+        heroTrack.addEventListener('mouseleave', startHeroSlider);
     }
 </script>
 @endpush

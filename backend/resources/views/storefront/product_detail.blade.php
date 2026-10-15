@@ -119,9 +119,12 @@
                     <span style="font-size: 12.5px; font-weight: 600; color: #475569;">Quantity:</span>
                     <div style="display: inline-flex; align-items: center; border: 1.5px solid #CBD5E1; border-radius: 8px; background: #FFFFFF; overflow: hidden;">
                         <button type="button" onclick="const i = document.getElementById('vmProductQtyInput'); if (parseInt(i.value) > 1) i.value = parseInt(i.value) - 1;" style="width: 32px; height: 32px; border: none; background: #F1F5F9; font-weight: 800; cursor: pointer; color: #334155;">-</button>
-                        <input type="number" id="vmProductQtyInput" value="1" min="1" max="99" style="width: 40px; height: 32px; border: none; text-align: center; font-size: 13.5px; font-weight: 800; color: #0F172A; outline: none;">
-                        <button type="button" onclick="const i = document.getElementById('vmProductQtyInput'); i.value = parseInt(i.value) + 1;" style="width: 32px; height: 32px; border: none; background: #F1F5F9; font-weight: 800; cursor: pointer; color: #334155;">+</button>
+                        <input type="number" id="vmProductQtyInput" value="1" min="1" max="{{ max(1, $product->inventory_quantity ?? 1) }}" style="width: 40px; height: 32px; border: none; text-align: center; font-size: 13.5px; font-weight: 800; color: #0F172A; outline: none;">
+                        <button type="button" onclick="const i = document.getElementById('vmProductQtyInput'); const m = parseInt(i.getAttribute('max')) || 99; if (parseInt(i.value) < m) i.value = parseInt(i.value) + 1;" style="width: 32px; height: 32px; border: none; background: #F1F5F9; font-weight: 800; cursor: pointer; color: #334155;">+</button>
                     </div>
+                    @if(($product->inventory_quantity ?? 0) <= 5 && ($product->inventory_quantity ?? 0) > 0)
+                        <span style="font-size: 11px; color: #DC2626; font-weight: 700; margin-left: 4px;">Only {{ $product->inventory_quantity }} left!</span>
+                    @endif
                 </div>
             </div>
 
@@ -184,21 +187,55 @@
                     <span>🛒 Add to Cart</span>
                 </button>
 
-                <!-- Action 2: Buy Now (Yellow/Gold) -->
+                <!-- Action 2: Buy Now (Yellow/Gold with Customer Account Interception) -->
                 <a href="{{ route('checkout', ['product_id' => $product->id, 'quantity' => 1]) }}" 
-                   onclick="const q = document.getElementById('vmProductQtyInput').value; this.href = '{{ route('checkout') }}?product_id={{ $product->id }}&quantity=' + q;" 
+                   id="vmProductBuyNowBtn"
+                   onclick="
+                       const q = document.getElementById('vmProductQtyInput') ? document.getElementById('vmProductQtyInput').value : 1;
+                       const targetUrl = '{{ route('checkout') }}?product_id={{ $product->id }}&quantity=' + q;
+                       if (!window.vmIsCustomerAuth) {
+                           event.preventDefault();
+                           if (window.vmOpenAuthModal) {
+                               window.vmOpenAuthModal({
+                                   action: 'checkout',
+                                   redirectUrl: targetUrl,
+                                   title: 'Sign In to Buy Now',
+                                   message: 'Only registered customers can complete checkout, receive 5% cashback, and track delivery with OTP.'
+                               });
+                           } else {
+                               window.location.href = '/login?return_to=' + encodeURIComponent(targetUrl);
+                           }
+                           return false;
+                       }
+                       this.href = targetUrl;
+                   " 
                    style="background: linear-gradient(135deg, #FFD700 0%, #F59E0B 100%); color: #0F172A; text-decoration: none; font-weight: 800; font-size: 14px; padding: 14px 18px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(255, 215, 0, 0.35); text-align: center; transition: transform 0.15s ease;">
                     <span>⚡ Buy Now</span>
                 </a>
             </div>
 
-            <!-- Action 3: Inspect First, Pay Later (Pickup Reservation) -->
-            <form method="POST" action="{{ route('reservation.create') }}" style="margin: 0 0 20px;">
+            <!-- Action 3: Inspect First, Pay Later (Pickup Reservation with Auth Shield) -->
+            <form method="POST" action="{{ route('reservation.create') }}" id="vmReservationForm" style="margin: 0 0 20px;"
+                  onsubmit="
+                      if (!window.vmIsCustomerAuth) {
+                          event.preventDefault();
+                          if (window.vmOpenAuthModal) {
+                              window.vmOpenAuthModal({
+                                  action: 'reservation',
+                                  title: 'Sign In to Reserve Item',
+                                  message: 'Sign in or create an account so your 24-hour physical shop inspection pass is officially tied to your phone number.'
+                              });
+                          } else {
+                              window.location.href = '/login';
+                          }
+                          return false;
+                      }
+                  ">
                 @csrf
                 <input type="hidden" name="product_id" value="{{ $product->id }}">
                 <input type="hidden" name="shop_id" value="{{ $product->shop_id }}">
-                <input type="hidden" name="customer_name" value="{{ Auth::user()->name ?? 'Shopper' }}">
-                <input type="hidden" name="customer_phone" value="{{ Auth::user()->phone ?? '08012345678' }}">
+                <input type="hidden" name="customer_name" value="{{ Auth::user()->name ?? '' }}">
+                <input type="hidden" name="customer_phone" value="{{ Auth::user()->phone ?? '' }}">
                 <button type="submit" style="width: 100%; background: #F8FAFC; color: #0F172A; border: 1.5px solid #CBD5E1; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.15s ease;">
                     <span>🏢 Reserve for Free In-Shop Inspection</span>
                 </button>

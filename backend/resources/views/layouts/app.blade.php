@@ -950,8 +950,11 @@
                 </div>
             </button>
 
-            <!-- Global Search Bar with Action Button -->
-            <form action="{{ route('storefront') }}" method="GET" class="vm-search-form">
+            <!-- Global Search Bar with Action Button (Scrolls straight to #catalog) -->
+            <form action="{{ route('storefront') }}#catalog" method="GET" class="vm-search-form">
+                @if(request('category'))
+                    <input type="hidden" name="category" value="{{ request('category') }}">
+                @endif
                 <div class="vm-search-input-wrap">
                     <input type="text" name="search" class="vm-search-input" placeholder="Search for products, categories, or items..." value="{{ request('search') }}" autocomplete="off">
                     <button type="submit" class="vm-search-btn" style="background: var(--vm-info);">
@@ -1050,8 +1053,48 @@
         </div>
     </nav>
 
-    <!-- 4. Main Page Content -->
+    <!-- 4. Main Page Content (With Standardized Dismissible Flash Alerts) -->
     <main>
+        @if(session('status') || session('info') || session('error') || session('warning'))
+            <div class="vm-container" style="padding-top: 16px;">
+                @if(session('status'))
+                    <div style="background: #ECFDF5; border: 1.5px solid #10B981; color: #065F46; padding: 12px 18px; border-radius: 12px; font-size: 13.5px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.1);">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 18px;">✅</span>
+                            <span>{{ session('status') }}</span>
+                        </div>
+                        <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 20px; color: #065F46; cursor: pointer; padding: 0 4px;">&times;</button>
+                    </div>
+                @endif
+                @if(session('info'))
+                    <div style="background: #EFF6FF; border: 1.5px solid #3B82F6; color: #1E40AF; padding: 12px 18px; border-radius: 12px; font-size: 13.5px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.1);">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 18px;">ℹ️</span>
+                            <span>{{ session('info') }}</span>
+                        </div>
+                        <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 20px; color: #1E40AF; cursor: pointer; padding: 0 4px;">&times;</button>
+                    </div>
+                @endif
+                @if(session('error'))
+                    <div style="background: #FEF2F2; border: 1.5px solid #EF4444; color: #991B1B; padding: 12px 18px; border-radius: 12px; font-size: 13.5px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.1);">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 18px;">⚠️</span>
+                            <span>{{ session('error') }}</span>
+                        </div>
+                        <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 20px; color: #991B1B; cursor: pointer; padding: 0 4px;">&times;</button>
+                    </div>
+                @endif
+                @if(session('warning'))
+                    <div style="background: #FFFBEB; border: 1.5px solid #F59E0B; color: #92400E; padding: 12px 18px; border-radius: 12px; font-size: 13.5px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.1);">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 18px;">🔔</span>
+                            <span>{{ session('warning') }}</span>
+                        </div>
+                        <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 20px; color: #92400E; cursor: pointer; padding: 0 4px;">&times;</button>
+                    </div>
+                @endif
+            </div>
+        @endif
         @yield('content')
     </main>
 
@@ -1310,6 +1353,163 @@
             <div style="padding: 14px 24px; border-top: 1px solid #F1F5F9; background: #F8FAFC; display: flex; justify-content: space-between; align-items: center; border-radius: 0 0 16px 16px;">
                 <span style="font-size: 12px; color: #64748B;">Support Line: {{ $sysPhone ?? '0800-VMARKET' }}</span>
                 <button type="button" onclick="vmClosePolicyModal()" style="background: #1E293B; color: #FFFFFF; font-weight: 600; padding: 8px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px;">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dedicated Customer Authentication Interceptor Modal (Checkout & Order Protection) -->
+    <div id="vmAuthCheckoutModal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(6px); align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: #FFFFFF; border-radius: 20px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35); border: 1px solid #E2E8F0; position: relative;">
+            
+            <!-- Modal Header Banner -->
+            <div style="background: linear-gradient(135deg, #1E1B4B 0%, #312E81 50%, #4338CA 100%); padding: 22px 24px; color: #FFFFFF; position: relative; border-radius: 19px 19px 0 0;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                    <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 215, 0, 0.15); border: 1px solid rgba(255, 215, 0, 0.35); padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; color: #FFD700; text-transform: uppercase; letter-spacing: 0.5px;">
+                        <span>🔒 Customer Account Required</span>
+                    </div>
+                    <button type="button" onclick="vmCloseAuthModal()" style="background: rgba(255, 255, 255, 0.15); border: none; width: 30px; height: 30px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #FFFFFF;">&times;</button>
+                </div>
+                <h3 id="vmAuthModalTitle" style="font-size: 19px; font-weight: 800; color: #FFFFFF; margin: 0 0 4px; line-height: 1.3;">
+                    Sign In to Complete Checkout
+                </h3>
+                <p id="vmAuthModalSubtitle" style="font-size: 12.5px; color: #E0E7FF; margin: 0; line-height: 1.45;">
+                    Your cart items are saved! Sign in or register in 30 seconds to lock in your order with 100% Escrow Protection and claim 5% cashback.
+                </p>
+
+                <!-- Value Chips -->
+                <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
+                    <span style="font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, 0.12); padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                        <span>🛡️</span> Escrow Safe
+                    </span>
+                    <span style="font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, 0.12); padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                        <span>🪙</span> 5% Cashback
+                    </span>
+                    <span style="font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, 0.12); padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                        <span>📱</span> Delivery OTP
+                    </span>
+                </div>
+            </div>
+
+            <!-- Tab Switcher (Sign In vs Register) -->
+            <div style="padding: 16px 24px 0;">
+                <div style="display: flex; background: #F1F5F9; padding: 4px; border-radius: 12px; gap: 4px;">
+                    <button type="button" id="vmAuthTabBtnLogin" onclick="vmSwitchAuthTab('login')" style="flex: 1; padding: 9px; border-radius: 8px; border: none; font-size: 13.5px; font-weight: 800; cursor: pointer; transition: all 0.2s ease; background: #FFFFFF; color: #0F172A; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                        Sign In
+                    </button>
+                    <button type="button" id="vmAuthTabBtnRegister" onclick="vmSwitchAuthTab('register')" style="flex: 1; padding: 9px; border-radius: 8px; border: none; font-size: 13.5px; font-weight: 800; cursor: pointer; transition: all 0.2s ease; background: transparent; color: #64748B;">
+                        Create Account
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body Container -->
+            <div style="padding: 20px 24px 24px;">
+
+                <!-- ================= TAB 1: CUSTOMER SIGN IN ================= -->
+                <div id="vmAuthTabLogin" style="display: block;">
+                    
+                    <!-- Quick 1-Click Google Sign In -->
+                    <a href="{{ route('auth.google.redirect') }}" style="display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 11px; border: 1.5px solid #CBD5E1; border-radius: 10px; background: #FFFFFF; color: #1E293B; font-size: 13.5px; font-weight: 700; text-decoration: none; margin-bottom: 14px; box-sizing: border-box; transition: background 0.15s ease;">
+                        <svg width="18" height="18" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.98 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                        </svg>
+                        <span>Continue with Google</span>
+                    </a>
+
+                    <div style="display: flex; align-items: center; margin: 16px 0; color: #94A3B8; font-size: 11px; font-weight: 700; text-transform: uppercase;">
+                        <div style="flex-grow: 1; height: 1px; background: #E2E8F0;"></div>
+                        <span style="padding: 0 10px;">Or sign in with email / phone</span>
+                        <div style="flex-grow: 1; height: 1px; background: #E2E8F0;"></div>
+                    </div>
+
+                    <form method="POST" action="{{ route('customer.login.post') }}">
+                        @csrf
+                        <input type="hidden" name="return_to" id="vmAuthLoginReturnTo" value="{{ route('checkout') }}">
+                        
+                        <div style="margin-bottom: 14px;">
+                            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #334155; margin-bottom: 5px;">
+                                Email or Phone Number
+                            </label>
+                            <input type="text" name="login" required placeholder="e.g. 09118949035 or customer@email.com" style="width: 100%; padding: 11px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-size: 13.5px; outline: none; box-sizing: border-box;">
+                        </div>
+
+                        <div style="margin-bottom: 16px;">
+                            <label style="display: block; font-size: 12.5px; font-weight: 700; color: #334155; margin-bottom: 5px;">
+                                Password
+                            </label>
+                            <input type="password" name="password" required placeholder="Enter your password" style="width: 100%; padding: 11px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-size: 13.5px; outline: none; box-sizing: border-box;">
+                        </div>
+
+                        <button type="submit" style="width: 100%; padding: 13px; border-radius: 10px; border: none; background: linear-gradient(135deg, #5E17EB 0%, #4D0FD4 100%); color: #FFFFFF; font-size: 14px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 14px rgba(94, 23, 235, 0.35); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span>Sign In &amp; Continue &rarr;</span>
+                        </button>
+                    </form>
+
+                    <p style="text-align: center; margin: 16px 0 0; font-size: 12.5px; color: #64748B;">
+                        New to Victorious MARKET? 
+                        <a href="javascript:void(0)" onclick="vmSwitchAuthTab('register')" style="color: #5E17EB; font-weight: 700; text-decoration: none;">Create free account</a>
+                    </p>
+                </div>
+
+                <!-- ================= TAB 2: CUSTOMER REGISTRATION ================= -->
+                <div id="vmAuthTabRegister" style="display: none;">
+                    
+                    <form method="POST" action="{{ route('customer.register.post') }}">
+                        @csrf
+                        <input type="hidden" name="return_to" id="vmAuthRegisterReturnTo" value="{{ route('checkout') }}">
+                        <input type="hidden" name="terms" value="1">
+
+                        <div style="margin-bottom: 12px;">
+                            <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">
+                                Full Name *
+                            </label>
+                            <input type="text" name="name" required placeholder="e.g. Victor Bassey" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-size: 13px; outline: none; box-sizing: border-box;">
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                            <div>
+                                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">
+                                    Phone Number (For OTP) *
+                                </label>
+                                <input type="tel" name="phone" required placeholder="080... or 090..." style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-size: 13px; outline: none; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">
+                                    Email Address *
+                                </label>
+                                <input type="email" name="email" required placeholder="e.g. name@email.com" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-size: 13px; outline: none; box-sizing: border-box;">
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
+                            <div>
+                                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">
+                                    Password *
+                                </label>
+                                <input type="password" name="password" required minlength="8" placeholder="Min. 8 characters" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-size: 13px; outline: none; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px;">
+                                    Confirm Password *
+                                </label>
+                                <input type="password" name="password_confirmation" required minlength="8" placeholder="Repeat password" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-size: 13px; outline: none; box-sizing: border-box;">
+                            </div>
+                        </div>
+
+                        <button type="submit" style="width: 100%; padding: 13px; border-radius: 10px; border: none; background: linear-gradient(135deg, #FFD700 0%, #F59E0B 100%); color: #0F172A; font-size: 14px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 14px rgba(255, 215, 0, 0.35); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span>Create Customer Account &amp; Proceed &rarr;</span>
+                        </button>
+                    </form>
+
+                    <p style="text-align: center; margin: 14px 0 0; font-size: 12.5px; color: #64748B;">
+                        Already registered? 
+                        <a href="javascript:void(0)" onclick="vmSwitchAuthTab('login')" style="color: #5E17EB; font-weight: 700; text-decoration: none;">Sign in here</a>
+                    </p>
+                </div>
+
             </div>
         </div>
     </div>
@@ -1729,6 +1929,91 @@
             if (pModal) {
                 pModal.addEventListener('click', function(e) {
                     if (e.target === pModal) vmClosePolicyModal();
+                });
+            }
+
+            // Customer Authentication Interceptor Engine
+            window.vmIsCustomerAuth = {{ Auth::check() && Auth::user()->user_type === 'customer' ? 'true' : 'false' }};
+
+            window.vmOpenAuthModal = function(options) {
+                options = options || {};
+                const modal = document.getElementById('vmAuthCheckoutModal');
+                if (!modal) return;
+
+                const titleEl = document.getElementById('vmAuthModalTitle');
+                const subtitleEl = document.getElementById('vmAuthModalSubtitle');
+                const loginReturn = document.getElementById('vmAuthLoginReturnTo');
+                const regReturn = document.getElementById('vmAuthRegisterReturnTo');
+
+                const targetUrl = options.redirectUrl || '{{ route("checkout") }}';
+                if (loginReturn) loginReturn.value = targetUrl;
+                if (regReturn) regReturn.value = targetUrl;
+
+                if (options.action === 'reservation') {
+                    if (titleEl) titleEl.textContent = 'Sign In to Reserve for In-Shop Inspection';
+                    if (subtitleEl) subtitleEl.textContent = 'Sign in or register so your 24-hour physical shop inspection pass is officially tied to your phone number.';
+                } else {
+                    if (titleEl) titleEl.textContent = options.title || 'Sign In to Complete Checkout';
+                    if (subtitleEl) subtitleEl.textContent = options.message || 'You can freely browse and add items to your cart, but only customers with accounts can place orders and claim 5% cashback.';
+                }
+
+                if (options.tab === 'register') {
+                    window.vmSwitchAuthTab('register');
+                } else {
+                    window.vmSwitchAuthTab('login');
+                }
+
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+            };
+
+            window.vmCloseAuthModal = function() {
+                const modal = document.getElementById('vmAuthCheckoutModal');
+                if (modal) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = '';
+                }
+            };
+
+            window.vmSwitchAuthTab = function(tab) {
+                const loginTab = document.getElementById('vmAuthTabLogin');
+                const regTab = document.getElementById('vmAuthTabRegister');
+                const loginBtn = document.getElementById('vmAuthTabBtnLogin');
+                const regBtn = document.getElementById('vmAuthTabBtnRegister');
+
+                if (tab === 'register') {
+                    if (loginTab) loginTab.style.display = 'none';
+                    if (regTab) regTab.style.display = 'block';
+                    if (loginBtn) {
+                        loginBtn.style.background = 'transparent';
+                        loginBtn.style.color = '#64748B';
+                        loginBtn.style.boxShadow = 'none';
+                    }
+                    if (regBtn) {
+                        regBtn.style.background = '#FFFFFF';
+                        regBtn.style.color = '#0F172A';
+                        regBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)';
+                    }
+                } else {
+                    if (loginTab) loginTab.style.display = 'block';
+                    if (regTab) regTab.style.display = 'none';
+                    if (loginBtn) {
+                        loginBtn.style.background = '#FFFFFF';
+                        loginBtn.style.color = '#0F172A';
+                        loginBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)';
+                    }
+                    if (regBtn) {
+                        regBtn.style.background = 'transparent';
+                        regBtn.style.color = '#64748B';
+                        regBtn.style.boxShadow = 'none';
+                    }
+                }
+            };
+
+            const aModal = document.getElementById('vmAuthCheckoutModal');
+            if (aModal) {
+                aModal.addEventListener('click', function(e) {
+                    if (e.target === aModal) vmCloseAuthModal();
                 });
             }
         });

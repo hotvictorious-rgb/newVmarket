@@ -31,7 +31,9 @@ class WebAuthController extends Controller
 
     public function loginCustomer(Request $request)
     {
-        return $this->authenticateRole($request, ['customer'], redirect()->route('customer.dashboard'));
+        $returnTo = $request->input('return_to');
+        $target = $returnTo ? redirect($returnTo) : redirect()->intended(route('customer.dashboard'));
+        return $this->authenticateRole($request, ['customer'], $target);
     }
 
     public function showCustomerRegister()
@@ -87,7 +89,13 @@ class WebAuthController extends Controller
         Auth::login($user, true);
         $request->session()->regenerate();
 
-        return redirect()->route('customer.dashboard')
+        $returnTo = $request->input('return_to');
+        if ($returnTo) {
+            return redirect($returnTo)
+                ->with('status', "Account successfully created! Welcome to Victorious MARKET, {$user->name}. Your 5% cashback rewards wallet is active.");
+        }
+
+        return redirect()->intended(route('customer.dashboard'))
             ->with('status', "Account successfully created! Welcome to Victorious MARKET, {$user->name}. Your 5% cashback rewards wallet is active.");
     }
 

@@ -2097,6 +2097,11 @@ class PortalController extends Controller
 
     public function showCheckout(Request $request)
     {
+        if (!Auth::check() || Auth::user()->user_type !== 'customer') {
+            return redirect()->route('customer.login', ['return_to' => $request->fullUrl()])
+                ->with('info', 'Please sign in or create an account to proceed with checkout. Your cart has been saved.');
+        }
+
         $productId = $request->input('product_id');
         $quantity = max(1, (int)$request->input('quantity', 1));
 
@@ -2167,6 +2172,11 @@ class PortalController extends Controller
 
     public function processCheckout(Request $request)
     {
+        if (!Auth::check() || Auth::user()->user_type !== 'customer') {
+            return redirect()->route('customer.login')
+                ->with('error', 'Authentication required. Please sign in or create a customer account to place an order.');
+        }
+
         $validated = $request->validate([
             'product_id' => 'required|integer|exists:products,id',
             'quantity' => 'required|integer|min:1',
@@ -2235,20 +2245,8 @@ class PortalController extends Controller
 
             $splits = \App\Services\BcMathService::computeCommercialSplits($merchandiseSubtotal, $deliveryFee);
 
-            // Account Security: Cryptographically secure random password (Zero static defaults)
+            // Strictly Verified Customer Account
             $user = Auth::user();
-            if (!$user) {
-                $secureRandomPassword = \Illuminate\Support\Str::random(32);
-                $user = User::firstOrCreate([
-                    'phone' => $validated['customer_phone'],
-                ], [
-                    'name' => $validated['customer_name'],
-                    'email' => 'shopper.' . time() . '_' . rand(100, 999) . '@victoriousmarket.com.ng',
-                    'user_type' => 'customer',
-                    'status' => 'active',
-                    'password' => \Illuminate\Support\Facades\Hash::make($secureRandomPassword),
-                ]);
-            }
 
             // Two-Phase Intent Snapshot & SHA-256 Fingerprint
             $payload = [
@@ -2350,12 +2348,17 @@ class PortalController extends Controller
 
     public function createReservation(Request $request)
     {
+        if (!Auth::check() || Auth::user()->user_type !== 'customer') {
+            return redirect()->route('customer.login')
+                ->with('info', 'Please sign in or create an account to reserve items for in-shop inspection.');
+        }
+
         $validated = $request->validate([
             'product_id' => 'required|integer|exists:products,id',
             'quantity' => 'nullable|integer|min:1',
             'shop_id' => 'required|integer|exists:shops,id',
-            'customer_name' => 'required|string|max:150',
-            'customer_phone' => 'required|string|max:30',
+            'customer_name' => 'nullable|string|max:150',
+            'customer_phone' => 'nullable|string|max:30',
         ]);
 
         $product = Product::findOrFail($validated['product_id']);
@@ -2364,18 +2367,6 @@ class PortalController extends Controller
         $estimatedTotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
 
         $user = Auth::user();
-        if (!$user) {
-            $secureRandomPassword = \Illuminate\Support\Str::random(32);
-            $user = User::firstOrCreate([
-                'phone' => $validated['customer_phone'],
-            ], [
-                'name' => $validated['customer_name'],
-                'email' => 'shopper.' . time() . '_' . rand(100, 999) . '@victoriousmarket.com.ng',
-                'user_type' => 'customer',
-                'status' => 'active',
-                'password' => \Illuminate\Support\Facades\Hash::make($secureRandomPassword),
-            ]);
-        }
 
         $code = PickupReservation::generateCode();
         $reservation = PickupReservation::create([

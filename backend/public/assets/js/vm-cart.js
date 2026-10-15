@@ -220,10 +220,32 @@
             const openBtn = document.getElementById('vmHeaderCartBtn');
             const closeBtn = document.getElementById('vmCartCloseBtn');
             const overlay = document.getElementById('vmCartOverlay');
+            const checkoutBtn = document.getElementById('vmCartCheckoutBtn');
 
             if (openBtn) openBtn.addEventListener('click', () => this.openDrawer());
             if (closeBtn) closeBtn.addEventListener('click', () => this.closeDrawer());
             if (overlay) overlay.addEventListener('click', () => this.closeDrawer());
+
+            // Intercept checkout for unauthenticated visitors
+            if (checkoutBtn) {
+                checkoutBtn.addEventListener('click', (e) => {
+                    if (!window.vmIsCustomerAuth) {
+                        e.preventDefault();
+                        const targetUrl = checkoutBtn.getAttribute('href') || '/checkout';
+                        if (window.vmOpenAuthModal) {
+                            window.vmOpenAuthModal({
+                                action: 'checkout',
+                                redirectUrl: targetUrl,
+                                title: 'Sign In to Complete Checkout',
+                                message: 'Your items are saved in your cart! Only customers with accounts can place orders, verify delivery OTPs, and earn 5% cashback.'
+                            });
+                        } else {
+                            window.location.href = '/login?return_to=' + encodeURIComponent(targetUrl);
+                        }
+                        return false;
+                    }
+                });
+            }
 
             // Delegate "Add to Cart" clicks from any button with .vm-btn-add-cart
             document.addEventListener('click', (e) => {

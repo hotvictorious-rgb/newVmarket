@@ -44,11 +44,11 @@
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
                         <div>
                             <label style="display: block; font-size: 12.5px; font-weight: 700; color: #334155; margin-bottom: 5px;">Full Name *</label>
-                            <input type="text" name="customer_name" value="{{ Auth::user()->name ?? 'Shopper' }}" required placeholder="e.g. John Doe" style="width: 100%; padding: 11px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-size: 13.5px; outline: none; box-sizing: border-box;">
+                            <input type="text" name="customer_name" value="{{ Auth::user()->name ?? '' }}" required placeholder="e.g. John Doe" style="width: 100%; padding: 11px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-size: 13.5px; outline: none; box-sizing: border-box;">
                         </div>
                         <div>
                             <label style="display: block; font-size: 12.5px; font-weight: 700; color: #334155; margin-bottom: 5px;">Phone Number (For OTP) *</label>
-                            <input type="tel" name="customer_phone" value="{{ Auth::user()->phone ?? '08012345678' }}" required placeholder="e.g. 08012345678" style="width: 100%; padding: 11px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-size: 13.5px; outline: none; box-sizing: border-box;">
+                            <input type="tel" name="customer_phone" value="{{ Auth::user()->phone ?? '' }}" required placeholder="e.g. 08012345678" style="width: 100%; padding: 11px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-size: 13.5px; outline: none; box-sizing: border-box;">
                         </div>
                     </div>
 
@@ -282,24 +282,27 @@
         <div style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 16px; padding: 24px; box-shadow: var(--vm-shadow-xs); position: sticky; top: 90px;">
             <div style="font-weight: 800; font-size: 16px; color: #0F172A; margin-bottom: 16px; border-bottom: 1px solid #F1F5F9; padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
                 <span>Order Summary</span>
-                <span style="font-size: 12px; background: #F1F5F9; color: #64748B; padding: 2px 8px; border-radius: 999px;">1 Item</span>
+                <span id="vmSummaryItemCount" style="font-size: 12px; background: #F1F5F9; color: #64748B; padding: 2px 8px; border-radius: 999px;">1 Item</span>
             </div>
 
-            <!-- Single Item Row -->
-            <div style="display: flex; gap: 14px; margin-bottom: 20px; align-items: center;">
-                <div style="width: 60px; height: 60px; background: #F8FAFC; border-radius: 10px; border: 1px solid #E2E8F0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                    <img src="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="{{ $product->name }}" style="max-width: 80%; max-height: 80%; object-fit: contain;">
-                </div>
-                <div style="flex: 1; min-width: 0;">
-                    <strong style="font-size: 14px; color: #0F172A; display: block; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        {{ $product->name }}
-                    </strong>
-                    <div style="font-size: 12px; color: #64748B; margin-top: 2px;">
-                        <span>🏬 {{ $product->shop->name ?? 'Verified Merchant' }}</span> &bull; <span>Qty: {{ $quantity }}</span>
+            <!-- Items List Container (Synced with vmCart if multi-item) -->
+            <div id="vmCheckoutItemsList">
+                <!-- Single Item Row -->
+                <div style="display: flex; gap: 14px; margin-bottom: 20px; align-items: center;">
+                    <div style="width: 60px; height: 60px; background: #F8FAFC; border-radius: 10px; border: 1px solid #E2E8F0; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <img src="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="{{ $product->name }}" style="max-width: 80%; max-height: 80%; object-fit: contain;">
                     </div>
-                    <strong style="font-size: 13.5px; color: #5E17EB; display: block; margin-top: 4px;">
-                        &#8358;{{ number_format((float)$product->unit_price, 2) }}
-                    </strong>
+                    <div style="flex: 1; min-width: 0;">
+                        <strong style="font-size: 14px; color: #0F172A; display: block; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            {{ $product->name }}
+                        </strong>
+                        <div style="font-size: 12px; color: #64748B; margin-top: 2px;">
+                            <span>🏬 {{ $product->shop->name ?? 'Verified Merchant' }}</span> &bull; <span>Qty: {{ $quantity }}</span>
+                        </div>
+                        <strong style="font-size: 13.5px; color: #5E17EB; display: block; margin-top: 4px;">
+                            &#8358;{{ number_format((float)$product->unit_price, 2) }}
+                        </strong>
+                    </div>
                 </div>
             </div>
 
@@ -493,5 +496,48 @@ document.querySelectorAll('.vm-pay-option').forEach(option => {
         }
     });
 });
+
+// Gap 10: Multi-Item Cart to Checkout Synchronization
+try {
+    const rawCart = localStorage.getItem('vm_cart_items_v1');
+    const cartItems = rawCart ? JSON.parse(rawCart) : [];
+    if (Array.isArray(cartItems) && cartItems.length > 1) {
+        const itemsContainer = document.getElementById('vmCheckoutItemsList');
+        const countBadge = document.getElementById('vmSummaryItemCount');
+        if (itemsContainer) {
+            let html = '<div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; max-height: 280px; overflow-y: auto; padding-right: 4px;">';
+            cartItems.forEach(item => {
+                const lineTotal = item.unit_price * (item.quantity || 1);
+                html += `
+                    <div style="display: flex; gap: 12px; align-items: center; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 10px;">
+                        <div style="width: 48px; height: 48px; background: #FFFFFF; border-radius: 8px; border: 1px solid #E2E8F0; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;">
+                            <img src="${item.image}" alt="${item.name}" style="max-width: 85%; max-height: 85%; object-fit: contain;">
+                        </div>
+                        <div style="flex: 1; min-width: 0;">
+                            <strong style="font-size: 13px; color: #0F172A; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name}</strong>
+                            <div style="font-size: 11px; color: #64748B;">
+                                <span>🏬 ${item.shop_name}</span> &bull; <span>Qty: ${item.quantity}</span>
+                            </div>
+                            <strong style="font-size: 12.5px; color: #5E17EB;">₦${lineTotal.toLocaleString('en-NG', {minimumFractionDigits: 2})}</strong>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            itemsContainer.innerHTML = html;
+        }
+        if (countBadge) countBadge.textContent = cartItems.length + ' Items';
+    }
+} catch (e) {
+    console.error('Error synchronizing multi-item cart to checkout', e);
+}
+
+// Clear cart on successful checkout form submission
+const checkoutForm = document.getElementById('vmCheckoutForm');
+if (checkoutForm) {
+    checkoutForm.addEventListener('submit', function() {
+        if (window.vmCart) window.vmCart.clear();
+    });
+}
 </script>
 @endsection

@@ -101,6 +101,9 @@
                 <form method="POST" action="{{ route('customer.login.post') }}">
                     @csrf
                     <input type="hidden" name="_form_type" value="login">
+                    @if(request('return_to'))
+                        <input type="hidden" name="return_to" value="{{ request('return_to') }}">
+                    @endif
                     
                     <!-- Identifier (Email or Phone) -->
                     <div style="margin-bottom: 18px;">
@@ -167,6 +170,9 @@
                 <form method="POST" action="{{ route('customer.register.post') }}">
                     @csrf
                     <input type="hidden" name="_form_type" value="register">
+                    @if(request('return_to'))
+                        <input type="hidden" name="return_to" value="{{ request('return_to') }}">
+                    @endif
                     
                     <!-- Full Name -->
                     <div style="margin-bottom: 16px;">
