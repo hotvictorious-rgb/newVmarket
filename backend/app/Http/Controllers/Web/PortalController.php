@@ -257,7 +257,26 @@ class PortalController extends Controller
 
         $allVendors = VendorProfile::with(['user', 'shops'])->latest()->get();
         $allLgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
-        return view('admin.dashboard', compact('metrics', 'pendingSettlements', 'recentOrders', 'deliveryLanes', 'announcementSettings', 'allVendors', 'allLgas'));
+                $zonalSettings = [
+            'zone_intra_lga_fee' => \App\Models\SystemSetting::get('zone_intra_lga_fee', '500.00'),
+            'zone_intra_lga_eta' => \App\Models\SystemSetting::get('zone_intra_lga_eta', '2-4 hours'),
+            'zone_inter_lga_fee' => \App\Models\SystemSetting::get('zone_inter_lga_fee', '1500.00'),
+            'zone_inter_lga_eta' => \App\Models\SystemSetting::get('zone_inter_lga_eta', 'Same day / 12-24 hours'),
+            'zone_inter_state_fee' => \App\Models\SystemSetting::get('zone_inter_state_fee', '3500.00'),
+            'zone_inter_state_eta' => \App\Models\SystemSetting::get('zone_inter_state_eta', '2-4 business days'),
+            'zone_bulky_cargo_surcharge' => \App\Models\SystemSetting::get('zone_bulky_cargo_surcharge', '1000.00'),
+        ];
+
+        // Enrich delivery lanes with bidirectional status
+        $allLanePairs = DeliveryLane::where('is_active', true)->get();
+        foreach ($deliveryLanes as $l) {
+            $hasReverse = $allLanePairs->contains(function ($item) use ($l) {
+                return $item->origin_lga_id === $l->destination_lga_id && $item->destination_lga_id === $l->origin_lga_id;
+            });
+            $l->is_bidirectional = $hasReverse;
+        }
+
+        return view('admin.dashboard', compact('metrics', 'pendingSettlements', 'recentOrders', 'deliveryLanes', 'announcementSettings', 'allVendors', 'allLgas', 'zonalSettings'));
     }
 
     /**
@@ -618,27 +637,69 @@ class PortalController extends Controller
             'origin_lga_id' => 'required|integer|exists:lgas,id',
             'destination_lga_id' => 'required|integer|exists:lgas,id',
             'base_fee' => 'required|numeric|min:0',
-            'per_km_rate' => 'nullable|numeric|min:0',
             'bulky_surcharge' => 'nullable|numeric|min:0',
             'estimated_delivery_hours_min' => 'required|integer|min:1',
             'estimated_delivery_hours_max' => 'required|integer|min:1',
-            'cutoff_time' => 'required|string',
+            'is_bidirectional' => 'nullable',
         ]);
 
+        $isBidirectional = $request->has('is_bidirectional') || $request->input('is_bidirectional') == '1';
+
+        // 1. Forward lane (Origin -> Destination)
         DeliveryLane::updateOrCreate([
             'origin_lga_id' => $validated['origin_lga_id'],
             'destination_lga_id' => $validated['destination_lga_id'],
         ], [
             'base_fee' => number_format((float)$validated['base_fee'], 2, '.', ''),
-            'per_km_rate' => number_format((float)($validated['per_km_rate'] ?? 50.00), 2, '.', ''),
             'bulky_surcharge' => number_format((float)($validated['bulky_surcharge'] ?? 1000.00), 2, '.', ''),
             'estimated_delivery_hours_min' => $validated['estimated_delivery_hours_min'],
             'estimated_delivery_hours_max' => $validated['estimated_delivery_hours_max'],
-            'cutoff_time' => $validated['cutoff_time'],
             'is_active' => true,
         ]);
 
-        return redirect()->to(route('admin.dashboard') . '#delivery-lanes')->with('status', 'Directional delivery lane successfully configured!');
+        // 2. If bidirectional, automatically create/update reverse lane (Destination -> Origin)
+        if ($isBidirectional && $validated['origin_lga_id'] != $validated['destination_lga_id']) {
+            DeliveryLane::updateOrCreate([
+                'origin_lga_id' => $validated['destination_lga_id'],
+                'destination_lga_id' => $validated['origin_lga_id'],
+            ], [
+                'base_fee' => number_format((float)$validated['base_fee'], 2, '.', ''),
+                'bulky_surcharge' => number_format((float)($validated['bulky_surcharge'] ?? 1000.00), 2, '.', ''),
+                'estimated_delivery_hours_min' => $validated['estimated_delivery_hours_min'],
+                'estimated_delivery_hours_max' => $validated['estimated_delivery_hours_max'],
+                'is_active' => true,
+            ]);
+        }
+
+        $dirMsg = $isBidirectional ? 'Bidirectional route (A ⇄ B) synchronized!' : 'One-way corridor saved!';
+        return redirect()->to(route('admin.dashboard') . '#delivery-lanes')->with('status', "Custom corridor successfully saved: {$dirMsg}");
+    }
+
+    public function adminUpdateZonalRates(Request $request)
+    {
+        $validated = $request->validate([
+            'zone_intra_lga_fee' => 'required|numeric|min:0',
+            'zone_intra_lga_eta' => 'required|string|max:50',
+            'zone_inter_lga_fee' => 'required|numeric|min:0',
+            'zone_inter_lga_eta' => 'required|string|max:50',
+            'zone_inter_state_fee' => 'required|numeric|min:0',
+            'zone_inter_state_eta' => 'required|string|max:50',
+            'zone_bulky_cargo_surcharge' => 'required|numeric|min:0',
+        ]);
+
+        foreach ($validated as $k => $v) {
+            \App\Models\SystemSetting::set($k, (string)$v, 'zonal_rates');
+        }
+
+        return redirect()->to(route('admin.dashboard') . '#delivery-lanes')->with('status', '3-Tier Zonal Distance Baseline Rates saved successfully!');
+    }
+
+    public function adminDeleteDeliveryLane(Request $request, int $id)
+    {
+        $lane = DeliveryLane::findOrFail($id);
+        $lane->delete();
+
+        return redirect()->to(route('admin.dashboard') . '#delivery-lanes')->with('status', 'Delivery corridor deleted successfully.');
     }
 
     public function adminToggleDeliveryLane(Request $request, int $id)

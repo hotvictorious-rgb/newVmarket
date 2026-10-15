@@ -300,161 +300,352 @@
     </div>
 
     <!-- Directional Delivery Lanes Matrix -->
-    <div class="dash-card" id="delivery-lanes">
-        <div class="dash-card-header">
+        <!-- MASTER SECTION: 3-Tier Zonal Distance Routing & Directional Delivery Lanes Matrix -->
+    <div class="dash-card" id="delivery-lanes" style="border: 1.5px solid rgba(94, 23, 235, 0.25);">
+        
+        <!-- Header with Sub-Tabs -->
+        <div class="dash-card-header" style="background: linear-gradient(135deg, rgba(94, 23, 235, 0.05) 0%, rgba(255, 215, 0, 0.06) 100%); flex-wrap: wrap; gap: 12px;">
             <div class="dash-card-title">
-                <span>🛣️</span>
+                <span style="font-size: 22px;">🛣️</span>
                 <div>
-                    <div>Directional Delivery Lanes Matrix (Akwa Ibom LGAs)</div>
-                    <span class="dash-card-subtitle">Active LGA corridors, base tariffs, distance rates, and same-day cut-off windows.</span>
+                    <div style="font-size: 16px; font-weight: 800;">Delivery Lanes &amp; National Shipping Matrix</div>
+                    <span class="dash-card-subtitle">
+                        3-Tier Zonal Distance Routing &amp; Bidirectional Custom Corridors across 774 LGAs in Nigeria.
+                    </span>
                 </div>
             </div>
-            <div style="display: flex; gap: 8px; align-items: center;"><button type="button" class="btn-dash btn-dash-primary" onclick="var el = document.getElementById('vmNewLaneCollapse'); el.style.display = el.style.display === 'none' ? 'block' : 'none';">+ Add Directional Lane</button><span class="dash-badge dash-badge-info">LGA Topology</span></div>
+            
+            <!-- Tab Switcher Pills -->
+            <div style="display: flex; gap: 8px; background: rgba(15, 23, 42, 0.05); padding: 4px; border-radius: 8px;">
+                <button type="button" class="btn-dash btn-dash-primary" id="btnTabCorridors" onclick="switchLaneTab('corridors')" style="padding: 6px 14px; font-size: 12px; font-weight: 700;">
+                    🚲 Custom LGA Corridors ({{ count($deliveryLanes) }})
+                </button>
+                <button type="button" class="btn-dash btn-dash-outline" id="btnTabZonal" onclick="switchLaneTab('zonal')" style="padding: 6px 14px; font-size: 12px; font-weight: 700; background: #FFF;">
+                    ⚙️ 3-Tier Zonal Baseline Rates
+                </button>
+            </div>
         </div>
 
-                <!-- Add Directional Delivery Lane Form -->
-        <div id="vmNewLaneCollapse" style="display: none; background: #F8FAFC; border-bottom: 2px solid var(--adm-border); padding: 20px 24px;">
-            <div style="font-weight: 700; font-size: 14px; margin-bottom: 12px; color: var(--adm-text); display: flex; align-items: center; gap: 8px;">
-                <span>🛣️</span> Configure New Directional LGA Corridor
+        <div class="dash-card-body" style="padding: 24px;">
+
+            <!-- ============================================================ -->
+            <!-- TAB 1: 3-TIER ZONAL BASELINE MATRIX (Guarantees 100% Coverage) -->
+            <!-- ============================================================ -->
+            <div id="vmZonalRatesTab" style="display: none;">
+                <div style="background: #F8FAFC; border: 1px solid var(--adm-border); border-radius: 10px; padding: 16px 20px; margin-bottom: 24px;">
+                    <div style="font-weight: 700; color: #0F172A; font-size: 13.5px; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                        <span style="color: #059669;">🛡️</span> 100% Nationwide Fail-Safe Distance Architecture
+                    </div>
+                    <p style="font-size: 12px; color: #64748B; margin: 0; line-height: 1.5;">
+                        Victorious Market classifies all delivery orders into Tier 1, Tier 2, or Tier 3 automatically based on physical LGA/State distance unless a specific custom corridor override has been saved below. This prevents any checkout blockages nationwide.
+                    </p>
+                </div>
+
+                <form method="POST" action="{{ route('admin.delivery_lanes.zonal') }}">
+                    @csrf
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; margin-bottom: 24px;">
+                        
+                        <!-- Tier 1: Intra-LGA (Municipal) -->
+                        <div style="background: #F5F3FF; border: 1.5px solid #DDD6FE; border-radius: 10px; padding: 18px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div style="font-weight: 800; font-size: 13.5px; color: var(--adm-primary);">🚲 Tier 1: Intra-LGA (Municipal)</div>
+                                <span class="dash-badge dash-badge-purple">Tier 1</span>
+                            </div>
+                            <p style="font-size: 11.5px; color: #64748B; margin-bottom: 14px; line-height: 1.4;">
+                                Applied when merchant and buyer are in the <strong>SAME LGA</strong> (e.g. Uyo ⟷ Uyo). Express bike dispatch.
+                            </p>
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Base Delivery Fee (₦)</label>
+                                <input type="number" step="50" name="zone_intra_lga_fee" value="{{ $zonalSettings['zone_intra_lga_fee'] }}" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Estimated Lead Time</label>
+                                <input type="text" name="zone_intra_lga_eta" value="{{ $zonalSettings['zone_intra_lga_eta'] }}" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            </div>
+                        </div>
+
+                        <!-- Tier 2: Inter-LGA (Regional) -->
+                        <div style="background: #EFF6FF; border: 1.5px solid #BFDBFE; border-radius: 10px; padding: 18px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div style="font-weight: 800; font-size: 13.5px; color: #1D4ED8;">🚚 Tier 2: Inter-LGA (Regional)</div>
+                                <span class="dash-badge dash-badge-info">Tier 2</span>
+                            </div>
+                            <p style="font-size: 11.5px; color: #64748B; margin-bottom: 14px; line-height: 1.4;">
+                                Applied when merchant and buyer are in the <strong>SAME State, but DIFFERENT LGAs</strong> (e.g. Uyo ⟷ Eket).
+                            </p>
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Base Delivery Fee (₦)</label>
+                                <input type="number" step="50" name="zone_inter_lga_fee" value="{{ $zonalSettings['zone_inter_lga_fee'] }}" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Estimated Lead Time</label>
+                                <input type="text" name="zone_inter_lga_eta" value="{{ $zonalSettings['zone_inter_lga_eta'] }}" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            </div>
+                        </div>
+
+                        <!-- Tier 3: Inter-State (National Freight) -->
+                        <div style="background: #FAF5FF; border: 1.5px solid #E9D5FF; border-radius: 10px; padding: 18px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div style="font-weight: 800; font-size: 13.5px; color: #7C3AED;">✈️ Tier 3: Inter-State (National)</div>
+                                <span class="dash-badge dash-badge-purple">Tier 3</span>
+                            </div>
+                            <p style="font-size: 11.5px; color: #64748B; margin-bottom: 14px; line-height: 1.4;">
+                                Applied across <strong>DIFFERENT States</strong> (e.g. Akwa Ibom ⟷ Lagos). Interstate park and courier freight.
+                            </p>
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Base Delivery Fee (₦)</label>
+                                <input type="number" step="100" name="zone_inter_state_fee" value="{{ $zonalSettings['zone_inter_state_fee'] }}" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Estimated Lead Time</label>
+                                <input type="text" name="zone_inter_state_eta" value="{{ $zonalSettings['zone_inter_state_eta'] }}" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            </div>
+                        </div>
+
+                        <!-- Bulky Cargo Surcharge Addon -->
+                        <div style="background: #FFFBEB; border: 1.5px solid #FDE68A; border-radius: 10px; padding: 18px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div style="font-weight: 800; font-size: 13.5px; color: #B45309;">📦 Bulky Cargo Surcharge</div>
+                                <span class="dash-badge dash-badge-gold">Addon</span>
+                            </div>
+                            <p style="font-size: 11.5px; color: #64748B; margin-bottom: 14px; line-height: 1.4;">
+                                Appended automatically across all tiers when a product is classified as <strong>bulky package tier</strong>.
+                            </p>
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Bulky Surcharge Amount (₦)</label>
+                                <input type="number" step="100" name="zone_bulky_cargo_surcharge" value="{{ $zonalSettings['zone_bulky_cargo_surcharge'] }}" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            </div>
+                            <div style="font-size: 11px; color: #92400E; margin-top: 14px;">
+                                ✓ Applies on refrigerators, generators &amp; large displays.
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end;">
+                        <button type="submit" class="btn-dash btn-dash-primary" style="padding: 10px 24px; font-weight: 700;">
+                            ✓ Save 3-Tier Zonal Distance Baseline Rates
+                        </button>
+                    </div>
+                </form>
             </div>
-            <form method="POST" action="{{ route('admin.delivery_lanes.store') }}">
-                @csrf
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 14px;">
-                    <div>
-                        <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Origin LGA (Merchant)</label>
-                        <select name="origin_lga_id" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
-                            @foreach($allLgas ?? [] as $lga)
-                                <option value="{{ $lga->id }}" {{ $lga->name == 'Uyo' ? 'selected' : '' }}>{{ $lga->name }}</option>
-                            @endforeach
-                        </select>
+
+            <!-- ============================================================ -->
+            <!-- TAB 2: TWO-COLUMN MASTER-DETAIL CUSTOM OVERRIDE CORRIDORS    -->
+            <!-- ============================================================ -->
+            <div id="vmCorridorsTab">
+                <div style="display: grid; grid-template-columns: 380px 1fr; gap: 24px; align-items: start;">
+                    
+                    <!-- LEFT COLUMN: ADD CUSTOM OVERRIDE CORRIDOR FORM -->
+                    <div style="background: #FFFFFF; border: 1.5px solid var(--adm-border); border-radius: 12px; padding: 20px; box-shadow: var(--adm-shadow-sm);">
+                        <div style="font-weight: 800; font-size: 14px; color: #0F172A; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                            <span>➕</span> Add Custom Corridor Override
+                        </div>
+                        <p style="font-size: 11.5px; color: #64748B; margin-bottom: 16px;">
+                            Create high-priority custom pricing between specific LGA pairs.
+                        </p>
+
+                        <form method="POST" action="{{ route('admin.delivery_lanes.store') }}">
+                            @csrf
+                            
+                            <!-- Origin Card -->
+                            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                                <label style="display: block; font-size: 11.5px; font-weight: 700; color: #0F172A; margin-bottom: 6px;">
+                                    🛫 Origin LGA (Merchant Outlet) *
+                                </label>
+                                <select name="origin_lga_id" id="laneOriginSelect" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF; font-size: 13px;">
+                                    @foreach($allLgas ?? [] as $lga)
+                                        <option value="{{ $lga->id }}" {{ $lga->name == 'Uyo' ? 'selected' : '' }}>{{ $lga->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <!-- Destination Card -->
+                            <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                                <label style="display: block; font-size: 11.5px; font-weight: 700; color: #1D4ED8; margin-bottom: 6px;">
+                                    🛬 Destination LGA (Customer Doorstep) *
+                                </label>
+                                <select name="destination_lga_id" id="laneDestSelect" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF; font-size: 13px;">
+                                    @foreach($allLgas ?? [] as $lga)
+                                        <option value="{{ $lga->id }}" {{ $lga->name == 'Eket' ? 'selected' : '' }}>{{ $lga->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <!-- Terms -->
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                                <div>
+                                    <label style="display: block; font-size: 11px; font-weight: 700; margin-bottom: 4px;">Base Tariff (₦) *</label>
+                                    <input type="number" step="50" name="base_fee" value="1200" required style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--adm-border); font-size: 13px;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 11px; font-weight: 700; margin-bottom: 4px;">Bulky Surcharge (₦)</label>
+                                    <input type="number" step="50" name="bulky_surcharge" value="1000" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--adm-border); font-size: 13px;">
+                                </div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
+                                <div>
+                                    <label style="display: block; font-size: 11px; font-weight: 700; margin-bottom: 4px;">Min Hours *</label>
+                                    <input type="number" name="estimated_delivery_hours_min" value="2" required style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--adm-border); font-size: 13px;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 11px; font-weight: 700; margin-bottom: 4px;">Max Hours *</label>
+                                    <input type="number" name="estimated_delivery_hours_max" value="6" required style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--adm-border); font-size: 13px;">
+                                </div>
+                            </div>
+
+                            <!-- Bidirectional Checkbox -->
+                            <div style="background: #ECFDF5; border: 1.5px solid #A7F3D0; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                                <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 12px; font-weight: 700; color: #065F46;">
+                                    <input type="checkbox" name="is_bidirectional" value="1" checked style="margin-top: 2px;">
+                                    <div>
+                                        <span>⇄ Bidirectional Corridor (A ⇄ B)</span>
+                                        <div style="font-size: 11px; font-weight: normal; color: #047857; margin-top: 2px;">
+                                            Automatically creates symmetric rates in both directions.
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <button type="submit" class="btn-dash btn-dash-primary" style="width: 100%; padding: 11px; font-weight: 700; font-size: 13px;">
+                                + Save Custom Corridor
+                            </button>
+                        </form>
                     </div>
+
+                    <!-- RIGHT COLUMN: ACTIVE CORRIDORS LIST & SEARCH -->
                     <div>
-                        <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Destination LGA (Customer)</label>
-                        <select name="destination_lga_id" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
-                            @foreach($allLgas ?? [] as $lga)
-                                <option value="{{ $lga->id }}">{{ $lga->name }}</option>
-                            @endforeach
-                        </select>
+                        <!-- Search and Quick Filter Bar -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px;">
+                            <div style="position: relative; flex: 1;">
+                                <input type="text" id="vmLaneSearchInput" onkeyup="filterLaneRows()" placeholder="🔍 Filter corridors by LGA name..." style="width: 100%; padding: 9px 14px 9px 36px; border-radius: 8px; border: 1px solid var(--adm-border); font-size: 13px;">
+                                <span style="position: absolute; left: 12px; top: 10px; color: #94A3B8; font-size: 13px;">🔍</span>
+                            </div>
+                            <span class="dash-badge dash-badge-purple" style="font-size: 12px; padding: 6px 12px;">
+                                {{ count($deliveryLanes) }} Custom Overrides
+                            </span>
+                        </div>
+
+                        <!-- Corridors Table -->
+                        <div class="dash-table-responsive" style="background: #FFFFFF; border: 1px solid var(--adm-border); border-radius: 10px; overflow: hidden;">
+                            <table class="dash-table" id="vmLanesTable">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Origin LGA</th>
+                                        <th style="text-align: center;">Direction</th>
+                                        <th>Destination LGA</th>
+                                        <th>Base Tariff</th>
+                                        <th>Lead Time</th>
+                                        <th style="text-align: center;">Status</th>
+                                        <th style="text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse($deliveryLanes as $idx => $lane)
+                                        <tr class="lane-row" data-origin="{{ strtolower($lane->originLga->name ?? '') }}" data-dest="{{ strtolower($lane->destinationLga->name ?? '') }}">
+                                            <td style="font-size: 12px; color: var(--adm-text-muted);">{{ $idx + 1 }}</td>
+                                            <td>
+                                                <strong style="color: var(--adm-text);">{{ $lane->originLga->name ?? 'Uyo' }}</strong>
+                                            </td>
+                                            <td style="text-align: center;">
+                                                @if(!empty($lane->is_bidirectional))
+                                                    <span class="dash-badge dash-badge-success" style="font-size: 11px; padding: 3px 8px;" title="Bidirectional: Applies both ways">
+                                                        ⇄ Bidirectional
+                                                    </span>
+                                                @else
+                                                    <span class="dash-badge dash-badge-purple" style="font-size: 11px; padding: 3px 8px;" title="One-Way Directional">
+                                                        ➔ Directional
+                                                    </span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                <span class="dash-badge dash-badge-info" style="font-weight: 700;">{{ $lane->destinationLga->name ?? 'Eket' }}</span>
+                                            </td>
+                                            <td>
+                                                <strong style="color: #0F172A; font-size: 13.5px;">&#8358;{{ number_format((float)$lane->base_fee, 2) }}</strong>
+                                                @if((float)$lane->bulky_surcharge > 0)
+                                                    <div style="font-size: 10.5px; color: #B45309;">+&#8358;{{ number_format((float)$lane->bulky_surcharge) }} bulky</div>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                <span class="dash-badge dash-badge-purple" style="font-size: 11.5px;">
+                                                    {{ $lane->estimated_delivery_hours_min }}-{{ $lane->estimated_delivery_hours_max }} hrs
+                                                </span>
+                                            </td>
+                                            <td style="text-align: center;">
+                                                <form method="POST" action="{{ route('admin.delivery_lanes.toggle', $lane->id) }}" style="margin: 0; display: inline;">
+                                                    @csrf
+                                                    <button type="submit" style="background: none; border: none; cursor: pointer; padding: 0;">
+                                                        @if($lane->is_active)
+                                                            <span class="dash-badge dash-badge-success" style="cursor: pointer;">● Active</span>
+                                                        @else
+                                                            <span class="dash-badge dash-badge-danger" style="cursor: pointer;">● Inactive</span>
+                                                        @endif
+                                                    </button>
+                                                </form>
+                                            </td>
+                                            <td style="text-align: right;">
+                                                <form method="POST" action="{{ route('admin.delivery_lanes.delete', $lane->id) }}" onsubmit="return confirm('Delete this corridor?');" style="margin: 0; display: inline;">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn-dash btn-dash-danger" style="padding: 3px 8px; font-size: 11px;">
+                                                        🗑️
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="8" style="text-align: center; padding: 24px; color: var(--adm-text-muted);">
+                                                No custom corridor lanes saved yet. Zonal baseline rates will apply automatically.
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <div>
-                        <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Base Tariff (₦)</label>
-                        <input type="number" step="50" name="base_fee" value="500" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Speed Min (Hours)</label>
-                        <input type="number" name="estimated_delivery_hours_min" value="2" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Speed Max (Hours)</label>
-                        <input type="number" name="estimated_delivery_hours_max" value="4" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Daily Cut-Off Time</label>
-                        <input type="text" name="cutoff_time" value="15:00" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
-                    </div>
+
                 </div>
-                <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                    <button type="button" class="btn-dash btn-dash-outline" onclick="document.getElementById('vmNewLaneCollapse').style.display='none'">Cancel</button>
-                    <button type="submit" class="btn-dash btn-dash-primary">✓ Save Directional Lane</button>
-                </div>
-            </form>
-        </div>
-        <div class="dash-table-responsive">
-            <table class="dash-table">
-                <thead>
-                    <tr>
-                        <th>Origin LGA</th>
-                        <th>Destination LGA</th>
-                        <th>Base Tariff</th>
-                        <th>Per-Km Rate</th>
-                        <th>Order Cut-off</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($deliveryLanes as $lane)
-                        <tr>
-                            <td><strong>{{ $lane->originLga->name ?? 'Uyo' }}</strong></td>
-                            <td>
-                                <span class="dash-badge dash-badge-purple">{{ $lane->destinationLga->name ?? 'Ikot Ekpene' }}</span>
-                            </td>
-                            <td>&#8358;{{ number_format($lane->base_fee, 2) }}</td>
-                            <td>&#8358;{{ number_format($lane->per_km_rate, 2) }}/km</td>
-                            <td>{{ $lane->cutoff_time }} (Daily)</td>
-                            <td>
-                                <span class="dash-badge dash-badge-success">● Active Corridor</span>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="6" style="text-align: center; padding: 20px; color: var(--adm-text-muted);">
-                                No delivery lanes configured.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+            </div>
+
         </div>
     </div>
 
-    <!-- Recent Platform Escrow Orders -->
-    <div class="dash-card" id="recent-orders">
-        <div class="dash-card-header">
-            <div class="dash-card-title">
-                <span>📦</span>
-                <div>
-                    <div>Recent Platform Escrow Orders</div>
-                    <span class="dash-card-subtitle">Full transaction oversight across Uyo branches and directional transit.</span>
-                </div>
-            </div>
-            <span class="dash-badge dash-badge-purple">Full Audit Trail</span>
-        </div>
+    <script>
+    function switchLaneTab(tab) {
+        if (tab === 'zonal') {
+            document.getElementById('vmZonalRatesTab').style.display = 'block';
+            document.getElementById('vmCorridorsTab').style.display = 'none';
+            document.getElementById('btnTabZonal').className = 'btn-dash btn-dash-primary';
+            document.getElementById('btnTabCorridors').className = 'btn-dash btn-dash-outline';
+            document.getElementById('btnTabCorridors').style.background = '#FFF';
+        } else {
+            document.getElementById('vmZonalRatesTab').style.display = 'none';
+            document.getElementById('vmCorridorsTab').style.display = 'block';
+            document.getElementById('btnTabCorridors').className = 'btn-dash btn-dash-primary';
+            document.getElementById('btnTabZonal').className = 'btn-dash btn-dash-outline';
+            document.getElementById('btnTabZonal').style.background = '#FFF';
+        }
+    }
 
-        <div class="dash-table-responsive">
-            <table class="dash-table">
-                <thead>
-                    <tr>
-                        <th>Order #</th>
-                        <th>Customer</th>
-                        <th>Branch Plaza</th>
-                        <th>Total</th>
-                        <th>Fulfillment</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($recentOrders as $order)
-                        <tr>
-                            <td style="font-family: monospace; font-weight: 700;">{{ $order->order_number }}</td>
-                            <td>{{ $order->customer->name ?? 'Customer' }}</td>
-                            <td>{{ $order->shop->name ?? 'Uyo Plaza' }}</td>
-                            <td><strong>&#8358;{{ number_format($order->total_amount, 2) }}</strong></td>
-                            <td>
-                                <span class="dash-badge dash-badge-gold">
-                                    {{ ucfirst(str_replace('_', ' ', $order->fulfillment_type)) }}
-                                </span>
-                            </td>
-                            <td>
-                                @if($order->order_status === 'delivered')
-                                    <span class="dash-badge dash-badge-success">Delivered ✓</span>
-                                @elseif($order->order_status === 'out_for_delivery')
-                                    <span class="dash-badge dash-badge-info">In LGA Transit 🚚</span>
-                                @else
-                                    <span class="dash-badge dash-badge-warning">{{ ucfirst($order->order_status) }}</span>
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="6" style="text-align: center; padding: 20px; color: var(--adm-text-muted);">No orders found.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
+    function filterLaneRows() {
+        var query = document.getElementById('vmLaneSearchInput').value.toLowerCase();
+        var rows = document.querySelectorAll('.lane-row');
+        rows.forEach(function(row) {
+            var origin = row.getAttribute('data-origin') || '';
+            var dest = row.getAttribute('data-dest') || '';
+            if (origin.includes(query) || dest.includes(query)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+    </script>
 
-    <!-- Stage 1.2: Merchant Accreditation & KYC Desk -->
     <div class="dash-card" id="merchants-desk">
         <div class="dash-card-header">
             <div class="dash-card-title">
