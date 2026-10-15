@@ -176,6 +176,7 @@
                         data-id="{{ $product->id }}" 
                         data-name="{{ $product->name }}" 
                         data-price="{{ $product->unit_price }}" 
+                        data-image="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}"
                         data-shop="{{ $product->shop->name ?? 'Verified Merchant' }}" 
                         data-lga="{{ $product->shop->lga->name ?? 'Uyo' }}" 
                         data-slug="{{ $product->slug }}"

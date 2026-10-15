@@ -874,7 +874,7 @@
             <div style="display: flex; gap: 16px; align-items: center;">
                 <a href="{{ route('vendor.login') }}">Become a Vendor</a>
                 <span style="opacity: 0.4;">•</span>
-                <a href="#footer-guarantees">Help & Support</a>
+                <a href="{{ route('storefront') }}#footer-guarantees">Help & Support</a>
                 <span style="opacity: 0.4;">•</span>
                 <!-- 7 Connected Login Portals Switcher -->
                 <div class="vm-portal-dropdown">
@@ -1078,14 +1078,14 @@
                 <div>
                     <h4 class="vm-footer-title">Customer Care</h4>
                     <div class="vm-footer-links">
-                        <a href="#contact">Contact & Help Center</a>
-                        <a href="#faq">Frequently Asked Questions</a>
-                        <a href="#about">About Us</a>
-                        <a href="#terms">Terms And Conditions</a>
-                        <a href="#privacy">Privacy Policy</a>
-                        <a href="#refund">Refund Policy</a>
-                        <a href="#return">Return Policy</a>
-                        <a href="#cancellation">Cancellation Policy</a>
+                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('contact')">Contact &amp; Help Center</a>
+                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('faq')">Frequently Asked Questions</a>
+                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('about')">About Us</a>
+                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('terms')">Terms And Conditions</a>
+                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('privacy')">Privacy Policy</a>
+                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('refund')">Refund Policy</a>
+                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('return')">Return Policy</a>
+                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('cancellation')">Cancellation Policy</a>
                     </div>
                 </div>
 
@@ -1266,15 +1266,38 @@
         </div>
     </div>
 
+    <!-- Platform Policy & Customer Care Modal -->
+    <div id="vmPolicyModal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: #FFFFFF; border-radius: 16px; width: 100%; max-width: 620px; max-height: 85vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #E2E8F0; position: relative;">
+            <div style="padding: 20px 24px; border-bottom: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: #FFFFFF; z-index: 10;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span id="vmPolicyIcon" style="font-size: 24px;">📋</span>
+                    <div>
+                        <h3 id="vmPolicyTitle" style="font-size: 18px; font-weight: 700; color: #0F172A; margin: 0;">Policy Information</h3>
+                        <p style="font-size: 12px; color: #64748B; margin: 2px 0 0 0;">Victorious Market — Akwa Ibom Trusted Commerce</p>
+                    </div>
+                </div>
+                <button type="button" onclick="vmClosePolicyModal()" style="background: #F1F5F9; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #64748B;">&times;</button>
+            </div>
+            <div id="vmPolicyBody" style="padding: 24px; font-size: 14px; line-height: 1.6; color: #334155;">
+                <!-- Populated dynamically via vmOpenPolicyModal -->
+            </div>
+            <div style="padding: 14px 24px; border-top: 1px solid #F1F5F9; background: #F8FAFC; display: flex; justify-content: space-between; align-items: center; border-radius: 0 0 16px 16px;">
+                <span style="font-size: 12px; color: #64748B;">Support Line: {{ $sysPhone ?? '0800-VMARKET' }}</span>
+                <button type="button" onclick="vmClosePolicyModal()" style="background: #1E293B; color: #FFFFFF; font-weight: 600; padding: 8px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px;">Got it</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Mobile Bottom App Navigation Bar (Mockup Screen 5 Parity) -->
     <div class="vm-mobile-bottom-nav">
         <a href="{{ route('storefront') }}" class="vm-mob-nav-item {{ request()->routeIs('storefront') ? 'active' : '' }}">
             <span class="vm-mob-nav-icon">🏠</span>
             <span class="vm-mob-nav-text">Home</span>
         </a>
-        <a href="{{ route('storefront') }}#categories" class="vm-mob-nav-item">
-            <span class="vm-mob-nav-icon">📑</span>
-            <span class="vm-mob-nav-text">Categories</span>
+        <a href="{{ route('storefront') }}#merchants" class="vm-mob-nav-item">
+            <span class="vm-mob-nav-icon">🏪</span>
+            <span class="vm-mob-nav-text">Plazas</span>
         </a>
         <button type="button" class="vm-mob-nav-item vm-mob-cart-trigger" onclick="if(window.vmCart) window.vmCart.openDrawer();" style="background: none; border: none; cursor: pointer;">
             <div style="position: relative; display: inline-block;">
@@ -1539,6 +1562,150 @@
             if (cartBtn) cartBtn.addEventListener('click', () => toggleCart(true));
             if (cartClose) cartClose.addEventListener('click', () => toggleCart(false));
             if (cartOverlay) cartOverlay.addEventListener('click', () => toggleCart(false));
+
+            // Platform Policy Modal Engine
+            const policyContent = {
+                contact: {
+                    icon: '📞',
+                    title: 'Contact & Help Center',
+                    html: `
+                        <p style="margin-bottom: 12px;">Need help with your order, delivery, or merchant inquiry? Our Uyo-based operations desk is ready to support you.</p>
+                        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px; margin-bottom: 12px;">
+                            <strong>Customer Support Desk:</strong><br>
+                            Phone: <a href="tel:{{ $sysPhone ?? '08008627538' }}" style="color: #6B21A8; font-weight: 600;">{{ $sysPhone ?? '0800-VMARKET' }}</a><br>
+                            Email: <a href="mailto:{{ $sysEmail ?? 'support@victoriousmarket.ng' }}" style="color: #6B21A8; font-weight: 600;">{{ $sysEmail ?? 'support@victoriousmarket.ng' }}</a><br>
+                            Hours: Mon – Sat, 8:00 AM – 6:00 PM (WAT)
+                        </div>
+                        <p style="font-size: 13px; color: #64748B;">For rider escalations or shop pickup verification, please quote your <strong>Order Ref Number</strong> when calling.</p>
+                    `
+                },
+                faq: {
+                    icon: '❓',
+                    title: 'Frequently Asked Questions',
+                    html: `
+                        <div style="display: flex; flex-direction: column; gap: 14px;">
+                            <div>
+                                <strong style="color: #0F172A;">How does Escrow Protection work?</strong>
+                                <p style="margin-top: 4px; font-size: 13px;">Your payment is safely held by Victorious Market until you inspect and physically receive your order via secure OTP handoff.</p>
+                            </div>
+                            <div>
+                                <strong style="color: #0F172A;">Can I inspect items before paying?</strong>
+                                <p style="margin-top: 4px; font-size: 13px;">Yes! Choose <em>In-Shop Pickup (Pay on Inspection)</em> at checkout to reserve the product, visit the vendor plaza, inspect the item, and pay on the spot.</p>
+                            </div>
+                            <div>
+                                <strong style="color: #0F172A;">How fast is delivery within Uyo & Akwa Ibom?</strong>
+                                <p style="margin-top: 4px; font-size: 13px;">Intra-Uyo deliveries arrive within 1–3 hours. LGA-to-LGA and corridor orders are dispatched along verified transit corridors.</p>
+                            </div>
+                            <div>
+                                <strong style="color: #0F172A;">What is the 5% Cashback Reward?</strong>
+                                <p style="margin-top: 4px; font-size: 13px;">Every verified order earns 5% cashback credited directly to your customer balance upon confirmed OTP delivery sign-off.</p>
+                            </div>
+                        </div>
+                    `
+                },
+                about: {
+                    icon: '🏪',
+                    title: 'About Victorious Market',
+                    html: `
+                        <p style="margin-bottom: 12px;">Victorious Market is Akwa Ibom\\'s premier multi-merchant marketplace connecting verified plaza shops in Uyo, Ikot Ekpene, Eket, and beyond with shoppers across Nigeria.</p>
+                        <p style="margin-bottom: 12px;">We bridge physical shopping with digital convenience through accredited merchant verifications, directional LGA-to-LGA logistics, Paystack escrow security, and in-shop physical reservation.</p>
+                        <div style="background: #FAF5FF; border: 1px solid #E9D5FF; padding: 12px; border-radius: 8px; font-size: 13px; color: #581C87;">
+                            <strong>Our Core Values:</strong> 100% Genuine Products, Secure Escrow Settlement, Transparent LGA Logistics, and Empowering Local Nigerian Plaza Merchants.
+                        </div>
+                    `
+                },
+                terms: {
+                    icon: '📜',
+                    title: 'Terms & Conditions',
+                    html: `
+                        <p style="margin-bottom: 10px;">By using Victorious Market, you agree to fair and transparent marketplace guidelines:</p>
+                        <ul style="padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
+                            <li>All orders require OTP verification (Handover Code) between rider and customer or counter personnel to guarantee delivery integrity.</li>
+                            <li>Delivery fees are calculated directionally based on LGA transit corridors and are distinct from product pricing.</li>
+                            <li>Merchants are accredited business owners operating registered shops and commercial stalls in verified commercial plazas.</li>
+                            <li>Fraudulent cancellation after rider dispatch may incur standard transit logistics recovery fees.</li>
+                        </ul>
+                    `
+                },
+                privacy: {
+                    icon: '🔒',
+                    title: 'Privacy Policy',
+                    html: `
+                        <p style="margin-bottom: 10px;">We take your data confidentiality and personal privacy seriously:</p>
+                        <ul style="padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
+                            <li>We collect necessary contact information (phone number, delivery LGA, street address) strictly for order fulfillment and OTP confirmation.</li>
+                            <li>Financial credentials and card numbers are processed directly through Paystack\\'s PCI-DSS compliant payment gateway. Victorious Market never stores card CVVs or pins.</li>
+                            <li>Your contact details are shared only with the assigned verified rider delivering your specific package.</li>
+                        </ul>
+                    `
+                },
+                refund: {
+                    icon: '💰',
+                    title: 'Refund Policy',
+                    html: `
+                        <p style="margin-bottom: 10px;">Our Paystack escrow system ensures you never lose money on unfulfilled or defective goods:</p>
+                        <ul style="padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
+                            <li>If an item is unavailable at the merchant\\'s plaza after payment, a full 100% refund is initiated immediately to your source account or customer wallet.</li>
+                            <li>If a delivered item does not match product specifications upon arrival, reject the delivery OTP and notify our support desk within 2 hours.</li>
+                            <li>Approved refunds are processed within 24 business hours back through Paystack gateway.</li>
+                        </ul>
+                    `
+                },
+                return: {
+                    icon: '🔄',
+                    title: 'Return Policy',
+                    html: `
+                        <p style="margin-bottom: 10px;">Returns are hassle-free with our verified merchant network:</p>
+                        <ul style="padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
+                            <li>Electronics, gadgets, and home appliances carry a minimum 48-hour testing window for manufacturer defects.</li>
+                            <li>Returned items must be intact with original packaging, warranty seals, and accessories.</li>
+                            <li>Items can be returned directly to the vendor\\'s physical shop address or collected by a verified Victorious Market rider.</li>
+                        </ul>
+                    `
+                },
+                cancellation: {
+                    icon: '❌',
+                    title: 'Cancellation Policy',
+                    html: `
+                        <p style="margin-bottom: 10px;">Order cancellation terms:</p>
+                        <ul style="padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
+                            <li>Orders can be cancelled with 100% automatic refund prior to merchant packaging and rider dispatch.</li>
+                            <li>In-Shop reservations that are not claimed within the designated 24-hour pickup window are automatically cancelled with zero penalty.</li>
+                            <li>To cancel an active order, navigate to your <strong>Customer Portal &rarr; Orders</strong> or call customer care.</li>
+                        </ul>
+                    `
+                }
+            };
+
+            window.vmOpenPolicyModal = function(type) {
+                const modal = document.getElementById('vmPolicyModal');
+                const titleEl = document.getElementById('vmPolicyTitle');
+                const iconEl = document.getElementById('vmPolicyIcon');
+                const bodyEl = document.getElementById('vmPolicyBody');
+                if (!modal || !bodyEl) return;
+
+                const data = policyContent[type] || policyContent['about'];
+                titleEl.textContent = data.title;
+                iconEl.textContent = data.icon;
+                bodyEl.innerHTML = data.html;
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+            };
+
+            window.vmClosePolicyModal = function() {
+                const modal = document.getElementById('vmPolicyModal');
+                if (modal) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = '';
+                }
+            };
+
+            const pModal = document.getElementById('vmPolicyModal');
+            if (pModal) {
+                pModal.addEventListener('click', function(e) {
+                    if (e.target === pModal) vmClosePolicyModal();
+                });
+            }
         });
     </script>
     @stack('scripts')

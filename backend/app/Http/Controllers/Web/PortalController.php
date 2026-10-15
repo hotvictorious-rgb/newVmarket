@@ -2032,7 +2032,21 @@ class PortalController extends Controller
         $productId = $request->input('product_id');
         $quantity = max(1, (int)$request->input('quantity', 1));
 
-        $product = Product::with(['shop.lga', 'vendor'])->findOrFail($productId);
+        $product = null;
+        if ($productId) {
+            $product = Product::with(['shop.lga', 'vendor'])->find($productId);
+        }
+        if (!$product) {
+            $product = Product::marketplaceEligible()->with(['shop.lga', 'vendor'])->first();
+        }
+        if (!$product) {
+            $product = Product::with(['shop.lga', 'vendor'])->first();
+        }
+
+        if (!$product) {
+            return redirect()->route('storefront')->with('info', 'Marketplace catalog is currently being updated. Please browse our stores.');
+        }
+
         $activeCity = session('customer_city', 'Uyo');
         $destLga = Lga::where('name', $activeCity)->first() ?? Lga::where('name', 'Uyo')->first();
 

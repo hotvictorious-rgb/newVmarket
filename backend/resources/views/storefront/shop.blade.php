@@ -51,11 +51,9 @@
                             {{ $isOpenNow ? 'Store Open for Inspection' : 'Store Currently Closed' }}
                         </span>
 
-                        @if($shop->pickup_opening_time)
-                            <span style="color: #CBD5E1; font-weight: 500;">
-                                🕒 Hours: {{ substr($shop->pickup_opening_time, 0, 5) }} &ndash; {{ substr($shop->pickup_closing_time ?? '18:00', 0, 5) }}
-                            </span>
-                        @endif
+                        <span style="color: #CBD5E1; font-weight: 500;">
+                            🕒 Store Operating Hours: {{ substr($shop->pickup_opening_time ?? '08:00', 0, 5) }} &ndash; {{ substr($shop->pickup_closing_time ?? '18:00', 0, 5) }}
+                        </span>
 
                         <span style="background: rgba(94, 23, 235, 0.4); color: #E9D5FF; padding: 3px 10px; border-radius: 6px; font-weight: 600;">
                             ⚡ In-Shop Counter Ready
@@ -232,6 +230,7 @@
                                 data-id="{{ $product->id }}" 
                                 data-name="{{ $product->name }}" 
                                 data-price="{{ $product->unit_price }}" 
+                                data-image="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}"
                                 data-shop="{{ $shop->name }}" 
                                 data-lga="{{ $shop->lga->name ?? 'Uyo' }}" 
                                 data-slug="{{ $product->slug }}"
