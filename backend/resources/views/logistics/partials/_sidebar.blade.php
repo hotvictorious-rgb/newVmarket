@@ -23,6 +23,15 @@
         @endif
     </a>
 </li>
+<li class="sidebar-nav-item">
+    <a href="{{ route('logistics.collection_points.index') }}" class="sidebar-nav-link {{ request()->routeIs('logistics.collection_points.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">📍</span>
+        <span>LGA Collection Points</span>
+        @if(isset($collectionPointsCount) && $collectionPointsCount > 0)
+            <span class="nav-link-badge">{{ $collectionPointsCount }}</span>
+        @endif
+    </a>
+</li>
 
 <li class="nav-section-title">FINANCE &amp; SETTLEMENT</li>
 <li class="sidebar-nav-item">

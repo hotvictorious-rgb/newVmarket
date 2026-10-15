@@ -9,6 +9,7 @@ class DeliveryLane extends Model
     protected $fillable = [
         'origin_lga_id',
         'destination_lga_id',
+        'assigned_logistics_company_id',
         'base_fee',
         'bulky_surcharge',
         'estimated_delivery_hours_min',
@@ -30,6 +31,11 @@ class DeliveryLane extends Model
     public function destinationLga()
     {
         return $this->belongsTo(Lga::class, 'destination_lga_id');
+    }
+
+    public function assignedLogisticsCompany()
+    {
+        return $this->belongsTo(LogisticsCompanyProfile::class, 'assigned_logistics_company_id');
     }
 
     /**

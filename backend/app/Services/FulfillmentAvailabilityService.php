@@ -34,6 +34,9 @@ class FulfillmentAvailabilityService
                 $fee = BcMathService::add($fee, $lane->bulky_surcharge);
             }
 
+            $isCrossLga = ($shop->lga_id !== $destinationLgaId);
+            $collectionPoints = $isCrossLga ? $this->resolveCollectionPoints($destinationLgaId, $lane->assigned_logistics_company_id) : [];
+
             return [
                 'is_available' => true,
                 'lane_id' => $lane->id,
@@ -44,6 +47,8 @@ class FulfillmentAvailabilityService
                 'estimated_delivery_hours_max' => $lane->estimated_delivery_hours_max,
                 'estimated_time_text' => "{$lane->estimated_delivery_hours_min}-{$lane->estimated_delivery_hours_max} hours",
                 'rate_tier' => 'custom_override',
+                'is_collection_point' => $isCrossLga,
+                'collection_points' => $collectionPoints,
             ];
         }
 
@@ -60,8 +65,10 @@ class FulfillmentAvailabilityService
                 'origin_lga_id' => $shop->lga_id,
                 'destination_lga_id' => $destinationLgaId,
                 'fee' => '0.00',
-                'message' => 'Doorstep delivery is currently suspended or unserviceable along this route corridor.',
+                'message' => 'Delivery is currently suspended or unserviceable along this route corridor.',
                 'rate_tier' => 'corridor_suspended',
+                'is_collection_point' => ($shop->lga_id !== $destinationLgaId),
+                'collection_points' => [],
             ];
         }
 
@@ -85,8 +92,10 @@ class FulfillmentAvailabilityService
                     'origin_lga_id' => $shop->lga_id,
                     'destination_lga_id' => $destinationLgaId,
                     'fee' => '0.00',
-                    'message' => "Doorstep delivery is currently suspended to " . ($destLga->state->name ?? 'this state') . ".",
+                    'message' => "Delivery is currently suspended to " . ($destLga->state->name ?? 'this state') . ".",
                     'rate_tier' => 'state_corridor_suspended',
+                    'is_collection_point' => true,
+                    'collection_points' => [],
                 ];
             }
         }
@@ -94,7 +103,7 @@ class FulfillmentAvailabilityService
         if ($shopLga && $destLga) {
             $bulkySurcharge = (string)\App\Models\SystemSetting::get('zone_bulky_cargo_surcharge', '1000.00');
             
-            // Tier 1: Intra-LGA (Municipal same-LGA)
+            // Tier 1: Intra-LGA (Municipal same-LGA) -> Doorstep Delivery
             if ($shopLga->id === $destLga->id) {
                 $baseFee = (string)\App\Models\SystemSetting::get('zone_intra_lga_fee', '500.00');
                 $eta = (string)\App\Models\SystemSetting::get('zone_intra_lga_eta', '2-4 hours');
@@ -110,14 +119,17 @@ class FulfillmentAvailabilityService
                     'estimated_delivery_hours_max' => 4,
                     'estimated_time_text' => $eta,
                     'rate_tier' => 'tier_1_intra_lga',
+                    'is_collection_point' => false,
+                    'collection_points' => [],
                 ];
             }
 
-            // Tier 2: Inter-LGA (Regional, same state)
+            // Tier 2: Inter-LGA (Regional, same state) -> Collection Point Pickup
             if ($shopLga->state_id === $destLga->state_id) {
                 $baseFee = (string)\App\Models\SystemSetting::get('zone_inter_lga_fee', '1500.00');
                 $eta = (string)\App\Models\SystemSetting::get('zone_inter_lga_eta', 'Same day / 12-24 hours');
                 $fee = ($packageTier === 'bulky') ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
+                $collectionPoints = $this->resolveCollectionPoints($destinationLgaId);
 
                 return [
                     'is_available' => true,
@@ -129,13 +141,16 @@ class FulfillmentAvailabilityService
                     'estimated_delivery_hours_max' => 24,
                     'estimated_time_text' => $eta,
                     'rate_tier' => 'tier_2_inter_lga',
+                    'is_collection_point' => true,
+                    'collection_points' => $collectionPoints,
                 ];
             }
 
-            // Tier 3: Inter-State (National freight)
+            // Tier 3: Inter-State (National freight) -> Collection Point Pickup
             $baseFee = (string)\App\Models\SystemSetting::get('zone_inter_state_fee', '3500.00');
             $eta = (string)\App\Models\SystemSetting::get('zone_inter_state_eta', '2-4 business days');
             $fee = ($packageTier === 'bulky') ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
+            $collectionPoints = $this->resolveCollectionPoints($destinationLgaId);
 
             return [
                 'is_available' => true,
@@ -147,6 +162,8 @@ class FulfillmentAvailabilityService
                 'estimated_delivery_hours_max' => 96,
                 'estimated_time_text' => $eta,
                 'rate_tier' => 'tier_3_inter_state',
+                'is_collection_point' => true,
+                'collection_points' => $collectionPoints,
             ];
         }
 
@@ -181,5 +198,32 @@ class FulfillmentAvailabilityService
             'opening_time' => $shop->pickup_opening_time,
             'closing_time' => $shop->pickup_closing_time,
         ];
+    }
+
+    /**
+     * Resolves active Collection Points in destination LGA.
+     */
+    protected function resolveCollectionPoints(int $destinationLgaId, ?int $assignedCompanyId = null): array
+    {
+        $query = \App\Models\LogisticsCollectionPoint::where('lga_id', $destinationLgaId)
+            ->where('is_active', true)
+            ->with('logisticsCompany');
+
+        if ($assignedCompanyId) {
+            $query->where('logistics_company_id', $assignedCompanyId);
+        }
+
+        return $query->get()->map(function ($cp) {
+            return [
+                'id' => $cp->id,
+                'name' => $cp->name,
+                'code' => $cp->code,
+                'company_name' => $cp->logisticsCompany->company_name ?? 'Accredited Logistics Company',
+                'address' => $cp->address,
+                'landmark' => $cp->landmark,
+                'contact_phone' => $cp->contact_phone,
+                'operating_hours' => $cp->operating_hours,
+            ];
+        })->toArray();
     }
 }

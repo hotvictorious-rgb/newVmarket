@@ -116,8 +116,28 @@ class OrderSettlementService
 
             $lockedOrder->save();
 
-            // Real-time credit delivery fee to rider wallet
-            $targetRider = $rider ?? ($lockedOrder->rider_id ? RiderProfile::find($lockedOrder->rider_id) : null);
+            // Corporate B2B Settlement: Credit 100% of delivery fee to accredited Logistics Company Corporate Wallet
+            $targetRider = $rider ?? ($lockedOrder->rider_id ? RiderProfile::with('logisticsCompany')->find($lockedOrder->rider_id) : null);
+            $logisticsCompany = null;
+            if ($lockedOrder->collection_point_id) {
+                $collectionPoint = \App\Models\LogisticsCollectionPoint::find($lockedOrder->collection_point_id);
+                $logisticsCompany = $collectionPoint ? $collectionPoint->company : null;
+            }
+            if (!$logisticsCompany && $targetRider && $targetRider->logistics_company_id) {
+                $logisticsCompany = $targetRider->logisticsCompany;
+            }
+            if (!$logisticsCompany && $lockedOrder->delivery_lane_id) {
+                $lane = \App\Models\DeliveryLane::find($lockedOrder->delivery_lane_id);
+                $logisticsCompany = $lane ? $lane->assignedLogisticsCompany : null;
+            }
+            if (!$logisticsCompany) {
+                $logisticsCompany = \App\Models\LogisticsCompanyProfile::where('status', 'active')->first();
+            }
+
+            if ($logisticsCompany && bccomp((string)($lockedOrder->delivery_fee ?? '0.00'), '0.00', 2) > 0) {
+                $logisticsCompany->creditWallet((string)$lockedOrder->delivery_fee);
+            }
+
             if ($targetRider) {
                 $currentBalance = (float) ($targetRider->current_balance ?? 0);
                 $deliveryCut = (float) ($lockedOrder->delivery_fee ?? 0);

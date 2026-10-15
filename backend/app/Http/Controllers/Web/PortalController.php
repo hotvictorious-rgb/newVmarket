@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\CustomerCashbackLedger;
 use App\Models\DeliveryLane;
 use App\Models\Lga;
+use App\Models\LogisticsCollectionPoint;
 use App\Models\LogisticsCompanyProfile;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -851,6 +852,108 @@ class PortalController extends Controller
     }
 
     /**
+     * Logistics LGA Collection Points Manager Page
+     */
+    public function logisticsCollectionPointsPage()
+    {
+        $company = $this->resolveLogisticsCompany();
+        $collectionPoints = LogisticsCollectionPoint::where('logistics_company_id', $company->id)
+            ->with(['lga.state', 'state'])
+            ->latest()
+            ->get();
+
+        $lgas = Lga::where('is_active', true)->with('state')->orderBy('name', 'asc')->get();
+        $states = State::where('is_active', true)->orderBy('name', 'asc')->get();
+
+        $coveredLgaIds = $collectionPoints->pluck('lga_id')->unique();
+        $metrics = [
+            'total_points' => $collectionPoints->count(),
+            'active_points' => $collectionPoints->where('is_active', true)->count(),
+            'covered_lgas' => $coveredLgaIds->count(),
+            'total_orders_handled' => Order::where('collection_point_id', '!=', null)
+                ->whereIn('collection_point_id', $collectionPoints->pluck('id'))
+                ->count(),
+        ];
+
+        return view('logistics.collection_points', compact('company', 'collectionPoints', 'lgas', 'states', 'metrics'));
+    }
+
+    /**
+     * Store a new Logistics Collection Point per LGA
+     */
+    public function logisticsStoreCollectionPoint(Request $request)
+    {
+        $company = $this->resolveLogisticsCompany();
+
+        $validated = $request->validate([
+            'lga_id' => 'required|integer|exists:lgas,id',
+            'name' => 'required|string|max:150',
+            'address' => 'required|string|max:255',
+            'landmark' => 'nullable|string|max:150',
+            'contact_phone' => 'required|string|max:30',
+            'contact_person' => 'nullable|string|max:100',
+            'operating_hours' => 'nullable|string|max:100',
+        ]);
+
+        $lga = Lga::with('state')->findOrFail($validated['lga_id']);
+        $code = LogisticsCollectionPoint::generateUniqueCode($lga->name);
+
+        LogisticsCollectionPoint::create([
+            'logistics_company_id' => $company->id,
+            'state_id' => $lga->state_id,
+            'lga_id' => $lga->id,
+            'name' => $validated['name'],
+            'code' => $code,
+            'address' => $validated['address'],
+            'landmark' => $validated['landmark'] ?? null,
+            'contact_phone' => $validated['contact_phone'],
+            'contact_person' => $validated['contact_person'] ?? null,
+            'operating_hours' => $validated['operating_hours'] ?? '08:00 AM - 06:00 PM',
+            'is_active' => true,
+        ]);
+
+        return redirect()->route('logistics.collection_points.index')
+            ->with('status', "Collection Point '{$validated['name']}' in {$lga->name} registered successfully!");
+    }
+
+    /**
+     * Toggle Collection Point Active Status
+     */
+    public function logisticsToggleCollectionPoint($id)
+    {
+        $company = $this->resolveLogisticsCompany();
+        $point = LogisticsCollectionPoint::where('logistics_company_id', $company->id)->findOrFail($id);
+
+        $point->is_active = !$point->is_active;
+        $point->save();
+
+        $stateText = $point->is_active ? 'activated' : 'deactivated';
+        return redirect()->route('logistics.collection_points.index')
+            ->with('status', "Collection point '{$point->name}' has been {$stateText}.");
+    }
+
+    /**
+     * Delete Collection Point
+     */
+    public function logisticsDeleteCollectionPoint($id)
+    {
+        $company = $this->resolveLogisticsCompany();
+        $point = LogisticsCollectionPoint::where('logistics_company_id', $company->id)->findOrFail($id);
+
+        $hasOrders = Order::where('collection_point_id', $point->id)->exists();
+        if ($hasOrders) {
+            $point->is_active = false;
+            $point->save();
+            return redirect()->route('logistics.collection_points.index')
+                ->with('warning', "Point has historical orders so it was deactivated instead of deleted.");
+        }
+
+        $point->delete();
+        return redirect()->route('logistics.collection_points.index')
+            ->with('status', "Collection point deleted successfully.");
+    }
+
+    /**
      * Delivery Rider Mobile Cockpit Dashboard
      */
     public function riderDashboard()
@@ -1629,7 +1732,13 @@ class PortalController extends Controller
             })
             ->toArray();
 
-        return view('storefront.checkout', compact('product', 'quantity', 'merchandiseSubtotal', 'deliveryFee', 'totalPayable', 'deliveryCheck', 'pickupCheck', 'destLga', 'lgas', 'allShops', 'availableCashback', 'activeCity', 'activeLanesMap'));
+        // Active collection points in destination LGA
+        $collectionPoints = \App\Models\LogisticsCollectionPoint::where('lga_id', $destLga->id)
+            ->where('is_active', true)
+            ->with('logisticsCompany')
+            ->get();
+
+        return view('storefront.checkout', compact('product', 'quantity', 'merchandiseSubtotal', 'deliveryFee', 'totalPayable', 'deliveryCheck', 'pickupCheck', 'destLga', 'lgas', 'allShops', 'availableCashback', 'activeCity', 'activeLanesMap', 'collectionPoints'));
     }
 
     public function processCheckout(Request $request)
@@ -1641,6 +1750,7 @@ class PortalController extends Controller
             'customer_name' => 'required|string|max:150',
             'customer_phone' => 'required|string|max:30',
             'destination_lga_id' => 'nullable|integer|exists:lgas,id',
+            'collection_point_id' => 'nullable|integer|exists:logistics_collection_points,id',
             'delivery_address' => 'nullable|string|max:255',
             'shop_id' => 'nullable|integer|exists:shops,id',
             'redeem_cashback' => 'nullable',
@@ -1656,6 +1766,7 @@ class PortalController extends Controller
         $deliveryFee = '0.00';
         $laneId = null;
         $destLgaId = $validated['destination_lga_id'] ?? $shop->lga_id;
+        $collectionPointId = null;
 
         if ($validated['fulfillment_type'] === 'doorstep_delivery') {
             $fulfillmentService = new \App\Services\FulfillmentAvailabilityService();
@@ -1663,12 +1774,28 @@ class PortalController extends Controller
             
             if (!$check['is_available']) {
                 return back()->withErrors([
-                    'fulfillment_type' => 'Doorstep delivery is currently suspended or unavailable for this route corridor. Please choose In-Store Pickup or choose a serviced destination LGA.'
+                    'fulfillment_type' => 'Delivery is currently suspended or unavailable for this route corridor. Please choose In-Store Pickup or choose a serviced destination LGA.'
                 ])->withInput();
             }
 
             $deliveryFee = $check['fee'];
             $laneId = $check['lane_id'] ?? null;
+
+            // Inter-LGA / Inter-State Collection Point Resolution (Per-LGA System)
+            if ((int)$shop->lga_id !== (int)$destLgaId || !empty($validated['collection_point_id'])) {
+                if (!empty($validated['collection_point_id'])) {
+                    $cp = \App\Models\LogisticsCollectionPoint::where('id', $validated['collection_point_id'])
+                        ->where('is_active', true)
+                        ->first();
+                    $collectionPointId = $cp ? $cp->id : null;
+                }
+                if (!$collectionPointId) {
+                    $fallbackCp = \App\Models\LogisticsCollectionPoint::where('lga_id', $destLgaId)
+                        ->where('is_active', true)
+                        ->first();
+                    $collectionPointId = $fallbackCp ? $fallbackCp->id : null;
+                }
+            }
         }
 
         $splits = \App\Services\BcMathService::computeCommercialSplits($merchandiseSubtotal, $deliveryFee);
@@ -1703,14 +1830,25 @@ class PortalController extends Controller
         $deliveryOtp = Order::generateUniqueDeliveryOtp();
         $pickupOtp = Order::generateUniquePickupOtp();
 
-        // Assign active rider
-        $rider = RiderProfile::where('is_online', true)->first() ?? RiderProfile::first();
+        // Assign active accredited rider belonging to handling logistics company
+        $rider = null;
+        if ($collectionPointId) {
+            $assignedCp = \App\Models\LogisticsCollectionPoint::find($collectionPointId);
+            if ($assignedCp && $assignedCp->logistics_company_id) {
+                $rider = RiderProfile::where('logistics_company_id', $assignedCp->logistics_company_id)->where('is_online', true)->first()
+                    ?? RiderProfile::where('logistics_company_id', $assignedCp->logistics_company_id)->first();
+            }
+        }
+        if (!$rider) {
+            $rider = RiderProfile::where('is_online', true)->first() ?? RiderProfile::first();
+        }
 
         $order = Order::create([
             'order_number' => $orderNumber,
             'customer_id' => $user->id,
             'vendor_id' => $product->vendor_id,
             'shop_id' => $shop->id,
+            'collection_point_id' => $collectionPointId,
             'rider_id' => $rider ? $rider->id : null,
             'fulfillment_type' => $validated['fulfillment_type'],
             'order_status' => 'confirmed',

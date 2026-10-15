@@ -111,6 +111,10 @@ Route::middleware(['role:logistics_company'])->prefix('logistics')->group(functi
     Route::get('/riders', [PortalController::class, 'logisticsRidersPage'])->name('logistics.riders.index');
     Route::get('/waybills', [PortalController::class, 'logisticsWaybillsPage'])->name('logistics.waybills.index');
     Route::get('/wallet', [PortalController::class, 'logisticsWalletPage'])->name('logistics.wallet.index');
+    Route::get('/collection-points', [PortalController::class, 'logisticsCollectionPointsPage'])->name('logistics.collection_points.index');
+    Route::post('/collection-points', [PortalController::class, 'logisticsStoreCollectionPoint'])->name('logistics.collection_points.store');
+    Route::post('/collection-points/{id}/toggle', [PortalController::class, 'logisticsToggleCollectionPoint'])->name('logistics.collection_points.toggle');
+    Route::delete('/collection-points/{id}', [PortalController::class, 'logisticsDeleteCollectionPoint'])->name('logistics.collection_points.delete');
 });
 
 // 6. Delivery Rider Dispatch Cockpit

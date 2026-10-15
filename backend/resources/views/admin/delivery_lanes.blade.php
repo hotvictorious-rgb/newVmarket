@@ -278,13 +278,13 @@
                             </div>
                         </div>
 
-                        <!-- Tier 2: Inter-LGA (Regional) -->
+                        <!-- Tier 2: Inter-LGA (Regional Collection Points) -->
                         <div style="background: #FFF; border: 1.5px solid #E2E8F0; border-radius: 10px; padding: 16px;">
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                                <strong style="font-size: 13px; color: var(--adm-text);">Tier 2: Regional (Inter-LGA)</strong>
+                                <strong style="font-size: 13px; color: var(--adm-text);">Tier 2: Inter-LGA (Collection Points)</strong>
                                 <span class="dash-badge dash-badge-info" style="font-size: 10px;">Same State</span>
                             </div>
-                            <div style="font-size: 11.5px; color: var(--adm-text-muted); margin-bottom: 12px;">E.g. Uyo merchant shipping to Eket, Ikot Ekpene, or Oron.</div>
+                            <div style="font-size: 11.5px; color: var(--adm-text-muted); margin-bottom: 12px;">E.g. Uyo merchant shipping to Eket, Ikot Ekpene, or Oron. Customers pick up at company Collection Point.</div>
                             <div style="margin-bottom: 10px;">
                                 <label style="font-size: 11px; font-weight: 700; color: #64748B;">BASE FEE (₦)</label>
                                 <input type="number" step="0.01" name="zone_inter_lga_fee" value="{{ $zonalSettings['zone_inter_lga_fee'] ?? '1500.00' }}" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); font-size: 13px; font-weight: 700;">
@@ -295,13 +295,13 @@
                             </div>
                         </div>
 
-                        <!-- Tier 3: Inter-State (National Freight) -->
+                        <!-- Tier 3: Inter-State (National Collection Points) -->
                         <div style="background: #FFF; border: 1.5px solid #E2E8F0; border-radius: 10px; padding: 16px;">
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                                <strong style="font-size: 13px; color: var(--adm-text);">Tier 3: Inter-State Freight</strong>
+                                <strong style="font-size: 13px; color: var(--adm-text);">Tier 3: Inter-State (Collection Points)</strong>
                                 <span class="dash-badge dash-badge-purple" style="font-size: 10px;">Nationwide</span>
                             </div>
-                            <div style="font-size: 11.5px; color: var(--adm-text-muted); margin-bottom: 12px;">E.g. Akwa Ibom to Lagos, Abuja, Rivers, or Cross River.</div>
+                            <div style="font-size: 11.5px; color: var(--adm-text-muted); margin-bottom: 12px;">E.g. Akwa Ibom to Lagos, Abuja, Rivers, or Abia. Customers pick up at company Collection Point.</div>
                             <div style="margin-bottom: 10px;">
                                 <label style="font-size: 11px; font-weight: 700; color: #64748B;">BASE FEE (₦)</label>
                                 <input type="number" step="0.01" name="zone_inter_state_fee" value="{{ $zonalSettings['zone_inter_state_fee'] ?? '3500.00' }}" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); font-size: 13px; font-weight: 700;">

@@ -140,11 +140,44 @@
                                     {{ $isDeliveryAvailable ? '&#8358;' . number_format((float)$deliveryFee, 0) : 'UNAVAILABLE' }}
                                 </span>
                             </div>
-                            <strong id="vmDeliveryTitle" style="display: block; font-size: 14px; color: {{ $isDeliveryAvailable ? '#5E17EB' : '#64748B' }}; margin-bottom: 3px;">🚚 Doorstep Delivery</strong>
+                            @php
+                                $isCrossLga = ($product->shop->lga_id !== $destLga->id);
+                            @endphp
+                            <strong id="vmDeliveryTitle" style="display: block; font-size: 14px; color: {{ $isDeliveryAvailable ? '#5E17EB' : '#64748B' }}; margin-bottom: 3px;">
+                                {{ $isCrossLga ? '📍 LGA Collection Point' : '🚚 Municipal Doorstep Delivery' }}
+                            </strong>
                             <span id="vmDeliveryDesc" style="font-size: 12px; color: #64748B; line-height: 1.4; display: block;">
-                                {{ $isDeliveryAvailable ? 'Delivered directly to your door with Handshake OTP verification' : 'Doorstep route currently suspended. In-Store Pickup active.' }}
+                                @if(!$isDeliveryAvailable)
+                                    Delivery route currently suspended. In-Store Pickup active.
+                                @elseif($isCrossLga)
+                                    Transit fleet delivers to company Collection Point in {{ $destLga->name }}. Collect using your secret 6-digit PIN.
+                                @else
+                                    Delivered directly to your door with Handshake OTP verification.
+                                @endif
                             </span>
                         </label>
+                    </div>
+
+                    <!-- Collection Point Selector (Inter-LGA / Inter-State) -->
+                    <div id="vmCollectionPointFields" style="display: {{ ($isDeliveryAvailable && $isCrossLga && isset($collectionPoints) && count($collectionPoints) > 0) ? 'block' : 'none' }}; background: #EEF2FF; border: 1.5px solid #6366F1; border-radius: 12px; padding: 16px; margin-top: 10px; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <label style="display: block; font-size: 12.5px; font-weight: 800; color: #1E1B4B;">
+                                📍 Choose Accredited Collection Point in {{ $destLga->name }} *
+                            </label>
+                            <span class="dash-badge dash-badge-purple" style="font-size: 10px; font-weight: 700;">
+                                Single-Company Transit
+                            </span>
+                        </div>
+                        <select name="collection_point_id" id="vmCollectionPointSelect" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #818CF8; background: #FFF; font-size: 13.5px; color: #0F172A; font-weight: 600; outline: none;">
+                            @foreach($collectionPoints ?? [] as $cp)
+                                <option value="{{ $cp->id }}">
+                                    {{ $cp->name }} &mdash; {{ $cp->address }} ({{ $cp->logisticsCompany->company_name ?? 'Logistics Partner' }})
+                                </option>
+                            @endforeach
+                        </select>
+                        <div style="font-size: 11.5px; color: #4338CA; margin-top: 8px; line-height: 1.4;">
+                            🛡️ <strong>Collection Point Protocol:</strong> Your courier picks up directly from the merchant's physical shop. Line-haul transit brings the package to this designated station in {{ $destLga->name }}, where you inspect and collect using your secret 6-digit delivery PIN.
+                        </div>
                     </div>
 
                     <!-- Pickup Shop Select Drawer -->

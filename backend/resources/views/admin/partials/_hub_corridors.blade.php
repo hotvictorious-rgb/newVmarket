@@ -81,7 +81,7 @@
         </div>
         <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;">
             <div>
-                <div style="font-size: 10.5px; font-weight: 700; color: #64748B;">TIER 2: INTER-LGA ({{ $currentHub->state->name ?? 'State' }})</div>
+                <div style="font-size: 10.5px; font-weight: 700; color: #64748B;">TIER 2: INTER-LGA COLLECTION POINTS</div>
                 <div style="font-size: 14.5px; font-weight: 800; color: #2563EB;">
                     {{ $interActiveCount }} / {{ $stateLgas->count() }} LGAs Serviced
                 </div>
@@ -91,7 +91,7 @@
         </div>
         <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;">
             <div>
-                <div style="font-size: 10.5px; font-weight: 700; color: #64748B;">TIER 3: OUT-OF-STATE</div>
+                <div style="font-size: 10.5px; font-weight: 700; color: #64748B;">TIER 3: INTER-STATE COLLECTION POINTS</div>
                 <div style="font-size: 14.5px; font-weight: 800; color: #D97706;">
                     {{ $outOfStateActiveCount }} / {{ $otherStates->count() }} States Serviced
                 </div>
@@ -199,10 +199,10 @@
             <div class="dash-card-title">
                 <span style="font-size: 18px;">🚚</span>
                 <div>
-                    <span style="font-weight: 800; color: var(--adm-text);">Tier 2: Inter-LGA Regional Corridors</span>
+                    <span style="font-weight: 800; color: var(--adm-text);">Tier 2: Inter-LGA Regional Corridors (Collection Points)</span>
                     <span class="dash-badge dash-badge-info" style="font-size: 11px; margin-left: 6px;">{{ $stateLgas->count() }} LGAs in {{ $currentHub->state->name ?? 'State' }}</span>
                     <div class="dash-card-subtitle" style="margin-top: 2px;">
-                        Delivery corridors originating from <strong>{{ $currentHub->name }}</strong> to every Local Government Area across {{ $currentHub->state->name ?? 'State' }}.
+                        Delivery corridors originating from <strong>{{ $currentHub->name }}</strong> to every LGA across {{ $currentHub->state->name ?? 'State' }}. Customers pick up at accredited company Collection Points.
                     </div>
                 </div>
             </div>
@@ -352,10 +352,10 @@
             <div class="dash-card-title">
                 <span style="font-size: 18px;">🗺️</span>
                 <div>
-                    <span style="font-weight: 800; color: var(--adm-text);">Tier 3: Out-of-State Corridors</span>
+                    <span style="font-weight: 800; color: var(--adm-text);">Tier 3: Out-of-State Corridors (Collection Points)</span>
                     <span class="dash-badge dash-badge-gold" style="font-size: 11px; margin-left: 6px;">{{ $otherStates->count() }} States Across Nigeria</span>
                     <div class="dash-card-subtitle" style="margin-top: 2px;">
-                        Long-haul freight originating from <strong>{{ $currentHub->name }} ({{ $currentHub->state->name ?? 'Akwa Ibom' }})</strong> to all other states across the federation.
+                        Long-haul freight originating from <strong>{{ $currentHub->name }} ({{ $currentHub->state->name ?? 'Akwa Ibom' }})</strong> to all other states across the federation. Customers pick up at designated company Collection Points.
                     </div>
                 </div>
             </div>

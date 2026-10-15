@@ -13,6 +13,7 @@ class Order extends Model
         'customer_id',
         'vendor_id',
         'shop_id',
+        'collection_point_id',
         'rider_id',
         'fulfillment_type',
         'order_status',
@@ -113,6 +114,16 @@ class Order extends Model
     public function shop()
     {
         return $this->belongsTo(Shop::class, 'shop_id');
+    }
+
+    public function collectionPoint()
+    {
+        return $this->belongsTo(LogisticsCollectionPoint::class, 'collection_point_id');
+    }
+
+    public function isCollectionPointPickup(): bool
+    {
+        return !is_null($this->collection_point_id);
     }
 
     public function rider()

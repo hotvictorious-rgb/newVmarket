@@ -72,6 +72,40 @@
         </div>
     </div>
 
+    @if($order->collectionPoint)
+        <!-- ========================================== -->
+        <!-- DESIGNATED LGA COLLECTION POINT CARD       -->
+        <!-- ========================================== -->
+        <div style="background: linear-gradient(135deg, #1E1B4B 0%, #312E81 100%); border: 2px solid #6366F1; border-radius: 16px; padding: 22px; margin-bottom: 24px; color: #FFFFFF; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.2);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 22px;">📍</span>
+                    <strong style="font-size: 16px; color: #FFFFFF;">Designated LGA Collection Point</strong>
+                </div>
+                <span class="dash-badge dash-badge-purple" style="font-size: 11px; padding: 4px 10px; font-weight: 800; font-family: monospace;">
+                    {{ $order->collectionPoint->code }}
+                </span>
+            </div>
+            <div style="font-size: 15px; font-weight: 800; color: #E0E7FF; margin-bottom: 4px;">
+                {{ $order->collectionPoint->name }}
+            </div>
+            <div style="font-size: 13px; color: #C7D2FE; margin-bottom: 10px;">
+                🏢 {{ $order->collectionPoint->address }}
+                @if($order->collectionPoint->landmark)
+                    &bull; 📍 {{ $order->collectionPoint->landmark }}
+                @endif
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 12px; color: #A5B4FC; background: rgba(0,0,0,0.25); padding: 10px 14px; border-radius: 8px;">
+                <div>📞 Station Phone: <strong style="color: #FFF;">{{ $order->collectionPoint->contact_phone }}</strong></div>
+                <div>🕒 Hours: <strong style="color: #FFF;">{{ $order->collectionPoint->operating_hours }}</strong></div>
+                <div>🚚 Logistics: <strong style="color: #FFF;">{{ $order->collectionPoint->logisticsCompany->company_name ?? 'Accredited Partner' }}</strong></div>
+            </div>
+            <div style="margin-top: 12px; font-size: 12px; color: #D1FAE5; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); padding: 8px 12px; border-radius: 8px;">
+                🛡️ <strong>Collection Point Instruction:</strong> When line-haul transit delivers your package to this station, visit with your secret 6-digit PIN below to inspect and collect your package.
+            </div>
+        </div>
+    @endif
+
     <!-- ========================================================================= -->
     <!-- 2. TAMPER-PROOF CUSTOMER-SIDE HANDSHAKE (PHONE-ONLY CONFIRMATION) -->
     <!-- ========================================================================= -->

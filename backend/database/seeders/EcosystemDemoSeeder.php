@@ -129,8 +129,61 @@ class EcosystemDemoSeeder extends Seeder
             'contact_phone' => '+2348044440001',
             'lga_id' => $uyo ? $uyo->id : 1,
             'fleet_size' => 15,
+            'wallet_balance' => '0.00',
             'status' => 'active',
         ]);
+
+        // Designated Collection Points per LGA for Inter-LGA / Inter-State lanes
+        if ($eket) {
+            \App\Models\LogisticsCollectionPoint::updateOrCreate([
+                'code' => 'CP-EKE-001',
+            ], [
+                'logistics_company_id' => $baseLogistics->id,
+                'state_id' => $eket->state_id,
+                'lga_id' => $eket->id,
+                'name' => 'Akwa Express Station & Eket Transit Hub',
+                'address' => '22 Marina Road, Eket Urban Plaza',
+                'landmark' => 'Opposite Eket Central Park',
+                'contact_phone' => '+2348033330002',
+                'contact_person' => 'Bassey Effiong',
+                'operating_hours' => '07:30 AM - 06:30 PM',
+                'is_active' => true,
+            ]);
+        }
+
+        if ($ikotEkpene) {
+            \App\Models\LogisticsCollectionPoint::updateOrCreate([
+                'code' => 'CP-IKO-001',
+            ], [
+                'logistics_company_id' => $baseLogistics->id,
+                'state_id' => $ikotEkpene->state_id,
+                'lga_id' => $ikotEkpene->id,
+                'name' => 'Peace Mass Transit & Akwa Express Depo',
+                'address' => '14 Aba Road, Ikot Ekpene',
+                'landmark' => 'Beside Zenith Bank',
+                'contact_phone' => '+2348033330003',
+                'contact_person' => 'Iniobong Udoh',
+                'operating_hours' => '08:00 AM - 06:00 PM',
+                'is_active' => true,
+            ]);
+        }
+
+        if ($uyo) {
+            \App\Models\LogisticsCollectionPoint::updateOrCreate([
+                'code' => 'CP-UYO-001',
+            ], [
+                'logistics_company_id' => $baseLogistics->id,
+                'state_id' => $uyo->state_id,
+                'lga_id' => $uyo->id,
+                'name' => 'Akwa Express Central Hub — Uyo Plaza',
+                'address' => '58 Aka Road, Uyo',
+                'landmark' => 'Near Ibom Plaza Complex',
+                'contact_phone' => '+2348033330001',
+                'contact_person' => 'Aniefiok Akpan',
+                'operating_hours' => '07:00 AM - 07:00 PM',
+                'is_active' => true,
+            ]);
+        }
 
         $baseRiderUser = User::updateOrCreate(['email' => 'rider@victoriousmarket.com.ng'], [
             'name' => 'Edidiong Udoh',

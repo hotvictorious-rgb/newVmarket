@@ -29,7 +29,7 @@
         </div>
         <div>
             <span class="dash-badge dash-badge-success" style="padding: 6px 14px; font-size: 13px; font-weight: 800;">
-                ₦{{ number_format($fleetMetrics['accumulated_fees'] ?? 0, 2) }} Total Earned
+                ₦{{ number_format((float)($company->wallet_balance ?? 0), 2) }} Corporate Balance
             </span>
         </div>
     </div>
@@ -38,9 +38,9 @@
     <div class="stat-grid-4">
         <div class="stat-card stat-card-border-emerald">
             <div class="stat-card-info">
-                <span class="stat-card-label">Accumulated 5% Fees</span>
-                <span class="stat-card-value">₦{{ number_format($fleetMetrics['accumulated_fees'] ?? 0, 2) }}</span>
-                <span class="stat-card-subtext" style="color: var(--adm-success);">Mathematical 5% Revenue Share</span>
+                <span class="stat-card-label">Corporate Wallet Balance</span>
+                <span class="stat-card-value">₦{{ number_format((float)($company->wallet_balance ?? 0), 2) }}</span>
+                <span class="stat-card-subtext" style="color: var(--adm-success);">Direct B2B Escrow Balance</span>
             </div>
             <div class="stat-card-icon-box icon-box-emerald">💼</div>
         </div>
