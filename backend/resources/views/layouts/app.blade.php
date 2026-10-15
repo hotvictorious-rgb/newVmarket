@@ -967,7 +967,7 @@
             <!-- Actions: Sign In, Register, Cart Drawer -->
             <div class="vm-header-actions">
                 @auth
-                    <a href="{{ route('customer.login') }}" class="vm-action-btn" title="My Account">
+                    <a href="{{ route('customer.dashboard') }}" class="vm-action-btn" title="My Account">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                             <circle cx="12" cy="7" r="4"></circle>
@@ -1018,6 +1018,31 @@
                         <span>Categories</span>
                         <span class="vm-nav-caret">▾</span>
                     </a>
+                    <div class="vm-nav-dropdown-menu">
+                        <div class="vm-nav-dropdown-grid">
+                            <a href="{{ route('storefront', ['category' => 'electronics-gadgets']) }}" class="vm-nav-dropdown-item">
+                                <span class="vm-nav-cat-bullet">●</span>
+                                <span>📱 Electronics &amp; Gadgets</span>
+                            </a>
+                            <a href="{{ route('storefront', ['category' => 'home-appliances']) }}" class="vm-nav-dropdown-item">
+                                <span class="vm-nav-cat-bullet">●</span>
+                                <span>🔌 Home &amp; Kitchen Appliances</span>
+                            </a>
+                            <a href="{{ route('storefront', ['category' => 'groceries-farm-produce']) }}" class="vm-nav-dropdown-item">
+                                <span class="vm-nav-cat-bullet">●</span>
+                                <span>🌾 Groceries &amp; Produce</span>
+                            </a>
+                            <a href="{{ route('storefront') }}?search=Phone" class="vm-nav-dropdown-item">
+                                <span class="vm-nav-cat-bullet">●</span>
+                                <span>💻 Phones &amp; Laptops</span>
+                            </a>
+                        </div>
+                        <div class="vm-nav-dropdown-footer">
+                            <a href="{{ route('storefront') }}#categories" class="vm-nav-dropdown-all-link" style="font-size: 11.5px; font-weight: 700; color: var(--vm-primary); text-decoration: none;">
+                                Browse All Categories &rarr;
+                            </a>
+                        </div>
+                    </div>
                 </li>
                 <li><a href="{{ route('storefront') }}#merchants" class="vm-nav-link">Verified Merchants</a></li>
                 <li><a href="{{ route('storefront') }}#contact" class="vm-nav-link">Contact & Location</a></li>

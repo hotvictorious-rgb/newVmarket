@@ -8,7 +8,7 @@
     <div style="font-size: 13px; color: #64748B; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
         <a href="{{ route('storefront') }}" style="color: var(--vm-primary); text-decoration: none; font-weight: 600;">Storefront</a>
         <span>&rsaquo;</span>
-        <span>{{ $product->category->name ?? 'Electronics' }}</span>
+        <a href="{{ route('storefront', ['category' => $product->category->slug ?? 'electronics-gadgets']) }}" style="color: #64748B; text-decoration: none; font-weight: 500;">{{ $product->category->name ?? 'Electronics' }}</a>
         <span>&rsaquo;</span>
         <span style="color: #0F172A; font-weight: 700;">{{ Str::limit($product->name, 40) }}</span>
     </div>
@@ -47,9 +47,9 @@
             <!-- Rating & Category Row (Mockup Screen 8 Parity) -->
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="background: var(--vm-primary-light); color: var(--vm-primary); font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px;">
+                    <a href="{{ route('storefront', ['category' => $product->category->slug ?? 'electronics-gadgets']) }}" style="background: var(--vm-primary-light); color: var(--vm-primary); font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px; text-decoration: none;">
                         {{ $product->category->name ?? 'Electronics' }}
-                    </span>
+                    </a>
                     <span style="background: #F1F5F9; color: #475569; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 6px;">
                         Package: {{ ucfirst($product->package_tier ?? 'standard') }}
                     </span>
