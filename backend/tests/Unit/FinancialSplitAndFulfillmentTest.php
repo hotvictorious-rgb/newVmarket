@@ -67,6 +67,45 @@ class FinancialSplitAndFulfillmentTest extends TestCase
         $interLga = $service->checkDeliveryAvailability($shop->id, $eket->id);
         $this->assertTrue($interLga['is_available']);
         $this->assertEquals('1500.00', $interLga['fee']);
+
+        // Real-World Scenario: Asymmetric unserviceable corridor
+        // Vendor shop located in Eket
+        $eketShop = Shop::create([
+            'vendor_id' => $shop->vendor_id,
+            'country_id' => $shop->country_id ?? 1,
+            'lga_id' => $eket->id,
+            'state_id' => $eket->state_id,
+            'name' => 'Eket Marine Plaza Branch',
+            'slug' => 'eket-marine-plaza-branch',
+            'phone' => '+2348098765432',
+            'address' => '12 Marina Road, Eket',
+            'is_primary' => false,
+            'pickup_enabled' => true,
+        ]);
+
+        // Eket -> Uyo is unserviceable / deactivated by admin
+        DeliveryLane::updateOrCreate([
+            'origin_lga_id' => $eket->id,
+            'destination_lga_id' => $uyo->id,
+        ], [
+            'base_fee' => '1500.00',
+            'bulky_surcharge' => '1000.00',
+            'estimated_delivery_hours_min' => 12,
+            'estimated_delivery_hours_max' => 24,
+            'is_active' => false, // Explicitly Deactivated / Unserviceable
+        ]);
+
+        // Doorstep delivery from Eket to Uyo MUST be unavailable
+        $eketToUyo = $service->checkDeliveryAvailability($eketShop->id, $uyo->id);
+        $this->assertFalse($eketToUyo['is_available']);
+        $this->assertEquals('0.00', $eketToUyo['fee']);
+        $this->assertEquals('corridor_suspended', $eketToUyo['rate_tier']);
+
+        // But In-Shop Counter Inspection & Pickup at Eket Shop is 100% available with ₦0.00 fee!
+        $pickup = $service->checkPickupAvailability($eketShop->id);
+        $this->assertTrue($pickup['is_available']);
+        $this->assertEquals('Eket Marine Plaza Branch', $pickup['shop_name']);
+        $this->assertEquals('Eket', $pickup['lga']);
     }
 
     /**

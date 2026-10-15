@@ -74,28 +74,50 @@ Route::prefix('admin')->group(function () {
 // 2. Admin Staff (Support, Moderation, Operations)
 Route::prefix('admin-staff')->group(function () {
     Route::get('/', [PortalController::class, 'adminStaffDashboard'])->name('admin.staff.dashboard');
+    Route::get('/moderation', [PortalController::class, 'adminStaffModerationPage'])->name('admin.staff.moderation.index');
+    Route::get('/orders', [PortalController::class, 'adminStaffOrdersPage'])->name('admin.staff.orders.index');
+    Route::get('/inspections', [PortalController::class, 'adminStaffInspectionsPage'])->name('admin.staff.inspections.index');
+    Route::get('/logs', [PortalController::class, 'adminStaffLogsPage'])->name('admin.staff.logs.index');
 });
 
 // 3. Vendor Merchant Desk
 Route::prefix('vendor')->group(function () {
     Route::get('/', [PortalController::class, 'vendorDashboard'])->name('vendor.dashboard');
+    Route::get('/products', [PortalController::class, 'vendorProductsPage'])->name('vendor.products.index');
+    Route::get('/orders', [PortalController::class, 'vendorOrdersPage'])->name('vendor.orders.index');
+    Route::get('/reservations', [PortalController::class, 'vendorReservationsPage'])->name('vendor.reservations.index');
+    Route::get('/shops', [PortalController::class, 'vendorShopsPage'])->name('vendor.shops.index');
+    Route::get('/payout-account', [PortalController::class, 'vendorPayoutPage'])->name('vendor.payout.index');
+
     Route::post('/approve-inspection', [PortalController::class, 'vendorApproveInspection'])->name('vendor.approve.inspection');
 });
 
 // 4. In-Shop Branch Counter Staff Terminal
 Route::prefix('counter')->group(function () {
     Route::get('/', [PortalController::class, 'counterDashboard'])->name('counter.dashboard');
+    Route::get('/inspections', [PortalController::class, 'counterInspectionsPage'])->name('counter.inspections.index');
+    Route::get('/handovers', [PortalController::class, 'counterHandoversPage'])->name('counter.handovers.index');
+    Route::get('/records', [PortalController::class, 'counterRecordsPage'])->name('counter.records.index');
+
     Route::post('/verify-handover-otp', [PortalController::class, 'counterVerifyHandoverOtp'])->name('counter.verify.handover.otp');
 });
 
 // 5. Logistics Fleet Operations Desk
 Route::prefix('logistics')->group(function () {
     Route::get('/', [PortalController::class, 'logisticsDashboard'])->name('logistics.dashboard');
+    Route::get('/riders', [PortalController::class, 'logisticsRidersPage'])->name('logistics.riders.index');
+    Route::get('/waybills', [PortalController::class, 'logisticsWaybillsPage'])->name('logistics.waybills.index');
+    Route::get('/wallet', [PortalController::class, 'logisticsWalletPage'])->name('logistics.wallet.index');
 });
 
 // 6. Delivery Rider Dispatch Cockpit
 Route::prefix('rider')->group(function () {
     Route::get('/', [PortalController::class, 'riderDashboard'])->name('rider.dashboard');
+    Route::get('/deliveries', [PortalController::class, 'riderDeliveriesPage'])->name('rider.deliveries.index');
+    Route::get('/pickup', [PortalController::class, 'riderPickupPage'])->name('rider.pickup.index');
+    Route::get('/dropoff', [PortalController::class, 'riderDropoffPage'])->name('rider.dropoff.index');
+    Route::get('/earnings', [PortalController::class, 'riderEarningsPage'])->name('rider.earnings.index');
+
     Route::post('/verify-delivery-otp', [PortalController::class, 'riderVerifyDeliveryOtp'])->name('rider.verify.delivery.otp');
     Route::post('/toggle-shift', [PortalController::class, 'riderToggleShift'])->name('rider.toggle.shift');
 });

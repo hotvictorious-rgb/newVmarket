@@ -133,6 +133,33 @@ class PortalWebTest extends TestCase
         ]);
     }
 
+    public function test_super_admin_can_edit_existing_delivery_lane(): void
+    {
+        $lane = \App\Models\DeliveryLane::first();
+        $this->assertNotNull($lane);
+
+        $updateData = [
+            'lane_id' => $lane->id,
+            'origin_lga_id' => $lane->origin_lga_id,
+            'destination_lga_id' => $lane->destination_lga_id,
+            'base_fee' => '2450.00',
+            'bulky_surcharge' => '1500.00',
+            'estimated_delivery_hours_min' => 8,
+            'estimated_delivery_hours_max' => 20,
+        ];
+
+        $response = $this->post('/admin/delivery-lanes', $updateData);
+        $response->assertRedirect('/admin/delivery-lanes');
+
+        $this->assertDatabaseHas('delivery_lanes', [
+            'id' => $lane->id,
+            'base_fee' => '2450.00',
+            'bulky_surcharge' => '1500.00',
+            'estimated_delivery_hours_min' => 8,
+            'estimated_delivery_hours_max' => 20,
+        ]);
+    }
+
     public function test_super_admin_settlements_page_loads_successfully(): void
     {
         $response = $this->get('/admin/settlements');

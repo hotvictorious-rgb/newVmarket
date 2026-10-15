@@ -47,7 +47,25 @@ class FulfillmentAvailabilityService
             ];
         }
 
-        // 3-Tier Zonal Distance Fallback (100% Nationwide Coverage)
+        // Check if an explicit corridor exists that was deactivated (marked unserviceable by admin)
+        $deactivatedLane = DeliveryLane::where('origin_lga_id', $shop->lga_id)
+            ->where('destination_lga_id', $destinationLgaId)
+            ->where('is_active', false)
+            ->first();
+
+        if ($deactivatedLane) {
+            return [
+                'is_available' => false,
+                'lane_id' => $deactivatedLane->id,
+                'origin_lga_id' => $shop->lga_id,
+                'destination_lga_id' => $destinationLgaId,
+                'fee' => '0.00',
+                'message' => 'Doorstep delivery is currently suspended or unserviceable along this route corridor.',
+                'rate_tier' => 'corridor_suspended',
+            ];
+        }
+
+        // 3-Tier Zonal Distance Fallback (100% Nationwide Coverage for unscheduled routes)
         $destLga = \App\Models\Lga::find($destinationLgaId);
         $shopLga = $shop->lga;
 

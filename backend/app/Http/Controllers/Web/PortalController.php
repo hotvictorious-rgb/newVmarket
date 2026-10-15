@@ -429,6 +429,70 @@ class PortalController extends Controller
     }
 
     /**
+     * Admin Staff Product Moderation & Freshness Desk
+     */
+    public function adminStaffModerationPage()
+    {
+        $metrics = [
+            'pending_reviews' => Product::where('status', 'active')->count(),
+            'orders_triage' => Order::whereIn('order_status', ['pending', 'processing'])->count(),
+            'counter_inspections' => PickupReservation::count(),
+            'active_riders' => RiderProfile::where('is_online', true)->count(),
+        ];
+
+        $products = Product::with(['shop:id,name', 'category:id,name'])->latest()->get();
+        return view('admin-staff.moderation', compact('metrics', 'products'));
+    }
+
+    /**
+     * Admin Staff Order Dispatch Triage Desk
+     */
+    public function adminStaffOrdersPage()
+    {
+        $metrics = [
+            'pending_reviews' => Product::where('status', 'active')->count(),
+            'orders_triage' => Order::whereIn('order_status', ['pending', 'processing'])->count(),
+            'counter_inspections' => PickupReservation::count(),
+            'active_riders' => RiderProfile::where('is_online', true)->count(),
+        ];
+
+        $recentOrders = Order::with(['customer:id,name,phone', 'shop:id,name', 'vendor:id,business_name'])->latest()->get();
+        return view('admin-staff.orders', compact('metrics', 'recentOrders'));
+    }
+
+    /**
+     * Admin Staff Counter Inspection Monitor Desk
+     */
+    public function adminStaffInspectionsPage()
+    {
+        $metrics = [
+            'pending_reviews' => Product::where('status', 'active')->count(),
+            'orders_triage' => Order::whereIn('order_status', ['pending', 'processing'])->count(),
+            'counter_inspections' => PickupReservation::count(),
+            'active_riders' => RiderProfile::where('is_online', true)->count(),
+        ];
+
+        $counterInspections = PickupReservation::with(['product:id,name,unit_price', 'customer:id,name,phone', 'shop:id,name'])->latest()->get();
+        return view('admin-staff.inspections', compact('metrics', 'counterInspections'));
+    }
+
+    /**
+     * Admin Staff Operational Audit Logs Desk
+     */
+    public function adminStaffLogsPage()
+    {
+        $metrics = [
+            'pending_reviews' => Product::where('status', 'active')->count(),
+            'orders_triage' => Order::whereIn('order_status', ['pending', 'processing'])->count(),
+            'counter_inspections' => PickupReservation::count(),
+            'active_riders' => RiderProfile::where('is_online', true)->count(),
+        ];
+
+        $auditLogs = \App\Models\AdminAuditLog::with('user:id,name')->latest()->take(50)->get();
+        return view('admin-staff.logs', compact('metrics', 'auditLogs'));
+    }
+
+    /**
      * Vendor Merchant Business Dashboard
      */
     public function vendorDashboard(Request $request)
@@ -471,6 +535,85 @@ class PortalController extends Controller
     }
 
     /**
+     * Vendor Products & Freshness Page
+     */
+    public function vendorProductsPage(Request $request)
+    {
+        $user = Auth::user();
+        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::with(['shops', 'user'])->first();
+        $products = Product::where('vendor_id', $vendor->id)->with('category')->latest()->get();
+        $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
+
+        return view('vendor.products', compact('vendor', 'products', 'categories'));
+    }
+
+    /**
+     * Vendor Customer Orders Page
+     */
+    public function vendorOrdersPage(Request $request)
+    {
+        $user = Auth::user();
+        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::with(['shops', 'user'])->first();
+        $orders = Order::where('vendor_id', $vendor->id)
+            ->with('customer:id,name,phone')
+            ->latest()
+            ->get();
+
+        return view('vendor.orders', compact('vendor', 'orders'));
+    }
+
+    /**
+     * Vendor Pickup Reservations Page
+     */
+    public function vendorReservationsPage(Request $request)
+    {
+        $user = Auth::user();
+        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::with(['shops', 'user'])->first();
+        $reservations = PickupReservation::where('vendor_id', $vendor->id)
+            ->with(['product:id,name,unit_price', 'customer:id,name,phone'])
+            ->latest()
+            ->get();
+
+        return view('vendor.reservations', compact('vendor', 'reservations'));
+    }
+
+    /**
+     * Vendor Physical Plaza Outlets Page
+     */
+    public function vendorShopsPage(Request $request)
+    {
+        $user = Auth::user();
+        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::with(['shops', 'user'])->first();
+        $shops = Shop::where('vendor_id', $vendor->id)->with('lga.state')->get();
+        $allLgas = Lga::with('state')->where('is_active', true)->orderBy('name', 'asc')->get();
+
+        return view('vendor.shops', compact('vendor', 'shops', 'allLgas'));
+    }
+
+    /**
+     * Vendor 90% Payout Bank Account Page
+     */
+    public function vendorPayoutPage(Request $request)
+    {
+        $user = Auth::user();
+        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::with(['shops', 'user'])->first();
+
+        $grossSales = Order::where('vendor_id', $vendor->id)->sum('total_amount');
+        $netEarnings = Order::where('vendor_id', $vendor->id)->sum('vendor_earning_90');
+        $settledAmount = Order::where('vendor_id', $vendor->id)->where('vendor_settlement_status', 'settled')->sum('vendor_earning_90');
+        $pendingSettlement = Order::where('vendor_id', $vendor->id)->whereIn('vendor_settlement_status', ['eligible', 'held'])->sum('vendor_earning_90');
+
+        $vendorMetrics = [
+            'gross_sales' => $grossSales,
+            'net_earnings' => $netEarnings,
+            'settled_amount' => $settledAmount,
+            'pending_settlement' => $pendingSettlement,
+        ];
+
+        return view('vendor.payout', compact('vendor', 'vendorMetrics'));
+    }
+
+    /**
      * Branch Counter Staff Terminal Dashboard
      */
     public function counterDashboard()
@@ -505,6 +648,49 @@ class PortalController extends Controller
     }
 
     /**
+     * Counter Physical Inspection Desk Page
+     */
+    public function counterInspectionsPage()
+    {
+        $shop = Shop::with('vendor')->first();
+        $pendingInspections = PickupReservation::where('status', 'pending_inspection')
+            ->with(['product:id,name,unit_price', 'customer:id,name,phone', 'shop:id,name'])
+            ->latest()
+            ->get();
+
+        return view('counter.inspections', compact('shop', 'pendingInspections'));
+    }
+
+    /**
+     * Counter Rider Handover OTP Desk Page
+     */
+    public function counterHandoversPage()
+    {
+        $shop = Shop::with('vendor')->first();
+        $stagedOrders = Order::where('fulfillment_type', 'doorstep_delivery')
+            ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup'])
+            ->with(['customer:id,name,phone', 'shop:id,name'])
+            ->latest()
+            ->get();
+
+        return view('counter.handovers', compact('shop', 'stagedOrders'));
+    }
+
+    /**
+     * Counter Today's Inspection Records Page
+     */
+    public function counterRecordsPage()
+    {
+        $shop = Shop::with('vendor')->first();
+        $inspectedToday = PickupReservation::where('status', 'inspected')
+            ->with(['product:id,name,unit_price', 'customer:id,name,phone', 'shop:id,name'])
+            ->latest()
+            ->get();
+
+        return view('counter.records', compact('shop', 'inspectedToday'));
+    }
+
+    /**
      * Logistics Company Operations Dashboard
      */
     public function logisticsDashboard()
@@ -534,6 +720,56 @@ class PortalController extends Controller
         ];
 
         return view('logistics.dashboard', compact('company', 'activeRiders', 'activeDeliveries', 'completedRuns', 'fleetMetrics'));
+    }
+
+    /**
+     * Logistics Rider Roster & Shifts Page
+     */
+    public function logisticsRidersPage()
+    {
+        $company = LogisticsCompanyProfile::with(['riders.user', 'hqLga'])->first();
+        $activeRiders = RiderProfile::where('is_active', true)->with(['user', 'assignedLga'])->get();
+
+        return view('logistics.riders', compact('company', 'activeRiders'));
+    }
+
+    /**
+     * Logistics Directional LGA Waybills Page
+     */
+    public function logisticsWaybillsPage()
+    {
+        $company = LogisticsCompanyProfile::with(['riders.user', 'hqLga'])->first();
+        $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
+            ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
+            ->with(['shop', 'customer', 'rider.user'])
+            ->get();
+
+        return view('logistics.waybills', compact('company', 'activeDeliveries'));
+    }
+
+    /**
+     * Logistics 5% Fee Wallet Page
+     */
+    public function logisticsWalletPage()
+    {
+        $company = LogisticsCompanyProfile::with(['riders.user', 'hqLga'])->first();
+        $activeRiders = RiderProfile::where('is_active', true)->with(['user', 'assignedLga'])->get();
+        $completedRuns = Order::where('fulfillment_type', 'doorstep_delivery')
+            ->where('order_status', 'delivered')
+            ->with(['shop', 'customer', 'rider.user'])
+            ->latest()
+            ->take(20)
+            ->get();
+
+        $totalRevenue = Order::where('order_status', 'delivered')->sum('logistics_fee_5');
+
+        $fleetMetrics = [
+            'active_riders' => $activeRiders->count(),
+            'on_road' => $activeRiders->where('is_online', true)->count(),
+            'accumulated_fees' => $totalRevenue,
+        ];
+
+        return view('logistics.wallet', compact('company', 'completedRuns', 'fleetMetrics'));
     }
 
     /**
@@ -571,6 +807,92 @@ class PortalController extends Controller
         ];
 
         return view('rider.dashboard', compact('rider', 'activeDeliveries', 'completedDrops', 'riderMetrics'));
+    }
+
+    /**
+     * Rider Active Drops Page
+     */
+    public function riderDeliveriesPage()
+    {
+        $rider = RiderProfile::with(['user', 'assignedLga', 'logisticsCompany'])->first();
+        $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
+            ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
+            ->with(['shop', 'customer'])
+            ->get();
+
+        if ($activeDeliveries->isEmpty()) {
+            $fallback = Order::with(['shop', 'customer'])->first();
+            if ($fallback) {
+                $activeDeliveries = collect([$fallback]);
+            }
+        }
+
+        return view('rider.deliveries', compact('rider', 'activeDeliveries'));
+    }
+
+    /**
+     * Rider Plaza Pickup Page (Step 1)
+     */
+    public function riderPickupPage()
+    {
+        $rider = RiderProfile::with(['user', 'assignedLga', 'logisticsCompany'])->first();
+        $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
+            ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup'])
+            ->with(['shop', 'customer'])
+            ->get();
+
+        if ($activeDeliveries->isEmpty()) {
+            $fallback = Order::with(['shop', 'customer'])->first();
+            if ($fallback) {
+                $activeDeliveries = collect([$fallback]);
+            }
+        }
+
+        return view('rider.pickup', compact('rider', 'activeDeliveries'));
+    }
+
+    /**
+     * Rider Customer Dropoff Page (Step 2)
+     */
+    public function riderDropoffPage()
+    {
+        $rider = RiderProfile::with(['user', 'assignedLga', 'logisticsCompany'])->first();
+        $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
+            ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
+            ->with(['shop', 'customer'])
+            ->get();
+
+        if ($activeDeliveries->isEmpty()) {
+            $fallback = Order::with(['shop', 'customer'])->first();
+            if ($fallback) {
+                $activeDeliveries = collect([$fallback]);
+            }
+        }
+
+        return view('rider.dropoff', compact('rider', 'activeDeliveries'));
+    }
+
+    /**
+     * Rider Today's Earnings Ledger Page
+     */
+    public function riderEarningsPage()
+    {
+        $rider = RiderProfile::with(['user', 'assignedLga', 'logisticsCompany'])->first();
+        $completedDrops = Order::where('fulfillment_type', 'doorstep_delivery')
+            ->where('order_status', 'delivered')
+            ->with(['shop', 'customer'])
+            ->latest()
+            ->take(15)
+            ->get();
+
+        $riderMetrics = [
+            'completed_today' => $completedDrops->count(),
+            'estimated_earnings' => number_format($completedDrops->count() * 750 + 1500, 2),
+            'shift_status' => ($rider && $rider->is_online) ? 'ON DUTY' : 'OFF DUTY',
+            'assigned_corridor' => $rider->assignedLga->name ?? 'Uyo Central Corridor',
+        ];
+
+        return view('rider.earnings', compact('rider', 'completedDrops', 'riderMetrics'));
     }
 
     /**
@@ -743,6 +1065,37 @@ class PortalController extends Controller
         ]);
 
         $isBidirectional = $request->has('is_bidirectional') || $request->input('is_bidirectional') == '1';
+
+        // Check if updating an existing lane
+        if ($request->filled('lane_id')) {
+            $existing = DeliveryLane::find($request->input('lane_id'));
+            if ($existing) {
+                $existing->update([
+                    'origin_lga_id' => $validated['origin_lga_id'],
+                    'destination_lga_id' => $validated['destination_lga_id'],
+                    'base_fee' => number_format((float)$validated['base_fee'], 2, '.', ''),
+                    'bulky_surcharge' => number_format((float)($validated['bulky_surcharge'] ?? 1000.00), 2, '.', ''),
+                    'estimated_delivery_hours_min' => $validated['estimated_delivery_hours_min'],
+                    'estimated_delivery_hours_max' => $validated['estimated_delivery_hours_max'],
+                    'is_active' => true,
+                ]);
+
+                if ($isBidirectional && $validated['origin_lga_id'] != $validated['destination_lga_id']) {
+                    DeliveryLane::updateOrCreate([
+                        'origin_lga_id' => $validated['destination_lga_id'],
+                        'destination_lga_id' => $validated['origin_lga_id'],
+                    ], [
+                        'base_fee' => number_format((float)$validated['base_fee'], 2, '.', ''),
+                        'bulky_surcharge' => number_format((float)($validated['bulky_surcharge'] ?? 1000.00), 2, '.', ''),
+                        'estimated_delivery_hours_min' => $validated['estimated_delivery_hours_min'],
+                        'estimated_delivery_hours_max' => $validated['estimated_delivery_hours_max'],
+                        'is_active' => true,
+                    ]);
+                }
+
+                return redirect()->route('admin.delivery_lanes.index')->with('status', "Corridor successfully updated!");
+            }
+        }
 
         // 1. Forward lane (Origin -> Destination)
         DeliveryLane::updateOrCreate([

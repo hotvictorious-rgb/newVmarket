@@ -370,14 +370,20 @@
                     <!-- LEFT COLUMN: ADD CUSTOM OVERRIDE CORRIDOR FORM -->
                     <div style="background: #F8FAFC; border: 1px solid var(--adm-border); border-radius: 10px; padding: 18px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
-                            <strong style="font-size: 13.5px; color: var(--adm-text); display: flex; align-items: center; gap: 6px;">
-                                <span>➕</span> Add Custom Corridor
+                            <strong id="vmFormHeaderTitle" style="font-size: 13.5px; color: var(--adm-text); display: flex; align-items: center; gap: 6px;">
+                                <span>➕</span> <span>Add Custom Corridor</span>
                             </strong>
-                            <span class="dash-badge dash-badge-purple" style="font-size: 10px;">LGA ⇄ LGA</span>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <button type="button" id="vmCancelEditBtn" onclick="cancelCorridorEdit()" style="display: none; background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; color: #475569; cursor: pointer;">
+                                    ✕ Cancel Edit
+                                </button>
+                                <span class="dash-badge dash-badge-purple" id="vmFormModeBadge" style="font-size: 10px;">LGA ⇄ LGA</span>
+                            </div>
                         </div>
 
                         <form method="POST" action="{{ route('admin.delivery_lanes.store') }}" id="vmAddCorridorForm">
                             @csrf
+                            <input type="hidden" name="lane_id" id="editLaneId" value="">
                             
                             <!-- 1. ORIGIN LGA SEARCHABLE FIELD -->
                             <div class="vm-lga-field-wrapper" id="originLgaWrapper">
@@ -536,7 +542,7 @@
                                 </div>
                             </div>
 
-                            <button type="submit" class="btn-dash btn-dash-primary" style="width: 100%; padding: 10px; font-size: 13px; font-weight: 700; justify-content: center;">
+                            <button type="submit" id="btnSubmitCorridor" class="btn-dash btn-dash-primary" style="width: 100%; padding: 10px; font-size: 13px; font-weight: 700; justify-content: center;">
                                 🚀 Publish Delivery Corridor
                             </button>
                         </form>
@@ -615,13 +621,36 @@
                                                 </form>
                                             </td>
                                             <td>
-                                                <form method="POST" action="{{ route('admin.delivery_lanes.delete', $lane->id) }}" onsubmit="return confirm('Delete this custom corridor? Fallback rates will apply.');" style="margin: 0;">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="btn-dash btn-dash-danger" style="padding: 3px 8px; font-size: 10.5px;" title="Delete Corridor">
-                                                        🗑️
+                                                <div style="display: flex; align-items: center; gap: 6px;">
+                                                    <button 
+                                                        type="button" 
+                                                        class="btn-dash btn-dash-outline btn-edit-corridor" 
+                                                        style="padding: 3px 8px; font-size: 10.5px; background: #FFF; font-weight: 700; color: var(--adm-primary);" 
+                                                        title="Edit Corridor Rates &amp; ETA"
+                                                        data-id="{{ $lane->id }}"
+                                                        data-origin-id="{{ $lane->origin_lga_id }}"
+                                                        data-origin-name="{{ ($lane->originLga->name ?? '') . ' — ' . ($lane->originLga->state->name ?? 'Akwa Ibom') }}"
+                                                        data-origin-clean="{{ $lane->originLga->name ?? '' }}"
+                                                        data-dest-id="{{ $lane->destination_lga_id }}"
+                                                        data-dest-name="{{ ($lane->destinationLga->name ?? '') . ' — ' . ($lane->destinationLga->state->name ?? 'Akwa Ibom') }}"
+                                                        data-dest-clean="{{ $lane->destinationLga->name ?? '' }}"
+                                                        data-base-fee="{{ $lane->base_fee }}"
+                                                        data-bulky="{{ $lane->bulky_surcharge ?? '1000.00' }}"
+                                                        data-min-eta="{{ $lane->estimated_delivery_hours_min }}"
+                                                        data-max-eta="{{ $lane->estimated_delivery_hours_max }}"
+                                                        data-bidirectional="{{ $lane->is_bidirectional ? '1' : '0' }}"
+                                                        onclick="populateEditCorridor(this)"
+                                                    >
+                                                        ✏️ Edit
                                                     </button>
-                                                </form>
+                                                    <form method="POST" action="{{ route('admin.delivery_lanes.delete', $lane->id) }}" onsubmit="return confirm('Delete this custom corridor? Fallback rates will apply.');" style="margin: 0;">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="btn-dash btn-dash-danger" style="padding: 3px 8px; font-size: 10.5px;" title="Delete Corridor">
+                                                            🗑️
+                                                        </button>
+                                                    </form>
+                                                </div>
                                             </td>
                                         </tr>
                                     @empty
@@ -1022,6 +1051,113 @@
                 }
             });
         }
+
+        // 7. Interactive Corridor Edit Functions
+        window.populateEditCorridor = function (btn) {
+            const id = btn.dataset.id;
+            const originId = btn.dataset.originId;
+            const originName = btn.dataset.originName;
+            const originClean = btn.dataset.originClean;
+            const destId = btn.dataset.destId;
+            const destName = btn.dataset.destName;
+            const destClean = btn.dataset.destClean;
+            const baseFee = btn.dataset.baseFee;
+            const bulky = btn.dataset.bulky;
+            const minEta = btn.dataset.minEta;
+            const maxEta = btn.dataset.maxEta;
+            const bidirectional = btn.dataset.bidirectional === '1';
+
+            // Populate hidden IDs and text inputs
+            const editHidden = document.getElementById('editLaneId');
+            if (editHidden) editHidden.value = id;
+
+            originHidden.value = originId;
+            originInput.value = originName;
+            if (originIndicator) originIndicator.textContent = `Selected: ${originClean}`;
+
+            destHidden.value = destId;
+            destInput.value = destName;
+            if (destIndicator) destIndicator.textContent = `Selected: ${destClean}`;
+
+            const baseFeeInput = document.querySelector('input[name="base_fee"]');
+            if (baseFeeInput) baseFeeInput.value = parseFloat(baseFee).toFixed(2);
+
+            const bulkyInput = document.querySelector('input[name="bulky_surcharge"]');
+            if (bulkyInput) bulkyInput.value = parseFloat(bulky).toFixed(2);
+
+            const minEtaInput = document.querySelector('input[name="estimated_delivery_hours_min"]');
+            if (minEtaInput) minEtaInput.value = minEta;
+
+            const maxEtaInput = document.querySelector('input[name="estimated_delivery_hours_max"]');
+            if (maxEtaInput) maxEtaInput.value = maxEta;
+
+            const bidiCheckbox = document.querySelector('input[name="is_bidirectional"]');
+            if (bidiCheckbox) bidiCheckbox.checked = bidirectional;
+
+            // Change Header, Mode Badge, and Submit Button
+            const titleElem = document.getElementById('vmFormHeaderTitle');
+            if (titleElem) {
+                titleElem.innerHTML = `<span>✏️</span> <span>Edit Corridor #${id}: ${escapeHtml(originClean)} &rarr; ${escapeHtml(destClean)}</span>`;
+            }
+
+            const btnSubmit = document.getElementById('btnSubmitCorridor');
+            if (btnSubmit) {
+                btnSubmit.innerHTML = `💾 Save Corridor #${id} Changes`;
+                btnSubmit.className = 'btn-dash btn-dash-success';
+                btnSubmit.style.width = '100%';
+                btnSubmit.style.padding = '10px';
+                btnSubmit.style.fontSize = '13px';
+                btnSubmit.style.fontWeight = '700';
+                btnSubmit.style.justifyContent = 'center';
+            }
+
+            const cancelBtn = document.getElementById('vmCancelEditBtn');
+            if (cancelBtn) cancelBtn.style.display = 'inline-block';
+
+            const modeBadge = document.getElementById('vmFormModeBadge');
+            if (modeBadge) {
+                modeBadge.textContent = 'Editing #' + id;
+                modeBadge.className = 'dash-badge dash-badge-gold';
+            }
+
+            updateTopologyPreview();
+
+            // Smooth scroll to form container
+            const formContainer = document.getElementById('vmAddCorridorForm');
+            if (formContainer) {
+                formContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        };
+
+        window.cancelCorridorEdit = function () {
+            const editHidden = document.getElementById('editLaneId');
+            if (editHidden) editHidden.value = '';
+            
+            const titleElem = document.getElementById('vmFormHeaderTitle');
+            if (titleElem) {
+                titleElem.innerHTML = `<span>➕</span> <span>Add Custom Corridor</span>`;
+            }
+
+            const btnSubmit = document.getElementById('btnSubmitCorridor');
+            if (btnSubmit) {
+                btnSubmit.innerHTML = `🚀 Publish Delivery Corridor`;
+                btnSubmit.className = 'btn-dash btn-dash-primary';
+                btnSubmit.style.width = '100%';
+                btnSubmit.style.padding = '10px';
+                btnSubmit.style.fontSize = '13px';
+                btnSubmit.style.fontWeight = '700';
+                btnSubmit.style.justifyContent = 'center';
+            }
+
+            const cancelBtn = document.getElementById('vmCancelEditBtn');
+            if (cancelBtn) cancelBtn.style.display = 'none';
+
+            const modeBadge = document.getElementById('vmFormModeBadge');
+            if (modeBadge) {
+                modeBadge.textContent = 'LGA ⇄ LGA';
+                modeBadge.className = 'dash-badge dash-badge-purple';
+            }
+        };
 
         // Initialize topology summary on load
         updateTopologyPreview();

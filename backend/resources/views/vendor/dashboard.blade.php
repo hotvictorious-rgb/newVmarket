@@ -1,412 +1,166 @@
 @extends('layouts.dashboard')
 
-@section('title', 'Merchant Business Suite')
-@section('role_title', 'Vendor Merchant')
-@section('page_title', 'Merchant Commerce Suite')
-@section('role_badge', 'VENDOR MERCHANT')
+@section('title', 'Merchant Commerce Suite — Vendor')
+@section('role_title', 'Merchant Commerce Suite')
+@section('page_title', 'Merchant Command Overview')
+@section('role_badge', 'VENDOR')
 @section('role_badge_class', 'role-badge-vendor')
 
 @section('sidebar_menu')
-    <li class="nav-section-title">MERCHANT COMMERCE</li>
-    <li class="sidebar-nav-item">
-        <a href="{{ route('vendor.dashboard') }}" class="sidebar-nav-link active">
-            <span class="nav-link-icon">📊</span>
-            <span>Merchant Overview</span>
-        </a>
-    </li>
-    <li class="sidebar-nav-item">
-        <a href="#products-catalog" class="sidebar-nav-link">
-            <span class="nav-link-icon">🏷️</span>
-            <span>Products &amp; Freshness</span>
-            <span class="nav-link-badge">{{ count($products) }}</span>
-        </a>
-    </li>
-    <li class="sidebar-nav-item">
-        <a href="#shop-orders" class="sidebar-nav-link">
-            <span class="nav-link-icon">🛍️</span>
-            <span>Customer Orders</span>
-            <span class="nav-link-badge">{{ count($orders) }}</span>
-        </a>
-    </li>
-    <li class="sidebar-nav-item">
-        <a href="#reservations" class="sidebar-nav-link">
-            <span class="nav-link-icon">📝</span>
-            <span>Pickup Reservations</span>
-        </a>
-    </li>
-
-    <li class="nav-section-title">OUTLETS &amp; SETTLEMENT</li>
-    <li class="sidebar-nav-item">
-        <a href="#shop-branches" class="sidebar-nav-link">
-            <span class="nav-link-icon">🏬</span>
-            <span>Physical Plaza Outlets</span>
-        </a>
-    </li>
-    <li class="sidebar-nav-item">
-        <a href="#settlement-account" class="sidebar-nav-link">
-            <span class="nav-link-icon">💳</span>
-            <span>90% Payout Bank Account</span>
-        </a>
-    </li>
+    @include('vendor.partials._sidebar')
 @endsection
 
 @section('content')
-    <!-- Page Header -->
     <div class="page-header-row">
         <div>
             <h1 class="page-header-title">
                 <span style="font-size: 26px;">🏪</span>
-                <span>{{ $vendor->business_name ?? 'Victor Tech Innovations' }}</span>
+                <span>Merchant Commerce Suite</span>
             </h1>
             <p class="page-header-subtitle">
-                Accredited Merchant Portal &bull; Flagship: {{ $primaryShop->name ?? 'Victor Tech Uyo Plaza' }} &bull; CAC: {{ $vendor->cac_number ?? 'RC-987654' }}
+                Supervise your catalog freshness, customer orders, physical plaza branches, and escrow settlements.
             </p>
         </div>
         <div style="display: flex; gap: 8px;">
             <span class="dash-badge dash-badge-success" style="padding: 6px 12px; font-size: 12px;">
-                ✓ KYC VERIFIED (NIN: {{ $vendor->nin_number ?? '12345678901' }})
-            </span>
-            <span class="dash-badge dash-badge-purple" style="padding: 6px 12px; font-size: 12px;">
-                🛡️ 48H BANK COOLDOWN ACTIVE
+                ● Active Verified Merchant
             </span>
         </div>
     </div>
 
-    <!-- 4 KPI Metrics -->
+    <!-- 4 KPI Cards -->
     <div class="stat-grid-4">
-        <div class="stat-card stat-card-border-gold">
+        <div class="stat-card stat-card-border-purple">
             <div class="stat-card-info">
                 <span class="stat-card-label">Gross Merchant Sales</span>
-                <span class="stat-card-value">&#8358;{{ number_format($vendorMetrics['gross_sales'], 2) }}</span>
-                <span class="stat-card-subtext" style="color: #B45309;">100% Customer Paid</span>
+                <span class="stat-card-value">₦{{ number_format($vendorMetrics['gross_sales'], 2) }}</span>
+                <span class="stat-card-subtext" style="color: var(--adm-primary);">Total Escrow Sales</span>
             </div>
-            <div class="stat-card-icon-box icon-box-gold">💰</div>
+            <div class="stat-card-icon-box icon-box-purple">📊</div>
         </div>
 
         <div class="stat-card stat-card-border-emerald">
             <div class="stat-card-info">
-                <span class="stat-card-label">90% Net Disbursed</span>
-                <span class="stat-card-value">&#8358;{{ number_format($vendorMetrics['settled_amount'], 2) }}</span>
-                <span class="stat-card-subtext" style="color: var(--adm-success);">Direct to Zenith Bank</span>
+                <span class="stat-card-label">90% Net Earnings</span>
+                <span class="stat-card-value">₦{{ number_format($vendorMetrics['net_earnings'], 2) }}</span>
+                <span class="stat-card-subtext" style="color: var(--adm-success);">Direct Merchant Share</span>
             </div>
-            <div class="stat-card-icon-box icon-box-emerald">🏦</div>
+            <div class="stat-card-icon-box icon-box-emerald">💰</div>
+        </div>
+
+        <div class="stat-card stat-card-border-blue">
+            <div class="stat-card-info">
+                <span class="stat-card-label">Active Catalog Products</span>
+                <span class="stat-card-value">{{ $vendorMetrics['total_products'] }}</span>
+                <span class="stat-card-subtext" style="color: var(--adm-info);">7-Day Certified Freshness</span>
+            </div>
+            <div class="stat-card-icon-box icon-box-blue">🏷️</div>
         </div>
 
         <div class="stat-card stat-card-border-amber">
             <div class="stat-card-info">
-                <span class="stat-card-label">Pending Escrow Settlement</span>
-                <span class="stat-card-value">&#8358;{{ number_format($vendorMetrics['pending_settlement'], 2) }}</span>
-                <span class="stat-card-subtext" style="color: var(--adm-warning);">In 24h Return Buffer</span>
+                <span class="stat-card-label">Active Orders</span>
+                <span class="stat-card-value">{{ $vendorMetrics['active_orders'] }}</span>
+                <span class="stat-card-subtext" style="color: var(--adm-warning);">In Fulfillment</span>
             </div>
-            <div class="stat-card-icon-box icon-box-amber">⏳</div>
-        </div>
-
-        <div class="stat-card stat-card-border-purple">
-            <div class="stat-card-info">
-                <span class="stat-card-label">Verified Active Listings</span>
-                <span class="stat-card-value">{{ $vendorMetrics['total_products'] }}</span>
-                <span class="stat-card-subtext" style="color: var(--adm-primary);">7-Day Freshness Monitored</span>
-            </div>
-            <div class="stat-card-icon-box icon-box-purple">🏷️</div>
+            <div class="stat-card-icon-box icon-box-amber">🛍️</div>
         </div>
     </div>
 
-    <!-- Panel 1: Products Catalog & 7-Day Freshness Countdown -->
-    <div class="dash-card" id="products-catalog">
-        <div class="dash-card-header">
-            <div class="dash-card-title">
-                <span>🏷️</span>
+    <!-- Operational Launchpad -->
+    <div style="margin-bottom: 28px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+            <h2 style="font-size: 15px; font-weight: 800; color: var(--adm-text); text-transform: uppercase; letter-spacing: 0.5px;">
+                ⚡ Merchant Management Desks
+            </h2>
+            <span style="font-size: 12px; color: var(--adm-text-muted);">Dedicated Standalone Modules</span>
+        </div>
+
+        <div class="module-launchpad-grid">
+            <div class="module-card">
                 <div>
-                    <div>My Products &amp; 7-Day Freshness Status</div>
-                    <span class="dash-card-subtitle">Items must be re-verified or restocked every 7 days to preserve certified freshness on Victorious MARKET.</span>
+                    <div class="module-card-header">
+                        <div class="module-card-icon" style="background: rgba(94, 23, 235, 0.1); color: var(--adm-primary);">🏷️</div>
+                        <span class="dash-badge dash-badge-purple">{{ count($products) }} Products</span>
+                    </div>
+                    <div class="module-card-title">Products &amp; Freshness Catalog</div>
+                    <div class="module-card-desc">Restock, add new items, and re-verify certified freshness every 7 days to preserve storefront visibility.</div>
+                </div>
+                <div class="module-card-footer">
+                    <span style="font-size: 11.5px; color: #047857; font-weight: 700;">● Active Catalog</span>
+                    <a href="{{ route('vendor.products.index') }}" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 700;">
+                        Open Catalog &rarr;
+                    </a>
                 </div>
             </div>
-            <button type="button" class="btn-dash btn-dash-primary" onclick="document.getElementById('vmNewProductModal').style.display = 'flex'">
-                <span>+ Add New Product</span>
-            </button>
-        </div>
 
-        <div class="dash-table-responsive">
-            <table class="dash-table">
-                <thead>
-                    <tr>
-                        <th>Product Name</th>
-                        <th>Category</th>
-                        <th>Retail Price</th>
-                        <th>Your 90% Cut</th>
-                        <th>Stock Qty</th>
-                        <th>Freshness Lifecycle</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($products as $product)
-                        <tr>
-                            <td>
-                                <strong style="color: var(--adm-text);">{{ $product->name }}</strong>
-                                <div style="font-size: 11px; color: var(--adm-text-muted);">SKU: VM-{{ $product->id }}</div>
-                            </td>
-                            <td><span class="dash-badge dash-badge-info">{{ $product->category->name ?? 'Electronics' }}</span></td>
-                            <td>&#8358;{{ number_format($product->unit_price, 2) }}</td>
-                            <td>
-                                <strong style="color: var(--adm-success); font-size: 13.5px;">
-                                    &#8358;{{ number_format($product->unit_price * 0.9, 2) }}
-                                </strong>
-                            </td>
-                            <td>
-                                <span class="dash-badge {{ $product->stock_quantity > 5 ? 'dash-badge-success' : 'dash-badge-danger' }}">
-                                    {{ $product->stock_quantity }} units
-                                </span>
-                            </td>
-                            <td>
-                                <span class="dash-badge dash-badge-purple">
-                                    ● Certified Fresh (5 days left)
-                                </span>
-                            </td>
-                            <td>
-                                <form method="POST" action="{{ route('vendor.products.refresh', $product->id) }}" style="margin: 0;">@csrf<button type="submit" class="btn-dash btn-dash-outline" style="padding: 4px 10px; font-size: 11.5px;">↻ Refresh (7 Days)</button></form>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="7" style="text-align: center; padding: 20px; color: var(--adm-text-muted);">
-                                No products found. Add your first item above!
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Panel 2: Customer Orders for This Merchant -->
-    <div class="dash-card" id="shop-orders">
-        <div class="dash-card-header">
-            <div class="dash-card-title">
-                <span>🛍️</span>
+            <div class="module-card">
                 <div>
-                    <div>Orders Placed for My Items</div>
-                    <span class="dash-card-subtitle">Escrow-backed orders awaiting counter pickup or directional logistics dispatch.</span>
+                    <div class="module-card-header">
+                        <div class="module-card-icon" style="background: rgba(245, 158, 11, 0.1); color: var(--adm-warning);">🛍️</div>
+                        <span class="dash-badge dash-badge-gold">{{ count($orders) }} Orders</span>
+                    </div>
+                    <div class="module-card-title">Customer Orders</div>
+                    <div class="module-card-desc">Review incoming customer orders, manage processing packaging, and monitor counter rider handovers.</div>
+                </div>
+                <div class="module-card-footer">
+                    <span style="font-size: 11.5px; color: var(--adm-text-muted);">Escrow Protected</span>
+                    <a href="{{ route('vendor.orders.index') }}" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 700;">
+                        Open Orders &rarr;
+                    </a>
                 </div>
             </div>
-            <span class="dash-badge dash-badge-gold">Live Storefront Orders</span>
-        </div>
 
-        <div class="dash-table-responsive">
-            <table class="dash-table">
-                <thead>
-                    <tr>
-                        <th>Order #</th>
-                        <th>Customer</th>
-                        <th>Gross Total</th>
-                        <th>Your 90% Share</th>
-                        <th>Fulfillment</th>
-                        <th>Settlement Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($orders as $order)
-                        <tr>
-                            <td style="font-family: monospace; font-weight: 700;">{{ $order->order_number }}</td>
-                            <td>
-                                <div>{{ $order->customer->name ?? 'Shopper' }}</div>
-                                <div style="font-size: 11px; color: var(--adm-text-muted);">{{ $order->customer->phone ?? 'N/A' }}</div>
-                            </td>
-                            <td>&#8358;{{ number_format($order->total_amount, 2) }}</td>
-                            <td>
-                                <strong style="color: var(--adm-success); font-size: 14px;">
-                                    &#8358;{{ number_format($order->vendor_earning_90, 2) }}
-                                </strong>
-                            </td>
-                            <td>
-                                <span class="dash-badge dash-badge-purple">
-                                    {{ ucfirst(str_replace('_', ' ', $order->fulfillment_type)) }}
-                                </span>
-                            </td>
-                            <td>
-                                @if($order->vendor_settlement_status === 'settled')
-                                    <span class="dash-badge dash-badge-success">Settled to Bank ✓</span>
-                                @elseif($order->vendor_settlement_status === 'held')
-                                    <span class="dash-badge dash-badge-warning">In 24h Buffer ⏳</span>
-                                @else
-                                    <span class="dash-badge dash-badge-info">{{ ucfirst($order->vendor_settlement_status) }}</span>
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="6" style="text-align: center; padding: 20px; color: var(--adm-text-muted);">No orders found for this merchant.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
+            <div class="module-card">
+                <div>
+                    <div class="module-card-header">
+                        <div class="module-card-icon" style="background: rgba(16, 185, 129, 0.1); color: var(--adm-success);">📝</div>
+                        <span class="dash-badge dash-badge-success">{{ count($reservations) }} Passes</span>
+                    </div>
+                    <div class="module-card-title">Pickup Reservations</div>
+                    <div class="module-card-desc">Customer reservation passes awaiting walk-in inspection at your Plaza counter with zero upfront risk.</div>
+                </div>
+                <div class="module-card-footer">
+                    <span style="font-size: 11.5px; color: #10B981; font-weight: 700;">● In-Shop Pass</span>
+                    <a href="{{ route('vendor.reservations.index') }}" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 700;">
+                        Open Reservations &rarr;
+                    </a>
+                </div>
+            </div>
 
-    <!-- Panel 3 & 4: Outlet Details & Settlement Account -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px;">
-        <!-- Outlet Details -->
-        <div class="dash-card" id="shop-branches">
-            <div class="dash-card-header">
-                <div class="dash-card-title">
-                    <span>🏬</span>
-                    <span>Primary Shop Outlet</span>
+            <div class="module-card">
+                <div>
+                    <div class="module-card-header">
+                        <div class="module-card-icon" style="background: rgba(2, 132, 199, 0.1); color: var(--adm-info);">🏬</div>
+                        <span class="dash-badge dash-badge-info">{{ count($shops) }} Outlets</span>
+                    </div>
+                    <div class="module-card-title">Physical Plaza Outlets</div>
+                    <div class="module-card-desc">Manage your commercial plaza branches, operating hours, and counter staff verification desks.</div>
                 </div>
-                <span class="dash-badge dash-badge-success">Inspection Counter Active</span>
-            </div>
-            <div class="dash-card-body">
-                <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 6px;">{{ $primaryShop->name ?? 'Victor Tech Uyo Flagship Plaza' }}</h3>
-                <p style="color: var(--adm-text-muted); font-size: 13px; margin-bottom: 14px;">
-                    📍 {{ $primaryShop->address ?? '42 Ikot Ekpene Road, Uyo, Akwa Ibom' }}
-                </p>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12.5px;">
-                    <div style="background: #F8FAFC; padding: 10px; border-radius: 6px;">
-                        <span style="color: var(--adm-text-muted); display: block;">Counter Staff:</span>
-                        <strong>Aniefiok Akpan</strong>
-                    </div>
-                    <div style="background: #F8FAFC; padding: 10px; border-radius: 6px;">
-                        <span style="color: var(--adm-text-muted); display: block;">Operating Hours:</span>
-                        <strong>08:30 AM – 06:00 PM</strong>
-                    </div>
+                <div class="module-card-footer">
+                    <span style="font-size: 11.5px; color: var(--adm-text-muted);">Commercial Corridors</span>
+                    <a href="{{ route('vendor.shops.index') }}" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 700;">
+                        Open Outlets &rarr;
+                    </a>
                 </div>
             </div>
-        </div>
 
-        <!-- Settlement Bank Account -->
-        <div class="dash-card" id="settlement-account">
-            <div class="dash-card-header">
-                <div class="dash-card-title">
-                    <span>💳</span>
-                    <span>90% Payout Bank Account</span>
+            <div class="module-card">
+                <div>
+                    <div class="module-card-header">
+                        <div class="module-card-icon" style="background: rgba(16, 185, 129, 0.1); color: var(--adm-success);">💳</div>
+                        <span class="dash-badge dash-badge-success">90% Payout</span>
+                    </div>
+                    <div class="module-card-title">90% Payout Bank Account</div>
+                    <div class="module-card-desc">View disbursed funds, escrow holds, and verified Nigerian bank details for automatic payouts.</div>
                 </div>
-                <span class="dash-badge dash-badge-purple">48h Invariant Locked</span>
+                <div class="module-card-footer">
+                    <span style="font-size: 11.5px; color: #059669; font-weight: 700;">● T+0 Settlement</span>
+                    <a href="{{ route('vendor.payout.index') }}" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 700;">
+                        Open Bank Account &rarr;
+                    </a>
+                </div>
             </div>
-            <div class="dash-card-body">
-                <div style="background: linear-gradient(135deg, #0B0F19 0%, #1A1035 100%); color: #FFF; padding: 18px 20px; border-radius: 10px; border: 1.5px solid var(--adm-gold); margin-bottom: 14px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <span style="font-size: 13px; font-weight: 700; color: var(--adm-gold); text-transform: uppercase;">{{ $vendor->bank_name ?? 'Zenith Bank' }}</span>
-                        <span style="font-size: 10px; background: rgba(255, 215, 0, 0.2); color: var(--adm-gold); padding: 2px 8px; border-radius: 4px; font-weight: 700;">VERIFIED</span>
-                    </div>
-                    <div style="font-family: monospace; font-size: 20px; font-weight: 700; letter-spacing: 2px; margin-bottom: 8px;">
-                        {{ $vendor->account_number ?? '1012345678' }}
-                    </div>
-                    <div style="font-size: 12px; color: #CBD5E1;">
-                        {{ $vendor->account_name ?? 'Victor Tech Innovations' }}
-                    </div>
-                </div>
-                <p style="font-size: 11.5px; color: var(--adm-text-muted); line-height: 1.4;">
-                    🛡️ <strong>48-Hour Bank Cooldown Rule:</strong> Any bank account modification triggers a mandatory 48-hour freeze on disbursements to prevent hijacked payouts. Last updated: 5 days ago (Safe).
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal 1: Add New Product -->
-    <div id="vmNewProductModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
-        <div style="background: #FFFFFF; width: 90%; max-width: 580px; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); border: 2px solid var(--adm-gold); overflow: hidden;">
-            <div style="padding: 18px 24px; background: linear-gradient(135deg, #5E17EB, #7C3AED); color: #FFF; display: flex; justify-content: space-between; align-items: center;">
-                <div style="font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px;">
-                    <span>🏷️</span> Publish Authentic Item (7-Day Freshness)
-                </div>
-                <button type="button" onclick="document.getElementById('vmNewProductModal').style.display='none'" style="background: none; border: none; color: #FFF; font-size: 20px; cursor: pointer;">&times;</button>
-            </div>
-            <form method="POST" action="{{ route('vendor.products.store') }}" style="padding: 24px;">
-                @csrf
-                <div style="margin-bottom: 14px;">
-                    <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Item Title / Name *</label>
-                    <input type="text" name="name" placeholder="e.g. Samsung Galaxy A54 5G 128GB" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
-                    <div>
-                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Category *</label>
-                        <select name="category_id" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
-                            @foreach($categories ?? [] as $cat)
-                                <option value="{{ $cat->id }}">{{ $cat->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Shop Counter Allocation *</label>
-                        <select name="shop_id" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
-                            @foreach($shops ?? [] as $sh)
-                                <option value="{{ $sh->id }}">{{ $sh->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px;">
-                    <div>
-                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Retail Price (₦) *</label>
-                        <input type="number" step="100" name="unit_price" placeholder="285000" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Stock Qty *</label>
-                        <input type="number" name="inventory_quantity" value="10" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Package Tier *</label>
-                        <select name="package_tier" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
-                            <option value="standard">Standard Parcel</option>
-                            <option value="bulky">Bulky Cargo</option>
-                        </select>
-                    </div>
-                </div>
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Item Specifications & Warranty Note</label>
-                    <textarea name="description" rows="3" placeholder="Genuine brand new with 1-year warranty. Available for physical counter inspection." style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);"></textarea>
-                </div>
-                <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                    <button type="button" class="btn-dash btn-dash-outline" onclick="document.getElementById('vmNewProductModal').style.display='none'">Cancel</button>
-                    <button type="submit" class="btn-dash btn-dash-primary" style="padding: 10px 24px;">✓ Publish to Storefront</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal 2: Add Shop Branch Outlet -->
-    <div id="vmNewShopModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
-        <div style="background: #FFFFFF; width: 90%; max-width: 520px; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); border: 2px solid var(--adm-gold); overflow: hidden;">
-            <div style="padding: 18px 24px; background: linear-gradient(135deg, #0F172A, #1E293B); color: #FFF; display: flex; justify-content: space-between; align-items: center;">
-                <div style="font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px;">
-                    <span>🏢</span> Register Physical Plaza Branch
-                </div>
-                <button type="button" onclick="document.getElementById('vmNewShopModal').style.display='none'" style="background: none; border: none; color: #FFF; font-size: 20px; cursor: pointer;">&times;</button>
-            </div>
-            <form method="POST" action="{{ route('vendor.shops.store') }}" style="padding: 24px;">
-                @csrf
-                <div style="margin-bottom: 14px;">
-                    <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Branch Outlet Name *</label>
-                    <input type="text" name="name" placeholder="e.g. Victor Tech Ikot Ekpene Branch" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
-                    <div>
-                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Local Government (LGA) *</label>
-                        <select name="lga_id" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
-                            @foreach($allLgas ?? [] as $lga)
-                                <option value="{{ $lga->id }}" {{ $lga->name == 'Uyo' ? 'selected' : '' }}>{{ $lga->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Counter Phone *</label>
-                        <input type="text" name="phone" placeholder="+2348012345678" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
-                    </div>
-                </div>
-                <div style="margin-bottom: 14px;">
-                    <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Physical Street / Plaza Address *</label>
-                    <input type="text" name="address" placeholder="Suite 14, Plaza Complex, Ikot Ekpene Road" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
-                </div>
-                <div style="margin-bottom: 20px;">
-                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                        <input type="checkbox" name="pickup_enabled" value="1" checked>
-                        <span>Enable In-Shop Physical Inspection & Customer Pickup</span>
-                    </label>
-                </div>
-                <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                    <button type="button" class="btn-dash btn-dash-outline" onclick="document.getElementById('vmNewShopModal').style.display='none'">Cancel</button>
-                    <button type="submit" class="btn-dash btn-dash-primary" style="padding: 10px 24px;">✓ Register Branch</button>
-                </div>
-            </form>
         </div>
     </div>
 @endsection
