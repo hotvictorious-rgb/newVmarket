@@ -7,46 +7,7 @@
 @section('role_badge_class', 'role-badge-admin-staff')
 
 @section('sidebar_menu')
-    <li class="nav-section-title">STAFF OPERATIONS</li>
-    <li class="sidebar-nav-item">
-        <a href="{{ route('admin.staff.dashboard') }}" class="sidebar-nav-link active">
-            <span class="nav-link-icon">📋</span>
-            <span>Staff Desk Overview</span>
-        </a>
-    </li>
-    <li class="sidebar-nav-item">
-        <a href="#catalog-moderation" class="sidebar-nav-link">
-            <span class="nav-link-icon">🔍</span>
-            <span>Product Moderation &amp; Freshness</span>
-            <span class="nav-link-badge">{{ count($products) }}</span>
-        </a>
-    </li>
-    <li class="sidebar-nav-item">
-        <a href="#order-triage" class="sidebar-nav-link">
-            <span class="nav-link-icon">📦</span>
-            <span>Order Dispatch Triage</span>
-        </a>
-    </li>
-    <li class="sidebar-nav-item">
-        <a href="#counter-monitor" class="sidebar-nav-link">
-            <span class="nav-link-icon">🏬</span>
-            <span>Counter Inspection Monitor</span>
-        </a>
-    </li>
-
-    <li class="nav-section-title">SUPPORT &amp; LOGS</li>
-    <li class="sidebar-nav-item">
-        <a href="#dispute-queue" class="sidebar-nav-link">
-            <span class="nav-link-icon">💬</span>
-            <span>Customer Dispute Triage</span>
-        </a>
-    </li>
-    <li class="sidebar-nav-item">
-        <a href="#activity-log" class="sidebar-nav-link">
-            <span class="nav-link-icon">📜</span>
-            <span>Platform Operational Logs</span>
-        </a>
-    </li>
+    @include('admin-staff.partials._sidebar')
 @endsection
 
 @section('content')
@@ -107,172 +68,83 @@
         </div>
     </div>
 
-    <!-- Panel 1: Product Catalog Moderation & 7-Day Freshness Verification -->
-    <div class="dash-card" id="catalog-moderation">
-        <div class="dash-card-header">
-            <div class="dash-card-title">
-                <span>🔍</span>
+    <!-- Operational Launchpad -->
+    <div style="margin-bottom: 28px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+            <h2 style="font-size: 15px; font-weight: 800; color: var(--adm-text); text-transform: uppercase; letter-spacing: 0.5px;">
+                ⚡ Staff Operations Desks
+            </h2>
+            <span style="font-size: 12px; color: var(--adm-text-muted);">Dedicated Standalone Modules</span>
+        </div>
+
+        <div class="module-launchpad-grid">
+            <div class="module-card">
                 <div>
-                    <div>Product Catalog Moderation &amp; 7-Day Freshness Queue</div>
-                    <span class="dash-card-subtitle">Verify merchant catalog submissions and inspect inventory approaching the 7-day auto-stale delisting boundary.</span>
+                    <div class="module-card-header">
+                        <div class="module-card-icon" style="background: rgba(2, 132, 199, 0.1); color: var(--adm-info);">🔍</div>
+                        <span class="dash-badge dash-badge-info">{{ count($products) }} Items</span>
+                    </div>
+                    <div class="module-card-title">Product Catalog Moderation &amp; 7-Day Freshness Queue</div>
+                    <div class="module-card-desc">Moderate new merchant listings, inspect description quality, and enforce the 7-day freshness rotation.</div>
+                </div>
+                <div class="module-card-footer">
+                    <span style="font-size: 11.5px; color: #047857; font-weight: 700;">● Active Queue</span>
+                    <a href="{{ route('admin.staff.moderation.index') }}" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 700;">
+                        Open Moderation Desk &rarr;
+                    </a>
                 </div>
             </div>
-            <span class="dash-badge dash-badge-purple">Catalog Integrity</span>
-        </div>
 
-        <div class="dash-table-responsive">
-            <table class="dash-table">
-                <thead>
-                    <tr>
-                        <th>Product Details</th>
-                        <th>Category</th>
-                        <th>Merchant Plaza Branch</th>
-                        <th>Unit Price</th>
-                        <th>Freshness Status</th>
-                        <th>Staff Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($products as $product)
-                        <tr>
-                            <td>
-                                <div style="font-weight: 700;">{{ $product->name }}</div>
-                                <div style="font-size: 11px; color: var(--adm-text-muted);">SKU: VM-PRD-{{ $product->id }}</div>
-                            </td>
-                            <td>
-                                <span class="dash-badge dash-badge-info">{{ $product->category->name ?? 'Electronics' }}</span>
-                            </td>
-                            <td>{{ $product->shop->name ?? 'Victor Tech Uyo Flagship' }}</td>
-                            <td><strong>&#8358;{{ number_format($product->unit_price, 2) }}</strong></td>
-                            <td>
-                                <span class="dash-badge dash-badge-success">
-                                    ✓ Fresh Listing (Active)
-                                </span>
-                            </td>
-                            <td>
-                                <button type="button" class="btn-dash btn-dash-outline" onclick="alert('Product #{{ $product->id }} verified and approved for storefront!')">
-                                    <span>✓ Verify &amp; Pass</span>
-                                </button>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="6" style="text-align: center; padding: 20px; color: var(--adm-text-muted);">
-                                No products in moderation queue.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Panel 2: Order Fulfillment Oversight & Triage -->
-    <div class="dash-card" id="order-triage">
-        <div class="dash-card-header">
-            <div class="dash-card-title">
-                <span>📦</span>
+            <div class="module-card">
                 <div>
-                    <div>Order Dispatch Triage Desk</div>
-                    <span class="dash-card-subtitle">Active customer transactions monitored for prompt preparation and directional handover.</span>
+                    <div class="module-card-header">
+                        <div class="module-card-icon" style="background: rgba(245, 158, 11, 0.1); color: var(--adm-warning);">📦</div>
+                        <span class="dash-badge dash-badge-gold">{{ count($recentOrders) }} Orders</span>
+                    </div>
+                    <div class="module-card-title">Order Dispatch Triage</div>
+                    <div class="module-card-desc">Supervise active customer orders, ensure merchant preparation promptness, and monitor handover queues.</div>
+                </div>
+                <div class="module-card-footer">
+                    <span style="font-size: 11.5px; color: var(--adm-text-muted);">Live Triage Flow</span>
+                    <a href="{{ route('admin.staff.orders.index') }}" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 700;">
+                        Open Triage Desk &rarr;
+                    </a>
                 </div>
             </div>
-            <span class="dash-badge dash-badge-gold">Operational Flow</span>
-        </div>
 
-        <div class="dash-table-responsive">
-            <table class="dash-table">
-                <thead>
-                    <tr>
-                        <th>Order #</th>
-                        <th>Customer Contact</th>
-                        <th>Branch Plaza</th>
-                        <th>Total Amount</th>
-                        <th>Fulfillment Stage</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($recentOrders as $order)
-                        <tr>
-                            <td style="font-family: monospace; font-weight: 700;">{{ $order->order_number }}</td>
-                            <td>
-                                <div style="font-weight: 600;">{{ $order->customer->name ?? 'Customer' }}</div>
-                                <div style="font-size: 11.5px; color: var(--adm-text-muted);">{{ $order->customer->phone ?? 'N/A' }}</div>
-                            </td>
-                            <td>{{ $order->shop->name ?? 'Victor Tech Plaza' }}</td>
-                            <td>&#8358;{{ number_format($order->total_amount, 2) }}</td>
-                            <td>
-                                <span class="dash-badge dash-badge-purple">
-                                    {{ ucfirst(str_replace('_', ' ', $order->fulfillment_type)) }}
-                                </span>
-                            </td>
-                            <td>
-                                @if($order->order_status === 'delivered')
-                                    <span class="dash-badge dash-badge-success">Delivered</span>
-                                @elseif($order->order_status === 'out_for_delivery')
-                                    <span class="dash-badge dash-badge-info">In Transit</span>
-                                @else
-                                    <span class="dash-badge dash-badge-warning">{{ ucfirst($order->order_status) }}</span>
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="6" style="text-align: center; padding: 20px; color: var(--adm-text-muted);">No orders in triage queue.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Panel 3: Counter Inspection Activity Feed -->
-    <div class="dash-card" id="counter-monitor">
-        <div class="dash-card-header">
-            <div class="dash-card-title">
-                <span>🏬</span>
+            <div class="module-card">
                 <div>
-                    <div>Branch Counter Inspection Monitor</div>
-                    <span class="dash-card-subtitle">Real-time record of customer physical examinations at Uyo Plaza counters.</span>
+                    <div class="module-card-header">
+                        <div class="module-card-icon" style="background: rgba(16, 185, 129, 0.1); color: var(--adm-success);">🏬</div>
+                        <span class="dash-badge dash-badge-success">{{ count($counterInspections) }} Passes</span>
+                    </div>
+                    <div class="module-card-title">Counter Inspection Monitor</div>
+                    <div class="module-card-desc">Track physical inspection reservation passes, branch staff sign-offs, and in-shop pickup custody handovers.</div>
+                </div>
+                <div class="module-card-footer">
+                    <span style="font-size: 11.5px; color: #10B981; font-weight: 700;">● Counter Terminals</span>
+                    <a href="{{ route('admin.staff.inspections.index') }}" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 700;">
+                        Open Counter Monitor &rarr;
+                    </a>
                 </div>
             </div>
-            <span class="dash-badge dash-badge-emerald">Live Branch Feed</span>
-        </div>
 
-        <div class="dash-table-responsive">
-            <table class="dash-table">
-                <thead>
-                    <tr>
-                        <th>Reservation Code</th>
-                        <th>Product Inspected</th>
-                        <th>Customer</th>
-                        <th>Plaza Branch</th>
-                        <th>Inspection Result</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($counterInspections as $res)
-                        <tr>
-                            <td><strong style="font-family: monospace;">{{ $res->reservation_code }}</strong></td>
-                            <td>{{ $res->product->name ?? 'Verified Item' }}</td>
-                            <td>{{ $res->customer->name ?? 'Customer' }}</td>
-                            <td>{{ $res->shop->name ?? 'Uyo Flagship Plaza' }}</td>
-                            <td>
-                                @if($res->status === 'inspected')
-                                    <span class="dash-badge dash-badge-success">Passed Inspection ✓</span>
-                                @else
-                                    <span class="dash-badge dash-badge-warning">Awaiting Inspection ⏳</span>
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" style="text-align: center; padding: 20px; color: var(--adm-text-muted);">No counter inspection logs found.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+            <div class="module-card">
+                <div>
+                    <div class="module-card-header">
+                        <div class="module-card-icon" style="background: rgba(168, 85, 247, 0.1); color: #8B5CF6;">📜</div>
+                        <span class="dash-badge dash-badge-purple">{{ count($auditLogs) }} Logs</span>
+                    </div>
+                    <div class="module-card-title">Platform Operational Logs</div>
+                    <div class="module-card-desc">Review the immutable audit log of administrative actions, user logins, and order status transitions.</div>
+                </div>
+                <div class="module-card-footer">
+                    <span style="font-size: 11.5px; color: var(--adm-text-muted);">Immutable Trail</span>
+                    <a href="{{ route('admin.staff.logs.index') }}" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 700;">
+                        View Audit Logs &rarr;
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 @endsection

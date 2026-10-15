@@ -94,6 +94,43 @@ class PortalWebTest extends TestCase
         $response->assertSee('Tier 1: Municipal (Intra-LGA)');
         $response->assertSee('Tier 2: Regional (Inter-LGA)');
         $response->assertSee('Tier 3: Inter-State Freight');
+        $response->assertSee('id="vmAllLgasData"', false);
+        $response->assertSee('id="laneOriginSearchInput"', false);
+        $response->assertSee('id="laneDestSearchInput"', false);
+        $response->assertSee('id="btnSwapOriginDest"', false);
+        $response->assertSee('id="vmCorridorLiveTopology"', false);
+    }
+
+    public function test_super_admin_can_store_custom_delivery_lane_via_searchable_lga_selection(): void
+    {
+        $origin = \App\Models\Lga::where('name', 'Uyo')->first() ?? \App\Models\Lga::first();
+        $dest = \App\Models\Lga::where('name', 'Eket')->first() ?? \App\Models\Lga::skip(1)->first();
+
+        $postData = [
+            'origin_lga_id' => $origin->id,
+            'destination_lga_id' => $dest->id,
+            'base_fee' => '1350.00',
+            'bulky_surcharge' => '1200.00',
+            'estimated_delivery_hours_min' => 4,
+            'estimated_delivery_hours_max' => 12,
+            'is_bidirectional' => '1',
+        ];
+
+        $response = $this->post('/admin/delivery-lanes', $postData);
+        $response->assertRedirect('/admin/delivery-lanes');
+
+        $this->assertDatabaseHas('delivery_lanes', [
+            'origin_lga_id' => $origin->id,
+            'destination_lga_id' => $dest->id,
+            'base_fee' => '1350.00',
+        ]);
+
+        // Assert bidirectional reverse lane created automatically
+        $this->assertDatabaseHas('delivery_lanes', [
+            'origin_lga_id' => $dest->id,
+            'destination_lga_id' => $origin->id,
+            'base_fee' => '1350.00',
+        ]);
     }
 
     public function test_super_admin_settlements_page_loads_successfully(): void
