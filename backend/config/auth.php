@@ -114,4 +114,21 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Super Administrator Environment Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Super Admin credentials strictly originate from environment variables
+    | and must NEVER be treated as demo accounts.
+    |
+    */
+
+    'superadmin' => [
+        'email' => env('SUPERADMIN_EMAIL', 'admin@victoriousmarket.com.ng'),
+        'password' => env('SUPERADMIN_PASSWORD', 'Password123!'),
+        'name' => env('SUPERADMIN_NAME', 'Victorious Super Admin'),
+        'phone' => env('SUPERADMIN_PHONE', '+2348011110001'),
+    ],
+
 ];

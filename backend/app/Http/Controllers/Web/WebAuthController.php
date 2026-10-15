@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\Lga;
 use App\Models\User;
+use App\Services\DemoAccountRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -24,7 +25,8 @@ class WebAuthController extends Controller
             return redirect()->route('customer.dashboard');
         }
         $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
-        return view('auth.customer-login', compact('lgas'));
+        $demoAccounts = DemoAccountRegistry::getDemoAccounts('customer');
+        return view('auth.customer-login', compact('lgas', 'demoAccounts'));
     }
 
     public function loginCustomer(Request $request)
@@ -305,6 +307,10 @@ class WebAuthController extends Controller
     // ==========================================
     public function showAdminLogin()
     {
+        if (Auth::check() && Auth::user()->isSuperAdmin()) {
+            return redirect()->route('admin.dashboard');
+        }
+        // Super Admin credentials strictly come from ENV. No demo accounts.
         return view('auth.admin-login');
     }
 
@@ -318,7 +324,11 @@ class WebAuthController extends Controller
     // ==========================================
     public function showAdminStaffLogin()
     {
-        return view('auth.admin-staff-login');
+        if (Auth::check() && Auth::user()->isAdminEmployee()) {
+            return redirect()->route('admin.staff.dashboard');
+        }
+        $demoAccounts = DemoAccountRegistry::getDemoAccounts('admin_employee');
+        return view('auth.admin-staff-login', compact('demoAccounts'));
     }
 
     public function loginAdminStaff(Request $request)
@@ -331,7 +341,11 @@ class WebAuthController extends Controller
     // ==========================================
     public function showVendorLogin()
     {
-        return view('auth.vendor-login');
+        if (Auth::check() && Auth::user()->isVendor()) {
+            return redirect()->route('vendor.dashboard');
+        }
+        $demoAccounts = DemoAccountRegistry::getDemoAccounts('vendor');
+        return view('auth.vendor-login', compact('demoAccounts'));
     }
 
     public function loginVendor(Request $request)
@@ -344,7 +358,11 @@ class WebAuthController extends Controller
     // ==========================================
     public function showCounterLogin()
     {
-        return view('auth.branch-counter-login');
+        if (Auth::check() && Auth::user()->isVendorEmployee()) {
+            return redirect()->route('counter.dashboard');
+        }
+        $demoAccounts = DemoAccountRegistry::getDemoAccounts('vendor_employee');
+        return view('auth.branch-counter-login', compact('demoAccounts'));
     }
 
     public function loginCounter(Request $request)
@@ -357,7 +375,11 @@ class WebAuthController extends Controller
     // ==========================================
     public function showLogisticsLogin()
     {
-        return view('auth.logistics-login');
+        if (Auth::check() && Auth::user()->isLogisticsCompany()) {
+            return redirect()->route('logistics.dashboard');
+        }
+        $demoAccounts = DemoAccountRegistry::getDemoAccounts('logistics_company');
+        return view('auth.logistics-login', compact('demoAccounts'));
     }
 
     public function loginLogistics(Request $request)
@@ -370,7 +392,11 @@ class WebAuthController extends Controller
     // ==========================================
     public function showRiderLogin()
     {
-        return view('auth.rider-login');
+        if (Auth::check() && Auth::user()->isRider()) {
+            return redirect()->route('rider.dashboard');
+        }
+        $demoAccounts = DemoAccountRegistry::getDemoAccounts('rider');
+        return view('auth.rider-login', compact('demoAccounts'));
     }
 
     public function loginRider(Request $request)
@@ -381,6 +407,69 @@ class WebAuthController extends Controller
     // ==========================================
     // UNIFIED AUTHENTICATION ENGINE
     // ==========================================
+    
+    /**
+     * One-click demo persona authentication.
+     * HARD INVARIANTS:
+     * 1. Permanently disabled in production.
+     * 2. Cannot authenticate super_admin (Superadmin is strictly from ENV).
+     * 3. Cannot authenticate real (is_demo == false) users.
+     */
+    public function quickDemoLogin(Request $request)
+    {
+        if (app()->environment('production') || !DemoAccountRegistry::isDemoEnabled()) {
+            abort(403, 'Demo authentication is permanently forbidden in production environments.');
+        }
+
+        $email = (string) $request->input('email');
+        $role = (string) $request->input('role');
+
+        if ($role === 'super_admin') {
+            abort(403, 'Super Admin credentials must strictly be provided via server environment (ENV).');
+        }
+
+        $demoAccount = DemoAccountRegistry::findDemoAccount($email);
+        if (!$demoAccount) {
+            abort(404, 'Specified demo persona was not found in registry.');
+        }
+
+        $user = User::where('email', $demoAccount['email'])->first();
+        if (!$user) {
+            $user = User::create([
+                'name' => $demoAccount['name'],
+                'email' => $demoAccount['email'],
+                'phone' => '+2348000' . rand(100000, 999999),
+                'password' => Hash::make(DemoAccountRegistry::DEMO_PASSWORD),
+                'user_type' => $role,
+                'status' => 'active',
+                'is_demo' => true,
+            ]);
+        }
+
+        if ($user->user_type === 'super_admin') {
+            abort(403, 'Super Admin credentials originate strictly from environment variables (ENV) and cannot be authenticated via demo shortcuts.');
+        }
+
+        if (!$user->is_demo) {
+            abort(403, 'Security Violation: Cannot authenticate non-demo accounts via quick demo login.');
+        }
+
+        Auth::login($user, true);
+        $request->session()->regenerate();
+
+        $redirectRoute = match ($user->user_type) {
+            'admin_employee' => 'admin.staff.dashboard',
+            'vendor' => 'vendor.dashboard',
+            'vendor_employee' => 'counter.dashboard',
+            'logistics_company' => 'logistics.dashboard',
+            'rider' => 'rider.dashboard',
+            default => 'customer.dashboard',
+        };
+
+        return redirect()->route($redirectRoute)
+            ->with('status', "Signed in as demo persona: {$user->name} ({$demoAccount['badge']})");
+    }
+
     protected function authenticateRole(Request $request, array $allowedRoles, $redirectTarget)
     {
         $credentials = $request->validate([
@@ -395,6 +484,19 @@ class WebAuthController extends Controller
         if (!$user || !Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'login' => ['Invalid credentials provided.'],
+            ]);
+        }
+
+        // Hard Security Invariant: Super Admin accounts can NEVER be demo accounts under any circumstance
+        if ($user->user_type === 'super_admin' && $user->is_demo) {
+            throw ValidationException::withMessages([
+                'login' => ['Security Violation: Super Admin accounts can never be demo accounts.'],
+            ]);
+        }
+
+        if ($user->is_demo && app()->environment('production')) {
+            throw ValidationException::withMessages([
+                'login' => ['Demo accounts are permanently disabled in production environments.'],
             ]);
         }
 

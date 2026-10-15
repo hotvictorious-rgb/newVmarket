@@ -28,18 +28,19 @@
             @csrf
             <div style="margin-bottom: 18px;">
                 <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Merchant Registered Email / Phone</label>
-                <input type="text" name="login" value="vendor@victoriousmarket.com.ng" required autofocus style="width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #FFF; font-size: 0.95rem;">
+                <input type="text" name="login" value="{{ old('login') }}" placeholder="Account Email / ID" required autofocus style="width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #FFF; font-size: 0.95rem;">
             </div>
 
             <div style="margin-bottom: 20px;">
                 <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Password</label>
-                <input type="password" name="password" value="Password123!" required style="width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #FFF; font-size: 0.95rem;">
+                <input type="password" name="password" value="" placeholder="••••••••••••" required style="width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #FFF; font-size: 0.95rem;">
             </div>
 
             <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 1rem; background: linear-gradient(135deg, #1D4ED8, #3B82F6);">
                 Enter Merchant Dashboard
             </button>
         </form>
+        @include('auth.partials._demo-accounts', ['demoAccounts' => $demoAccounts ?? \App\Services\DemoAccountRegistry::getDemoAccounts('vendor'), 'roleKey' => 'vendor'])
 
         <div style="margin-top: 24px; padding: 14px; border-radius: var(--radius-md); background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); font-size: 0.8rem; color: #93C5FD;">
             📱 <strong>Mobile App Recommended:</strong> For real-time push alerts and live order notifications on the go, use the <strong>Victorious Vendor Flutter App</strong>.

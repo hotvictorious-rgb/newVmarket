@@ -28,18 +28,19 @@
             @csrf
             <div style="margin-bottom: 18px;">
                 <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">Rider Phone Number / Email</label>
-                <input type="text" name="login" value="rider@victoriousmarket.com.ng" required autofocus style="width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #FFF; font-size: 0.95rem;">
+                <input type="text" name="login" value="{{ old('login') }}" placeholder="Account Email / ID" required autofocus style="width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #FFF; font-size: 0.95rem;">
             </div>
 
             <div style="margin-bottom: 20px;">
                 <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">PIN / Password</label>
-                <input type="password" name="password" value="Password123!" required style="width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #FFF; font-size: 0.95rem;">
+                <input type="password" name="password" value="" placeholder="••••••••••••" required style="width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.3); color: #FFF; font-size: 0.95rem;">
             </div>
 
             <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-size: 1rem;">
                 Sign In to Rider Account
             </button>
         </form>
+        @include('auth.partials._demo-accounts', ['demoAccounts' => $demoAccounts ?? \App\Services\DemoAccountRegistry::getDemoAccounts('rider'), 'roleKey' => 'rider'])
 
         <div style="margin-top: 24px; padding: 16px; border-radius: var(--radius-md); background: rgba(108, 42, 138, 0.15); border: 1px solid rgba(108, 42, 138, 0.3); font-size: 0.82rem; color: #D8B4FE; text-align: center;">
             <div style="font-weight: 700; margin-bottom: 4px;">📲 Active Deliveries Require Mobile App</div>

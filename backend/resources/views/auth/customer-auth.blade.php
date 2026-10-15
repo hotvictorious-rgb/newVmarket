@@ -149,6 +149,8 @@
                     </button>
                 </form>
 
+                @include('auth.partials._demo-accounts', ['demoAccounts' => $demoAccounts ?? \App\Services\DemoAccountRegistry::getDemoAccounts('customer'), 'roleKey' => 'customer'])
+
                 <!-- Bottom Registration Prompt (Zero-Reload Toggle) -->
                 <div style="margin-top: 26px; padding-top: 20px; border-top: 1px solid #F1F5F9; font-size: 13px; text-align: center; color: #64748B;">
                     New to Victorious MARKET? 
@@ -278,6 +280,8 @@
                         <span>→</span>
                     </button>
                 </form>
+
+                @include('auth.partials._demo-accounts', ['demoAccounts' => $demoAccounts ?? \App\Services\DemoAccountRegistry::getDemoAccounts('customer'), 'roleKey' => 'customer'])
 
                 <!-- Bottom Login Prompt (Zero-Reload Toggle) -->
                 <div style="margin-top: 26px; padding-top: 20px; border-top: 1px solid #F1F5F9; font-size: 13px; text-align: center; color: #64748B;">

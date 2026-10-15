@@ -123,4 +123,17 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Demo Mode Switch
+    |--------------------------------------------------------------------------
+    |
+    | Enables rapid testing demo account switchers.
+    | HARD INVARIANT: Always suppressed in production.
+    |
+    */
+
+    'demo_mode' => (bool) env('DEMO_MODE', false),
+
 ];

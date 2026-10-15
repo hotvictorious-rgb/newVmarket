@@ -18,6 +18,7 @@ use App\Models\Shop;
 use App\Models\State;
 use App\Models\User;
 use App\Models\VendorProfile;
+use App\Models\VendorEmployeeProfile;
 use App\Services\OrderSettlementService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -1819,28 +1820,14 @@ class PortalController extends Controller
     // DEFENSIVE PORTAL ENTITY RESOLVERS (Zero-Null Guarantee Across All 7 Roles)
     // =========================================================================
 
-    private function resolveCustomerUser(): User
+        private function resolveCustomerUser(): User
     {
         $user = Auth::user();
         if ($user && $user->user_type === 'customer') {
             return $user;
         }
 
-        $customer = User::where('user_type', 'customer')->first();
-        if (!$customer) {
-            $customer = User::firstOrCreate(
-                ['email' => 'customer@victoriousmarket.com.ng'],
-                [
-                    'name' => 'Emeka Okonkwo',
-                    'phone' => '08012345678',
-                    'password' => bcrypt('Password123!'),
-                    'user_type' => 'customer',
-                    'is_active' => true,
-                ]
-            );
-        }
-
-        return $customer;
+        abort(403, 'Unauthorized principal: Customer access required.');
     }
 
     private function resolveVendorProfile(): VendorProfile
@@ -1850,111 +1837,85 @@ class PortalController extends Controller
             return $user->vendorProfile;
         }
 
-        $vendor = VendorProfile::with(['shops', 'user'])->first();
-        if (!$vendor) {
-            $vendorUser = User::firstOrCreate(
-                ['email' => 'vendor@victoriousmarket.com.ng'],
+        if ($user && $user->user_type === 'vendor') {
+            return VendorProfile::firstOrCreate(
+                ['user_id' => $user->id],
                 [
-                    'name' => 'Victor Bassey',
-                    'phone' => '08087654321',
-                    'password' => bcrypt('Password123!'),
-                    'user_type' => 'vendor',
-                    'is_active' => true,
-                ]
-            );
-
-            $vendor = VendorProfile::firstOrCreate(
-                ['user_id' => $vendorUser->id],
-                [
-                    'business_name' => 'Victor Tech Solutions',
-                    'business_phone' => '08087654321',
-                    'support_email' => 'vendor@victoriousmarket.com.ng',
+                    'business_name' => $user->name . ' Store',
+                    'business_phone' => $user->phone ?? '08087654321',
+                    'support_email' => $user->email,
                     'bank_name' => 'Zenith Bank PLC',
                     'bank_account_number' => '1012345678',
-                    'account_holder_name' => 'Victor Tech Solutions',
+                    'account_holder_name' => $user->name,
                     'kyc_status' => 'verified',
                     'marketplace_status' => 'active',
                 ]
             );
         }
 
-        return $vendor;
+        abort(403, 'Unauthorized principal: Vendor access required.');
     }
 
     private function resolvePrimaryShop(): Shop
     {
-        $shop = Shop::with('vendor')->first();
-        if (!$shop) {
+        $user = Auth::user();
+        if ($user && $user->user_type === 'vendor') {
             $vendor = $this->resolveVendorProfile();
-            $lga = Lga::where('name', 'Uyo')->first() ?? Lga::first();
-            $shop = Shop::firstOrCreate(
-                ['vendor_id' => $vendor->id],
-                [
-                    'name' => 'Victor Tech Uyo Flagship Plaza',
-                    'address' => 'Shop 12, Ibom Plaza Commercial Center, Uyo',
-                    'contact_phone' => '08087654321',
-                    'lga_id' => $lga ? $lga->id : 1,
-                    'operating_hours' => 'Mon-Sat: 8:00 AM - 6:00 PM',
-                    'is_active' => true,
-                ]
-            );
+            $shop = Shop::where('vendor_id', $vendor->id)->first();
+            if ($shop) return $shop;
         }
 
-        return $shop;
+        if ($user && $user->user_type === 'vendor_employee') {
+            $employee = VendorEmployeeProfile::where('user_id', $user->id)->with('shop')->first();
+            if ($employee && $employee->shop) {
+                return $employee->shop;
+            }
+        }
+
+        $shop = Shop::first();
+        if ($shop) return $shop;
+
+        abort(403, 'No shop found for authorized context.');
     }
 
     private function resolveLogisticsCompany(): LogisticsCompanyProfile
     {
-        $company = LogisticsCompanyProfile::with(['riders.user', 'hqLga'])->first();
-        if (!$company) {
-            $logisticsUser = User::firstOrCreate(
-                ['email' => 'logistics@victoriousmarket.com.ng'],
-                [
-                    'name' => 'Akwa Express Logistics Ltd',
-                    'phone' => '08055556666',
-                    'password' => bcrypt('Password123!'),
-                    'user_type' => 'logistics_company',
-                    'is_active' => true,
-                ]
-            );
+        $user = Auth::user();
+        if ($user && $user->logisticsCompanyProfile) {
+            return $user->logisticsCompanyProfile;
+        }
 
+        if ($user && $user->user_type === 'logistics_company') {
             $lga = Lga::where('name', 'Uyo')->first() ?? Lga::first();
-            $company = LogisticsCompanyProfile::firstOrCreate(
-                ['user_id' => $logisticsUser->id],
+            return LogisticsCompanyProfile::firstOrCreate(
+                ['user_id' => $user->id],
                 [
-                    'company_name' => 'Akwa Express Logistics Ltd',
+                    'company_name' => $user->name,
                     'hq_lga_id' => $lga ? $lga->id : 1,
-                    'fleet_size' => 12,
+                    'fleet_size' => 10,
                     'is_active' => true,
                 ]
             );
         }
 
-        return $company;
+        abort(403, 'Unauthorized principal: Logistics company access required.');
     }
 
     private function resolveRiderProfile(): RiderProfile
     {
-        $rider = RiderProfile::with(['user', 'assignedLga', 'logisticsCompany'])->first();
-        if (!$rider) {
-            $riderUser = User::firstOrCreate(
-                ['email' => 'rider@victoriousmarket.com.ng'],
-                [
-                    'name' => 'Edidiong Udoh',
-                    'phone' => '08033334444',
-                    'password' => bcrypt('Password123!'),
-                    'user_type' => 'rider',
-                    'is_active' => true,
-                ]
-            );
+        $user = Auth::user();
+        if ($user && $user->riderProfile) {
+            return $user->riderProfile;
+        }
 
-            $company = $this->resolveLogisticsCompany();
+        if ($user && $user->user_type === 'rider') {
+            $company = LogisticsCompanyProfile::first();
             $lga = Lga::where('name', 'Uyo')->first() ?? Lga::first();
 
-            $rider = RiderProfile::firstOrCreate(
-                ['user_id' => $riderUser->id],
+            return RiderProfile::firstOrCreate(
+                ['user_id' => $user->id],
                 [
-                    'logistics_company_id' => $company->id,
+                    'logistics_company_id' => $company ? $company->id : 1,
                     'assigned_lga_id' => $lga ? $lga->id : 1,
                     'vehicle_type' => 'Motorcycle',
                     'vehicle_plate_number' => 'UYO-123-AK',
@@ -1964,6 +1925,6 @@ class PortalController extends Controller
             );
         }
 
-        return $rider;
+        abort(403, 'Unauthorized principal: Rider access required.');
     }
 }

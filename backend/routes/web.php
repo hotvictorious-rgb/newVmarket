@@ -53,13 +53,16 @@ Route::post('/rider/login', [WebAuthController::class, 'loginRider'])->name('rid
 // Logout Route
 Route::post('/logout', [WebAuthController::class, 'logout'])->name('logout');
 
+// Gated Demo Authentication (Strictly forbidden in production)
+Route::post('/demo/quick-login', [WebAuthController::class, 'quickDemoLogin'])->name('demo.quick_login');
+
 
 // ==========================================
 // THE 7 DISTINCT ROLE DASHBOARDS
 // ==========================================
 
 // 1. Super Admin Command Tower
-Route::prefix('admin')->group(function () {
+Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/', [PortalController::class, 'adminDashboard'])->name('admin.dashboard');
     Route::get('/delivery-lanes', [PortalController::class, 'adminDeliveryLanesPage'])->name('admin.delivery_lanes.index');
     Route::get('/settlements', [PortalController::class, 'adminSettlementsPage'])->name('admin.settlements.index');
@@ -72,7 +75,7 @@ Route::prefix('admin')->group(function () {
 });
 
 // 2. Admin Staff (Support, Moderation, Operations)
-Route::prefix('admin-staff')->group(function () {
+Route::middleware(['role:admin_employee'])->prefix('admin-staff')->group(function () {
     Route::get('/', [PortalController::class, 'adminStaffDashboard'])->name('admin.staff.dashboard');
     Route::get('/moderation', [PortalController::class, 'adminStaffModerationPage'])->name('admin.staff.moderation.index');
     Route::get('/orders', [PortalController::class, 'adminStaffOrdersPage'])->name('admin.staff.orders.index');
@@ -81,7 +84,7 @@ Route::prefix('admin-staff')->group(function () {
 });
 
 // 3. Vendor Merchant Desk
-Route::prefix('vendor')->group(function () {
+Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
     Route::get('/', [PortalController::class, 'vendorDashboard'])->name('vendor.dashboard');
     Route::get('/products', [PortalController::class, 'vendorProductsPage'])->name('vendor.products.index');
     Route::get('/orders', [PortalController::class, 'vendorOrdersPage'])->name('vendor.orders.index');
@@ -93,7 +96,7 @@ Route::prefix('vendor')->group(function () {
 });
 
 // 4. In-Shop Branch Counter Staff Terminal
-Route::prefix('counter')->group(function () {
+Route::middleware(['role:vendor_employee'])->prefix('counter')->group(function () {
     Route::get('/', [PortalController::class, 'counterDashboard'])->name('counter.dashboard');
     Route::get('/inspections', [PortalController::class, 'counterInspectionsPage'])->name('counter.inspections.index');
     Route::get('/handovers', [PortalController::class, 'counterHandoversPage'])->name('counter.handovers.index');
@@ -103,7 +106,7 @@ Route::prefix('counter')->group(function () {
 });
 
 // 5. Logistics Fleet Operations Desk
-Route::prefix('logistics')->group(function () {
+Route::middleware(['role:logistics_company'])->prefix('logistics')->group(function () {
     Route::get('/', [PortalController::class, 'logisticsDashboard'])->name('logistics.dashboard');
     Route::get('/riders', [PortalController::class, 'logisticsRidersPage'])->name('logistics.riders.index');
     Route::get('/waybills', [PortalController::class, 'logisticsWaybillsPage'])->name('logistics.waybills.index');
@@ -111,7 +114,7 @@ Route::prefix('logistics')->group(function () {
 });
 
 // 6. Delivery Rider Dispatch Cockpit
-Route::prefix('rider')->group(function () {
+Route::middleware(['role:rider'])->prefix('rider')->group(function () {
     Route::get('/', [PortalController::class, 'riderDashboard'])->name('rider.dashboard');
     Route::get('/deliveries', [PortalController::class, 'riderDeliveriesPage'])->name('rider.deliveries.index');
     Route::get('/pickup', [PortalController::class, 'riderPickupPage'])->name('rider.pickup.index');
@@ -123,7 +126,7 @@ Route::prefix('rider')->group(function () {
 });
 
 // 7. Customer Shopper Portal
-Route::prefix('customer')->group(function () {
+Route::middleware(['role:customer'])->prefix('customer')->group(function () {
     Route::get('/', [PortalController::class, 'customerDashboard'])->name('customer.dashboard');
     Route::get('/orders', [PortalController::class, 'customerOrdersPage'])->name('customer.orders.index');
     Route::get('/reservations', [PortalController::class, 'customerReservationsPage'])->name('customer.reservations.index');
@@ -138,7 +141,7 @@ Route::prefix('customer')->group(function () {
 // ==========================================
 
 // Stage 1: Super Admin Command Routes
-Route::prefix('admin')->group(function () {
+Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/delivery-lanes', [PortalController::class, 'adminStoreDeliveryLane'])->name('admin.delivery_lanes.store');
     Route::post('/delivery-lanes/zonal-rates', [PortalController::class, 'adminUpdateZonalRates'])->name('admin.delivery_lanes.zonal');
     Route::delete('/delivery-lanes/{id}', [PortalController::class, 'adminDeleteDeliveryLane'])->name('admin.delivery_lanes.delete');
@@ -148,7 +151,7 @@ Route::prefix('admin')->group(function () {
 });
 
 // Stage 2: Vendor Commerce Desk Routes
-Route::prefix('vendor')->group(function () {
+Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
     Route::post('/products', [PortalController::class, 'vendorStoreProduct'])->name('vendor.products.store');
     Route::post('/products/{id}/refresh', [PortalController::class, 'vendorRefreshProductFreshness'])->name('vendor.products.refresh');
     Route::post('/shops', [PortalController::class, 'vendorStoreShop'])->name('vendor.shops.store');
@@ -163,6 +166,6 @@ Route::get('/reservation/{code}', [PortalController::class, 'showReservationPass
 Route::get('/order/{order_number}', [PortalController::class, 'showOrderStatus'])->name('order.status');
 
 // Stage 4: Rider Merchant Pickup Route
-Route::prefix('rider')->group(function () {
+Route::middleware(['role:rider'])->prefix('rider')->group(function () {
     Route::post('/verify-pickup-otp', [PortalController::class, 'riderVerifyPickupOtp'])->name('rider.verify.pickup.otp');
 });

@@ -21,10 +21,12 @@ class User extends Authenticatable
         'avatar',
         'fcm_token',
         'password',
+        'is_demo',
     ];
 
     protected $hidden = [
         'password',
+        'is_demo',
         'remember_token',
     ];
 
@@ -33,7 +35,18 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_demo' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (User $user) {
+            // Strict Invariant: Super Admin accounts can NEVER be demo accounts under any circumstance.
+            if ($user->user_type === 'super_admin') {
+                $user->is_demo = false;
+            }
+        });
     }
 
     // Role verification helpers
