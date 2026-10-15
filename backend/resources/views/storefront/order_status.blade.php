@@ -291,8 +291,8 @@
             <button type="button" onclick="navigator.clipboard.writeText('{{ $order->fulfillment_type === 'in_shop_pickup' ? $order->pickup_verification_code : $order->verification_code }}'); alert('PIN copied to clipboard: {{ $order->fulfillment_type === 'in_shop_pickup' ? $order->pickup_verification_code : $order->verification_code }}');" style="background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.25); color: #FFFFFF; font-weight: 700; font-size: 12.5px; padding: 9px 18px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
                 <span>📋 Copy PIN</span>
             </button>
-            <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $order->shop->phone ?? '09118949035') }}?text=Hello%20{{ urlencode($order->shop->name) }},%20I%20have%20placed%20Order%20{{ $order->order_number }}" target="_blank" style="background: #25D366; color: #FFFFFF; font-weight: 700; font-size: 12.5px; padding: 9px 18px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
-                <span>💬 WhatsApp Merchant</span>
+            <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', \App\Models\SystemSetting::get('support_whatsapp', '09118949035')) }}?text=Hello%20Victorious%20Market%20Support,%20I%20need%20assistance%20with%20Order%20{{ $order->order_number }}" target="_blank" style="background: #25D366; color: #FFFFFF; font-weight: 700; font-size: 12.5px; padding: 9px 18px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+                <span>💬 VMarket Support Desk</span>
             </a>
         </div>
     </div>

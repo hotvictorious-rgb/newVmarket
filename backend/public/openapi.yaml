@@ -10,6 +10,37 @@ servers:
     description: Production Environment
 
 paths:
+  /api/v1/config:
+    get:
+      summary: Get remote system and mobile app runtime configuration
+      description: Returns dynamic branding, support phone, email, currency symbol, active corridors, version enforcement, and maintenance flags.
+      responses:
+        '200':
+          description: Remote configuration payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      app_name: { type: string, example: 'Victorious MARKET' }
+                      support_phone: { type: string, example: '09118949035' }
+                      support_email: { type: string, example: 'support@victoriousmarket.com.ng' }
+                      call_to_order_phone: { type: string, example: '+2349118949035' }
+                      currency_symbol: { type: string, example: '₦' }
+                      currency_code: { type: string, example: 'NGN' }
+                      cashback_percentage: { type: number, example: 5.0 }
+                      active_corridors:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: integer }
+                            name: { type: string }
+
   /api/v1/auth/register:
     post:
       summary: Register a new customer

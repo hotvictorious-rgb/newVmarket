@@ -52,6 +52,13 @@ class StorefrontWiringAndShopTest extends TestCase
         $response->assertSee('ACCREDITED MERCHANT');
         $response->assertSee('Store Operating Hours');
 
+        // Strict Platform Anti-Disintermediation Rules: Never expose vendor direct phone or WhatsApp
+        if (!empty($shop->phone)) {
+            $response->assertDontSee($shop->phone);
+        }
+        $response->assertDontSee('Call Store');
+        $response->assertDontSee('WhatsApp Merchant');
+
         // Shop's products should appear in the catalog
         $shopProduct = Product::where('shop_id', $shop->id)->first();
         if ($shopProduct) {

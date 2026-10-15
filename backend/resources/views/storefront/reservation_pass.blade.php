@@ -47,8 +47,8 @@
                 <div style="font-size: 12.5px; color: #64748B; margin-bottom: 6px;">
                     📍 {{ $reservation->shop->address }} ({{ $reservation->shop->lga->name ?? 'Uyo' }} LGA)
                 </div>
-                <div style="font-size: 12px; color: #64748B;">
-                    📞 Counter Support: <strong>{{ $reservation->shop->phone }}</strong>
+                <div style="font-size: 12px; color: #059669; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                    <span>🛡️</span> Verified Merchant Counter &bull; Zero Upfront Fee
                 </div>
             </div>
 

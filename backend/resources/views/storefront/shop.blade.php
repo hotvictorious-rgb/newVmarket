@@ -62,16 +62,18 @@
                 </div>
             </div>
 
-            <!-- Right: Direct Phone & WhatsApp CTA -->
+            <!-- Right: Platform Escrow & Support Desk Badge -->
             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                @if(!empty($shop->phone))
-                    <a href="tel:{{ $shop->phone }}" style="background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.25); color: #FFFFFF; font-weight: 700; font-size: 13px; padding: 10px 18px; border-radius: 10px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s ease;">
-                        <span>📞 Call Store</span>
-                    </a>
-                    <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $shop->phone) }}" target="_blank" style="background: #25D366; color: #FFFFFF; font-weight: 700; font-size: 13px; padding: 10px 18px; border-radius: 10px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(37, 211, 102, 0.35); transition: all 0.2s ease;">
-                        <span>💬 WhatsApp</span>
-                    </a>
-                @endif
+                <div style="background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); padding: 8px 16px; border-radius: 10px; display: flex; align-items: center; gap: 8px; color: #FFFFFF; font-size: 12.5px;">
+                    <span style="color: #FFD700; font-size: 16px;">🛡️</span>
+                    <div>
+                        <strong style="display: block; font-size: 12.5px; line-height: 1.2;">Paystack Escrow Protected</strong>
+                        <span style="color: #CBD5E1; font-size: 11px;">100% Platform Settled &bull; Zero Direct Risk</span>
+                    </div>
+                </div>
+                <button type="button" onclick="vmOpenPolicyModal('contact')" style="background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.25); color: #FFFFFF; font-weight: 700; font-size: 12.5px; padding: 10px 16px; border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                    <span>📞 Help Desk</span>
+                </button>
             </div>
 
         </div>

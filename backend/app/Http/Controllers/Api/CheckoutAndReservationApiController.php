@@ -190,7 +190,7 @@ class CheckoutAndReservationApiController extends Controller
     public function showPickupReservation(string $code): JsonResponse
     {
         $reservation = PickupReservation::where('reservation_code', strtoupper(trim($code)))
-            ->with(['shop:id,name,address,phone,lga_id', 'product:id,name,thumbnail,unit_price'])
+            ->with(['shop:id,name,address,lga_id', 'product:id,name,thumbnail,unit_price'])
             ->first();
 
         if (!$reservation) {

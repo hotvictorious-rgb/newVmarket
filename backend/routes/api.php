@@ -9,10 +9,14 @@ use App\Http\Controllers\Api\FulfillmentApiController;
 use App\Http\Controllers\Api\GeographyApiController;
 use App\Http\Controllers\Api\ProductApiController;
 use App\Http\Controllers\Api\RiderTerminalApiController;
+use App\Http\Controllers\Api\SystemConfigApiController;
 use App\Http\Controllers\Api\VendorTerminalApiController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
+    // 0. Remote System & Mobile App Dynamic Configuration (Public)
+    Route::get('config', [SystemConfigApiController::class, 'show']);
+
     // 1. Canonical Geography (Public)
     Route::prefix('geography')->group(function () {
         Route::get('countries', [GeographyApiController::class, 'countries']);

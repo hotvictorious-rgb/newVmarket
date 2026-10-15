@@ -209,4 +209,31 @@ class CustomerApiContractTest extends TestCase
             'payment_method' => 'paystack',
         ]);
     }
+
+    public function test_remote_config_endpoint_returns_dynamic_system_and_corridor_controls(): void
+    {
+        $response = $this->getJson('/api/v1/config');
+        $response->assertStatus(200);
+        $response->assertJson([
+            'status' => true,
+            'data' => [
+                'currency_symbol' => '₦',
+                'currency_code' => 'NGN',
+                'cashback_percentage' => 5.0,
+                'version_control' => [
+                    'min_version' => '1.0.0',
+                    'force_update' => false,
+                ],
+                'maintenance_mode' => [
+                    'is_active' => false,
+                ],
+            ],
+        ]);
+
+        $this->assertNotEmpty($response->json('data.app_name'));
+        $this->assertNotEmpty($response->json('data.support_phone'));
+        $this->assertNotEmpty($response->json('data.support_email'));
+        $this->assertIsArray($response->json('data.active_corridors'));
+        $this->assertNotEmpty($response->json('data.active_corridors'));
+    }
 }

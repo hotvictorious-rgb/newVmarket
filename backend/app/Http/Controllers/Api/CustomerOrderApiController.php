@@ -376,7 +376,6 @@ class CustomerOrderApiController extends Controller
                 'id' => $order->shop->id,
                 'name' => $order->shop->name,
                 'address' => $order->shop->address,
-                'phone' => $order->shop->contact_phone,
             ] : null,
             'rider' => $order->rider ? [
                 'name' => $order->rider->user->name ?? 'Assigned Rider',
