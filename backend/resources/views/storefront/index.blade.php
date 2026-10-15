@@ -215,28 +215,28 @@
             </div>
 
             <div class="vm-discovery-quad-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
-                <a href="#catalog" class="vm-discovery-tile" style="text-decoration: none;">
+                <a href="{{ route('storefront', ['category' => 'home-appliances', 'search' => 'Blender']) }}" class="vm-discovery-tile" style="text-decoration: none;">
                     <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(234, 88, 12, 0.06); display: flex; align-items: center; justify-content: center; color: #EA580C;">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 13.8V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9.8"/><rect x="4" y="14" width="16" height="8" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
                     </div>
                     <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Blenders & Grinders</span>
                 </a>
 
-                <a href="#catalog" class="vm-discovery-tile" style="text-decoration: none;">
+                <a href="{{ route('storefront', ['category' => 'home-appliances', 'search' => 'Microwave']) }}" class="vm-discovery-tile" style="text-decoration: none;">
                     <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(234, 88, 12, 0.06); display: flex; align-items: center; justify-content: center; color: #EA580C;">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/><circle cx="18" cy="9" r="1"/><circle cx="18" cy="15" r="1"/></svg>
                     </div>
                     <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Microwaves & Ovens</span>
                 </a>
 
-                <a href="#catalog" class="vm-discovery-tile" style="text-decoration: none;">
+                <a href="{{ route('storefront', ['category' => 'home-appliances', 'search' => 'Cooker']) }}" class="vm-discovery-tile" style="text-decoration: none;">
                     <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(234, 88, 12, 0.06); display: flex; align-items: center; justify-content: center; color: #EA580C;">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="2"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/><circle cx="16" cy="16" r="2"/></svg>
                     </div>
                     <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Gas Cookers & Stoves</span>
                 </a>
 
-                <a href="#catalog" class="vm-discovery-tile" style="text-decoration: none;">
+                <a href="{{ route('storefront', ['category' => 'home-appliances', 'search' => 'Fryer']) }}" class="vm-discovery-tile" style="text-decoration: none;">
                     <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(234, 88, 12, 0.06); display: flex; align-items: center; justify-content: center; color: #EA580C;">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                     </div>
@@ -245,7 +245,7 @@
             </div>
 
             <div class="vm-discovery-card-footer">
-                <a href="#catalog" class="vm-discovery-card-link" style="font-size: 12.5px; font-weight: 700; color: var(--vm-primary); text-decoration: none;">
+                <a href="{{ route('storefront', ['category' => 'home-appliances']) }}" class="vm-discovery-card-link" style="font-size: 12.5px; font-weight: 700; color: var(--vm-primary); text-decoration: none;">
                     Explore Kitchen Appliances →
                 </a>
             </div>
@@ -262,28 +262,28 @@
             </div>
 
             <div class="vm-discovery-quad-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
-                <a href="#catalog" class="vm-discovery-tile" style="text-decoration: none;">
+                <a href="{{ route('storefront', ['category' => 'electronics-gadgets', 'search' => 'Phone']) }}" class="vm-discovery-tile" style="text-decoration: none;">
                     <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(94, 23, 235, 0.06); display: flex; align-items: center; justify-content: center; color: var(--vm-primary);">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
                     </div>
                     <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Smartphones & iPhones</span>
                 </a>
 
-                <a href="#catalog" class="vm-discovery-tile" style="text-decoration: none;">
+                <a href="{{ route('storefront', ['category' => 'electronics-gadgets', 'search' => 'Laptop']) }}" class="vm-discovery-tile" style="text-decoration: none;">
                     <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(94, 23, 235, 0.06); display: flex; align-items: center; justify-content: center; color: var(--vm-primary);">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                     </div>
                     <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Laptops & Computers</span>
                 </a>
 
-                <a href="#catalog" class="vm-discovery-tile" style="text-decoration: none;">
+                <a href="{{ route('storefront', ['category' => 'electronics-gadgets', 'search' => 'Audio']) }}" class="vm-discovery-tile" style="text-decoration: none;">
                     <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(94, 23, 235, 0.06); display: flex; align-items: center; justify-content: center; color: var(--vm-primary);">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
                     </div>
                     <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Audio & Headphones</span>
                 </a>
 
-                <a href="#catalog" class="vm-discovery-tile" style="text-decoration: none;">
+                <a href="{{ route('storefront', ['category' => 'electronics-gadgets', 'search' => 'Power']) }}" class="vm-discovery-tile" style="text-decoration: none;">
                     <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(94, 23, 235, 0.06); display: flex; align-items: center; justify-content: center; color: var(--vm-primary);">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><polygon points="13 7 9 13 12 13 11 17 15 11 12 11 13 7"/></svg>
                     </div>
@@ -292,55 +292,55 @@
             </div>
 
             <div class="vm-discovery-card-footer">
-                <a href="#catalog" class="vm-discovery-card-link" style="font-size: 12.5px; font-weight: 700; color: var(--vm-primary); text-decoration: none;">
+                <a href="{{ route('storefront', ['category' => 'electronics-gadgets']) }}" class="vm-discovery-card-link" style="font-size: 12.5px; font-weight: 700; color: var(--vm-primary); text-decoration: none;">
                     Explore All Tech Deals →
                 </a>
             </div>
         </div>
 
-        <!-- Card 4: Start Looking Sharp -->
+        <!-- Card 4: Farm Fresh & Groceries -->
         <div class="vm-discovery-card" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: var(--vm-shadow-xs);">
             <div class="vm-discovery-card-header" style="margin-bottom: 14px;">
-                <div class="vm-discovery-badge-pill" style="display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 999px; background: rgba(219, 39, 119, 0.1); color: #DB2777; margin-bottom: 6px;">
-                    <span class="vm-badge-dot" style="width: 5px; height: 5px; border-radius: 50%; background: #DB2777;"></span>
-                    <span>FASHION & BEAUTY</span>
+                <div class="vm-discovery-badge-pill" style="display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 999px; background: rgba(16, 185, 129, 0.1); color: #059669; margin-bottom: 6px;">
+                    <span class="vm-badge-dot" style="width: 5px; height: 5px; border-radius: 50%; background: #059669;"></span>
+                    <span>FRESH & GROCERIES</span>
                 </div>
-                <h3 class="vm-discovery-card-title" style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0;">Start Looking Sharp</h3>
+                <h3 class="vm-discovery-card-title" style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0;">Akwa Ibom Fresh Harvest</h3>
             </div>
 
             <div class="vm-discovery-quad-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
-                <a href="#catalog" class="vm-discovery-tile" style="text-decoration: none;">
-                    <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(219, 39, 119, 0.06); display: flex; align-items: center; justify-content: center; color: #DB2777;">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.5a2 2 0 0 0 1.54 1.63L6 11.2V20a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8.8l1.6-.38a2 2 0 0 0 1.54-1.63l.58-3.5a2 2 0 0 0-1.34-2.23z"/></svg>
+                <a href="{{ route('storefront', ['category' => 'groceries-farm-produce', 'search' => 'Produce']) }}" class="vm-discovery-tile" style="text-decoration: none;">
+                    <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(16, 185, 129, 0.06); display: flex; align-items: center; justify-content: center; color: #059669; font-size: 24px;">
+                        🥬
                     </div>
-                    <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Men’s Clothing</span>
+                    <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Fresh Produce</span>
                 </a>
 
-                <a href="#catalog" class="vm-discovery-tile" style="text-decoration: none;">
-                    <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(219, 39, 119, 0.06); display: flex; align-items: center; justify-content: center; color: #DB2777;">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12l3 7-9 12L3 10l3-7z"/></svg>
+                <a href="{{ route('storefront', ['category' => 'groceries-farm-produce', 'search' => 'Rice']) }}" class="vm-discovery-tile" style="text-decoration: none;">
+                    <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(16, 185, 129, 0.06); display: flex; align-items: center; justify-content: center; color: #059669; font-size: 24px;">
+                        🌾
                     </div>
-                    <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Women’s Fashion</span>
+                    <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Grains & Staples</span>
                 </a>
 
-                <a href="#catalog" class="vm-discovery-tile" style="text-decoration: none;">
-                    <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(219, 39, 119, 0.06); display: flex; align-items: center; justify-content: center; color: #DB2777;">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 17h20v2H2zM4 17l2-7h12l2 7z"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/></svg>
+                <a href="{{ route('storefront', ['category' => 'groceries-farm-produce', 'search' => 'Oil']) }}" class="vm-discovery-tile" style="text-decoration: none;">
+                    <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(16, 185, 129, 0.06); display: flex; align-items: center; justify-content: center; color: #059669; font-size: 24px;">
+                        🫒
                     </div>
-                    <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Shoes & Sneakers</span>
+                    <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Cooking Oils</span>
                 </a>
 
-                <a href="#catalog" class="vm-discovery-tile" style="text-decoration: none;">
-                    <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(219, 39, 119, 0.06); display: flex; align-items: center; justify-content: center; color: #DB2777;">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+                <a href="{{ route('storefront', ['category' => 'groceries-farm-produce', 'search' => 'Honey']) }}" class="vm-discovery-tile" style="text-decoration: none;">
+                    <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: rgba(16, 185, 129, 0.06); display: flex; align-items: center; justify-content: center; color: #059669; font-size: 24px;">
+                        🍯
                     </div>
-                    <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Beauty & Skincare</span>
+                    <span class="vm-discovery-tile-caption" style="display: block; font-size: 11px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Honey & Natural</span>
                 </a>
             </div>
 
             <div class="vm-discovery-card-footer">
-                <a href="#catalog" class="vm-discovery-card-link" style="font-size: 12.5px; font-weight: 700; color: var(--vm-primary); text-decoration: none;">
-                    Discover Trending Fashion →
+                <a href="{{ route('storefront', ['category' => 'groceries-farm-produce']) }}" class="vm-discovery-card-link" style="font-size: 12.5px; font-weight: 700; color: var(--vm-primary); text-decoration: none;">
+                    Discover Fresh Market →
                 </a>
             </div>
         </div>
@@ -386,19 +386,23 @@
             <a href="#merchants" class="vm-section-link" style="font-size: 13px; font-weight: 700; color: var(--vm-info); text-decoration: none;">All Stores →</a>
         </div>
 
-        <div class="vm-merchants-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+        <div class="vm-merchants-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
             @forelse($shops as $shop)
-                <div class="vm-merchant-box" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 14px; box-shadow: var(--vm-shadow-xs);">
+                <a href="{{ route('shop.storefront', $shop->slug) }}" class="vm-merchant-box" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 14px; box-shadow: var(--vm-shadow-xs); text-decoration: none; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);">
                     <div style="width: 56px; height: 56px; border-radius: 10px; background: #F8FAFC; border: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;">
-                        <img src="{{ asset('assets/img/vm_icon.jpg') }}" alt="{{ $shop->name }}" style="width: 100%; height: 100%; object-fit: cover;">
+                        <img src="{{ $shop->logo_url ?? $shop->image_path ?? asset('assets/img/vm_icon.jpg') }}" alt="{{ $shop->name }}" style="width: 100%; height: 100%; object-fit: cover;">
                     </div>
-                    <div class="vm-merchant-details">
-                        <strong class="vm-merchant-name" style="display: block; font-size: 14px; font-weight: 700; color: #0F172A;">{{ $shop->name }}</strong>
-                        <span class="vm-merchant-location" style="display: block; font-size: 12px; color: #64748B; margin-top: 2px;">
-                            📍 {{ $shop->lga->name ?? 'Uyo' }}, Akwa Ibom • In-Shop Ready
+                    <div class="vm-merchant-details" style="flex-grow: 1; min-width: 0;">
+                        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+                            <strong class="vm-merchant-name" style="font-size: 14px; font-weight: 700; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $shop->name }}</strong>
+                            <span style="font-size: 9.5px; background: #ECFDF5; color: #059669; font-weight: 800; padding: 1px 6px; border-radius: 4px; flex-shrink: 0;">VERIFIED</span>
+                        </div>
+                        <span class="vm-merchant-location" style="display: block; font-size: 12px; color: #64748B;">
+                            📍 {{ $shop->lga->name ?? 'Uyo' }}, Akwa Ibom &bull; 🕒 {{ substr($shop->pickup_opening_time ?? '08:00', 0, 5) }} - {{ substr($shop->pickup_closing_time ?? '18:00', 0, 5) }}
                         </span>
                     </div>
-                </div>
+                    <span style="color: var(--vm-primary); font-size: 18px; font-weight: 700; flex-shrink: 0;">&rsaquo;</span>
+                </a>
             @empty
                 <div class="vm-merchant-box" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 14px;">
                     <div style="width: 56px; height: 56px; border-radius: 10px; background: #F8FAFC; border: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;">
@@ -446,67 +450,6 @@
 
 @push('scripts')
 <script>
-    // Client-side cart manager
-    let cart = [];
-
-    document.querySelectorAll('.vm-add-cart-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            const id = this.dataset.id;
-            const name = this.dataset.name;
-            const price = parseFloat(this.dataset.price);
-
-            const existing = cart.find(item => item.id === id);
-            if (existing) {
-                existing.qty += 1;
-            } else {
-                cart.push({ id, name, price, qty: 1 });
-            }
-
-            renderCart();
-            // Open cart drawer
-            document.getElementById('vmCartDrawer').classList.add('active');
-            document.getElementById('vmCartOverlay').classList.add('active');
-        });
-    });
-
-    function renderCart() {
-        const count = cart.reduce((sum, item) => sum + item.qty, 0);
-        const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-        const cashback = subtotal * 0.05;
-
-        document.getElementById('vmHeaderCartBadge').textContent = count;
-        document.getElementById('vmCartBadgeCount').textContent = count + ' items';
-        document.getElementById('vmCartSubtotal').textContent = '₦' + subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 });
-
-        const container = document.getElementById('vmCartItemsContainer');
-        if (cart.length === 0) {
-            container.innerHTML = `
-                <div style="text-align: center; padding: 40px 10px; color: #94A3B8;">
-                    <span style="font-size: 48px; display: block; margin-bottom: 12px;">🛍️</span>
-                    <strong style="color: #334155; font-size: 16px; display: block; margin-bottom: 6px;">Your cart is empty</strong>
-                    <p style="font-size: 13px;">Explore verified items with 5% cashback reward</p>
-                </div>
-            `;
-        } else {
-            container.innerHTML = cart.map(item => `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #F1F5F9;">
-                    <div style="flex-grow: 1; padding-right: 10px;">
-                        <strong style="font-size: 13px; color: #0F172A; display: block;">${item.name}</strong>
-                        <span style="font-size: 12px; color: var(--vm-info); font-weight: 700;">₦${item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 12px; font-weight: 600; color: #475569;">x${item.qty}</span>
-                        <button type="button" onclick="removeItem('${item.id}')" style="background: none; border: none; color: #EF4444; cursor: pointer; font-size: 14px;">🗑️</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-    }
-
-    window.removeItem = function (id) {
-        cart = cart.filter(item => item.id !== id);
-        renderCart();
-    };
     // Hero Slider Carousel Script
     let currentHeroSlide = 0;
     const heroSlides = document.querySelectorAll('.vm-hero-slide-item');
