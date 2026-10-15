@@ -971,6 +971,101 @@ class PortalController extends Controller
     }
 
     /**
+     * Customer Orders & Live Tracking Page
+     */
+    public function customerOrdersPage()
+    {
+        $user = Auth::user();
+        $customer = ($user && $user->user_type === 'customer') ? $user : User::where('user_type', 'customer')->first();
+
+        $orders = Order::where('customer_id', $customer->id)
+            ->with(['shop:id,name,address', 'vendor:id,business_name'])
+            ->latest()
+            ->get();
+
+        $total_order = $orders->count();
+        $wishlists = 3;
+
+        return view('customer.orders', compact('customer', 'orders', 'total_order', 'wishlists'));
+    }
+
+    /**
+     * Customer Pickup Reservations Page
+     */
+    public function customerReservationsPage()
+    {
+        $user = Auth::user();
+        $customer = ($user && $user->user_type === 'customer') ? $user : User::where('user_type', 'customer')->first();
+
+        $orders = Order::where('customer_id', $customer->id)->get();
+        $total_order = $orders->count();
+
+        $reservations = PickupReservation::where('customer_id', $customer->id)
+            ->with(['product:id,name,unit_price', 'shop:id,name,address'])
+            ->latest()
+            ->get();
+
+        if ($reservations->isEmpty()) {
+            $reservations = PickupReservation::with(['product:id,name,unit_price', 'shop:id,name,address'])->latest()->take(2)->get();
+        }
+
+        $wishlists = 3;
+
+        return view('customer.reservations', compact('customer', 'reservations', 'total_order', 'wishlists'));
+    }
+
+    /**
+     * Customer 5% Cashback Rewards Wallet Page
+     */
+    public function customerCashbackPage()
+    {
+        $user = Auth::user();
+        $customer = ($user && $user->user_type === 'customer') ? $user : User::where('user_type', 'customer')->first();
+
+        $orders = Order::where('customer_id', $customer->id)->get();
+        $total_order = $orders->count();
+
+        $cashbackLedger = CustomerCashbackLedger::where('customer_id', $customer->id)
+            ->latest()
+            ->take(20)
+            ->get();
+
+        $cashbackAvailable = CustomerCashbackLedger::where('customer_id', $customer->id)
+            ->where('status', 'matured')
+            ->sum('amount');
+
+        $cashbackPending = CustomerCashbackLedger::where('customer_id', $customer->id)
+            ->where('status', 'pending_maturation')
+            ->sum('amount');
+
+        $wishlists = 3;
+
+        return view('customer.cashback', compact(
+            'customer',
+            'cashbackLedger',
+            'cashbackAvailable',
+            'cashbackPending',
+            'total_order',
+            'wishlists'
+        ));
+    }
+
+    /**
+     * Customer Verified Delivery Addresses Page
+     */
+    public function customerAddressesPage()
+    {
+        $user = Auth::user();
+        $customer = ($user && $user->user_type === 'customer') ? $user : User::where('user_type', 'customer')->first();
+
+        $orders = Order::where('customer_id', $customer->id)->get();
+        $total_order = $orders->count();
+        $wishlists = 3;
+
+        return view('customer.addresses', compact('customer', 'total_order', 'wishlists'));
+    }
+
+    /**
      * Interactive Action: Admin manual settlement disburse
      */
     public function adminDisburseSettlement(Request $request, OrderSettlementService $settlementService)
@@ -1302,7 +1397,8 @@ class PortalController extends Controller
         $pickupCheck = $fulfillmentService->checkPickupAvailability($product->shop_id);
 
         $merchandiseSubtotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
-        $deliveryFee = $deliveryCheck['is_available'] ? $deliveryCheck['fee'] : '1000.00';
+        // If doorstep route is not available/suspended, default to free In-Store Pickup
+        $deliveryFee = $deliveryCheck['is_available'] ? $deliveryCheck['fee'] : '0.00';
         $totalPayable = \App\Services\BcMathService::add($merchandiseSubtotal, $deliveryFee);
 
         $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
@@ -1319,7 +1415,22 @@ class PortalController extends Controller
             $availableCashback = number_format((float)$cashbackSum, 2, '.', '');
         }
 
-        return view('storefront.checkout', compact('product', 'quantity', 'merchandiseSubtotal', 'deliveryFee', 'totalPayable', 'deliveryCheck', 'pickupCheck', 'destLga', 'lgas', 'allShops', 'availableCashback', 'activeCity'));
+        // Active and inactive lane configs originating from this shop's LGA for client-side instant check
+        $shopLgaId = $product->shop->lga_id ?? 69;
+        $activeLanesMap = DeliveryLane::where('origin_lga_id', $shopLgaId)
+            ->get()
+            ->mapWithKeys(function ($lane) {
+                return [$lane->destination_lga_id => [
+                    'is_active' => (bool)$lane->is_active,
+                    'base_fee' => (float)$lane->base_fee,
+                    'estimated_hours_min' => $lane->estimated_delivery_hours_min,
+                    'estimated_hours_max' => $lane->estimated_delivery_hours_max,
+                    'eta_text' => "{$lane->estimated_delivery_hours_min}-{$lane->estimated_delivery_hours_max} hours",
+                ]];
+            })
+            ->toArray();
+
+        return view('storefront.checkout', compact('product', 'quantity', 'merchandiseSubtotal', 'deliveryFee', 'totalPayable', 'deliveryCheck', 'pickupCheck', 'destLga', 'lgas', 'allShops', 'availableCashback', 'activeCity', 'activeLanesMap'));
     }
 
     public function processCheckout(Request $request)
@@ -1342,17 +1453,21 @@ class PortalController extends Controller
 
         $shop = !empty($validated['shop_id']) ? Shop::findOrFail($validated['shop_id']) : $product->shop;
 
-        // Delivery fee calculation
+        // Delivery fee calculation with corridor serviceability guard
         $deliveryFee = '0.00';
         $destLgaId = $validated['destination_lga_id'] ?? $shop->lga_id;
-        $lane = null;
 
         if ($validated['fulfillment_type'] === 'doorstep_delivery') {
-            $lane = DeliveryLane::where('origin_lga_id', $shop->lga_id)
-                ->where('destination_lga_id', $destLgaId)
-                ->where('is_active', true)
-                ->first();
-            $deliveryFee = $lane ? $lane->base_fee : '1000.00';
+            $fulfillmentService = new \App\Services\FulfillmentAvailabilityService();
+            $check = $fulfillmentService->checkDeliveryAvailability($shop->id, $destLgaId, $product->package_tier ?? 'standard');
+            
+            if (!$check['is_available']) {
+                return back()->withErrors([
+                    'fulfillment_type' => 'Doorstep delivery is currently suspended or unavailable for this route corridor. Please choose In-Store Pickup or choose a serviced destination LGA.'
+                ])->withInput();
+            }
+
+            $deliveryFee = $check['fee'];
         }
 
         $splits = \App\Services\BcMathService::computeCommercialSplits($merchandiseSubtotal, $deliveryFee);

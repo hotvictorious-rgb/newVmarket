@@ -125,6 +125,10 @@ Route::prefix('rider')->group(function () {
 // 7. Customer Shopper Portal
 Route::prefix('customer')->group(function () {
     Route::get('/', [PortalController::class, 'customerDashboard'])->name('customer.dashboard');
+    Route::get('/orders', [PortalController::class, 'customerOrdersPage'])->name('customer.orders.index');
+    Route::get('/reservations', [PortalController::class, 'customerReservationsPage'])->name('customer.reservations.index');
+    Route::get('/cashback', [PortalController::class, 'customerCashbackPage'])->name('customer.cashback.index');
+    Route::get('/addresses', [PortalController::class, 'customerAddressesPage'])->name('customer.addresses.index');
 });
 
 
