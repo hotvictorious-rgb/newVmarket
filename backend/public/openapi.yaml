@@ -1,0 +1,222 @@
+openapi: 3.0.3
+info:
+  title: Victorious MARKET Customer REST API
+  description: Authoritative OpenAPI 3.0 Specification for Victorious MARKET (Sovereign Omnichannel Retail & Directional Logistics Operating System).
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local Laravel Development Server
+  - url: https://shop.victoriousmarket.com.ng
+    description: Production Environment
+
+paths:
+  /api/v1/auth/register:
+    post:
+      summary: Register a new customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, phone, password]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                phone: { type: string }
+                password: { type: string, minLength: 8 }
+                user_type: { type: string, default: customer }
+      responses:
+        '201':
+          description: User registered successfully
+
+  /api/v1/auth/login:
+    post:
+      summary: Customer login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login, password]
+              properties:
+                login: { type: string, description: "Email or phone number" }
+                password: { type: string }
+      responses:
+        '200':
+          description: Login successful with Sanctum token
+
+  /api/v1/auth/me:
+    get:
+      summary: Current authenticated customer profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current customer profile
+
+  /api/v1/geography/countries:
+    get:
+      summary: Fetch active countries
+      responses:
+        '200':
+          description: List of countries
+
+  /api/v1/geography/states/{country_id}:
+    get:
+      summary: Fetch active states in a country
+      parameters:
+        - name: country_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: List of states (e.g. Akwa Ibom)
+
+  /api/v1/geography/lgas/{state_id}:
+    get:
+      summary: Fetch active LGAs in a state
+      parameters:
+        - name: state_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: List of canonical LGAs (Uyo, Eket, Ikot Ekpene, Oron)
+
+  /api/v1/categories:
+    get:
+      summary: Fetch marketplace product categories
+      responses:
+        '200':
+          description: Active product categories
+
+  /api/v1/products:
+    get:
+      summary: Query verified listed products
+      parameters:
+        - name: category_id
+          in: query
+          schema: { type: integer }
+        - name: lga_id
+          in: query
+          schema: { type: integer }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: flagship_only
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Paginated products
+
+  /api/v1/products/{id}:
+    get:
+      summary: Retrieve single product details with shop & pickup hours
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Detailed product information
+
+  /api/v1/fulfillment/availability:
+    post:
+      summary: Calculate directional lane availability and fee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fulfillment_type, shop_id]
+              properties:
+                fulfillment_type: { type: string, enum: [doorstep_delivery, in_shop_pickup] }
+                shop_id: { type: integer }
+                destination_lga_id: { type: integer }
+      responses:
+        '200':
+          description: Lane rate and ETA details
+
+  /api/v1/checkout/intent:
+    post:
+      summary: Generate frozen two-phase checkout intent with BCMath subtotal and cashback deduction
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fulfillment_type, shop_id, items]
+              properties:
+                fulfillment_type: { type: string, enum: [doorstep_delivery, in_shop_pickup] }
+                customer_address_id: { type: integer }
+                shop_id: { type: integer }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [product_id, quantity]
+                    properties:
+                      product_id: { type: integer }
+                      quantity: { type: integer }
+                redeem_cashback: { type: boolean }
+      responses:
+        '201':
+          description: Intent created with cryptographic fingerprint
+
+  /api/v1/pickup-reservations/create:
+    post:
+      summary: Create 24-hr in-shop inspection reservation pass (₦0.00 down)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shop_id, product_id]
+              properties:
+                shop_id: { type: integer }
+                product_id: { type: integer }
+                quantity: { type: integer, default: 1 }
+      responses:
+        '201':
+          description: Reservation pass created with RES-XXXXXXXX code
+
+  /api/v1/pickup-reservations/{code}:
+    get:
+      summary: Public lookup for in-shop inspection pass
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Reservation pass and inspection readiness
+
+  /api/v1/customer/cashback:
+    get:
+      summary: Retrieve customer 5% sovereign cashback balance & pending maturation
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Cashback summary
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum

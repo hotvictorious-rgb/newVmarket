@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\Api\AuthApiController;
+use App\Http\Controllers\Api\BannerApiController;
 use App\Http\Controllers\Api\CheckoutAndReservationApiController;
 use App\Http\Controllers\Api\CustomerAddressApiController;
+use App\Http\Controllers\Api\CustomerOrderApiController;
 use App\Http\Controllers\Api\FulfillmentApiController;
 use App\Http\Controllers\Api\GeographyApiController;
 use App\Http\Controllers\Api\ProductApiController;
@@ -26,16 +28,19 @@ Route::prefix('v1')->group(function () {
     Route::get('products', [ProductApiController::class, 'index']);
     Route::get('products/{id}', [ProductApiController::class, 'show']);
 
-    // 4. Pickup Reservation Lookup (Public)
+    // 4. Storefront & Mobile Dynamic Banners (Public)
+    Route::get('banners', [BannerApiController::class, 'index']);
+
+    // 5. Pickup Reservation Lookup (Public)
     Route::get('pickup-reservations/{code}', [CheckoutAndReservationApiController::class, 'showPickupReservation']);
 
-    // 5. Authentication
+    // 6. Authentication
     Route::prefix('auth')->group(function () {
         Route::post('register', [AuthApiController::class, 'register']);
         Route::post('login', [AuthApiController::class, 'login'])->middleware('throttle:10,1');
     });
 
-    // 6. Authenticated Endpoints
+    // 7. Authenticated Endpoints
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('auth/me', [AuthApiController::class, 'me']);
 
@@ -45,10 +50,18 @@ Route::prefix('v1')->group(function () {
             Route::post('add', [CustomerAddressApiController::class, 'store']);
         });
 
-        // Checkout Intents & Pickup Reservations
+        // Checkout Intents & In-Shop Reservations
         Route::post('checkout/intent', [CheckoutAndReservationApiController::class, 'createIntent']);
         Route::post('pickup-reservations/create', [CheckoutAndReservationApiController::class, 'createPickupReservation']);
         Route::get('customer/cashback', [CheckoutAndReservationApiController::class, 'cashbackBalance']);
+
+        // Customer Orders & 5-Stage Live Handshake Tracking
+        Route::prefix('customer/orders')->group(function () {
+            Route::get('', [CustomerOrderApiController::class, 'index']);
+            Route::post('checkout', [CustomerOrderApiController::class, 'executeCheckout']);
+            Route::get('{order_number}', [CustomerOrderApiController::class, 'show']);
+            Route::post('{order_number}/confirm-delivery', [CustomerOrderApiController::class, 'confirmDelivery']);
+        });
 
         // Delivery Rider Terminal
         Route::prefix('rider')->group(function () {

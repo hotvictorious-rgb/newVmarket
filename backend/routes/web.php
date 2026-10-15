@@ -175,6 +175,7 @@ Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
 });
 
 // Stage 3: Customer Storefront, Product Detail, Checkout & Tracking Routes
+Route::get('/shop/{slug}', [PortalController::class, 'showShopStorefront'])->name('shop.storefront');
 Route::get('/product/{slug}', [PortalController::class, 'showProductDetail'])->name('product.detail');
 Route::get('/checkout', [PortalController::class, 'showCheckout'])->name('checkout');
 Route::post('/checkout/process', [PortalController::class, 'processCheckout'])->name('checkout.process');

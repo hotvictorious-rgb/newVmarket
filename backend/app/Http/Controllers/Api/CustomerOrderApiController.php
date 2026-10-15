@@ -1,0 +1,411 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\CheckoutIntent;
+use App\Models\CustomerAddress;
+use App\Models\CustomerCashbackLedger;
+use App\Models\DeliveryLane;
+use App\Models\LogisticsCollectionPoint;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\RiderProfile;
+use App\Models\Shop;
+use App\Services\BcMathService;
+use App\Services\FulfillmentAvailabilityService;
+use App\Services\NotificationDispatchService;
+use App\Services\OrderSettlementService;
+use App\Services\PaystackService;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
+class CustomerOrderApiController extends Controller
+{
+    protected FulfillmentAvailabilityService $fulfillmentService;
+    protected OrderSettlementService $settlementService;
+    protected PaystackService $paystackService;
+
+    public function __construct(
+        FulfillmentAvailabilityService $fulfillmentService,
+        OrderSettlementService $settlementService,
+        PaystackService $paystackService
+    ) {
+        $this->fulfillmentService = $fulfillmentService;
+        $this->settlementService = $settlementService;
+        $this->paystackService = $paystackService;
+    }
+
+    /**
+     * List all orders belonging to authenticated customer.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $orders = Order::where('customer_id', $user->id)
+            ->with(['shop', 'vendor', 'items.product', 'rider.user'])
+            ->orderBy('id', 'desc')
+            ->paginate(15);
+
+        $formatted = $orders->getCollection()->map(fn (Order $o) => $this->formatOrderBrief($o));
+
+        return response()->json([
+            'status' => true,
+            'data' => $formatted,
+            'meta' => [
+                'current_page' => $orders->currentPage(),
+                'last_page' => $orders->lastPage(),
+                'total' => $orders->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * Show single order details with full 5-stage tracking and handshake status.
+     */
+    public function show(Request $request, string $orderNumber): JsonResponse
+    {
+        $user = $request->user();
+
+        $order = Order::where('customer_id', $user->id)
+            ->where('order_number', trim($orderNumber))
+            ->with(['shop.state', 'shop.lga', 'vendor', 'items.product', 'rider.user', 'collectionPoint'])
+            ->first();
+
+        if (!$order) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Order not found or unauthorized access.',
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => $this->formatOrderFull($order),
+        ]);
+    }
+
+    /**
+     * Finalize checkout intent into active Order and return Paystack payment credentials.
+     */
+    public function executeCheckout(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'intent_id' => 'nullable|integer|exists:checkout_intents,id',
+            'shop_id' => 'required|integer|exists:shops,id',
+            'fulfillment_type' => 'required|in:doorstep_delivery,in_shop_pickup',
+            'customer_address_id' => 'nullable|required_if:fulfillment_type,doorstep_delivery|integer|exists:customer_addresses,id',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|integer|exists:products,id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'redeem_cashback' => 'nullable|boolean',
+            'payment_method' => 'nullable|string|in:paystack,cash_on_counter,wallet',
+        ]);
+
+        $user = $request->user();
+        $shop = Shop::with('lga')->findOrFail($validated['shop_id']);
+
+        return DB::transaction(function () use ($validated, $user, $shop) {
+            $merchandiseSubtotal = '0.00';
+            $itemsToCreate = [];
+
+            foreach ($validated['items'] as $item) {
+                $product = Product::marketplaceEligible()->lockForUpdate()->findOrFail($item['product_id']);
+                
+                if ($product->inventory_quantity < $item['quantity']) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => "Insufficient stock for {$product->name}. Only {$product->inventory_quantity} available.",
+                    ], 422);
+                }
+
+                $lineTotal = BcMathService::mul($product->unit_price, (string)$item['quantity']);
+                $merchandiseSubtotal = BcMathService::add($merchandiseSubtotal, $lineTotal);
+
+                $itemsToCreate[] = [
+                    'product' => $product,
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $product->unit_price,
+                    'line_total' => $lineTotal,
+                ];
+            }
+
+            // Delivery Fee & Corridor Resolution
+            $deliveryFee = '0.00';
+            $destLgaId = $shop->lga_id;
+            $laneId = null;
+            $collectionPointId = null;
+
+            if ($validated['fulfillment_type'] === 'doorstep_delivery') {
+                $address = CustomerAddress::where('user_id', $user->id)->findOrFail($validated['customer_address_id']);
+                $destLgaId = $address->lga_id;
+
+                $availability = $this->fulfillmentService->checkDeliveryAvailability($shop->id, $destLgaId);
+                if (!$availability['is_available']) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => $availability['message'],
+                    ], 422);
+                }
+
+                $deliveryFee = $availability['fee'];
+                $laneId = $availability['lane_id'] ?? null;
+                $collectionPointId = $availability['collection_point_id'] ?? null;
+            }
+
+            // Cashback Redemption Check
+            $cashbackApplied = '0.00';
+            if (!empty($validated['redeem_cashback'])) {
+                $availableCashback = CustomerCashbackLedger::where('customer_id', $user->id)
+                    ->where('status', 'available')
+                    ->where('expires_at', '>', Carbon::now())
+                    ->sum('amount');
+
+                $availableCashbackStr = number_format((float)$availableCashback, 2, '.', '');
+                $maxRedemption = BcMathService::mul($merchandiseSubtotal, '0.50');
+                $cashbackApplied = BcMathService::comp($availableCashbackStr, $maxRedemption) > 0 ? $maxRedemption : $availableCashbackStr;
+            }
+
+            // Mathematical Splits (90% Vendor Net, 5% Margin, 5% Cashback)
+            $vendorNet90 = BcMathService::mul($merchandiseSubtotal, '0.90');
+            $customerCashback5 = BcMathService::mul($merchandiseSubtotal, '0.05');
+            $platformMargin5 = BcMathService::mul($merchandiseSubtotal, '0.05');
+
+            // Logistics Splits (90% Rider/Fleet, 10% Platform Delivery Fee)
+            $logisticsNet90 = BcMathService::mul($deliveryFee, '0.90');
+            $platformDelivery10 = BcMathService::mul($deliveryFee, '0.10');
+
+            $grandTotal = BcMathService::add(BcMathService::sub($merchandiseSubtotal, $cashbackApplied), $deliveryFee);
+
+            // Assign courier from fleet if collection point assigned
+            $rider = null;
+            if ($collectionPointId) {
+                $cp = LogisticsCollectionPoint::find($collectionPointId);
+                if ($cp && $cp->logistics_company_id) {
+                    $rider = RiderProfile::where('logistics_company_id', $cp->logistics_company_id)->where('is_online', true)->first()
+                        ?? RiderProfile::where('logistics_company_id', $cp->logistics_company_id)->first();
+                }
+            }
+            if (!$rider && $validated['fulfillment_type'] === 'doorstep_delivery') {
+                $rider = RiderProfile::where('is_online', true)->first() ?? RiderProfile::first();
+            }
+
+            $orderNumber = 'VM-' . date('Ymd') . '-' . strtoupper(Str::random(4));
+            $paymentRef = 'pstk_' . time() . '_' . rand(100, 999);
+            $paymentMethod = $validated['payment_method'] ?? 'paystack';
+
+            $order = Order::create([
+                'order_number' => $orderNumber,
+                'customer_id' => $user->id,
+                'vendor_id' => $shop->vendor_id,
+                'shop_id' => $shop->id,
+                'collection_point_id' => $collectionPointId,
+                'rider_id' => $rider ? $rider->id : null,
+                'fulfillment_type' => $validated['fulfillment_type'],
+                'order_status' => 'confirmed',
+                'payment_status' => 'pending',
+                'payment_method' => $paymentMethod,
+                'payment_reference' => $paymentRef,
+                'guest_access_token' => bin2hex(random_bytes(32)),
+                'origin_lga_id' => $shop->lga_id,
+                'destination_lga_id' => $destLgaId,
+                'delivery_lane_id' => $laneId,
+                'merchandise_subtotal' => $merchandiseSubtotal,
+                'delivery_fee' => $deliveryFee,
+                'cashback_redeemed' => $cashbackApplied,
+                'grand_total' => $grandTotal,
+                'vendor_net_90' => $vendorNet90,
+                'customer_cashback_5' => $customerCashback5,
+                'platform_margin_5' => $platformMargin5,
+                'logistics_fee_retained' => $logisticsNet90,
+                'platform_delivery_fee' => $platformDelivery10,
+                'pickup_verification_code' => Order::generateUniquePickupOtp(),
+                'verification_code' => Order::generateUniqueDeliveryOtp(),
+                'vendor_settlement_status' => 'held',
+            ]);
+
+            // Deduct inventory and insert items
+            foreach ($itemsToCreate as $itemData) {
+                $itemData['product']->decrement('inventory_quantity', $itemData['quantity']);
+
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'product_id' => $itemData['product']->id,
+                    'product_name' => $itemData['product']->name,
+                    'quantity' => $itemData['quantity'],
+                    'unit_price' => $itemData['unit_price'],
+                    'line_total' => $itemData['line_total'],
+                ]);
+            }
+
+            // Deduct redeemed cashback if applicable
+            if (BcMathService::comp($cashbackApplied, '0.00') > 0) {
+                CustomerCashbackLedger::create([
+                    'customer_id' => $user->id,
+                    'order_id' => $order->id,
+                    'amount' => '-' . $cashbackApplied,
+                    'direction' => 'debit',
+                    'status' => 'redeemed',
+                    'notes' => "Redeemed for order {$order->order_number}",
+                ]);
+            }
+
+            // Initialize Paystack Checkout Transaction
+            $callbackUrl = route('storefront') . '?order_success=' . $order->order_number;
+            $paystackInit = $this->paystackService->initializeTransaction($order, $callbackUrl, $user->email);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Order created successfully. Proceed to payment.',
+                'data' => [
+                    'order_number' => $order->order_number,
+                    'grand_total' => $order->grand_total,
+                    'payment_method' => $order->payment_method,
+                    'paystack' => $paystackInit,
+                    'order' => $this->formatOrderFull($order),
+                ],
+            ], 201);
+        });
+    }
+
+    /**
+     * Customer Delivery Handshake Confirmation on phone.
+     */
+    public function confirmDelivery(Request $request, string $orderNumber): JsonResponse
+    {
+        $validated = $request->validate([
+            'delivery_otp' => 'required|string|size:6',
+        ]);
+
+        $user = $request->user();
+        $order = Order::where('customer_id', $user->id)
+            ->where('order_number', trim($orderNumber))
+            ->first();
+
+        if (!$order) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Order not found.',
+            ], 404);
+        }
+
+        $result = $this->settlementService->verifyCustomerDeliveryOtp(
+            $order,
+            $validated['delivery_otp'],
+            null,
+            null,
+            'Confirmed via customer mobile application.'
+        );
+
+        if (!$result['success']) {
+            return response()->json([
+                'status' => false,
+                'message' => $result['message'],
+            ], 422);
+        }
+
+        $order->refresh();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Delivery confirmed! Escrow released and cashback rewarded.',
+            'data' => $this->formatOrderFull($order),
+        ]);
+    }
+
+    /**
+     * Format brief summary for order list cards.
+     */
+    protected function formatOrderBrief(Order $order): array
+    {
+        return [
+            'order_number' => $order->order_number,
+            'order_status' => $order->order_status,
+            'payment_status' => $order->payment_status,
+            'grand_total' => (float)$order->grand_total,
+            'formatted_total' => '₦' . number_format((float)$order->grand_total, 2),
+            'items_count' => $order->items->sum('quantity'),
+            'shop_name' => $order->shop->name ?? 'Verified Merchant',
+            'created_at' => $order->created_at ? $order->created_at->toIso8601String() : null,
+            'is_handshake_pending' => $order->isCustomerHandshakePending(),
+        ];
+    }
+
+    /**
+     * Format complete details with 5-stage tracking and PIN.
+     */
+    protected function formatOrderFull(Order $order): array
+    {
+        $stages = [
+            'confirmed' => 1,
+            'processing' => 2,
+            'ready_for_pickup' => 2,
+            'out_for_delivery' => $order->hasRiderArrived() ? 4 : 3,
+            'delivered' => 5,
+            'cancelled' => 0,
+        ];
+
+        $currentStage = $stages[$order->order_status] ?? 1;
+
+        return [
+            'id' => $order->id,
+            'order_number' => $order->order_number,
+            'order_status' => $order->order_status,
+            'payment_status' => $order->payment_status,
+            'payment_method' => $order->payment_method,
+            'fulfillment_type' => $order->fulfillment_type,
+            'tracking_stage' => $currentStage,
+            'stage_description' => $this->getStageDescription($order, $currentStage),
+            'delivery_otp' => $order->verification_code,
+            'is_handshake_pending' => $order->isCustomerHandshakePending(),
+            'has_rider_arrived' => $order->hasRiderArrived(),
+            'financials' => [
+                'merchandise_subtotal' => (float)$order->merchandise_subtotal,
+                'delivery_fee' => (float)$order->delivery_fee,
+                'cashback_redeemed' => (float)$order->cashback_redeemed,
+                'grand_total' => (float)$order->grand_total,
+                'customer_cashback_earned' => (float)$order->customer_cashback_5,
+                'formatted_grand_total' => '₦' . number_format((float)$order->grand_total, 2),
+            ],
+            'shop' => $order->shop ? [
+                'id' => $order->shop->id,
+                'name' => $order->shop->name,
+                'address' => $order->shop->address,
+                'phone' => $order->shop->contact_phone,
+            ] : null,
+            'rider' => $order->rider ? [
+                'name' => $order->rider->user->name ?? 'Assigned Rider',
+                'phone' => $order->rider->user->phone ?? null,
+                'vehicle_type' => $order->rider->vehicle_type ?? 'Motorcycle',
+            ] : null,
+            'items' => $order->items->map(fn (OrderItem $item) => [
+                'id' => $item->id,
+                'product_id' => $item->product_id,
+                'name' => $item->product_name,
+                'quantity' => $item->quantity,
+                'unit_price' => (float)$item->unit_price,
+                'line_total' => (float)$item->line_total,
+                'thumbnail' => $item->product && $item->product->thumbnail ? url($item->product->thumbnail) : null,
+            ]),
+            'created_at' => $order->created_at ? $order->created_at->toIso8601String() : null,
+            'delivered_at' => $order->received_at ? $order->received_at->toIso8601String() : null,
+        ];
+    }
+
+    protected function getStageDescription(Order $order, int $stage): string
+    {
+        return match ($stage) {
+            1 => 'Order placed and confirmed. Awaiting merchant packaging.',
+            2 => 'Merchant is preparing parcel at plaza counter.',
+            3 => 'Courier has picked up package and is in transit.',
+            4 => 'Rider has arrived at your location! Present your 6-digit PIN below.',
+            5 => 'Delivered and verified. 5% Cashback credited to wallet.',
+            default => 'Order in progress.',
+        };
+    }
+}

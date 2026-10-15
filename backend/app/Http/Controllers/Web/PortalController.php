@@ -1957,6 +1957,53 @@ class PortalController extends Controller
     // STAGE 3: CUSTOMER PRODUCT DETAIL & CHECKOUT
     // ==========================================
 
+    public function showShopStorefront(Request $request, string $slug)
+    {
+        $shop = Shop::where('slug', $slug)
+            ->orWhere('id', is_numeric($slug) ? (int)$slug : 0)
+            ->with(['vendor', 'lga.state', 'state'])
+            ->firstOrFail();
+
+        $activeCity = session('customer_city', 'Uyo');
+        $activeState = session('customer_state', 'Akwa Ibom');
+
+        $query = Product::marketplaceEligible()
+            ->where('shop_id', $shop->id)
+            ->with(['category', 'shop.lga']);
+
+        if ($request->filled('category')) {
+            $query->whereHas('category', function ($q) use ($request) {
+                $q->where('slug', $request->input('category'));
+            });
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        $products = $query->latest()->get();
+        $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
+
+        // Operating hours & live status
+        $isOpenNow = true;
+        if (!empty($shop->pickup_opening_time) && !empty($shop->pickup_closing_time)) {
+            $nowTime = Carbon::now()->format('H:i:s');
+            $isOpenNow = ($nowTime >= $shop->pickup_opening_time && $nowTime <= $shop->pickup_closing_time);
+        }
+
+        // Active lanes for delivery estimation to current user city
+        $userLga = Lga::where('name', $activeCity)->first() ?? Lga::where('name', 'Uyo')->first();
+        $selectedLgaId = $userLga ? $userLga->id : 69;
+        $activeLanes = DeliveryLane::where('destination_lga_id', $selectedLgaId)
+            ->where('is_active', true)
+            ->get();
+
+        return view('storefront.shop', compact(
+            'shop', 'products', 'categories', 'activeCity', 'activeState', 'isOpenNow', 'selectedLgaId', 'activeLanes'
+        ));
+    }
+
     public function showProductDetail(Request $request, string $slug)
     {
         $product = Product::where('slug', $slug)

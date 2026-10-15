@@ -9,7 +9,7 @@
         <div>
             <!-- Product Thumbnail Box -->
             <div class="vm-product-img-wrap" style="width: 100%; aspect-ratio: 1 / 1; background: #F8FAFC; border-bottom: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: center; position: relative;">
-                <img src="{{ asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="{{ $product->name }}" class="vm-product-img" style="width: 80px; height: 80px; opacity: 0.65; object-fit: contain;">
+                <img src="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="{{ $product->name }}" class="vm-product-img" style="max-width: 80%; max-height: 80%; object-fit: contain;">
                 
                 @if($product->is_vmarket_flagship)
                     <span style="position: absolute; top: 10px; right: 10px; background: var(--vm-primary, #5E17EB); color: #FFFFFF; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; letter-spacing: 0.4px;">
@@ -40,7 +40,9 @@
             <div class="vm-product-info" style="padding: 12px 14px 10px;">
                 <div class="vm-product-shop" style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #64748B; margin-bottom: 5px;">
                     <span>🏬</span>
-                    <span style="font-weight: 500;">{{ Str::limit($product->shop->name ?? 'Emeka Electronics Plaza', 20) }}</span>
+                    <a href="{{ route('shop.storefront', $product->shop->slug ?? $product->shop_id) }}" style="color: #475569; text-decoration: none; font-weight: 600;">
+                        {{ Str::limit($product->shop->name ?? 'Emeka Electronics Plaza', 20) }}
+                    </a>
                     <span style="opacity: 0.5;">•</span>
                     <span style="color: #94A3B8;">{{ $product->shop->lga->name ?? 'Uyo' }}</span>
                 </div>

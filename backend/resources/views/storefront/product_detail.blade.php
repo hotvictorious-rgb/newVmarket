@@ -18,7 +18,7 @@
         <!-- Left Column: Gallery & Verification Badges -->
         <div>
             <div style="width: 100%; aspect-ratio: 1 / 1; background: #F8FAFC; border-radius: 12px; border: 1.5px solid #F1F5F9; display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 16px;">
-                <img src="{{ asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="{{ $product->name }}" style="max-width: 65%; max-height: 65%; object-fit: contain;">
+                <img src="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="{{ $product->name }}" style="max-width: 80%; max-height: 80%; object-fit: contain;">
                 
                 <span style="position: absolute; top: 14px; left: 14px; background: #0F172A; color: #FFFFFF; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px;">
                     🛡️ ESCROW SECURED
@@ -44,9 +44,6 @@
 
         <!-- Right Column: Pricing, Delivery Options, Action Buttons -->
         <div>
-            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-                <span style="background: var(--vm-primary-light); color: var(--vm-primary); font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px;">
-                    {{ $product->category->name ?? 'Electronics' }}
             <!-- Rating & Category Row (Mockup Screen 8 Parity) -->
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -68,11 +65,15 @@
                 {{ $product->name }}
             </h1>
 
-            <div style="font-size: 13px; color: #64748B; margin-bottom: 16px; display: flex; align-items: center; gap: 6px;">
+            <div style="font-size: 13px; color: #64748B; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 <span>Verified Merchant:</span>
-                <strong style="color: #0F172A;">{{ $product->vendor->business_name ?? 'Victor Tech Innovations' }}</strong>
+                <a href="{{ route('shop.storefront', $product->shop->slug ?? $product->shop_id) }}" style="color: var(--vm-primary); text-decoration: none; font-weight: 700;">
+                    {{ $product->vendor->business_name ?? $product->shop->name }}
+                </a>
                 <span>&bull;</span>
-                <span>Branch: {{ $product->shop->name }} ({{ $product->shop->lga->name ?? 'Uyo' }})</span>
+                <a href="{{ route('shop.storefront', $product->shop->slug ?? $product->shop_id) }}" style="color: #475569; text-decoration: none; font-weight: 600;">
+                    Branch: {{ $product->shop->name }} ({{ $product->shop->lga->name ?? 'Uyo' }}) 🏬
+                </a>
             </div>
 
             <!-- Price & Cashback Banner (Mockup Screen 8 Parity) -->
