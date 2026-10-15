@@ -12,10 +12,19 @@ Route::post('/set-location', [PortalController::class, 'setLocation'])->name('se
 // THE 7 DISTINCT LOGIN PORTALS
 // ==========================================
 
-// Portal 1: Customer Shopper Login
+// Portal 1: Customer Shopper Login & Registration
 Route::get('/login', [WebAuthController::class, 'showCustomerLogin'])->name('login');
 Route::get('/customer/login', [WebAuthController::class, 'showCustomerLogin'])->name('customer.login');
 Route::post('/customer/login', [WebAuthController::class, 'loginCustomer'])->name('customer.login.post');
+
+Route::get('/register', [WebAuthController::class, 'showCustomerRegister'])->name('register');
+Route::get('/customer/register', [WebAuthController::class, 'showCustomerRegister'])->name('customer.register');
+Route::post('/customer/register', [WebAuthController::class, 'registerCustomer'])->name('customer.register.post');
+
+// Google OAuth & Identity Services
+Route::get('/auth/google/redirect', [WebAuthController::class, 'redirectToGoogle'])->name('auth.google.redirect');
+Route::get('/auth/google/callback', [WebAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
+Route::post('/auth/google/one-tap', [WebAuthController::class, 'handleGoogleOneTap'])->name('auth.google.one_tap');
 
 // Portal 2: Super Admin Command Gate
 Route::get('/admin/login', [WebAuthController::class, 'showAdminLogin'])->name('admin.login');
@@ -90,3 +99,35 @@ Route::prefix('customer')->group(function () {
     Route::get('/', [PortalController::class, 'customerDashboard'])->name('customer.dashboard');
 });
 
+
+
+// ==========================================
+// SEQUENTIAL STAGE ROUTES
+// ==========================================
+
+// Stage 1: Super Admin Command Routes
+Route::prefix('admin')->group(function () {
+    Route::post('/delivery-lanes', [PortalController::class, 'adminStoreDeliveryLane'])->name('admin.delivery_lanes.store');
+    Route::post('/delivery-lanes/{id}/toggle', [PortalController::class, 'adminToggleDeliveryLane'])->name('admin.delivery_lanes.toggle');
+    Route::post('/vendors/{id}/accredit', [PortalController::class, 'adminAccreditVendor'])->name('admin.vendors.accredit');
+});
+
+// Stage 2: Vendor Commerce Desk Routes
+Route::prefix('vendor')->group(function () {
+    Route::post('/products', [PortalController::class, 'vendorStoreProduct'])->name('vendor.products.store');
+    Route::post('/products/{id}/refresh', [PortalController::class, 'vendorRefreshProductFreshness'])->name('vendor.products.refresh');
+    Route::post('/shops', [PortalController::class, 'vendorStoreShop'])->name('vendor.shops.store');
+});
+
+// Stage 3: Customer Storefront, Product Detail, Checkout & Tracking Routes
+Route::get('/product/{slug}', [PortalController::class, 'showProductDetail'])->name('product.detail');
+Route::get('/checkout', [PortalController::class, 'showCheckout'])->name('checkout');
+Route::post('/checkout/process', [PortalController::class, 'processCheckout'])->name('checkout.process');
+Route::post('/reservation/create', [PortalController::class, 'createReservation'])->name('reservation.create');
+Route::get('/reservation/{code}', [PortalController::class, 'showReservationPass'])->name('reservation.pass');
+Route::get('/order/{order_number}', [PortalController::class, 'showOrderStatus'])->name('order.status');
+
+// Stage 4: Rider Merchant Pickup Route
+Route::prefix('rider')->group(function () {
+    Route::post('/verify-pickup-otp', [PortalController::class, 'riderVerifyPickupOtp'])->name('rider.verify.pickup.otp');
+});

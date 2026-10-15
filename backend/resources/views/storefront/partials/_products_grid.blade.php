@@ -45,9 +45,9 @@
                     <span style="color: #94A3B8;">{{ $product->shop->lga->name ?? 'Uyo' }}</span>
                 </div>
 
-                <h3 class="vm-product-name" style="font-size: 14px; font-weight: 700; color: #0F172A; margin: 0 0 10px; line-height: 1.35; min-height: 38px;">
+                <h3 class="vm-product-name" style="font-size: 14px; font-weight: 700; color: #0F172A; margin: 0 0 10px; line-height: 1.35; min-height: 38px;"><a href="{{ route('product.detail', $product->slug) }}" style="color: inherit; text-decoration: none;">
                     {{ $product->name }}
-                </h3>
+                </a></h3>
 
                 <div class="vm-product-price-row" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
                     <span class="vm-price-current" style="font-size: 17px; font-weight: 800; color: var(--vm-info);">
@@ -62,13 +62,7 @@
 
         <!-- Add to Cart / Reservation Action -->
         <div style="padding: 0 14px 14px;">
-            <button type="button" class="vm-add-cart-btn" 
-                    data-id="{{ $product->id }}" 
-                    data-name="{{ $product->name }}" 
-                    data-price="{{ $product->unit_price }}" 
-                    style="width: 100%; background: #F8FAFC; border: 1.5px solid var(--vm-border); color: #0F172A; font-weight: 700; font-size: 12.5px; padding: 9px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.15s ease;">
-                <span>🛒 Add to Cart</span>
-            </button>
+            <a href="{{ route('product.detail', $product->slug) }}" style="width: 100%; background: #F8FAFC; border: 1.5px solid var(--vm-border); color: #0F172A; font-weight: 700; font-size: 12.5px; padding: 9px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; transition: all 0.15s ease;"><span>🔍 View Item &amp; Delivery</span></a>
         </div>
 
     </div>

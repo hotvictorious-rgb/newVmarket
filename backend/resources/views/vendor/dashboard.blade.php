@@ -121,7 +121,7 @@
                     <span class="dash-card-subtitle">Items must be re-verified or restocked every 7 days to preserve certified freshness on Victorious MARKET.</span>
                 </div>
             </div>
-            <button type="button" class="btn-dash btn-dash-primary" onclick="alert('Product addition modal: Fill in item name, price, and shop counter allocation.')">
+            <button type="button" class="btn-dash btn-dash-primary" onclick="document.getElementById('vmNewProductModal').style.display = 'flex'">
                 <span>+ Add New Product</span>
             </button>
         </div>
@@ -164,9 +164,7 @@
                                 </span>
                             </td>
                             <td>
-                                <button type="button" class="btn-dash btn-dash-outline" onclick="alert('Freshness timestamp extended by 7 days for {{ addslashes($product->name) }}!')">
-                                    <span>↻ Refresh (7 Days)</span>
-                                </button>
+                                <form method="POST" action="{{ route('vendor.products.refresh', $product->id) }}" style="margin: 0;">@csrf<button type="submit" class="btn-dash btn-dash-outline" style="padding: 4px 10px; font-size: 11.5px;">↻ Refresh (7 Days)</button></form>
                             </td>
                         </tr>
                     @empty
@@ -300,6 +298,115 @@
                     🛡️ <strong>48-Hour Bank Cooldown Rule:</strong> Any bank account modification triggers a mandatory 48-hour freeze on disbursements to prevent hijacked payouts. Last updated: 5 days ago (Safe).
                 </p>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal 1: Add New Product -->
+    <div id="vmNewProductModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+        <div style="background: #FFFFFF; width: 90%; max-width: 580px; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); border: 2px solid var(--adm-gold); overflow: hidden;">
+            <div style="padding: 18px 24px; background: linear-gradient(135deg, #5E17EB, #7C3AED); color: #FFF; display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                    <span>🏷️</span> Publish Authentic Item (7-Day Freshness)
+                </div>
+                <button type="button" onclick="document.getElementById('vmNewProductModal').style.display='none'" style="background: none; border: none; color: #FFF; font-size: 20px; cursor: pointer;">&times;</button>
+            </div>
+            <form method="POST" action="{{ route('vendor.products.store') }}" style="padding: 24px;">
+                @csrf
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Item Title / Name *</label>
+                    <input type="text" name="name" placeholder="e.g. Samsung Galaxy A54 5G 128GB" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Category *</label>
+                        <select name="category_id" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            @foreach($categories ?? [] as $cat)
+                                <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Shop Counter Allocation *</label>
+                        <select name="shop_id" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            @foreach($shops ?? [] as $sh)
+                                <option value="{{ $sh->id }}">{{ $sh->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Retail Price (₦) *</label>
+                        <input type="number" step="100" name="unit_price" placeholder="285000" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Stock Qty *</label>
+                        <input type="number" name="inventory_quantity" value="10" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Package Tier *</label>
+                        <select name="package_tier" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            <option value="standard">Standard Parcel</option>
+                            <option value="bulky">Bulky Cargo</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Item Specifications & Warranty Note</label>
+                    <textarea name="description" rows="3" placeholder="Genuine brand new with 1-year warranty. Available for physical counter inspection." style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);"></textarea>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn-dash btn-dash-outline" onclick="document.getElementById('vmNewProductModal').style.display='none'">Cancel</button>
+                    <button type="submit" class="btn-dash btn-dash-primary" style="padding: 10px 24px;">✓ Publish to Storefront</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 2: Add Shop Branch Outlet -->
+    <div id="vmNewShopModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+        <div style="background: #FFFFFF; width: 90%; max-width: 520px; border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); border: 2px solid var(--adm-gold); overflow: hidden;">
+            <div style="padding: 18px 24px; background: linear-gradient(135deg, #0F172A, #1E293B); color: #FFF; display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+                    <span>🏢</span> Register Physical Plaza Branch
+                </div>
+                <button type="button" onclick="document.getElementById('vmNewShopModal').style.display='none'" style="background: none; border: none; color: #FFF; font-size: 20px; cursor: pointer;">&times;</button>
+            </div>
+            <form method="POST" action="{{ route('vendor.shops.store') }}" style="padding: 24px;">
+                @csrf
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Branch Outlet Name *</label>
+                    <input type="text" name="name" placeholder="e.g. Victor Tech Ikot Ekpene Branch" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Local Government (LGA) *</label>
+                        <select name="lga_id" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            @foreach($allLgas ?? [] as $lga)
+                                <option value="{{ $lga->id }}" {{ $lga->name == 'Uyo' ? 'selected' : '' }}>{{ $lga->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Counter Phone *</label>
+                        <input type="text" name="phone" placeholder="+2348012345678" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
+                    </div>
+                </div>
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 5px;">Physical Street / Plaza Address *</label>
+                    <input type="text" name="address" placeholder="Suite 14, Plaza Complex, Ikot Ekpene Road" required style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                        <input type="checkbox" name="pickup_enabled" value="1" checked>
+                        <span>Enable In-Shop Physical Inspection & Customer Pickup</span>
+                    </label>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn-dash btn-dash-outline" onclick="document.getElementById('vmNewShopModal').style.display='none'">Cancel</button>
+                    <button type="submit" class="btn-dash btn-dash-primary" style="padding: 10px 24px;">✓ Register Branch</button>
+                </div>
+            </form>
         </div>
     </div>
 @endsection

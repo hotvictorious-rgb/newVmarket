@@ -309,9 +309,56 @@
                     <span class="dash-card-subtitle">Active LGA corridors, base tariffs, distance rates, and same-day cut-off windows.</span>
                 </div>
             </div>
-            <span class="dash-badge dash-badge-info">LGA Topology</span>
+            <div style="display: flex; gap: 8px; align-items: center;"><button type="button" class="btn-dash btn-dash-primary" onclick="var el = document.getElementById('vmNewLaneCollapse'); el.style.display = el.style.display === 'none' ? 'block' : 'none';">+ Add Directional Lane</button><span class="dash-badge dash-badge-info">LGA Topology</span></div>
         </div>
 
+                <!-- Add Directional Delivery Lane Form -->
+        <div id="vmNewLaneCollapse" style="display: none; background: #F8FAFC; border-bottom: 2px solid var(--adm-border); padding: 20px 24px;">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 12px; color: var(--adm-text); display: flex; align-items: center; gap: 8px;">
+                <span>🛣️</span> Configure New Directional LGA Corridor
+            </div>
+            <form method="POST" action="{{ route('admin.delivery_lanes.store') }}">
+                @csrf
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 14px;">
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Origin LGA (Merchant)</label>
+                        <select name="origin_lga_id" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            @foreach($allLgas ?? [] as $lga)
+                                <option value="{{ $lga->id }}" {{ $lga->name == 'Uyo' ? 'selected' : '' }}>{{ $lga->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Destination LGA (Customer)</label>
+                        <select name="destination_lga_id" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF;">
+                            @foreach($allLgas ?? [] as $lga)
+                                <option value="{{ $lga->id }}">{{ $lga->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Base Tariff (₦)</label>
+                        <input type="number" step="50" name="base_fee" value="500" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Speed Min (Hours)</label>
+                        <input type="number" name="estimated_delivery_hours_min" value="2" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Speed Max (Hours)</label>
+                        <input type="number" name="estimated_delivery_hours_max" value="4" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 700; margin-bottom: 4px;">Daily Cut-Off Time</label>
+                        <input type="text" name="cutoff_time" value="15:00" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border);">
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" class="btn-dash btn-dash-outline" onclick="document.getElementById('vmNewLaneCollapse').style.display='none'">Cancel</button>
+                    <button type="submit" class="btn-dash btn-dash-primary">✓ Save Directional Lane</button>
+                </div>
+            </form>
+        </div>
         <div class="dash-table-responsive">
             <table class="dash-table">
                 <thead>
@@ -400,6 +447,82 @@
                     @empty
                         <tr>
                             <td colspan="6" style="text-align: center; padding: 20px; color: var(--adm-text-muted);">No orders found.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Stage 1.2: Merchant Accreditation & KYC Desk -->
+    <div class="dash-card" id="merchants-desk">
+        <div class="dash-card-header">
+            <div class="dash-card-title">
+                <span>🏛️</span>
+                <div>
+                    <div>Accredited Merchant KYC & Banking Desk</div>
+                    <span class="dash-card-subtitle">Examine legal CAC/NIN verification and disburse permissions to sell on Victorious MARKET.</span>
+                </div>
+            </div>
+            <span class="dash-badge dash-badge-purple">Sovereign Quality Gate</span>
+        </div>
+
+        <div class="dash-table-responsive">
+            <table class="dash-table">
+                <thead>
+                    <tr>
+                        <th>Merchant / Business</th>
+                        <th>CAC Number</th>
+                        <th>Director NIN</th>
+                        <th>Settlement Bank</th>
+                        <th>KYC Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($allVendors ?? [] as $v)
+                        <tr>
+                            <td>
+                                <strong style="font-size: 13.5px; color: var(--adm-text);">{{ $v->business_name }}</strong>
+                                <div style="font-size: 11.5px; color: var(--adm-text-muted);">Owner: {{ $v->user->name ?? 'N/A' }} ({{ $v->user->phone ?? 'N/A' }})</div>
+                            </td>
+                            <td>
+                                <span class="dash-badge dash-badge-info">{{ $v->cac_number ?? 'Pending CAC' }}</span>
+                            </td>
+                            <td>
+                                <span class="dash-badge dash-badge-purple">{{ $v->nin_number ?? 'Pending NIN' }}</span>
+                            </td>
+                            <td>
+                                <div><strong>{{ $v->bank_name ?? 'Zenith Bank' }}</strong></div>
+                                <div style="font-family: monospace; font-size: 12px; color: var(--adm-text-muted);">{{ $v->account_number ?? '1012345678' }}</div>
+                            </td>
+                            <td>
+                                @if($v->kyc_status === 'verified')
+                                    <span class="dash-badge dash-badge-success">● Accredited Active</span>
+                                @else
+                                    <span class="dash-badge dash-badge-danger">● {{ ucfirst($v->kyc_status ?? 'Pending') }}</span>
+                                @endif
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ route('admin.vendors.accredit', $v->id) }}" style="display: flex; gap: 6px; margin: 0;">
+                                    @csrf
+                                    @if($v->kyc_status === 'verified')
+                                        <button type="submit" name="action" value="reject" class="btn-dash btn-dash-danger" style="padding: 4px 10px; font-size: 11px;">
+                                            Suspend
+                                        </button>
+                                    @else
+                                        <button type="submit" name="action" value="verify" class="btn-dash btn-dash-success" style="padding: 4px 10px; font-size: 11px;">
+                                            ✓ Approve KYC
+                                        </button>
+                                    @endif
+                                </form>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 20px; color: var(--adm-text-muted);">
+                                No merchants registered yet.
+                            </td>
                         </tr>
                     @endforelse
                 </tbody>

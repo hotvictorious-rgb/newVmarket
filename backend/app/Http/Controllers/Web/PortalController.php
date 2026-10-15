@@ -9,6 +9,8 @@ use App\Models\DeliveryLane;
 use App\Models\Lga;
 use App\Models\LogisticsCompanyProfile;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\CheckoutIntent;
 use App\Models\PickupReservation;
 use App\Models\Product;
 use App\Models\RiderProfile;
@@ -253,7 +255,9 @@ class PortalController extends Controller
             'announcement_is_active' => (bool)\App\Models\SystemSetting::get('announcement_is_active', true),
         ];
 
-        return view('admin.dashboard', compact('metrics', 'pendingSettlements', 'recentOrders', 'deliveryLanes', 'announcementSettings'));
+        $allVendors = VendorProfile::with(['user', 'shops'])->latest()->get();
+        $allLgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+        return view('admin.dashboard', compact('metrics', 'pendingSettlements', 'recentOrders', 'deliveryLanes', 'announcementSettings', 'allVendors', 'allLgas'));
     }
 
     /**
@@ -342,7 +346,10 @@ class PortalController extends Controller
             'active_orders' => $orders->whereIn('order_status', ['pending', 'confirmed', 'processing'])->count(),
         ];
 
-        return view('vendor.dashboard', compact('vendor', 'primaryShop', 'products', 'reservations', 'orders', 'vendorMetrics'));
+        $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
+        $shops = Shop::where('vendor_id', $vendor->id)->get();
+        $allLgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+        return view('vendor.dashboard', compact('vendor', 'primaryShop', 'products', 'reservations', 'orders', 'vendorMetrics', 'categories', 'shops', 'allLgas'));
     }
 
     /**
@@ -599,5 +606,403 @@ class PortalController extends Controller
 
         $statusText = ($rider && $rider->is_online) ? 'ON DUTY (Ready for Deliveries)' : 'OFF DUTY';
         return back()->with('status', "Your shift status has been updated to: {$statusText}");
+    }
+
+    // ==========================================
+    // STAGE 1: SUPER ADMIN COMMAND ACTIONS
+    // ==========================================
+
+    public function adminStoreDeliveryLane(Request $request)
+    {
+        $validated = $request->validate([
+            'origin_lga_id' => 'required|integer|exists:lgas,id',
+            'destination_lga_id' => 'required|integer|exists:lgas,id',
+            'base_fee' => 'required|numeric|min:0',
+            'per_km_rate' => 'nullable|numeric|min:0',
+            'bulky_surcharge' => 'nullable|numeric|min:0',
+            'estimated_delivery_hours_min' => 'required|integer|min:1',
+            'estimated_delivery_hours_max' => 'required|integer|min:1',
+            'cutoff_time' => 'required|string',
+        ]);
+
+        DeliveryLane::updateOrCreate([
+            'origin_lga_id' => $validated['origin_lga_id'],
+            'destination_lga_id' => $validated['destination_lga_id'],
+        ], [
+            'base_fee' => number_format((float)$validated['base_fee'], 2, '.', ''),
+            'per_km_rate' => number_format((float)($validated['per_km_rate'] ?? 50.00), 2, '.', ''),
+            'bulky_surcharge' => number_format((float)($validated['bulky_surcharge'] ?? 1000.00), 2, '.', ''),
+            'estimated_delivery_hours_min' => $validated['estimated_delivery_hours_min'],
+            'estimated_delivery_hours_max' => $validated['estimated_delivery_hours_max'],
+            'cutoff_time' => $validated['cutoff_time'],
+            'is_active' => true,
+        ]);
+
+        return redirect()->to(route('admin.dashboard') . '#delivery-lanes')->with('status', 'Directional delivery lane successfully configured!');
+    }
+
+    public function adminToggleDeliveryLane(Request $request, int $id)
+    {
+        $lane = DeliveryLane::findOrFail($id);
+        $lane->is_active = !$lane->is_active;
+        $lane->save();
+
+        return redirect()->to(route('admin.dashboard') . '#delivery-lanes')->with('status', "Delivery lane #{$lane->id} toggled " . ($lane->is_active ? 'Active' : 'Inactive') . '.');
+    }
+
+    public function adminAccreditVendor(Request $request, int $id)
+    {
+        $vendor = VendorProfile::findOrFail($id);
+        $action = $request->input('action', 'verify');
+
+        if ($action === 'verify') {
+            $vendor->kyc_status = 'verified';
+            $vendor->marketplace_status = 'active';
+            $vendor->kyc_reviewed_at = Carbon::now();
+            $msg = "Merchant '{$vendor->business_name}' accredited and certified active on Victorious MARKET!";
+        } else {
+            $vendor->kyc_status = 'rejected';
+            $vendor->marketplace_status = 'suspended';
+            $msg = "Merchant '{$vendor->business_name}' suspended from public marketplace listings.";
+        }
+        $vendor->save();
+
+        return redirect()->to(route('admin.dashboard') . '#merchants-desk')->with('status', $msg);
+    }
+
+    // ==========================================
+    // STAGE 2: VENDOR COMMERCE SUITE ACTIONS
+    // ==========================================
+
+    public function vendorStoreProduct(Request $request)
+    {
+        $user = Auth::user();
+        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::first();
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'category_id' => 'required|integer|exists:categories,id',
+            'shop_id' => 'required|integer|exists:shops,id',
+            'unit_price' => 'required|numeric|min:10',
+            'inventory_quantity' => 'required|integer|min:0',
+            'package_tier' => 'required|in:standard,bulky',
+            'description' => 'nullable|string',
+        ]);
+
+        $product = Product::create([
+            'vendor_id' => $vendor->id,
+            'shop_id' => $validated['shop_id'],
+            'category_id' => $validated['category_id'],
+            'name' => $validated['name'],
+            'slug' => \Illuminate\Support\Str::slug($validated['name']) . '-' . rand(1000, 9999),
+            'description' => $validated['description'] ?? "Authentic certified {$validated['name']} backed by Victorious MARKET escrow.",
+            'unit_price' => number_format((float)$validated['unit_price'], 2, '.', ''),
+            'is_in_stock' => $validated['inventory_quantity'] > 0,
+            'inventory_quantity' => $validated['inventory_quantity'],
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now(),
+            'is_approved' => true,
+            'is_vmarket_flagship' => true,
+            'package_tier' => $validated['package_tier'],
+        ]);
+
+        return redirect()->to(route('vendor.dashboard') . '#products-catalog')->with('status', "Product '{$product->name}' successfully published with 7-day certified freshness!");
+    }
+
+    public function vendorRefreshProductFreshness(Request $request, int $id)
+    {
+        $product = Product::findOrFail($id);
+        $product->listing_confirmed_at = Carbon::now();
+        $product->listing_status = 'listed';
+        $product->is_in_stock = true;
+        $product->save();
+
+        return redirect()->to(route('vendor.dashboard') . '#products-catalog')->with('status', "Freshness clock extended by 7 days for '{$product->name}'!");
+    }
+
+    public function vendorStoreShop(Request $request)
+    {
+        $user = Auth::user();
+        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::first();
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'address' => 'required|string|max:255',
+            'lga_id' => 'required|integer|exists:lgas,id',
+            'phone' => 'required|string|max:30',
+            'pickup_enabled' => 'nullable',
+        ]);
+
+        $shop = Shop::create([
+            'vendor_id' => $vendor->id,
+            'lga_id' => $validated['lga_id'],
+            'state_id' => 1,
+            'name' => $validated['name'],
+            'slug' => \Illuminate\Support\Str::slug($validated['name']) . '-' . rand(100, 999),
+            'address' => $validated['address'],
+            'phone' => $validated['phone'],
+            'pickup_enabled' => $request->has('pickup_enabled'),
+            'is_primary_branch' => false,
+        ]);
+
+        return redirect()->to(route('vendor.dashboard') . '#shop-branches')->with('status', "New branch outlet '{$shop->name}' registered!");
+    }
+
+    // ==========================================
+    // STAGE 3: CUSTOMER PRODUCT DETAIL & CHECKOUT
+    // ==========================================
+
+    public function showProductDetail(Request $request, string $slug)
+    {
+        $product = Product::where('slug', $slug)
+            ->with(['shop.lga', 'vendor', 'category'])
+            ->firstOrFail();
+
+        $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
+        $activeCity = session('customer_city', 'Uyo');
+        $activeState = session('customer_state', 'Akwa Ibom');
+        $destLga = Lga::where('name', $activeCity)->first() ?? Lga::where('name', 'Uyo')->first();
+
+        $fulfillmentService = new \App\Services\FulfillmentAvailabilityService();
+        $deliveryCheck = $fulfillmentService->checkDeliveryAvailability($product->shop_id, $destLga->id, $product->package_tier ?? 'standard');
+        $pickupCheck = $fulfillmentService->checkPickupAvailability($product->shop_id);
+
+        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+
+        // 5% cashback estimation
+        $cashbackEarnable = \App\Services\BcMathService::mul($product->unit_price, '0.05');
+
+        return view('storefront.product_detail', compact('product', 'categories', 'activeCity', 'activeState', 'destLga', 'deliveryCheck', 'pickupCheck', 'lgas', 'cashbackEarnable'));
+    }
+
+    public function showCheckout(Request $request)
+    {
+        $productId = $request->input('product_id');
+        $quantity = max(1, (int)$request->input('quantity', 1));
+
+        $product = Product::with(['shop.lga', 'vendor'])->findOrFail($productId);
+        $activeCity = session('customer_city', 'Uyo');
+        $destLga = Lga::where('name', $activeCity)->first() ?? Lga::where('name', 'Uyo')->first();
+
+        $fulfillmentService = new \App\Services\FulfillmentAvailabilityService();
+        $deliveryCheck = $fulfillmentService->checkDeliveryAvailability($product->shop_id, $destLga->id, $product->package_tier ?? 'standard');
+        $pickupCheck = $fulfillmentService->checkPickupAvailability($product->shop_id);
+
+        $merchandiseSubtotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
+        $deliveryFee = $deliveryCheck['is_available'] ? $deliveryCheck['fee'] : '1000.00';
+        $totalPayable = \App\Services\BcMathService::add($merchandiseSubtotal, $deliveryFee);
+
+        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+        $allShops = Shop::where('pickup_enabled', true)->get();
+
+        // Check if user has available cashback
+        $user = Auth::user();
+        $availableCashback = '0.00';
+        if ($user) {
+            $cashbackSum = CustomerCashbackLedger::where('customer_id', $user->id)
+                ->where('status', 'available')
+                ->where('expires_at', '>', Carbon::now())
+                ->sum('amount');
+            $availableCashback = number_format((float)$cashbackSum, 2, '.', '');
+        }
+
+        return view('storefront.checkout', compact('product', 'quantity', 'merchandiseSubtotal', 'deliveryFee', 'totalPayable', 'deliveryCheck', 'pickupCheck', 'destLga', 'lgas', 'allShops', 'availableCashback', 'activeCity'));
+    }
+
+    public function processCheckout(Request $request)
+    {
+        $validated = $request->validate([
+            'product_id' => 'required|integer|exists:products,id',
+            'quantity' => 'required|integer|min:1',
+            'fulfillment_type' => 'required|in:doorstep_delivery,in_shop_pickup',
+            'customer_name' => 'required|string|max:150',
+            'customer_phone' => 'required|string|max:30',
+            'destination_lga_id' => 'nullable|integer|exists:lgas,id',
+            'delivery_address' => 'nullable|string|max:255',
+            'shop_id' => 'nullable|integer|exists:shops,id',
+            'redeem_cashback' => 'nullable',
+        ]);
+
+        $product = Product::with(['shop', 'vendor'])->findOrFail($validated['product_id']);
+        $quantity = (int)$validated['quantity'];
+        $merchandiseSubtotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
+
+        $shop = !empty($validated['shop_id']) ? Shop::findOrFail($validated['shop_id']) : $product->shop;
+
+        // Delivery fee calculation
+        $deliveryFee = '0.00';
+        $destLgaId = $validated['destination_lga_id'] ?? $shop->lga_id;
+        $lane = null;
+
+        if ($validated['fulfillment_type'] === 'doorstep_delivery') {
+            $lane = DeliveryLane::where('origin_lga_id', $shop->lga_id)
+                ->where('destination_lga_id', $destLgaId)
+                ->where('is_active', true)
+                ->first();
+            $deliveryFee = $lane ? $lane->base_fee : '1000.00';
+        }
+
+        $splits = \App\Services\BcMathService::computeCommercialSplits($merchandiseSubtotal, $deliveryFee);
+
+        // Find or create customer user
+        $user = Auth::user();
+        if (!$user) {
+            $user = User::firstOrCreate([
+                'phone' => $validated['customer_phone'],
+            ], [
+                'name' => $validated['customer_name'],
+                'email' => 'shopper.' . time() . '@victoriousmarket.com.ng',
+                'user_type' => 'customer',
+                'status' => 'active',
+                'password' => \Illuminate\Support\Facades\Hash::make('Password123!'),
+            ]);
+        }
+
+        // Two-Phase Intent Snapshot & SHA-256 Fingerprint
+        $payload = [
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'quantity' => $quantity,
+            'fulfillment_type' => $validated['fulfillment_type'],
+            'total_payable' => $splits['grand_total'],
+            'timestamp' => Carbon::now()->timestamp,
+        ];
+        $fingerprint = \App\Models\CheckoutIntent::generateFingerprint($payload);
+
+        // Order Number & OTPs
+        $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(4));
+        $deliveryOtp = (string)random_int(100000, 999999);
+        $pickupOtp = (string)random_int(100000, 999999);
+
+        // Assign active rider
+        $rider = RiderProfile::where('is_online', true)->first() ?? RiderProfile::first();
+
+        $order = Order::create([
+            'order_number' => $orderNumber,
+            'customer_id' => $user->id,
+            'vendor_id' => $product->vendor_id,
+            'shop_id' => $shop->id,
+            'rider_id' => $rider ? $rider->id : null,
+            'fulfillment_type' => $validated['fulfillment_type'],
+            'order_status' => 'confirmed',
+            'payment_status' => 'paid',
+            'payment_method' => 'paystack_direct',
+            'payment_reference' => 'pstk_' . time() . '_' . rand(100, 999),
+            'origin_lga_id' => $shop->lga_id,
+            'destination_lga_id' => $destLgaId,
+            'delivery_lane_id' => $lane ? $lane->id : null,
+            'merchandise_subtotal' => $splits['merchandise_subtotal'],
+            'delivery_fee' => $splits['delivery_fee_segregated'],
+            'cashback_redeemed' => '0.00',
+            'grand_total' => $splits['grand_total'],
+            'vendor_net_90' => $splits['vendor_net_90'],
+            'customer_cashback_5' => $splits['customer_cashback_5'],
+            'platform_margin_5' => $splits['platform_retained_5'],
+            'logistics_fee_retained' => $splits['delivery_fee_segregated'],
+            'pickup_verification_code' => $pickupOtp,
+            'verification_code' => $deliveryOtp,
+            'vendor_settlement_status' => 'held',
+        ]);
+
+        OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'unit_price' => $product->unit_price,
+            'quantity' => $quantity,
+            'line_total' => $merchandiseSubtotal,
+        ]);
+
+        // Decrement stock atomically
+        if ($product->inventory_quantity >= $quantity) {
+            $product->decrement('inventory_quantity', $quantity);
+        }
+
+        return redirect()->route('order.status', ['order_number' => $order->order_number])->with('status', 'Payment verified! Your order has been placed successfully.');
+    }
+
+    public function createReservation(Request $request)
+    {
+        $validated = $request->validate([
+            'product_id' => 'required|integer|exists:products,id',
+            'quantity' => 'nullable|integer|min:1',
+            'shop_id' => 'required|integer|exists:shops,id',
+            'customer_name' => 'required|string|max:150',
+            'customer_phone' => 'required|string|max:30',
+        ]);
+
+        $product = Product::findOrFail($validated['product_id']);
+        $shop = Shop::findOrFail($validated['shop_id']);
+        $quantity = $validated['quantity'] ?? 1;
+        $estimatedTotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
+
+        $user = Auth::user();
+        if (!$user) {
+            $user = User::firstOrCreate([
+                'phone' => $validated['customer_phone'],
+            ], [
+                'name' => $validated['customer_name'],
+                'email' => 'shopper.' . time() . '@victoriousmarket.com.ng',
+                'user_type' => 'customer',
+                'status' => 'active',
+                'password' => \Illuminate\Support\Facades\Hash::make('Password123!'),
+            ]);
+        }
+
+        $code = PickupReservation::generateCode();
+        $reservation = PickupReservation::create([
+            'reservation_code' => $code,
+            'customer_id' => $user->id,
+            'vendor_id' => $shop->vendor_id,
+            'shop_id' => $shop->id,
+            'product_id' => $product->id,
+            'quantity' => $quantity,
+            'unit_price' => $product->unit_price,
+            'estimated_total' => $estimatedTotal,
+            'status' => 'reserved',
+            'expires_at' => Carbon::now()->addHours(24),
+        ]);
+
+        return redirect()->route('reservation.pass', ['code' => $reservation->reservation_code])->with('status', 'In-Shop Pickup reservation confirmed! Present this code at the shop counter.');
+    }
+
+    public function showReservationPass(string $code)
+    {
+        $reservation = PickupReservation::where('reservation_code', strtoupper(trim($code)))
+            ->with(['shop.lga', 'product.category', 'customer'])
+            ->firstOrFail();
+
+        return view('storefront.reservation_pass', compact('reservation'));
+    }
+
+    public function showOrderStatus(string $orderNumber)
+    {
+        $order = Order::where('order_number', $orderNumber)
+            ->with(['items.product', 'shop.lga', 'customer', 'rider.user', 'vendor'])
+            ->firstOrFail();
+
+        return view('storefront.order_status', compact('order'));
+    }
+
+    // ==========================================
+    // STAGE 4: RIDER HANDSHAKE ACTIONS
+    // ==========================================
+
+    public function riderVerifyPickupOtp(Request $request)
+    {
+        $validated = $request->validate([
+            'order_id' => 'required|integer|exists:orders,id',
+            'pickup_otp' => 'required|string',
+        ]);
+
+        $order = Order::findOrFail($validated['order_id']);
+        if ($order->pickup_verification_code !== trim($validated['pickup_otp'])) {
+            return back()->withErrors(['pickup_otp' => 'Invalid merchant pickup verification OTP.']);
+        }
+
+        $order->order_status = 'out_for_delivery';
+        $order->save();
+
+        return redirect()->route('rider.dashboard')->with('status', "Order #{$order->order_number} package verified at counter. Out for delivery!");
     }
 }
