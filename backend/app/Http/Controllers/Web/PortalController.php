@@ -1624,6 +1624,7 @@ class PortalController extends Controller
 
         // Delivery fee calculation with corridor serviceability guard
         $deliveryFee = '0.00';
+        $laneId = null;
         $destLgaId = $validated['destination_lga_id'] ?? $shop->lga_id;
 
         if ($validated['fulfillment_type'] === 'doorstep_delivery') {
@@ -1637,6 +1638,7 @@ class PortalController extends Controller
             }
 
             $deliveryFee = $check['fee'];
+            $laneId = $check['lane_id'] ?? null;
         }
 
         $splits = \App\Services\BcMathService::computeCommercialSplits($merchandiseSubtotal, $deliveryFee);
@@ -1687,7 +1689,7 @@ class PortalController extends Controller
             'payment_reference' => 'pstk_' . time() . '_' . rand(100, 999),
             'origin_lga_id' => $shop->lga_id,
             'destination_lga_id' => $destLgaId,
-            'delivery_lane_id' => $lane ? $lane->id : null,
+            'delivery_lane_id' => $laneId,
             'merchandise_subtotal' => $splits['merchandise_subtotal'],
             'delivery_fee' => $splits['delivery_fee_segregated'],
             'cashback_redeemed' => '0.00',

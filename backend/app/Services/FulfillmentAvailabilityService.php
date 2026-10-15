@@ -66,8 +66,30 @@ class FulfillmentAvailabilityService
         }
 
         // 3-Tier Zonal Distance Fallback (100% Nationwide Coverage for unscheduled routes)
-        $destLga = \App\Models\Lga::find($destinationLgaId);
+        $destLga = \App\Models\Lga::with('state')->find($destinationLgaId);
         $shopLga = $shop->lga;
+
+        // Check if out-of-state corridor to this entire destination state is suspended
+        if ($shopLga && $destLga && $shopLga->state_id !== $destLga->state_id) {
+            $stateSuspended = DeliveryLane::where('origin_lga_id', $shop->lga_id)
+                ->whereHas('destinationLga', function ($q) use ($destLga) {
+                    $q->where('state_id', $destLga->state_id);
+                })
+                ->where('is_active', false)
+                ->exists();
+
+            if ($stateSuspended) {
+                return [
+                    'is_available' => false,
+                    'lane_id' => null,
+                    'origin_lga_id' => $shop->lga_id,
+                    'destination_lga_id' => $destinationLgaId,
+                    'fee' => '0.00',
+                    'message' => "Doorstep delivery is currently suspended to " . ($destLga->state->name ?? 'this state') . ".",
+                    'rate_tier' => 'state_corridor_suspended',
+                ];
+            }
+        }
 
         if ($shopLga && $destLga) {
             $bulkySurcharge = (string)\App\Models\SystemSetting::get('zone_bulky_cargo_surcharge', '1000.00');

@@ -96,10 +96,10 @@ class PortalWebTest extends TestCase
         $response->assertSee('Tier 2: Regional (Inter-LGA)');
         $response->assertSee('Tier 3: Inter-State Freight');
         $response->assertSee('id="vmAllLgasData"', false);
-        $response->assertSee('id="laneOriginSearchInput"', false);
-        $response->assertSee('id="laneDestSearchInput"', false);
-        $response->assertSee('id="btnSwapOriginDest"', false);
-        $response->assertSee('id="vmCorridorLiveTopology"', false);
+        $response->assertSee('id="vmHubSwitcherInput"', false);
+        $response->assertSee('id="vmInterLgaTable"', false);
+        $response->assertSee('id="vmOutOfStateTable"', false);
+        $response->assertSee('id="vmCorridorModalOverlay"', false);
     }
 
     public function test_super_admin_can_store_custom_delivery_lane_via_searchable_lga_selection(): void

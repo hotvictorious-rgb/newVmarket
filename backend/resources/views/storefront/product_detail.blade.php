@@ -124,32 +124,46 @@
                 </div>
             </div>
 
-            <!-- Directional Corridor Card -->
-            <div style="background: #F8FAFC; border: 1px solid var(--vm-border); border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-size: 11.5px; font-weight: 700; color: #475569; text-transform: uppercase;">Delivery to Your Location:</span>
-                    <button type="button" onclick="if(window.vmOpenLocationModal) window.vmOpenLocationModal();" style="background: none; border: none; color: var(--vm-primary); font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline;">
-                        Change ({{ $activeCity }})
+            <!-- Directional Corridor Card (Mockup Screen 3 Parity) -->
+            <div style="background: #F8FAFC; border: 1.5px solid var(--vm-border); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-size: 11.5px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Fulfillment to Your Location:</span>
+                    <button type="button" onclick="if(window.vmOpenLocationModal) window.vmOpenLocationModal();" style="background: none; border: none; color: var(--vm-primary); font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline; padding: 0;">
+                        Change ({{ $activeCity }}) 📍
                     </button>
                 </div>
 
                 @if($deliveryCheck['is_available'])
-                    <div style="display: flex; align-items: center; gap: 8px; color: #1D4ED8; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
-                        <span>🚚</span>
-                        <span>Delivers to {{ $activeCity }}: &#8358;{{ number_format((float)$deliveryCheck['fee'], 2) }}</span>
-                        <span style="font-size: 11.5px; color: #64748B; font-weight: normal;">({{ $deliveryCheck['estimated_time_text'] }})</span>
+                    <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px; color: #1D4ED8; font-weight: 700; font-size: 13.5px;">
+                            <span>🚚</span>
+                            <span>Doorstep to {{ $activeCity }}: &#8358;{{ number_format((float)$deliveryCheck['fee'], 2) }}</span>
+                        </div>
+                        <span style="background: #DBEAFE; color: #1E40AF; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px;">
+                            ⏱️ {{ $deliveryCheck['estimated_time_text'] }}
+                        </span>
                     </div>
                 @else
-                    <div style="display: flex; align-items: center; gap: 8px; color: #D97706; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
-                        <span>📦</span>
-                        <span>Direct lane in transit setup. Nationwide dispatch available.</span>
+                    <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 6px; color: #B45309; font-weight: 700; font-size: 13px; margin-bottom: 2px;">
+                            <span>⚠️</span>
+                            <span>Route Suspended: {{ $product->shop->lga->name ?? 'Origin' }} &rarr; {{ $activeCity }}</span>
+                        </div>
+                        <p style="font-size: 11.5px; color: #92400E; margin: 0; line-height: 1.4;">
+                            Doorstep delivery along this corridor is temporarily offline. You can still order for <strong>guaranteed free In-Store Counter Pickup</strong>!
+                        </p>
                     </div>
                 @endif
 
                 @if($pickupCheck['is_available'])
-                    <div style="display: flex; align-items: center; gap: 8px; color: #059669; font-weight: 600; font-size: 12.5px;">
-                        <span>⚡</span>
-                        <span>In-Shop Inspection &amp; Pickup enabled at {{ $product->shop->name }} ({{ $product->shop->address }})</span>
+                    <div style="background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px; color: #065F46; font-size: 12.5px; font-weight: 600;">
+                            <span>🏢</span>
+                            <span>In-Store Inspection: <strong>FREE (&#8358;0.00)</strong> at {{ $product->shop->name }}</span>
+                        </div>
+                        <span style="background: #D1FAE5; color: #047857; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px;">
+                            Zero Risk
+                        </span>
                     </div>
                 @endif
             </div>

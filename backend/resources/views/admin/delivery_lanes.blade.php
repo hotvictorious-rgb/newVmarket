@@ -338,364 +338,10 @@
             </div>
 
             <!-- ============================================================ -->
-            <!-- TAB 2: TWO-COLUMN MASTER-DETAIL CUSTOM OVERRIDE CORRIDORS    -->
+            <!-- TAB 2: HUB-AND-SPOKE DIRECTIONAL CORRIDORS COMMAND CONSOLE   -->
             <!-- ============================================================ -->
             <div id="vmCorridorsTab">
-                @php
-                    $defaultOrigin = $allLgas->firstWhere('name', 'Uyo') ?? ($allLgas->first() ?? null);
-                    $defaultDest = $allLgas->firstWhere('name', 'Eket') ?? ($allLgas->count() > 1 ? $allLgas->values()->get(1) : $allLgas->first());
-                    $defaultOriginId = $defaultOrigin->id ?? 69;
-                    $defaultOriginName = ($defaultOrigin->name ?? 'Uyo') . ' — ' . ($defaultOrigin->state->name ?? 'Akwa Ibom');
-                    $defaultDestId = $defaultDest->id ?? 68;
-                    $defaultDestName = ($defaultDest->name ?? 'Eket') . ' — ' . ($defaultDest->state->name ?? 'Akwa Ibom');
-
-                    $commonHubs = ['Uyo', 'Eket', 'Ikot Ekpene', 'Oron', 'Abak', 'Ibesikpo Asutan'];
-                    $quickOriginLgas = $allLgas->filter(fn($l) => in_array($l->name, $commonHubs))->values();
-                    $quickDestLgas = $allLgas->filter(fn($l) => in_array($l->name, ['Eket', 'Ikot Ekpene', 'Oron', 'Abak', 'Uyo', 'Ikono']))->values();
-                @endphp
-
-                <!-- Embedded Canonical LGAs JSON Data for Instantaneous 0ms Client-Side Autocomplete -->
-                <script id="vmAllLgasData" type="application/json">
-                    {!! json_encode($allLgas->map(function($l) {
-                        return [
-                            'id' => $l->id,
-                            'name' => $l->name,
-                            'state' => $l->state->name ?? 'Akwa Ibom',
-                            'is_akwa' => strtolower($l->state->name ?? '') === 'akwa ibom',
-                        ];
-                    })) !!}
-                </script>
-
-                <div class="vm-corridors-grid">
-                    <!-- LEFT COLUMN: ADD CUSTOM OVERRIDE CORRIDOR FORM -->
-                    <div style="background: #F8FAFC; border: 1px solid var(--adm-border); border-radius: 10px; padding: 18px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
-                            <strong id="vmFormHeaderTitle" style="font-size: 13.5px; color: var(--adm-text); display: flex; align-items: center; gap: 6px;">
-                                <span>➕</span> <span>Add Custom Corridor</span>
-                            </strong>
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <button type="button" id="vmCancelEditBtn" onclick="cancelCorridorEdit()" style="display: none; background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; color: #475569; cursor: pointer;">
-                                    ✕ Cancel Edit
-                                </button>
-                                <span class="dash-badge dash-badge-purple" id="vmFormModeBadge" style="font-size: 10px;">LGA ⇄ LGA</span>
-                            </div>
-                        </div>
-
-                        <form method="POST" action="{{ route('admin.delivery_lanes.store') }}" id="vmAddCorridorForm">
-                            @csrf
-                            <input type="hidden" name="lane_id" id="editLaneId" value="">
-                            
-                            <!-- 1. ORIGIN LGA SEARCHABLE FIELD -->
-                            <div class="vm-lga-field-wrapper" id="originLgaWrapper">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                    <label style="font-size: 11px; font-weight: 700; color: #64748B; margin: 0; display: flex; align-items: center; gap: 4px;">
-                                        <span>📍</span> ORIGIN LGA (DISPATCH FROM)
-                                    </label>
-                                    <span id="originSelectedIndicator" style="font-size: 10.5px; font-weight: 700; color: var(--adm-primary); background: rgba(94, 23, 235, 0.08); padding: 2px 7px; border-radius: 4px;">
-                                        Selected: {{ $defaultOrigin->name ?? 'Uyo' }}
-                                    </span>
-                                </div>
-
-                                <!-- Server-Bound Hidden Input -->
-                                <input type="hidden" name="origin_lga_id" id="laneOriginSelect" value="{{ $defaultOriginId }}" required>
-
-                                <!-- Interactive Autocomplete Input Box -->
-                                <div class="vm-lga-input-container">
-                                    <span class="vm-lga-icon-prefix">🔍</span>
-                                    <input 
-                                        type="text" 
-                                        id="laneOriginSearchInput" 
-                                        class="vm-lga-search-box" 
-                                        placeholder="Type LGA or State (e.g. Uyo, Eket, Abak)..."
-                                        value="{{ $defaultOriginName }}"
-                                        autocomplete="off"
-                                        required
-                                    >
-                                    <button type="button" class="vm-lga-clear-btn" id="laneOriginClearBtn" title="Clear and search LGA">✕</button>
-                                </div>
-
-                                <!-- Fast Hub Shortcuts -->
-                                <div style="display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; align-items: center;">
-                                    <span style="font-size: 10px; color: #94A3B8; font-weight: 600;">Hubs:</span>
-                                    @foreach($quickOriginLgas as $hub)
-                                        <button 
-                                            type="button" 
-                                            class="vm-quick-hub-btn vm-quick-origin-hub" 
-                                            data-id="{{ $hub->id }}" 
-                                            data-name="{{ $hub->name }}" 
-                                            data-state="{{ $hub->state->name ?? 'Akwa Ibom' }}"
-                                        >
-                                            {{ $hub->name }}
-                                        </button>
-                                    @endforeach
-                                </div>
-
-                                <!-- Floating Filter Results Dropdown -->
-                                <div class="vm-lga-floating-menu" id="laneOriginDropdown"></div>
-                            </div>
-
-                            <!-- 2. SWAP ORIGIN ⇄ DESTINATION BUTTON -->
-                            <div style="display: flex; justify-content: center; margin: 2px 0 8px;">
-                                <button type="button" class="vm-swap-btn" id="btnSwapOriginDest" title="Swap Origin and Destination LGAs">
-                                    <span>⇅</span>
-                                    <span>Swap Origin ⇄ Destination</span>
-                                </button>
-                            </div>
-
-                            <!-- 3. DESTINATION LGA SEARCHABLE FIELD -->
-                            <div class="vm-lga-field-wrapper" id="destLgaWrapper">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                    <label style="font-size: 11px; font-weight: 700; color: #64748B; margin: 0; display: flex; align-items: center; gap: 4px;">
-                                        <span>🎯</span> DESTINATION LGA (DELIVER TO)
-                                    </label>
-                                    <span id="destSelectedIndicator" style="font-size: 10.5px; font-weight: 700; color: #0284C7; background: rgba(2, 132, 199, 0.08); padding: 2px 7px; border-radius: 4px;">
-                                        Selected: {{ $defaultDest->name ?? 'Eket' }}
-                                    </span>
-                                </div>
-
-                                <!-- Server-Bound Hidden Input -->
-                                <input type="hidden" name="destination_lga_id" id="laneDestSelect" value="{{ $defaultDestId }}" required>
-
-                                <!-- Interactive Autocomplete Input Box -->
-                                <div class="vm-lga-input-container">
-                                    <span class="vm-lga-icon-prefix">🔍</span>
-                                    <input 
-                                        type="text" 
-                                        id="laneDestSearchInput" 
-                                        class="vm-lga-search-box" 
-                                        placeholder="Type LGA or State (e.g. Eket, Ikot Ekpene, Oron)..."
-                                        value="{{ $defaultDestName }}"
-                                        autocomplete="off"
-                                        required
-                                    >
-                                    <button type="button" class="vm-lga-clear-btn" id="laneDestClearBtn" title="Clear and search LGA">✕</button>
-                                </div>
-
-                                <!-- Fast Hub Shortcuts -->
-                                <div style="display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; align-items: center;">
-                                    <span style="font-size: 10px; color: #94A3B8; font-weight: 600;">Hubs:</span>
-                                    @foreach($quickDestLgas as $hub)
-                                        <button 
-                                            type="button" 
-                                            class="vm-quick-hub-btn vm-quick-dest-hub" 
-                                            data-id="{{ $hub->id }}" 
-                                            data-name="{{ $hub->name }}" 
-                                            data-state="{{ $hub->state->name ?? 'Akwa Ibom' }}"
-                                        >
-                                            {{ $hub->name }}
-                                        </button>
-                                    @endforeach
-                                </div>
-
-                                <!-- Floating Filter Results Dropdown -->
-                                <div class="vm-lga-floating-menu" id="laneDestDropdown"></div>
-                            </div>
-
-                            <!-- 4. LIVE ROUTE TOPOLOGY INTELLIGENCE PREVIEW -->
-                            <div id="vmCorridorLiveTopology" style="background: #FFFFFF; border: 1px solid var(--adm-border); border-left: 4px solid var(--adm-primary); border-radius: 7px; padding: 10px 12px; margin-bottom: 14px;">
-                                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
-                                    <div style="display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700;">
-                                        <span id="previewOriginLabel" style="color: var(--adm-text);">{{ $defaultOrigin->name ?? 'Uyo' }}</span>
-                                        <span style="color: var(--adm-primary); font-weight: 900;">➔</span>
-                                        <span id="previewDestLabel" style="color: var(--adm-text);">{{ $defaultDest->name ?? 'Eket' }}</span>
-                                    </div>
-                                    <span id="previewTierBadge" class="dash-badge dash-badge-info" style="font-size: 10px;">
-                                        Tier 2: Regional (Inter-LGA)
-                                    </span>
-                                </div>
-                                <div id="previewClassificationText" style="font-size: 11px; color: #64748B; margin-top: 3px;">
-                                    Intra-state corridor within Akwa Ibom logistics grid.
-                                </div>
-                            </div>
-
-                            <!-- Terms -->
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
-                                <div>
-                                    <label style="font-size: 11px; font-weight: 700; color: #64748B; margin-bottom: 4px; display: block;">BASE FEE (₦)</label>
-                                    <input type="number" step="0.01" name="base_fee" value="1200.00" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); font-size: 13px; font-weight: 700;">
-                                </div>
-                                <div>
-                                    <label style="font-size: 11px; font-weight: 700; color: #64748B; margin-bottom: 4px; display: block;">BULKY ADDON (₦)</label>
-                                    <input type="number" step="0.01" name="bulky_surcharge" value="1000.00" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); font-size: 13px;">
-                                </div>
-                            </div>
-
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
-                                <div>
-                                    <label style="font-size: 11px; font-weight: 700; color: #64748B; margin-bottom: 4px; display: block;">MIN ETA (HRS)</label>
-                                    <input type="number" name="estimated_delivery_hours_min" value="6" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); font-size: 13px;">
-                                </div>
-                                <div>
-                                    <label style="font-size: 11px; font-weight: 700; color: #64748B; margin-bottom: 4px; display: block;">MAX ETA (HRS)</label>
-                                    <input type="number" name="estimated_delivery_hours_max" value="18" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); font-size: 13px;">
-                                </div>
-                            </div>
-
-                            <!-- Bidirectional Checkbox -->
-                            <div style="background: rgba(94, 23, 235, 0.05); border: 1px dashed rgba(94, 23, 235, 0.3); border-radius: 6px; padding: 10px 12px; margin-bottom: 16px;">
-                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--adm-primary); margin: 0;">
-                                    <input type="checkbox" name="is_bidirectional" value="1" checked style="accent-color: var(--adm-primary);">
-                                    <span>Sync Bidirectional (A ⇄ B)</span>
-                                </label>
-                                <div style="font-size: 10.5px; color: #64748B; margin-top: 4px; margin-left: 20px;">
-                                    Automatically configures the reverse corridor with identical fee and ETA.
-                                </div>
-                            </div>
-
-                            <button type="submit" id="btnSubmitCorridor" class="btn-dash btn-dash-primary" style="width: 100%; padding: 10px; font-size: 13px; font-weight: 700; justify-content: center;">
-                                🚀 Publish Delivery Corridor
-                            </button>
-                        </form>
-                    </div>
-
-                    <!-- RIGHT COLUMN: ACTIVE CORRIDORS LIST & SEARCH -->
-                    <div style="min-width: 0;">
-                        <!-- Tier Filter Tabs (Mockup Screen 1 Parity) -->
-                        <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
-                            <button type="button" class="btn-tier-filter active" data-tier="all" onclick="setLaneTierFilter('all')" style="padding: 6px 14px; font-size: 11.5px; border-radius: 999px; font-weight: 700; background: var(--adm-primary); color: #FFF; border: none; cursor: pointer; transition: all 0.15s ease;">
-                                🌐 All Corridors ({{ count($deliveryLanes) }})
-                            </button>
-                            <button type="button" class="btn-tier-filter" data-tier="tier_1" onclick="setLaneTierFilter('tier_1')" style="padding: 6px 14px; font-size: 11.5px; border-radius: 999px; font-weight: 700; background: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; cursor: pointer; transition: all 0.15s ease;">
-                                🟢 Tier 1: Municipal (Intra-LGA)
-                            </button>
-                            <button type="button" class="btn-tier-filter" data-tier="tier_2" onclick="setLaneTierFilter('tier_2')" style="padding: 6px 14px; font-size: 11.5px; border-radius: 999px; font-weight: 700; background: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; cursor: pointer; transition: all 0.15s ease;">
-                                🟣 Tier 2: Regional (Inter-LGA)
-                            </button>
-                            <button type="button" class="btn-tier-filter" data-tier="tier_3" onclick="setLaneTierFilter('tier_3')" style="padding: 6px 14px; font-size: 11.5px; border-radius: 999px; font-weight: 700; background: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; cursor: pointer; transition: all 0.15s ease;">
-                                🟠 Tier 3: Inter-State
-                            </button>
-                        </div>
-
-                        <!-- Search and Quick Filter Bar -->
-                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
-                            <div style="position: relative; flex: 1; min-width: 200px;">
-                                <span style="position: absolute; left: 12px; top: 10px; font-size: 13px; color: #94A3B8;">🔍</span>
-                                <input type="text" id="vmLaneSearchInput" onkeyup="filterLaneRows()" placeholder="Filter corridors by LGA name or state..." style="width: 100%; padding: 9px 14px 9px 36px; border-radius: 8px; border: 1px solid var(--adm-border); font-size: 13px; outline: none; box-sizing: border-box;">
-                            </div>
-                            <span class="dash-badge dash-badge-info" id="vmCorridorCountBadge" style="font-size: 11.5px; padding: 6px 12px; white-space: nowrap;">
-                                {{ count($deliveryLanes) }} Custom Corridors
-                            </span>
-                        </div>
-
-                        <!-- Corridors Table -->
-                        <div class="dash-table-responsive" style="border: 1px solid var(--adm-border); border-radius: 8px; overflow-x: auto;">
-                            <table class="dash-table" id="vmLanesTable">
-                                <thead>
-                                    <tr>
-                                        <th>Directional Route</th>
-                                        <th>Type &amp; Tier</th>
-                                        <th>Base Fee</th>
-                                        <th>Bulky Cargo</th>
-                                        <th>Speed ETA</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($deliveryLanes as $lane)
-                                        @php
-                                            $isMunicipal = ($lane->origin_lga_id === $lane->destination_lga_id);
-                                            $isRegional = !$isMunicipal && (($lane->originLga->state_id ?? 1) === ($lane->destinationLga->state_id ?? 1));
-                                            $laneTier = $isMunicipal ? 'tier_1' : ($isRegional ? 'tier_2' : 'tier_3');
-                                        @endphp
-                                        <tr class="vm-lane-row" data-tier="{{ $laneTier }}" data-search="{{ strtolower(($lane->originLga->name ?? '') . ' ' . ($lane->destinationLga->name ?? '') . ' ' . ($lane->originLga->state->name ?? '') . ' ' . ($lane->destinationLga->state->name ?? '')) }}">
-                                            <td class="route-cell">
-                                                <div style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; flex-wrap: wrap;">
-                                                    <span style="font-weight: 700; color: var(--adm-text);">{{ $lane->originLga->name ?? "LGA #{$lane->origin_lga_id}" }}</span>
-                                                    <span style="color: var(--adm-primary); font-weight: 800;">&rarr;</span>
-                                                    <span style="font-weight: 700; color: var(--adm-text);">{{ $lane->destinationLga->name ?? "LGA #{$lane->destination_lga_id}" }}</span>
-                                                </div>
-                                                <div style="font-size: 11px; color: var(--adm-text-muted); margin-top: 3px;">
-                                                    <span style="color: #64748B;">{{ $lane->originLga->state->name ?? 'Akwa Ibom' }}</span>
-                                                    <span style="color: #94A3B8; margin: 0 4px;">&rarr;</span>
-                                                    <span style="color: #64748B;">{{ $lane->destinationLga->state->name ?? 'Akwa Ibom' }}</span>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
-                                                    @if($lane->is_bidirectional)
-                                                        <span class="dash-badge dash-badge-success" title="Bidirectional return corridor exists" style="font-size: 10px; cursor: help;">
-                                                            ⇄ Bidirectional
-                                                        </span>
-                                                    @else
-                                                        <span class="dash-badge dash-badge-info" style="font-size: 10px;">
-                                                            &rarr; One-Way
-                                                        </span>
-                                                    @endif
-
-                                                    @if($laneTier === 'tier_1')
-                                                        <span class="dash-badge" style="background: #ECFDF5; color: #059669; font-size: 9.5px; padding: 1px 6px; border-radius: 4px;">Tier 1: Municipal</span>
-                                                    @elseif($laneTier === 'tier_2')
-                                                        <span class="dash-badge" style="background: #F5F3FF; color: #5E17EB; font-size: 9.5px; padding: 1px 6px; border-radius: 4px;">Tier 2: Regional</span>
-                                                    @else
-                                                        <span class="dash-badge" style="background: #FFFBEB; color: #D97706; font-size: 9.5px; padding: 1px 6px; border-radius: 4px;">Tier 3: Inter-State</span>
-                                                    @endif
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <strong style="font-size: 13.5px; color: #047857;">&#8358;{{ number_format((float)$lane->base_fee, 2) }}</strong>
-                                            </td>
-                                            <td>
-                                                <span style="font-size: 12px; color: #64748B;">+&#8358;{{ number_format((float)($lane->bulky_surcharge ?? 1000.00), 2) }}</span>
-                                            </td>
-                                            <td>
-                                                <span class="dash-badge dash-badge-purple" style="font-size: 11px;">
-                                                    ⏱️ {{ $lane->estimated_delivery_hours_min }}-{{ $lane->estimated_delivery_hours_max }} hrs
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <form method="POST" action="{{ route('admin.delivery_lanes.toggle', $lane->id) }}" style="margin: 0;">
-                                                    @csrf
-                                                    <button type="submit" class="btn-dash {{ $lane->is_active ? 'btn-dash-success' : 'btn-dash-outline' }}" style="padding: 3px 8px; font-size: 10.5px;">
-                                                        {{ $lane->is_active ? '● Active' : '○ Inactive' }}
-                                                    </button>
-                                                </form>
-                                            </td>
-                                            <td>
-                                                <div style="display: flex; align-items: center; gap: 6px;">
-                                                    <button 
-                                                        type="button" 
-                                                        class="btn-dash btn-dash-outline btn-edit-corridor" 
-                                                        style="padding: 3px 8px; font-size: 10.5px; background: #FFF; font-weight: 700; color: var(--adm-primary);" 
-                                                        title="Edit Corridor Rates &amp; ETA"
-                                                        data-id="{{ $lane->id }}"
-                                                        data-origin-id="{{ $lane->origin_lga_id }}"
-                                                        data-origin-name="{{ ($lane->originLga->name ?? '') . ' — ' . ($lane->originLga->state->name ?? 'Akwa Ibom') }}"
-                                                        data-origin-clean="{{ $lane->originLga->name ?? '' }}"
-                                                        data-dest-id="{{ $lane->destination_lga_id }}"
-                                                        data-dest-name="{{ ($lane->destinationLga->name ?? '') . ' — ' . ($lane->destinationLga->state->name ?? 'Akwa Ibom') }}"
-                                                        data-dest-clean="{{ $lane->destinationLga->name ?? '' }}"
-                                                        data-base-fee="{{ $lane->base_fee }}"
-                                                        data-bulky="{{ $lane->bulky_surcharge ?? '1000.00' }}"
-                                                        data-min-eta="{{ $lane->estimated_delivery_hours_min }}"
-                                                        data-max-eta="{{ $lane->estimated_delivery_hours_max }}"
-                                                        data-bidirectional="{{ $lane->is_bidirectional ? '1' : '0' }}"
-                                                        onclick="populateEditCorridor(this)"
-                                                    >
-                                                        ✏️ Edit
-                                                    </button>
-                                                    <form method="POST" action="{{ route('admin.delivery_lanes.delete', $lane->id) }}" onsubmit="return confirm('Delete this custom corridor? Fallback rates will apply.');" style="margin: 0;">
-                                                        @csrf
-                                                        @method('DELETE')
-                                                        <button type="submit" class="btn-dash btn-dash-danger" style="padding: 3px 8px; font-size: 10.5px;" title="Delete Corridor">
-                                                            🗑️
-                                                        </button>
-                                                    </form>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    @empty
-                                        <tr>
-                                            <td colspan="7" style="text-align: center; padding: 30px; color: var(--adm-text-muted);">
-                                                No custom overrides registered yet. System is operating seamlessly on 3-tier zonal distance baseline rates!
-                                            </td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+                @include('admin.partials._hub_corridors')
             </div>
         </div>
     </div>
@@ -729,26 +375,141 @@
     }
 
     // -------------------------------------------------------------
-    // Corridors Table Live Filter
+    // Tier 2: Inter-LGA Table Filtering & Search
     // -------------------------------------------------------------
-    function filterLaneRows() {
-        const query = document.getElementById('vmLaneSearchInput').value.toLowerCase().trim();
-        const rows = document.querySelectorAll('#vmLanesTable .vm-lane-row');
+    let currentInterFilter = 'all';
+
+    function setInterLgaFilter(filter) {
+        currentInterFilter = filter;
+        document.querySelectorAll('.btn-inter-filter').forEach(btn => {
+            if (btn.getAttribute('data-filter') === filter) {
+                btn.className = 'btn-dash btn-dash-primary btn-inter-filter';
+                btn.style.background = 'var(--adm-primary)';
+                btn.style.color = '#FFF';
+                btn.style.border = 'none';
+            } else {
+                btn.className = 'btn-dash btn-dash-outline btn-inter-filter';
+                btn.style.background = '#FFF';
+                btn.style.color = 'var(--adm-text)';
+                btn.style.border = '1px solid var(--adm-border)';
+            }
+        });
+        filterInterLgaRows();
+    }
+
+    function filterInterLgaRows() {
+        const query = (document.getElementById('interLgaSearchInput')?.value || '').toLowerCase().trim();
+        const rows = document.querySelectorAll('#vmInterLgaTable .vm-inter-row');
+        let visibleCount = 0;
+
         rows.forEach(row => {
             const searchData = row.getAttribute('data-search') || '';
-            if (searchData.includes(query)) {
+            const status = row.getAttribute('data-status') || '';
+
+            const matchesQuery = !query || searchData.includes(query);
+            const matchesFilter = (currentInterFilter === 'all') || (status === currentInterFilter);
+
+            if (matchesQuery && matchesFilter) {
                 row.style.display = '';
+                visibleCount++;
             } else {
                 row.style.display = 'none';
             }
         });
+
+        const badge = document.getElementById('interLgaCountBadge');
+        if (badge) {
+            badge.textContent = `${visibleCount} LGA${visibleCount === 1 ? '' : 's'} Visible`;
+        }
     }
 
     // -------------------------------------------------------------
-    // Searchable LGA Autocomplete & Combobox Architecture
+    // Tier 3: Out-of-State Table Filtering & Search
+    // -------------------------------------------------------------
+    let currentOutFilter = 'all';
+
+    function setOutOfStateFilter(filter) {
+        currentOutFilter = filter;
+        document.querySelectorAll('.btn-state-filter').forEach(btn => {
+            if (btn.getAttribute('data-filter') === filter) {
+                btn.className = 'btn-dash btn-dash-primary btn-state-filter';
+                btn.style.background = 'var(--adm-primary)';
+                btn.style.color = '#FFF';
+                btn.style.border = 'none';
+            } else {
+                btn.className = 'btn-dash btn-dash-outline btn-state-filter';
+                btn.style.background = '#FFF';
+                btn.style.color = 'var(--adm-text)';
+                btn.style.border = '1px solid var(--adm-border)';
+            }
+        });
+        filterOutOfStateRows();
+    }
+
+    function filterOutOfStateRows() {
+        const query = (document.getElementById('outOfStateSearchInput')?.value || '').toLowerCase().trim();
+        const rows = document.querySelectorAll('#vmOutOfStateTable .vm-state-row');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const searchData = row.getAttribute('data-search') || '';
+            const status = row.getAttribute('data-status') || '';
+
+            const matchesQuery = !query || searchData.includes(query);
+            const matchesFilter = (currentOutFilter === 'all') || (status === currentOutFilter);
+
+            if (matchesQuery && matchesFilter) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        const badge = document.getElementById('outOfStateCountBadge');
+        if (badge) {
+            badge.textContent = `${visibleCount} State${visibleCount === 1 ? '' : 's'} Visible`;
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Corridor Rate Configuration Modal Engine
+    // -------------------------------------------------------------
+    function openCorridorModal(data) {
+        document.getElementById('modalLaneId').value = data.id || '';
+        document.getElementById('modalOriginLgaId').value = data.origin_id;
+        document.getElementById('modalDestLgaId').value = data.dest_id;
+        document.getElementById('modalOriginDisplay').textContent = data.origin_name;
+        document.getElementById('modalDestDisplay').textContent = data.dest_name;
+        document.getElementById('modalTierBadge').textContent = data.tier_label || 'Regional Corridor';
+
+        document.getElementById('modalBaseFee').value = parseFloat(data.base_fee || 0).toFixed(2);
+        document.getElementById('modalBulkyFee').value = parseFloat(data.bulky || 0).toFixed(2);
+        document.getElementById('modalMinEta').value = data.min_eta || 12;
+        document.getElementById('modalMaxEta').value = data.max_eta || 24;
+
+        const bidiCheckbox = document.getElementById('modalIsBidi');
+        if (bidiCheckbox) {
+            bidiCheckbox.checked = !!data.is_bidi;
+        }
+
+        const overlay = document.getElementById('vmCorridorModalOverlay');
+        if (overlay) {
+            overlay.style.display = 'flex';
+        }
+    }
+
+    function closeCorridorModal() {
+        const overlay = document.getElementById('vmCorridorModalOverlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Hub Switcher Autocomplete Engine (0ms Client-Side Instant Search)
     // -------------------------------------------------------------
     document.addEventListener('DOMContentLoaded', function () {
-        // 1. Parse Embedded Canonical LGAs Dataset
         let allLgas = [];
         try {
             const dataElem = document.getElementById('vmAllLgasData');
@@ -759,7 +520,6 @@
             console.error('Failed to parse canonical LGA dataset', err);
         }
 
-        // Helper string sanitizers
         function escapeHtml(str) {
             if (!str) return '';
             return String(str)
@@ -773,470 +533,86 @@
             return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
 
-        // DOM Element References
-        const originInput = document.getElementById('laneOriginSearchInput');
-        const originHidden = document.getElementById('laneOriginSelect');
-        const originClear = document.getElementById('laneOriginClearBtn');
-        const originDropdown = document.getElementById('laneOriginDropdown');
-        const originIndicator = document.getElementById('originSelectedIndicator');
+        const hubInput = document.getElementById('vmHubSwitcherInput');
+        const hubDropdown = document.getElementById('vmHubDropdown');
+        const hubClear = document.getElementById('vmHubClearBtn');
 
-        const destInput = document.getElementById('laneDestSearchInput');
-        const destHidden = document.getElementById('laneDestSelect');
-        const destClear = document.getElementById('laneDestClearBtn');
-        const destDropdown = document.getElementById('laneDestDropdown');
-        const destIndicator = document.getElementById('destSelectedIndicator');
-
-        const btnSwap = document.getElementById('btnSwapOriginDest');
-
-        // Dynamic Route Topology Indicator
-        function updateTopologyPreview() {
-            const originId = originHidden.value;
-            const destId = destHidden.value;
-
-            const originObj = allLgas.find(l => String(l.id) === String(originId));
-            const destObj = allLgas.find(l => String(l.id) === String(destId));
-
-            if (!originObj || !destObj) return;
-
-            const originName = originObj.name;
-            const destName = destObj.name;
-            const originState = originObj.state;
-            const destState = destObj.state;
-
-            const labelOrigin = document.getElementById('previewOriginLabel');
-            const labelDest = document.getElementById('previewDestLabel');
-            const badgeTier = document.getElementById('previewTierBadge');
-            const textDesc = document.getElementById('previewClassificationText');
-
-            if (labelOrigin) labelOrigin.textContent = originName;
-            if (labelDest) labelDest.textContent = destName;
-
-            if (String(originId) === String(destId)) {
-                if (badgeTier) {
-                    badgeTier.className = 'dash-badge dash-badge-success';
-                    badgeTier.textContent = 'Tier 1: Municipal (Intra-LGA)';
-                }
-                if (textDesc) {
-                    textDesc.textContent = `Intra-LGA municipal corridor within ${originName}. Hyper-local same-day dispatch.`;
-                }
-            } else if (originState.toLowerCase() === destState.toLowerCase()) {
-                if (badgeTier) {
-                    badgeTier.className = 'dash-badge dash-badge-info';
-                    badgeTier.textContent = 'Tier 2: Regional (Inter-LGA)';
-                }
-                if (textDesc) {
-                    textDesc.textContent = `Inter-LGA regional corridor between ${originName} and ${destName} within ${originState}.`;
-                }
-            } else {
-                if (badgeTier) {
-                    badgeTier.className = 'dash-badge dash-badge-purple';
-                    badgeTier.textContent = 'Tier 3: Inter-State Freight';
-                }
-                if (textDesc) {
-                    textDesc.textContent = `Inter-state cargo corridor spanning ${originState} to ${destState}.`;
-                }
-            }
-        }
-
-        // Generic LGA Combobox Binder
-        function bindLgaCombobox({
-            inputElem,
-            hiddenElem,
-            clearBtnElem,
-            dropdownElem,
-            indicatorElem,
-            quickHubSelector,
-            onSelect
-        }) {
-            let activeNavIndex = -1;
-
-            function filterDataset(query) {
+        if (hubInput && hubDropdown) {
+            function filterHubDataset(query) {
                 const q = (query || '').trim().toLowerCase();
-                if (!q) {
-                    return allLgas.slice(0, 35);
-                }
+                if (!q) return allLgas.slice(0, 30);
                 return allLgas.filter(l => 
                     l.name.toLowerCase().includes(q) || 
                     (l.state && l.state.toLowerCase().includes(q))
-                ).slice(0, 35);
+                ).slice(0, 30);
             }
 
-            function renderDropdown(items, query = '') {
+            function renderHubDropdown(items, query = '') {
                 if (!items.length) {
-                    dropdownElem.innerHTML = `
-                        <div style="padding: 14px 12px; text-align: center; color: #94A3B8; font-size: 12px;">
-                            No Local Government Area found matching &ldquo;<strong>${escapeHtml(query)}</strong>&rdquo;
+                    hubDropdown.innerHTML = `
+                        <div style="padding: 12px; text-align: center; color: #94A3B8; font-size: 12px;">
+                            No LGA found matching &ldquo;<strong>${escapeHtml(query)}</strong>&rdquo;
                         </div>
                     `;
-                    dropdownElem.style.display = 'block';
+                    hubDropdown.style.display = 'block';
                     return;
                 }
 
                 let html = '';
                 items.forEach((lga, idx) => {
-                    const isSelected = String(hiddenElem.value) === String(lga.id);
-                    const isAkwa = lga.is_akwa;
-                    
                     let highlightedName = escapeHtml(lga.name);
                     if (query) {
                         const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
                         highlightedName = highlightedName.replace(regex, '<mark style="background: rgba(94, 23, 235, 0.16); color: #5E17EB; padding: 0 2px; border-radius: 2px;">$1</mark>');
                     }
 
+                    const targetUrl = `{{ route('admin.delivery_lanes.index') }}?hub_lga_id=${lga.id}`;
                     html += `
-                        <div class="vm-lga-option-row ${isSelected ? 'active-row' : ''}" data-idx="${idx}" data-id="${lga.id}" data-name="${escapeHtml(lga.name)}" data-state="${escapeHtml(lga.state)}">
+                        <a href="${targetUrl}" class="vm-lga-option-row" style="text-decoration: none; color: inherit; display: flex; align-items: center; justify-content: space-between;">
                             <div style="display: flex; align-items: baseline;">
                                 <span class="vm-lga-option-name">${highlightedName}</span>
                                 <span class="vm-lga-option-state">&mdash; ${escapeHtml(lga.state)}</span>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                ${isSelected ? '<span style="color: #059669; font-weight: 800; font-size: 13px;">✓</span>' : ''}
-                                <span class="vm-lga-badge-zone" style="${isAkwa ? 'background: #ECFDF5; color: #059669;' : 'background: #F1F5F9; color: #64748B;'}">
-                                    ${isAkwa ? '⚡ Akwa Ibom' : 'Nationwide'}
-                                </span>
-                            </div>
-                        </div>
+                            <span class="vm-lga-badge-zone" style="${lga.is_akwa ? 'background: #ECFDF5; color: #059669;' : 'background: #F1F5F9; color: #64748B;'}">
+                                ${lga.is_akwa ? '⚡ Akwa Ibom' : escapeHtml(lga.state)}
+                            </span>
+                        </a>
                     `;
                 });
 
-                dropdownElem.innerHTML = html;
-                dropdownElem.style.display = 'block';
-
-                // Row Click Handlers
-                dropdownElem.querySelectorAll('.vm-lga-option-row').forEach(row => {
-                    row.addEventListener('click', function (e) {
-                        e.stopPropagation();
-                        selectLga({
-                            id: this.dataset.id,
-                            name: this.dataset.name,
-                            state: this.dataset.state
-                        });
-                    });
-                });
+                hubDropdown.innerHTML = html;
+                hubDropdown.style.display = 'block';
             }
 
-            function selectLga(lga) {
-                hiddenElem.value = lga.id;
-                inputElem.value = `${lga.name} — ${lga.state}`;
-                if (indicatorElem) {
-                    indicatorElem.textContent = `Selected: ${lga.name}`;
-                }
-                dropdownElem.style.display = 'none';
-                activeNavIndex = -1;
-                if (typeof onSelect === 'function') {
-                    onSelect(lga);
-                }
-            }
-
-            // Input Event (Typing Live Filter)
-            inputElem.addEventListener('input', function () {
-                const query = this.value;
-                const matches = filterDataset(query);
-                renderDropdown(matches, query);
+            hubInput.addEventListener('input', function () {
+                renderHubDropdown(filterHubDataset(this.value), this.value);
             });
 
-            // Focus Event (Open Full or Filtered List)
-            inputElem.addEventListener('focus', function () {
-                const matches = filterDataset(this.value);
-                renderDropdown(matches, this.value);
+            hubInput.addEventListener('focus', function () {
+                renderHubDropdown(filterHubDataset(this.value), this.value);
             });
 
-            // Clear Button Event
-            if (clearBtnElem) {
-                clearBtnElem.addEventListener('click', function (e) {
+            if (hubClear) {
+                hubClear.addEventListener('click', function (e) {
                     e.stopPropagation();
-                    inputElem.value = '';
-                    inputElem.focus();
-                    renderDropdown(filterDataset(''), '');
+                    hubInput.value = '';
+                    hubInput.focus();
+                    renderHubDropdown(filterHubDataset(''), '');
                 });
             }
 
-            // Keyboard Navigation (ArrowUp, ArrowDown, Enter, Escape)
-            inputElem.addEventListener('keydown', function (e) {
-                const rows = dropdownElem.querySelectorAll('.vm-lga-option-row');
-                if (!rows.length || dropdownElem.style.display === 'none') {
-                    if (e.key === 'ArrowDown' || e.key === 'Enter') {
-                        renderDropdown(filterDataset(inputElem.value), inputElem.value);
-                    }
-                    return;
+            document.addEventListener('click', function (e) {
+                const wrapper = document.getElementById('hubSwitcherWrapper');
+                if (wrapper && !wrapper.contains(e.target)) {
+                    hubDropdown.style.display = 'none';
                 }
 
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    activeNavIndex = (activeNavIndex + 1) % rows.length;
-                    highlightRow(rows, activeNavIndex);
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    activeNavIndex = (activeNavIndex - 1 + rows.length) % rows.length;
-                    highlightRow(rows, activeNavIndex);
-                } else if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (activeNavIndex >= 0 && rows[activeNavIndex]) {
-                        rows[activeNavIndex].click();
-                    } else if (rows[0]) {
-                        rows[0].click();
-                    }
-                } else if (e.key === 'Escape') {
-                    dropdownElem.style.display = 'none';
-                }
-            });
-
-            function highlightRow(rows, idx) {
-                rows.forEach((r, i) => {
-                    if (i === idx) {
-                        r.classList.add('active-row');
-                        r.scrollIntoView({ block: 'nearest' });
-                    } else {
-                        r.classList.remove('active-row');
-                    }
-                });
-            }
-
-            // Quick Hub Click Shortcuts
-            if (quickHubSelector) {
-                document.querySelectorAll(quickHubSelector).forEach(btn => {
-                    btn.addEventListener('click', function (e) {
-                        e.stopPropagation();
-                        selectLga({
-                            id: this.dataset.id,
-                            name: this.dataset.name,
-                            state: this.dataset.state
-                        });
-                    });
-                });
-            }
-        }
-
-        // 2. Initialize Origin LGA Combobox
-        bindLgaCombobox({
-            inputElem: originInput,
-            hiddenElem: originHidden,
-            clearBtnElem: originClear,
-            dropdownElem: originDropdown,
-            indicatorElem: originIndicator,
-            quickHubSelector: '.vm-quick-origin-hub',
-            onSelect: updateTopologyPreview
-        });
-
-        // 3. Initialize Destination LGA Combobox
-        bindLgaCombobox({
-            inputElem: destInput,
-            hiddenElem: destHidden,
-            clearBtnElem: destClear,
-            dropdownElem: destDropdown,
-            indicatorElem: destIndicator,
-            quickHubSelector: '.vm-quick-dest-hub',
-            onSelect: updateTopologyPreview
-        });
-
-        // 4. Swap Origin ⇄ Destination Button Engine
-        if (btnSwap) {
-            btnSwap.addEventListener('click', function () {
-                const prevOriginId = originHidden.value;
-                const prevOriginText = originInput.value;
-                const prevDestId = destHidden.value;
-                const prevDestText = destInput.value;
-
-                // Swap values
-                originHidden.value = prevDestId;
-                originInput.value = prevDestText;
-
-                destHidden.value = prevOriginId;
-                destInput.value = prevOriginText;
-
-                // Update indicators
-                const newOriginObj = allLgas.find(l => String(l.id) === String(prevDestId));
-                const newDestObj = allLgas.find(l => String(l.id) === String(prevOriginId));
-
-                if (newOriginObj && originIndicator) {
-                    originIndicator.textContent = `Selected: ${newOriginObj.name}`;
-                }
-                if (newDestObj && destIndicator) {
-                    destIndicator.textContent = `Selected: ${newDestObj.name}`;
-                }
-
-                updateTopologyPreview();
-            });
-        }
-
-        // 5. Global Document Click Outside Closer
-        document.addEventListener('click', function (e) {
-            const originWrapper = document.getElementById('originLgaWrapper');
-            const destWrapper = document.getElementById('destLgaWrapper');
-
-            if (originDropdown && originWrapper && !originWrapper.contains(e.target)) {
-                originDropdown.style.display = 'none';
-            }
-            if (destDropdown && destWrapper && !destWrapper.contains(e.target)) {
-                destDropdown.style.display = 'none';
-            }
-        });
-
-        // 6. Form Submission Safeguard
-        const addCorridorForm = document.getElementById('vmAddCorridorForm');
-        if (addCorridorForm) {
-            addCorridorForm.addEventListener('submit', function (e) {
-                if (!originHidden.value || !destHidden.value) {
-                    e.preventDefault();
-                    alert('Please select a valid Origin and Destination LGA from the searchable dropdown list.');
+                const modalOverlay = document.getElementById('vmCorridorModalOverlay');
+                if (modalOverlay && e.target === modalOverlay) {
+                    closeCorridorModal();
                 }
             });
         }
-
-        // 7. Interactive Corridor Edit Functions
-        window.populateEditCorridor = function (btn) {
-            const id = btn.dataset.id;
-            const originId = btn.dataset.originId;
-            const originName = btn.dataset.originName;
-            const originClean = btn.dataset.originClean;
-            const destId = btn.dataset.destId;
-            const destName = btn.dataset.destName;
-            const destClean = btn.dataset.destClean;
-            const baseFee = btn.dataset.baseFee;
-            const bulky = btn.dataset.bulky;
-            const minEta = btn.dataset.minEta;
-            const maxEta = btn.dataset.maxEta;
-            const bidirectional = btn.dataset.bidirectional === '1';
-
-            // Populate hidden IDs and text inputs
-            const editHidden = document.getElementById('editLaneId');
-            if (editHidden) editHidden.value = id;
-
-            originHidden.value = originId;
-            originInput.value = originName;
-            if (originIndicator) originIndicator.textContent = `Selected: ${originClean}`;
-
-            destHidden.value = destId;
-            destInput.value = destName;
-            if (destIndicator) destIndicator.textContent = `Selected: ${destClean}`;
-
-            const baseFeeInput = document.querySelector('input[name="base_fee"]');
-            if (baseFeeInput) baseFeeInput.value = parseFloat(baseFee).toFixed(2);
-
-            const bulkyInput = document.querySelector('input[name="bulky_surcharge"]');
-            if (bulkyInput) bulkyInput.value = parseFloat(bulky).toFixed(2);
-
-            const minEtaInput = document.querySelector('input[name="estimated_delivery_hours_min"]');
-            if (minEtaInput) minEtaInput.value = minEta;
-
-            const maxEtaInput = document.querySelector('input[name="estimated_delivery_hours_max"]');
-            if (maxEtaInput) maxEtaInput.value = maxEta;
-
-            const bidiCheckbox = document.querySelector('input[name="is_bidirectional"]');
-            if (bidiCheckbox) bidiCheckbox.checked = bidirectional;
-
-            // Change Header, Mode Badge, and Submit Button
-            const titleElem = document.getElementById('vmFormHeaderTitle');
-            if (titleElem) {
-                titleElem.innerHTML = `<span>✏️</span> <span>Edit Corridor #${id}: ${escapeHtml(originClean)} &rarr; ${escapeHtml(destClean)}</span>`;
-            }
-
-            const btnSubmit = document.getElementById('btnSubmitCorridor');
-            if (btnSubmit) {
-                btnSubmit.innerHTML = `💾 Save Corridor #${id} Changes`;
-                btnSubmit.className = 'btn-dash btn-dash-success';
-                btnSubmit.style.width = '100%';
-                btnSubmit.style.padding = '10px';
-                btnSubmit.style.fontSize = '13px';
-                btnSubmit.style.fontWeight = '700';
-                btnSubmit.style.justifyContent = 'center';
-            }
-
-            const cancelBtn = document.getElementById('vmCancelEditBtn');
-            if (cancelBtn) cancelBtn.style.display = 'inline-block';
-
-            const modeBadge = document.getElementById('vmFormModeBadge');
-            if (modeBadge) {
-                modeBadge.textContent = 'Editing #' + id;
-                modeBadge.className = 'dash-badge dash-badge-gold';
-            }
-
-            updateTopologyPreview();
-
-            // Smooth scroll to form container
-            const formContainer = document.getElementById('vmAddCorridorForm');
-            if (formContainer) {
-                formContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        };
-
-        window.cancelCorridorEdit = function () {
-            const editHidden = document.getElementById('editLaneId');
-            if (editHidden) editHidden.value = '';
-            
-            const titleElem = document.getElementById('vmFormHeaderTitle');
-            if (titleElem) {
-                titleElem.innerHTML = `<span>➕</span> <span>Add Custom Corridor</span>`;
-            }
-
-            const btnSubmit = document.getElementById('btnSubmitCorridor');
-            if (btnSubmit) {
-                btnSubmit.innerHTML = `🚀 Publish Delivery Corridor`;
-                btnSubmit.className = 'btn-dash btn-dash-primary';
-                btnSubmit.style.width = '100%';
-                btnSubmit.style.padding = '10px';
-                btnSubmit.style.fontSize = '13px';
-                btnSubmit.style.fontWeight = '700';
-                btnSubmit.style.justifyContent = 'center';
-            }
-
-            const cancelBtn = document.getElementById('vmCancelEditBtn');
-            if (cancelBtn) cancelBtn.style.display = 'none';
-
-            const modeBadge = document.getElementById('vmFormModeBadge');
-            if (modeBadge) {
-                modeBadge.textContent = 'LGA ⇄ LGA';
-                modeBadge.className = 'dash-badge dash-badge-purple';
-            }
-        };
-
-        // Corridor Tier Filtering & Search Mechanism (Mockup Screen 1 Parity)
-        let currentTierFilter = 'all';
-
-        window.setLaneTierFilter = function (tier) {
-            currentTierFilter = tier;
-            document.querySelectorAll('.btn-tier-filter').forEach(btn => {
-                if (btn.getAttribute('data-tier') === tier) {
-                    btn.style.background = 'var(--adm-primary)';
-                    btn.style.color = '#FFFFFF';
-                    btn.style.border = 'none';
-                } else {
-                    btn.style.background = '#F1F5F9';
-                    btn.style.color = '#475569';
-                    btn.style.border = '1px solid #CBD5E1';
-                }
-            });
-            window.filterLaneRows();
-        };
-
-        window.filterLaneRows = function () {
-            const searchVal = (document.getElementById('vmLaneSearchInput')?.value || '').toLowerCase().trim();
-            const rows = document.querySelectorAll('.vm-lane-row');
-            let visibleCount = 0;
-
-            rows.forEach(row => {
-                const rowSearch = row.getAttribute('data-search') || '';
-                const rowTier = row.getAttribute('data-tier') || '';
-
-                const matchesSearch = !searchVal || rowSearch.includes(searchVal);
-                const matchesTier = (currentTierFilter === 'all') || (rowTier === currentTierFilter);
-
-                if (matchesSearch && matchesTier) {
-                    row.style.display = '';
-                    visibleCount++;
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-
-            const countBadge = document.getElementById('vmCorridorCountBadge');
-            if (countBadge) {
-                countBadge.textContent = `${visibleCount} Corridor${visibleCount === 1 ? '' : 's'} Visible`;
-            }
-        };
-
-        // Initialize topology summary on load
-        updateTopologyPreview();
     });
 </script>
 @endpush

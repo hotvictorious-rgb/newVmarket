@@ -143,6 +143,7 @@ Route::prefix('admin')->group(function () {
     Route::post('/delivery-lanes/zonal-rates', [PortalController::class, 'adminUpdateZonalRates'])->name('admin.delivery_lanes.zonal');
     Route::delete('/delivery-lanes/{id}', [PortalController::class, 'adminDeleteDeliveryLane'])->name('admin.delivery_lanes.delete');
     Route::post('/delivery-lanes/{id}/toggle', [PortalController::class, 'adminToggleDeliveryLane'])->name('admin.delivery_lanes.toggle');
+    Route::post('/delivery-lanes/toggle-corridor', [PortalController::class, 'adminToggleHubCorridor'])->name('admin.delivery_lanes.toggle_corridor');
     Route::post('/vendors/{id}/accredit', [PortalController::class, 'adminAccreditVendor'])->name('admin.vendors.accredit');
 });
 
