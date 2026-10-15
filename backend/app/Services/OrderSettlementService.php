@@ -33,7 +33,12 @@ class OrderSettlementService
 
             $lockedOrder->vendor_handover_ready_at = Carbon::now();
             $lockedOrder->order_status = 'ready_for_pickup';
+            $lockedOrder->pickup_failed_attempts = 0;
+            $lockedOrder->pickup_locked_until = null;
             $lockedOrder->save();
+
+            // Dispatch handover authorized alert with OTP to merchant counter & alert assigned courier
+            NotificationDispatchService::dispatchVendorHandoverReady($lockedOrder);
 
             return [
                 'success' => true,
@@ -48,7 +53,7 @@ class OrderSettlementService
      * Handshake 1B: Rider collects package from Vendor.
      * Courier inputs the secret 6-digit pickup_verification_code on their own phone,
      * with optional package condition photo proof.
-     * Enforces strict mathematical non-collision and rate-limiting brute force protection.
+     * Enforces strict authorization, vendor readiness, non-collision, and timed lockout protection.
      */
     public function verifyRiderPickupOtp(
         Order $order,
@@ -64,25 +69,51 @@ class OrderSettlementService
                 return ['success' => false, 'message' => "Order cannot be picked up in status {$lockedOrder->order_status}."];
             }
 
-            // Anti-Brute-Force Shield: Lock after 5 consecutive failures
-            if ($lockedOrder->pickup_failed_attempts >= 5) {
+            // Enforce Rider Assignment Authorization
+            if ($lockedOrder->rider_id && (int)$lockedOrder->rider_id !== (int)$rider->id) {
                 return [
                     'success' => false,
-                    'message' => 'Pickup verification temporarily locked due to 5 consecutive incorrect attempts. Please consult merchant counter staff.',
+                    'message' => 'Unauthorized: This order is assigned to another dispatch courier.',
+                ];
+            }
+
+            // Enforce Vendor Handover Readiness
+            if (!$lockedOrder->isVendorHandoverReady() && $lockedOrder->order_status !== 'ready_for_pickup') {
+                return [
+                    'success' => false,
+                    'message' => 'Merchant handover has not been authorized yet. Please ask merchant counter staff to click "Handover Ready" on their screen.',
+                ];
+            }
+
+            // Timed Lockout Protection: Check if pickup is currently locked
+            if ($lockedOrder->isPickupLocked()) {
+                $minutesRemaining = max(1, Carbon::now()->diffInMinutes($lockedOrder->pickup_locked_until));
+                return [
+                    'success' => false,
+                    'message' => "Pickup verification locked due to excessive failed attempts. Try again in {$minutesRemaining} minute(s) or request merchant re-authorization at counter.",
                 ];
             }
 
             // Mathematical Equality Check (Constant-time hash comparison prevents side-channel leaks)
             if (!hash_equals((string)$lockedOrder->pickup_verification_code, trim($otp))) {
                 $lockedOrder->increment('pickup_failed_attempts');
+                if ($lockedOrder->pickup_failed_attempts >= 5) {
+                    $lockedOrder->pickup_locked_until = Carbon::now()->addMinutes(15);
+                    $lockedOrder->save();
+                    return [
+                        'success' => false,
+                        'message' => 'Pickup verification temporarily locked for 15 minutes due to 5 consecutive incorrect attempts. Merchant can re-authorize at counter.',
+                    ];
+                }
                 return [
                     'success' => false,
                     'message' => 'Invalid merchant pickup verification OTP. Please verify with counter staff.',
                 ];
             }
 
-            // Reset failed attempts upon successful authentication
+            // Reset failed attempts & lockout upon successful authentication
             $lockedOrder->pickup_failed_attempts = 0;
+            $lockedOrder->pickup_locked_until = null;
             $lockedOrder->order_status = 'out_for_delivery';
             $lockedOrder->pickup_confirmed_by_rider = true;
             $lockedOrder->picked_up_at = Carbon::now();
@@ -122,6 +153,14 @@ class OrderSettlementService
                 return [
                     'success' => false,
                     'message' => "Order cannot be marked arrived in status {$lockedOrder->order_status}.",
+                ];
+            }
+
+            // Enforce Rider Assignment Authorization
+            if ($lockedOrder->rider_id && (int)$lockedOrder->rider_id !== (int)$rider->id) {
+                return [
+                    'success' => false,
+                    'message' => 'Unauthorized: This delivery is assigned to another dispatch courier.',
                 ];
             }
 

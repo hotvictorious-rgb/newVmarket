@@ -131,6 +131,21 @@ class FulfillmentAvailabilityService
                 $fee = ($packageTier === 'bulky') ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
                 $collectionPoints = $this->resolveCollectionPoints($destinationLgaId);
 
+                // Truthful Serviceability Guard: Require active collection point in destination LGA
+                if (empty($collectionPoints)) {
+                    return [
+                        'is_available' => false,
+                        'lane_id' => null,
+                        'origin_lga_id' => $shop->lga_id,
+                        'destination_lga_id' => $destinationLgaId,
+                        'fee' => '0.00',
+                        'message' => "No active logistics collection point operates in {$destLga->name} LGA yet. Cross-LGA delivery is unserviced.",
+                        'rate_tier' => 'tier_2_inter_lga_unserviced',
+                        'is_collection_point' => true,
+                        'collection_points' => [],
+                    ];
+                }
+
                 return [
                     'is_available' => true,
                     'lane_id' => null,
@@ -151,6 +166,21 @@ class FulfillmentAvailabilityService
             $eta = (string)\App\Models\SystemSetting::get('zone_inter_state_eta', '2-4 business days');
             $fee = ($packageTier === 'bulky') ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
             $collectionPoints = $this->resolveCollectionPoints($destinationLgaId);
+
+            // Truthful Serviceability Guard: Require active collection point in destination LGA
+            if (empty($collectionPoints)) {
+                return [
+                    'is_available' => false,
+                    'lane_id' => null,
+                    'origin_lga_id' => $shop->lga_id,
+                    'destination_lga_id' => $destinationLgaId,
+                    'fee' => '0.00',
+                    'message' => "No active logistics collection point operates in {$destLga->name} LGA yet. Inter-state freight delivery is unserviced.",
+                    'rate_tier' => 'tier_3_inter_state_unserviced',
+                    'is_collection_point' => true,
+                    'collection_points' => [],
+                ];
+            }
 
             return [
                 'is_available' => true,

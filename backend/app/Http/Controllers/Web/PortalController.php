@@ -2617,6 +2617,7 @@ class PortalController extends Controller
             if ($employee && $employee->shop) {
                 return $employee->shop;
             }
+            abort(403, 'No assigned shop branch for this employee.');
         }
 
         $shop = Shop::first();

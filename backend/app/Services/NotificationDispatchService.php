@@ -14,6 +14,8 @@ class NotificationDispatchService
 
     /**
      * Dispatch multi-channel notification for Order Creation
+     * NOTE: Security Invariant — pickup OTP is NEVER disclosed at order placement.
+     * It is only revealed after physical merchant verification and handover authorization.
      */
     public static function dispatchOrderPlaced(Order $order): array
     {
@@ -24,10 +26,33 @@ class NotificationDispatchService
         $customerMsg = "Victorious Market: Order {$order->order_number} confirmed! Total ₦" . number_format((float)$order->grand_total, 2) . ". Track live: " . route('order.status', $order->order_number);
         $dispatches[] = self::record('sms', $customerPhone, 'Customer', $customerMsg);
 
-        // 2. Vendor WhatsApp Alert
+        // 2. Vendor Alert (Zero early disclosure of pickup OTP)
         $vendorPhone = $order->vendor->business_phone ?? '+2348000000001';
-        $vendorMsg = "Victorious Market Plaza Alert: New Order {$order->order_number} received! Pickup OTP: {$order->pickup_verification_code}. Please prepare package for courier handover.";
+        $vendorMsg = "Victorious Market Plaza Alert: New Order {$order->order_number} received! Please inspect and prepare package. Pickup OTP will be issued upon handover authorization.";
         $dispatches[] = self::record('whatsapp', $vendorPhone, 'Vendor', $vendorMsg);
+
+        return $dispatches;
+    }
+
+    /**
+     * Dispatch notification when Merchant / Counter authorizes handover and reveals OTP
+     */
+    public static function dispatchVendorHandoverReady(Order $order): array
+    {
+        $dispatches = [];
+
+        // 1. Vendor Counter Alert with Secret 6-digit PIN
+        $vendorPhone = $order->vendor->business_phone ?? '+2348000000001';
+        $vendorMsg = "Victorious Market Counter Authorized: Handover OTP for Order {$order->order_number} is [{$order->pickup_verification_code}]. Verify assigned courier identity before releasing package.";
+        $dispatches[] = self::record('whatsapp', $vendorPhone, 'Vendor Counter', $vendorMsg);
+
+        // 2. Assigned Courier Alert: Package is sealed and ready for collection
+        if ($order->rider && $order->rider->user) {
+            $riderPhone = $order->rider->user->phone ?? '+2348000000003';
+            $shopName = $order->shop->name ?? 'Merchant Shop';
+            $riderMsg = "Victorious Market: Order {$order->order_number} is packed and ready for pickup at {$shopName}. Present yourself to counter staff to collect package.";
+            $dispatches[] = self::record('sms', $riderPhone, 'Assigned Courier', $riderMsg);
+        }
 
         return $dispatches;
     }
@@ -110,21 +135,55 @@ class NotificationDispatchService
     }
 
     /**
-     * Records and logs dispatch event
+     * Records, logs and attempts production dispatch with fallback to simulation
+     * Supports Termii/Twilio SMS & WhatsApp gateways when configured in environment.
      */
     protected static function record(string $channel, string $recipient, string $recipientType, string $message): array
     {
+        $channelUpper = strtoupper($channel);
+        $deliveryStatus = 'simulated';
+        $providerRef = null;
+
+        // Production Provider Dispatch: Check Termii (Nigeria SMS/WhatsApp gateway)
+        $termiiApiKey = env('TERMII_API_KEY');
+        if (!empty($termiiApiKey) && in_array(strtolower($channel), ['sms', 'whatsapp'])) {
+            try {
+                $termiiEndpoint = 'https://api.ng.termii.com/api/sms/send';
+                $response = \Illuminate\Support\Facades\Http::timeout(5)->retry(2, 200)->post($termiiEndpoint, [
+                    'to' => $recipient,
+                    'from' => env('TERMII_SENDER_ID', 'VMARKET'),
+                    'sms' => $message,
+                    'type' => 'plain',
+                    'channel' => strtolower($channel) === 'whatsapp' ? 'whatsapp' : 'generic',
+                    'api_key' => $termiiApiKey,
+                ]);
+
+                if ($response->successful()) {
+                    $deliveryStatus = 'delivered';
+                    $providerRef = $response->json('message_id') ?? 'termii_' . uniqid();
+                } else {
+                    $deliveryStatus = 'failed_provider_fallback';
+                    Log::warning("Termii dispatch non-200: " . $response->body());
+                }
+            } catch (\Throwable $e) {
+                $deliveryStatus = 'provider_timeout_fallback';
+                Log::warning("Termii provider connection error: " . $e->getMessage());
+            }
+        }
+
         $payload = [
-            'channel' => strtoupper($channel),
+            'channel' => $channelUpper,
             'recipient' => $recipient,
             'recipient_type' => $recipientType,
             'message' => $message,
+            'delivery_status' => $deliveryStatus,
+            'provider_ref' => $providerRef,
             'dispatched_at' => Carbon::now()->toIso8601String(),
         ];
 
-        Log::info("Notification dispatched [{$channel}]: {$message}", $payload);
+        Log::info("Notification dispatched [{$channelUpper} - {$deliveryStatus}]: {$message}", $payload);
 
-        // Retain last 30 notifications in cache for live UI simulation
+        // Retain last 30 notifications in cache for live UI audit trail
         try {
             $recent = Cache::get(self::CACHE_KEY, []);
             array_unshift($recent, $payload);
