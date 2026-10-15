@@ -32,8 +32,18 @@ class BcMathService
     }
 
     /**
-     * Mathematical Commercial Split Engine (90 / 5 / 5 Invariant)
-     * Proof: Vendor 90% + Cashback 5% + Platform 5% == Merchandise 100% (Delta = ₦0.00)
+     * Mathematical Commercial Split Engine
+     * 
+     * 1. Merchandise Subtotal Invariant (90 / 5 / 5):
+     *    - Vendor Net: 90% guaranteed to merchant
+     *    - Customer Cashback: 5% customer loyalty reward
+     *    - Platform Retained Margin: 5% Victorious Market operating margin
+     *    Proof: Vendor 90% + Cashback 5% + Platform 5% == Merchandise 100% (Δ = ₦0.00)
+     *
+     * 2. Delivery Fee Invariant (90 / 10 Split):
+     *    - Logistics Company: 90% credited to corporate wallet
+     *    - Victorious Market Platform: 10% platform delivery fee cut
+     *    Proof: Logistics 90% + Platform Delivery Cut 10% == Delivery Fee 100% (Δ = ₦0.00)
      */
     public static function computeCommercialSplits(string $merchandiseSubtotal, string $deliveryFee = '0.00'): array
     {
@@ -47,20 +57,40 @@ class BcMathService
         $totalCommission = self::mul($merchandiseSubtotal, '0.10');
         $platformRetained = self::sub($totalCommission, $cashback);
 
-        // Verification invariant check: Δ == 0.00
-        $sum = self::add(self::add($vendorNet, $cashback), $platformRetained);
-        $delta = self::sub($merchandiseSubtotal, $sum);
+        // Verification invariant check: Δ == 0.00 on merchandise
+        $merchandiseSum = self::add(self::add($vendorNet, $cashback), $platformRetained);
+        $merchandiseDelta = self::sub($merchandiseSubtotal, $merchandiseSum);
 
-        if (self::comp($delta, '0.00') !== 0) {
-            $platformRetained = self::add($platformRetained, $delta);
+        if (self::comp($merchandiseDelta, '0.00') !== 0) {
+            $platformRetained = self::add($platformRetained, $merchandiseDelta);
         }
+
+        // Delivery fee split: 90% Logistics Company / 10% Victorious Market
+        $logisticsNet = self::mul($deliveryFee, '0.90');
+        $platformDeliveryCut = self::sub($deliveryFee, $logisticsNet);
+
+        // Verification invariant check: Δ == 0.00 on delivery fee
+        $deliverySum = self::add($logisticsNet, $platformDeliveryCut);
+        $deliveryDelta = self::sub($deliveryFee, $deliverySum);
+
+        if (self::comp($deliveryDelta, '0.00') !== 0) {
+            $platformDeliveryCut = self::add($platformDeliveryCut, $deliveryDelta);
+        }
+
+        // Platform Total Retained = Merchandise 5% + Delivery Fee 10%
+        $platformTotalRetained = self::add($platformRetained, $platformDeliveryCut);
 
         return [
             'merchandise_subtotal' => $merchandiseSubtotal,
             'vendor_net_90' => $vendorNet,
             'customer_cashback_5' => $cashback,
             'platform_retained_5' => $platformRetained,
+            'platform_vendor_commission_5' => $platformRetained,
             'delivery_fee_segregated' => $deliveryFee,
+            'logistics_net_90' => $logisticsNet,
+            'platform_delivery_cut_10' => $platformDeliveryCut,
+            'platform_delivery_commission_10' => $platformDeliveryCut,
+            'platform_total_retained' => $platformTotalRetained,
             'grand_total' => self::add($merchandiseSubtotal, $deliveryFee),
         ];
     }

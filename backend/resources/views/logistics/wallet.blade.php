@@ -1,8 +1,8 @@
 @extends('layouts.dashboard')
 
-@section('title', '5% Logistics Fee Wallet — Logistics Fleet')
+@section('title', '90% Logistics Fee Wallet — Logistics Fleet')
 @section('role_title', 'Logistics Fleet Operations Center')
-@section('page_title', '5% Logistics Fee Wallet')
+@section('page_title', '90% Logistics Delivery Fee Wallet')
 @section('role_badge', 'LOGISTICS HQ')
 @section('role_badge_class', 'role-badge-logistics')
 
@@ -14,17 +14,17 @@
     <div class="breadcrumb-trail">
         <a href="{{ route('logistics.dashboard') }}">Logistics Fleet</a>
         <span class="breadcrumb-separator">/</span>
-        <span class="breadcrumb-current">5% Logistics Fee Wallet</span>
+        <span class="breadcrumb-current">90% Logistics Delivery Fee Wallet</span>
     </div>
 
     <div class="page-header-row">
         <div>
             <h1 class="page-header-title">
                 <span style="font-size: 26px;">💼</span>
-                <span>5% Logistics Fee Wallet &amp; Revenue Ledger</span>
+                <span>90% Logistics Delivery Fee Wallet &amp; Revenue Ledger</span>
             </h1>
             <p class="page-header-subtitle">
-                Automated mathematical 5% revenue cut credited upon verified customer delivery OTP handshake. Direct corporate settlement.
+                Automated mathematical 90% delivery revenue credited upon verified customer delivery OTP handshake. Victorious Market earns 10% platform fee. Direct B2B corporate settlement.
             </p>
         </div>
         <div>
@@ -40,7 +40,7 @@
             <div class="stat-card-info">
                 <span class="stat-card-label">Corporate Wallet Balance</span>
                 <span class="stat-card-value">₦{{ number_format((float)($company->wallet_balance ?? 0), 2) }}</span>
-                <span class="stat-card-subtext" style="color: var(--adm-success);">Direct B2B Escrow Balance</span>
+                <span class="stat-card-subtext" style="color: var(--adm-success);">Direct 90% Delivery Escrow</span>
             </div>
             <div class="stat-card-icon-box icon-box-emerald">💼</div>
         </div>
@@ -65,9 +65,9 @@
 
         <div class="stat-card stat-card-border-amber">
             <div class="stat-card-info">
-                <span class="stat-card-label">Settlement Status</span>
-                <span class="stat-card-value">AUTO</span>
-                <span class="stat-card-subtext" style="color: var(--adm-warning);">Instant Escrow Release</span>
+                <span class="stat-card-label">Settlement Formula</span>
+                <span class="stat-card-value">90% / 10%</span>
+                <span class="stat-card-subtext" style="color: var(--adm-warning);">90% Fleet / 10% VMarket</span>
             </div>
             <div class="stat-card-icon-box icon-box-amber">⚡</div>
         </div>
@@ -90,7 +90,8 @@
                         <th>Shopper &amp; Phone</th>
                         <th>Plaza Branch</th>
                         <th>Courier</th>
-                        <th>5% Logistics Cut</th>
+                        <th>Total Delivery Fee</th>
+                        <th>90% Logistics Cut</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -111,8 +112,12 @@
                             <td>
                                 <span class="dash-badge dash-badge-purple">{{ $run->rider->user->name ?? 'Courier' }}</span>
                             </td>
+                            <td>
+                                <div style="font-weight: 600; color: var(--adm-text);">₦{{ number_format((float)($run->delivery_fee ?? 0), 2) }}</div>
+                                <span style="font-size: 11px; color: var(--adm-text-muted);">VMarket 10%: ₦{{ number_format((float)($run->platform_delivery_fee ?? bcmul((string)($run->delivery_fee ?? 0), '0.10', 2)), 2) }}</span>
+                            </td>
                             <td style="font-weight: 800; color: #059669;">
-                                ₦{{ number_format($run->logistics_fee_5 ?? 150, 2) }}
+                                ₦{{ number_format((float)($run->logistics_fee_retained ?? bcmul((string)($run->delivery_fee ?? 0), '0.90', 2)), 2) }}
                             </td>
                             <td>
                                 <span class="dash-badge dash-badge-success">✅ Delivered &amp; Settled</span>
@@ -120,7 +125,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" style="text-align: center; padding: 40px; color: var(--adm-text-muted);">
+                            <td colspan="7" style="text-align: center; padding: 40px; color: var(--adm-text-muted);">
                                 No completed delivery dispatches recorded yet.
                             </td>
                         </tr>

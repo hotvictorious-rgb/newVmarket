@@ -31,6 +31,7 @@ class Order extends Model
         'customer_cashback_5',
         'platform_margin_5',
         'logistics_fee_retained',
+        'platform_delivery_fee',
         'pickup_verification_code',
         'verification_code',
         'rider_arrived_at',
@@ -46,14 +47,15 @@ class Order extends Model
     ];
 
     protected $casts = [
-        'merchandise_subtotal' => 'string',
-        'delivery_fee' => 'string',
-        'cashback_redeemed' => 'string',
-        'grand_total' => 'string',
-        'vendor_net_90' => 'string',
-        'customer_cashback_5' => 'string',
-        'platform_margin_5' => 'string',
-        'logistics_fee_retained' => 'string',
+        'merchandise_subtotal' => 'decimal:2',
+        'delivery_fee' => 'decimal:2',
+        'cashback_redeemed' => 'decimal:2',
+        'grand_total' => 'decimal:2',
+        'vendor_net_90' => 'decimal:2',
+        'customer_cashback_5' => 'decimal:2',
+        'platform_margin_5' => 'decimal:2',
+        'logistics_fee_retained' => 'decimal:2',
+        'platform_delivery_fee' => 'decimal:2',
         'rider_arrived_at' => 'datetime',
         'delivery_confirmed_by_customer' => 'boolean',
         'received_at' => 'datetime',
@@ -181,12 +183,29 @@ class Order extends Model
             $platformMargin = bcadd($platformMargin, $delta, 2);
         }
 
+        // Delivery fee split: 90% Logistics Company / 10% Victorious Market
+        $logisticsNet = bcmul($deliveryFee, '0.90', 2);
+        $platformDeliveryFee = bcsub($deliveryFee, $logisticsNet, 2);
+
         return [
             'vendor_net_90' => $vendorNet,
             'customer_cashback_5' => $cashback,
             'platform_margin_5' => $platformMargin,
+            'delivery_fee' => $deliveryFee,
             'logistics_fee' => $deliveryFee,
+            'logistics_net_90' => $logisticsNet,
+            'platform_delivery_fee_10' => $platformDeliveryFee,
         ];
+    }
+
+    public function getLogisticsNetCutAttribute(): string
+    {
+        return $this->logistics_fee_retained ?? bcmul((string)$this->delivery_fee, '0.90', 2);
+    }
+
+    public function getPlatformDeliveryCutAttribute(): string
+    {
+        return $this->platform_delivery_fee ?? bcmul((string)$this->delivery_fee, '0.10', 2);
     }
 
     /**

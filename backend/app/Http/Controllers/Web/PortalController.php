@@ -788,7 +788,7 @@ class PortalController extends Controller
             ->take(10)
             ->get();
 
-        $totalRevenue = Order::where('order_status', 'delivered')->sum('logistics_fee_5');
+        $totalRevenue = (float)($company->wallet_balance ?? 0);
 
         $fleetMetrics = [
             'active_riders' => $activeRiders->count(),
@@ -840,7 +840,7 @@ class PortalController extends Controller
             ->take(20)
             ->get();
 
-        $totalRevenue = Order::where('order_status', 'delivered')->sum('logistics_fee_5');
+        $totalRevenue = (float)($company->wallet_balance ?? 0);
 
         $fleetMetrics = [
             'active_riders' => $activeRiders->count(),
@@ -1865,7 +1865,8 @@ class PortalController extends Controller
             'vendor_net_90' => $splits['vendor_net_90'],
             'customer_cashback_5' => $splits['customer_cashback_5'],
             'platform_margin_5' => $splits['platform_retained_5'],
-            'logistics_fee_retained' => $splits['delivery_fee_segregated'],
+            'logistics_fee_retained' => $splits['logistics_net_90'],
+            'platform_delivery_fee' => $splits['platform_delivery_cut_10'],
             'pickup_verification_code' => $pickupOtp,
             'verification_code' => $deliveryOtp,
             'vendor_settlement_status' => 'held',

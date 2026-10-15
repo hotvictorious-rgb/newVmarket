@@ -116,7 +116,8 @@ class OrderSettlementService
 
             $lockedOrder->save();
 
-            // Corporate B2B Settlement: Credit 100% of delivery fee to accredited Logistics Company Corporate Wallet
+            // Corporate B2B Settlement: Credit 90% of delivery fee to accredited Logistics Company Corporate Wallet
+            // Victorious Market retains 10% platform delivery fee cut
             $targetRider = $rider ?? ($lockedOrder->rider_id ? RiderProfile::with('logisticsCompany')->find($lockedOrder->rider_id) : null);
             $logisticsCompany = null;
             if ($lockedOrder->collection_point_id) {
@@ -134,8 +135,14 @@ class OrderSettlementService
                 $logisticsCompany = \App\Models\LogisticsCompanyProfile::where('status', 'active')->first();
             }
 
-            if ($logisticsCompany && bccomp((string)($lockedOrder->delivery_fee ?? '0.00'), '0.00', 2) > 0) {
-                $logisticsCompany->creditWallet((string)$lockedOrder->delivery_fee);
+            // Authoritative 90% Logistics Net Calculation via BCMath
+            $logisticsNetCut = $lockedOrder->logistics_fee_retained;
+            if (empty($logisticsNetCut) || bccomp((string)$logisticsNetCut, '0.00', 2) === 0) {
+                $logisticsNetCut = bcmul((string)($lockedOrder->delivery_fee ?? '0.00'), '0.90', 2);
+            }
+
+            if ($logisticsCompany && bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
+                $logisticsCompany->creditWallet((string)$logisticsNetCut);
             }
 
             if ($targetRider) {

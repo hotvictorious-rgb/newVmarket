@@ -374,7 +374,8 @@ class EcosystemDemoSeeder extends Seeder
             'vendor_net_90' => '1305000.00',
             'customer_cashback_5' => '72500.00',
             'platform_margin_5' => '72500.00',
-            'logistics_fee_retained' => '2500.00',
+            'logistics_fee_retained' => '2250.00',
+            'platform_delivery_fee' => '250.00',
             'verification_code' => '482910',
             'vendor_settlement_status' => 'eligible',
         ]);

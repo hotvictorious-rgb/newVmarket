@@ -85,7 +85,7 @@ class PortalWebTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Fleet Logistics Operations Center');
         $response->assertSee('Directional LGA Waybills Manifest');
-        $response->assertSee('5% Logistics Fee Wallet');
+        $response->assertSee('90% Delivery Fee Wallet');
     }
 
     public function test_delivery_rider_dashboard_loads_successfully_when_authenticated(): void

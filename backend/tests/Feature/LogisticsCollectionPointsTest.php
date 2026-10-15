@@ -159,11 +159,14 @@ class LogisticsCollectionPointsTest extends TestCase
         $this->assertTrue($order->isCollectionPointPickup());
         $this->assertNotNull($order->rider);
         $this->assertEquals($collectionPoint->logistics_company_id, $order->rider->logistics_company_id);
+        // Verify 90% Logistics Net and 10% Victorious Market Delivery Commission
+        $this->assertEquals(bcmul((string)$order->delivery_fee, '0.90', 2), $order->logistics_fee_retained);
+        $this->assertEquals(bcmul((string)$order->delivery_fee, '0.10', 2), $order->platform_delivery_fee);
     }
 
     /**
-     * Test 6: Corporate B2B Settlement guarantees 100% delivery fee is credited to parent
-     * Logistics Company Corporate Wallet, NOT individual street riders.
+     * Test 6: Corporate B2B Settlement guarantees 90% delivery fee is credited to parent
+     * Logistics Company Corporate Wallet, with Victorious Market retaining 10% delivery commission.
      */
     public function test_delivery_otp_credits_parent_logistics_company_corporate_wallet(): void
     {
@@ -199,7 +202,8 @@ class LogisticsCollectionPointsTest extends TestCase
             'vendor_net_90' => '18000.00',
             'customer_cashback_5' => '1000.00',
             'platform_margin_5' => '1000.00',
-            'logistics_fee_retained' => $deliveryFee,
+            'logistics_fee_retained' => '1350.00', // 90% to logistics company
+            'platform_delivery_fee' => '150.00',   // 10% to Victorious Market
             'pickup_verification_code' => '654321',
             'verification_code' => $otp,
             'rider_arrived_at' => Carbon::now(),
@@ -212,9 +216,12 @@ class LogisticsCollectionPointsTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertEquals('delivered', $order->fresh()->order_status);
 
-        // Authoritative Proof: 100% of segregated delivery fee credited to Logistics Company Corporate Wallet
+        // Authoritative Proof: 90% of delivery fee credited to Logistics Company Corporate Wallet
         $refreshedCompany = $logisticsCompany->fresh();
-        $this->assertEquals('1500.00', $refreshedCompany->wallet_balance);
-        $this->assertEquals('1500.00', $refreshedCompany->wallet_balance);
+        $this->assertEquals('1350.00', $refreshedCompany->wallet_balance);
+
+        // Authoritative Proof: VMarket earns both Vendor Commission (5% = ₦1,000) and Delivery Commission (10% = ₦150)
+        $this->assertEquals('1000.00', $order->fresh()->platform_margin_5);
+        $this->assertEquals('150.00', $order->fresh()->platform_delivery_fee);
     }
 }
