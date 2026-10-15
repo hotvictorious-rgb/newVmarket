@@ -47,28 +47,39 @@
             <div style="display: flex; gap: 8px; margin-bottom: 10px;">
                 <span style="background: var(--vm-primary-light); color: var(--vm-primary); font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px;">
                     {{ $product->category->name ?? 'Electronics' }}
-                </span>
-                <span style="background: #F1F5F9; color: #475569; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 6px;">
-                    Package: {{ ucfirst($product->package_tier ?? 'standard') }}
-                </span>
+            <!-- Rating & Category Row (Mockup Screen 8 Parity) -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="background: var(--vm-primary-light); color: var(--vm-primary); font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px;">
+                        {{ $product->category->name ?? 'Electronics' }}
+                    </span>
+                    <span style="background: #F1F5F9; color: #475569; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 6px;">
+                        Package: {{ ucfirst($product->package_tier ?? 'standard') }}
+                    </span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px; font-size: 13px; color: #64748B;">
+                    <span style="color: #F59E0B; font-size: 15px;">★</span>
+                    <strong style="color: #0F172A; font-weight: 800;">4.7</strong>
+                    <span>(124 reviews)</span>
+                </div>
             </div>
 
-            <h1 style="font-size: 24px; font-weight: 800; color: #0F172A; margin: 0 0 14px; line-height: 1.3;">
+            <h1 style="font-size: 26px; font-weight: 800; color: #0F172A; margin: 0 0 10px; line-height: 1.25;">
                 {{ $product->name }}
             </h1>
 
-            <div style="font-size: 13px; color: #64748B; margin-bottom: 18px; display: flex; align-items: center; gap: 6px;">
-                <span>Merchant:</span>
+            <div style="font-size: 13px; color: #64748B; margin-bottom: 16px; display: flex; align-items: center; gap: 6px;">
+                <span>Verified Merchant:</span>
                 <strong style="color: #0F172A;">{{ $product->vendor->business_name ?? 'Victor Tech Innovations' }}</strong>
                 <span>&bull;</span>
                 <span>Branch: {{ $product->shop->name }} ({{ $product->shop->lga->name ?? 'Uyo' }})</span>
             </div>
 
-            <!-- Price & Cashback Banner -->
-            <div style="background: linear-gradient(135deg, rgba(94, 23, 235, 0.05) 0%, rgba(255, 215, 0, 0.08) 100%); border: 1.5px solid var(--vm-gold); border-radius: 12px; padding: 18px 22px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
+            <!-- Price & Cashback Banner (Mockup Screen 8 Parity) -->
+            <div style="background: linear-gradient(135deg, rgba(94, 23, 235, 0.05) 0%, rgba(255, 215, 0, 0.08) 100%); border: 1.5px solid var(--vm-gold); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
                 <div>
-                    <span style="font-size: 12px; color: #64748B; font-weight: 600; display: block; margin-bottom: 2px;">MARKETPLACE RETAIL PRICE</span>
-                    <span style="font-size: 28px; font-weight: 900; color: var(--vm-primary);">
+                    <span style="font-size: 11.5px; color: #64748B; font-weight: 700; display: block; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.4px;">MARKETPLACE RETAIL PRICE</span>
+                    <span style="font-size: 30px; font-weight: 900; color: var(--vm-primary);">
                         &#8358;{{ number_format((float)$product->unit_price, 2) }}
                     </span>
                 </div>
@@ -80,55 +91,102 @@
                 </div>
             </div>
 
+            <!-- Feature Spec Pills (Mockup Screen 8 Parity) -->
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;">
+                <div style="display: inline-flex; align-items: center; gap: 6px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: #334155;">
+                    <span>⚡</span> 128GB Storage
+                </div>
+                <div style="display: inline-flex; align-items: center; gap: 6px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: #334155;">
+                    <span>📱</span> 6.5" Super AMOLED
+                </div>
+                <div style="display: inline-flex; align-items: center; gap: 6px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: #334155;">
+                    <span>🔋</span> 5000mAh Battery
+                </div>
+                <div style="display: inline-flex; align-items: center; gap: 6px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: #334155;">
+                    <span>🛡️</span> 1 Year Warranty
+                </div>
+            </div>
+
+            <!-- Stock Status & Quantity Stepper (Mockup Screen 8 Parity) -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 12px 16px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: #10B981; display: inline-block;"></span>
+                    <strong style="color: #0F172A; font-size: 13.5px;">In Stock</strong>
+                    <span style="font-size: 12px; color: #64748B;">(Verified at {{ $product->shop->name }})</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 12.5px; font-weight: 600; color: #475569;">Quantity:</span>
+                    <div style="display: inline-flex; align-items: center; border: 1.5px solid #CBD5E1; border-radius: 8px; background: #FFFFFF; overflow: hidden;">
+                        <button type="button" onclick="const i = document.getElementById('vmProductQtyInput'); if (parseInt(i.value) > 1) i.value = parseInt(i.value) - 1;" style="width: 32px; height: 32px; border: none; background: #F1F5F9; font-weight: 800; cursor: pointer; color: #334155;">-</button>
+                        <input type="number" id="vmProductQtyInput" value="1" min="1" max="99" style="width: 40px; height: 32px; border: none; text-align: center; font-size: 13.5px; font-weight: 800; color: #0F172A; outline: none;">
+                        <button type="button" onclick="const i = document.getElementById('vmProductQtyInput'); i.value = parseInt(i.value) + 1;" style="width: 32px; height: 32px; border: none; background: #F1F5F9; font-weight: 800; cursor: pointer; color: #334155;">+</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Directional Corridor Card -->
-            <div style="background: #F8FAFC; border: 1px solid var(--vm-border); border-radius: 10px; padding: 16px; margin-bottom: 24px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <span style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase;">Delivery to Your Location:</span>
-                    <button type="button" class="vm-header-location-btn" style="background: none; border: none; color: var(--vm-primary); font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline;">
+            <div style="background: #F8FAFC; border: 1px solid var(--vm-border); border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 11.5px; font-weight: 700; color: #475569; text-transform: uppercase;">Delivery to Your Location:</span>
+                    <button type="button" onclick="if(window.vmOpenLocationModal) window.vmOpenLocationModal();" style="background: none; border: none; color: var(--vm-primary); font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline;">
                         Change ({{ $activeCity }})
                     </button>
                 </div>
 
                 @if($deliveryCheck['is_available'])
-                    <div style="display: flex; align-items: center; gap: 10px; color: #1D4ED8; font-weight: 600; font-size: 13.5px; margin-bottom: 6px;">
+                    <div style="display: flex; align-items: center; gap: 8px; color: #1D4ED8; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
                         <span>🚚</span>
                         <span>Delivers to {{ $activeCity }}: &#8358;{{ number_format((float)$deliveryCheck['fee'], 2) }}</span>
-                        <span style="font-size: 12px; color: #64748B; font-weight: normal;">({{ $deliveryCheck['estimated_time_text'] }})</span>
+                        <span style="font-size: 11.5px; color: #64748B; font-weight: normal;">({{ $deliveryCheck['estimated_time_text'] }})</span>
                     </div>
                 @else
-                    <div style="display: flex; align-items: center; gap: 10px; color: #D97706; font-weight: 600; font-size: 13.5px; margin-bottom: 6px;">
+                    <div style="display: flex; align-items: center; gap: 8px; color: #D97706; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
                         <span>📦</span>
                         <span>Direct lane in transit setup. Nationwide dispatch available.</span>
                     </div>
                 @endif
 
                 @if($pickupCheck['is_available'])
-                    <div style="display: flex; align-items: center; gap: 10px; color: #059669; font-weight: 600; font-size: 13px;">
+                    <div style="display: flex; align-items: center; gap: 8px; color: #059669; font-weight: 600; font-size: 12.5px;">
                         <span>⚡</span>
                         <span>In-Shop Inspection &amp; Pickup enabled at {{ $product->shop->name }} ({{ $product->shop->address }})</span>
                     </div>
                 @endif
             </div>
 
-            <!-- THE 2 PRIMARY REAL-WORLD ACTION BUTTONS -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 24px;">
-                <!-- Action 1: Doorstep Delivery Checkout -->
-                <a href="{{ route('checkout', ['product_id' => $product->id, 'quantity' => 1]) }}" style="background: linear-gradient(135deg, #5E17EB, #7C3AED); color: #FFFFFF; text-decoration: none; font-weight: 800; font-size: 14px; padding: 14px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(94, 23, 235, 0.35); text-align: center;">
-                    <span>🚚 Doorstep Delivery</span>
-                </a>
+            <!-- THE 2 PRIMARY CALL TO ACTION BUTTONS (Mockup Screen 8 Parity) -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                <!-- Action 1: Add to Cart (Purple) -->
+                <button type="button" class="vm-btn-add-cart" 
+                        data-id="{{ $product->id }}" 
+                        data-name="{{ $product->name }}" 
+                        data-price="{{ $product->unit_price }}" 
+                        data-shop="{{ $product->shop->name ?? 'Verified Merchant' }}" 
+                        data-lga="{{ $product->shop->lga->name ?? 'Uyo' }}" 
+                        data-slug="{{ $product->slug }}"
+                        style="background: #5E17EB; color: #FFFFFF; border: none; font-weight: 800; font-size: 14px; padding: 14px 18px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(94, 23, 235, 0.35); transition: transform 0.15s ease;">
+                    <span>🛒 Add to Cart</span>
+                </button>
 
-                <!-- Action 2: Inspect First, Pay Later (Pickup Reservation) -->
-                <form method="POST" action="{{ route('reservation.create') }}" style="margin: 0;">
-                    @csrf
-                    <input type="hidden" name="product_id" value="{{ $product->id }}">
-                    <input type="hidden" name="shop_id" value="{{ $product->shop_id }}">
-                    <input type="hidden" name="customer_name" value="{{ Auth::user()->name ?? 'Shopper' }}">
-                    <input type="hidden" name="customer_phone" value="{{ Auth::user()->phone ?? '08012345678' }}">
-                    <button type="submit" style="width: 100%; height: 100%; background: #0F172A; color: var(--vm-gold); border: 1.5px solid var(--vm-gold); font-weight: 800; font-size: 13.5px; padding: 14px 10px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        <span>🏢 Reserve for In-Shop Pickup</span>
-                    </button>
-                </form>
+                <!-- Action 2: Buy Now (Yellow/Gold) -->
+                <a href="{{ route('checkout', ['product_id' => $product->id, 'quantity' => 1]) }}" 
+                   onclick="const q = document.getElementById('vmProductQtyInput').value; this.href = '{{ route('checkout') }}?product_id={{ $product->id }}&quantity=' + q;" 
+                   style="background: linear-gradient(135deg, #FFD700 0%, #F59E0B 100%); color: #0F172A; text-decoration: none; font-weight: 800; font-size: 14px; padding: 14px 18px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(255, 215, 0, 0.35); text-align: center; transition: transform 0.15s ease;">
+                    <span>⚡ Buy Now</span>
+                </a>
             </div>
+
+            <!-- Action 3: Inspect First, Pay Later (Pickup Reservation) -->
+            <form method="POST" action="{{ route('reservation.create') }}" style="margin: 0 0 20px;">
+                @csrf
+                <input type="hidden" name="product_id" value="{{ $product->id }}">
+                <input type="hidden" name="shop_id" value="{{ $product->shop_id }}">
+                <input type="hidden" name="customer_name" value="{{ Auth::user()->name ?? 'Shopper' }}">
+                <input type="hidden" name="customer_phone" value="{{ Auth::user()->phone ?? '08012345678' }}">
+                <button type="submit" style="width: 100%; background: #F8FAFC; color: #0F172A; border: 1.5px solid #CBD5E1; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.15s ease;">
+                    <span>🏢 Reserve for Free In-Shop Inspection</span>
+                </button>
+            </form>
 
             <!-- Description -->
             <div style="border-top: 1px solid var(--vm-border); padding-top: 18px;">

@@ -17,6 +17,7 @@
 
     <!-- Victorious MARKET Theme Design System -->
     <link rel="stylesheet" href="{{ asset('assets/css/vmarket.css') }}">
+    <script src="{{ asset('assets/js/vm-cart.js') }}" defer></script>
 
     <!-- Brand Specific Custom Overrides -->
     <style>
@@ -608,6 +609,70 @@
         .vm-btn-done:active {
             transform: translateY(0);
         }
+
+        /* Mobile Bottom App Navigation Bar (Mockup Screen 5) */
+        .vm-mobile-bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: #FFFFFF;
+            border-top: 1px solid #E2E8F0;
+            box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+            z-index: 999;
+            justify-content: space-around;
+            align-items: center;
+            padding: 4px 6px;
+        }
+
+        @media (max-width: 768px) {
+            .vm-mobile-bottom-nav {
+                display: flex;
+            }
+            body {
+                padding-bottom: 64px;
+            }
+        }
+
+        .vm-mob-nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            color: #64748B;
+            font-size: 11px;
+            font-weight: 600;
+            flex: 1;
+            padding: 4px 0;
+            transition: color 0.15s ease;
+        }
+
+        .vm-mob-nav-item.active,
+        .vm-mob-nav-item:hover {
+            color: var(--vm-primary);
+        }
+
+        .vm-mob-nav-icon {
+            font-size: 19px;
+            line-height: 1.2;
+            margin-bottom: 1px;
+        }
+
+        .vm-mob-nav-badge {
+            position: absolute;
+            top: -4px;
+            right: -8px;
+            background: var(--vm-primary);
+            color: #FFFFFF;
+            font-size: 9.5px;
+            font-weight: 800;
+            padding: 1px 5px;
+            border-radius: 999px;
+            display: none;
+        }
 </style>
     @stack('styles')
 </head>
@@ -1025,12 +1090,39 @@
             </div>
             <div style="display: flex; gap: 8px; margin-bottom: 16px; font-size: 12px; color: #059669; background: #ECFDF5; padding: 8px 12px; border-radius: 6px;">
                 <span>🎁</span>
-                <span>You will earn <strong>5% Cashback (₦0.00)</strong> upon receipt sign-off</span>
+                <span>You will earn <strong>5% Cashback (<span id="vmCartCashbackEstimate">₦0.00</span>)</strong> upon receipt sign-off</span>
             </div>
-            <a href="{{ route('customer.login') }}" style="display: block; text-align: center; background: var(--vm-primary); color: #FFFFFF; font-weight: 700; padding: 12px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 12px rgba(94, 23, 235, 0.25);">
-                Proceed to Checkout
+            <a href="{{ route('checkout') }}" id="vmCartCheckoutBtn" style="display: block; text-align: center; background: linear-gradient(135deg, #FFD700 0%, #F59E0B 100%); color: #0F172A; font-weight: 800; font-size: 14px; padding: 13px; border-radius: 10px; text-decoration: none; box-shadow: 0 4px 14px rgba(255, 215, 0, 0.35); transition: transform 0.15s ease;">
+                Proceed to Checkout &rarr;
             </a>
         </div>
+    </div>
+
+    <!-- Mobile Bottom App Navigation Bar (Mockup Screen 5 Parity) -->
+    <div class="vm-mobile-bottom-nav">
+        <a href="{{ route('storefront') }}" class="vm-mob-nav-item {{ request()->routeIs('storefront') ? 'active' : '' }}">
+            <span class="vm-mob-nav-icon">🏠</span>
+            <span class="vm-mob-nav-text">Home</span>
+        </a>
+        <a href="{{ route('storefront') }}#categories" class="vm-mob-nav-item">
+            <span class="vm-mob-nav-icon">📑</span>
+            <span class="vm-mob-nav-text">Categories</span>
+        </a>
+        <button type="button" class="vm-mob-nav-item vm-mob-cart-trigger" onclick="if(window.vmCart) window.vmCart.openDrawer();" style="background: none; border: none; cursor: pointer;">
+            <div style="position: relative; display: inline-block;">
+                <span class="vm-mob-nav-icon">🛒</span>
+                <span class="vm-mob-nav-badge" id="vmMobCartBadge">0</span>
+            </div>
+            <span class="vm-mob-nav-text">Cart</span>
+        </button>
+        <a href="{{ route('customer.dashboard') }}" class="vm-mob-nav-item {{ request()->routeIs('customer.dashboard') ? 'active' : '' }}">
+            <span class="vm-mob-nav-icon">📦</span>
+            <span class="vm-mob-nav-text">Orders</span>
+        </a>
+        <a href="{{ Auth::check() ? route('customer.dashboard') : route('customer.login') }}" class="vm-mob-nav-item {{ request()->routeIs('customer.login', 'customer.register') ? 'active' : '' }}">
+            <span class="vm-mob-nav-icon">👤</span>
+            <span class="vm-mob-nav-text">{{ Auth::check() ? 'Account' : 'Login' }}</span>
+        </a>
     </div>
 
     <!-- Interactive Client Scripts -->

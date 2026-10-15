@@ -563,16 +563,19 @@
                                 <th style="padding: 10px 12px;">Total</th>
                                 <th style="padding: 10px 12px;">Type</th>
                                 <th style="padding: 10px 12px;">Status</th>
+                                <th style="padding: 10px 12px; text-align: right;">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             @forelse($orders as $order)
                                 <tr style="border-bottom: 1px solid var(--vm-border-light);">
-                                    <td style="padding: 12px; font-family: monospace; font-weight: 700; color: var(--vm-primary);">
-                                        {{ $order->order_number }}
+                                    <td style="padding: 12px; font-family: monospace; font-weight: 700;">
+                                        <a href="{{ route('order.status', ['order_number' => $order->order_number]) }}" style="color: var(--vm-primary); text-decoration: underline;" title="View Live Tracking & OTP">
+                                            {{ $order->order_number }}
+                                        </a>
                                     </td>
                                     <td style="padding: 12px;">{{ $order->shop->name ?? 'Victor Tech Plaza' }}</td>
-                                    <td style="padding: 12px;"><strong>&#8358;{{ number_format($order->total_amount, 2) }}</strong></td>
+                                    <td style="padding: 12px;"><strong>&#8358;{{ number_format($order->grand_total ?? $order->total_amount, 2) }}</strong></td>
                                     <td style="padding: 12px;">
                                         <span class="badge" style="background: var(--vm-primary-light); color: var(--vm-primary); font-size: 11px;">
                                             {{ ucfirst(str_replace('_', ' ', $order->fulfillment_type)) }}
@@ -587,10 +590,16 @@
                                             <span class="badge" style="background: #FFFBEB; color: #B45309; font-size: 11px;">{{ ucfirst($order->order_status) }}</span>
                                         @endif
                                     </td>
+                                    <td style="padding: 12px; text-align: right;">
+                                        <a href="{{ route('order.status', ['order_number' => $order->order_number]) }}" class="btn-accent" style="padding: 4px 10px; font-size: 11px; text-decoration: none; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                                            <span>Track &amp; OTP</span>
+                                            <span>🔑</span>
+                                        </a>
+                                    </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" style="text-align: center; padding: 20px; color: var(--vm-text-muted);">No orders found.</td>
+                                    <td colspan="6" style="text-align: center; padding: 20px; color: var(--vm-text-muted);">No orders found.</td>
                                 </tr>
                             @endforelse
                         </tbody>

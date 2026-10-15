@@ -49,20 +49,41 @@
                     {{ $product->name }}
                 </a></h3>
 
-                <div class="vm-product-price-row" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;">
-                    <span class="vm-price-current" style="font-size: 17px; font-weight: 800; color: var(--vm-info);">
+                <div class="vm-product-price-row" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+                    <span class="vm-price-current" style="font-size: 17px; font-weight: 800; color: #5E17EB;">
                         ₦{{ number_format((float)$product->unit_price, 2) }}
                     </span>
-                    <span style="font-size: 11px; color: #059669; font-weight: 600; background: #ECFDF5; padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(5, 150, 105, 0.15);">
+                    <span style="font-size: 11px; color: #059669; font-weight: 700; background: #ECFDF5; padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(5, 150, 105, 0.15);">
                         +5% Reward
                     </span>
+                </div>
+
+                <!-- Star Rating (Mockup Screen 7 Parity) -->
+                <div style="display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: #64748B; margin-bottom: 4px;">
+                    <span style="color: #F59E0B; font-size: 12px;">★</span>
+                    <strong style="color: #0F172A; font-weight: 700;">4.8</strong>
+                    <span>(86 reviews)</span>
+                    <span style="opacity: 0.4;">&bull;</span>
+                    <span style="color: #10B981; font-weight: 600;">In Stock</span>
                 </div>
             </div>
         </div>
 
-        <!-- Add to Cart / Reservation Action -->
-        <div style="padding: 0 14px 14px;">
-            <a href="{{ route('product.detail', $product->slug) }}" style="width: 100%; background: #F8FAFC; border: 1.5px solid var(--vm-border); color: #0F172A; font-weight: 700; font-size: 12.5px; padding: 9px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; transition: all 0.15s ease;"><span>🔍 View Item &amp; Delivery</span></a>
+        <!-- Add to Cart & Details Action (Mockup Screen 7 Parity) -->
+        <div style="padding: 0 14px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <button type="button" class="vm-btn-add-cart" 
+                    data-id="{{ $product->id }}" 
+                    data-name="{{ $product->name }}" 
+                    data-price="{{ $product->unit_price }}" 
+                    data-shop="{{ $product->shop->name ?? 'Verified Merchant' }}" 
+                    data-lga="{{ $product->shop->lga->name ?? 'Uyo' }}" 
+                    data-slug="{{ $product->slug }}"
+                    style="background: #F5F3FF; border: 1.5px solid rgba(94, 23, 235, 0.25); color: #5E17EB; font-weight: 700; font-size: 12px; padding: 8px 10px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: all 0.15s ease;">
+                <span>🛒 + Cart</span>
+            </button>
+            <a href="{{ route('product.detail', $product->slug) }}" style="background: #0F172A; border: none; color: #FFFFFF; font-weight: 700; font-size: 12px; padding: 8px 10px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; text-decoration: none; transition: all 0.15s ease;">
+                <span>Details &rarr;</span>
+            </a>
         </div>
 
     </div>

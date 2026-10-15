@@ -14,11 +14,14 @@
             </div>
             <h1 style="font-size: 20px; font-weight: 800; margin: 0 0 12px;">Inspect First, Pay Later Guarantee</h1>
             
-            <div style="background: rgba(255, 215, 0, 0.15); border: 1.5px dashed var(--vm-gold); border-radius: 8px; padding: 12px; display: inline-block;">
-                <span style="font-size: 11px; color: #CBD5E1; display: block; margin-bottom: 2px;">RESERVATION CODE:</span>
-                <span style="font-family: monospace; font-size: 26px; font-weight: 900; color: var(--vm-gold); letter-spacing: 2px;">
+            <div style="background: rgba(255, 215, 0, 0.15); border: 1.5px dashed var(--vm-gold); border-radius: 12px; padding: 14px 24px; display: inline-block;">
+                <span style="font-size: 11px; color: #CBD5E1; display: block; margin-bottom: 2px;">YOUR IN-SHOP RESERVATION CODE:</span>
+                <span style="font-family: monospace; font-size: 32px; font-weight: 900; color: var(--vm-gold); letter-spacing: 4px; display: block;">
                     {{ $reservation->reservation_code }}
                 </span>
+                <button type="button" onclick="navigator.clipboard.writeText('{{ $reservation->reservation_code }}'); alert('Reservation code {{ $reservation->reservation_code }} copied to clipboard!');" style="margin-top: 8px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.3); color: #FFF; font-size: 11.5px; font-weight: 700; padding: 4px 12px; border-radius: 6px; cursor: pointer;">
+                    📋 Copy Code
+                </button>
             </div>
         </div>
 
