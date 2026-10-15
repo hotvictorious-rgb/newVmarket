@@ -22,15 +22,44 @@ use Illuminate\Support\Facades\Auth;
 
 class PortalController extends Controller
 {
-    /**
+        /**
      * Public Customer Storefront
      */
     public function storefront(Request $request)
     {
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
         
+        $activeCity = $request->input('city', session('customer_city', 'Uyo'));
+        $activeState = $request->input('state', session('customer_state', 'Akwa Ibom'));
+
+        // Lookup LGA
+        $selectedLga = Lga::where('name', $activeCity)->first();
+        if (!$selectedLga) {
+            $selectedLga = Lga::where('name', 'Uyo')->first();
+        }
+        $selectedLgaId = $selectedLga ? $selectedLga->id : 69;
+
+        // Origin LGAs with active fulfillment to destination LGA
+        $eligibleOriginLgaIds = collect([$selectedLgaId]);
+        $activeLanes = DeliveryLane::where('destination_lga_id', $selectedLgaId)
+            ->where('is_active', true)
+            ->with('originLga')
+            ->get();
+
+        foreach ($activeLanes as $lane) {
+            $eligibleOriginLgaIds->push($lane->origin_lga_id);
+        }
+        $eligibleOriginLgaIds = $eligibleOriginLgaIds->unique();
+
+        // Check local merchant availability in this LGA
+        $hasLocalShops = Shop::where('lga_id', $selectedLgaId)->where('pickup_enabled', true)->exists();
+
+        // Query eligible products
         $query = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug']);
+            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
+            ->whereHas('shop', function ($q) use ($eligibleOriginLgaIds) {
+                $q->whereIn('lga_id', $eligibleOriginLgaIds);
+            });
 
         if ($request->filled('category')) {
             $query->whereHas('category', function ($q) use ($request) {
@@ -44,6 +73,18 @@ class PortalController extends Controller
         }
 
         $products = $query->latest()->take(12)->get();
+        $isFallbackCatalog = false;
+
+        // If an LGA has no direct items yet, fall back to flagship items so catalog isn't empty
+        if ($products->isEmpty() && !$request->filled('search') && !$request->filled('category')) {
+            $products = Product::marketplaceEligible()
+                ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
+                ->latest()
+                ->take(12)
+                ->get();
+            $isFallbackCatalog = true;
+        }
+
         $latestProducts = Product::marketplaceEligible()
             ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
             ->latest()
@@ -52,14 +93,58 @@ class PortalController extends Controller
 
         $shops = Shop::with('lga:id,name')
             ->where('pickup_enabled', true)
+            ->whereIn('lga_id', $eligibleOriginLgaIds)
             ->take(6)
             ->get();
 
-        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
-        $activeCity = session('customer_city', 'Uyo');
-        $activeState = session('customer_state', 'Akwa Ibom');
+        if ($shops->isEmpty()) {
+            $shops = Shop::with('lga:id,name')->where('pickup_enabled', true)->take(6)->get();
+        }
 
-        return view('storefront.index', compact('categories', 'products', 'latestProducts', 'shops', 'lgas', 'activeCity', 'activeState'));
+        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+
+        // Coverage Status
+        if ($hasLocalShops) {
+            $coverageStatus = 'pickup_and_delivery';
+            $statusBadge = '⚡ In-Shop Pickup & Same-Day Delivery Active';
+            $previewStatus = 'Pickup and delivery available in this local government';
+        } elseif ($activeLanes->isNotEmpty()) {
+            $minHours = $activeLanes->min('estimated_delivery_hours_min') ?? 12;
+            $maxHours = $activeLanes->max('estimated_delivery_hours_max') ?? 24;
+            $coverageStatus = 'transit_delivery';
+            $statusBadge = "🚚 Transit Delivery Corridor Active ({$minHours}-{$maxHours} hrs)";
+            $previewStatus = "Delivery corridor active ({$minHours}-{$maxHours} hrs delivery speed)";
+        } else {
+            $coverageStatus = 'regional';
+            $statusBadge = '📦 Nationwide Park Dispatch';
+            $previewStatus = 'Delivery options and speeds vary by regional dispatch';
+        }
+
+        // Return dynamic JSON for AJAX requests
+        if ($request->ajax() || $request->wantsJson() || $request->has('ajax')) {
+            $productsHtml = view('storefront.partials._products_grid', compact('products', 'activeCity', 'selectedLgaId', 'activeLanes', 'isFallbackCatalog'))->render();
+            $shopsHtml = view('storefront.partials._shops_grid', compact('shops', 'activeCity'))->render();
+
+            return response()->json([
+                'success' => true,
+                'city' => $activeCity,
+                'state' => $activeState,
+                'lga_id' => $selectedLgaId,
+                'coverage_status' => $coverageStatus,
+                'status_badge' => $statusBadge,
+                'preview_status' => $previewStatus,
+                'products_count' => $products->count(),
+                'products_html' => $productsHtml,
+                'shops_html' => $shopsHtml,
+                'is_fallback' => $isFallbackCatalog,
+            ]);
+        }
+
+        return view('storefront.index', compact(
+            'categories', 'products', 'latestProducts', 'shops', 'lgas',
+            'activeCity', 'activeState', 'selectedLgaId', 'activeLanes',
+            'coverageStatus', 'statusBadge', 'previewStatus', 'isFallbackCatalog'
+        ));
     }
 
     /**
@@ -70,17 +155,57 @@ class PortalController extends Controller
         $request->validate([
             'city' => 'required|string',
             'state' => 'nullable|string',
+            'lga_id' => 'nullable|integer',
         ]);
 
+        $city = $request->input('city');
+        $state = $request->input('state', 'Akwa Ibom');
+
+        $lga = null;
+        if ($request->filled('lga_id')) {
+            $lga = Lga::find($request->input('lga_id'));
+        }
+        if (!$lga) {
+            $lga = Lga::where('name', $city)->first();
+        }
+
+        $lgaId = $lga ? $lga->id : 69;
+        $cityName = $lga ? $lga->name : $city;
+
         session([
-            'customer_city' => $request->input('city'),
-            'customer_state' => $request->input('state', 'Akwa Ibom'),
+            'customer_city' => $cityName,
+            'customer_state' => $state,
+            'customer_lga_id' => $lgaId,
         ]);
+
+        // Calculate coverage info
+        $hasLocalShops = Shop::where('lga_id', $lgaId)->where('pickup_enabled', true)->exists();
+        $activeLanes = DeliveryLane::where('destination_lga_id', $lgaId)->where('is_active', true)->get();
+
+        if ($hasLocalShops) {
+            $coverageStatus = 'pickup_and_delivery';
+            $statusBadge = '⚡ In-Shop Pickup & Same-Day Delivery Active';
+            $previewStatus = 'Pickup and delivery available in this local government';
+        } elseif ($activeLanes->isNotEmpty()) {
+            $minHours = $activeLanes->min('estimated_delivery_hours_min') ?? 12;
+            $maxHours = $activeLanes->max('estimated_delivery_hours_max') ?? 24;
+            $coverageStatus = 'transit_delivery';
+            $statusBadge = "🚚 Transit Delivery Corridor Active ({$minHours}-{$maxHours} hrs)";
+            $previewStatus = "Delivery corridor active ({$minHours}-{$maxHours} hrs delivery speed)";
+        } else {
+            $coverageStatus = 'regional';
+            $statusBadge = '📦 Nationwide Park Dispatch';
+            $previewStatus = 'Delivery options and speeds vary by regional dispatch';
+        }
 
         return response()->json([
             'success' => true,
-            'city' => session('customer_city'),
-            'state' => session('customer_state'),
+            'city' => $cityName,
+            'state' => $state,
+            'lga_id' => $lgaId,
+            'coverage_status' => $coverageStatus,
+            'status_badge' => $statusBadge,
+            'preview_status' => $previewStatus,
         ]);
     }
 

@@ -140,20 +140,20 @@
 
             </div>
 
-            <!-- Omnichannel Proximity Status Bar -->
-            <div class="vm-proximity-strip" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 10px; padding: 10px 18px; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--vm-shadow-xs);">
+                        <!-- Omnichannel Proximity Status Bar -->
+            <div class="vm-proximity-strip" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; padding: 10px 18px; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--vm-shadow-xs);">
                 <div class="vm-proximity-info" style="display: flex; align-items: center; gap: 10px; font-size: 13.5px;">
-                    <span class="vm-proximity-icon" style="color: var(--vm-primary);">📍</span>
+                    <span class="vm-proximity-icon" style="color: var(--vm-primary); font-size: 16px;">📍</span>
                     <div class="vm-proximity-text" style="display: flex; align-items: center; gap: 8px;">
                         <span class="vm-proximity-label" style="color: #64748B;">Your Location:</span>
-                        <strong class="vm-proximity-highlight" style="color: #0F172A; font-weight: 700;">{{ $activeCity ?? 'Uyo' }}, {{ $activeState ?? 'Akwa Ibom' }}</strong>
+                        <strong class="vm-proximity-highlight" id="vmProximityCityText" style="color: #0F172A; font-weight: 700;">{{ $activeCity ?? 'Uyo' }}, {{ $activeState ?? 'Akwa Ibom' }}</strong>
                         <span class="vm-proximity-dot" style="color: #CBD5E1;">•</span>
-                        <span class="vm-proximity-mode-tag" style="background: rgba(94, 23, 235, 0.08); color: var(--vm-primary); font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 4px;">
-                            ⚡ Pickup & Delivery Active
+                        <span class="vm-proximity-mode-tag" id="vmProximityStatusTag" style="background: rgba(94, 23, 235, 0.08); color: var(--vm-primary); font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 4px;">
+                            {{ $statusBadge ?? '⚡ Pickup & Delivery Active' }}
                         </span>
                     </div>
                 </div>
-                <button type="button" class="vm-proximity-switch-btn" onclick="document.getElementById('vmLocationModal').classList.add('active')" style="background: #F8FAFC; border: 1px solid var(--vm-border); border-radius: 6px; padding: 5px 12px; font-size: 12.5px; font-weight: 600; color: #334155; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                <button type="button" class="vm-proximity-switch-btn" onclick="if(window.vmOpenLocationModal) window.vmOpenLocationModal(); else document.getElementById('vmLocationModal').classList.add('active');" style="background: #F8FAFC; border: 1px solid var(--vm-border); border-radius: 8px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; color: #334155; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;">
                     <span>Change Location</span>
                     <span class="vm-caret">▾</span>
                 </button>
@@ -173,27 +173,11 @@
                     <span class="vm-badge-dot" style="width: 5px; height: 5px; border-radius: 50%; background: var(--vm-primary);"></span>
                     <span>VERIFIED LOCAL HUBS</span>
                 </div>
-                <h3 class="vm-discovery-card-title" style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0;">Stores Closer to You in {{ $activeCity ?? 'Uyo' }}</h3>
+                <h3 class="vm-discovery-card-title" style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0;">Stores Closer to You in <span class="vm-dynamic-city-label">{{ $activeCity ?? 'Uyo' }}</span></h3>
             </div>
             
-            <div class="vm-discovery-quad-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
-                @forelse($shops->take(2) as $shop)
-                    <a href="#merchants" class="vm-discovery-tile" style="text-decoration: none;">
-                        <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: #F8FAFC; border: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: center; position: relative;">
-                            <img src="{{ asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="{{ $shop->name }}" style="width: 48px; height: 48px; opacity: 0.6;">
-                            <span class="vm-tile-floating-badge" style="position: absolute; bottom: 4px; left: 4px; font-size: 9.5px; background: #1E293B; color: #FFFFFF; padding: 1px 6px; border-radius: 4px; font-weight: 600;">🏪 In-Shop</span>
-                        </div>
-                        <span class="vm-discovery-tile-caption" style="display: block; font-size: 11.5px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">{{ Str::limit($shop->name, 12) }}</span>
-                    </a>
-                @empty
-                    <div class="vm-discovery-tile" style="text-decoration: none;">
-                        <div class="vm-discovery-tile-thumb-wrap" style="width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: #F8FAFC; border: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: center; position: relative;">
-                            <img src="{{ asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="Emeka Electronics" style="width: 48px; height: 48px; opacity: 0.6;">
-                            <span class="vm-tile-floating-badge" style="position: absolute; bottom: 4px; left: 4px; font-size: 9.5px; background: #1E293B; color: #FFFFFF; padding: 1px 6px; border-radius: 4px; font-weight: 600;">🏪 In-Shop</span>
-                        </div>
-                        <span class="vm-discovery-tile-caption" style="display: block; font-size: 11.5px; color: #475569; margin-top: 4px; font-weight: 500; text-align: center;">Emeka Electronics...</span>
-                    </div>
-                @endforelse
+            <div class="vm-discovery-quad-grid" id="vmShopsGridContainer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
+                @include('storefront.partials._shops_grid')
             </div>
 
             <div class="vm-discovery-card-footer">
@@ -414,100 +398,22 @@
         </div>
     </div>
 
-    <!-- 5. Latest Products in Market (Exact items from Screenshot) -->
+        <!-- 5. Latest Products in Market (Filtered Dynamically by Active Location) -->
     <div class="vm-section-block" id="catalog">
         <div class="vm-section-header" style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px;">
             <div style="border-left: 4px solid var(--vm-info); padding-left: 12px;">
-                <h2 class="vm-section-title" style="font-size: 19px; font-weight: 800; color: #0F172A; margin: 0; line-height: 1.2;">Latest Products in Market</h2>
-                <p class="vm-section-desc" style="font-size: 13px; color: #64748B; margin-top: 3px;">Fresh arrivals uploaded directly from verified regional warehouses.</p>
+                <h2 class="vm-section-title" style="font-size: 19px; font-weight: 800; color: #0F172A; margin: 0; line-height: 1.2;">
+                    Latest Products in Market — Available in <span class="vm-dynamic-city-label">{{ $activeCity ?? 'Uyo' }}</span>
+                </h2>
+                <p class="vm-section-desc" style="font-size: 13px; color: #64748B; margin-top: 3px;">
+                    Fresh arrivals delivering to <span class="vm-dynamic-city-label">{{ $activeCity ?? 'Uyo' }}</span> with verified 5% customer cashback reward.
+                </p>
             </div>
             <a href="#catalog" class="vm-section-link" style="font-size: 13px; font-weight: 700; color: var(--vm-info); text-decoration: none;">View All →</a>
         </div>
 
-        <div class="vm-products-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px;">
-            @forelse($products as $product)
-                <div class="vm-product-card" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; box-shadow: var(--vm-shadow-xs); transition: transform 0.2s ease, box-shadow 0.2s ease;">
-                    
-                    <div>
-                        <!-- Product Thumbnail Box -->
-                        <div class="vm-product-img-wrap" style="width: 100%; aspect-ratio: 1 / 1; background: #F8FAFC; border-bottom: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: center; position: relative;">
-                            <img src="{{ asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="{{ $product->name }}" class="vm-product-img" style="width: 72px; height: 72px; opacity: 0.55;">
-                            @if($product->is_vmarket_flagship)
-                                <span style="position: absolute; top: 8px; right: 8px; background: var(--vm-primary); color: #FFFFFF; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;">
-                                    ★ FLAGSHIP
-                                </span>
-                            @endif
-                        </div>
-
-                        <!-- Product Information -->
-                        <div class="vm-product-info" style="padding: 14px;">
-                            <div class="vm-product-shop" style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #64748B; margin-bottom: 6px;">
-                                <span>🏪</span>
-                                <span>{{ Str::limit($product->shop->name ?? 'Emeka Electronics Plaza', 20) }}</span>
-                            </div>
-
-                            <h3 class="vm-product-name" style="font-size: 14px; font-weight: 700; color: #0F172A; margin: 0 0 10px; line-height: 1.35; min-height: 38px;">
-                                {{ $product->name }}
-                            </h3>
-
-                            <div class="vm-product-price-row" style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px;">
-                                <span class="vm-price-current" style="font-size: 17px; font-weight: 800; color: var(--vm-info);">
-                                    ₦{{ number_format((float)$product->unit_price, 2) }}
-                                </span>
-                                <span style="font-size: 11px; color: #059669; font-weight: 600; background: #ECFDF5; padding: 2px 6px; border-radius: 4px;">
-                                    +5% Reward
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Add to Cart / Reservation Action -->
-                    <div style="padding: 0 14px 14px;">
-                        <button type="button" class="vm-add-cart-btn" 
-                                data-id="{{ $product->id }}" 
-                                data-name="{{ $product->name }}" 
-                                data-price="{{ $product->unit_price }}" 
-                                style="width: 100%; background: #F8FAFC; border: 1.5px solid var(--vm-border); color: #0F172A; font-weight: 700; font-size: 12.5px; padding: 9px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.15s ease;">
-                            <span>🛒 Add to Cart</span>
-                        </button>
-                    </div>
-
-                </div>
-            @empty
-                <!-- Fallback to the 3 exact items from the user screenshot -->
-                <div class="vm-product-card" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div class="vm-product-img-wrap" style="width: 100%; aspect-ratio: 1 / 1; background: #F8FAFC; display: flex; align-items: center; justify-content: center;">
-                        <img src="{{ asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="Power Bank" style="width: 72px; height: 72px; opacity: 0.55;">
-                    </div>
-                    <div class="vm-product-info" style="padding: 14px;">
-                        <div class="vm-product-shop" style="font-size: 11.5px; color: #64748B; margin-bottom: 6px;">🏪 Emeka Electronics...</div>
-                        <h3 class="vm-product-name" style="font-size: 14px; font-weight: 700; color: #0F172A; margin: 0 0 10px;">Heavy Duty 20,000mAh Power Bank</h3>
-                        <div class="vm-product-price-row"><span class="vm-price-current" style="font-size: 17px; font-weight: 800; color: var(--vm-info);">₦32,000.00</span></div>
-                    </div>
-                </div>
-
-                <div class="vm-product-card" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div class="vm-product-img-wrap" style="width: 100%; aspect-ratio: 1 / 1; background: #F8FAFC; display: flex; align-items: center; justify-content: center;">
-                        <img src="{{ asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="Earbuds" style="width: 72px; height: 72px; opacity: 0.55;">
-                    </div>
-                    <div class="vm-product-info" style="padding: 14px;">
-                        <div class="vm-product-shop" style="font-size: 11.5px; color: #64748B; margin-bottom: 6px;">🏪 Emeka Electronics...</div>
-                        <h3 class="vm-product-name" style="font-size: 14px; font-weight: 700; color: #0F172A; margin: 0 0 10px;">Wireless Bluetooth Earbuds Pro</h3>
-                        <div class="vm-product-price-row"><span class="vm-price-current" style="font-size: 17px; font-weight: 800; color: var(--vm-info);">₦25,000.00</span></div>
-                    </div>
-                </div>
-
-                <div class="vm-product-card" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div class="vm-product-img-wrap" style="width: 100%; aspect-ratio: 1 / 1; background: #F8FAFC; display: flex; align-items: center; justify-content: center;">
-                        <img src="{{ asset('assets/img/placeholder/placeholder-1-1.png') }}" alt="Charger" style="width: 72px; height: 72px; opacity: 0.55;">
-                    </div>
-                    <div class="vm-product-info" style="padding: 14px;">
-                        <div class="vm-product-shop" style="font-size: 11.5px; color: #64748B; margin-bottom: 6px;">🏪 Emeka Electronics...</div>
-                        <h3 class="vm-product-name" style="font-size: 14px; font-weight: 700; color: #0F172A; margin: 0 0 10px;">Original Fast Charger 65W GaN</h3>
-                        <div class="vm-product-price-row"><span class="vm-price-current" style="font-size: 17px; font-weight: 800; color: var(--vm-info);">₦18,500.00</span></div>
-                    </div>
-                </div>
-            @endforelse
+        <div class="vm-products-grid" id="vmProductsGridContainer" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; transition: opacity 0.2s ease;">
+            @include('storefront.partials._products_grid')
         </div>
     </div>
 

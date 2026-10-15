@@ -22,3 +22,7 @@ backend/storage/framework/cache/data/*
 backend/storage/framework/sessions/*
 backend/storage/framework/views/*
 backend/.phpunit.result.cache
+
+# Generated build artifacts for shared hosting
+dist_shared_hosting/
+backend/storage/framework/*.lock

@@ -190,48 +190,425 @@
             background: #F8FAFC;
         }
 
+                /* Location Header Pill Button */
+        .vm-header-location-pill {
+            background: #FFFFFF;
+            border: 1px solid var(--vm-border);
+            border-radius: 999px;
+            padding: 5px 12px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        }
+
+        @media (min-width: 860px) {
+            .vm-header-location-pill {
+                display: inline-flex;
+            }
+        }
+
+        .vm-header-location-pill:hover {
+            border-color: var(--vm-primary);
+            background: var(--vm-primary-light);
+            box-shadow: 0 2px 8px rgba(94, 23, 235, 0.15);
+            transform: translateY(-1px);
+        }
+
+        .vm-location-pin-icon {
+            color: var(--vm-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .vm-location-labels {
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+            line-height: 1.15;
+        }
+
+        .vm-location-sub {
+            font-size: 10px;
+            color: #64748B;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .vm-location-main {
+            font-size: 13px;
+            color: #0F172A;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .vm-location-main .vm-caret {
+            font-size: 10px;
+            color: #94A3B8;
+        }
+
         /* Modal Location Selector */
         .vm-modal-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(15, 23, 42, 0.65);
-            backdrop-filter: blur(4px);
-            z-index: 1020;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 1050;
             display: none;
             align-items: center;
             justify-content: center;
             padding: 16px;
+            animation: vmFadeIn 0.2s ease;
         }
 
         .vm-modal-overlay.active {
             display: flex;
         }
 
-        .vm-modal-card {
-            background: #FFFFFF;
-            border-radius: 16px;
-            width: 100%;
-            max-width: 480px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
-            border: 1px solid var(--vm-border);
+        @keyframes vmFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
 
-        .vm-modal-header {
-            padding: 18px 22px;
-            background: #F8FAFC;
-            border-bottom: 1px solid var(--vm-border);
+        @keyframes vmSlideUp {
+            from { transform: translateY(16px) scale(0.97); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        .vm-location-modal-card {
+            background: #FFFFFF;
+            border-radius: 22px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(226, 232, 240, 0.9);
+            padding: 24px;
+            position: relative;
+            max-height: 92vh;
+            overflow-y: auto;
+            animation: vmSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .vm-modal-close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #F1F5F9;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748B;
+            transition: all 0.2s ease;
+        }
+
+        .vm-modal-close-btn:hover {
+            background: #E2E8F0;
+            color: #0F172A;
+            transform: scale(1.05);
+        }
+
+        .vm-modal-header-top {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 20px;
+            padding-right: 36px;
+        }
+
+        .vm-modal-icon-pill {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: rgba(94, 23, 235, 0.08);
+            color: #5E17EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .vm-modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #0F172A;
+            margin: 0 0 3px;
+        }
+
+        .vm-modal-subtitle {
+            font-size: 12.5px;
+            color: #64748B;
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        .vm-country-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background: #FAFAFA;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin-bottom: 16px;
         }
 
-        .vm-modal-body {
-            padding: 22px;
-            max-height: 70vh;
-            overflow-y: auto;
+        .vm-country-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #0F172A;
         }
-    </style>
+
+        .vm-flag-tag {
+            font-size: 11px;
+            font-weight: 800;
+            background: #0F172A;
+            color: #FFFFFF;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+        }
+
+        .vm-country-sub {
+            font-size: 12px;
+            color: #64748B;
+            font-weight: 500;
+        }
+
+        .vm-form-group {
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .vm-form-label {
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #1E293B;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .vm-input-icon-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .vm-input-lead-icon {
+            position: absolute;
+            left: 14px;
+            color: #94A3B8;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+        }
+
+        .vm-lga-search-input {
+            width: 100%;
+            height: 44px;
+            padding-left: 42px !important;
+            padding-right: 36px !important;
+            font-size: 13.5px !important;
+            border-radius: 12px !important;
+            border: 1.5px solid #CBD5E1 !important;
+            background: #FFFFFF !important;
+            color: #0F172A !important;
+            font-weight: 500 !important;
+            box-sizing: border-box;
+            transition: all 0.2s ease !important;
+        }
+
+        .vm-lga-search-input:focus {
+            border-color: #5E17EB !important;
+            outline: none !important;
+            box-shadow: 0 0 0 3px rgba(94, 23, 235, 0.12) !important;
+        }
+
+        .vm-input-clear-btn {
+            position: absolute;
+            right: 12px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #94A3B8;
+            cursor: pointer;
+            padding: 4px;
+            line-height: 1;
+        }
+
+        .vm-input-clear-btn:hover {
+            color: #0F172A;
+        }
+
+        .vm-lga-dropdown-list {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            max-height: 220px;
+            overflow-y: auto;
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            box-shadow: 0 14px 35px -5px rgba(0, 0, 0, 0.15);
+            z-index: 150;
+            padding: 6px;
+        }
+
+        .vm-lga-dropdown-item {
+            padding: 9px 12px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-size: 13px;
+            color: #1E293B;
+            transition: all 0.15s ease;
+        }
+
+        .vm-lga-dropdown-item:hover, .vm-lga-dropdown-item.active {
+            background: rgba(94, 23, 235, 0.07);
+            color: #5E17EB;
+        }
+
+        .vm-chips-heading {
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748B;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .vm-city-chips-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .vm-city-chip {
+            background: #F1F5F9;
+            border: 1px solid #E2E8F0;
+            border-radius: 999px;
+            padding: 6px 14px;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: #334155;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .vm-city-chip:hover {
+            background: #E2E8F0;
+            border-color: #CBD5E1;
+        }
+
+        .vm-city-chip.active {
+            background: #5E17EB;
+            color: #FFFFFF;
+            border-color: #5E17EB;
+            box-shadow: 0 2px 8px rgba(94, 23, 235, 0.35);
+        }
+
+        .vm-chip-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #94A3B8;
+        }
+
+        .vm-city-chip.active .vm-chip-dot {
+            background: #FFD700;
+        }
+
+        .vm-selected-location-card {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px;
+        }
+
+        .vm-selected-loc-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .vm-selected-pin {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .vm-selected-city-text {
+            display: block;
+            font-size: 13.5px;
+            color: #0F172A;
+            font-weight: 700;
+        }
+
+        .vm-selected-status-text {
+            display: block;
+            font-size: 11.5px;
+            color: #16A34A;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        .vm-modal-footer-single {
+            border-top: 1px solid #F1F5F9;
+            padding-top: 16px;
+        }
+
+        .vm-btn-done {
+            width: 100%;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #5E17EB 0%, #4D0FD4 100%);
+            color: #FFFFFF;
+            border: none;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 14px rgba(94, 23, 235, 0.35);
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .vm-btn-done:hover {
+            background: linear-gradient(135deg, #4D0FD4 0%, #3C08AB 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(94, 23, 235, 0.45);
+        }
+
+        .vm-btn-done:active {
+            transform: translateY(0);
+        }
+</style>
     @stack('styles')
 </head>
 <body>
@@ -522,34 +899,106 @@
         </div>
     </footer>
 
-    <!-- Interactive LGA Location Selection Modal -->
-    <div class="vm-modal-overlay" id="vmLocationModal">
-        <div class="vm-modal-card">
-            <div class="vm-modal-header">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <img src="{{ asset('assets/img/vm_icon.jpg') }}" alt="VM" style="width: 32px; height: 32px; border-radius: 8px; object-fit: cover; box-shadow: 0 2px 6px rgba(94, 23, 235, 0.25);">
-                    <div>
-                        <h3 style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0;">Select Your Location</h3>
-                        <p style="font-size: 12px; color: #64748B; margin: 0;">Directional fulfillment & physical counter inspection</p>
-                    </div>
+        <!-- Interactive LGA Location Selection Modal (Legacy-Matching High-Fidelity) -->
+    <div class="vm-modal-overlay" id="vmLocationModal" role="dialog" aria-modal="true" aria-labelledby="vmLocationModalTitle">
+        <div class="vm-location-modal-card">
+            <!-- Close Button -->
+            <button type="button" class="vm-modal-close-btn" id="vmCloseLocationModal" aria-label="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+
+            <!-- Modal Header -->
+            <div class="vm-modal-header-top">
+                <div class="vm-modal-icon-pill">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                        <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
                 </div>
-                <button type="button" id="vmCloseLocationModal" style="background: none; border: none; font-size: 22px; cursor: pointer; color: #64748B;">&times;</button>
+                <div>
+                    <h3 class="vm-modal-title" id="vmLocationModalTitle">Choose your location</h3>
+                    <p class="vm-modal-subtitle">Delivery options and delivery speeds may vary for different locations</p>
+                </div>
             </div>
-            <div class="vm-modal-body">
-                <p style="font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 12px;">Akwa Ibom LGAs:</p>
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+
+            <!-- Country Badge Bar -->
+            <div class="vm-country-bar">
+                <div class="vm-country-badge">
+                    <span class="vm-flag-tag">NG</span>
+                    <span class="vm-country-name">Nigeria</span>
+                </div>
+                <span class="vm-country-sub">Nationwide Local Governments</span>
+            </div>
+
+            <!-- Search Input with Autocomplete -->
+            <div class="vm-form-group vm-lga-search-group">
+                <label for="vmLgaSearchInput" class="vm-form-label">Type your residential lga</label>
+                <div class="vm-input-icon-wrap">
+                    <span class="vm-input-lead-icon">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </span>
+                    <input type="text" id="vmLgaSearchInput" class="vm-modal-input vm-lga-search-input" placeholder="Type your residential lga" value="{{ session('customer_city', 'Uyo') }}" autocomplete="off">
+                    <button type="button" class="vm-input-clear-btn" id="vmLgaClearBtn" aria-label="Clear">×</button>
+                </div>
+
+                <!-- Autocomplete Dropdown List -->
+                <div class="vm-lga-dropdown-list" id="vmLgaDropdownList" style="display: none;"></div>
+            </div>
+
+            <!-- Popular Local Governments Chips -->
+            <div class="vm-form-group" style="margin-bottom: 16px;">
+                <span class="vm-chips-heading">POPULAR LOCAL GOVERNMENTS:</span>
+                <div class="vm-city-chips-grid">
                     @php
-                        $sampleLgas = ['Uyo', 'Eket', 'Ikot Ekpene', 'Oron', 'Abak', 'Itu', 'Ibesikpo Asutan', 'Mkpat Enin', 'Onna', 'Nsit Ubium'];
+                        $popularCities = ['Abak', 'Eket', 'Ikot Abasi', 'Ikot Ekpene', 'Oron', 'Uyo'];
+                        $currentActiveCity = session('customer_city', 'Uyo');
                     @endphp
-                    @foreach($sampleLgas as $sampleLga)
-                        <button type="button" class="vm-lga-select-btn" data-city="{{ $sampleLga }}" style="text-align: left; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--vm-border); background: #F8FAFC; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s ease;">
-                            📍 {{ $sampleLga }}
+                    @foreach($popularCities as $pCity)
+                        <button type="button" class="vm-city-chip {{ $currentActiveCity === $pCity ? 'active' : '' }}" data-city="{{ $pCity }}" data-state="Akwa Ibom">
+                            <span class="vm-chip-dot"></span>
+                            <span class="vm-chip-name">{{ $pCity }}</span>
                         </button>
                     @endforeach
                 </div>
             </div>
+
+            <!-- Active Selected Location Feedback Card -->
+            <div class="vm-selected-location-card" id="vmSelectedLocCard">
+                <div class="vm-selected-loc-left">
+                    <span class="vm-selected-pin">📍</span>
+                    <div>
+                        <strong class="vm-selected-city-text" id="vmPreviewCity">{{ session('customer_city', 'Uyo') }}, {{ session('customer_state', 'Akwa Ibom') }}</strong>
+                        <small class="vm-selected-status-text" id="vmPreviewStatus">Pickup and delivery available in this local government</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Done Button -->
+            <div class="vm-modal-footer-single">
+                <button type="button" class="vm-btn-done" id="vmLocationModalSubmit">
+                    <span>Done</span>
+                </button>
+            </div>
         </div>
     </div>
+
+    <!-- Embedded Canonical LGA List Dataset -->
+    @php
+        $canonicalLgasList = \Illuminate\Support\Facades\Cache::remember('vmarket_canonical_lgas_min', 86400, function () {
+            return \App\Models\Lga::where('is_active', true)
+                ->with('state:id,name')
+                ->orderBy('name')
+                ->get()
+                ->map(fn($l) => ['id' => $l->id, 'name' => $l->name, 'state' => $l->state->name ?? 'Nigeria']);
+        });
+    @endphp
+    <script id="vmCanonicalLgasJson" type="application/json">{!! json_encode($canonicalLgasList) !!}</script>
 
     <!-- Interactive Cart Drawer -->
     <div class="vm-cart-drawer-overlay" id="vmCartOverlay"></div>
@@ -586,41 +1035,230 @@
 
     <!-- Interactive Client Scripts -->
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
+                document.addEventListener('DOMContentLoaded', function () {
             // Location Modal Trigger
             const locBtn = document.getElementById('vmHeaderLocationBtn');
             const locModal = document.getElementById('vmLocationModal');
             const locClose = document.getElementById('vmCloseLocationModal');
+            const lgaInput = document.getElementById('vmLgaSearchInput');
+            const lgaClear = document.getElementById('vmLgaClearBtn');
+            const lgaDropdown = document.getElementById('vmLgaDropdownList');
+            const doneBtn = document.getElementById('vmLocationModalSubmit');
+            const previewCity = document.getElementById('vmPreviewCity');
+            const previewStatus = document.getElementById('vmPreviewStatus');
             const activeCityLabel = document.querySelector('.vm-active-city-label');
 
-            if (locBtn && locModal) {
-                locBtn.addEventListener('click', () => locModal.classList.add('active'));
-            }
-            if (locClose && locModal) {
-                locClose.addEventListener('click', () => locModal.classList.remove('active'));
+            let selectedCity = '{{ session('customer_city', 'Uyo') }}';
+            let selectedState = '{{ session('customer_state', 'Akwa Ibom') }}';
+            let selectedLgaId = {{ session('customer_lga_id', 69) }};
+
+            // Parse embedded canonical LGAs
+            let allLgas = [];
+            try {
+                const lgaScript = document.getElementById('vmCanonicalLgasJson');
+                if (lgaScript) allLgas = JSON.parse(lgaScript.textContent);
+            } catch (e) {
+                console.error('Failed to parse canonical LGAs list', e);
             }
 
-            // Location Selection
-            document.querySelectorAll('.vm-lga-select-btn').forEach(btn => {
-                btn.addEventListener('click', function () {
+            // Open / Close modal
+            function openLocationModal() {
+                if (locModal) locModal.classList.add('active');
+            }
+            function closeLocationModal() {
+                if (locModal) locModal.classList.remove('active');
+            }
+
+            if (locBtn) locBtn.addEventListener('click', openLocationModal);
+            if (locClose) locClose.addEventListener('click', closeLocationModal);
+            if (locModal) {
+                locModal.addEventListener('click', (e) => {
+                    if (e.target === locModal) closeLocationModal();
+                });
+            }
+
+            // Global trigger hook for any "Change Location" button on page
+            window.vmOpenLocationModal = openLocationModal;
+
+            // Update preview feedback card
+            function updatePreview(cityName, stateName, statusText) {
+                selectedCity = cityName;
+                selectedState = stateName || 'Akwa Ibom';
+                if (previewCity) previewCity.textContent = `${selectedCity}, ${selectedState}`;
+                if (lgaInput) lgaInput.value = selectedCity;
+                
+                // Highlight active chip
+                document.querySelectorAll('.vm-city-chip').forEach(c => {
+                    if (c.dataset.city.toLowerCase() === selectedCity.toLowerCase()) {
+                        c.classList.add('active');
+                    } else {
+                        c.classList.remove('active');
+                    }
+                });
+
+                if (previewStatus) {
+                    if (statusText) {
+                        previewStatus.textContent = statusText;
+                    } else if (selectedCity.toLowerCase() === 'uyo') {
+                        previewStatus.textContent = 'Pickup and delivery available in this local government';
+                        previewStatus.style.color = '#16A34A';
+                    } else if (['eket', 'ikot ekpene', 'oron'].includes(selectedCity.toLowerCase())) {
+                        previewStatus.textContent = 'Delivery corridor active (12-24 hrs delivery speed)';
+                        previewStatus.style.color = '#16A34A';
+                    } else {
+                        previewStatus.textContent = 'Delivery options and speeds vary by regional dispatch';
+                        previewStatus.style.color = '#0284C7';
+                    }
+                }
+            }
+
+            // Quick City Chips Click
+            document.querySelectorAll('.vm-city-chip').forEach(chip => {
+                chip.addEventListener('click', function () {
                     const city = this.dataset.city;
+                    const state = this.dataset.state || 'Akwa Ibom';
+                    updatePreview(city, state);
+                });
+            });
+
+            // Live Autocomplete Search
+            if (lgaInput && lgaDropdown) {
+                lgaInput.addEventListener('input', function () {
+                    const q = this.value.trim().toLowerCase();
+                    if (q.length === 0) {
+                        lgaDropdown.style.display = 'none';
+                        return;
+                    }
+
+                    const matches = allLgas.filter(l => l.name.toLowerCase().includes(q) || (l.state && l.state.toLowerCase().includes(q))).slice(0, 8);
+                    if (matches.length === 0) {
+                        lgaDropdown.innerHTML = '<div style="padding: 10px 12px; font-size: 12.5px; color: #94A3B8; text-align: center;">No matching LGA found</div>';
+                        lgaDropdown.style.display = 'block';
+                        return;
+                    }
+
+                    let html = '';
+                    matches.forEach(m => {
+                        const isAkwa = (m.state && m.state.toLowerCase() === 'akwa ibom');
+                        html += `
+                            <div class="vm-lga-dropdown-item" data-id="${m.id}" data-city="${m.name}" data-state="${m.state}">
+                                <div>
+                                    <strong>${m.name}</strong>
+                                    <span class="vm-lga-dropdown-state">${m.state}</span>
+                                </div>
+                                <span style="font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; ${isAkwa ? 'background: #ECFDF5; color: #059669;' : 'background: #F1F5F9; color: #64748B;'}">
+                                    ${isAkwa ? '⚡ Active Zone' : 'Nationwide'}
+                                </span>
+                            </div>
+                        `;
+                    });
+
+                    lgaDropdown.innerHTML = html;
+                    lgaDropdown.style.display = 'block';
+
+                    // Attach click to dropdown items
+                    lgaDropdown.querySelectorAll('.vm-lga-dropdown-item').forEach(item => {
+                        item.addEventListener('click', function () {
+                            const c = this.dataset.city;
+                            const s = this.dataset.state;
+                            selectedLgaId = this.dataset.id;
+                            updatePreview(c, s);
+                            lgaDropdown.style.display = 'none';
+                        });
+                    });
+                });
+
+                // Clear button
+                if (lgaClear) {
+                    lgaClear.addEventListener('click', function () {
+                        lgaInput.value = '';
+                        lgaInput.focus();
+                        lgaDropdown.style.display = 'none';
+                    });
+                }
+
+                // Hide dropdown when clicking outside
+                document.addEventListener('click', function (e) {
+                    if (!lgaInput.contains(e.target) && !lgaDropdown.contains(e.target)) {
+                        lgaDropdown.style.display = 'none';
+                    }
+                });
+            }
+
+            // Done Button / Location Submit (Dynamic Product Swapper)
+            if (doneBtn) {
+                doneBtn.addEventListener('click', function () {
+                    doneBtn.disabled = true;
+                    doneBtn.innerHTML = '<span>Saving...</span>';
+
                     fetch('{{ route("set.location") }}', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            'Accept': 'application/json'
                         },
-                        body: JSON.stringify({ city: city, state: 'Akwa Ibom' })
-                    }).then(res => res.json()).then(data => {
+                        body: JSON.stringify({
+                            city: selectedCity,
+                            state: selectedState,
+                            lga_id: selectedLgaId
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        doneBtn.disabled = false;
+                        doneBtn.innerHTML = '<span>Done</span>';
+
                         if (data.success) {
+                            // Update Header Pill
                             if (activeCityLabel) activeCityLabel.textContent = data.city;
-                            const heroCityLabel = document.querySelector('.vm-proximity-highlight');
-                            if (heroCityLabel) heroCityLabel.textContent = data.city + ', Akwa Ibom';
-                            locModal.classList.remove('active');
+
+                            // Update Proximity Strip on Homepage
+                            const proximityCityText = document.getElementById('vmProximityCityText');
+                            if (proximityCityText) proximityCityText.textContent = `${data.city}, ${data.state}`;
+                            const proximityStatusTag = document.getElementById('vmProximityStatusTag');
+                            if (proximityStatusTag && data.status_badge) proximityStatusTag.textContent = data.status_badge;
+
+                            // Update Dynamic City Labels across Page
+                            document.querySelectorAll('.vm-dynamic-city-label').forEach(el => el.textContent = data.city);
+
+                            // Close modal
+                            closeLocationModal();
+
+                            // DYNAMICALLY FETCH PRODUCTS FOR THIS LGA
+                            const productsGrid = document.getElementById('vmProductsGridContainer');
+                            const shopsWrap = document.getElementById('vmShopsGridContainer');
+
+                            if (productsGrid) {
+                                productsGrid.style.opacity = '0.4';
+
+                                fetch(`{{ route("storefront") }}?ajax=1&city=${encodeURIComponent(data.city)}&state=${encodeURIComponent(data.state)}`, {
+                                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                                })
+                                .then(r => r.json())
+                                .then(catalogData => {
+                                    productsGrid.style.opacity = '1';
+                                    if (catalogData.products_html) {
+                                        productsGrid.innerHTML = catalogData.products_html;
+                                    }
+                                    if (shopsWrap && catalogData.shops_html) {
+                                        shopsWrap.innerHTML = catalogData.shops_html;
+                                    }
+                                })
+                                .catch(err => {
+                                    console.error('Error refreshing products dynamically:', err);
+                                    productsGrid.style.opacity = '1';
+                                });
+                            }
                         }
+                    })
+                    .catch(err => {
+                        console.error('Error setting location:', err);
+                        doneBtn.disabled = false;
+                        doneBtn.innerHTML = '<span>Done</span>';
                     });
                 });
-            });
+            }
 
             // Cart Drawer Trigger
             const cartBtn = document.getElementById('vmHeaderCartBtn');
