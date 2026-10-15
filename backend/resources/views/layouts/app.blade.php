@@ -673,6 +673,174 @@
             border-radius: 999px;
             display: none;
         }
+
+        /* =========================================================================
+         * RESPONSIVE STOREFRONT & MOBILE 2-COLUMN CATALOG ARCHITECTURE
+         * ========================================================================= */
+        .vm-hero-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .vm-category-sidebar {
+            display: none;
+        }
+
+        .vm-mobile-category-track {
+            display: flex;
+            overflow-x: auto;
+            gap: 8px;
+            padding: 4px 2px 10px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        .vm-mobile-category-track::-webkit-scrollbar {
+            display: none;
+        }
+
+        .vm-mob-cat-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #FFFFFF;
+            border: 1px solid var(--vm-border);
+            border-radius: 999px;
+            padding: 7px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #334155;
+            text-decoration: none;
+            white-space: nowrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+        .vm-mob-cat-chip.active,
+        .vm-mob-cat-chip:hover {
+            background: #5E17EB;
+            color: #FFFFFF;
+            border-color: #5E17EB;
+        }
+
+        /* Value Proposition Strip (2x2 on Mobile, 4-Col on Desktop) */
+        .vm-val-prop-strip {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        /* Amazon Discovery Quad Grid (1-Col Mobile, 2-Col Tablet, 4-Col Desktop) */
+        .vm-amazon-discovery-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            margin-bottom: 32px;
+        }
+
+        /* Products Grid (MANDATORY 2-COLUMNS ON MOBILE, 3 ON TABLET, 4 ON DESKTOP, 5 ON ULTRA-WIDE) */
+        .vm-products-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 10px !important;
+            transition: opacity 0.2s ease;
+        }
+
+        .vm-product-card {
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+            transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease, border-color 0.22s ease;
+            position: relative;
+        }
+
+        .vm-product-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 24px rgba(94, 23, 235, 0.09);
+            border-color: rgba(94, 23, 235, 0.3);
+        }
+
+        .vm-card-action-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+
+        /* Screen Sizes >= 641px (Tablets) */
+        @media (min-width: 641px) {
+            .vm-amazon-discovery-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 16px;
+            }
+            .vm-products-grid {
+                grid-template-columns: repeat(3, 1fr) !important;
+                gap: 14px !important;
+            }
+        }
+
+        /* Screen Sizes >= 769px */
+        @media (min-width: 769px) {
+            .vm-val-prop-strip {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 12px;
+            }
+        }
+
+        /* Screen Sizes >= 1024px (Standard Desktop) */
+        @media (min-width: 1024px) {
+            .vm-hero-wrapper {
+                flex-direction: row;
+                gap: 20px;
+            }
+            .vm-category-sidebar {
+                display: flex;
+                width: 260px;
+                flex-shrink: 0;
+            }
+            .vm-mobile-category-track {
+                display: none;
+            }
+            .vm-amazon-discovery-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 16px;
+            }
+            .vm-products-grid {
+                grid-template-columns: repeat(4, 1fr) !important;
+                gap: 18px !important;
+            }
+            .vm-product-card {
+                border-radius: 14px;
+            }
+        }
+
+        /* Screen Sizes >= 1440px (Ultra-Wide Monitors) */
+        @media (min-width: 1440px) {
+            .vm-products-grid {
+                grid-template-columns: repeat(5, 1fr) !important;
+                gap: 20px !important;
+            }
+        }
+
+        /* Mobile specific card adjustments */
+        @media (max-width: 480px) {
+            .vm-card-action-grid {
+                grid-template-columns: 1fr;
+            }
+            .vm-product-name {
+                font-size: 13px !important;
+                min-height: 32px !important;
+            }
+            .vm-price-current {
+                font-size: 15px !important;
+            }
+        }
 </style>
     @stack('styles')
 </head>

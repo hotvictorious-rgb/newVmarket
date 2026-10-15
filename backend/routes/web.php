@@ -66,7 +66,12 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/', [PortalController::class, 'adminDashboard'])->name('admin.dashboard');
     Route::get('/delivery-lanes', [PortalController::class, 'adminDeliveryLanesPage'])->name('admin.delivery_lanes.index');
     Route::get('/settlements', [PortalController::class, 'adminSettlementsPage'])->name('admin.settlements.index');
-    Route::get('/announcements', [PortalController::class, 'adminAnnouncementsPage'])->name('admin.announcements.index');
+        Route::get('/announcements', [PortalController::class, 'adminAnnouncementsPage'])->name('admin.announcements.index');
+    Route::get('/banners', [PortalController::class, 'adminBannersPage'])->name('admin.banners.index');
+    Route::post('/banners', [PortalController::class, 'adminStoreBanner'])->name('admin.banners.store');
+    Route::put('/banners/{id}', [PortalController::class, 'adminUpdateBanner'])->name('admin.banners.update');
+    Route::post('/banners/{id}/toggle', [PortalController::class, 'adminToggleBanner'])->name('admin.banners.toggle');
+    Route::delete('/banners/{id}', [PortalController::class, 'adminDeleteBanner'])->name('admin.banners.destroy');
     Route::get('/merchants', [PortalController::class, 'adminMerchantsPage'])->name('admin.merchants.index');
     Route::get('/orders', [PortalController::class, 'adminOrdersPage'])->name('admin.orders.index');
 

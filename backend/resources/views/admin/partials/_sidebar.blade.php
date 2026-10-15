@@ -28,6 +28,12 @@
         <span>Announcement Bar &amp; Care</span>
     </a>
 </li>
+<li class="sidebar-nav-item">
+    <a href="{{ route('admin.banners.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.banners.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">🎨</span>
+        <span>Storefront Banners &amp; Promos</span>
+    </a>
+</li>
 
 <li class="nav-section-title">ECOSYSTEM ACTORS</li>
 <li class="sidebar-nav-item">

@@ -5,11 +5,23 @@
 @section('content')
 <div class="vm-container" style="margin-top: 18px; margin-bottom: 40px;">
 
-    <!-- 1. Top Hero Section: Side Category Dropdown (Left) + Branded Hero Banner (Right) -->
-    <div class="vm-hero-wrapper" style="display: flex; gap: 20px; margin-bottom: 24px;">
+        <!-- Mobile Horizontal Category Swipe Track (Thumb-Friendly on Phones) -->
+    <div class="vm-mobile-category-track">
+        <a href="{{ route('storefront') }}" class="vm-mob-cat-chip {{ !request('category') ? 'active' : '' }}">
+            <span>✦ All Items</span>
+        </a>
+        @foreach($categories as $cat)
+            <a href="{{ route('storefront', ['category' => $cat->slug]) }}" class="vm-mob-cat-chip {{ request('category') == $cat->slug ? 'active' : '' }}">
+                <span>{{ $cat->name }}</span>
+            </a>
+        @endforeach
+    </div>
+
+    <!-- 1. Top Hero Section: Side Category Dropdown (Left) + Dynamic Hero Banner (Right) -->
+    <div class="vm-hero-wrapper">
         
         <!-- Category Side Dropdown Navigation (Desktop Left) -->
-        <aside class="vm-category-sidebar" style="width: 260px; flex-shrink: 0; background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--vm-shadow-xs);">
+        <aside class="vm-category-sidebar" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 14px; overflow: hidden; flex-direction: column; box-shadow: var(--vm-shadow-xs);">
             <div class="vm-category-sidebar-header" style="background: linear-gradient(135deg, #1E1B4B 0%, #311042 100%); color: #FFFFFF; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;">
                 <div class="vm-cat-header-left" style="display: flex; align-items: center; gap: 10px;">
                     <img src="{{ asset('assets/img/vm_icon.jpg') }}" alt="VM" style="width: 22px; height: 22px; border-radius: 6px; object-fit: cover;">
@@ -62,41 +74,82 @@
         <div class="vm-hero-main-column" style="flex-grow: 1; display: flex; flex-direction: column; gap: 14px;">
 
             <!-- Hero Banner Card -->
-            <div class="vm-hero-slider-container" style="background: linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%); border: 1px solid rgba(94, 23, 235, 0.12); border-radius: 14px; padding: 34px 40px; box-shadow: var(--vm-shadow-xs); position: relative; overflow: hidden; display: flex; justify-content: space-between; align-items: center;">
-                <div style="max-width: 580px; position: relative; z-index: 2;">
-                    
-                    <!-- Verified Omnichannel Badge Pill -->
-                    <div class="vm-hero-badge-pill" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 3px 10px; border-radius: 999px; background: #FFFBE6; color: #D97706; margin-bottom: 14px;">
-                        <span class="vm-badge-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #D97706;"></span>
-                        <span>VERIFIED OMNICHANNEL MARKET</span>
-                    </div>
+                        <!-- Dynamic Hero Banner Slider (Configurable in Admin Panel) -->
+            <div class="vm-hero-slider-wrapper" style="position: relative;">
+                @php
+                    $activeHeroBanners = (isset($heroBanners) && $heroBanners->isNotEmpty()) 
+                        ? $heroBanners 
+                        : collect([
+                            (object)[
+                                'title' => 'Seamless Shopping, Swift Logistics',
+                                'subtitle' => "Akwa Ibom's Premier Platform • Physical In-Shop Inspection • Escrow Protected",
+                                'badge_text' => 'VERIFIED OMNICHANNEL MARKET',
+                                'bg_gradient' => 'linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%)',
+                                'text_color' => '#0F172A',
+                                'cta_text' => 'Shop Verified Items',
+                                'cta_url' => '#catalog',
+                                'image_path' => 'assets/img/vm_icon.jpg',
+                            ]
+                        ]);
+                @endphp
 
-                    <h2 class="vm-hero-title" style="font-size: 32px; font-weight: 800; color: #0F172A; line-height: 1.2; margin-bottom: 10px; letter-spacing: -0.5px;">
-                        Seamless Shopping, Swift Logistics
-                    </h2>
+                <div class="vm-hero-slides-track" id="vmHeroSliderTrack">
+                    @foreach($activeHeroBanners as $index => $banner)
+                        <div class="vm-hero-slide-item {{ $index === 0 ? 'active' : '' }}" 
+                             style="{{ $index !== 0 ? 'display: none;' : 'display: flex;' }} background: {{ $banner->bg_gradient ?? 'linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%)' }}; border: 1px solid rgba(94, 23, 235, 0.12); border-radius: 14px; padding: 28px 32px; box-shadow: var(--vm-shadow-xs); position: relative; overflow: hidden; justify-content: space-between; align-items: center; min-height: 220px;"
+                             data-slide-index="{{ $index }}">
+                            <div style="max-width: 580px; position: relative; z-index: 2;">
+                                
+                                @if(!empty($banner->badge_text))
+                                    <div class="vm-hero-badge-pill" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; padding: 3px 10px; border-radius: 999px; background: #FFFBE6; color: #D97706; margin-bottom: 12px;">
+                                        <span class="vm-badge-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #D97706;"></span>
+                                        <span>{{ $banner->badge_text }}</span>
+                                    </div>
+                                @endif
 
-                    <p class="vm-hero-subtitle" style="font-size: 14.5px; color: #64748B; margin-bottom: 22px; line-height: 1.5;">
-                        Akwa Ibom’s Premier Platform • Physical In-Shop Inspection • Escrow Protected
-                    </p>
+                                <h2 class="vm-hero-title" style="font-size: clamp(22px, 3.5vw, 32px); font-weight: 800; color: {{ $banner->text_color ?? '#0F172A' }}; line-height: 1.22; margin-bottom: 8px; letter-spacing: -0.5px;">
+                                    {{ $banner->title }}
+                                </h2>
 
-                    <div class="vm-hero-actions" style="display: flex; gap: 12px; align-items: center;">
-                        <a href="#catalog" class="vm-hero-cta-btn" style="display: inline-flex; align-items: center; gap: 6px; background: var(--vm-gold); color: #0F172A; font-weight: 800; font-size: 14px; padding: 11px 22px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 14px rgba(255, 215, 0, 0.35); transition: all 0.2s ease;">
-                            <span>Shop Verified Items</span>
-                            <span>→</span>
-                        </a>
-                    </div>
+                                @if(!empty($banner->subtitle))
+                                    <p class="vm-hero-subtitle" style="font-size: clamp(12.5px, 2vw, 14.5px); color: #64748B; margin-bottom: 18px; line-height: 1.45;">
+                                        {{ $banner->subtitle }}
+                                    </p>
+                                @endif
+
+                                <div class="vm-hero-actions" style="display: flex; gap: 12px; align-items: center;">
+                                    <a href="{{ $banner->cta_url ?? '#catalog' }}" class="vm-hero-cta-btn" style="display: inline-flex; align-items: center; gap: 6px; background: var(--vm-gold); color: #0F172A; font-weight: 800; font-size: 13.5px; padding: 10px 22px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 14px rgba(255, 215, 0, 0.35); transition: all 0.2s ease;">
+                                        <span>{{ $banner->cta_text ?? 'Shop Verified Items' }}</span>
+                                        <span>→</span>
+                                    </a>
+                                </div>
+                            </div>
+
+                            <!-- Brand Emblem Pedestal -->
+                            <div class="vm-hero-pedestal-wrap" style="display: flex; align-items: center; justify-content: center; position: relative; margin-left: 16px; flex-shrink: 0;">
+                                <div style="width: 110px; height: 110px; border-radius: 24px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 28px rgba(94, 23, 235, 0.14); border: 2px solid rgba(255, 215, 0, 0.45);">
+                                    <img src="{{ asset($banner->image_path ?: 'assets/img/vm_icon.jpg') }}" alt="Victorious MARKET" style="width: 90px; height: 90px; border-radius: 18px; object-fit: cover;">
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
                 </div>
 
-                <!-- Brand Emblem Pedestal -->
-                <div style="display: flex; align-items: center; justify-content: center; position: relative; margin-left: 20px;">
-                    <div style="width: 130px; height: 130px; border-radius: 28px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 32px rgba(94, 23, 235, 0.16); border: 2px solid rgba(255, 215, 0, 0.45);">
-                        <img src="{{ asset('assets/img/vm_icon.jpg') }}" alt="Victorious MARKET" style="width: 108px; height: 108px; border-radius: 22px; object-fit: cover;">
+                @if($activeHeroBanners->count() > 1)
+                    <!-- Slider Navigation Dots -->
+                    <div style="display: flex; justify-content: center; gap: 6px; margin-top: 10px;">
+                        @foreach($activeHeroBanners as $idx => $b)
+                            <button type="button" class="vm-hero-dot {{ $idx === 0 ? 'active' : '' }}" 
+                                    onclick="vmSwitchHeroSlide({{ $idx }})"
+                                    style="width: {{ $idx === 0 ? '24px' : '8px' }}; height: 8px; border-radius: 999px; background: {{ $idx === 0 ? '#5E17EB' : '#CBD5E1' }}; border: none; padding: 0; cursor: pointer; transition: all 0.25s ease;"
+                                    data-dot-index="{{ $idx }}"></button>
+                        @endforeach
                     </div>
-                </div>
+                @endif
             </div>
 
             <!-- Value Proposition Strip (4 Aligned Trust Pills) -->
-            <div class="vm-val-prop-strip" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+            <div class="vm-val-prop-strip">
                 
                 <div class="vm-val-prop-item" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; box-shadow: var(--vm-shadow-xs);">
                     <div class="vm-val-prop-icon-wrap" style="width: 36px; height: 36px; border-radius: 8px; background: rgba(94, 23, 235, 0.08); color: var(--vm-primary); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">
@@ -164,7 +217,7 @@
     </div>
 
     <!-- 2. Amazon-Inspired Quad Discovery & Recommendation Grid -->
-    <div class="vm-amazon-discovery-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px;">
+    <div class="vm-amazon-discovery-grid">
 
         <!-- Card 1: Verified Stores Closer to You in Uyo -->
         <div class="vm-discovery-card" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: var(--vm-shadow-xs);">
@@ -398,7 +451,33 @@
         </div>
     </div>
 
-        <!-- 5. Latest Products in Market (Filtered Dynamically by Active Location) -->
+            <!-- Dynamic Promotional Strip (Configurable via Admin Panel) -->
+    @if(isset($promoBanners) && $promoBanners->isNotEmpty())
+        @php $promo = $promoBanners->first(); @endphp
+        <div class="vm-promo-strip-banner" style="background: {{ $promo->bg_gradient ?? 'linear-gradient(135deg, #1E1B4B 0%, #311042 100%)' }}; border-radius: 14px; padding: 20px 28px; margin-bottom: 30px; color: {{ $promo->text_color ?? '#FFFFFF' }}; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 18px rgba(30, 27, 75, 0.12); flex-wrap: wrap; gap: 16px;">
+            <div style="max-width: 650px;">
+                @if(!empty($promo->badge_text))
+                    <span style="display: inline-block; background: #F59E0B; color: #0F172A; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.4px;">
+                        {{ $promo->badge_text }}
+                    </span>
+                @endif
+                <h3 style="font-size: clamp(17px, 2.5vw, 21px); font-weight: 800; margin: 0 0 4px; line-height: 1.25;">
+                    {{ $promo->title }}
+                </h3>
+                @if(!empty($promo->subtitle))
+                    <p style="font-size: 13px; opacity: 0.9; margin: 0; line-height: 1.4;">
+                        {{ $promo->subtitle }}
+                    </p>
+                @endif
+            </div>
+            <a href="{{ $promo->cta_url ?? '#catalog' }}" style="background: #F59E0B; color: #0F172A; font-size: 13px; font-weight: 800; padding: 10px 22px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35); flex-shrink: 0; transition: all 0.2s ease;">
+                <span>{{ $promo->cta_text ?? 'Claim Rewards' }}</span>
+                <span>→</span>
+            </a>
+        </div>
+    @endif
+
+    <!-- 5. Latest Products in Market (Filtered Dynamically by Active Location) -->
     <div class="vm-section-block" id="catalog">
         <div class="vm-section-header" style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px;">
             <div style="border-left: 4px solid var(--vm-info); padding-left: 12px;">
@@ -412,7 +491,7 @@
             <a href="#catalog" class="vm-section-link" style="font-size: 13px; font-weight: 700; color: var(--vm-info); text-decoration: none;">View All →</a>
         </div>
 
-        <div class="vm-products-grid" id="vmProductsGridContainer" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; transition: opacity 0.2s ease;">
+        <div class="vm-products-grid" id="vmProductsGridContainer">
             @include('storefront.partials._products_grid')
         </div>
     </div>
@@ -482,6 +561,43 @@
         cart = cart.filter(item => item.id !== id);
         renderCart();
     };
+    // Hero Slider Carousel Script
+    let currentHeroSlide = 0;
+    const heroSlides = document.querySelectorAll('.vm-hero-slide-item');
+    const heroDots = document.querySelectorAll('.vm-hero-dot');
+
+    window.vmSwitchHeroSlide = function(index) {
+        if (!heroSlides || heroSlides.length <= 1) return;
+        currentHeroSlide = index;
+
+        heroSlides.forEach((slide, idx) => {
+            if (idx === index) {
+                slide.style.display = 'flex';
+                slide.classList.add('active');
+            } else {
+                slide.style.display = 'none';
+                slide.classList.remove('active');
+            }
+        });
+
+        heroDots.forEach((dot, idx) => {
+            if (idx === index) {
+                dot.style.width = '24px';
+                dot.style.background = '#5E17EB';
+            } else {
+                dot.style.width = '8px';
+                dot.style.background = '#CBD5E1';
+            }
+        });
+    };
+
+    // Auto rotate every 6 seconds if multiple slides exist
+    if (heroSlides && heroSlides.length > 1) {
+        setInterval(() => {
+            currentHeroSlide = (currentHeroSlide + 1) % heroSlides.length;
+            window.vmSwitchHeroSlide(currentHeroSlide);
+        }, 6000);
+    }
 </script>
 @endpush
 @endsection
