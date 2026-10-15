@@ -10,13 +10,39 @@ class DemoAccountRegistry
      * Determine if demo mode is active.
      * HARD INVARIANT: Permanently disabled in production regardless of config/env.
      */
+    /**
+     * Determine if demo mode is active.
+     * MULTI-LAYER HARDENED INVARIANT:
+     * Layer 1: Permanently disabled in production (APP_ENV=production).
+     * Layer 2: Must be explicitly enabled via config (app.demo_mode / DEMO_MODE=true).
+     * Layer 3: Failsafe Domain Barrier - if request hostname is not localhost/127.0.0.1/.test/.local,
+     *          demo mode is forcibly killed even if APP_ENV was mistakenly misconfigured.
+     */
     public static function isDemoEnabled(): bool
     {
+        // Layer 1: Environment check
         if (app()->environment('production')) {
             return false;
         }
 
-        return (bool) config('app.demo_mode', env('DEMO_MODE', false));
+        // Layer 2: Explicit config switch
+        if (!config('app.demo_mode', false) && !env('DEMO_MODE', false)) {
+            return false;
+        }
+
+        // Layer 3: Live Host / Domain Barrier
+        if (!app()->runningInConsole() && request() && request()->hasHeader('Host')) {
+            $host = strtolower(request()->getHost());
+            $isLocal = in_array($host, ['localhost', '127.0.0.1', '::1'])
+                || str_ends_with($host, '.test')
+                || str_ends_with($host, '.local');
+
+            if (!$isLocal) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

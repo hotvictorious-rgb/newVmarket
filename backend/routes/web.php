@@ -15,7 +15,7 @@ Route::post('/set-location', [PortalController::class, 'setLocation'])->name('se
 // Portal 1: Customer Shopper Login & Registration
 Route::get('/login', [WebAuthController::class, 'showCustomerLogin'])->name('login');
 Route::get('/customer/login', [WebAuthController::class, 'showCustomerLogin'])->name('customer.login');
-Route::post('/customer/login', [WebAuthController::class, 'loginCustomer'])->name('customer.login.post');
+Route::post('/customer/login', [WebAuthController::class, 'loginCustomer'])->name('customer.login.post')->middleware('throttle:10,1');
 
 Route::get('/register', [WebAuthController::class, 'showCustomerRegister'])->name('register');
 Route::get('/customer/register', [WebAuthController::class, 'showCustomerRegister'])->name('customer.register');
@@ -28,33 +28,33 @@ Route::post('/auth/google/one-tap', [WebAuthController::class, 'handleGoogleOneT
 
 // Portal 2: Super Admin Command Gate
 Route::get('/admin/login', [WebAuthController::class, 'showAdminLogin'])->name('admin.login');
-Route::post('/admin/login', [WebAuthController::class, 'loginAdmin'])->name('admin.login.post');
+Route::post('/admin/login', [WebAuthController::class, 'loginAdmin'])->name('admin.login.post')->middleware('throttle:10,1');
 
 // Portal 3: Admin Staff (Finance, Dispatch, Support)
 Route::get('/admin-staff/login', [WebAuthController::class, 'showAdminStaffLogin'])->name('admin.staff.login');
-Route::post('/admin-staff/login', [WebAuthController::class, 'loginAdminStaff'])->name('admin.staff.login.post');
+Route::post('/admin-staff/login', [WebAuthController::class, 'loginAdminStaff'])->name('admin.staff.login.post')->middleware('throttle:10,1');
 
 // Portal 4: Vendor Merchant Owner Desk
 Route::get('/vendor/login', [WebAuthController::class, 'showVendorLogin'])->name('vendor.login');
-Route::post('/vendor/login', [WebAuthController::class, 'loginVendor'])->name('vendor.login.post');
+Route::post('/vendor/login', [WebAuthController::class, 'loginVendor'])->name('vendor.login.post')->middleware('throttle:10,1');
 
 // Portal 5: In-Shop Branch Counter Staff Terminal
 Route::get('/counter/login', [WebAuthController::class, 'showCounterLogin'])->name('counter.login');
-Route::post('/counter/login', [WebAuthController::class, 'loginCounter'])->name('counter.login.post');
+Route::post('/counter/login', [WebAuthController::class, 'loginCounter'])->name('counter.login.post')->middleware('throttle:10,1');
 
 // Portal 6: Logistics Company Fleet Desk
 Route::get('/logistics/login', [WebAuthController::class, 'showLogisticsLogin'])->name('logistics.login');
-Route::post('/logistics/login', [WebAuthController::class, 'loginLogistics'])->name('logistics.login.post');
+Route::post('/logistics/login', [WebAuthController::class, 'loginLogistics'])->name('logistics.login.post')->middleware('throttle:10,1');
 
 // Portal 7: Delivery Rider Status Portal
 Route::get('/rider/login', [WebAuthController::class, 'showRiderLogin'])->name('rider.login');
-Route::post('/rider/login', [WebAuthController::class, 'loginRider'])->name('rider.login.post');
+Route::post('/rider/login', [WebAuthController::class, 'loginRider'])->name('rider.login.post')->middleware('throttle:10,1');
 
 // Logout Route
 Route::post('/logout', [WebAuthController::class, 'logout'])->name('logout');
 
 // Gated Demo Authentication (Strictly forbidden in production)
-Route::post('/demo/quick-login', [WebAuthController::class, 'quickDemoLogin'])->name('demo.quick_login');
+Route::post('/demo/quick-login', [WebAuthController::class, 'quickDemoLogin'])->name('demo.quick_login')->middleware('throttle:10,1');
 
 
 // ==========================================
@@ -122,6 +122,8 @@ Route::middleware(['role:rider'])->prefix('rider')->group(function () {
     Route::get('/earnings', [PortalController::class, 'riderEarningsPage'])->name('rider.earnings.index');
 
     Route::post('/verify-delivery-otp', [PortalController::class, 'riderVerifyDeliveryOtp'])->name('rider.verify.delivery.otp');
+    Route::post('/order/arrived', [PortalController::class, 'riderMarkArrived'])->name('rider.order.arrived');
+    Route::get('/orders/{order}/handshake-status', [PortalController::class, 'riderCheckDeliveryStatus'])->name('rider.order.handshake_status');
     Route::post('/toggle-shift', [PortalController::class, 'riderToggleShift'])->name('rider.toggle.shift');
 });
 
@@ -164,6 +166,8 @@ Route::post('/checkout/process', [PortalController::class, 'processCheckout'])->
 Route::post('/reservation/create', [PortalController::class, 'createReservation'])->name('reservation.create');
 Route::get('/reservation/{code}', [PortalController::class, 'showReservationPass'])->name('reservation.pass');
 Route::get('/order/{order_number}', [PortalController::class, 'showOrderStatus'])->name('order.status');
+Route::get('/order/{order_number}/handshake-status', [PortalController::class, 'customerCheckArrivalStatus'])->name('order.handshake_status');
+Route::post('/order/{order_number}/confirm-delivery', [PortalController::class, 'customerConfirmDelivery'])->name('order.customer_confirm_delivery');
 
 // Stage 4: Rider Merchant Pickup Route
 Route::middleware(['role:rider'])->prefix('rider')->group(function () {

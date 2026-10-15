@@ -32,6 +32,10 @@ class Order extends Model
         'logistics_fee_retained',
         'pickup_verification_code',
         'verification_code',
+        'rider_arrived_at',
+        'delivery_confirmed_by_customer',
+        'proof_of_delivery_image',
+        'customer_delivery_notes',
         'received_at',
         'refund_window_expires_at',
         'vendor_settlement_status',
@@ -49,10 +53,52 @@ class Order extends Model
         'customer_cashback_5' => 'string',
         'platform_margin_5' => 'string',
         'logistics_fee_retained' => 'string',
+        'rider_arrived_at' => 'datetime',
+        'delivery_confirmed_by_customer' => 'boolean',
         'received_at' => 'datetime',
         'refund_window_expires_at' => 'datetime',
         'settled_at' => 'datetime',
     ];
+
+    public function hasRiderArrived(): bool
+    {
+        return !is_null($this->rider_arrived_at);
+    }
+
+    public function isCustomerHandshakePending(): bool
+    {
+        return $this->order_status === 'out_for_delivery' && $this->hasRiderArrived() && !$this->delivery_confirmed_by_customer;
+    }
+
+    /**
+     * Mathematically guarantees collision-free delivery OTP across all active orders.
+     */
+    public static function generateUniqueDeliveryOtp(): string
+    {
+        do {
+            $otp = (string) random_int(100000, 999999);
+            $collision = self::where('verification_code', $otp)
+                ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
+                ->exists();
+        } while ($collision);
+
+        return $otp;
+    }
+
+    /**
+     * Mathematically guarantees collision-free pickup OTP across all active orders.
+     */
+    public static function generateUniquePickupOtp(): string
+    {
+        do {
+            $otp = (string) random_int(100000, 999999);
+            $collision = self::where('pickup_verification_code', $otp)
+                ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
+                ->exists();
+        } while ($collision);
+
+        return $otp;
+    }
 
     public function customer()
     {

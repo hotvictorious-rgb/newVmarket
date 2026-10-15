@@ -27,7 +27,7 @@ class OrderSettlementService
                 return ['success' => false, 'message' => "Order cannot be picked up in status {$lockedOrder->order_status}."];
             }
 
-            if ($lockedOrder->pickup_verification_code !== trim($otp)) {
+            if (!hash_equals((string)$lockedOrder->pickup_verification_code, trim($otp))) {
                 return ['success' => false, 'message' => 'Invalid pickup verification OTP.'];
             }
 
@@ -44,28 +44,86 @@ class OrderSettlementService
     }
 
     /**
-     * Handshake 2: Rider delivers package to Customer at doorstep.
-     * Verifies the 6-digit Customer Delivery verification_code.
+     * Handshake 2A: Rider arrives at Customer Doorstep.
+     * Records arrival time and signals customer phone to open verification prompt.
      */
-    public function verifyCustomerDeliveryOtp(Order $order, string $otp, RiderProfile $rider): array
+    public function markRiderArrived(Order $order, RiderProfile $rider): array
     {
-        return DB::transaction(function () use ($order, $otp, $rider) {
+        return DB::transaction(function () use ($order, $rider) {
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+
+            if ($lockedOrder->order_status !== 'out_for_delivery') {
+                return [
+                    'success' => false,
+                    'message' => "Order cannot be marked arrived in status {$lockedOrder->order_status}.",
+                ];
+            }
+
+            $lockedOrder->rider_arrived_at = Carbon::now();
+            if (!$lockedOrder->rider_id) {
+                $lockedOrder->rider_id = $rider->id;
+            }
+            $lockedOrder->save();
+
+            return [
+                'success' => true,
+                'message' => 'Arrival signaled! Handshake prompt is now active on the customer\'s phone.',
+                'order' => $lockedOrder,
+            ];
+        });
+    }
+
+    /**
+     * Handshake 2B: Customer enters 6-digit PIN on their own device with optional photo snap.
+     * Verifies verification_code, sets delivered, enqueues cashback, and credits rider wallet.
+     */
+    public function verifyCustomerDeliveryOtp(
+        Order $order,
+        string $otp,
+        ?RiderProfile $rider = null,
+        ?string $proofImagePath = null,
+        ?string $customerNotes = null
+    ): array {
+        return DB::transaction(function () use ($order, $otp, $rider, $proofImagePath, $customerNotes) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
             if ($lockedOrder->order_status !== 'out_for_delivery') {
                 return ['success' => false, 'message' => 'Order is not currently out for delivery.'];
             }
 
-            if ($lockedOrder->verification_code !== trim($otp)) {
-                return ['success' => false, 'message' => 'Invalid customer delivery verification OTP.'];
+            if (!hash_equals((string)$lockedOrder->verification_code, trim($otp))) {
+                return ['success' => false, 'message' => 'Invalid customer delivery verification OTP. Please check your phone SMS or screen.'];
             }
 
             $now = Carbon::now();
             $lockedOrder->order_status = 'delivered';
+            $lockedOrder->delivery_confirmed_by_customer = true;
             $lockedOrder->received_at = $now;
             $lockedOrder->refund_window_expires_at = $now->copy()->addHours(24);
             $lockedOrder->vendor_settlement_status = 'held';
+
+            if ($proofImagePath) {
+                $lockedOrder->proof_of_delivery_image = $proofImagePath;
+            }
+
+            if ($customerNotes) {
+                $lockedOrder->customer_delivery_notes = $customerNotes;
+            }
+
+            if (!$lockedOrder->rider_id && $rider) {
+                $lockedOrder->rider_id = $rider->id;
+            }
+
             $lockedOrder->save();
+
+            // Real-time credit delivery fee to rider wallet
+            $targetRider = $rider ?? ($lockedOrder->rider_id ? RiderProfile::find($lockedOrder->rider_id) : null);
+            if ($targetRider) {
+                $currentBalance = (float) ($targetRider->current_balance ?? 0);
+                $deliveryCut = (float) ($lockedOrder->delivery_fee ?? 0);
+                $targetRider->current_balance = number_format($currentBalance + $deliveryCut, 2, '.', '');
+                $targetRider->save();
+            }
 
             // Enqueue 5% Customer Cashback reward with 24h maturation lock
             CustomerCashbackLedger::updateOrCreate([
@@ -80,7 +138,7 @@ class OrderSettlementService
 
             return [
                 'success' => true,
-                'message' => 'Delivery verified. 24-hour return window has commenced.',
+                'message' => 'Package delivery confirmed successfully! 24-hour return window is now active.',
                 'order' => $lockedOrder,
             ];
         });
@@ -145,7 +203,7 @@ class OrderSettlementService
                 return ['success' => false, 'message' => 'Goods cannot be handed over before verified payment.'];
             }
 
-            if ($lockedOrder->verification_code !== trim($otp)) {
+            if (!hash_equals((string)$lockedOrder->verification_code, trim($otp))) {
                 return ['success' => false, 'message' => 'Invalid pickup handover OTP.'];
             }
 

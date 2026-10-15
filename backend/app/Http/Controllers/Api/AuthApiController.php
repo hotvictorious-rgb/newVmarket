@@ -27,6 +27,7 @@ class AuthApiController extends Controller
             'phone' => $validated['phone'],
             'user_type' => $validated['user_type'] ?? 'customer',
             'status' => 'active',
+            'is_demo' => false, // Real registration is NEVER a demo account
             'password' => Hash::make($validated['password']),
         ]);
 
@@ -61,6 +62,22 @@ class AuthApiController extends Controller
             throw ValidationException::withMessages([
                 'login' => ['The provided credentials are incorrect.'],
             ]);
+        }
+
+        // Hard Invariant: Super Admin accounts cannot authenticate via mobile API tokens
+        if ($user->user_type === 'super_admin') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Super Administrator credentials are strictly restricted to the Web Command Gate.',
+            ], 403);
+        }
+
+        // Hard Invariant: Demo accounts cannot authenticate in production
+        if ($user->is_demo && app()->environment('production')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Demo accounts are permanently disabled in production environments.',
+            ], 403);
         }
 
         if ($user->status !== 'active') {

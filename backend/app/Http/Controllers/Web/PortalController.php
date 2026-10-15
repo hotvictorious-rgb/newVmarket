@@ -862,12 +862,7 @@ class PortalController extends Controller
             ->with(['shop', 'customer'])
             ->get();
 
-        if ($activeDeliveries->isEmpty()) {
-            $fallback = Order::with(['shop', 'customer'])->first();
-            if ($fallback) {
-                $activeDeliveries = collect([$fallback]);
-            }
-        }
+
 
         $completedDrops = Order::where('fulfillment_type', 'doorstep_delivery')
             ->where('order_status', 'delivered')
@@ -898,12 +893,7 @@ class PortalController extends Controller
             ->with(['shop', 'customer'])
             ->get();
 
-        if ($activeDeliveries->isEmpty()) {
-            $fallback = Order::with(['shop', 'customer'])->first();
-            if ($fallback) {
-                $activeDeliveries = collect([$fallback]);
-            }
-        }
+
 
         return view('rider.deliveries', compact('rider', 'activeDeliveries'));
     }
@@ -919,12 +909,7 @@ class PortalController extends Controller
             ->with(['shop', 'customer'])
             ->get();
 
-        if ($activeDeliveries->isEmpty()) {
-            $fallback = Order::with(['shop', 'customer'])->first();
-            if ($fallback) {
-                $activeDeliveries = collect([$fallback]);
-            }
-        }
+
 
         return view('rider.pickup', compact('rider', 'activeDeliveries'));
     }
@@ -940,12 +925,7 @@ class PortalController extends Controller
             ->with(['shop', 'customer'])
             ->get();
 
-        if ($activeDeliveries->isEmpty()) {
-            $fallback = Order::with(['shop', 'customer'])->first();
-            if ($fallback) {
-                $activeDeliveries = collect([$fallback]);
-            }
-        }
+
 
         return view('rider.dropoff', compact('rider', 'activeDeliveries'));
     }
@@ -1008,9 +988,7 @@ class PortalController extends Controller
             ->latest()
             ->get();
 
-        if ($reservations->isEmpty()) {
-            $reservations = PickupReservation::with(['product:id,name,unit_price', 'shop:id,name,address'])->latest()->take(2)->get();
-        }
+
 
         $nameParts = explode(' ', $customer->name ?? 'Emeka Okonkwo', 2);
         $f_name = $nameParts[0] ?? 'Emeka';
@@ -1080,9 +1058,7 @@ class PortalController extends Controller
             ->latest()
             ->get();
 
-        if ($reservations->isEmpty()) {
-            $reservations = PickupReservation::with(['product:id,name,unit_price', 'shop:id,name,address'])->latest()->take(2)->get();
-        }
+
 
         $wishlists = 3;
 
@@ -1176,7 +1152,7 @@ class PortalController extends Controller
         ]);
 
         $order = Order::findOrFail($request->input('order_id'));
-        $rider = RiderProfile::first();
+        $rider = $this->resolveRiderProfile();
 
         $result = $settlementService->verifyRiderPickupOtp($order, $request->input('handover_otp'), $rider);
 
@@ -1186,6 +1162,61 @@ class PortalController extends Controller
     /**
      * Interactive Action: Rider verifies delivery at Customer doorstep using Dual OTP
      */
+    /**
+     * Interactive Action: Rider arrives at Customer location and triggers customer-side handshake
+     */
+    public function riderMarkArrived(Request $request, OrderSettlementService $settlementService)
+    {
+        $validated = $request->validate([
+            'order_id' => 'nullable|integer|exists:orders,id',
+            'order_number' => 'nullable|string|exists:orders,order_number',
+        ]);
+
+        $order = null;
+        if (!empty($validated['order_id'])) {
+            $order = Order::findOrFail($validated['order_id']);
+        } elseif (!empty($validated['order_number'])) {
+            $order = Order::where('order_number', $validated['order_number'])->firstOrFail();
+        } else {
+            return back()->with('error', 'Order reference is required to signal arrival.');
+        }
+
+        $rider = $this->resolveRiderProfile();
+        $result = $settlementService->markRiderArrived($order, $rider);
+
+        if ($request->wantsJson()) {
+            return response()->json($result, $result['success'] ? 200 : 422);
+        }
+
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
+
+        return back()->with('success', $result['message']);
+    }
+
+    /**
+     * Polling Action: Rider phone checks if customer has confirmed receipt on their device
+     */
+    public function riderCheckDeliveryStatus(Request $request, $orderId)
+    {
+        $order = Order::with(['customer', 'shop'])->findOrFail($orderId);
+        $rider = $this->resolveRiderProfile();
+
+        return response()->json([
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'order_status' => $order->order_status,
+            'rider_arrived' => $order->hasRiderArrived(),
+            'rider_arrived_at' => $order->rider_arrived_at ? $order->rider_arrived_at->format('h:i A') : null,
+            'is_delivered' => $order->order_status === 'delivered',
+            'delivered_at' => $order->received_at ? $order->received_at->format('h:i A') : null,
+            'proof_image' => $order->proof_of_delivery_image,
+            'delivery_fee' => number_format((float)$order->delivery_fee, 2),
+            'rider_wallet_balance' => number_format((float)($rider->current_balance ?? 0), 2),
+        ]);
+    }
+
     public function riderVerifyDeliveryOtp(Request $request, OrderSettlementService $settlementService)
     {
         $request->validate([
@@ -1194,7 +1225,7 @@ class PortalController extends Controller
         ]);
 
         $order = Order::findOrFail($request->input('order_id'));
-        $rider = RiderProfile::first();
+        $rider = $this->resolveRiderProfile();
 
         $result = $settlementService->verifyCustomerDeliveryOtp($order, $request->input('delivery_otp'), $rider);
 
@@ -1206,7 +1237,7 @@ class PortalController extends Controller
      */
     public function riderToggleShift(Request $request)
     {
-        $rider = RiderProfile::first();
+        $rider = $this->resolveRiderProfile();
         if ($rider) {
             $rider->is_online = !$rider->is_online;
             $rider->save();
@@ -1454,8 +1485,7 @@ class PortalController extends Controller
 
     public function vendorStoreProduct(Request $request)
     {
-        $user = Auth::user();
-        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::first();
+        $vendor = $this->resolveVendorProfile();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -1500,8 +1530,7 @@ class PortalController extends Controller
 
     public function vendorStoreShop(Request $request)
     {
-        $user = Auth::user();
-        $vendor = ($user && $user->vendorProfile) ? $user->vendorProfile : VendorProfile::first();
+        $vendor = $this->resolveVendorProfile();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -1671,8 +1700,8 @@ class PortalController extends Controller
 
         // Order Number & OTPs
         $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(4));
-        $deliveryOtp = (string)random_int(100000, 999999);
-        $pickupOtp = (string)random_int(100000, 999999);
+        $deliveryOtp = Order::generateUniqueDeliveryOtp();
+        $pickupOtp = Order::generateUniquePickupOtp();
 
         // Assign active rider
         $rider = RiderProfile::where('is_online', true)->first() ?? RiderProfile::first();
@@ -1792,6 +1821,65 @@ class PortalController extends Controller
             ->firstOrFail();
 
         return view('storefront.order_status', compact('order'));
+    }
+
+    /**
+     * Customer Phone Handshake: Customer inputs their secret 6-digit PIN on their own device
+     * with optional photo snapping to verify and complete delivery.
+     */
+    public function customerConfirmDelivery(Request $request, string $orderNumber, OrderSettlementService $settlementService)
+    {
+        $validated = $request->validate([
+            'delivery_otp' => 'required|string|size:6',
+            'proof_photo' => 'nullable|image|max:10240',
+            'customer_notes' => 'nullable|string|max:500',
+        ]);
+
+        $order = Order::where('order_number', $orderNumber)->firstOrFail();
+
+        // Optional photo upload
+        $proofPath = null;
+        if ($request->hasFile('proof_photo') && $request->file('proof_photo')->isValid()) {
+            $path = $request->file('proof_photo')->store('delivery_proofs', 'public');
+            $proofPath = '/storage/' . $path;
+        }
+
+        $result = $settlementService->verifyCustomerDeliveryOtp(
+            $order,
+            $validated['delivery_otp'],
+            null,
+            $proofPath,
+            $validated['customer_notes'] ?? null
+        );
+
+        if ($request->wantsJson()) {
+            return response()->json($result, $result['success'] ? 200 : 422);
+        }
+
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
+
+        return redirect()->route('order.status', $order->order_number)->with('success', $result['message']);
+    }
+
+    /**
+     * Customer Phone Polling: Detects when rider taps "I Have Arrived"
+     */
+    public function customerCheckArrivalStatus(Request $request, string $orderNumber)
+    {
+        $order = Order::where('order_number', $orderNumber)->with('rider.user')->firstOrFail();
+
+        return response()->json([
+            'order_number' => $order->order_number,
+            'order_status' => $order->order_status,
+            'rider_arrived' => $order->hasRiderArrived(),
+            'rider_arrived_at' => $order->rider_arrived_at ? $order->rider_arrived_at->format('h:i A') : null,
+            'rider_name' => $order->rider->user->name ?? 'Assigned Dispatch Rider',
+            'rider_phone' => $order->rider->user->phone ?? null,
+            'is_delivered' => $order->order_status === 'delivered',
+            'handshake_pending' => $order->isCustomerHandshakePending(),
+        ]);
     }
 
     // ==========================================

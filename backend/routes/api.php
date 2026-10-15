@@ -32,7 +32,7 @@ Route::prefix('v1')->group(function () {
     // 5. Authentication
     Route::prefix('auth')->group(function () {
         Route::post('register', [AuthApiController::class, 'register']);
-        Route::post('login', [AuthApiController::class, 'login']);
+        Route::post('login', [AuthApiController::class, 'login'])->middleware('throttle:10,1');
     });
 
     // 6. Authenticated Endpoints
