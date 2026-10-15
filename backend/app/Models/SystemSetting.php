@@ -19,22 +19,35 @@ class SystemSetting extends Model
     ];
 
     /**
-     * Retrieve a setting by key with memory/cache acceleration
+     * In-memory request cache for 0ms repeated lookups
+     */
+    protected static ?array $runtimeCache = null;
+
+    /**
+     * Retrieve a setting by key with 0ms memory cache acceleration
      */
     public static function get(string $key, mixed $default = null): mixed
     {
-        $value = Cache::remember("sys_setting_{$key}", 300, function () use ($key) {
-            $setting = static::where('key', $key)->first();
-            return $setting ? $setting->value : null;
-        });
-
-        if (is_null($value)) {
-            return $default;
+        if (static::$runtimeCache === null) {
+            try {
+                static::$runtimeCache = Cache::remember('vmarket_all_system_settings_dict', 3600, function () {
+                    return static::pluck('value', 'key')->toArray();
+                }) ?? [];
+            } catch (\Throwable $e) {
+                static::$runtimeCache = [];
+            }
         }
 
-        // Try decoding if JSON
-        $decoded = json_decode($value, true);
-        return (json_last_error() === JSON_ERROR_NONE) ? $decoded : $value;
+        if (array_key_exists($key, static::$runtimeCache)) {
+            $value = static::$runtimeCache[$key];
+            if ($value === null) {
+                return $default;
+            }
+            $decoded = json_decode($value, true);
+            return (json_last_error() === JSON_ERROR_NONE) ? $decoded : $value;
+        }
+
+        return $default;
     }
 
     /**
@@ -49,7 +62,8 @@ class SystemSetting extends Model
             ['value' => $serialized, 'group' => $group]
         );
 
-        Cache::forget("sys_setting_{$key}");
+        static::$runtimeCache = null;
+        Cache::forget('vmarket_all_system_settings_dict');
 
         return $setting;
     }
