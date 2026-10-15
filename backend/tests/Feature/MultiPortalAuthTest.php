@@ -113,4 +113,60 @@ class MultiPortalAuthTest extends TestCase
         $response->assertRedirect('/');
         $this->assertGuest();
     }
+
+    public function test_customer_can_register_and_is_authenticated_with_customer_role(): void
+    {
+        $response = $this->post('/customer/register', [
+            'name' => 'Akwa Ibom Buyer',
+            'email' => 'buyer@victoriousmarket.com.ng',
+            'phone' => '08012345678',
+            'password' => 'SecurePass123!',
+            'password_confirmation' => 'SecurePass123!',
+            'terms' => '1',
+        ]);
+
+        $response->assertRedirect('/customer');
+        $this->assertAuthenticated();
+
+        $user = User::where('email', 'buyer@victoriousmarket.com.ng')->first();
+        $this->assertNotNull($user);
+        $this->assertEquals('customer', $user->user_type);
+        $this->assertEquals('active', $user->status);
+    }
+
+    public function test_customer_registration_strictly_blocks_privilege_escalation(): void
+    {
+        // Attacker attempts to forge user_type as super_admin
+        $response = $this->post('/customer/register', [
+            'name' => 'Sneaky Actor',
+            'email' => 'sneaky@example.com',
+            'phone' => '08099887766',
+            'password' => 'SecurePass123!',
+            'password_confirmation' => 'SecurePass123!',
+            'user_type' => 'super_admin',
+            'terms' => '1',
+        ]);
+
+        $response->assertRedirect('/customer');
+        $user = User::where('email', 'sneaky@example.com')->first();
+        $this->assertNotNull($user);
+        // Invariant: Must strictly remain 'customer'
+        $this->assertEquals('customer', $user->user_type);
+        $this->assertFalse($user->isSuperAdmin());
+    }
+
+    public function test_customer_registration_validates_required_fields(): void
+    {
+        $response = $this->post('/customer/register', []);
+        $response->assertSessionHasErrors(['name', 'email', 'phone', 'password', 'terms']);
+        $this->assertGuest();
+    }
+
+    public function test_google_redirect_handles_unconfigured_or_redirect_state_safely(): void
+    {
+        $response = $this->get('/auth/google/redirect');
+        // If not configured in .env, redirects to customer.login with explanatory message
+        // If configured, redirects to accounts.google.com
+        $this->assertTrue(in_array($response->getStatusCode(), [302, 303]));
+    }
 }

@@ -750,7 +750,7 @@
                         </svg>
                         <span>Sign In</span>
                     </a>
-                    <a href="{{ route('customer.login') }}" class="vm-action-btn vm-register-btn" style="background: var(--vm-primary); color: #fff; padding: 6px 14px; border-radius: 999px;" title="Register">
+                    <a href="{{ route('customer.register') }}" class="vm-action-btn vm-register-btn" style="background: var(--vm-primary); color: #fff; padding: 6px 14px; border-radius: 999px;" title="Register">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                             <circle cx="8.5" cy="7" r="4"></circle>
