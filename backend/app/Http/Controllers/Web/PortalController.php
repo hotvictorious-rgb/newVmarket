@@ -238,7 +238,7 @@ class PortalController extends Controller
             ->take(10)
             ->get();
 
-        $deliveryLanes = DeliveryLane::with(['originLga', 'destinationLga'])
+        $deliveryLanes = DeliveryLane::with(['originLga.state', 'destinationLga.state'])
             ->where('is_active', true)
             ->take(10)
             ->get();
@@ -256,7 +256,7 @@ class PortalController extends Controller
         ];
 
         $allVendors = VendorProfile::with(['user', 'shops'])->latest()->get();
-        $allLgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+        $allLgas = Lga::with('state')->where('is_active', true)->orderBy('name', 'asc')->get();
                 $zonalSettings = [
             'zone_intra_lga_fee' => \App\Models\SystemSetting::get('zone_intra_lga_fee', '500.00'),
             'zone_intra_lga_eta' => \App\Models\SystemSetting::get('zone_intra_lga_eta', '2-4 hours'),
@@ -287,9 +287,9 @@ class PortalController extends Controller
      */
     public function adminDeliveryLanesPage(Request $request)
     {
-        $allLgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+        $allLgas = Lga::with('state')->where('is_active', true)->orderBy('name', 'asc')->get();
 
-        $deliveryLanes = DeliveryLane::with(['originLga', 'destinationLga'])
+        $deliveryLanes = DeliveryLane::with(['originLga.state', 'destinationLga.state'])
             ->orderBy('is_active', 'desc')
             ->latest()
             ->get();
@@ -466,7 +466,7 @@ class PortalController extends Controller
 
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
         $shops = Shop::where('vendor_id', $vendor->id)->get();
-        $allLgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+        $allLgas = Lga::with('state')->where('is_active', true)->orderBy('name', 'asc')->get();
         return view('vendor.dashboard', compact('vendor', 'primaryShop', 'products', 'reservations', 'orders', 'vendorMetrics', 'categories', 'shops', 'allLgas'));
     }
 
@@ -1077,6 +1077,16 @@ class PortalController extends Controller
         if ($product->inventory_quantity >= $quantity) {
             $product->decrement('inventory_quantity', $quantity);
         }
+
+        // Record 5% Customer Cashback Reward in Ledger (VMarket Business Rule)
+        CustomerCashbackLedger::create([
+            'customer_id' => $user->id,
+            'order_id' => $order->id,
+            'amount' => $splits['customer_cashback_5'],
+            'status' => 'pending_maturation',
+            'matures_at' => Carbon::now()->addHours(24),
+            'expires_at' => Carbon::now()->addDays(90),
+        ]);
 
         return redirect()->route('order.status', ['order_number' => $order->order_number])->with('status', 'Payment verified! Your order has been placed successfully.');
     }

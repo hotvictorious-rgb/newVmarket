@@ -127,61 +127,54 @@
                 <div style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 14px; padding: 22px; margin-bottom: 24px; box-shadow: var(--vm-shadow-xs);">
                     <div style="font-weight: 800; font-size: 15px; color: #0F172A; margin-bottom: 16px; display: flex; align-items: center; gap: 10px;">
                         <span style="background: #5E17EB; color: #FFF; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;">3</span>
-                        <span>Select Secure Payment Method</span>
+                    <div style="font-weight: 800; font-size: 15px; color: #0F172A; margin-bottom: 6px; display: flex; align-items: center; gap: 10px;">
+                        <span style="background: #5E17EB; color: #FFF; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;">3</span>
+                        <span>Select Paystack Payment Channel</span>
                     </div>
+                    <p style="font-size: 12px; color: #64748B; margin: 0 0 16px 34px;">
+                        All payments are processed exclusively and securely through <strong>Paystack</strong> (Nigeria’s leading PCI-DSS Level 1 certified gateway).
+                    </p>
 
                     <!-- Payment Options Grid -->
                     <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;">
                         
-                        <!-- Option A: Cards (Visa, Mastercard, Verve) -->
+                        <!-- Option A: Cards (Visa, Mastercard, Verve via Paystack) -->
                         <label class="vm-pay-option active" style="display: flex; align-items: center; justify-content: space-between; border: 1.5px solid #5E17EB; background: #F5F3FF; border-radius: 10px; padding: 12px 16px; cursor: pointer;">
                             <div style="display: flex; align-items: center; gap: 12px;">
                                 <input type="radio" name="payment_method_choice" value="cards" checked style="accent-color: #5E17EB; width: 16px; height: 16px;">
                                 <div>
-                                    <strong style="font-size: 13.5px; color: #0F172A; display: block;">💳 Debit Cards</strong>
+                                    <strong style="font-size: 13.5px; color: #0F172A; display: block;">💳 Paystack Debit Card</strong>
                                     <span style="font-size: 11.5px; color: #64748B;">Mastercard, Visa, Verve (Instant verification)</span>
                                 </div>
                             </div>
-                            <span style="font-size: 11px; font-weight: 700; color: #5E17EB;">FASTEST</span>
+                            <span style="font-size: 11px; font-weight: 800; color: #5E17EB; background: rgba(94, 23, 235, 0.08); padding: 2px 8px; border-radius: 4px;">FASTEST</span>
                         </label>
 
-                        <!-- Option B: Direct Bank Transfer -->
+                        <!-- Option B: Direct Bank Transfer via Paystack -->
                         <label class="vm-pay-option" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid #CBD5E1; background: #FFFFFF; border-radius: 10px; padding: 12px 16px; cursor: pointer;">
                             <div style="display: flex; align-items: center; gap: 12px;">
                                 <input type="radio" name="payment_method_choice" value="bank_transfer" style="accent-color: #5E17EB; width: 16px; height: 16px;">
                                 <div>
-                                    <strong style="font-size: 13.5px; color: #0F172A; display: block;">🏦 Direct Bank Transfer</strong>
-                                    <span style="font-size: 11.5px; color: #64748B;">Transfer via OPay, PalmPay, Kuda, GTBank</span>
+                                    <strong style="font-size: 13.5px; color: #0F172A; display: block;">🏦 Paystack Bank Transfer</strong>
+                                    <span style="font-size: 11.5px; color: #64748B;">Dedicated virtual account via OPay, PalmPay, Kuda, GTBank</span>
                                 </div>
                             </div>
-                            <span style="font-size: 11px; font-weight: 700; color: #059669;">30s AUTO-CONFIRM</span>
+                            <span style="font-size: 11px; font-weight: 800; color: #059669; background: #ECFDF5; padding: 2px 8px; border-radius: 4px;">AUTO-CONFIRM</span>
                         </label>
 
-                        <!-- Option C: USSD -->
+                        <!-- Option C: USSD via Paystack -->
                         <label class="vm-pay-option" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid #CBD5E1; background: #FFFFFF; border-radius: 10px; padding: 12px 16px; cursor: pointer;">
                             <div style="display: flex; align-items: center; gap: 12px;">
                                 <input type="radio" name="payment_method_choice" value="ussd" style="accent-color: #5E17EB; width: 16px; height: 16px;">
                                 <div>
-                                    <strong style="font-size: 13.5px; color: #0F172A; display: block;">📱 USSD Banking</strong>
+                                    <strong style="font-size: 13.5px; color: #0F172A; display: block;">📱 Paystack USSD Banking</strong>
                                     <span style="font-size: 11.5px; color: #64748B;">*737#, *919#, *966# and all Nigerian banks</span>
                                 </div>
                             </div>
-                            <span style="font-size: 11px; color: #64748B;">NO DATA NEEDED</span>
+                            <span style="font-size: 11px; color: #64748B; background: #F1F5F9; padding: 2px 8px; border-radius: 4px;">NO DATA NEEDED</span>
                         </label>
 
-                        <!-- Option D: Paystack Direct Gateway -->
-                        <label class="vm-pay-option" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid #CBD5E1; background: #FFFFFF; border-radius: 10px; padding: 12px 16px; cursor: pointer;">
-                            <div style="display: flex; align-items: center; gap: 12px;">
-                                <input type="radio" name="payment_method_choice" value="paystack_direct" style="accent-color: #5E17EB; width: 16px; height: 16px;">
-                                <div>
-                                    <strong style="font-size: 13.5px; color: #0F172A; display: block;">⚡ Paystack Pop-up</strong>
-                                    <span style="font-size: 11.5px; color: #64748B;">Pay with Paystack checkout dialog</span>
-                                </div>
-                            </div>
-                            <span style="font-size: 11px; font-weight: 700; color: #0284C7;">OFFICIAL PARTNER</span>
-                        </label>
-
-                        <!-- Option E: 5% Cashback Wallet Balance -->
+                        <!-- Option D: 5% Cashback Wallet Balance -->
                         @if((float)$availableCashback > 0)
                         <label class="vm-pay-option" style="display: flex; align-items: center; justify-content: space-between; border: 1.5px solid #10B981; background: #ECFDF5; border-radius: 10px; padding: 12px 16px; cursor: pointer;">
                             <div style="display: flex; align-items: center; gap: 12px;">
@@ -200,19 +193,19 @@
                     <!-- Escrow Trust Guarantee Banner -->
                     <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 10px 14px; font-size: 11.5px; color: #64748B; display: flex; align-items: center; gap: 8px;">
                         <span style="font-size: 16px;">🛡️</span>
-                        <span>Your money is held in escrow until you inspect your items or confirm handover with your secret OTP.</span>
+                        <span><strong>Paystack Escrow Assurance:</strong> Your money is held securely until you inspect your items or confirm handover with your secret OTP.</span>
                     </div>
                 </div>
 
                 <!-- SUBMIT BUTTON (MOCKUP SCREEN 12 PARITY) -->
                 <button type="submit" id="vmPayNowBtn" style="width: 100%; background: linear-gradient(135deg, #FFD700 0%, #F59E0B 100%); color: #0F172A; border: none; font-weight: 900; font-size: 16px; padding: 16px 20px; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 16px rgba(255, 215, 0, 0.4); display: flex; align-items: center; justify-content: center; gap: 10px; transition: transform 0.15s ease;">
-                    <span>🔒 Pay &#8358;{{ number_format((float)$totalPayable, 2) }} &amp; Secure Order</span>
+                    <span>🔒 Pay &#8358;{{ number_format((float)$totalPayable, 2) }} via Paystack &amp; Secure Order</span>
                     <span style="font-size: 18px;">&rarr;</span>
                 </button>
 
                 <div style="text-align: center; margin-top: 12px; font-size: 11.5px; color: #64748B; display: flex; align-items: center; justify-content: center; gap: 6px;">
                     <span>🔒</span>
-                    <span>256-Bit Bank-Grade Encryption &bull; Paystack Verified Partner</span>
+                    <span>100% Processed by Paystack • PCI-DSS Level 1 Certified • Zero Card Details Stored on Server</span>
                 </div>
             </form>
         </div>

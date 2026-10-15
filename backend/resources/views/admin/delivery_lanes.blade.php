@@ -197,7 +197,7 @@
             <!-- TAB 2: TWO-COLUMN MASTER-DETAIL CUSTOM OVERRIDE CORRIDORS    -->
             <!-- ============================================================ -->
             <div id="vmCorridorsTab">
-                <div style="display: grid; grid-template-columns: 340px 1fr; gap: 24px; align-items: start;">
+                <div class="vm-corridors-grid">
                     <!-- LEFT COLUMN: ADD CUSTOM OVERRIDE CORRIDOR FORM -->
                     <div style="background: #F8FAFC; border: 1px solid var(--adm-border); border-radius: 10px; padding: 18px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
@@ -215,7 +215,9 @@
                                 <label style="font-size: 11px; font-weight: 700; color: #64748B; margin-bottom: 4px; display: block;">ORIGIN LGA (DISPATCH FROM)</label>
                                 <select name="origin_lga_id" id="laneOriginSelect" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF; font-size: 13px;">
                                     @foreach($allLgas ?? [] as $lga)
-                                        <option value="{{ $lga->id }}" {{ $lga->name == 'Uyo' ? 'selected' : '' }}>{{ $lga->name }} ({{ $lga->state ?? 'Akwa Ibom' }})</option>
+                                        <option value="{{ $lga->id }}" {{ $lga->name == 'Uyo' ? 'selected' : '' }}>
+                                            {{ $lga->name }} &mdash; {{ $lga->state->name ?? 'Akwa Ibom' }}
+                                        </option>
                                     @endforeach
                                 </select>
                             </div>
@@ -225,7 +227,9 @@
                                 <label style="font-size: 11px; font-weight: 700; color: #64748B; margin-bottom: 4px; display: block;">DESTINATION LGA (DELIVER TO)</label>
                                 <select name="destination_lga_id" id="laneDestSelect" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--adm-border); background: #FFF; font-size: 13px;">
                                     @foreach($allLgas ?? [] as $lga)
-                                        <option value="{{ $lga->id }}" {{ $lga->name == 'Eket' ? 'selected' : '' }}>{{ $lga->name }} ({{ $lga->state ?? 'Akwa Ibom' }})</option>
+                                        <option value="{{ $lga->id }}" {{ $lga->name == 'Eket' ? 'selected' : '' }}>
+                                            {{ $lga->name }} &mdash; {{ $lga->state->name ?? 'Akwa Ibom' }}
+                                        </option>
                                     @endforeach
                                 </select>
                             </div>
@@ -271,12 +275,12 @@
                     </div>
 
                     <!-- RIGHT COLUMN: ACTIVE CORRIDORS LIST & SEARCH -->
-                    <div>
+                    <div style="min-width: 0;">
                         <!-- Search and Quick Filter Bar -->
-                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px;">
-                            <div style="position: relative; flex: 1;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
+                            <div style="position: relative; flex: 1; min-width: 200px;">
                                 <span style="position: absolute; left: 12px; top: 10px; font-size: 13px; color: #94A3B8;">🔍</span>
-                                <input type="text" id="vmLaneSearchInput" onkeyup="filterLaneRows()" placeholder="Filter corridors by LGA name or state..." style="width: 100%; padding: 9px 14px 9px 36px; border-radius: 8px; border: 1px solid var(--adm-border); font-size: 13px; outline: none;">
+                                <input type="text" id="vmLaneSearchInput" onkeyup="filterLaneRows()" placeholder="Filter corridors by LGA name or state..." style="width: 100%; padding: 9px 14px 9px 36px; border-radius: 8px; border: 1px solid var(--adm-border); font-size: 13px; outline: none; box-sizing: border-box;">
                             </div>
                             <span class="dash-badge dash-badge-info" style="font-size: 11.5px; padding: 6px 12px; white-space: nowrap;">
                                 {{ count($deliveryLanes) }} Custom Corridors
@@ -284,9 +288,9 @@
                         </div>
 
                         <!-- Corridors Table -->
-                        <div class="dash-table-responsive" style="max-height: 540px; overflow-y: auto; border: 1px solid var(--adm-border); border-radius: 8px;">
+                        <div class="dash-table-responsive" style="border: 1px solid var(--adm-border); border-radius: 8px; overflow-x: auto;">
                             <table class="dash-table" id="vmLanesTable">
-                                <thead style="position: sticky; top: 0; background: #F8FAFC; z-index: 10;">
+                                <thead>
                                     <tr>
                                         <th>Directional Route</th>
                                         <th>Type</th>
@@ -299,15 +303,17 @@
                                 </thead>
                                 <tbody>
                                     @forelse($deliveryLanes as $lane)
-                                        <tr class="vm-lane-row" data-search="{{ strtolower(($lane->originLga->name ?? '') . ' ' . ($lane->destinationLga->name ?? '')) }}">
-                                            <td>
-                                                <div style="display: flex; align-items: center; gap: 6px; font-size: 13px;">
+                                        <tr class="vm-lane-row" data-search="{{ strtolower(($lane->originLga->name ?? '') . ' ' . ($lane->destinationLga->name ?? '') . ' ' . ($lane->originLga->state->name ?? '') . ' ' . ($lane->destinationLga->state->name ?? '')) }}">
+                                            <td class="route-cell">
+                                                <div style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; flex-wrap: wrap;">
                                                     <span style="font-weight: 700; color: var(--adm-text);">{{ $lane->originLga->name ?? "LGA #{$lane->origin_lga_id}" }}</span>
                                                     <span style="color: var(--adm-primary); font-weight: 800;">&rarr;</span>
                                                     <span style="font-weight: 700; color: var(--adm-text);">{{ $lane->destinationLga->name ?? "LGA #{$lane->destination_lga_id}" }}</span>
                                                 </div>
-                                                <div style="font-size: 11px; color: var(--adm-text-muted);">
-                                                    {{ $lane->originLga->state ?? 'Akwa Ibom' }} to {{ $lane->destinationLga->state ?? 'Akwa Ibom' }}
+                                                <div style="font-size: 11px; color: var(--adm-text-muted); margin-top: 3px;">
+                                                    <span style="color: #64748B;">{{ $lane->originLga->state->name ?? 'Akwa Ibom' }}</span>
+                                                    <span style="color: #94A3B8; margin: 0 4px;">&rarr;</span>
+                                                    <span style="color: #64748B;">{{ $lane->destinationLga->state->name ?? 'Akwa Ibom' }}</span>
                                                 </div>
                                             </td>
                                             <td>
