@@ -243,8 +243,18 @@
                     <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px; display: flex; align-items: center; gap: 14px;">
                         <img src="{{ $order->proof_of_delivery_image }}" alt="Delivery Proof" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #CBD5E1;">
                         <div>
-                            <span style="font-size: 11.5px; font-weight: 700; color: #0F172A; display: block;">📸 Package Condition Proof Captured</span>
-                            <span style="font-size: 11px; color: #64748B;">Recorded at handshake handover</span>
+                            <span style="font-size: 11.5px; font-weight: 700; color: #0F172A; display: block;">📸 Doorstep Package Condition Proof Captured</span>
+                            <span style="font-size: 11px; color: #64748B;">Recorded at customer doorstep handover</span>
+                        </div>
+                    </div>
+                @endif
+
+                @if($order->pickup_proof_image)
+                    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px; display: flex; align-items: center; gap: 14px; margin-top: 10px;">
+                        <img src="{{ $order->pickup_proof_image }}" alt="Pickup Condition Proof" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #CBD5E1;">
+                        <div>
+                            <span style="font-size: 11.5px; font-weight: 700; color: #0F172A; display: block;">🏬 Courier Counter Pickup Proof Snapped</span>
+                            <span style="font-size: 11px; color: #64748B;">Recorded at branch counter ({{ $order->picked_up_at ? $order->picked_up_at->format('d M, h:i A') : 'Handover' }})</span>
                         </div>
                     </div>
                 @endif

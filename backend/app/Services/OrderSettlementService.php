@@ -15,25 +15,91 @@ use InvalidArgumentException;
 class OrderSettlementService
 {
     /**
-     * Handshake 1: Rider collects package from Vendor.
-     * Verifies the secret 6-digit pickup_verification_code.
+     * Handshake 1A: Vendor signals courier arrival / handover readiness at branch counter.
+     * Sets vendor_handover_ready_at, updates order status to ready_for_pickup,
+     * and reveals the secret 6-digit pickup_verification_code to the vendor.
      */
-    public function verifyRiderPickupOtp(Order $order, string $otp, RiderProfile $rider): array
+    public function markVendorHandoverReady(Order $order, $merchantUser = null): array
     {
-        return DB::transaction(function () use ($order, $otp, $rider) {
+        return DB::transaction(function () use ($order, $merchantUser) {
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+
+            if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_pickup'])) {
+                return [
+                    'success' => false,
+                    'message' => "Order cannot be staged for handover in status {$lockedOrder->order_status}.",
+                ];
+            }
+
+            $lockedOrder->vendor_handover_ready_at = Carbon::now();
+            $lockedOrder->order_status = 'ready_for_pickup';
+            $lockedOrder->save();
+
+            return [
+                'success' => true,
+                'message' => 'Handover authorized! Show the 6-digit pickup code to the courier at the counter.',
+                'pickup_otp' => $lockedOrder->pickup_verification_code,
+                'order' => $lockedOrder,
+            ];
+        });
+    }
+
+    /**
+     * Handshake 1B: Rider collects package from Vendor.
+     * Courier inputs the secret 6-digit pickup_verification_code on their own phone,
+     * with optional package condition photo proof.
+     * Enforces strict mathematical non-collision and rate-limiting brute force protection.
+     */
+    public function verifyRiderPickupOtp(
+        Order $order,
+        string $otp,
+        RiderProfile $rider,
+        ?string $proofImagePath = null,
+        ?string $pickupNotes = null
+    ): array {
+        return DB::transaction(function () use ($order, $otp, $rider, $proofImagePath, $pickupNotes) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
             if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_pickup'])) {
                 return ['success' => false, 'message' => "Order cannot be picked up in status {$lockedOrder->order_status}."];
             }
 
-            if (!hash_equals((string)$lockedOrder->pickup_verification_code, trim($otp))) {
-                return ['success' => false, 'message' => 'Invalid pickup verification OTP.'];
+            // Anti-Brute-Force Shield: Lock after 5 consecutive failures
+            if ($lockedOrder->pickup_failed_attempts >= 5) {
+                return [
+                    'success' => false,
+                    'message' => 'Pickup verification temporarily locked due to 5 consecutive incorrect attempts. Please consult merchant counter staff.',
+                ];
             }
 
+            // Mathematical Equality Check (Constant-time hash comparison prevents side-channel leaks)
+            if (!hash_equals((string)$lockedOrder->pickup_verification_code, trim($otp))) {
+                $lockedOrder->increment('pickup_failed_attempts');
+                return [
+                    'success' => false,
+                    'message' => 'Invalid merchant pickup verification OTP. Please verify with counter staff.',
+                ];
+            }
+
+            // Reset failed attempts upon successful authentication
+            $lockedOrder->pickup_failed_attempts = 0;
             $lockedOrder->order_status = 'out_for_delivery';
+            $lockedOrder->pickup_confirmed_by_rider = true;
+            $lockedOrder->picked_up_at = Carbon::now();
             $lockedOrder->rider_id = $rider->id;
+
+            if ($proofImagePath) {
+                $lockedOrder->pickup_proof_image = $proofImagePath;
+            }
+
+            if ($pickupNotes) {
+                $lockedOrder->pickup_notes = $pickupNotes;
+            }
+
             $lockedOrder->save();
+
+            // Multi-channel alert to customer and vendor
+            NotificationDispatchService::dispatchRiderPickedUp($lockedOrder);
 
             return [
                 'success' => true,

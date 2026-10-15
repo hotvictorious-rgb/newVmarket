@@ -33,6 +33,12 @@ class Order extends Model
         'logistics_fee_retained',
         'platform_delivery_fee',
         'pickup_verification_code',
+        'vendor_handover_ready_at',
+        'pickup_confirmed_by_rider',
+        'pickup_proof_image',
+        'picked_up_at',
+        'pickup_notes',
+        'pickup_failed_attempts',
         'verification_code',
         'rider_arrived_at',
         'delivery_confirmed_by_customer',
@@ -56,6 +62,10 @@ class Order extends Model
         'platform_margin_5' => 'decimal:2',
         'logistics_fee_retained' => 'decimal:2',
         'platform_delivery_fee' => 'decimal:2',
+        'vendor_handover_ready_at' => 'datetime',
+        'pickup_confirmed_by_rider' => 'boolean',
+        'picked_up_at' => 'datetime',
+        'pickup_failed_attempts' => 'integer',
         'rider_arrived_at' => 'datetime',
         'delivery_confirmed_by_customer' => 'boolean',
         'received_at' => 'datetime',
@@ -71,6 +81,17 @@ class Order extends Model
     public function isCustomerHandshakePending(): bool
     {
         return $this->order_status === 'out_for_delivery' && $this->hasRiderArrived() && !$this->delivery_confirmed_by_customer;
+    }
+
+    public function isVendorHandoverReady(): bool
+    {
+        return !is_null($this->vendor_handover_ready_at);
+    }
+
+    public function isRiderPickupPending(): bool
+    {
+        return in_array($this->order_status, ['confirmed', 'processing', 'ready_for_pickup'])
+            && !$this->pickup_confirmed_by_rider;
     }
 
     /**

@@ -88,8 +88,8 @@
                             <td>
                                 <div style="display: flex; gap: 6px; align-items: center;">
                                     @if($order->order_status === 'processing' || $order->order_status === 'ready_for_pickup')
-                                        <a href="{{ route('rider.pickup.index') }}" class="btn-dash btn-dash-outline" style="padding: 4px 10px; font-size: 11.5px;">
-                                            Step 1 &rarr;
+                                        <a href="{{ route('rider.pickup.index', ['order_number' => $order->order_number]) }}" class="btn-dash btn-dash-primary" style="padding: 5px 12px; font-size: 11.5px; font-weight: 700; background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); border: none;">
+                                            🔑 Enter Pickup Code &rarr;
                                         </a>
                                     @elseif($order->order_status === 'out_for_delivery' && !$order->hasRiderArrived())
                                         <form method="POST" action="{{ route('rider.order.arrived') }}" style="display: inline; margin: 0;">

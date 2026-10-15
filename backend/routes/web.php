@@ -99,6 +99,7 @@ Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
     Route::get('/payout-account', [PortalController::class, 'vendorPayoutPage'])->name('vendor.payout.index');
 
     Route::post('/approve-inspection', [PortalController::class, 'vendorApproveInspection'])->name('vendor.approve.inspection');
+    Route::post('/orders/{id}/ready-for-handover', [PortalController::class, 'vendorMarkHandoverReady'])->name('vendor.orders.handover_ready');
 });
 
 // 4. In-Shop Branch Counter Staff Terminal
@@ -109,6 +110,7 @@ Route::middleware(['role:vendor_employee'])->prefix('counter')->group(function (
     Route::get('/records', [PortalController::class, 'counterRecordsPage'])->name('counter.records.index');
 
     Route::post('/verify-handover-otp', [PortalController::class, 'counterVerifyHandoverOtp'])->name('counter.verify.handover.otp');
+    Route::post('/orders/{id}/ready-for-handover', [PortalController::class, 'counterMarkHandoverReady'])->name('counter.orders.handover_ready');
 });
 
 // 5. Logistics Fleet Operations Desk
@@ -136,6 +138,7 @@ Route::middleware(['role:rider'])->prefix('rider')->group(function () {
     Route::post('/verify-delivery-otp', [PortalController::class, 'riderVerifyDeliveryOtp'])->name('rider.verify.delivery.otp');
     Route::post('/order/arrived', [PortalController::class, 'riderMarkArrived'])->name('rider.order.arrived');
     Route::get('/orders/{order}/handshake-status', [PortalController::class, 'riderCheckDeliveryStatus'])->name('rider.order.handshake_status');
+    Route::get('/orders/{order_number}/pickup-status', [PortalController::class, 'riderCheckPickupHandshakeStatus'])->name('rider.order.pickup_status');
     Route::post('/toggle-shift', [PortalController::class, 'riderToggleShift'])->name('rider.toggle.shift');
 });
 
@@ -179,6 +182,7 @@ Route::post('/reservation/create', [PortalController::class, 'createReservation'
 Route::get('/reservation/{code}', [PortalController::class, 'showReservationPass'])->name('reservation.pass');
 Route::get('/order/{order_number}', [PortalController::class, 'showOrderStatus'])->name('order.status');
 Route::get('/order/{order_number}/handshake-status', [PortalController::class, 'customerCheckArrivalStatus'])->name('order.handshake_status');
+Route::get('/order/{order_number}/pickup-handshake-status', [PortalController::class, 'vendorCheckPickupHandshakeStatus'])->name('order.pickup_handshake_status');
 Route::post('/order/{order_number}/confirm-delivery', [PortalController::class, 'customerConfirmDelivery'])->name('order.customer_confirm_delivery');
 
 // Stage 4: Rider Merchant Pickup Route

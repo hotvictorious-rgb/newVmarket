@@ -781,7 +781,7 @@ class PortalController extends Controller
     {
         $vendor = $this->resolveVendorProfile();
         $orders = Order::where('vendor_id', $vendor->id)
-            ->with('customer:id,name,phone')
+            ->with(['customer:id,name,phone', 'rider.user', 'shop'])
             ->latest()
             ->get();
 
@@ -1500,15 +1500,38 @@ class PortalController extends Controller
      */
     public function counterVerifyHandoverOtp(Request $request, OrderSettlementService $settlementService)
     {
-        $request->validate([
-            'order_id' => 'required|exists:orders,id',
-            'handover_otp' => 'required|string',
+        $validated = $request->validate([
+            'order_id' => 'nullable|exists:orders,id',
+            'order_number' => 'nullable|string|exists:orders,order_number',
+            'handover_otp' => 'nullable|string',
+            'pickup_otp' => 'nullable|string',
         ]);
 
-        $order = Order::findOrFail($request->input('order_id'));
-        $rider = $this->resolveRiderProfile();
+        $order = null;
+        if (!empty($validated['order_id'])) {
+            $order = Order::findOrFail($validated['order_id']);
+        } elseif (!empty($validated['order_number'])) {
+            $order = Order::where('order_number', $validated['order_number'])->firstOrFail();
+        } else {
+            return back()->with('error', 'Order reference is required.');
+        }
 
-        $result = $settlementService->verifyRiderPickupOtp($order, $request->input('handover_otp'), $rider);
+        $otp = $validated['pickup_otp'] ?? $validated['handover_otp'] ?? '';
+        $rider = $order->rider ?? RiderProfile::first() ?? RiderProfile::create([
+            'user_id' => Auth::id(),
+            'logistics_company_id' => 1,
+            'assigned_lga_id' => $order->origin_lga_id,
+            'vehicle_type' => 'Motorcycle',
+            'vehicle_plate_number' => 'COUNTER-EXP-01',
+            'is_active' => true,
+            'is_online' => true,
+        ]);
+
+        $result = $settlementService->verifyRiderPickupOtp($order, $otp, $rider);
+
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
 
         return back()->with('status', $result['message']);
     }
@@ -2276,25 +2299,137 @@ class PortalController extends Controller
     }
 
     // ==========================================
-    // STAGE 4: RIDER HANDSHAKE ACTIONS
+    // STAGE 4: SYMMETRICAL COUNTER PICKUP HANDSHAKE ACTIONS
     // ==========================================
 
-    public function riderVerifyPickupOtp(Request $request)
+    /**
+     * Handshake 1A: Vendor signals courier arrival and authorizes package handover
+     */
+    public function vendorMarkHandoverReady(Request $request, $orderId, OrderSettlementService $settlementService)
     {
-        $validated = $request->validate([
-            'order_id' => 'required|integer|exists:orders,id',
-            'pickup_otp' => 'required|string',
-        ]);
+        $vendor = $this->resolveVendorProfile();
+        $order = Order::where('vendor_id', $vendor->id)->findOrFail($orderId);
 
-        $order = Order::findOrFail($validated['order_id']);
-        if ($order->pickup_verification_code !== trim($validated['pickup_otp'])) {
-            return back()->withErrors(['pickup_otp' => 'Invalid merchant pickup verification OTP.']);
+        $result = $settlementService->markVendorHandoverReady($order, Auth::user());
+
+        if ($request->wantsJson() || $request->expectsJson() || $request->isJson() || $request->ajax()) {
+            return response()->json($result, $result['success'] ? 200 : 422);
         }
 
-        $order->order_status = 'out_for_delivery';
-        $order->save();
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
+
+        return back()->with('success', $result['message'])->with('pickup_otp', $result['pickup_otp']);
+    }
+
+    /**
+     * Handshake 1A: Counter Staff signals courier arrival and authorizes package handover
+     */
+    public function counterMarkHandoverReady(Request $request, $orderId, OrderSettlementService $settlementService)
+    {
+        $shop = $this->resolvePrimaryShop();
+        $order = Order::where('shop_id', $shop->id)->findOrFail($orderId);
+
+        $result = $settlementService->markVendorHandoverReady($order, Auth::user());
+
+        if ($request->wantsJson() || $request->expectsJson() || $request->isJson() || $request->ajax()) {
+            return response()->json($result, $result['success'] ? 200 : 422);
+        }
+
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
+
+        return back()->with('success', $result['message'])->with('pickup_otp', $result['pickup_otp']);
+    }
+
+    /**
+     * Handshake 1B: Rider enters 6-digit PIN on their own mobile device with optional parcel photo snap.
+     */
+    public function riderVerifyPickupOtp(Request $request, OrderSettlementService $settlementService)
+    {
+        $validated = $request->validate([
+            'order_id' => 'nullable|integer|exists:orders,id',
+            'order_number' => 'nullable|string|exists:orders,order_number',
+            'pickup_otp' => 'required|string|size:6',
+            'proof_photo' => 'nullable|image|max:10240',
+            'pickup_notes' => 'nullable|string|max:500',
+        ]);
+
+        $order = null;
+        if (!empty($validated['order_id'])) {
+            $order = Order::findOrFail($validated['order_id']);
+        } elseif (!empty($validated['order_number'])) {
+            $order = Order::where('order_number', $validated['order_number'])->firstOrFail();
+        } else {
+            return back()->withErrors(['pickup_otp' => 'Order reference is required for counter pickup.']);
+        }
+
+        $rider = $this->resolveRiderProfile();
+
+        // Optional package condition photo upload
+        $proofPath = null;
+        if ($request->hasFile('proof_photo') && $request->file('proof_photo')->isValid()) {
+            $path = $request->file('proof_photo')->store('pickup_proofs', 'public');
+            $proofPath = '/storage/' . $path;
+        }
+
+        $result = $settlementService->verifyRiderPickupOtp(
+            $order,
+            $validated['pickup_otp'],
+            $rider,
+            $proofPath,
+            $validated['pickup_notes'] ?? null
+        );
+
+        if ($request->wantsJson()) {
+            return response()->json($result, $result['success'] ? 200 : 422);
+        }
+
+        if (!$result['success']) {
+            return back()->withErrors(['pickup_otp' => $result['message']]);
+        }
 
         return redirect()->route('rider.dashboard')->with('status', "Order #{$order->order_number} package verified at counter. Out for delivery!");
+    }
+
+    /**
+     * Live Polling: Check if vendor authorized handover (for Rider screen)
+     */
+    public function riderCheckPickupHandshakeStatus(Request $request, string $orderNumber)
+    {
+        $order = Order::where('order_number', $orderNumber)->with(['shop', 'vendor'])->firstOrFail();
+
+        return response()->json([
+            'order_number' => $order->order_number,
+            'order_status' => $order->order_status,
+            'is_handover_ready' => $order->isVendorHandoverReady(),
+            'vendor_handover_ready_at' => $order->vendor_handover_ready_at ? $order->vendor_handover_ready_at->format('h:i A') : null,
+            'is_picked_up' => $order->pickup_confirmed_by_rider || in_array($order->order_status, ['out_for_delivery', 'delivered']),
+            'picked_up_at' => $order->picked_up_at ? $order->picked_up_at->format('h:i A') : null,
+            'shop_name' => $order->shop->name ?? 'Merchant Shop',
+            'shop_address' => $order->shop->address ?? 'Plaza Counter',
+        ]);
+    }
+
+    /**
+     * Live Polling: Check if rider entered code on their phone (for Vendor & Counter screens)
+     */
+    public function vendorCheckPickupHandshakeStatus(Request $request, string $orderNumber)
+    {
+        $order = Order::where('order_number', $orderNumber)->with('rider.user')->firstOrFail();
+
+        return response()->json([
+            'order_number' => $order->order_number,
+            'order_status' => $order->order_status,
+            'is_handover_ready' => $order->isVendorHandoverReady(),
+            'is_picked_up' => $order->pickup_confirmed_by_rider || in_array($order->order_status, ['out_for_delivery', 'delivered']),
+            'picked_up_at' => $order->picked_up_at ? $order->picked_up_at->format('h:i A') : null,
+            'rider_name' => $order->rider->user->name ?? 'Assigned Courier',
+            'rider_phone' => $order->rider->user->phone ?? null,
+            'pickup_proof_image' => $order->pickup_proof_image,
+        ]);
     }
 
     // =========================================================================

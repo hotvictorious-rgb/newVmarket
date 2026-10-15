@@ -33,6 +33,28 @@ class NotificationDispatchService
     }
 
     /**
+     * Dispatch multi-channel notification for Rider Counter Pickup Handshake
+     */
+    public static function dispatchRiderPickedUp(Order $order): array
+    {
+        $dispatches = [];
+
+        // 1. Customer Notification: Package in transit
+        $customerPhone = $order->customer->phone ?? '+2348000000000';
+        $riderName = $order->rider->user->name ?? 'Dispatch Courier';
+        $shopName = $order->shop->name ?? 'Merchant';
+        $customerMsg = "Victorious Market: Your package for Order {$order->order_number} has been picked up from {$shopName} by courier {$riderName} and is now en route to you! Track: " . route('order.status', $order->order_number);
+        $dispatches[] = self::record('sms', $customerPhone, 'Customer', $customerMsg);
+
+        // 2. Vendor Notification: Handover confirmed
+        $vendorPhone = $order->vendor->business_phone ?? '+2348000000001';
+        $vendorMsg = "Victorious Market: Order {$order->order_number} custody transferred to courier {$riderName}. Status is now Out for Delivery.";
+        $dispatches[] = self::record('whatsapp', $vendorPhone, 'Vendor', $vendorMsg);
+
+        return $dispatches;
+    }
+
+    /**
      * Dispatch multi-channel notification for Rider Doorstep Arrival
      */
     public static function dispatchRiderArrived(Order $order): array
