@@ -50,8 +50,17 @@
                     <a href="{{ route('storefront', ['category' => $product->category->slug ?? 'electronics-gadgets']) }}" style="background: var(--vm-primary-light); color: var(--vm-primary); font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px; text-decoration: none;">
                         {{ $product->category->name ?? 'Electronics' }}
                     </a>
-                    <span style="background: #F1F5F9; color: #475569; font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 6px;">
-                        Package: {{ ucfirst($product->package_tier ?? 'standard') }}
+                    @if($product->condition === 'uk_used')
+                        <span style="background: #EEF2FF; color: #4338CA; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px;">
+                            🇬🇧 UK Used
+                        </span>
+                    @else
+                        <span style="background: #ECFDF5; color: #047857; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px;">
+                            ✨ Brand New
+                        </span>
+                    @endif
+                    <span style="background: {{ in_array($product->package_tier, ['keke', 'bulky']) ? '#FEF3C7' : '#E0F2FE' }}; color: {{ in_array($product->package_tier, ['keke', 'bulky']) ? '#B45309' : '#0369A1' }}; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px;">
+                        {{ in_array($product->package_tier, ['keke', 'bulky']) ? '🛺 Keke Cargo' : '🏍️ Bike Delivery' }}
                     </span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 4px; font-size: 13px; color: #64748B;">
@@ -80,9 +89,21 @@
             <div style="background: linear-gradient(135deg, rgba(94, 23, 235, 0.05) 0%, rgba(255, 215, 0, 0.08) 100%); border: 1.5px solid var(--vm-gold); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <span style="font-size: 11.5px; color: #64748B; font-weight: 700; display: block; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.4px;">MARKETPLACE RETAIL PRICE</span>
-                    <span style="font-size: 30px; font-weight: 900; color: var(--vm-primary);">
-                        &#8358;{{ number_format((float)$product->unit_price, 2) }}
-                    </span>
+                    <div style="display: flex; align-items: baseline; gap: 10px;">
+                        <span style="font-size: 30px; font-weight: 900; color: var(--vm-primary);">
+                            &#8358;{{ number_format((float)$product->unit_price, 2) }}
+                        </span>
+                        @if($product->slash_price && (float)$product->slash_price > (float)$product->unit_price)
+                            <span style="font-size: 16px; color: #94A3B8; text-decoration: line-through; font-weight: 600;">
+                                &#8358;{{ number_format((float)$product->slash_price, 2) }}
+                            </span>
+                            @if($product->discount_percent)
+                                <span style="background: #FEF2F2; color: #DC2626; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 4px;">
+                                    -{{ $product->discount_percent }}% OFF
+                                </span>
+                            @endif
+                        @endif
+                    </div>
                 </div>
                 <div style="text-align: right;">
                     <span style="background: #ECFDF5; color: #059669; border: 1px solid rgba(5, 150, 105, 0.25); font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 6px; display: inline-block; margin-bottom: 4px;">
@@ -94,17 +115,14 @@
 
             <!-- Feature Spec Pills (Mockup Screen 8 Parity) -->
             <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;">
-                <div style="display: inline-flex; align-items: center; gap: 6px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: #334155;">
-                    <span>⚡</span> 128GB Storage
+                <div style="display: inline-flex; align-items: center; gap: 6px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 700; color: #1E293B;">
+                    <span>🏷️</span> {{ $product->condition_label }}
                 </div>
-                <div style="display: inline-flex; align-items: center; gap: 6px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: #334155;">
-                    <span>📱</span> 6.5" Super AMOLED
+                <div style="display: inline-flex; align-items: center; gap: 6px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 700; color: #1E293B;">
+                    <span>🛡️</span> {{ $product->warranty_label }}
                 </div>
-                <div style="display: inline-flex; align-items: center; gap: 6px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: #334155;">
-                    <span>🔋</span> 5000mAh Battery
-                </div>
-                <div style="display: inline-flex; align-items: center; gap: 6px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: #334155;">
-                    <span>🛡️</span> 1 Year Warranty
+                <div style="display: inline-flex; align-items: center; gap: 6px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 700; color: #1E293B;">
+                    <span>🚚</span> {{ $product->package_tier_label }}
                 </div>
             </div>
 

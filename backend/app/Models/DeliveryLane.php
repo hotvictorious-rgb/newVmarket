@@ -41,7 +41,7 @@ class DeliveryLane extends Model
     /**
      * Resolves directional delivery fee between two LGAs using BCMath.
      */
-    public static function resolveFee(int $originLgaId, int $destinationLgaId, string $packageTier = 'standard'): ?array
+    public static function resolveFee(int $originLgaId, int $destinationLgaId, string $packageTier = 'bike'): ?array
     {
         $lane = self::where('origin_lga_id', $originLgaId)
             ->where('destination_lga_id', $destinationLgaId)
@@ -53,7 +53,7 @@ class DeliveryLane extends Model
         }
 
         $fee = $lane->base_fee;
-        if ($packageTier === 'bulky') {
+        if (in_array(strtolower($packageTier), ['keke', 'bulky'], true)) {
             $fee = bcadd($fee, $lane->bulky_surcharge, 2);
         }
 

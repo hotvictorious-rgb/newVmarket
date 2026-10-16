@@ -71,6 +71,8 @@ class SanitizeAndHardenInputMiddleware
      */
     protected function sanitizeString(string $value): string
     {
+        $wasNotEmpty = strlen(trim($value)) > 0;
+
         // 1. Strip null bytes
         $clean = str_replace(chr(0), '', $value);
 
@@ -90,7 +92,14 @@ class SanitizeAndHardenInputMiddleware
 
         // 6. Normalize multiple consecutive spaces into a single space and trim
         $clean = preg_replace('/\s+/', ' ', $clean) ?? $clean;
+        $clean = trim($clean);
 
-        return trim($clean);
+        // If an input was non-empty malicious markup that got stripped to zero,
+        // prevent it from converting to null so subsequent validators can reject it with 422.
+        if ($wasNotEmpty && strlen($clean) === 0) {
+            return '[blocked-markup]';
+        }
+
+        return $clean;
     }
 }

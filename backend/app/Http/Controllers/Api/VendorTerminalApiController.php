@@ -484,8 +484,12 @@ class VendorTerminalApiController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'unit_price' => 'required|numeric|min:1',
+            'slash_price' => 'nullable|numeric|gt:unit_price',
             'inventory_quantity' => 'required|integer|min:0',
             'category_id' => 'required|integer|exists:categories,id',
+            'condition' => 'nullable|string|in:brand_new,uk_used',
+            'package_tier' => 'nullable|string|in:bike,keke,standard,bulky',
+            'warranty_type' => 'nullable|string|in:in_store_testing,7_days_replacement,brand_warranty,as_is',
             'description' => 'nullable|string|max:2000',
             'image_url' => 'nullable|string|max:500',
             'video_url' => [
@@ -496,15 +500,24 @@ class VendorTerminalApiController extends Controller
             ],
         ], [
             'video_url.regex' => 'Please provide a valid YouTube product video link (e.g., https://youtube.com/watch?v=... or https://youtu.be/...).',
+            'slash_price.gt' => 'The original slash price must be greater than the selling price.',
+            'condition.in' => 'Condition must be strictly Brand New or UK Used.',
+            'package_tier.in' => 'Delivery logistics must be strictly Bike or Keke Cargo.',
         ]);
+
+        $resolvedTier = in_array(strtolower($validated['package_tier'] ?? 'bike'), ['keke', 'bulky'], true) ? 'keke' : 'bike';
 
         $product = Product::create([
             'vendor_id' => $vendor->id,
             'shop_id' => $shop->id,
             'category_id' => $validated['category_id'],
+            'condition' => $validated['condition'] ?? 'brand_new',
+            'package_tier' => $resolvedTier,
+            'warranty_type' => $validated['warranty_type'] ?? 'in_store_testing',
             'name' => strip_tags(trim($validated['name'])),
             'slug' => Str::slug($validated['name']) . '-' . rand(100, 999),
-            'unit_price' => $validated['unit_price'],
+            'unit_price' => number_format((float)$validated['unit_price'], 2, '.', ''),
+            'slash_price' => !empty($validated['slash_price']) ? number_format((float)$validated['slash_price'], 2, '.', '') : null,
             'inventory_quantity' => $validated['inventory_quantity'],
             'is_in_stock' => $validated['inventory_quantity'] > 0,
             'description' => isset($validated['description']) ? strip_tags(trim($validated['description'])) : null,

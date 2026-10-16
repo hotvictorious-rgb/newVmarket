@@ -974,10 +974,11 @@ class PortalController extends Controller
     public function vendorProductsPage(Request $request)
     {
         $vendor = $this->resolveVendorProfile();
-        $products = Product::where('vendor_id', $vendor->id)->with('category')->latest()->get();
+        $products = Product::where('vendor_id', $vendor->id)->with(['category', 'shop'])->latest()->get();
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
+        $shops = Shop::where('vendor_id', $vendor->id)->where('is_active', true)->get();
 
-        return view('vendor.products', compact('vendor', 'products', 'categories'));
+        return view('vendor.products', compact('vendor', 'products', 'categories', 'shops'));
     }
 
     /**
@@ -2441,19 +2442,46 @@ class PortalController extends Controller
             abort(403, 'Merchant marketplace account is currently not active.');
         }
 
+        // Support both inventory_quantity and legacy current_stock input names
+        if (!$request->has('inventory_quantity') && $request->has('current_stock')) {
+            $request->merge(['inventory_quantity' => $request->input('current_stock')]);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category_id' => 'required|integer|exists:categories,id',
-            'shop_id' => 'required|integer|exists:shops,id',
+            'shop_id' => 'nullable|integer|exists:shops,id',
+            'condition' => 'nullable|string|in:brand_new,uk_used',
             'unit_price' => 'required|numeric|min:0.01|max:100000000',
+            'slash_price' => 'nullable|numeric|gt:unit_price|max:100000000',
             'inventory_quantity' => 'required|integer|min:0|max:1000000',
-            'package_tier' => 'required|in:standard,bulky',
+            'package_tier' => 'nullable|string|in:bike,keke,standard,bulky',
+            'warranty_type' => 'nullable|string|in:in_store_testing,7_days_replacement,brand_warranty,as_is',
             'description' => 'nullable|string|max:5000',
             'image' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:5120',
+            'video_url' => [
+                'nullable',
+                'string',
+                'max:255',
+                'regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})([\?&].*)?$/'
+            ],
+        ], [
+            'slash_price.gt' => 'The original slash price must be greater than the selling price.',
+            'condition.in' => 'Condition must be strictly Brand New or UK Used.',
+            'package_tier.in' => 'Delivery logistics must be strictly Bike or Keke Cargo.',
+            'video_url.regex' => 'Please provide a valid YouTube product video link (e.g., https://youtube.com/watch?v=... or https://youtu.be/...).',
         ]);
 
         // Multi-Tenant Isolation Guard: Shop must belong to authenticated vendor
-        $shop = Shop::where('vendor_id', $vendor->id)->findOrFail($validated['shop_id']);
+        $shopId = $validated['shop_id'] ?? null;
+        if ($shopId) {
+            $shop = Shop::where('vendor_id', $vendor->id)->findOrFail($shopId);
+        } else {
+            $shop = Shop::where('vendor_id', $vendor->id)->where('is_active', true)->first();
+            if (!$shop) {
+                abort(422, 'No active shop branch found for merchant. Please create a shop outlet first.');
+            }
+        }
 
         if (!$shop->is_active) {
             abort(422, 'Cannot add products to an inactive shop branch.');
@@ -2472,23 +2500,29 @@ class PortalController extends Controller
             $imagePath = '/storage/' . $path;
         }
 
+        $resolvedTier = in_array(strtolower($validated['package_tier'] ?? 'bike'), ['keke', 'bulky'], true) ? 'keke' : 'bike';
+
         $product = Product::create([
             'vendor_id' => $vendor->id,
             'shop_id' => $shop->id,
             'category_id' => $validated['category_id'],
+            'condition' => $validated['condition'] ?? 'brand_new',
+            'package_tier' => $resolvedTier,
+            'warranty_type' => $validated['warranty_type'] ?? 'in_store_testing',
             'name' => $cleanName,
             'slug' => \Illuminate\Support\Str::slug($cleanName) . '-' . rand(1000, 9999),
             'description' => $cleanDesc,
             'unit_price' => number_format((float)$validated['unit_price'], 2, '.', ''),
+            'slash_price' => !empty($validated['slash_price']) ? number_format((float)$validated['slash_price'], 2, '.', '') : null,
             'is_in_stock' => $validated['inventory_quantity'] > 0,
             'inventory_quantity' => $validated['inventory_quantity'],
             'listing_status' => 'listed',
             'listing_confirmed_at' => Carbon::now(),
             'is_approved' => true,
             'is_vmarket_flagship' => false,
-            'package_tier' => $validated['package_tier'],
             'thumbnail' => $imagePath,
             'primary_image' => $imagePath,
+            'youtube_video_id' => Product::extractYoutubeVideoId($request->input('video_url')),
         ]);
 
         return redirect()->to(route('vendor.dashboard') . '#products-catalog')->with('status', "Product '{$product->name}' successfully published with 7-day certified freshness!");
@@ -2504,18 +2538,37 @@ class PortalController extends Controller
 
         $product = Product::where('vendor_id', $vendor->id)->findOrFail($id);
 
+        if (!$request->has('inventory_quantity') && $request->has('current_stock')) {
+            $request->merge(['inventory_quantity' => $request->input('current_stock')]);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category_id' => 'required|integer|exists:categories,id',
-            'shop_id' => 'required|integer|exists:shops,id',
+            'shop_id' => 'nullable|integer|exists:shops,id',
+            'condition' => 'nullable|string|in:brand_new,uk_used',
             'unit_price' => 'required|numeric|min:0.01|max:100000000',
+            'slash_price' => 'nullable|numeric|gt:unit_price|max:100000000',
             'inventory_quantity' => 'required|integer|min:0|max:1000000',
-            'package_tier' => 'required|in:standard,bulky',
+            'package_tier' => 'nullable|string|in:bike,keke,standard,bulky',
+            'warranty_type' => 'nullable|string|in:in_store_testing,7_days_replacement,brand_warranty,as_is',
             'description' => 'nullable|string|max:5000',
             'image' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:5120',
+            'video_url' => [
+                'nullable',
+                'string',
+                'max:255',
+                'regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})([\?&].*)?$/'
+            ],
+        ], [
+            'slash_price.gt' => 'The original slash price must be greater than the selling price.',
+            'condition.in' => 'Condition must be strictly Brand New or UK Used.',
+            'package_tier.in' => 'Delivery logistics must be strictly Bike or Keke Cargo.',
+            'video_url.regex' => 'Please provide a valid YouTube product video link (e.g., https://youtube.com/watch?v=... or https://youtu.be/...).',
         ]);
 
-        $shop = Shop::where('vendor_id', $vendor->id)->findOrFail($validated['shop_id']);
+        $shopId = $validated['shop_id'] ?? $product->shop_id;
+        $shop = Shop::where('vendor_id', $vendor->id)->findOrFail($shopId);
 
         if (!$shop->is_active) {
             abort(422, 'Cannot assign products to an inactive shop branch.');
@@ -2525,12 +2578,26 @@ class PortalController extends Controller
         $product->name = $cleanName;
         $product->category_id = $validated['category_id'];
         $product->shop_id = $shop->id;
+        if (isset($validated['condition'])) {
+            $product->condition = $validated['condition'];
+        }
+        if (isset($validated['warranty_type'])) {
+            $product->warranty_type = $validated['warranty_type'];
+        }
         $product->unit_price = number_format((float)$validated['unit_price'], 2, '.', '');
+        $product->slash_price = !empty($validated['slash_price']) ? number_format((float)$validated['slash_price'], 2, '.', '') : null;
         $product->inventory_quantity = $validated['inventory_quantity'];
         $product->is_in_stock = $validated['inventory_quantity'] > 0;
-        $product->package_tier = $validated['package_tier'];
+        
+        $resolvedTier = in_array(strtolower($validated['package_tier'] ?? $product->package_tier ?? 'bike'), ['keke', 'bulky'], true) ? 'keke' : 'bike';
+        $product->package_tier = $resolvedTier;
+
         if (isset($validated['description'])) {
             $product->description = strip_tags(trim($validated['description']));
+        }
+
+        if ($request->filled('video_url')) {
+            $product->youtube_video_id = Product::extractYoutubeVideoId($request->input('video_url'));
         }
 
         if ($request->hasFile('image') && $request->file('image')->isValid()) {

@@ -26,10 +26,14 @@ class Product extends Model
         'is_vmarket_flagship',
         'is_approved',
         'package_tier',
+        'condition',
+        'slash_price',
+        'warranty_type',
     ];
 
     protected $casts = [
-        'unit_price' => 'string',
+        'unit_price' => 'decimal:2',
+        'slash_price' => 'decimal:2',
         'is_in_stock' => 'boolean',
         'is_vmarket_flagship' => 'boolean',
         'is_approved' => 'boolean',
@@ -40,6 +44,10 @@ class Product extends Model
     protected $appends = [
         'video_thumbnail_url',
         'video_embed_url',
+        'condition_label',
+        'package_tier_label',
+        'warranty_label',
+        'discount_percent',
     ];
 
     public function vendor()
@@ -132,5 +140,41 @@ class Product extends Model
                 $q->where('marketplace_status', 'active');
             })
             ->whereHas('shop');
+    }
+
+    public function getConditionLabelAttribute(): string
+    {
+        return match ($this->condition) {
+            'uk_used' => 'UK Used (Clean Grade A)',
+            default => 'Brand New (Sealed Pack)',
+        };
+    }
+
+    public function getPackageTierLabelAttribute(): string
+    {
+        return in_array($this->package_tier, ['keke', 'bulky'], true)
+            ? 'Keke Cargo (Heavy / Bulky Surcharge)'
+            : 'Bike Dispatch (Standard Parcel Box)';
+    }
+
+    public function getWarrantyLabelAttribute(): string
+    {
+        return match ($this->warranty_type) {
+            '7_days_replacement' => '7-Day Return / Replacement Warranty',
+            'brand_warranty' => 'Official Manufacturer Warranty',
+            'as_is' => 'Sold As-Is (No Warranty After Inspection)',
+            default => 'Doorstep / In-Store Testing on Arrival',
+        };
+    }
+
+    public function getDiscountPercentAttribute(): ?int
+    {
+        if (!$this->slash_price || bccomp((string)$this->slash_price, (string)$this->unit_price, 2) <= 0) {
+            return null;
+        }
+
+        $diff = bcsub((string)$this->slash_price, (string)$this->unit_price, 2);
+        $percent = bcmul(bcdiv($diff, (string)$this->slash_price, 4), '100', 0);
+        return (int)$percent;
     }
 }

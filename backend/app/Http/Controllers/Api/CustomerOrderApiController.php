@@ -166,7 +166,16 @@ class CustomerOrderApiController extends Controller
                 $address = CustomerAddress::where('user_id', $user->id)->findOrFail($validated['customer_address_id']);
                 $destLgaId = $address->lga_id;
 
-                $availability = $this->fulfillmentService->checkDeliveryAvailability($shop->id, $destLgaId);
+                $orderPackageTier = 'bike';
+                foreach ($itemsToCreate as $it) {
+                    $tier = $it['product']->package_tier ?? 'bike';
+                    if (in_array(strtolower($tier), ['keke', 'bulky'], true)) {
+                        $orderPackageTier = 'keke';
+                        break;
+                    }
+                }
+
+                $availability = $this->fulfillmentService->checkDeliveryAvailability($shop->id, $destLgaId, $orderPackageTier);
                 if (!$availability['is_available']) {
                     return [
                         'error' => true,

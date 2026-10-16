@@ -48,14 +48,14 @@ class FulfillmentApiController extends Controller
             'fulfillment_type' => 'required|in:doorstep_delivery,in_shop_pickup',
             'shop_id' => 'required|integer|exists:shops,id',
             'destination_lga_id' => 'nullable|required_if:fulfillment_type,doorstep_delivery|integer|exists:lgas,id',
-            'package_tier' => 'nullable|string|in:standard,fragile,bulky',
+            'package_tier' => 'nullable|string|in:bike,keke,standard,fragile,bulky',
         ]);
 
         if ($validated['fulfillment_type'] === 'doorstep_delivery') {
             $result = $this->fulfillmentService->checkDeliveryAvailability(
                 (int)$validated['shop_id'],
                 (int)$validated['destination_lga_id'],
-                $validated['package_tier'] ?? 'standard'
+                $validated['package_tier'] ?? 'bike'
             );
 
             return response()->json([
@@ -85,7 +85,7 @@ class FulfillmentApiController extends Controller
             'shop_id' => 'required|integer|exists:shops,id',
             'address_id' => 'nullable|integer|exists:customer_addresses,id',
             'destination_lga_id' => 'nullable|integer|exists:lgas,id',
-            'package_tier' => 'nullable|string|in:standard,fragile,bulky',
+            'package_tier' => 'nullable|string|in:bike,keke,standard,fragile,bulky',
         ]);
 
         $shop = Shop::with('lga')->findOrFail($validated['shop_id']);
@@ -106,7 +106,7 @@ class FulfillmentApiController extends Controller
         $result = $this->fulfillmentService->checkDeliveryAvailability(
             $shop->id,
             (int)$destLgaId,
-            $validated['package_tier'] ?? 'standard'
+            $validated['package_tier'] ?? 'bike'
         );
 
         return response()->json([

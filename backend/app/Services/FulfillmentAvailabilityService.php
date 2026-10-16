@@ -12,7 +12,7 @@ class FulfillmentAvailabilityService
     /**
      * Checks directional doorstep delivery availability & fee between Shop LGA and Destination LGA.
      */
-    public function checkDeliveryAvailability(int $shopId, int $destinationLgaId, string $packageTier = 'standard'): array
+    public function checkDeliveryAvailability(int $shopId, int $destinationLgaId, string $packageTier = 'bike'): array
     {
         $shop = Shop::with('lga')->find($shopId);
         if (!$shop) {
@@ -23,6 +23,8 @@ class FulfillmentAvailabilityService
             ];
         }
 
+        $isKekeOrBulky = in_array(strtolower($packageTier), ['keke', 'bulky'], true);
+
         $lane = DeliveryLane::where('origin_lga_id', $shop->lga_id)
             ->where('destination_lga_id', $destinationLgaId)
             ->where('is_active', true)
@@ -30,7 +32,7 @@ class FulfillmentAvailabilityService
 
         if ($lane) {
             $fee = BcMathService::add($lane->base_fee, '0.00');
-            if ($packageTier === 'bulky') {
+            if ($isKekeOrBulky) {
                 $fee = BcMathService::add($fee, $lane->bulky_surcharge);
             }
 
@@ -101,13 +103,14 @@ class FulfillmentAvailabilityService
         }
 
         if ($shopLga && $destLga) {
-            $bulkySurcharge = (string)\App\Models\SystemSetting::get('zone_bulky_cargo_surcharge', '1000.00');
+            $bulkySurcharge = number_format((float)\App\Models\SystemSetting::get('zone_bulky_cargo_surcharge', '1000.00'), 2, '.', '');
             
             // Tier 1: Intra-LGA (Municipal same-LGA) -> Doorstep Delivery
             if ($shopLga->id === $destLga->id) {
-                $baseFee = (string)\App\Models\SystemSetting::get('zone_intra_lga_fee', '500.00');
+                $baseFee = number_format((float)\App\Models\SystemSetting::get('zone_intra_lga_fee', '500.00'), 2, '.', '');
                 $eta = (string)\App\Models\SystemSetting::get('zone_intra_lga_eta', '2-4 hours');
-                $fee = ($packageTier === 'bulky') ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
+                $fee = $isKekeOrBulky ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
+                $fee = number_format((float)$fee, 2, '.', '');
 
                 return [
                     'is_available' => true,
@@ -126,9 +129,10 @@ class FulfillmentAvailabilityService
 
             // Tier 2: Inter-LGA (Regional, same state) -> Collection Point Pickup
             if ($shopLga->state_id === $destLga->state_id) {
-                $baseFee = (string)\App\Models\SystemSetting::get('zone_inter_lga_fee', '1500.00');
+                $baseFee = number_format((float)\App\Models\SystemSetting::get('zone_inter_lga_fee', '1500.00'), 2, '.', '');
                 $eta = (string)\App\Models\SystemSetting::get('zone_inter_lga_eta', 'Same day / 12-24 hours');
-                $fee = ($packageTier === 'bulky') ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
+                $fee = $isKekeOrBulky ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
+                $fee = number_format((float)$fee, 2, '.', '');
                 $collectionPoints = $this->resolveCollectionPoints($destinationLgaId);
 
                 // Truthful Serviceability Guard: Require active collection point in destination LGA
@@ -162,9 +166,10 @@ class FulfillmentAvailabilityService
             }
 
             // Tier 3: Inter-State (National freight) -> Collection Point Pickup
-            $baseFee = (string)\App\Models\SystemSetting::get('zone_inter_state_fee', '3500.00');
+            $baseFee = number_format((float)\App\Models\SystemSetting::get('zone_inter_state_fee', '3500.00'), 2, '.', '');
             $eta = (string)\App\Models\SystemSetting::get('zone_inter_state_eta', '2-4 business days');
-            $fee = ($packageTier === 'bulky') ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
+            $fee = $isKekeOrBulky ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
+            $fee = number_format((float)$fee, 2, '.', '');
             $collectionPoints = $this->resolveCollectionPoints($destinationLgaId);
 
             // Truthful Serviceability Guard: Require active collection point in destination LGA
@@ -322,7 +327,16 @@ class FulfillmentAvailabilityService
 
             // 1. Delivery evaluation
             if ($destinationLgaId) {
-                $deliveryRes = $this->checkDeliveryAvailability($shop->id, $destinationLgaId);
+                $groupTier = 'bike';
+                foreach ($group['products'] as $groupProduct) {
+                    $pTier = $groupProduct['product']->package_tier ?? 'bike';
+                    if (in_array(strtolower($pTier), ['keke', 'bulky'], true)) {
+                        $groupTier = 'keke';
+                        break;
+                    }
+                }
+
+                $deliveryRes = $this->checkDeliveryAvailability($shop->id, $destinationLgaId, $groupTier);
                 $isLaneAvail = $deliveryRes['is_available'] ?? false;
                 $fee = $isLaneAvail ? ($deliveryRes['fee'] ?? '0.00') : '0.00';
 

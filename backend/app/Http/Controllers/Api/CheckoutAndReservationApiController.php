@@ -58,6 +58,7 @@ class CheckoutAndReservationApiController extends Controller
         $merchandiseSubtotal = '0.00';
         $itemsSnapshot = [];
 
+        $orderPackageTier = 'bike';
         foreach ($validated['items'] as $item) {
             $product = Product::marketplaceEligible()->findOrFail($item['product_id']);
 
@@ -77,6 +78,10 @@ class CheckoutAndReservationApiController extends Controller
                 ], 422);
             }
 
+            if (in_array(strtolower($product->package_tier ?? ''), ['keke', 'bulky'], true)) {
+                $orderPackageTier = 'keke';
+            }
+
             $lineTotal = BcMathService::mul($product->unit_price, (string)$item['quantity']);
             $merchandiseSubtotal = BcMathService::add($merchandiseSubtotal, $lineTotal);
 
@@ -92,7 +97,7 @@ class CheckoutAndReservationApiController extends Controller
         $deliveryFee = '0.00';
         if ($validated['fulfillment_type'] === 'doorstep_delivery') {
             $address = CustomerAddress::where('user_id', $user->id)->findOrFail($validated['customer_address_id']);
-            $availability = $this->fulfillmentService->checkDeliveryAvailability($shop->id, $address->lga_id);
+            $availability = $this->fulfillmentService->checkDeliveryAvailability($shop->id, $address->lga_id, $orderPackageTier);
 
             if (!$availability['is_available']) {
                 return response()->json([

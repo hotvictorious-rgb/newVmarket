@@ -52,6 +52,21 @@ class ProductApiController extends Controller
             $query->where('is_vmarket_flagship', true);
         }
 
+        if ($request->filled('condition')) {
+            $condition = (string)$request->input('condition');
+            if (in_array($condition, ['brand_new', 'uk_used'], true)) {
+                $query->where('condition', $condition);
+            }
+        }
+
+        if ($request->filled('package_tier')) {
+            $tier = strtolower((string)$request->input('package_tier'));
+            if (in_array($tier, ['bike', 'keke', 'standard', 'bulky'], true)) {
+                $mappedTier = in_array($tier, ['keke', 'bulky'], true) ? ['keke', 'bulky'] : ['bike', 'standard'];
+                $query->whereIn('package_tier', $mappedTier);
+            }
+        }
+
         $products = $query->paginate(20);
 
         return response()->json([
