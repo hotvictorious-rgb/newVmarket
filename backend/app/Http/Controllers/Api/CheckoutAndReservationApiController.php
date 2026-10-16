@@ -7,22 +7,31 @@ use App\Models\CheckoutIntent;
 use App\Models\CustomerAddress;
 use App\Models\CustomerCashbackLedger;
 use App\Models\DeliveryLane;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\PickupReservation;
 use App\Models\Product;
 use App\Models\Shop;
 use App\Services\BcMathService;
 use App\Services\FulfillmentAvailabilityService;
+use App\Services\PaystackService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class CheckoutAndReservationApiController extends Controller
 {
     protected FulfillmentAvailabilityService $fulfillmentService;
+    protected PaystackService $paystackService;
 
-    public function __construct(FulfillmentAvailabilityService $fulfillmentService)
-    {
+    public function __construct(
+        FulfillmentAvailabilityService $fulfillmentService,
+        PaystackService $paystackService
+    ) {
         $this->fulfillmentService = $fulfillmentService;
+        $this->paystackService = $paystackService;
     }
 
     /**
@@ -242,25 +251,254 @@ class CheckoutAndReservationApiController extends Controller
 
     public function cashbackBalance(Request $request): JsonResponse
     {
+        return $this->cashbackSummary($request);
+    }
+
+    public function cashbackSummary(Request $request): JsonResponse
+    {
         $userId = $request->user()->id;
 
-        $available = CustomerCashbackLedger::where('customer_id', $userId)
+        $available = (float)CustomerCashbackLedger::where('customer_id', $userId)
             ->where('status', 'available')
             ->where('matures_at', '<=', Carbon::now())
             ->where('expires_at', '>', Carbon::now())
             ->sum('amount');
 
-        $pending = CustomerCashbackLedger::where('customer_id', $userId)
+        $pending = (float)CustomerCashbackLedger::where('customer_id', $userId)
             ->where('status', 'pending_maturation')
             ->sum('amount');
 
+        $lifetimeEarned = (float)CustomerCashbackLedger::where('customer_id', $userId)
+            ->whereIn('status', ['available', 'redeemed', 'pending_maturation', 'expired'])
+            ->where('amount', '>', 0)
+            ->sum('amount');
+
+        $lifetimeRedeemed = (float)Order::where('customer_id', $userId)
+            ->where('payment_status', 'paid')
+            ->sum('cashback_redeemed');
+
+        $pointsBalance = (int)round($available);
+
         return response()->json([
             'status' => true,
+            'summary' => [
+                'points_balance' => $pointsBalance,
+                'equivalent_naira' => number_format($available, 2, '.', ''),
+                'currency' => 'NGN',
+                'lifetime_earned_points' => (int)round($lifetimeEarned),
+                'lifetime_redeemed_points' => (int)round($lifetimeRedeemed),
+                'pending_settlement_points' => (int)round($pending),
+            ],
             'data' => [
-                'available_cashback' => number_format((float)$available, 2, '.', ''),
-                'pending_maturation' => number_format((float)$pending, 2, '.', ''),
+                'available_cashback' => number_format($available, 2, '.', ''),
+                'pending_maturation' => number_format($pending, 2, '.', ''),
                 'currency' => 'NGN',
             ],
+        ]);
+    }
+
+    public function cashbackList(Request $request): JsonResponse
+    {
+        $userId = $request->user()->id;
+        $limit = $request->integer('limit', 20);
+
+        $entries = CustomerCashbackLedger::where('customer_id', $userId)
+            ->with('order:id,order_number')
+            ->orderBy('id', 'desc')
+            ->paginate($limit);
+
+        return response()->json([
+            'status' => true,
+            'data' => $entries->items(),
+            'meta' => [
+                'current_page' => $entries->currentPage(),
+                'last_page' => $entries->lastPage(),
+                'total' => $entries->total(),
+            ],
+        ]);
+    }
+
+    public function listPickupReservations(Request $request): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        $reservations = PickupReservation::where('customer_id', $userId)
+            ->with(['shop:id,name,address,lga_id', 'product:id,name,thumbnail,unit_price', 'order:id,order_number,pickup_verification_code,order_status,payment_status'])
+            ->orderBy('id', 'desc')
+            ->paginate(15);
+
+        return response()->json([
+            'status' => true,
+            'reservations' => $reservations->items(),
+            'data' => $reservations->items(),
+            'meta' => [
+                'current_page' => $reservations->currentPage(),
+                'last_page' => $reservations->lastPage(),
+                'total' => $reservations->total(),
+            ],
+        ]);
+    }
+
+    public function payPickupReservation(Request $request, string $code): JsonResponse
+    {
+        $user = $request->user();
+        $code = strtoupper(trim($code));
+
+        $result = DB::transaction(function () use ($user, $code, $request) {
+            $reservation = PickupReservation::where('customer_id', $user->id)
+                ->where('reservation_code', $code)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$reservation) {
+                return ['error' => true, 'code' => 404, 'message' => 'Reservation not found or unauthorized.'];
+            }
+
+            if ($reservation->status === 'order_placed') {
+                return ['error' => true, 'code' => 422, 'message' => 'An order has already been placed for this reservation.'];
+            }
+
+            if ($reservation->status === 'cancelled' || $reservation->status === 'expired') {
+                return ['error' => true, 'code' => 422, 'message' => "Reservation is {$reservation->status} and cannot be paid."];
+            }
+
+            if ($reservation->status !== 'inspected_accepted') {
+                return [
+                    'error' => true,
+                    'code' => 422,
+                    'message' => 'Reservation must be inspected and accepted at merchant shop before payment can be initialized.',
+                ];
+            }
+
+            $product = Product::marketplaceEligible()->lockForUpdate()->find($reservation->product_id);
+            if (!$product || $product->inventory_quantity < $reservation->quantity) {
+                return [
+                    'error' => true,
+                    'code' => 422,
+                    'message' => "Insufficient stock remaining for {$product?->name}.",
+                ];
+            }
+
+            $shop = Shop::findOrFail($reservation->shop_id);
+            $merchandiseSubtotal = $reservation->estimated_total;
+
+            // Optional cashback redemption
+            $cashbackApplied = '0.00';
+            if ($request->boolean('use_cashback') || $request->boolean('redeem_cashback')) {
+                $availableCashback = CustomerCashbackLedger::where('customer_id', $user->id)
+                    ->where('status', 'available')
+                    ->where('matures_at', '<=', Carbon::now())
+                    ->where('expires_at', '>', Carbon::now())
+                    ->sum('amount');
+
+                $availableStr = number_format((float)$availableCashback, 2, '.', '');
+                $maxRedemption = BcMathService::mul($merchandiseSubtotal, '0.50');
+                $cashbackApplied = BcMathService::comp($availableStr, $maxRedemption) > 0 ? $maxRedemption : $availableStr;
+            }
+
+            $totalPayable = BcMathService::sub($merchandiseSubtotal, $cashbackApplied);
+
+            $vendorNet90 = BcMathService::mul($merchandiseSubtotal, '0.90');
+            $customerCashback5 = BcMathService::mul($merchandiseSubtotal, '0.05');
+            $platformMargin5 = BcMathService::mul($merchandiseSubtotal, '0.05');
+
+            $orderNumber = 'VM-' . date('Ymd') . '-' . strtoupper(Str::random(4));
+            $paymentRef = Order::generateUniquePaymentReference();
+            $pickupOtp = Order::generateUniquePickupOtp();
+
+            $order = Order::create([
+                'order_number' => $orderNumber,
+                'customer_id' => $user->id,
+                'vendor_id' => $shop->vendor_id,
+                'shop_id' => $shop->id,
+                'fulfillment_type' => 'in_shop_pickup',
+                'order_status' => 'confirmed',
+                'payment_status' => 'pending',
+                'payment_method' => 'paystack',
+                'payment_reference' => $paymentRef,
+                'guest_access_token' => bin2hex(random_bytes(32)),
+                'origin_lga_id' => $shop->lga_id,
+                'destination_lga_id' => $shop->lga_id,
+                'merchandise_subtotal' => $merchandiseSubtotal,
+                'delivery_fee' => '0.00',
+                'cashback_redeemed' => $cashbackApplied,
+                'grand_total' => $totalPayable,
+                'vendor_net_90' => $vendorNet90,
+                'customer_cashback_5' => $customerCashback5,
+                'platform_margin_5' => $platformMargin5,
+                'pickup_verification_code' => $pickupOtp,
+                'verification_code' => Order::generateUniqueDeliveryOtp(),
+                'vendor_settlement_status' => 'held',
+                'expires_at' => Carbon::now()->addMinutes(30),
+            ]);
+
+            // Deduct inventory & create order item
+            $product->decrement('inventory_quantity', $reservation->quantity);
+            $product->is_in_stock = ($product->inventory_quantity > 0);
+            $product->save();
+
+            OrderItem::create([
+                'order_id' => $order->id,
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+                'quantity' => $reservation->quantity,
+                'unit_price' => $reservation->unit_price,
+                'line_total' => $reservation->estimated_total,
+            ]);
+
+            // Mark reservation as payment completed and bind order
+            $reservation->status = 'payment_completed';
+            $reservation->order_id = $order->id;
+            $reservation->save();
+
+            return ['error' => false, 'order' => $order, 'reservation' => $reservation];
+        });
+
+        if (!empty($result['error'])) {
+            return response()->json([
+                'status' => false,
+                'message' => $result['message'],
+            ], $result['code'] ?? 422);
+        }
+
+        $order = $result['order'];
+        $callbackUrl = route('storefront') . '?order_success=' . $order->order_number;
+        $paystackInit = $this->paystackService->initializeTransaction($order, $callbackUrl, $user->email);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Pickup payment initialized. Present 6-digit PIN upon payment completion.',
+            'data' => [
+                'order_number' => $order->order_number,
+                'reservation_code' => $code,
+                'pickup_otp' => $order->pickup_verification_code,
+                'grand_total' => $order->grand_total,
+                'paystack' => $paystackInit,
+            ],
+        ], 200);
+    }
+
+    public function cancelPickupReservation(Request $request, string $code): JsonResponse
+    {
+        $user = $request->user();
+        $reservation = PickupReservation::where('customer_id', $user->id)
+            ->where('reservation_code', strtoupper(trim($code)))
+            ->first();
+
+        if (!$reservation) {
+            return response()->json(['status' => false, 'message' => 'Reservation not found.'], 404);
+        }
+
+        if (in_array($reservation->status, ['order_placed', 'cancelled'])) {
+            return response()->json(['status' => false, 'message' => "Reservation cannot be cancelled in status {$reservation->status}."], 422);
+        }
+
+        $reservation->status = 'cancelled';
+        $reservation->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Pickup reservation cancelled successfully.',
         ]);
     }
 }

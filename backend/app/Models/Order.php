@@ -284,6 +284,11 @@ class Order extends Model
         return Carbon::now()->lte($this->refund_window_expires_at);
     }
 
+    public function isRefundWindowActive(): bool
+    {
+        return $this->isWithinReturnWindow();
+    }
+
     public function isReturnWindowExpired(): bool
     {
         if (!$this->received_at || !$this->refund_window_expires_at) {

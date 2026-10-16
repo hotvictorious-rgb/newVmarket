@@ -7,6 +7,7 @@ use App\Models\CheckoutIntent;
 use App\Models\CustomerAddress;
 use App\Models\CustomerCashbackLedger;
 use App\Models\DeliveryLane;
+use App\Models\DisputeAndReturn;
 use App\Models\LogisticsCollectionPoint;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -517,5 +518,179 @@ class CustomerOrderApiController extends Controller
             5 => 'Delivered and verified. 5% Cashback credited to wallet.',
             default => 'Order in progress.',
         };
+    }
+
+    /**
+     * File a post-delivery dispute/return during the 24-hour return window.
+     * Automatically freezes vendor escrow settlement.
+     */
+    public function createDispute(Request $request, string $orderNumber): JsonResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'reason' => 'required|string|in:wrong_item,damaged_item,materially_defective,different_from_advertised,missing_component',
+            'customer_description' => 'required|string|max:1000',
+            'evidence_photos' => 'nullable|array',
+            'evidence_photos.*' => 'string',
+        ]);
+
+        $order = Order::where('customer_id', $user->id)
+            ->where('order_number', trim($orderNumber))
+            ->first();
+
+        if (!$order) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Order not found or unauthorized access.',
+            ], 404);
+        }
+
+        if ($order->order_status !== 'delivered') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Disputes can only be filed on delivered orders.',
+            ], 422);
+        }
+
+        if (!$order->isRefundWindowActive()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'The return and dispute window for this order has expired.',
+            ], 422);
+        }
+
+        // Prevent duplicate disputes
+        $existingDispute = DisputeAndReturn::where('order_id', $order->id)
+            ->where('customer_id', $user->id)
+            ->whereIn('status', ['filed', 'under_review', 'approved_refund'])
+            ->first();
+
+        if ($existingDispute) {
+            return response()->json([
+                'status' => false,
+                'message' => 'A dispute has already been filed for this order.',
+            ], 422);
+        }
+
+        $dispute = DB::transaction(function () use ($order, $user, $validated) {
+            $dispute = DisputeAndReturn::create([
+                'order_id' => $order->id,
+                'customer_id' => $user->id,
+                'reason' => $validated['reason'],
+                'customer_description' => strip_tags(trim($validated['customer_description'])),
+                'evidence_photos' => $validated['evidence_photos'] ?? [],
+                'status' => 'filed',
+            ]);
+
+            // Freeze vendor escrow release under dispute
+            $order->vendor_settlement_status = 'disputed';
+            $order->save();
+
+            return $dispute;
+        });
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Dispute filed successfully. Vendor escrow has been frozen pending marketplace arbitration.',
+            'data' => [
+                'dispute_id' => $dispute->id,
+                'order_number' => $order->order_number,
+                'reason' => $dispute->reason,
+                'status' => $dispute->status,
+                'created_at' => $dispute->created_at->toIso8601String(),
+            ],
+        ], 201);
+    }
+
+    /**
+     * View customer dispute status and admin resolution.
+     */
+    public function getDispute(Request $request, string $orderNumber): JsonResponse
+    {
+        $user = $request->user();
+
+        $order = Order::where('customer_id', $user->id)
+            ->where('order_number', trim($orderNumber))
+            ->first();
+
+        if (!$order) {
+            return response()->json(['status' => false, 'message' => 'Order not found.'], 404);
+        }
+
+        $dispute = DisputeAndReturn::where('order_id', $order->id)
+            ->where('customer_id', $user->id)
+            ->latest('id')
+            ->first();
+
+        if (!$dispute) {
+            return response()->json(['status' => false, 'message' => 'No dispute found for this order.'], 404);
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'id' => $dispute->id,
+                'order_number' => $order->order_number,
+                'reason' => $dispute->reason,
+                'customer_description' => $dispute->customer_description,
+                'evidence_photos' => $dispute->evidence_photos,
+                'status' => $dispute->status,
+                'resolution_notes' => $dispute->resolution_notes,
+                'created_at' => $dispute->created_at->toIso8601String(),
+            ],
+        ]);
+    }
+
+    /**
+     * Customer App Tracking Route Alias: GET /api/v1/order/track?order_id= or order_number=
+     */
+    public function trackOrder(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $orderId = $request->input('order_id');
+        $orderNumber = $request->input('order_number');
+
+        $query = Order::query();
+        if ($user) {
+            $query->where('customer_id', $user->id);
+        }
+
+        if ($orderNumber) {
+            $query->where('order_number', trim($orderNumber));
+        } elseif ($orderId) {
+            $query->where('id', (int)$orderId);
+        } else {
+            return response()->json(['status' => false, 'message' => 'order_id or order_number is required.'], 422);
+        }
+
+        $order = $query->with(['shop', 'vendor', 'items.product', 'rider.user'])->first();
+
+        if (!$order) {
+            return response()->json(['status' => false, 'message' => 'Order not found.'], 404);
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => $this->formatOrderFull($order),
+        ]);
+    }
+
+    /**
+     * Customer Delivery Handshake Confirmation accepting order identifier from payload.
+     */
+    public function confirmDeliveryByBody(Request $request): JsonResponse
+    {
+        $orderNumber = $request->input('order_number');
+        if (!$orderNumber && $request->filled('order_id')) {
+            $ord = Order::where('customer_id', $request->user()->id)->find($request->input('order_id'));
+            $orderNumber = $ord?->order_number;
+        }
+
+        if (!$orderNumber) {
+            return response()->json(['status' => false, 'message' => 'order_number or order_id is required.'], 422);
+        }
+
+        return $this->confirmDelivery($request, $orderNumber);
     }
 }

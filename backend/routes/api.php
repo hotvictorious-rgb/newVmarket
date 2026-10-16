@@ -27,6 +27,7 @@ Route::prefix('v1')->group(function () {
 
     // 2. Fulfillment Availability & Lane Calculation (Public)
     Route::post('fulfillment/availability', [FulfillmentApiController::class, 'checkAvailability']);
+    Route::post('fulfillment/delivery-fee', [FulfillmentApiController::class, 'deliveryFee']);
 
     // 3. Catalog & Products (Public)
     Route::get('categories', [ProductApiController::class, 'categories']);
@@ -36,8 +37,10 @@ Route::prefix('v1')->group(function () {
     // 4. Storefront & Mobile Dynamic Banners (Public)
     Route::get('banners', [BannerApiController::class, 'index']);
 
-    // 5. Pickup Reservation Lookup (Public)
+    // 5. Pickup Reservation Lookup & Order Tracking (Public / Hybrid)
     Route::get('pickup-reservations/{code}', [CheckoutAndReservationApiController::class, 'showPickupReservation']);
+    Route::get('order/track', [CustomerOrderApiController::class, 'trackOrder']);
+    Route::get('order/track-order', [CustomerOrderApiController::class, 'trackOrder']);
 
     // 6. Authentication
     Route::prefix('auth')->group(function () {
@@ -50,27 +53,55 @@ Route::prefix('v1')->group(function () {
 
     // 7. Authenticated Endpoints
     Route::middleware('auth:sanctum')->group(function () {
+        // Customer Profile & Session
         Route::get('auth/me', [AuthApiController::class, 'me']);
+        Route::get('customer/info', [AuthApiController::class, 'me']);
+        Route::post('auth/logout', [AuthApiController::class, 'logout']);
+        Route::post('customer/update-profile', [AuthApiController::class, 'updateProfile']);
 
-        // Customer Address Book
+        // Customer Address Book (Full CRUD)
         Route::prefix('customer/address')->group(function () {
             Route::get('list', [CustomerAddressApiController::class, 'index']);
             Route::post('add', [CustomerAddressApiController::class, 'store']);
+            Route::post('update/{id?}', [CustomerAddressApiController::class, 'update']);
+            Route::match(['delete', 'post'], '{id?}', [CustomerAddressApiController::class, 'destroy']);
+            Route::delete('delete/{id?}', [CustomerAddressApiController::class, 'destroy']);
         });
 
-        // Checkout Intents & In-Shop Reservations
+        // Checkout Intents & Delivery Checkout
         Route::post('checkout/intent', [CheckoutAndReservationApiController::class, 'createIntent']);
-        Route::post('pickup-reservations/create', [CheckoutAndReservationApiController::class, 'createPickupReservation']);
-        Route::get('customer/cashback', [CheckoutAndReservationApiController::class, 'cashbackBalance']);
 
-        // Customer Orders & 5-Stage Live Handshake Tracking
+        // Victorious Cashback 5% Reward Ledger API (API Contract Sec 5.3)
+        Route::get('cashback/summary', [CheckoutAndReservationApiController::class, 'cashbackSummary']);
+        Route::get('customer/cashback/summary', [CheckoutAndReservationApiController::class, 'cashbackSummary']);
+        Route::get('cashback/list', [CheckoutAndReservationApiController::class, 'cashbackList']);
+        Route::get('customer/cashback/list', [CheckoutAndReservationApiController::class, 'cashbackList']);
+        Route::get('customer/cashback', [CheckoutAndReservationApiController::class, 'cashbackSummary']);
+
+        // In-Shop Inspection & Pickup Reservations (Inspect First, Pay Later Engine)
+        Route::prefix('customer/pickup-reservations')->group(function () {
+            Route::get('', [CheckoutAndReservationApiController::class, 'listPickupReservations']);
+            Route::post('', [CheckoutAndReservationApiController::class, 'createPickupReservation']);
+            Route::get('{code}', [CheckoutAndReservationApiController::class, 'showPickupReservation']);
+            Route::post('{code}/pay', [CheckoutAndReservationApiController::class, 'payPickupReservation']);
+            Route::post('{code}/cancel', [CheckoutAndReservationApiController::class, 'cancelPickupReservation']);
+        });
+        Route::post('pickup-reservations/create', [CheckoutAndReservationApiController::class, 'createPickupReservation']);
+
+        // Customer Orders, Handover & 24h Post-Delivery Disputes
         Route::prefix('customer/orders')->group(function () {
             Route::get('', [CustomerOrderApiController::class, 'index']);
             Route::post('checkout', [CustomerOrderApiController::class, 'executeCheckout']);
             Route::post('verify-payment', [CustomerOrderApiController::class, 'verifyPayment']);
             Route::get('{order_number}', [CustomerOrderApiController::class, 'show']);
             Route::post('{order_number}/confirm-delivery', [CustomerOrderApiController::class, 'confirmDelivery']);
+            Route::post('{order_number}/dispute', [CustomerOrderApiController::class, 'createDispute']);
+            Route::get('{order_number}/dispute', [CustomerOrderApiController::class, 'getDispute']);
         });
+
+        // Customer Delivery Handshake Aliases
+        Route::post('customer/order/confirm-doorstep-delivery', [CustomerOrderApiController::class, 'confirmDeliveryByBody']);
+        Route::post('customer/order/confirm-inshop-pickup', [CustomerOrderApiController::class, 'confirmDeliveryByBody']);
 
         // Delivery Rider Terminal
         Route::prefix('rider')->group(function () {

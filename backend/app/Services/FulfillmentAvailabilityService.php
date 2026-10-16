@@ -256,4 +256,133 @@ class FulfillmentAvailabilityService
             ];
         })->toArray();
     }
+
+    /**
+     * Evaluates multi-item cart fulfillment availability across merchant shops, delivery lanes and pickup options.
+     */
+    public function checkCartFulfillmentAvailability(?int $destinationLgaId, array $cartItems): array
+    {
+        if (empty($cartItems)) {
+            return [
+                'status' => false,
+                'available' => false,
+                'message' => 'Cart is empty.',
+                'fulfillment_options' => [],
+            ];
+        }
+
+        $destLga = $destinationLgaId ? \App\Models\Lga::with('state')->find($destinationLgaId) : null;
+
+        // Group cart items by shop
+        $shopGroups = [];
+        foreach ($cartItems as $item) {
+            $productId = $item['product_id'] ?? $item['id'] ?? null;
+            if (!$productId) {
+                continue;
+            }
+
+            $product = Product::with(['shop.lga', 'shop.state', 'vendor'])->find($productId);
+            if (!$product || !$product->shop) {
+                continue;
+            }
+
+            $shopId = $product->shop->id;
+            if (!isset($shopGroups[$shopId])) {
+                $shopGroups[$shopId] = [
+                    'shop' => $product->shop,
+                    'vendor' => $product->vendor,
+                    'products' => [],
+                ];
+            }
+            $shopGroups[$shopId]['products'][] = [
+                'product' => $product,
+                'quantity' => $item['quantity'] ?? 1,
+            ];
+        }
+
+        if (empty($shopGroups)) {
+            return [
+                'status' => false,
+                'available' => false,
+                'message' => 'No active products or shops found for cart items.',
+                'fulfillment_options' => [],
+            ];
+        }
+
+        $vendorLanes = [];
+        $totalShippingFee = '0.00';
+        $allDeliverable = true;
+        $anyDeliverable = false;
+
+        $pickupShops = [];
+        $anyPickupAvailable = false;
+
+        foreach ($shopGroups as $shopId => $group) {
+            $shop = $group['shop'];
+
+            // 1. Delivery evaluation
+            if ($destinationLgaId) {
+                $deliveryRes = $this->checkDeliveryAvailability($shop->id, $destinationLgaId);
+                $isLaneAvail = $deliveryRes['is_available'] ?? false;
+                $fee = $isLaneAvail ? ($deliveryRes['fee'] ?? '0.00') : '0.00';
+
+                if ($isLaneAvail) {
+                    $anyDeliverable = true;
+                    $totalShippingFee = BcMathService::add($totalShippingFee, $fee);
+                } else {
+                    $allDeliverable = false;
+                }
+
+                $vendorLanes[] = [
+                    'shop_id' => $shop->id,
+                    'seller_id' => $shop->vendor_id,
+                    'shop_name' => $shop->name,
+                    'origin_lga' => $shop->lga ? ['id' => $shop->lga->id, 'name' => $shop->lga->name] : null,
+                    'delivery_fee' => $fee,
+                    'estimated_delivery_time' => $deliveryRes['estimated_time_text'] ?? '24-48 hours',
+                    'is_available' => $isLaneAvail,
+                    'unavailability_reason' => $isLaneAvail ? null : ($deliveryRes['message'] ?? 'Lane unserviced'),
+                    'collection_points' => $deliveryRes['collection_points'] ?? [],
+                ];
+            } else {
+                $allDeliverable = false;
+            }
+
+            // 2. Pickup evaluation
+            $pickupRes = $this->checkPickupAvailability($shop->id);
+            if (!empty($pickupRes['is_available'])) {
+                $anyPickupAvailable = true;
+                $pickupShops[] = [
+                    'shop_id' => $shop->id,
+                    'name' => $shop->name,
+                    'address' => $shop->address,
+                    'pickup_time_slots' => ['08:00 - 11:00', '11:00 - 14:00', '14:00 - 18:00'],
+                    'pickup_instructions' => 'Bring your 6-digit reservation code for inspection.',
+                    'opening_time' => $shop->pickup_opening_time ?? '08:00',
+                    'closing_time' => $shop->pickup_closing_time ?? '18:00',
+                ];
+            }
+        }
+
+        $overallAvailable = ($destinationLgaId && $allDeliverable) || $anyPickupAvailable;
+
+        return [
+            'status' => true,
+            'available' => $overallAvailable,
+            'fulfillment_options' => [
+                'delivery' => [
+                    'available' => (bool)($destinationLgaId && $allDeliverable),
+                    'total_shipping_fee' => $totalShippingFee,
+                    'currency' => 'NGN',
+                    'destination_lga' => $destLga ? ['id' => $destLga->id, 'name' => $destLga->name] : null,
+                    'vendor_lanes' => $vendorLanes,
+                ],
+                'in_shop_pickup' => [
+                    'available' => $anyPickupAvailable,
+                    'shops' => $pickupShops,
+                ],
+            ],
+        ];
+    }
 }
+

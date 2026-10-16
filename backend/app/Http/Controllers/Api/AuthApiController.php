@@ -175,4 +175,57 @@ class AuthApiController extends Controller
             'data' => $data,
         ]);
     }
+
+    public function logout(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if ($user && method_exists($user, 'currentAccessToken') && $user->currentAccessToken()) {
+            $user->currentAccessToken()->delete();
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Logged out successfully.',
+        ]);
+    }
+
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'name' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|unique:users,phone,' . $user->id,
+            'avatar' => 'nullable|string',
+            'password' => 'nullable|string|min:8',
+        ]);
+
+        if (isset($validated['name'])) {
+            $user->name = strip_tags(trim($validated['name']));
+        }
+        if (isset($validated['phone'])) {
+            $user->phone = preg_replace('/[^0-9+]/', '', $validated['phone']);
+        }
+        if (isset($validated['avatar'])) {
+            $user->avatar = strip_tags(trim($validated['avatar']));
+        }
+        if (!empty($validated['password'])) {
+            $user->password = Hash::make($validated['password']);
+        }
+
+        $user->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Profile updated successfully.',
+            'data' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'user_type' => $user->user_type,
+                'avatar' => $user->avatar,
+            ],
+        ]);
+    }
 }
