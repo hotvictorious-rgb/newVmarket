@@ -242,7 +242,6 @@ class RiderApiTerminalTest extends TestCase
             'is_active' => true,
             'is_online' => true,
         ]);
-        $rider->creditBalance('14500.00');
 
         // 1. Mobile Terminal Login
         $loginResponse = $this->postJson('/api/v1/auth/login', [
@@ -278,8 +277,10 @@ class RiderApiTerminalTest extends TestCase
                         'vehicle_type' => 'motorcycle',
                         'is_online' => true,
                     ],
-                    'fintech_metrics' => [
-                        'wallet_balance' => 14500.00,
+                    'operational_telemetry' => [
+                        'active_assignments_count' => 0,
+                        'completed_trips_count' => 0,
+                        'shift_status' => 'ON DUTY',
                     ],
                 ],
             ]);

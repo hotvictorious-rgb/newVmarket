@@ -263,80 +263,32 @@ class ClosedLoopLogisticsAndWalletHardeningTest extends TestCase
     }
 
     /**
-     * Test 2: Only the Logistics Company can pay its riders.
-     * Guaranteed Zero-Sum Transfer:
-     * Debits Company Wallet, Credits Rider Wallet by exact same amount.
+     * Test 2: Complete Elimination of Rider Wallet Domain Capabilities.
+     * Couriers are purely operational dispatch agents; creditBalance and debitBalance do not exist.
      */
-    public function test_only_parent_logistics_company_can_pay_rider_with_zero_sum_conservation(): void
+    public function test_rider_profile_has_no_wallet_or_disbursement_capabilities(): void
     {
-        // Fund Company 1 with earned delivery fees (₦5,000.00)
-        $this->company1->creditWallet('5000.00');
-        $this->company1->refresh();
-        $this->assertEquals(5000.00, (float)$this->company1->wallet_balance);
-        $this->assertEquals(0.00, (float)($this->rider1->current_balance ?? 0));
-
-        // Disburse ₦2,000.00 payroll to Courier 1
-        $result = $this->company1->disburseToRider($this->rider1, '2000.00', 'Shift delivery earnings', $this->fleetOwner1);
-
-        $this->assertTrue($result['success']);
-        $this->company1->refresh();
-        $this->rider1->refresh();
-
-        // Mathematical Proof of Zero-Sum Money Conservation:
-        // Company Wallet: 5,000.00 - 2,000.00 = 3,000.00
-        $this->assertEquals(3000.00, (float)$this->company1->wallet_balance);
-        // Rider Balance: 0.00 + 2,000.00 = 2,000.00
-        $this->assertEquals(2000.00, (float)$this->rider1->current_balance);
-
-        // Invariant: Company Wallet + Rider Balances = 3,000.00 + 2,000.00 = 5,000.00 (Net Money Delta = 0.00)
-        $totalSystemBalance = (float)$this->company1->wallet_balance + (float)$this->rider1->current_balance;
-        $this->assertEquals(5000.00, $totalSystemBalance);
-
-        // Verify Double-Entry Journal Entries
-        $ref = $result['reference'];
-        $debitEntry = FinancialJournalEntry::where('transaction_reference', $ref)->where('entry_type', 'debit')->first();
-        $creditEntry = FinancialJournalEntry::where('transaction_reference', $ref)->where('entry_type', 'credit')->first();
-
-        $this->assertNotNull($debitEntry);
-        $this->assertNotNull($creditEntry);
-        $this->assertEquals('logistics_company_wallet', $debitEntry->account_name);
-        $this->assertEquals(2000.00, (float)$debitEntry->amount);
-        $this->assertEquals('rider_wallet', $creditEntry->account_name);
-        $this->assertEquals(2000.00, (float)$creditEntry->amount);
+        $this->assertFalse(method_exists($this->rider1, 'creditBalance'), 'RiderProfile must not have creditBalance method.');
+        $this->assertFalse(method_exists($this->rider1, 'debitBalance'), 'RiderProfile must not have debitBalance method.');
+        $this->assertFalse(method_exists($this->company1, 'disburseToRider'), 'LogisticsCompanyProfile must not have disburseToRider method.');
     }
 
     /**
-     * Test 3: Cross-Company Disbursement Barrier.
-     * Company 1 is strictly forbidden from paying Rider 2 (who belongs to Company 2).
+     * Test 3: Rider Disbursement Route Is Completely Eliminated (404 Not Found).
      */
-    public function test_cross_company_rider_disbursement_is_strictly_blocked(): void
+    public function test_rider_disbursement_web_route_is_completely_eliminated(): void
     {
-        $this->company1->creditWallet('10000.00');
+        $response = $this->actingAs($this->fleetOwner1)
+            ->post('/logistics/riders/disburse', [
+                'rider_id' => $this->rider1->id,
+                'amount' => '1000.00',
+            ]);
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/Cross-company disbursements are strictly prohibited/');
-
-        // Company 1 attempts to pay Rider 2 (who belongs to Company 2)
-        $this->company1->disburseToRider($this->rider2, '2000.00', 'Illegal cross-fleet payout');
+        $response->assertStatus(404);
     }
 
     /**
-     * Test 4: Logistics Company Cannot Pay Riders What It Has Not Earned.
-     * Prevents overdraw and protects logistics company from artificial wallet inflation.
-     */
-    public function test_logistics_company_cannot_disburse_more_than_available_wallet_balance(): void
-    {
-        $this->company1->creditWallet('1500.00');
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessageMatches('/Insufficient corporate wallet balance/');
-
-        // Company 1 has ₦1,500.00; attempts to pay rider ₦3,000.00
-        $this->company1->disburseToRider($this->rider1, '3000.00', 'Overdraft attempt');
-    }
-
-    /**
-     * Test 5: Mass Assignment Protection Against Wallet Inflation.
+     * Test 4: Mass Assignment Protection Against Wallet Inflation.
      * Neither wallet_balance on LogisticsCompanyProfile nor current_balance on RiderProfile can be mass-assigned.
      */
     public function test_mass_assignment_cannot_inflate_corporate_or_rider_wallets(): void
@@ -363,8 +315,8 @@ class ClosedLoopLogisticsAndWalletHardeningTest extends TestCase
     }
 
     /**
-     * Test 6: Strict Non-Negative Debit Floor.
-     * Calling debitWallet or debitBalance with an amount exceeding balance throws RuntimeException.
+     * Test 5: Strict Non-Negative Debit Floor.
+     * Calling debitWallet on LogisticsCompanyProfile with an amount exceeding balance throws RuntimeException.
      */
     public function test_strict_non_negative_debit_floor_prevents_wallet_overdraft(): void
     {
@@ -375,48 +327,6 @@ class ClosedLoopLogisticsAndWalletHardeningTest extends TestCase
 
         // Attempt to debit 150.00 when only 100.00 available
         $this->company1->debitWallet('150.00');
-    }
-
-    /**
-     * Test 7: Web Endpoint Authorization & Validation for Fleet Payroll.
-     * Only authenticated logistics company can call the web disbursement endpoint.
-     */
-    public function test_logistics_web_disbursement_endpoint_enforces_auth_and_balance_checks(): void
-    {
-        $this->company1->creditWallet('5000.00');
-
-        // Customer cannot access logistics disbursement endpoint
-        $this->actingAs($this->customerUser)
-            ->post(route('logistics.riders.disburse'), [
-                'rider_id' => $this->rider1->id,
-                'amount' => '1000.00',
-            ])
-            ->assertStatus(403);
-
-        // Logistics Company 1 successfully disburses to Rider 1
-        $response = $this->actingAs($this->fleetOwner1)
-            ->post(route('logistics.riders.disburse'), [
-                'rider_id' => $this->rider1->id,
-                'amount' => '2500.00',
-                'notes' => 'Weekly fuel and delivery performance allowance',
-            ]);
-
-        $response->assertSessionHas('status');
-
-        $this->company1->refresh();
-        $this->rider1->refresh();
-
-        $this->assertEquals(2500.00, (float)$this->company1->wallet_balance);
-        $this->assertEquals(2500.00, (float)$this->rider1->current_balance);
-
-        // Logistics Company 1 attempts to pay Rider 2 (belonging to Company 2) -> 404/rejection
-        $crossFleetResponse = $this->actingAs($this->fleetOwner1)
-            ->post(route('logistics.riders.disburse'), [
-                'rider_id' => $this->rider2->id,
-                'amount' => '1000.00',
-            ]);
-
-        $crossFleetResponse->assertStatus(404);
     }
 
     /**

@@ -29,10 +29,10 @@
     </a>
 </li>
 
-<li class="nav-section-title">FINANCE</li>
+<li class="nav-section-title">OPERATIONS</li>
 <li class="sidebar-nav-item">
     <a href="{{ route('rider.earnings.index') }}" class="sidebar-nav-link {{ request()->routeIs('rider.earnings.*') ? 'active' : '' }}">
-        <span class="nav-link-icon">💰</span>
-        <span>Today's Earning Ledger</span>
+        <span class="nav-link-icon">📊</span>
+        <span>Shift Trip History</span>
     </a>
 </li>

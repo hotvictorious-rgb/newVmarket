@@ -91,15 +91,6 @@ class RiderTerminalApiController extends Controller
             ->where('order_status', 'delivered')
             ->count();
 
-        $todayEarnings = (float) Order::where('rider_id', $rider->id)
-            ->where('order_status', 'delivered')
-            ->whereDate('updated_at', now()->today())
-            ->sum('delivery_charge');
-
-        $totalEarnings = (float) Order::where('rider_id', $rider->id)
-            ->where('order_status', 'delivered')
-            ->sum('delivery_charge');
-
         $activeOrdersList = Order::where('rider_id', $rider->id)
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
             ->with(['shop:id,name,address,phone,lga_id', 'customer:id,name,phone'])
@@ -121,12 +112,11 @@ class RiderTerminalApiController extends Controller
                     'is_online' => (bool)$rider->is_online,
                     'rating' => 4.92,
                 ],
-                'fintech_metrics' => [
-                    'wallet_balance' => (float)($rider->current_balance ?? '0.00'),
-                    'today_earnings' => $todayEarnings,
-                    'total_earnings' => $totalEarnings,
+                'operational_telemetry' => [
                     'active_assignments_count' => $activeOrders,
                     'completed_trips_count' => $completedOrders,
+                    'shift_status' => (bool)$rider->is_online ? 'ON DUTY' : 'OFF DUTY',
+                    'assigned_corridor' => $rider->assignedLga->name ?? 'Metropolitan Dispatch Zone',
                 ],
                 'active_orders' => $activeOrdersList,
             ],
@@ -211,6 +201,31 @@ class RiderTerminalApiController extends Controller
         }
 
         $result = $this->settlementService->verifyRiderPickupOtp($order, $validated['otp'], $rider);
+
+        return response()->json([
+            'status' => $result['success'],
+            'message' => $result['message'],
+        ], $result['success'] ? 200 : 422);
+    }
+
+        public function markArrived(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'order_id' => 'required|integer|exists:orders,id',
+        ]);
+
+        if ($error = $this->guardRiderWithLogistics($request)) {
+            return $error;
+        }
+
+        $rider = $request->user()->riderProfile;
+        $order = Order::findOrFail($validated['order_id']);
+
+        if ($order->rider_id && (int)$order->rider_id !== (int)$rider->id) {
+            return response()->json(['status' => false, 'message' => 'Unauthorized: This order is assigned to another delivery courier.'], 403);
+        }
+
+        $result = $this->settlementService->markRiderArrived($order, $rider);
 
         return response()->json([
             'status' => $result['success'],

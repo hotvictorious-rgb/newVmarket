@@ -1334,7 +1334,6 @@ class PortalController extends Controller
         $riderMetrics = [
             'assigned_runs' => $activeDeliveries->count(),
             'completed_today' => $completedDrops->count(),
-            'estimated_earnings' => number_format($completedDrops->count() * 750 + 1500, 2),
             'shift_status' => ($rider && $rider->is_online) ? 'ON DUTY' : 'OFF DUTY',
             'assigned_corridor' => $rider->assignedLga->name ?? 'Uyo Central Corridor',
         ];
@@ -1405,7 +1404,6 @@ class PortalController extends Controller
 
         $riderMetrics = [
             'completed_today' => $completedDrops->count(),
-            'estimated_earnings' => number_format($completedDrops->count() * 750 + 1500, 2),
             'shift_status' => ($rider && $rider->is_online) ? 'ON DUTY' : 'OFF DUTY',
             'assigned_corridor' => $rider->assignedLga->name ?? 'Uyo Central Corridor',
         ];
@@ -1785,38 +1783,7 @@ class PortalController extends Controller
         });
     }
 
-    /**
-     * Interactive Action: Logistics Company disburses earnings from its earned corporate wallet to an assigned courier.
-     * Guaranteed Zero-Sum: Debits company corporate wallet, credits rider wallet.
-     * Only the parent logistics company can pay its riders; cannot pay couriers from other fleets.
-     */
-    public function logisticsPayRider(Request $request)
-    {
-        $company = $this->resolveLogisticsCompany();
 
-        if ($company->status !== 'active') {
-            return back()->with('error', 'Unauthorized: Logistics fleet account is inactive or suspended.');
-        }
-
-        $validated = $request->validate([
-            'rider_id' => 'required|integer|exists:rider_profiles,id',
-            'amount' => 'required|numeric|min:100|max:10000000',
-            'notes' => 'nullable|string|max:255',
-        ]);
-
-        $rider = RiderProfile::with('user')->where('logistics_company_id', $company->id)->findOrFail($validated['rider_id']);
-
-        if (!$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
-            return back()->with('error', 'Disbursement blocked: Courier account is inactive or suspended.');
-        }
-
-        try {
-            $result = $company->disburseToRider($rider, (string)$validated['amount'], $validated['notes'] ?? null, Auth::user());
-            return back()->with('status', $result['message']);
-        } catch (\Throwable $e) {
-            return back()->with('error', $e->getMessage());
-        }
-    }
 
     /**
      * Interactive Action: Vendor signs off in-shop physical inspection
@@ -1944,7 +1911,7 @@ class PortalController extends Controller
             'delivered_at' => $order->received_at ? $order->received_at->format('h:i A') : null,
             'proof_image' => $order->proof_of_delivery_image,
             'delivery_fee' => number_format((float)$order->delivery_fee, 2),
-            'rider_wallet_balance' => number_format((float)($rider->current_balance ?? 0), 2),
+            'shift_status' => ($rider && $rider->is_online) ? 'ON DUTY' : 'OFF DUTY',
         ]);
     }
 

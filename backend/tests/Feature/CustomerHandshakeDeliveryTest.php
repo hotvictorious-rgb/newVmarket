@@ -213,11 +213,9 @@ class CustomerHandshakeDeliveryTest extends TestCase
         Storage::fake('public');
 
         $customer = User::where('user_type', 'customer')->first();
-        $rider = RiderProfile::first();
-        // Set rider as independent courier to verify direct courier wallet credit
-        $rider->logistics_company_id = null;
-        $rider->save();
-        $initialRiderBalance = (float)($rider->current_balance ?? 0);
+        $rider = RiderProfile::with('logisticsCompany')->first();
+        $logisticsCompany = $rider->logisticsCompany ?? \App\Models\LogisticsCompanyProfile::first();
+        $initialCompanyBalance = (float)($logisticsCompany->wallet_balance ?? 0);
 
         $order = Order::where('fulfillment_type', 'doorstep_delivery')->first();
         $order->order_status = 'out_for_delivery';
@@ -244,10 +242,12 @@ class CustomerHandshakeDeliveryTest extends TestCase
         $this->assertNotNull($order->received_at);
         $this->assertNotNull($order->proof_of_delivery_image);
 
-        // Verify independent rider wallet was credited in real-time by 90% net delivery_fee (₦1,350.00)
+        // Verify logistics company corporate wallet was credited with 90% net delivery_fee (₦1,350.00)
+        // Couriers have NO wallet balance and cannot receive direct payouts
+        $logisticsCompany->refresh();
+        $this->assertEquals($initialCompanyBalance + 1350.00, (float)$logisticsCompany->wallet_balance);
         $rider->refresh();
-        $newRiderBalance = (float)$rider->current_balance;
-        $this->assertEquals($initialRiderBalance + 1350.00, $newRiderBalance);
+        $this->assertEquals(0.00, (float)($rider->current_balance ?? 0));
 
         // Verify 5% customer cashback reward enqueued with 24h maturation lock
         $cashback = CustomerCashbackLedger::where('order_id', $order->id)->first();

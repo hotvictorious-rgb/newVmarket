@@ -599,14 +599,11 @@ class OrderSettlementService
             }
 
             // Closed-Loop Platform Settlement:
-            // 1. If courier belongs to a logistics company, 100% of the delivery proceeds are credited to the accredited Corporate Fleet Wallet.
-            //    The fleet courier is NEVER credited by the platform (only their employer company can pay them).
-            // 2. If courier is an unassigned independent rider, credit rider wallet via domain method.
-            // Under NO circumstance do both receive payout or can a fleet courier be credited directly.
+            // 100% of the delivery proceeds (90% logistics cut) are credited exclusively to the accredited Corporate Fleet Wallet of the Logistics Company.
+            // Riders have NO platform wallets, NO balances, and are NEVER credited directly by the platform or customer.
+            // All courier compensation (salaries/trips) is handled offline by the logistics company.
             if ($logisticsCompany && bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
                 $logisticsCompany->creditWallet((string)$logisticsNetCut);
-            } elseif ($targetRider && !$targetRider->isFleetRider() && bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
-                $targetRider->creditBalance((string)$logisticsNetCut, 'independent_delivery_earning');
             }
 
             // Update/Enqueue 5% Customer Cashback reward with exact refund window maturation lock

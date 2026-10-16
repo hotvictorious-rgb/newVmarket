@@ -53,18 +53,18 @@
 
         <div class="stat-card stat-card-border-blue">
             <div class="stat-card-info">
-                <span class="stat-card-label">Today's Earnings</span>
-                <span class="stat-card-value">₦{{ $riderMetrics['estimated_earnings'] }}</span>
-                <span class="stat-card-subtext" style="color: var(--adm-info);">Daily Courier Payout</span>
+                <span class="stat-card-label">Assigned Corridor</span>
+                <span class="stat-card-value">{{ $riderMetrics['assigned_corridor'] ?? 'Uyo' }}</span>
+                <span class="stat-card-subtext" style="color: var(--adm-info);">Designated Transit Zone</span>
             </div>
-            <div class="stat-card-icon-box icon-box-blue">💰</div>
+            <div class="stat-card-icon-box icon-box-blue">📍</div>
         </div>
 
         <div class="stat-card stat-card-border-amber">
             <div class="stat-card-info">
                 <span class="stat-card-label">Duty Shift</span>
                 <span class="stat-card-value">{{ $riderMetrics['shift_status'] }}</span>
-                <span class="stat-card-subtext" style="color: var(--adm-warning);">Active Fleet Roster</span>
+                <span class="stat-card-subtext" style="color: var(--adm-warning);">{{ $rider->logisticsCompany->company_name ?? 'Fleet Headquarters' }}</span>
             </div>
             <div class="stat-card-icon-box icon-box-amber">⚡</div>
         </div>
