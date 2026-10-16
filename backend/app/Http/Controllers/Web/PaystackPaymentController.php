@@ -44,12 +44,18 @@ class PaystackPaymentController extends Controller
             return redirect()->route('storefront')->with('error', 'Unauthorized: Order does not belong to your account.');
         }
 
+        // Authorize guest tracking token only if session originator or matching authenticated customer (Finding 11)
+        $redirectParams = ['order_number' => $order->order_number];
+        if (session('checkout_order_number') === $order->order_number || (Auth::check() && (int)Auth::id() === (int)$order->customer_id)) {
+            $redirectParams['token'] = $order->guest_access_token;
+        }
+
         // Server-to-server authoritative verification against Paystack
         $verification = $this->paystackService->verifyTransaction($reference, $order);
 
         if (!$verification['success']) {
             Log::error("Paystack callback verification failed for reference '{$reference}': " . ($verification['message'] ?? ''));
-            return redirect()->route('order.status', ['order_number' => $order->order_number, 'token' => $order->guest_access_token])
+            return redirect()->route('order.status', $redirectParams)
                 ->with('error', 'Payment verification failed: ' . ($verification['message'] ?? 'Payment could not be verified.'));
         }
 
@@ -63,12 +69,12 @@ class PaystackPaymentController extends Controller
 
         if (!$settlement['success']) {
             Log::error("Paystack callback settlement failed for order #{$order->id}: " . ($settlement['message'] ?? ''));
-            return redirect()->route('order.status', ['order_number' => $order->order_number, 'token' => $order->guest_access_token])
+            return redirect()->route('order.status', $redirectParams)
                 ->with('error', 'Payment settlement error: ' . $settlement['message']);
         }
 
         if (($settlement['status'] ?? '') === 'REFUND_PENDING' || $order->fresh()->vendor_settlement_status === 'refund_pending') {
-            return redirect()->route('order.status', ['order_number' => $order->order_number, 'token' => $order->guest_access_token])
+            return redirect()->route('order.status', $redirectParams)
                 ->with('warning', 'Order was cancelled due to inventory depletion before payment was verified. A full refund of ₦' . number_format((float)$order->grand_total, 2) . ' has been initiated to your bank account.');
         }
 
@@ -76,7 +82,7 @@ class PaystackPaymentController extends Controller
             ? 'Payment previously verified and confirmed.'
             : 'Payment verified successfully! Your order is now active.';
 
-        return redirect()->route('order.status', ['order_number' => $order->order_number, 'token' => $order->guest_access_token])
+        return redirect()->route('order.status', $redirectParams)
             ->with('status', $successMsg);
     }
 

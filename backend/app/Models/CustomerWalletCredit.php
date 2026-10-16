@@ -51,7 +51,7 @@ class CustomerWalletCredit extends Model
             ->where('status', 'available')
             ->sum('amount');
 
-        return number_format((float)$sum, 2, '.', '');
+        return BcMathService::add((string)($sum ?? '0'), '0.00');
     }
 
     /**

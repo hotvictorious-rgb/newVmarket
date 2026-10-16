@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AdminAuditLog;
 use App\Models\CustomerCashbackLedger;
+use App\Models\CustomerWalletCredit;
 use App\Models\FinancialJournalEntry;
 use App\Models\LogisticsCollectionPoint;
 use App\Models\Order;
@@ -56,8 +57,9 @@ class ReturnAndRefundService
             }
 
             // 2. Order Delivered Status Guard
-            if (!in_array($lockedOrder->order_status, ['delivered', 'confirmed'])) {
-                return ['success' => false, 'message' => "Order cannot be returned (current status: {$lockedOrder->order_status})."];
+            // Strict Delivered Status Guard (Finding 1)
+            if ($lockedOrder->order_status !== 'delivered') {
+                return ['success' => false, 'message' => "Order cannot be returned (current status: {$lockedOrder->order_status}). Only delivered orders are eligible for return."];
             }
 
             // 3. Configurable Refund Window Guard (SystemSetting)
@@ -66,6 +68,10 @@ class ReturnAndRefundService
 
             if (!$windowExpiresAt && $lockedOrder->received_at) {
                 $windowExpiresAt = $lockedOrder->received_at->copy()->addHours($refundHours);
+            } elseif (!$windowExpiresAt && $lockedOrder->delivered_at) {
+                $windowExpiresAt = $lockedOrder->delivered_at->copy()->addHours($refundHours);
+            } elseif (!$windowExpiresAt && $lockedOrder->updated_at) {
+                $windowExpiresAt = $lockedOrder->updated_at->copy()->addHours($refundHours);
             }
 
             if ($windowExpiresAt && Carbon::now()->gt($windowExpiresAt)) {
@@ -91,10 +97,34 @@ class ReturnAndRefundService
             $totalRefundableAmount = '0.00';
             $validatedItems = [];
 
+            // 4a. Aggregate and Deduplicate Items Payload (Finding 2)
+            $aggregatedItems = [];
             foreach ($itemsData as $itemInput) {
                 $orderItemId = (int) ($itemInput['order_item_id'] ?? 0);
                 $quantity = max(1, (int) ($itemInput['quantity'] ?? 1));
                 $condition = (string) ($itemInput['item_condition'] ?? 'opened_tested');
+
+                if ($orderItemId <= 0) {
+                    return ['success' => false, 'message' => 'Invalid order_item_id specified in return items.'];
+                }
+
+                if (isset($aggregatedItems[$orderItemId])) {
+                    $aggregatedItems[$orderItemId]['quantity'] += $quantity;
+                } else {
+                    $aggregatedItems[$orderItemId] = [
+                        'order_item_id' => $orderItemId,
+                        'quantity' => $quantity,
+                        'item_condition' => $condition,
+                    ];
+                }
+            }
+
+            $totalRefundableAmount = '0.00';
+            $validatedItems = [];
+
+            foreach ($aggregatedItems as $orderItemId => $agg) {
+                $quantity = $agg['quantity'];
+                $condition = $agg['item_condition'];
 
                 $orderItem = OrderItem::where('id', $orderItemId)
                     ->where('order_id', $lockedOrder->id)
@@ -121,15 +151,27 @@ class ReturnAndRefundService
                 }
 
                 $itemSubtotal = bcmul((string)$orderItem->unit_price, (string)$quantity, 2);
-                $totalRefundableAmount = bcadd($totalRefundableAmount, $itemSubtotal, 2);
+
+                // Allocate proportional discount if order used cashback discount (Finding 8)
+                $allocatedDiscount = '0.00';
+                if (!empty($lockedOrder->cashback_redeemed) && bccomp((string)$lockedOrder->merchandise_subtotal, '0.00', 2) > 0) {
+                    $lineShare = bcdiv($itemSubtotal, (string)$lockedOrder->merchandise_subtotal, 6);
+                    $allocatedDiscount = bcmul((string)$lockedOrder->cashback_redeemed, $lineShare, 2);
+                }
+                $refundableAmount = bcsub($itemSubtotal, $allocatedDiscount, 2);
+                if (bccomp($refundableAmount, '0.00', 2) < 0) {
+                    $refundableAmount = '0.00';
+                }
+
+                $totalRefundableAmount = bcadd($totalRefundableAmount, $refundableAmount, 2);
 
                 $validatedItems[] = [
                     'order_item' => $orderItem,
                     'quantity' => $quantity,
                     'unit_price' => $orderItem->unit_price,
                     'line_total' => $itemSubtotal,
-                    'allocated_discount' => '0.00',
-                    'refundable_amount' => $itemSubtotal,
+                    'allocated_discount' => $allocatedDiscount,
+                    'refundable_amount' => $refundableAmount,
                     'item_condition' => $condition,
                 ];
             }
@@ -170,6 +212,10 @@ class ReturnAndRefundService
 
             // 7. Attach Evidence
             foreach ($evidencePaths as $ev) {
+                $rawPath = is_array($ev) ? ($ev['path'] ?? '') : (string)$ev;
+                if (str_contains($rawPath, '..') || str_starts_with($rawPath, '/') || str_starts_with($rawPath, '\\')) {
+                    continue; // Skip directory traversal / local paths
+                }
                 ReturnEvidence::create([
                     'return_case_id' => $returnCase->id,
                     'uploaded_by_id' => $customer->id,
@@ -222,6 +268,15 @@ class ReturnAndRefundService
 
             if (!$lockedCase) {
                 return ['success' => false, 'message' => 'Return case not found.'];
+            }
+
+            // Whitelist allowed initial statuses for inspection (Finding 4)
+            $allowedInspectionStatuses = ['requested', 'pending', 'in_transit', 'in_transit_back_to_vendor'];
+            if (!in_array($lockedCase->status, $allowedInspectionStatuses)) {
+                return [
+                    'success' => false,
+                    'message' => "Return case #{$lockedCase->case_number} cannot be inspected because it is already in '{$lockedCase->status}' status.",
+                ];
             }
 
             $inspection = ReturnInspection::create([
@@ -349,6 +404,15 @@ class ReturnAndRefundService
                 return ['success' => false, 'message' => "Cannot disburse refund for case in '{$lockedCase->status}' status."];
             }
 
+            // Check instant doorstep wallet credit constraints (Finding 5)
+            $walletCredit = CustomerWalletCredit::where('return_case_id', $lockedCase->id)->first();
+            if ($walletCredit && in_array($walletCredit->status, ['redeemed', 'spent'], true)) {
+                return [
+                    'success' => false,
+                    'message' => "Cannot disburse cash refund: Customer has already redeemed the instant wallet credit of ₦{$walletCredit->amount} issued for this return case.",
+                ];
+            }
+
             // Calculate exact refund amount
             $merchandiseRefund = $lockedCase->total_refundable_amount;
             $deliveryFeeRefund = '0.00';
@@ -371,8 +435,32 @@ class ReturnAndRefundService
                 $vendorNetDebit = bcadd($vendorNetDebit, $diff, 2);
             }
 
+            // Automated Paystack Gateway Refund Call before DB journal entries (Findings 3 & 10)
+            $paystackRefundId = null;
+            if (!empty($order->payment_reference)) {
+                $refundRes = $this->paystackService->initiateRefund(
+                    $order->payment_reference,
+                    $totalCashRefund,
+                    "Manual refund for Return Case #{$lockedCase->case_number}"
+                );
+                if (empty($refundRes['success'])) {
+                    return [
+                        'success' => false,
+                        'message' => 'Paystack gateway refund failed: ' . ($refundRes['message'] ?? 'Payment provider rejected or timed out.') . '. Return case remains in ' . $lockedCase->status . ' status.',
+                    ];
+                }
+                $paystackRefundId = $refundRes['refund_reference'] ?? ($refundRes['data']['reference'] ?? null);
+            }
+
+            // Reverse available instant wallet credit to prevent duplicate cash payout
+            if ($walletCredit && $walletCredit->status === 'available') {
+                $walletCredit->status = 'reversed_for_cash_refund';
+                $walletCredit->notes = ($walletCredit->notes ? $walletCredit->notes . ' | ' : '') . 'Reversed upon manual cash/bank refund disbursement.';
+                $walletCredit->save();
+            }
+
             $disburseRef = 'REFUND-' . $lockedCase->case_number . '-' . date('YmdHis');
-            $refToStore = $bankReference ?: $disburseRef;
+            $refToStore = $bankReference ?: ($paystackRefundId ?: $disburseRef);
 
             // 1. Post Double-Entry Journal Entries
             // Credit: Cash in Escrow (Exact Cash Outflow to Customer)
@@ -497,18 +585,7 @@ class ReturnAndRefundService
                 ]);
             }
 
-            // 2. Automated Paystack Gateway Refund Call if payment reference exists
-            $paystackRefundId = null;
-            if (!empty($order->payment_reference)) {
-                $refundRes = $this->paystackService->initiateRefund(
-                    $order->payment_reference,
-                    $totalCashRefund,
-                    "Manual refund for Return Case #{$lockedCase->case_number}"
-                );
-                if (!empty($refundRes['success'])) {
-                    $paystackRefundId = $refundRes['refund_reference'] ?? null;
-                }
-            }
+
 
             // 3. Update Return Case State
             $lockedCase->status = 'refunded';

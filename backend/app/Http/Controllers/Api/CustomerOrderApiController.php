@@ -1202,8 +1202,10 @@ class CustomerOrderApiController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'Re-order manifest prepared. 100% wallet credit applied.',
+            'message' => 'Re-order quotation manifest prepared. Ready for checkout submission with 100% wallet credit applied.',
             'data' => [
+                'operation' => 'quote_preview',
+                'is_quote' => true,
                 'items' => $reorderManifest,
                 'merchandise_subtotal' => $totalCost,
                 'wallet_credit_available' => $availableWallet,

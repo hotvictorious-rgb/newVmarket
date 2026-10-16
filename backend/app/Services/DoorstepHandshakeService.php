@@ -112,7 +112,34 @@ class DoorstepHandshakeService
                 ];
             }
 
-            // 4. Validate Manifest Quantities & Line Item Integrity
+            // 4. Validate Manifest Completeness & Prevent Duplicate Lines (Findings 6 & 7)
+            $manifestItemIds = [];
+            foreach ($manifestItems as $line) {
+                $id = (int) ($line['order_item_id'] ?? 0);
+                if ($id <= 0) {
+                    return [
+                        'success' => false,
+                        'message' => 'Invalid order_item_id specified in delivery manifest.',
+                    ];
+                }
+                if (in_array($id, $manifestItemIds, true)) {
+                    return [
+                        'success' => false,
+                        'message' => "Duplicate order_item_id #{$id} detected in delivery manifest.",
+                    ];
+                }
+                $manifestItemIds[] = $id;
+            }
+
+            // Ensure complete manifest coverage: all order items must be accounted for
+            $allOrderItemIds = OrderItem::where('order_id', $lockedOrder->id)->pluck('id')->all();
+            $missingItemIds = array_diff($allOrderItemIds, $manifestItemIds);
+            if (!empty($missingItemIds)) {
+                return [
+                    'success' => false,
+                    'message' => "Delivery manifest is incomplete: Order item(s) #" . implode(', #', $missingItemIds) . " are missing from the handover manifest.",
+                ];
+            }
             $totalAcceptedMerchandise = '0.00';
             $totalRejectedMerchandise = '0.00';
             $hasRejectedItems = false;
@@ -199,7 +226,7 @@ class DoorstepHandshakeService
 
             if ($hasRejectedItems) {
                 // Generate 6-Digit Vendor Return Handshake OTP
-                $vendorReturnOtp = (string) mt_rand(100000, 999999);
+                $vendorReturnOtp = (string) random_int(100000, 999999);
 
                 $returnCase = ReturnCase::create([
                     'case_number' => ReturnCase::generateCaseNumber(),

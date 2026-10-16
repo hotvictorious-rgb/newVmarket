@@ -360,7 +360,7 @@ class RiderTerminalApiController extends Controller
             $order->order_status = 'returned';
 
             // Generate Vendor Return OTP and create ReturnCase
-            $vendorReturnOtp = sprintf('%06d', mt_rand(100000, 999999));
+            $vendorReturnOtp = sprintf('%06d', random_int(100000, 999999));
             $caseNumber = 'RET-' . date('Ymd') . '-' . strtoupper(Str::random(4));
 
             $returnCase = ReturnCase::create([

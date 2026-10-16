@@ -148,7 +148,7 @@ class CheckoutAndReservationApiController extends Controller
                 ], 422);
             }
 
-            if (in_array(strtolower($product->package_tier ?? ''), ['keke', 'bulky'], true)) {
+            if (in_array(strtolower($product->package_tier ?? ''), ['keke', 'bulky', 'fragile'], true)) {
                 $orderPackageTier = 'keke';
             }
 
@@ -188,7 +188,7 @@ class CheckoutAndReservationApiController extends Controller
                 ->where('expires_at', '>', Carbon::now())
                 ->sum('amount');
 
-            $availableCashbackStr = number_format((float)$availableCashback, 2, '.', '');
+            $availableCashbackStr = BcMathService::add((string)($availableCashback ?? '0'), '0.00');
             // Cap cashback redemption at 50% of merchandise subtotal or available balance
             $maxRedemption = BcMathService::mul($merchandiseSubtotal, '0.50');
             $cashbackApplied = BcMathService::comp($availableCashbackStr, $maxRedemption) > 0 ? $maxRedemption : $availableCashbackStr;
