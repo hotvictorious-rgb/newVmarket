@@ -250,6 +250,22 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         return [$order, $item1, $item2];
     }
 
+    protected function postDoorstepHandover(array $params): \Illuminate\Testing\TestResponse
+    {
+        if (!isset($params['proof_photo'])) {
+            $params['proof_photo'] = UploadedFile::fake()->image('doorstep_condition.jpg');
+        }
+        if (isset($params['manifest_items'])) {
+            foreach ($params['manifest_items'] as $item) {
+                $itemId = $item['order_item_id'];
+                if (($item['rejected_quantity'] ?? 0) > 0 && !isset($params["item_photo_{$itemId}"]) && empty($item['defect_photo_path'])) {
+                    $params["item_photo_{$itemId}"] = UploadedFile::fake()->image("defect_{$itemId}.jpg");
+                }
+            }
+        }
+        return $this->postJson('/api/v1/rider/orders/doorstep-handover', $params);
+    }
+
     /**
      * Test 1: Customer partially accepts order at doorstep (accepts blender, rejects kettle).
      * Verifies:
@@ -267,7 +283,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $photo = UploadedFile::fake()->image('doorstep_defect.jpg');
 
         Sanctum::actingAs($this->riderUser);
-        $response = $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+        $response = $this->postDoorstepHandover( [
             'order_id' => $order->id,
             'otp' => '719283',
             'manifest_items' => [
@@ -337,7 +353,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
 
         // 1. Process doorstep handover with rejection
         Sanctum::actingAs($this->riderUser);
-        $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+        $this->postDoorstepHandover( [
             'order_id' => $order->id,
             'otp' => '719283',
             'manifest_items' => [
@@ -353,6 +369,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $failResp = $this->postJson('/api/v1/rider/orders/verify-vendor-return-otp', [
             'return_case_id' => $returnCase->id,
             'otp' => '000000',
+            'proof_photo' => UploadedFile::fake()->image('vendor_return.jpg'),
         ]);
         $failResp->assertStatus(422);
 
@@ -360,6 +377,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $successResp = $this->postJson('/api/v1/rider/orders/verify-vendor-return-otp', [
             'return_case_id' => $returnCase->id,
             'otp' => $otp,
+            'proof_photo' => UploadedFile::fake()->image('vendor_return.jpg'),
         ]);
         $successResp->assertStatus(200);
         $successResp->assertJsonPath('status', true);
@@ -382,7 +400,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
 
         Sanctum::actingAs($this->riderUser);
-        $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+        $this->postDoorstepHandover( [
             'order_id' => $order->id,
             'otp' => '719283',
             'manifest_items' => [
@@ -432,7 +450,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
 
         Sanctum::actingAs($this->riderUser);
-        $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+        $this->postDoorstepHandover( [
             'order_id' => $order->id,
             'otp' => '719283',
             'manifest_items' => [
@@ -477,7 +495,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
 
         Sanctum::actingAs($this->riderUser);
-        $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+        $this->postDoorstepHandover( [
             'order_id' => $order->id,
             'otp' => '719283',
             'manifest_items' => [
@@ -514,7 +532,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
 
         Sanctum::actingAs($this->riderUser);
-        $resp = $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+        $resp = $this->postDoorstepHandover( [
             'order_id' => $order->id,
             'otp' => '719283',
             'manifest_items' => [
@@ -543,7 +561,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
 
         Sanctum::actingAs($this->riderUser);
-        $resp = $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+        $resp = $this->postDoorstepHandover( [
             'order_id' => $order->id,
             'otp' => '719283',
             'manifest_items' => [
@@ -567,7 +585,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
 
         Sanctum::actingAs($this->riderUser);
-        $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+        $this->postDoorstepHandover( [
             'order_id' => $order->id,
             'otp' => '719283',
             'manifest_items' => [
@@ -603,7 +621,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
 
         Sanctum::actingAs($this->riderUser);
-        $response = $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+        $response = $this->postDoorstepHandover( [
             'order_id' => $order->id,
             'otp' => '719283',
             'manifest_items' => [
@@ -649,6 +667,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'order_id' => $order->id,
             'reason' => 'customer_unreachable',
             'notes' => 'Customer phone switched off. Gate security says resident is away.',
+            'proof_photo' => UploadedFile::fake()->image('attempt1.jpg'),
         ]);
 
         $response->assertStatus(200);
@@ -684,6 +703,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'order_id' => $order->id,
             'reason' => 'gate_locked',
             'notes' => 'Second attempt failed. Estate gate locked and customer number not connecting.',
+            'proof_photo' => UploadedFile::fake()->image('attempt2.jpg'),
         ]);
 
         $response->assertStatus(200);
@@ -920,7 +940,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $defectPhotoItem2 = UploadedFile::fake()->image('kettle_broken_element.jpg');
 
         Sanctum::actingAs($this->riderUser);
-        $response = $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+        $response = $this->postDoorstepHandover( [
             'order_id' => $order->id,
             'otp' => '719283',
             'manifest_items' => [
@@ -989,7 +1009,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
 
         // Perform rejection to generate return case
         Sanctum::actingAs($this->riderUser);
-        $doorstepRes = $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+        $doorstepRes = $this->postDoorstepHandover( [
             'order_id' => $order->id,
             'otp' => '719283',
             'manifest_items' => [
@@ -1087,6 +1107,121 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             ],
         ]);
     }
+
+    public function test_pickup_otp_strictly_requires_photo_and_rejects_without_it(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+        $order->order_status = 'ready_for_pickup';
+        $order->pickup_confirmed_by_rider = false;
+        $order->save();
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->postJson('/api/v1/rider/orders/verify-pickup-otp', [
+            'order_id' => $order->id,
+            'otp' => '918234',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['proof_photo']);
+        $this->assertStringContainsString('strictly mandatory', $response->json('message'));
+    }
+
+    public function test_delivery_otp_strictly_requires_photo_and_rejects_without_it(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->postJson('/api/v1/rider/orders/verify-delivery-otp', [
+            'order_id' => $order->id,
+            'otp' => '719283',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['proof_photo']);
+        $this->assertStringContainsString('strictly mandatory', $response->json('message'));
+    }
+
+    public function test_doorstep_handover_strictly_requires_photo_and_rejects_without_it(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+            'order_id' => $order->id,
+            'otp' => '719283',
+            'manifest_items' => [
+                ['order_item_id' => $item1->id, 'accepted_quantity' => 1, 'rejected_quantity' => 0],
+            ],
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['proof_photo']);
+        $this->assertStringContainsString('strictly mandatory', $response->json('message'));
+    }
+
+    public function test_doorstep_rejection_strictly_requires_item_defect_photo(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+            'order_id' => $order->id,
+            'otp' => '719283',
+            'manifest_items' => [
+                ['order_item_id' => $item1->id, 'accepted_quantity' => 1, 'rejected_quantity' => 0],
+                ['order_item_id' => $item2->id, 'accepted_quantity' => 0, 'rejected_quantity' => 1, 'rejection_category' => 'vendor_issue'],
+            ],
+            'proof_photo' => UploadedFile::fake()->image('overall_doorstep.jpg'),
+            // Notice: item_photo_{$item2->id} is intentionally omitted!
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertStringContainsString('live defect photo is strictly mandatory', $response->json('message'));
+    }
+
+    public function test_delivery_attempt_failed_strictly_requires_photo_and_rejects_without_it(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->postJson('/api/v1/rider/orders/delivery-attempt-failed', [
+            'order_id' => $order->id,
+            'reason' => 'gate_locked',
+            'notes' => 'Gate was locked, attempted without photo.',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['proof_photo']);
+        $this->assertStringContainsString('strictly mandatory', $response->json('message'));
+    }
+
+    public function test_verify_vendor_return_otp_strictly_requires_photo_and_rejects_without_it(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+        $returnCase = ReturnCase::create([
+            'case_number' => 'RET-MANDATORY-TEST',
+            'order_id' => $order->id,
+            'customer_id' => $order->customer_id,
+            'vendor_id' => $order->vendor_id,
+            'collection_point_id' => $order->collection_point_id,
+            'source' => 'doorstep_partial_rejection',
+            'rejection_category' => 'vendor_issue',
+            'vendor_return_otp' => '888999',
+            'returned_by_rider_id' => $this->riderProfile->id,
+            'status' => 'in_transit_back_to_vendor',
+            'return_reason' => 'damaged_item',
+            'total_refundable_amount' => '15000.00',
+        ]);
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->postJson('/api/v1/rider/orders/verify-vendor-return-otp', [
+            'return_case_id' => $returnCase->id,
+            'otp' => '888999',
+            // Notice: proof_photo omitted!
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['proof_photo']);
+        $this->assertStringContainsString('strictly mandatory', $response->json('message'));
+    }
 }
-
-

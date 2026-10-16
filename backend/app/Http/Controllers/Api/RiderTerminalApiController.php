@@ -246,7 +246,9 @@ class RiderTerminalApiController extends Controller
         $validated = $request->validate([
             'order_id' => 'required|integer|exists:orders,id',
             'otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
-            'proof_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:5120',
+            'proof_photo' => 'required|file|image|mimes:jpeg,png,jpg|max:5120',
+        ], [
+            'proof_photo.required' => 'A live photo of the package at the merchant counter is strictly mandatory to verify pickup.',
         ]);
 
         if ($error = $this->guardRiderWithLogistics($request)) {
@@ -312,7 +314,9 @@ class RiderTerminalApiController extends Controller
             'order_id' => 'required|integer|exists:orders,id',
             'reason' => 'required|string|in:customer_unreachable,gate_locked,customer_rescheduled,wrong_address,recipient_unavailable',
             'notes' => 'nullable|string|max:500',
-            'proof_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:5120',
+            'proof_photo' => 'required|file|image|mimes:jpeg,png,jpg|max:5120',
+        ], [
+            'proof_photo.required' => 'A live photo proof of the premises / locked gate is strictly mandatory when recording a failed delivery attempt.',
         ]);
 
         if ($error = $this->guardRiderWithLogistics($request)) {
@@ -454,7 +458,9 @@ class RiderTerminalApiController extends Controller
         $validated = $request->validate([
             'order_id' => 'required|integer|exists:orders,id',
             'otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
-            'proof_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:5120',
+            'proof_photo' => 'required|file|image|mimes:jpeg,png,jpg|max:5120',
+        ], [
+            'proof_photo.required' => 'A live photo of the package at the customer doorstep is strictly mandatory to complete delivery.',
         ]);
 
         if ($error = $this->guardRiderWithLogistics($request)) {
@@ -501,7 +507,9 @@ class RiderTerminalApiController extends Controller
             'manifest_items.*.rejection_category' => 'nullable|string|in:vendor_issue,transit_damage,customer_change_of_mind',
             'manifest_items.*.rejection_notes' => 'nullable|string|max:500',
             'manifest_items.*.defect_photo_path' => 'nullable|string',
-            'proof_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:5120',
+            'proof_photo' => 'required|file|image|mimes:jpeg,png,jpg|max:5120',
+        ], [
+            'proof_photo.required' => 'A live photo of the parcel condition at the customer doorstep is strictly mandatory.',
         ]);
 
         if ($error = $this->guardRiderWithLogistics($request)) {
@@ -527,6 +535,14 @@ class RiderTerminalApiController extends Controller
             if ($request->hasFile("item_photo_{$itemId}")) {
                 $path = $request->file("item_photo_{$itemId}")->store('item_defects', 'public');
                 $itemInput['defect_photo_path'] = 'storage/' . $path;
+            } elseif (($itemInput['rejected_quantity'] ?? 0) > 0 && empty($itemInput['defect_photo_path'])) {
+                return response()->json([
+                    'status' => false,
+                    'message' => "A live defect photo is strictly mandatory for rejected item #{$itemId}.",
+                    'errors' => [
+                        "item_photo_{$itemId}" => ["A live defect photo is strictly mandatory for rejected item #{$itemId}."],
+                    ],
+                ], 422);
             }
         }
 
@@ -558,7 +574,9 @@ class RiderTerminalApiController extends Controller
         $validated = $request->validate([
             'return_case_id' => 'required|integer|exists:return_cases,id',
             'otp' => ['required', 'string', 'size:6'],
-            'proof_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:5120',
+            'proof_photo' => 'required|file|image|mimes:jpeg,png,jpg|max:5120',
+        ], [
+            'proof_photo.required' => 'A live photo of the returned parcel at the merchant shop counter is strictly mandatory.',
         ]);
 
         if ($error = $this->guardRiderWithLogistics($request)) {
