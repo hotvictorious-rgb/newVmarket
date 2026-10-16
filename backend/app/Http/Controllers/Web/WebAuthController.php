@@ -31,9 +31,28 @@ class WebAuthController extends Controller
         return view('auth.customer-login', compact('lgas', 'demoAccounts'));
     }
 
+    protected function sanitizeReturnTo(?string $returnTo): ?string
+    {
+        if (empty($returnTo)) {
+            return null;
+        }
+
+        $trimmed = trim($returnTo);
+
+        // Must start with a single slash, not protocol-relative '//', and not contain schema '://'
+        if (str_starts_with($trimmed, '/') && !str_starts_with($trimmed, '//') && !str_contains($trimmed, '://') && !str_contains($trimmed, ':\\')) {
+            $parsed = parse_url($trimmed);
+            if (!isset($parsed['host']) && !isset($parsed['scheme'])) {
+                return $trimmed;
+            }
+        }
+
+        return null;
+    }
+
     public function loginCustomer(Request $request)
     {
-        $returnTo = $request->input('return_to');
+        $returnTo = $this->sanitizeReturnTo($request->input('return_to'));
         $target = $returnTo ? redirect($returnTo) : redirect()->intended(route('customer.dashboard'));
         return $this->authenticateRole($request, ['customer'], $target);
     }
@@ -91,7 +110,7 @@ class WebAuthController extends Controller
         Auth::login($user, true);
         $request->session()->regenerate();
 
-        $returnTo = $request->input('return_to');
+        $returnTo = $this->sanitizeReturnTo($request->input('return_to'));
         if ($returnTo) {
             return redirect($returnTo)
                 ->with('status', "Account successfully created! Welcome to Victorious MARKET, {$user->name}. Your 5% cashback rewards wallet is active.");

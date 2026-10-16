@@ -98,6 +98,7 @@ class CheckoutAndReservationApiController extends Controller
         if (!empty($validated['redeem_cashback'])) {
             $availableCashback = CustomerCashbackLedger::where('customer_id', $user->id)
                 ->where('status', 'available')
+                ->where('matures_at', '<=', Carbon::now())
                 ->where('expires_at', '>', Carbon::now())
                 ->sum('amount');
 
@@ -245,6 +246,7 @@ class CheckoutAndReservationApiController extends Controller
 
         $available = CustomerCashbackLedger::where('customer_id', $userId)
             ->where('status', 'available')
+            ->where('matures_at', '<=', Carbon::now())
             ->where('expires_at', '>', Carbon::now())
             ->sum('amount');
 

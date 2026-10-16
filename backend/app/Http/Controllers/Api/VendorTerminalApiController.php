@@ -52,6 +52,9 @@ class VendorTerminalApiController extends Controller
         }
 
         if ($user->isVendorEmployee()) {
+            if ($request->header('X-Terminal-Client') === 'vendor_mobile_terminal' || $request->header('X-Required-Role') === 'vendor') {
+                abort(403, 'Access Restricted: Branch employees and counter staff are strictly prohibited from the Merchant Mobile Terminal. Please sign in via the Web Staff Portal (/counter).');
+            }
             $employee = VendorEmployeeProfile::where('user_id', $user->id)
                 ->with(['vendor', 'shop'])
                 ->firstOrFail();

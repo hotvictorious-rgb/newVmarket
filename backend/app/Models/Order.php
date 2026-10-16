@@ -57,6 +57,7 @@ class Order extends Model
         'settled_at',
         'settled_by_admin_id',
         'settlement_proof_path',
+        'expires_at',
     ];
 
     protected $casts = [
@@ -82,6 +83,7 @@ class Order extends Model
         'refund_window_expires_at' => 'datetime',
         'settled_at' => 'datetime',
         'paid_at' => 'datetime',
+        'expires_at' => 'datetime',
     ];
 
     public function isPickupLocked(): bool
@@ -188,6 +190,19 @@ class Order extends Model
     public function dispute()
     {
         return $this->hasOne(DisputeAndReturn::class);
+    }
+
+    public function journalEntries()
+    {
+        return $this->hasMany(FinancialJournalEntry::class);
+    }
+
+    /**
+     * Generate cryptographically secure, high-entropy unique payment reference (CSPRNG).
+     */
+    public static function generateUniquePaymentReference(): string
+    {
+        return 'VM-PAY-' . date('YmdHis') . '-' . strtoupper(\Illuminate\Support\Str::random(16));
     }
 
     public function originLga()

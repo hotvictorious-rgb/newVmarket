@@ -124,14 +124,6 @@ class PaystackPaymentController extends Controller
         $order = Order::where('payment_reference', $reference)->first();
 
         if (!$order) {
-            // Also attempt lookup via metadata order_id if present
-            $metaOrderId = $data['metadata']['order_id'] ?? null;
-            if ($metaOrderId) {
-                $order = Order::find($metaOrderId);
-            }
-        }
-
-        if (!$order) {
             Log::warning("Paystack Webhook: Order not found for reference '{$reference}'.");
             return response()->json([
                 'status' => false,

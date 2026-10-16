@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class DisputeAndReturn extends Model
 {
+    protected $table = 'disputes_and_returns';
+
     protected $fillable = [
         'order_id',
         'customer_id',

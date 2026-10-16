@@ -74,7 +74,10 @@ Route::prefix('v1')->group(function () {
 
         // Delivery Rider Terminal
         Route::prefix('rider')->group(function () {
+            Route::get('dashboard', [RiderTerminalApiController::class, 'dashboard']);
+            Route::post('toggle-duty', [RiderTerminalApiController::class, 'toggleDuty']);
             Route::get('orders/active', [RiderTerminalApiController::class, 'activeOrders']);
+            Route::get('orders/history', [RiderTerminalApiController::class, 'history']);
             Route::post('orders/verify-pickup-otp', [RiderTerminalApiController::class, 'verifyPickupOtp']);
             Route::post('orders/verify-delivery-otp', [RiderTerminalApiController::class, 'verifyDeliveryOtp']);
         });

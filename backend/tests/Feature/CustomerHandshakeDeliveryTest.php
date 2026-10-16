@@ -214,6 +214,9 @@ class CustomerHandshakeDeliveryTest extends TestCase
 
         $customer = User::where('user_type', 'customer')->first();
         $rider = RiderProfile::first();
+        // Set rider as independent courier to verify direct courier wallet credit
+        $rider->logistics_company_id = null;
+        $rider->save();
         $initialRiderBalance = (float)($rider->current_balance ?? 0);
 
         $order = Order::where('fulfillment_type', 'doorstep_delivery')->first();
@@ -221,6 +224,8 @@ class CustomerHandshakeDeliveryTest extends TestCase
         $order->rider_id = $rider->id;
         $order->verification_code = '554433';
         $order->delivery_fee = '1500.00';
+        $order->logistics_fee_retained = '1350.00';
+        $order->platform_delivery_fee = '150.00';
         $order->rider_arrived_at = Carbon::now();
         $order->save();
 
@@ -239,10 +244,10 @@ class CustomerHandshakeDeliveryTest extends TestCase
         $this->assertNotNull($order->received_at);
         $this->assertNotNull($order->proof_of_delivery_image);
 
-        // Verify rider wallet was credited in real-time by delivery_fee (₦1,500.00)
+        // Verify independent rider wallet was credited in real-time by 90% net delivery_fee (₦1,350.00)
         $rider->refresh();
         $newRiderBalance = (float)$rider->current_balance;
-        $this->assertEquals($initialRiderBalance + 1500.00, $newRiderBalance);
+        $this->assertEquals($initialRiderBalance + 1350.00, $newRiderBalance);
 
         // Verify 5% customer cashback reward enqueued with 24h maturation lock
         $cashback = CustomerCashbackLedger::where('order_id', $order->id)->first();

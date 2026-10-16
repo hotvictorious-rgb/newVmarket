@@ -107,6 +107,43 @@
         </div>
     </div>
 
+    <!-- SECTION: Secure Platform Escrow & Cashback Maturation Policy (Super Admin Only) -->
+    <div class="dash-card" style="margin-bottom: 28px; border-left: 4px solid var(--adm-primary);" id="financial-policy-desk">
+        <div class="dash-card-header">
+            <div class="dash-card-title">
+                <span>⏱️</span>
+                <div>
+                    <div>Platform Escrow &amp; Cashback Maturation Policy</div>
+                    <span class="dash-card-subtitle">Set the mandatory post-delivery inspection &amp; refund window (hours). Cashback remains locked and unredeemable until this window elapses with zero active disputes.</span>
+                </div>
+            </div>
+            <span class="dash-badge dash-badge-gold">Super Admin Governance</span>
+        </div>
+        <div style="padding: 20px 24px;">
+            <form action="{{ route('admin.settings.financial') }}" method="POST" style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;">
+                @csrf
+                <div style="flex: 1; min-width: 260px;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: var(--adm-text); margin-bottom: 6px;">
+                        Refund Window &amp; Cashback Maturation Period (Hours)
+                    </label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="number" name="refund_window_hours" value="{{ $refundWindowHours ?? 24 }}" min="1" max="720" required
+                            style="width: 140px; padding: 10px 14px; border: 1.5px solid var(--adm-border); border-radius: 8px; font-size: 15px; font-weight: 700; color: var(--adm-text); background: var(--adm-card-bg);">
+                        <span style="font-size: 13.5px; font-weight: 600; color: var(--adm-text-muted);">hours (e.g. 24 = 1 full day)</span>
+                    </div>
+                    <p style="font-size: 12px; color: var(--adm-text-muted); margin-top: 6px; margin-bottom: 0;">
+                        🔒 All customer cashback rewards accrued from order deliveries enter <code>pending_maturation</code> state upon physical receipt and become redeemable strictly after this window expires without disputes.
+                    </p>
+                </div>
+                <div>
+                    <button type="submit" class="btn-dash btn-dash-primary" style="padding: 10px 22px; font-size: 13.5px; font-weight: 600;">
+                        Save Escrow &amp; Maturation Policy
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- SECTION 1: Logistics Fleet Corporate Payout Requests -->
     <div class="dash-card" style="margin-bottom: 28px;" id="logistics-payout-desk">
         <div class="dash-card-header">

@@ -110,7 +110,7 @@ class CustomerOrderApiController extends Controller
         $user = $request->user();
         $shop = Shop::with('lga')->findOrFail($validated['shop_id']);
 
-        return DB::transaction(function () use ($validated, $user, $shop) {
+        $result = DB::transaction(function () use ($validated, $user, $shop) {
             $merchandiseSubtotal = '0.00';
             $itemsToCreate = [];
 
@@ -118,24 +118,24 @@ class CustomerOrderApiController extends Controller
                 $product = Product::marketplaceEligible()->lockForUpdate()->findOrFail($item['product_id']);
                 
                 if ((int)$product->shop_id !== (int)$shop->id) {
-                    return response()->json([
-                        'status' => false,
+                    return [
+                        'error' => true,
                         'message' => "Product '{$product->name}' does not belong to the selected shop branch.",
-                    ], 422);
+                    ];
                 }
 
                 if ((int)$product->vendor_id !== (int)$shop->vendor_id) {
-                    return response()->json([
-                        'status' => false,
+                    return [
+                        'error' => true,
                         'message' => "Product '{$product->name}' does not belong to the selected merchant.",
-                    ], 422);
+                    ];
                 }
 
                 if ($product->inventory_quantity < $item['quantity']) {
-                    return response()->json([
-                        'status' => false,
+                    return [
+                        'error' => true,
                         'message' => "Insufficient stock for {$product->name}. Only {$product->inventory_quantity} available.",
-                    ], 422);
+                    ];
                 }
 
                 $lineTotal = BcMathService::mul($product->unit_price, (string)$item['quantity']);
@@ -161,10 +161,10 @@ class CustomerOrderApiController extends Controller
 
                 $availability = $this->fulfillmentService->checkDeliveryAvailability($shop->id, $destLgaId);
                 if (!$availability['is_available']) {
-                    return response()->json([
-                        'status' => false,
+                    return [
+                        'error' => true,
                         'message' => $availability['message'],
-                    ], 422);
+                    ];
                 }
 
                 $deliveryFee = $availability['fee'];
@@ -177,6 +177,7 @@ class CustomerOrderApiController extends Controller
             if (!empty($validated['redeem_cashback'])) {
                 $availableCashback = CustomerCashbackLedger::where('customer_id', $user->id)
                     ->where('status', 'available')
+                    ->where('matures_at', '<=', Carbon::now())
                     ->where('expires_at', '>', Carbon::now())
                     ->sum('amount');
 
@@ -227,7 +228,7 @@ class CustomerOrderApiController extends Controller
             }
 
             $orderNumber = 'VM-' . date('Ymd') . '-' . strtoupper(Str::random(4));
-            $paymentRef = 'pstk_' . time() . '_' . rand(100, 999);
+            $paymentRef = Order::generateUniquePaymentReference();
             $paymentMethod = $validated['payment_method'] ?? 'paystack';
 
             $order = Order::create([
@@ -258,11 +259,14 @@ class CustomerOrderApiController extends Controller
                 'pickup_verification_code' => Order::generateUniquePickupOtp(),
                 'verification_code' => Order::generateUniqueDeliveryOtp(),
                 'vendor_settlement_status' => 'held',
+                'expires_at' => Carbon::now()->addMinutes(30),
             ]);
 
             // Deduct inventory and insert items
             foreach ($itemsToCreate as $itemData) {
                 $itemData['product']->decrement('inventory_quantity', $itemData['quantity']);
+                $itemData['product']->is_in_stock = ($itemData['product']->inventory_quantity > 0);
+                $itemData['product']->save();
 
                 OrderItem::create([
                     'order_id' => $order->id,
@@ -274,34 +278,36 @@ class CustomerOrderApiController extends Controller
                 ]);
             }
 
-            // Deduct redeemed cashback if applicable
-            if (BcMathService::comp($cashbackApplied, '0.00') > 0) {
-                CustomerCashbackLedger::create([
-                    'customer_id' => $user->id,
-                    'order_id' => $order->id,
-                    'amount' => '-' . $cashbackApplied,
-                    'direction' => 'debit',
-                    'status' => 'redeemed',
-                    'notes' => "Redeemed for order {$order->order_number}",
-                ]);
-            }
-
-            // Initialize Paystack Checkout Transaction
-            $callbackUrl = route('storefront') . '?order_success=' . $order->order_number;
-            $paystackInit = $this->paystackService->initializeTransaction($order, $callbackUrl, $user->email);
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Order created successfully. Proceed to payment.',
-                'data' => [
-                    'order_number' => $order->order_number,
-                    'grand_total' => $order->grand_total,
-                    'payment_method' => $order->payment_method,
-                    'paystack' => $paystackInit,
-                    'order' => $this->formatOrderFull($order),
-                ],
-            ], 201);
+            return ['error' => false, 'order' => $order];
         });
+
+        if (!empty($result['error'])) {
+            return response()->json([
+                'status' => false,
+                'message' => $result['message'],
+            ], 422);
+        }
+
+        $order = $result['order'];
+
+        // Initialize Paystack Checkout Transaction OUTSIDE the DB transaction (releases locks immediately)
+        $callbackUrl = route('storefront') . '?order_success=' . $order->order_number;
+        $paystackInit = null;
+        if ($order->payment_method === 'paystack') {
+            $paystackInit = $this->paystackService->initializeTransaction($order, $callbackUrl, $user->email);
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Order created successfully. Proceed to payment.',
+            'data' => [
+                'order_number' => $order->order_number,
+                'grand_total' => $order->grand_total,
+                'payment_method' => $order->payment_method,
+                'paystack' => $paystackInit,
+                'order' => $this->formatOrderFull($order),
+            ],
+        ], 201);
     }
 
     /**

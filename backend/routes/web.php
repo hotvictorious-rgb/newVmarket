@@ -81,6 +81,7 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/disburse-settlement', [PortalController::class, 'adminDisburseSettlement'])->name('admin.disburse.settlement');
     Route::post('/disburse-logistics-payout', [PortalController::class, 'adminDisburseLogisticsPayout'])->name('admin.disburse.logistics_payout');
     Route::post('/settings/announcement', [PortalController::class, 'adminUpdateAnnouncementSettings'])->name('admin.settings.announcement');
+    Route::post('/settings/financial', [PortalController::class, 'adminUpdateFinancialSettings'])->name('admin.settings.financial');
 });
 
 // 2. Admin Staff (Support, Moderation, Operations)

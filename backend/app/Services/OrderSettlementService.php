@@ -4,9 +4,12 @@ namespace App\Services;
 
 use App\Models\AdminAuditLog;
 use App\Models\CustomerCashbackLedger;
+use App\Models\FinancialJournalEntry;
 use App\Models\Order;
 use App\Models\PickupReservation;
+use App\Models\Product;
 use App\Models\RiderProfile;
+use App\Models\SystemSetting;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -85,7 +88,7 @@ class OrderSettlementService
 
             // 6. Reference Invariant
             $reference = (string)($paystackData['reference'] ?? '');
-            if (!empty($lockedOrder->payment_reference) && !hash_equals((string)$lockedOrder->payment_reference, $reference)) {
+            if (empty($reference) || empty($lockedOrder->payment_reference) || !hash_equals((string)$lockedOrder->payment_reference, $reference)) {
                 return [
                     'success' => false,
                     'status' => 'REFERENCE_MISMATCH',
@@ -117,7 +120,111 @@ class OrderSettlementService
             $lockedOrder->vendor_settlement_status = 'held';
             $lockedOrder->save();
 
-            // 9. Register 5% Customer Cashback Reward in Ledger (24h maturation lock)
+            // 9. Authoritative Balanced Double-Entry Financial Journal
+            // Debit: Cash in Escrow (Grand Total Cash Paid)
+            FinancialJournalEntry::create([
+                'order_id' => $lockedOrder->id,
+                'transaction_reference' => $reference,
+                'account_name' => 'cash_in_escrow',
+                'entry_type' => 'debit',
+                'amount' => $lockedOrder->grand_total,
+                'currency' => 'NGN',
+                'description' => "Paystack gateway capture for Order #{$lockedOrder->order_number}",
+            ]);
+
+            // Debit: Cashback Liability Redeemed (if customer applied previously earned cashback)
+            if (bccomp((string)$lockedOrder->cashback_redeemed, '0.00', 2) > 0) {
+                FinancialJournalEntry::create([
+                    'order_id' => $lockedOrder->id,
+                    'transaction_reference' => $reference,
+                    'account_name' => 'cashback_liability',
+                    'entry_type' => 'debit',
+                    'amount' => $lockedOrder->cashback_redeemed,
+                    'currency' => 'NGN',
+                    'description' => "Customer cashback redeemed for Order #{$lockedOrder->order_number}",
+                ]);
+
+                // Consume available customer cashback entries
+                if ($lockedOrder->customer_id) {
+                    $remainingToDeduct = $lockedOrder->cashback_redeemed;
+                    $availableLots = CustomerCashbackLedger::where('customer_id', $lockedOrder->customer_id)
+                        ->where('status', 'available')
+                        ->where('matures_at', '<=', Carbon::now())
+                        ->where('expires_at', '>', Carbon::now())
+                        ->orderBy('id', 'asc')
+                        ->get();
+
+                    foreach ($availableLots as $lot) {
+                        if (bccomp($remainingToDeduct, '0.00', 2) <= 0) {
+                            break;
+                        }
+                        if (bccomp((string)$lot->amount, $remainingToDeduct, 2) <= 0) {
+                            $remainingToDeduct = bcsub($remainingToDeduct, (string)$lot->amount, 2);
+                            $lot->status = 'redeemed';
+                            $lot->save();
+                        } else {
+                            $lot->amount = bcsub((string)$lot->amount, $remainingToDeduct, 2);
+                            $lot->save();
+                            $remainingToDeduct = '0.00';
+                        }
+                    }
+                }
+            }
+
+            // Credit: Vendor Payable (90% Merchandise Net)
+            FinancialJournalEntry::create([
+                'order_id' => $lockedOrder->id,
+                'transaction_reference' => $reference,
+                'account_name' => 'vendor_payable',
+                'entry_type' => 'credit',
+                'amount' => $lockedOrder->vendor_net_90,
+                'currency' => 'NGN',
+                'description' => "Merchant 90% Net Payable held in escrow for Order #{$lockedOrder->order_number}",
+            ]);
+
+            // Credit: Logistics Payable (90% Delivery Net)
+            if (bccomp((string)$lockedOrder->logistics_fee_retained, '0.00', 2) > 0) {
+                FinancialJournalEntry::create([
+                    'order_id' => $lockedOrder->id,
+                    'transaction_reference' => $reference,
+                    'account_name' => 'logistics_payable',
+                    'entry_type' => 'credit',
+                    'amount' => $lockedOrder->logistics_fee_retained,
+                    'currency' => 'NGN',
+                    'description' => "Logistics Fleet 90% Net Payable held for Order #{$lockedOrder->order_number}",
+                ]);
+            }
+
+            // Credit: Customer Cashback Liability (5% Merchandise Split)
+            if (bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
+                FinancialJournalEntry::create([
+                    'order_id' => $lockedOrder->id,
+                    'transaction_reference' => $reference,
+                    'account_name' => 'cashback_liability',
+                    'entry_type' => 'credit',
+                    'amount' => $lockedOrder->customer_cashback_5,
+                    'currency' => 'NGN',
+                    'description' => "Customer 5% Cashback Reward Liability accrued for Order #{$lockedOrder->order_number}",
+                ]);
+            }
+
+            // Credit: Platform Revenue (5% Margin + 10% Delivery Cut)
+            $platformTotalCut = bcadd((string)$lockedOrder->platform_margin_5, (string)$lockedOrder->platform_delivery_fee, 2);
+            if (bccomp($platformTotalCut, '0.00', 2) > 0) {
+                FinancialJournalEntry::create([
+                    'order_id' => $lockedOrder->id,
+                    'transaction_reference' => $reference,
+                    'account_name' => 'platform_revenue',
+                    'entry_type' => 'credit',
+                    'amount' => $platformTotalCut,
+                    'currency' => 'NGN',
+                    'description' => "Victorious Market Gross Retained Commission for Order #{$lockedOrder->order_number}",
+                ]);
+            }
+
+            // 10. Register 5% Customer Cashback Reward in Ledger
+            // Invariant: Cashback is strictly NOT redeemable at payment!
+            // Maturation countdown commences ONLY upon physical delivery / counter handover inspection.
             if ($lockedOrder->customer_id && bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
                 CustomerCashbackLedger::updateOrCreate([
                     'order_id' => $lockedOrder->id,
@@ -125,8 +232,8 @@ class OrderSettlementService
                     'customer_id' => $lockedOrder->customer_id,
                     'amount' => $lockedOrder->customer_cashback_5,
                     'status' => 'pending_maturation',
-                    'matures_at' => $now->copy()->addHours(24),
-                    'expires_at' => $now->copy()->addDays(365),
+                    'matures_at' => Carbon::now()->addDays(365), // Locked until confirmed delivery/pickup!
+                    'expires_at' => Carbon::now()->addDays(730),
                 ]);
             }
 
@@ -445,10 +552,11 @@ class OrderSettlementService
             $lockedOrder->delivery_locked_until = null;
 
             $now = Carbon::now();
+            $refundHours = max(1, (int) SystemSetting::get('refund_window_hours', 24));
             $lockedOrder->order_status = 'delivered';
             $lockedOrder->delivery_confirmed_by_customer = true;
             $lockedOrder->received_at = $now;
-            $lockedOrder->refund_window_expires_at = $now->copy()->addHours(24);
+            $lockedOrder->refund_window_expires_at = $now->copy()->addHours($refundHours);
             $lockedOrder->vendor_settlement_status = 'held';
 
             if ($proofImagePath) {
@@ -480,7 +588,7 @@ class OrderSettlementService
                 $lane = \App\Models\DeliveryLane::find($lockedOrder->delivery_lane_id);
                 $logisticsCompany = $lane ? $lane->assignedLogisticsCompany : null;
             }
-            if (!$logisticsCompany) {
+            if (!$logisticsCompany && !$targetRider) {
                 $logisticsCompany = \App\Models\LogisticsCompanyProfile::where('status', 'active')->first();
             }
 
@@ -490,18 +598,18 @@ class OrderSettlementService
                 $logisticsNetCut = bcmul((string)($lockedOrder->delivery_fee ?? '0.00'), '0.90', 2);
             }
 
+            // Single credit: If corporate fleet company exists, credit company wallet.
+            // If independent rider with no fleet company, credit rider current balance.
+            // Under NO circumstance do both receive the payout.
             if ($logisticsCompany && bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
                 $logisticsCompany->creditWallet((string)$logisticsNetCut);
-            }
-
-            if ($targetRider) {
-                $currentBalance = (float) ($targetRider->current_balance ?? 0);
-                $deliveryCut = (float) ($lockedOrder->delivery_fee ?? 0);
-                $targetRider->current_balance = number_format($currentBalance + $deliveryCut, 2, '.', '');
+            } elseif ($targetRider && bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
+                $currentBalance = (string) ($targetRider->current_balance ?? '0.00');
+                $targetRider->current_balance = bcadd($currentBalance, (string)$logisticsNetCut, 2);
                 $targetRider->save();
             }
 
-            // Enqueue 5% Customer Cashback reward with 24h maturation lock
+            // Update/Enqueue 5% Customer Cashback reward with exact refund window maturation lock
             CustomerCashbackLedger::updateOrCreate([
                 'order_id' => $lockedOrder->id,
             ], [
@@ -517,7 +625,7 @@ class OrderSettlementService
 
             return [
                 'success' => true,
-                'message' => 'Package delivery confirmed successfully! 24-hour return window is now active.',
+                'message' => "Package delivery confirmed successfully! {$refundHours}-hour return window is now active.",
                 'order' => $lockedOrder,
             ];
         });
@@ -630,9 +738,10 @@ class OrderSettlementService
             $lockedOrder->pickup_locked_until = null;
 
             $now = Carbon::now();
+            $refundHours = max(1, (int) SystemSetting::get('refund_window_hours', 24));
             $lockedOrder->order_status = 'delivered';
             $lockedOrder->received_at = $now;
-            $lockedOrder->refund_window_expires_at = $now->copy()->addHours(24);
+            $lockedOrder->refund_window_expires_at = $now->copy()->addHours($refundHours);
             $lockedOrder->vendor_settlement_status = 'held';
             $lockedOrder->save();
 
@@ -641,7 +750,7 @@ class OrderSettlementService
                 'status' => 'handed_over',
             ]);
 
-            // Enqueue 5% Customer Cashback reward
+            // Update/Enqueue 5% Customer Cashback reward with exact refund window maturation lock
             CustomerCashbackLedger::updateOrCreate([
                 'order_id' => $lockedOrder->id,
             ], [
@@ -654,7 +763,7 @@ class OrderSettlementService
 
             return [
                 'success' => true,
-                'message' => 'Goods handed over successfully. 24-hour return window has commenced.',
+                'message' => "Goods handed over successfully. {$refundHours}-hour return window has commenced.",
                 'order' => $lockedOrder,
             ];
         });
@@ -662,7 +771,7 @@ class OrderSettlementService
 
     /**
      * Evaluates order post-receipt maturation (called via scheduler/cron).
-     * Transitions vendor settlement to 'eligible' and cashback to 'available' if 24h expired with zero disputes.
+     * Transitions vendor settlement to 'eligible' and cashback to 'available' if configured refund window expired with zero disputes.
      */
     public function evaluateMaturation(Order $order): void
     {
@@ -692,6 +801,7 @@ class OrderSettlementService
 
             CustomerCashbackLedger::where('order_id', $lockedOrder->id)
                 ->where('status', 'pending_maturation')
+                ->where('matures_at', '<=', Carbon::now())
                 ->update(['status' => 'available']);
         });
     }
@@ -778,5 +888,46 @@ class OrderSettlementService
                 'order' => $lockedOrder,
             ];
         });
+    }
+
+    /**
+     * Reclaims inventory and cancels abandoned orders whose payment expiration deadline passed.
+     */
+    public function expireAbandonedPendingOrders(): int
+    {
+        $now = Carbon::now();
+        $expiredOrders = Order::where('payment_status', 'pending')
+            ->where('order_status', 'pending')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', $now)
+            ->get();
+
+        $count = 0;
+        foreach ($expiredOrders as $order) {
+            DB::transaction(function () use ($order, &$count) {
+                $locked = Order::where('id', $order->id)->lockForUpdate()->first();
+                if (!$locked || $locked->payment_status !== 'pending' || $locked->order_status !== 'pending') {
+                    return;
+                }
+
+                $locked->order_status = 'cancelled';
+                $locked->save();
+
+                foreach ($locked->items as $item) {
+                    if ($item->product_id) {
+                        $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
+                        if ($product) {
+                            $product->increment('inventory_quantity', $item->quantity);
+                            $product->is_in_stock = ($product->inventory_quantity > 0);
+                            $product->save();
+                        }
+                    }
+                }
+
+                $count++;
+            });
+        }
+
+        return $count;
     }
 }

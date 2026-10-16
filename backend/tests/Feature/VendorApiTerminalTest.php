@@ -221,4 +221,34 @@ class VendorApiTerminalTest extends TestCase
         $refreshRes->assertStatus(200)
             ->assertJsonPath('status', true);
     }
+    public function test_vendor_employee_is_mathematically_blocked_from_mobile_terminal_endpoints(): void
+    {
+        [$vendorUser, $vendor, $shop] = $this->createVendor('Mega Store', 'mega@example.com', '08012345678');
+
+        $employeeUser = User::create([
+            'name' => 'Counter Worker A',
+            'email' => 'counter.worker@example.com',
+            'phone' => '08099887766',
+            'password' => bcrypt('Password123!'),
+            'user_type' => 'vendor_employee',
+            'status' => 'active',
+        ]);
+
+        VendorEmployeeProfile::create([
+            'user_id' => $employeeUser->id,
+            'vendor_id' => $vendor->id,
+            'shop_id' => $shop->id,
+            'role' => 'inspection_staff',
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($employeeUser);
+
+        $res = $this->withHeaders([
+            'X-Terminal-Client' => 'vendor_mobile_terminal',
+            'X-Required-Role' => 'vendor',
+        ])->getJson('/api/v1/vendor/dashboard');
+
+        $res->assertStatus(403);
+    }
 }

@@ -434,6 +434,7 @@ class PortalController extends Controller
         // Logistics Corporate Payout Requests
         $pendingLogisticsPayouts = LogisticsPayoutRequest::with('company')->latest()->get();
         $totalLogisticsEscrowBalance = LogisticsCompanyProfile::sum('wallet_balance');
+        $refundWindowHours = (int) \App\Models\SystemSetting::get('refund_window_hours', 24);
 
         return view('admin.settlements', compact(
             'pendingSettlements',
@@ -444,7 +445,8 @@ class PortalController extends Controller
             'totalDeliveryCommission',
             'totalVMarketEarnings',
             'pendingLogisticsPayouts',
-            'totalLogisticsEscrowBalance'
+            'totalLogisticsEscrowBalance',
+            'refundWindowHours'
         ));
     }
 
@@ -1429,7 +1431,9 @@ class PortalController extends Controller
             ->get();
 
         $cashbackAvailable = CustomerCashbackLedger::where('customer_id', $customer->id)
-            ->where('status', 'matured')
+            ->whereIn('status', ['available', 'matured'])
+            ->where('matures_at', '<=', Carbon::now())
+            ->where('expires_at', '>', Carbon::now())
             ->sum('amount');
 
         $cashbackPending = CustomerCashbackLedger::where('customer_id', $customer->id)
@@ -1536,7 +1540,9 @@ class PortalController extends Controller
             ->get();
 
         $cashbackAvailable = CustomerCashbackLedger::where('customer_id', $customer->id)
-            ->where('status', 'matured')
+            ->whereIn('status', ['available', 'matured'])
+            ->where('matures_at', '<=', Carbon::now())
+            ->where('expires_at', '>', Carbon::now())
             ->sum('amount');
 
         $cashbackPending = CustomerCashbackLedger::where('customer_id', $customer->id)
@@ -1668,6 +1674,39 @@ class PortalController extends Controller
         ]);
 
         return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " corporate delivery fee to {$company->company_name}!");
+    }
+
+    /**
+     * Interactive Action: Super Admin configures Platform Escrow & Cashback Maturation Refund Window
+     */
+    public function adminUpdateFinancialSettings(Request $request)
+    {
+        $admin = Auth::user();
+        if (!$admin || !$admin->isSuperAdmin() || $admin->status !== 'active') {
+            return back()->with('error', 'Unauthorized: Super Admin permissions required.');
+        }
+
+        $validated = $request->validate([
+            'refund_window_hours' => 'required|integer|min:1|max:720',
+        ]);
+
+        $oldHours = (int) \App\Models\SystemSetting::get('refund_window_hours', 24);
+        $newHours = (int) $validated['refund_window_hours'];
+
+        \App\Models\SystemSetting::set('refund_window_hours', (string) $newHours, 'financial_policy');
+
+        AdminAuditLog::create([
+            'user_id' => $admin->id,
+            'action' => 'refund_window_setting_updated',
+            'target_type' => \App\Models\SystemSetting::class,
+            'target_id' => null,
+            'old_values' => ['refund_window_hours' => $oldHours],
+            'new_values' => ['refund_window_hours' => $newHours],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return redirect()->route('admin.settlements.index')->with('status', "Platform refund window and cashback maturation timer set to {$newHours} hours successfully.");
     }
 
     /**
@@ -2627,6 +2666,7 @@ class PortalController extends Controller
         if ($user) {
             $cashbackSum = CustomerCashbackLedger::where('customer_id', $user->id)
                 ->where('status', 'available')
+                ->where('matures_at', '<=', Carbon::now())
                 ->where('expires_at', '>', Carbon::now())
                 ->sum('amount');
             $availableCashback = number_format((float)$cashbackSum, 2, '.', '');
@@ -2676,7 +2716,7 @@ class PortalController extends Controller
             'redeem_cashback' => 'nullable',
         ]);
 
-        return DB::transaction(function () use ($validated, $request) {
+        $order = DB::transaction(function () use ($validated, $request) {
             // Atomic Stock Locking Guard (Prevents overselling / race conditions)
             $product = Product::with(['shop', 'vendor'])
                 ->where('id', $validated['product_id'])
@@ -2698,9 +2738,14 @@ class PortalController extends Controller
 
             $merchandiseSubtotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
             
-            // Triple Consistency Guard: Shop must belong to product's vendor
+            // Triple Consistency Guard: Shop must belong to product's vendor AND match product branch
             if (!empty($validated['shop_id'])) {
                 $shop = Shop::where('vendor_id', $product->vendor_id)->findOrFail($validated['shop_id']);
+                if ($product->shop_id && (int)$shop->id !== (int)$product->shop_id) {
+                    return back()->withErrors([
+                        'shop_id' => 'Selected shop branch does not stock this product.'
+                    ])->withInput();
+                }
             } else {
                 $shop = $product->shop;
             }
@@ -2793,8 +2838,8 @@ class PortalController extends Controller
                         ->first();
             }
 
-            // PCI-DSS Verified Paystack Reference Initialization
-            $paymentRef = 'pstk_' . time() . '_' . rand(100, 999);
+            // Cryptographic CSPRNG Payment Reference Initialization
+            $paymentRef = Order::generateUniquePaymentReference();
 
             $order = Order::create([
                 'order_number' => $orderNumber,
@@ -2824,6 +2869,7 @@ class PortalController extends Controller
                 'pickup_verification_code' => $pickupOtp,
                 'verification_code' => $deliveryOtp,
                 'vendor_settlement_status' => 'held',
+                'expires_at' => Carbon::now()->addMinutes(30),
             ]);
 
             OrderItem::create([
@@ -2843,17 +2889,24 @@ class PortalController extends Controller
             // Store guest token in session for seamless tracking access
             session(['order_guest_token_' . $orderNumber => $guestAccessToken]);
 
-            // Initialize Paystack Checkout Gateway
-            $paystackService = app(\App\Services\PaystackService::class);
-            $callbackUrl = route('payment.paystack.callback');
-            $paystackInit = $paystackService->initializeTransaction($order, $callbackUrl, $user->email);
-
-            if (!$paystackInit['success'] || empty($paystackInit['authorization_url'])) {
-                throw new \RuntimeException($paystackInit['message'] ?? 'Unable to initialize Paystack payment gateway.');
-            }
-
-            return redirect()->away($paystackInit['authorization_url']);
+            return $order;
         });
+
+        if ($order instanceof \Illuminate\Http\RedirectResponse) {
+            return $order;
+        }
+
+        // Initialize Paystack Checkout Gateway OUTSIDE the DB transaction
+        $paystackService = app(\App\Services\PaystackService::class);
+        $callbackUrl = route('payment.paystack.callback');
+        $paystackInit = $paystackService->initializeTransaction($order, $callbackUrl, Auth::user()->email);
+
+        if (!$paystackInit['success'] || empty($paystackInit['authorization_url'])) {
+            return redirect()->route('order.status', ['order_number' => $order->order_number, 'token' => $order->guest_access_token])
+                ->with('error', $paystackInit['message'] ?? 'Unable to initialize Paystack payment gateway.');
+        }
+
+        return redirect()->away($paystackInit['authorization_url']);
     }
 
     public function createReservation(Request $request)
