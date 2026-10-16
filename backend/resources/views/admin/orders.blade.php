@@ -155,8 +155,8 @@
                             </td>
                             <td>
                                 <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                                    <button type="button" 
-                                        onclick='openAdminAuditModal(@json([
+                                    @php
+                                        $auditModalData = [
                                             'order_number' => $order->order_number,
                                             'status' => ucfirst(str_replace('_', ' ', $order->order_status)),
                                             'customer' => $order->customer->name ?? 'Guest Shopper',
@@ -171,11 +171,14 @@
                                             'rejection_photos' => is_array($order->doorstep_rejection_photos) ? array_map(fn($p) => asset($p), $order->doorstep_rejection_photos) : [],
                                             'item_defects' => $order->items ? $order->items->whereNotNull('defect_photo_path')->map(fn($it) => [
                                                 'name' => $it->product_name,
-                                                'status' => $it->fulfillment_status,
+                                                'status' => $it->item_delivery_status ?? $it->fulfillment_status ?? 'pending',
                                                 'photo' => asset($it->defect_photo_path),
                                             ])->values()->all() : [],
                                             'return_photo' => (isset($order->returnCases) && $order->returnCases->isNotEmpty() && $order->returnCases->first()->vendor_return_photo_path) ? asset($order->returnCases->first()->vendor_return_photo_path) : null,
-                                        ]))'
+                                        ];
+                                    @endphp
+                                    <button type="button" 
+                                        onclick='openAdminAuditModal(@json($auditModalData))'
                                         class="btn-dash btn-dash-primary" 
                                         style="padding: 4px 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; background: #6366F1; border: none; cursor: pointer;">
                                         <span>📸 Visual Proofs</span>

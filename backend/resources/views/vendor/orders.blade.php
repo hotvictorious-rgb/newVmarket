@@ -125,8 +125,8 @@
                                             Courier: <strong>{{ $order->rider->user->name ?? 'Assigned Rider' }}</strong>
                                         </div>
                                         <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
-                                            <button type="button" 
-                                                onclick='openVendorAuditModal(@json([
+                                            @php
+                                                $vendorAuditModalData = [
                                                     'order_number' => $order->order_number,
                                                     'status' => ucfirst(str_replace('_', ' ', $order->order_status)),
                                                     'customer' => $order->customer->name ?? 'Shopper',
@@ -140,11 +140,14 @@
                                                     'rejection_photos' => is_array($order->doorstep_rejection_photos) ? array_map(fn($p) => asset($p), $order->doorstep_rejection_photos) : [],
                                                     'item_defects' => $order->items ? $order->items->whereNotNull('defect_photo_path')->map(fn($it) => [
                                                         'name' => $it->product_name,
-                                                        'status' => $it->fulfillment_status,
+                                                        'status' => $it->item_delivery_status ?? $it->fulfillment_status ?? 'pending',
                                                         'photo' => asset($it->defect_photo_path),
                                                     ])->values()->all() : [],
                                                     'return_photo' => (isset($order->returnCases) && $order->returnCases->isNotEmpty() && $order->returnCases->first()->vendor_return_photo_path) ? asset($order->returnCases->first()->vendor_return_photo_path) : null,
-                                                ]))'
+                                                ];
+                                            @endphp
+                                            <button type="button" 
+                                                onclick='openVendorAuditModal(@json($vendorAuditModalData))'
                                                 style="background: #FFFFFF; border: 1.5px solid #6366F1; color: #4338CA; font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
                                                 <span>📸 Handshake Audit Proofs</span>
                                                 @php
