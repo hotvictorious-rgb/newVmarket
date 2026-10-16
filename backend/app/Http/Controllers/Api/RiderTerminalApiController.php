@@ -17,19 +17,71 @@ class RiderTerminalApiController extends Controller
         $this->settlementService = $settlementService;
     }
 
-    public function dashboard(Request $request): JsonResponse
+    /**
+     * STRICT ZERO-TRUST GUARD & ROLE INVARIANT:
+     * 1. Only users with user_type === 'rider' can access this terminal.
+     *    Logistics companies, vendors, and customers are strictly prohibited.
+     * 2. All riders MUST belong to an active, verified Logistics Company.
+     *    Independent unassigned dispatch is mathematically impossible.
+     */
+    protected function guardRiderWithLogistics(Request $request): ?JsonResponse
     {
         $user = $request->user();
-        if (!$user->isRider()) {
-            return response()->json(['status' => false, 'message' => 'Unauthorized: Only delivery couriers can access this terminal.'], 403);
+        if (!$user || !$user->isRider()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: Only registered delivery couriers can access this terminal. Logistics companies, merchants, and customers are strictly prohibited.',
+            ], 403);
+        }
+
+        if ($user->status !== 'active') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: User account is inactive.',
+            ], 403);
         }
 
         $rider = $user->riderProfile;
         if (!$rider) {
-            return response()->json(['status' => false, 'message' => 'Rider profile not found.'], 404);
+            return response()->json([
+                'status' => false,
+                'message' => 'Rider dispatch profile not found.',
+            ], 404);
         }
 
-        $fleetName = $rider->logisticsCompany ? $rider->logisticsCompany->company_name : 'Sovereign Dispatch Network';
+        if (!$rider->logistics_company_id || !$rider->logisticsCompany) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: Rider is not affiliated with any registered logistics company. All riders must belong to an active logistics company.',
+            ], 403);
+        }
+
+        if (!$rider->is_active) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: Rider dispatch account is inactive or suspended.',
+            ], 403);
+        }
+
+        if ($rider->logisticsCompany->status !== 'active') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: Parent logistics company fleet is currently inactive or suspended.',
+            ], 403);
+        }
+
+        return null;
+    }
+
+    public function dashboard(Request $request): JsonResponse
+    {
+        if ($error = $this->guardRiderWithLogistics($request)) {
+            return $error;
+        }
+
+        $user = $request->user();
+        $rider = $user->riderProfile;
+        $fleetName = $rider->logisticsCompany->company_name;
 
         $activeOrders = Order::where('rider_id', $rider->id)
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
@@ -83,16 +135,11 @@ class RiderTerminalApiController extends Controller
 
     public function toggleDuty(Request $request): JsonResponse
     {
-        $user = $request->user();
-        if (!$user->isRider()) {
-            return response()->json(['status' => false, 'message' => 'Unauthorized: Only delivery couriers can access this terminal.'], 403);
+        if ($error = $this->guardRiderWithLogistics($request)) {
+            return $error;
         }
 
-        $rider = $user->riderProfile;
-        if (!$rider) {
-            return response()->json(['status' => false, 'message' => 'Rider profile not found.'], 404);
-        }
-
+        $rider = $request->user()->riderProfile;
         $rider->is_online = !$rider->is_online;
         $rider->save();
 
@@ -107,16 +154,11 @@ class RiderTerminalApiController extends Controller
 
     public function activeOrders(Request $request): JsonResponse
     {
-        $user = $request->user();
-        if (!$user->isRider()) {
-            return response()->json(['status' => false, 'message' => 'Unauthorized: Only delivery couriers can access this terminal.'], 403);
+        if ($error = $this->guardRiderWithLogistics($request)) {
+            return $error;
         }
 
-        $rider = $user->riderProfile;
-        if (!$rider) {
-            return response()->json(['status' => false, 'message' => 'Rider profile not found.'], 404);
-        }
-
+        $rider = $request->user()->riderProfile;
         $orders = Order::where('rider_id', $rider->id)
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
             ->with(['shop:id,name,address,phone,lga_id', 'customer:id,name,phone'])
@@ -131,16 +173,11 @@ class RiderTerminalApiController extends Controller
 
     public function history(Request $request): JsonResponse
     {
-        $user = $request->user();
-        if (!$user->isRider()) {
-            return response()->json(['status' => false, 'message' => 'Unauthorized: Only delivery couriers can access this terminal.'], 403);
+        if ($error = $this->guardRiderWithLogistics($request)) {
+            return $error;
         }
 
-        $rider = $user->riderProfile;
-        if (!$rider) {
-            return response()->json(['status' => false, 'message' => 'Rider profile not found.'], 404);
-        }
-
+        $rider = $request->user()->riderProfile;
         $history = Order::where('rider_id', $rider->id)
             ->where('order_status', 'delivered')
             ->with(['shop:id,name,address,phone', 'customer:id,name,phone'])
@@ -162,16 +199,11 @@ class RiderTerminalApiController extends Controller
             'otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
         ]);
 
-        $user = $request->user();
-        if (!$user->isRider() || $user->status !== 'active') {
-            return response()->json(['status' => false, 'message' => 'Unauthorized: Active delivery courier access required.'], 403);
+        if ($error = $this->guardRiderWithLogistics($request)) {
+            return $error;
         }
 
-        $rider = $user->riderProfile;
-        if (!$rider || !$rider->is_active) {
-            return response()->json(['status' => false, 'message' => 'Rider account is inactive or suspended.'], 403);
-        }
-
+        $rider = $request->user()->riderProfile;
         $order = Order::findOrFail($validated['order_id']);
 
         if ($order->rider_id && (int)$order->rider_id !== (int)$rider->id) {
@@ -193,16 +225,11 @@ class RiderTerminalApiController extends Controller
             'otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
         ]);
 
-        $user = $request->user();
-        if (!$user->isRider() || $user->status !== 'active') {
-            return response()->json(['status' => false, 'message' => 'Unauthorized: Active delivery courier access required.'], 403);
+        if ($error = $this->guardRiderWithLogistics($request)) {
+            return $error;
         }
 
-        $rider = $user->riderProfile;
-        if (!$rider || !$rider->is_active) {
-            return response()->json(['status' => false, 'message' => 'Rider account is inactive or suspended.'], 403);
-        }
-
+        $rider = $request->user()->riderProfile;
         $order = Order::findOrFail($validated['order_id']);
 
         if ($order->rider_id && (int)$order->rider_id !== (int)$rider->id) {

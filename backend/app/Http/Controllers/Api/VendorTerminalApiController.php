@@ -53,7 +53,7 @@ class VendorTerminalApiController extends Controller
 
         if ($user->isVendorEmployee()) {
             if ($request->header('X-Terminal-Client') === 'vendor_mobile_terminal' || $request->header('X-Required-Role') === 'vendor') {
-                abort(403, 'Access Restricted: Branch employees and counter staff are strictly prohibited from the Merchant Mobile Terminal. Please sign in via the Web Staff Portal (/counter).');
+                abort(403, 'Unauthorized: Access denied.');
             }
             $employee = VendorEmployeeProfile::where('user_id', $user->id)
                 ->with(['vendor', 'shop'])
@@ -76,7 +76,7 @@ class VendorTerminalApiController extends Controller
             ];
         }
 
-        abort(403, 'Unauthorized: Valid vendor or merchant staff credentials required.');
+        abort(403, 'Unauthorized: Access denied.');
     }
 
     /**

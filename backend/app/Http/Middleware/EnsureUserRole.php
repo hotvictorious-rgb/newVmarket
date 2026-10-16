@@ -74,13 +74,19 @@ class EnsureUserRole
             }
         } elseif ($user->user_type === 'rider') {
             $rider = $user->riderProfile;
-            if ($rider && !$rider->is_active) {
+            if (!$rider || !$rider->logistics_company_id || !$rider->logisticsCompany) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+                return redirect()->route('rider.login')->with('error', 'Access terminated: Rider is not affiliated with any logistics company. All riders must belong to an active logistics company.');
+            }
+            if (!$rider->is_active) {
                 Auth::logout();
                 $request->session()->invalidate();
                 $request->session()->regenerateToken();
                 return redirect()->route('rider.login')->with('error', 'Access terminated: Your courier dispatch profile has been deactivated.');
             }
-            if ($rider && $rider->logisticsCompany && $rider->logisticsCompany->status !== 'active') {
+            if ($rider->logisticsCompany->status !== 'active') {
                 Auth::logout();
                 $request->session()->invalidate();
                 $request->session()->regenerateToken();
@@ -126,3 +132,4 @@ class EnsureUserRole
         return 'customer.login';
     }
 }
+

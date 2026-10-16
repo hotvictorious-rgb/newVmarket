@@ -1151,7 +1151,10 @@ class PortalController extends Controller
     public function logisticsRidersPage()
     {
         $company = $this->resolveLogisticsCompany();
-        $activeRiders = RiderProfile::where('is_active', true)->with(['user', 'assignedLga'])->get();
+        $activeRiders = RiderProfile::where('logistics_company_id', $company->id)
+            ->where('is_active', true)
+            ->with(['user', 'assignedLga'])
+            ->get();
 
         return view('logistics.riders', compact('company', 'activeRiders'));
     }
@@ -1780,6 +1783,39 @@ class PortalController extends Controller
 
             return back()->with('status', "Withdrawal request for ₦" . number_format((float)$amount, 2) . " submitted! Super Admin will review and disburse to {$lockedCompany->bank_name} ({$lockedCompany->account_number}).");
         });
+    }
+
+    /**
+     * Interactive Action: Logistics Company disburses earnings from its earned corporate wallet to an assigned courier.
+     * Guaranteed Zero-Sum: Debits company corporate wallet, credits rider wallet.
+     * Only the parent logistics company can pay its riders; cannot pay couriers from other fleets.
+     */
+    public function logisticsPayRider(Request $request)
+    {
+        $company = $this->resolveLogisticsCompany();
+
+        if ($company->status !== 'active') {
+            return back()->with('error', 'Unauthorized: Logistics fleet account is inactive or suspended.');
+        }
+
+        $validated = $request->validate([
+            'rider_id' => 'required|integer|exists:rider_profiles,id',
+            'amount' => 'required|numeric|min:100|max:10000000',
+            'notes' => 'nullable|string|max:255',
+        ]);
+
+        $rider = RiderProfile::with('user')->where('logistics_company_id', $company->id)->findOrFail($validated['rider_id']);
+
+        if (!$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
+            return back()->with('error', 'Disbursement blocked: Courier account is inactive or suspended.');
+        }
+
+        try {
+            $result = $company->disburseToRider($rider, (string)$validated['amount'], $validated['notes'] ?? null, Auth::user());
+            return back()->with('status', $result['message']);
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     /**

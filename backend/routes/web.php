@@ -130,6 +130,7 @@ Route::middleware(['role:logistics_company'])->prefix('logistics')->group(functi
     Route::delete('/collection-points/{id}', [PortalController::class, 'logisticsDeleteCollectionPoint'])->name('logistics.collection_points.delete');
     Route::post('/bank', [PortalController::class, 'logisticsUpdateBank'])->name('logistics.bank.update');
     Route::post('/payout-request', [PortalController::class, 'logisticsRequestPayout'])->name('logistics.payout.request');
+    Route::post('/riders/disburse', [PortalController::class, 'logisticsPayRider'])->name('logistics.riders.disburse');
 });
 
 // 6. Delivery Rider Dispatch Cockpit

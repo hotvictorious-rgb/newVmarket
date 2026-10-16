@@ -598,15 +598,15 @@ class OrderSettlementService
                 $logisticsNetCut = bcmul((string)($lockedOrder->delivery_fee ?? '0.00'), '0.90', 2);
             }
 
-            // Single credit: If corporate fleet company exists, credit company wallet.
-            // If independent rider with no fleet company, credit rider current balance.
-            // Under NO circumstance do both receive the payout.
+            // Closed-Loop Platform Settlement:
+            // 1. If courier belongs to a logistics company, 100% of the delivery proceeds are credited to the accredited Corporate Fleet Wallet.
+            //    The fleet courier is NEVER credited by the platform (only their employer company can pay them).
+            // 2. If courier is an unassigned independent rider, credit rider wallet via domain method.
+            // Under NO circumstance do both receive payout or can a fleet courier be credited directly.
             if ($logisticsCompany && bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
                 $logisticsCompany->creditWallet((string)$logisticsNetCut);
-            } elseif ($targetRider && bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
-                $currentBalance = (string) ($targetRider->current_balance ?? '0.00');
-                $targetRider->current_balance = bcadd($currentBalance, (string)$logisticsNetCut, 2);
-                $targetRider->save();
+            } elseif ($targetRider && !$targetRider->isFleetRider() && bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
+                $targetRider->creditBalance((string)$logisticsNetCut, 'independent_delivery_earning');
             }
 
             // Update/Enqueue 5% Customer Cashback reward with exact refund window maturation lock

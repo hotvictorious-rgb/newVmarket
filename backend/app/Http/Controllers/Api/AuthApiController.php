@@ -48,16 +48,20 @@ class AuthApiController extends Controller
 
     public function login(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'login' => 'required|string', // Accepts email or phone
-            'password' => 'required|string',
-        ]);
+        $loginIdentifier = $request->input('login') ?? $request->input('email');
+        $password = $request->input('password');
 
-        $user = User::where('email', $validated['login'])
-            ->orWhere('phone', $validated['login'])
+        if (!$loginIdentifier || !$password) {
+            throw ValidationException::withMessages([
+                'login' => ['The login (or email) and password fields are required.'],
+            ]);
+        }
+
+        $user = User::where('email', $loginIdentifier)
+            ->orWhere('phone', $loginIdentifier)
             ->first();
 
-        if (!$user || !Hash::check($validated['password'], $user->password)) {
+        if (!$user || !Hash::check($password, $user->password)) {
             throw ValidationException::withMessages([
                 'login' => ['The provided credentials are incorrect.'],
             ]);
@@ -86,19 +90,64 @@ class AuthApiController extends Controller
             ], 403);
         }
 
+        $terminal = $request->input('terminal') ?? $request->header('X-Terminal-Type');
+
+        // STRICT ROLE INVARIANT & PROOF: Rider Operating Terminal
+        // 1. Only users with user_type === 'rider' can log into the rider app.
+        //    Logistics companies, vendors, and customers are strictly prohibited.
+        // 2. All riders MUST belong to a verified, active logistics company.
+        if ($terminal === 'rider') {
+            if ($user->user_type !== 'rider') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Access Denied: Only dispatch riders can authenticate into the Rider Terminal. Logistics company accounts, merchants, and customers must use their designated portals.',
+                ], 403);
+            }
+
+            $rider = $user->riderProfile;
+            if (!$rider || !$rider->logistics_company_id || !$rider->logisticsCompany) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Access Denied: All riders must belong to an active logistics company. Independent unassigned dispatch is strictly prohibited.',
+                ], 403);
+            }
+
+            if (!$rider->is_active) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Access Denied: Rider dispatch account has been suspended or deactivated.',
+                ], 403);
+            }
+
+            if ($rider->logisticsCompany->status !== 'active') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Access Denied: Affiliated logistics company fleet is currently inactive or suspended.',
+                ], 403);
+            }
+        }
+
         $token = $user->createToken('mobile_app_token', [$user->user_type])->plainTextToken;
+
+        $userPayload = [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'user_type' => $user->user_type,
+        ];
+
+        if ($user->user_type === 'rider' && $user->riderProfile && $user->riderProfile->logisticsCompany) {
+            $userPayload['fleet_company'] = $user->riderProfile->logisticsCompany->company_name;
+            $userPayload['vehicle_type'] = $user->riderProfile->vehicle_type;
+            $userPayload['license_plate'] = $user->riderProfile->license_plate;
+        }
 
         return response()->json([
             'status' => true,
             'message' => 'Login successful.',
             'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'user_type' => $user->user_type,
-            ],
+            'user' => $userPayload,
         ]);
     }
 
@@ -106,16 +155,24 @@ class AuthApiController extends Controller
     {
         $user = $request->user();
 
+        $data = [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'user_type' => $user->user_type,
+            'avatar' => $user->avatar,
+        ];
+
+        if ($user->user_type === 'rider' && $user->riderProfile && $user->riderProfile->logisticsCompany) {
+            $data['fleet_company'] = $user->riderProfile->logisticsCompany->company_name;
+            $data['vehicle_type'] = $user->riderProfile->vehicle_type;
+            $data['license_plate'] = $user->riderProfile->license_plate;
+        }
+
         return response()->json([
             'status' => true,
-            'data' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'user_type' => $user->user_type,
-                'avatar' => $user->avatar,
-            ],
+            'data' => $data,
         ]);
     }
 }

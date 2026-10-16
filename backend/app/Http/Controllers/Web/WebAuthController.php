@@ -607,13 +607,18 @@ class WebAuthController extends Controller
             }
         }
 
-        if ($user->user_type === 'rider' && $user->riderProfile) {
+        if ($user->user_type === 'rider') {
+            if (!$user->riderProfile || !$user->riderProfile->logistics_company_id || !$user->riderProfile->logisticsCompany) {
+                throw ValidationException::withMessages([
+                    'login' => ['Access disabled: Rider is not affiliated with any logistics company. All riders must belong to an active logistics company.'],
+                ]);
+            }
             if (!$user->riderProfile->is_active) {
                 throw ValidationException::withMessages([
                     'login' => ['Your courier dispatch profile is currently deactivated.'],
                 ]);
             }
-            if ($user->riderProfile->logisticsCompany && $user->riderProfile->logisticsCompany->status !== 'active') {
+            if ($user->riderProfile->logisticsCompany->status !== 'active') {
                 throw ValidationException::withMessages([
                     'login' => ['Access disabled: Parent logistics fleet is currently inactive or suspended.'],
                 ]);
@@ -635,3 +640,4 @@ class WebAuthController extends Controller
         return redirect()->route('storefront')->with('status', 'You have been successfully signed out.');
     }
 }
+
