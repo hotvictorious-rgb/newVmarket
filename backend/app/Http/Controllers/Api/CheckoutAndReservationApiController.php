@@ -382,18 +382,28 @@ class CheckoutAndReservationApiController extends Controller
             $shop = Shop::findOrFail($reservation->shop_id);
             $merchandiseSubtotal = $reservation->estimated_total;
 
-            // Optional cashback redemption
+            // Optional cashback redemption with pessimistic balance reservation
             $cashbackApplied = '0.00';
             if ($request->boolean('use_cashback') || $request->boolean('redeem_cashback')) {
-                $availableCashback = CustomerCashbackLedger::where('customer_id', $user->id)
+                $now = Carbon::now();
+                $availableLotsSum = CustomerCashbackLedger::where('customer_id', $user->id)
                     ->where('status', 'available')
-                    ->where('matures_at', '<=', Carbon::now())
-                    ->where('expires_at', '>', Carbon::now())
+                    ->where('matures_at', '<=', $now)
+                    ->where('expires_at', '>', $now)
+                    ->lockForUpdate()
                     ->sum('amount');
 
-                $availableStr = number_format((float)$availableCashback, 2, '.', '');
-                $maxRedemption = BcMathService::mul($merchandiseSubtotal, '0.50');
-                $cashbackApplied = BcMathService::comp($availableStr, $maxRedemption) > 0 ? $maxRedemption : $availableStr;
+                $activeReservedSum = \App\Models\CashbackReservation::where('customer_id', $user->id)
+                    ->where('status', 'reserved')
+                    ->where('expires_at', '>', $now)
+                    ->lockForUpdate()
+                    ->sum('amount');
+
+                $effectiveAvailable = bcsub((string)$availableLotsSum, (string)$activeReservedSum, 2);
+                if (bccomp($effectiveAvailable, '0.00', 2) > 0) {
+                    $maxRedemption = BcMathService::mul($merchandiseSubtotal, '0.50');
+                    $cashbackApplied = bccomp($effectiveAvailable, $maxRedemption) > 0 ? $maxRedemption : $effectiveAvailable;
+                }
             }
 
             $totalPayable = BcMathService::sub($merchandiseSubtotal, $cashbackApplied);
@@ -431,6 +441,17 @@ class CheckoutAndReservationApiController extends Controller
                 'vendor_settlement_status' => 'held',
                 'expires_at' => Carbon::now()->addMinutes(30),
             ]);
+
+            // Atomic Cashback Pre-Payment Reservation
+            if (bccomp($cashbackApplied, '0.00', 2) > 0) {
+                \App\Models\CashbackReservation::create([
+                    'customer_id' => $user->id,
+                    'order_id' => $order->id,
+                    'amount' => $cashbackApplied,
+                    'status' => 'reserved',
+                    'expires_at' => Carbon::now()->addMinutes(30),
+                ]);
+            }
 
             // Deduct inventory & create order item
             $product->decrement('inventory_quantity', $reservation->quantity);

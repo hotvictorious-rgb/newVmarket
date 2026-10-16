@@ -173,18 +173,28 @@ class CustomerOrderApiController extends Controller
                 $collectionPointId = $availability['collection_point_id'] ?? null;
             }
 
-            // Cashback Redemption Check
+            // Cashback Redemption Check under Pessimistic Balance Reservation
             $cashbackApplied = '0.00';
             if (!empty($validated['redeem_cashback'])) {
-                $availableCashback = CustomerCashbackLedger::where('customer_id', $user->id)
+                $now = Carbon::now();
+                $availableLotsSum = CustomerCashbackLedger::where('customer_id', $user->id)
                     ->where('status', 'available')
-                    ->where('matures_at', '<=', Carbon::now())
-                    ->where('expires_at', '>', Carbon::now())
+                    ->where('matures_at', '<=', $now)
+                    ->where('expires_at', '>', $now)
+                    ->lockForUpdate()
                     ->sum('amount');
 
-                $availableCashbackStr = number_format((float)$availableCashback, 2, '.', '');
-                $maxRedemption = BcMathService::mul($merchandiseSubtotal, '0.50');
-                $cashbackApplied = BcMathService::comp($availableCashbackStr, $maxRedemption) > 0 ? $maxRedemption : $availableCashbackStr;
+                $activeReservedSum = \App\Models\CashbackReservation::where('customer_id', $user->id)
+                    ->where('status', 'reserved')
+                    ->where('expires_at', '>', $now)
+                    ->lockForUpdate()
+                    ->sum('amount');
+
+                $effectiveAvailable = bcsub((string)$availableLotsSum, (string)$activeReservedSum, 2);
+                if (bccomp($effectiveAvailable, '0.00', 2) > 0) {
+                    $maxRedemption = BcMathService::mul($merchandiseSubtotal, '0.50');
+                    $cashbackApplied = bccomp($effectiveAvailable, $maxRedemption) > 0 ? $maxRedemption : $effectiveAvailable;
+                }
             }
 
             // Mathematical Splits (90% Vendor Net, 5% Margin, 5% Cashback)
@@ -274,6 +284,17 @@ class CustomerOrderApiController extends Controller
                 'vendor_settlement_status' => 'held',
                 'expires_at' => Carbon::now()->addMinutes(30),
             ]);
+
+            // Atomic Cashback Pre-Payment Reservation
+            if (bccomp($cashbackApplied, '0.00', 2) > 0) {
+                \App\Models\CashbackReservation::create([
+                    'customer_id' => $user->id,
+                    'order_id' => $order->id,
+                    'amount' => $cashbackApplied,
+                    'status' => 'reserved',
+                    'expires_at' => Carbon::now()->addMinutes(30),
+                ]);
+            }
 
             // Deduct inventory and insert items
             foreach ($itemsToCreate as $itemData) {

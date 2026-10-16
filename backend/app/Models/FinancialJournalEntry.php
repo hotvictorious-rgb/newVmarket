@@ -39,7 +39,23 @@ class FinancialJournalEntry extends Model
      */
     public static function assertOrderBalanced(int $orderId): bool
     {
-        $entries = static::where('order_id', $orderId)->get();
+        $order = Order::find($orderId);
+        if (!$order) {
+            return false;
+        }
+
+        // If child order, pivot to parent order to inspect complete multi-vendor cluster
+        if ($order->parent_order_id) {
+            $orderId = $order->parent_order_id;
+            $order = Order::find($orderId);
+        }
+
+        $orderIds = [$orderId];
+        if ($order && $order->children()->exists()) {
+            $orderIds = array_merge($orderIds, $order->children()->pluck('id')->toArray());
+        }
+
+        $entries = static::whereIn('order_id', $orderIds)->get();
 
         $debits = '0.00';
         $credits = '0.00';

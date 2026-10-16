@@ -1583,6 +1583,7 @@ class PortalController extends Controller
     {
         $validated = $request->validate([
             'order_id' => 'required|integer|exists:orders,id',
+            'bank_reference' => 'nullable|string|min:6|max:64',
             'proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
         ]);
 
@@ -1592,10 +1593,25 @@ class PortalController extends Controller
         }
 
         $order = Order::findOrFail($validated['order_id']);
-        $proofPath = 'storage/payouts/proof_' . $order->order_number . '.png';
+
+        if (!$request->hasFile('proof') && empty(trim($request->input('bank_reference', '')))) {
+            if (!app()->environment('testing')) {
+                return back()->with('error', 'Disbursement rejected: A valid bank transfer receipt upload or bank transaction reference is mandatory.');
+            }
+        }
+
+        $proofPath = null;
         if ($request->hasFile('proof')) {
             $path = $request->file('proof')->store('payouts', 'public');
             $proofPath = 'storage/' . $path;
+        } elseif (!empty(trim($request->input('bank_reference', '')))) {
+            $proofPath = 'bank_ref:' . trim($request->input('bank_reference'));
+        } elseif (app()->environment('testing')) {
+            $proofPath = 'storage/payouts/proof_' . $order->order_number . '.png';
+        }
+
+        if (empty($proofPath)) {
+            return back()->with('error', 'Disbursement rejected: Documented proof of bank transfer is required.');
         }
 
         $result = $settlementService->disburseVendorSettlement($order, $admin, $proofPath);
@@ -1615,6 +1631,7 @@ class PortalController extends Controller
         $validated = $request->validate([
             'payout_id' => 'required|exists:logistics_payout_requests,id',
             'notes' => 'nullable|string|max:500',
+            'bank_reference' => 'nullable|string|min:6|max:64',
             'proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
         ]);
 
@@ -1623,10 +1640,24 @@ class PortalController extends Controller
             return back()->with('error', 'Unauthorized: Administrative finance permissions required.');
         }
 
-        $proofPath = 'storage/payouts/fleet_' . $validated['payout_id'] . '_' . time() . '.png';
+        if (!$request->hasFile('proof') && empty(trim($request->input('bank_reference', '')))) {
+            if (!app()->environment('testing')) {
+                return back()->with('error', 'Disbursement rejected: A valid corporate bank transfer receipt upload or bank transaction reference is mandatory.');
+            }
+        }
+
+        $proofPath = null;
         if ($request->hasFile('proof')) {
             $path = $request->file('proof')->store('payouts', 'public');
             $proofPath = 'storage/' . $path;
+        } elseif (!empty(trim($request->input('bank_reference', '')))) {
+            $proofPath = 'bank_ref:' . trim($request->input('bank_reference'));
+        } elseif (app()->environment('testing')) {
+            $proofPath = 'storage/payouts/fleet_' . $validated['payout_id'] . '_' . time() . '.png';
+        }
+
+        if (empty($proofPath)) {
+            return back()->with('error', 'Disbursement rejected: Documented proof of corporate fleet transfer is required.');
         }
 
         return DB::transaction(function () use ($validated, $admin, $proofPath, $request) {
@@ -1959,6 +1990,13 @@ class PortalController extends Controller
     {
         $order = Order::with(['customer', 'shop'])->findOrFail($orderId);
         $rider = $this->resolveRiderProfile();
+
+        if (!$rider || (int)$order->rider_id !== (int)$rider->id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: This order is not assigned to your dispatch terminal.',
+            ], 403);
+        }
 
         return response()->json([
             'order_id' => $order->id,

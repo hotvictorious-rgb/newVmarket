@@ -19,6 +19,12 @@ use InvalidArgumentException;
 
 class OrderSettlementService
 {
+    protected PaystackService $paystackService;
+
+    public function __construct(?PaystackService $paystackService = null)
+    {
+        $this->paystackService = $paystackService ?? app(PaystackService::class);
+    }
     /**
      * Authoritative Paystack Order Settlement Core.
      * Enforces pessimistic locking, actor IDOR check, exact kobo invariant,
@@ -218,6 +224,23 @@ class OrderSettlementService
                 // Invariant: ZERO new cashback reward is accrued for unfulfilled orders
                 // Invariant: ZERO merchant, logistics, or platform cut is distributed
 
+                // Release any pre-payment cashback reservation
+                \App\Models\CashbackReservation::where('order_id', $lockedOrder->id)
+                    ->where('status', 'reserved')
+                    ->update(['status' => 'released']);
+
+                // Invoke automated Paystack refund API
+                $refundRes = $this->paystackService->initiateRefund(
+                    $reference,
+                    (string)$lockedOrder->grand_total,
+                    "Automated refund for out-of-stock/cancelled Order #{$lockedOrder->order_number}"
+                );
+
+                if (!empty($refundRes['success']) && !empty($refundRes['refund_reference'])) {
+                    $lockedOrder->paystack_refund_reference = $refundRes['refund_reference'];
+                    $lockedOrder->save();
+                }
+
                 AdminAuditLog::create([
                     'user_id' => $lockedOrder->customer_id,
                     'action' => 'paystack_settlement_refund_pending_recorded',
@@ -229,6 +252,7 @@ class OrderSettlementService
                         'payment_status' => 'paid',
                         'vendor_settlement_status' => 'refund_pending',
                         'refund_liability_amount' => $lockedOrder->grand_total,
+                        'paystack_refund_reference' => $lockedOrder->paystack_refund_reference,
                     ],
                     'ip_address' => request()->ip() ?? '127.0.0.1',
                     'user_agent' => request()->userAgent(),
@@ -238,7 +262,7 @@ class OrderSettlementService
                     'success' => true,
                     'status' => 'REFUND_PENDING',
                     'is_refund_only' => true,
-                    'message' => 'Order was cancelled prior to payment and inventory is depleted. 100% of payment held in escrow as customer refund liability.',
+                    'message' => 'Order was cancelled prior to payment and inventory is depleted. 100% of payment held in escrow as customer refund liability and automated refund requested.',
                     'order' => $lockedOrder,
                 ];
             }
@@ -307,85 +331,191 @@ class OrderSettlementService
                             $remainingToDeduct = '0.00';
                         }
                     }
+
+                    // Transition reservation to consumed
+                    \App\Models\CashbackReservation::where('order_id', $lockedOrder->id)
+                        ->where('status', 'reserved')
+                        ->update(['status' => 'consumed']);
                 }
             }
 
-            // Credit: Vendor Payable (90% Merchandise Net)
-            FinancialJournalEntry::create([
-                'order_id' => $lockedOrder->id,
-                'transaction_reference' => $reference,
-                'event_id' => 'EVT-VND-ESCROW-' . $reference,
-                'beneficiary_type' => VendorProfile::class,
-                'beneficiary_id' => $lockedOrder->vendor_id,
-                'account_name' => 'vendor_payable',
-                'entry_type' => 'credit',
-                'amount' => $lockedOrder->vendor_net_90,
-                'currency' => 'NGN',
-                'description' => "Merchant 90% Net Payable held in escrow for Order #{$lockedOrder->order_number}",
-            ]);
+            // Check if this is a Multi-Vendor Parent Order with child orders
+            $childOrders = $lockedOrder->children()->get();
+            if ($childOrders->count() > 0) {
+                // Settle each child vendor order for their own merchandise subtotal only (Delivery fee excluded)
+                foreach ($childOrders as $child) {
+                    $child->payment_status = 'paid';
+                    $child->order_status = 'confirmed';
+                    $child->paid_at = $now;
+                    $child->save();
 
-            // Credit: Logistics Payable (90% Delivery Net)
-            if (bccomp((string)$lockedOrder->logistics_fee_retained, '0.00', 2) > 0) {
+                    // Credit: Vendor Payable for Child Vendor (90% Merchandise Net)
+                    FinancialJournalEntry::create([
+                        'order_id' => $child->id,
+                        'transaction_reference' => $reference,
+                        'event_id' => 'EVT-VND-ESCROW-' . $child->id . '-' . $reference,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $child->vendor_id,
+                        'account_name' => 'vendor_payable',
+                        'entry_type' => 'credit',
+                        'amount' => $child->vendor_net_90,
+                        'currency' => 'NGN',
+                        'description' => "Merchant 90% Net Payable held in escrow for Child Order #{$child->order_number} (Vendor #{$child->vendor_id})",
+                    ]);
+
+                    // Credit: Customer Cashback Liability (5% Merchandise Split for Child Order)
+                    if (bccomp((string)$child->customer_cashback_5, '0.00', 2) > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $child->id,
+                            'transaction_reference' => $reference,
+                            'event_id' => 'EVT-CB-ACCRUE-' . $child->id . '-' . $reference,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => $child->customer_id,
+                            'account_name' => 'cashback_liability',
+                            'entry_type' => 'credit',
+                            'amount' => $child->customer_cashback_5,
+                            'currency' => 'NGN',
+                            'description' => "Customer 5% Cashback Reward Liability accrued for Child Order #{$child->order_number}",
+                        ]);
+
+                        CustomerCashbackLedger::updateOrCreate([
+                            'order_id' => $child->id,
+                        ], [
+                            'customer_id' => $child->customer_id,
+                            'amount' => $child->customer_cashback_5,
+                            'status' => 'pending_maturation',
+                            'matures_at' => Carbon::now()->addDays(365),
+                            'expires_at' => Carbon::now()->addDays(730),
+                        ]);
+                    }
+
+                    // Credit: Platform Merchandise Revenue (5% Commercial Cut for Child Order)
+                    if (bccomp((string)$child->platform_margin_5, '0.00', 2) > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $child->id,
+                            'transaction_reference' => $reference,
+                            'event_id' => 'EVT-PLATFORM-REV-' . $child->id . '-' . $reference,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => null,
+                            'account_name' => 'platform_revenue',
+                            'entry_type' => 'credit',
+                            'amount' => $child->platform_margin_5,
+                            'currency' => 'NGN',
+                            'description' => "Victorious Market 5% Merchandise Commission for Child Order #{$child->order_number}",
+                        ]);
+                    }
+                }
+
+                // Credit: Logistics Payable (90% Delivery Net from parent order delivery fee)
+                if (bccomp((string)$lockedOrder->logistics_fee_retained, '0.00', 2) > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $lockedOrder->id,
+                        'transaction_reference' => $reference,
+                        'event_id' => 'EVT-FLEET-ESCROW-' . $reference,
+                        'beneficiary_type' => LogisticsCompanyProfile::class,
+                        'beneficiary_id' => $lockedOrder->logistics_company_id,
+                        'account_name' => 'logistics_payable',
+                        'entry_type' => 'credit',
+                        'amount' => $lockedOrder->logistics_fee_retained,
+                        'currency' => 'NGN',
+                        'description' => "Logistics Fleet 90% Net Payable held for Order #{$lockedOrder->order_number}",
+                    ]);
+                }
+
+                // Credit: Platform Delivery Fee Revenue (10% Delivery Cut from parent order)
+                if (bccomp((string)$lockedOrder->platform_delivery_fee, '0.00', 2) > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $lockedOrder->id,
+                        'transaction_reference' => $reference,
+                        'event_id' => 'EVT-PLATFORM-DELIVERY-REV-' . $reference,
+                        'beneficiary_type' => User::class,
+                        'beneficiary_id' => null,
+                        'account_name' => 'platform_revenue',
+                        'entry_type' => 'credit',
+                        'amount' => $lockedOrder->platform_delivery_fee,
+                        'currency' => 'NGN',
+                        'description' => "Victorious Market 10% Delivery Fee Retained for Order #{$lockedOrder->order_number}",
+                    ]);
+                }
+            } else {
+                // Standard Single-Vendor Order Path:
+                // Credit: Vendor Payable (90% Merchandise Net)
                 FinancialJournalEntry::create([
                     'order_id' => $lockedOrder->id,
                     'transaction_reference' => $reference,
-                    'event_id' => 'EVT-FLEET-ESCROW-' . $reference,
-                    'beneficiary_type' => LogisticsCompanyProfile::class,
-                    'beneficiary_id' => $lockedOrder->logistics_company_id,
-                    'account_name' => 'logistics_payable',
+                    'event_id' => 'EVT-VND-ESCROW-' . $reference,
+                    'beneficiary_type' => VendorProfile::class,
+                    'beneficiary_id' => $lockedOrder->vendor_id,
+                    'account_name' => 'vendor_payable',
                     'entry_type' => 'credit',
-                    'amount' => $lockedOrder->logistics_fee_retained,
+                    'amount' => $lockedOrder->vendor_net_90,
                     'currency' => 'NGN',
-                    'description' => "Logistics Fleet 90% Net Payable held for Order #{$lockedOrder->order_number}",
+                    'description' => "Merchant 90% Net Payable held in escrow for Order #{$lockedOrder->order_number}",
                 ]);
-            }
 
-            // Credit: Customer Cashback Liability (5% Merchandise Split)
-            if (bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
-                FinancialJournalEntry::create([
-                    'order_id' => $lockedOrder->id,
-                    'transaction_reference' => $reference,
-                    'event_id' => 'EVT-CB-ACCRUE-' . $reference,
-                    'beneficiary_type' => User::class,
-                    'beneficiary_id' => $lockedOrder->customer_id,
-                    'account_name' => 'cashback_liability',
-                    'entry_type' => 'credit',
-                    'amount' => $lockedOrder->customer_cashback_5,
-                    'currency' => 'NGN',
-                    'description' => "Customer 5% Cashback Reward Liability accrued for Order #{$lockedOrder->order_number}",
-                ]);
-            }
+                // Credit: Logistics Payable (90% Delivery Net)
+                if (bccomp((string)$lockedOrder->logistics_fee_retained, '0.00', 2) > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $lockedOrder->id,
+                        'transaction_reference' => $reference,
+                        'event_id' => 'EVT-FLEET-ESCROW-' . $reference,
+                        'beneficiary_type' => LogisticsCompanyProfile::class,
+                        'beneficiary_id' => $lockedOrder->logistics_company_id,
+                        'account_name' => 'logistics_payable',
+                        'entry_type' => 'credit',
+                        'amount' => $lockedOrder->logistics_fee_retained,
+                        'currency' => 'NGN',
+                        'description' => "Logistics Fleet 90% Net Payable held for Order #{$lockedOrder->order_number}",
+                    ]);
+                }
 
-            // Credit: Platform Revenue (5% Margin + 10% Delivery Cut)
-            $platformTotalCut = bcadd((string)$lockedOrder->platform_margin_5, (string)$lockedOrder->platform_delivery_fee, 2);
-            if (bccomp($platformTotalCut, '0.00', 2) > 0) {
-                FinancialJournalEntry::create([
-                    'order_id' => $lockedOrder->id,
-                    'transaction_reference' => $reference,
-                    'event_id' => 'EVT-PLATFORM-REV-' . $reference,
-                    'beneficiary_type' => User::class,
-                    'beneficiary_id' => null,
-                    'account_name' => 'platform_revenue',
-                    'entry_type' => 'credit',
-                    'amount' => $platformTotalCut,
-                    'currency' => 'NGN',
-                    'description' => "Victorious Market Gross Retained Commission for Order #{$lockedOrder->order_number}",
-                ]);
-            }
+                // Credit: Customer Cashback Liability (5% Merchandise Split)
+                if (bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $lockedOrder->id,
+                        'transaction_reference' => $reference,
+                        'event_id' => 'EVT-CB-ACCRUE-' . $reference,
+                        'beneficiary_type' => User::class,
+                        'beneficiary_id' => $lockedOrder->customer_id,
+                        'account_name' => 'cashback_liability',
+                        'entry_type' => 'credit',
+                        'amount' => $lockedOrder->customer_cashback_5,
+                        'currency' => 'NGN',
+                        'description' => "Customer 5% Cashback Reward Liability accrued for Order #{$lockedOrder->order_number}",
+                    ]);
+                }
 
-            // 11. Register 5% Customer Cashback Reward in Ledger
-            // Invariant: Cashback is strictly NOT redeemable at payment!
-            // Maturation countdown commences ONLY upon physical delivery / counter handover inspection.
-            if ($lockedOrder->customer_id && bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
-                CustomerCashbackLedger::updateOrCreate([
-                    'order_id' => $lockedOrder->id,
-                ], [
-                    'customer_id' => $lockedOrder->customer_id,
-                    'amount' => $lockedOrder->customer_cashback_5,
-                    'status' => 'pending_maturation',
-                    'matures_at' => Carbon::now()->addDays(365), // Locked until confirmed delivery/pickup!
-                    'expires_at' => Carbon::now()->addDays(730),
-                ]);
+                // Credit: Platform Revenue (5% Margin + 10% Delivery Cut)
+                $platformTotalCut = bcadd((string)$lockedOrder->platform_margin_5, (string)$lockedOrder->platform_delivery_fee, 2);
+                if (bccomp($platformTotalCut, '0.00', 2) > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $lockedOrder->id,
+                        'transaction_reference' => $reference,
+                        'event_id' => 'EVT-PLATFORM-REV-' . $reference,
+                        'beneficiary_type' => User::class,
+                        'beneficiary_id' => null,
+                        'account_name' => 'platform_revenue',
+                        'entry_type' => 'credit',
+                        'amount' => $platformTotalCut,
+                        'currency' => 'NGN',
+                        'description' => "Victorious Market Gross Retained Commission for Order #{$lockedOrder->order_number}",
+                    ]);
+                }
+
+                // 11. Register 5% Customer Cashback Reward in Ledger
+                // Invariant: Cashback is strictly NOT redeemable at payment!
+                // Maturation countdown commences ONLY upon physical delivery / counter handover inspection.
+                if ($lockedOrder->customer_id && bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
+                    CustomerCashbackLedger::updateOrCreate([
+                        'order_id' => $lockedOrder->id,
+                    ], [
+                        'customer_id' => $lockedOrder->customer_id,
+                        'amount' => $lockedOrder->customer_cashback_5,
+                        'status' => 'pending_maturation',
+                        'matures_at' => Carbon::now()->addDays(365), // Locked until confirmed delivery/pickup!
+                        'expires_at' => Carbon::now()->addDays(730),
+                    ]);
+                }
             }
 
             // 10. Immutable Audit Trail

@@ -59,6 +59,17 @@ class Order extends Model
         'settled_by_admin_id',
         'settlement_proof_path',
         'expires_at',
+        'paystack_refund_reference',
+    ];
+
+    /**
+     * Sensitive security fields hidden from default array and JSON serialization.
+     * Prevents unintentional leakage to couriers, third parties, or logging inspectors.
+     */
+    protected $hidden = [
+        'verification_code',
+        'pickup_verification_code',
+        'guest_access_token',
     ];
 
     protected $casts = [
@@ -196,6 +207,21 @@ class Order extends Model
     public function dispute()
     {
         return $this->hasOne(DisputeAndReturn::class);
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(Order::class, 'parent_order_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(Order::class, 'parent_order_id');
+    }
+
+    public function cashbackReservation()
+    {
+        return $this->hasOne(CashbackReservation::class);
     }
 
     public function journalEntries()

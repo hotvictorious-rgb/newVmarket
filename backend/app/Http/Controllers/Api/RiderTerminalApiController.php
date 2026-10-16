@@ -118,7 +118,7 @@ class RiderTerminalApiController extends Controller
                     'shift_status' => (bool)$rider->is_online ? 'ON DUTY' : 'OFF DUTY',
                     'assigned_corridor' => $rider->assignedLga->name ?? 'Metropolitan Dispatch Zone',
                 ],
-                'active_orders' => $activeOrdersList,
+                'active_orders' => $activeOrdersList->map(fn($o) => $this->formatOrderForRider($o)),
             ],
         ]);
     }
@@ -157,7 +157,7 @@ class RiderTerminalApiController extends Controller
         return response()->json([
             'status' => true,
             'message' => 'Active assignments retrieved.',
-            'data' => $orders,
+            'data' => $orders->map(fn($o) => $this->formatOrderForRider($o)),
         ]);
     }
 
@@ -178,8 +178,51 @@ class RiderTerminalApiController extends Controller
         return response()->json([
             'status' => true,
             'message' => 'Delivery history retrieved.',
-            'data' => $history,
+            'data' => $history->map(fn($o) => $this->formatOrderForRider($o)),
         ]);
+    }
+
+    /**
+     * Format Order for Rider Terminal projection.
+     * ZERO LEAKAGE: Never exposes verification_code (Delivery OTP), guest_access_token, or pickup_verification_code.
+     */
+    private function formatOrderForRider(Order $order): array
+    {
+        return [
+            'id' => $order->id,
+            'order_number' => $order->order_number,
+            'fulfillment_type' => $order->fulfillment_type,
+            'order_status' => $order->order_status,
+            'payment_status' => $order->payment_status,
+            'delivery_fee' => $order->delivery_fee,
+            'vendor_handover_ready_at' => $order->vendor_handover_ready_at ? $order->vendor_handover_ready_at->toIso8601String() : null,
+            'pickup_confirmed_by_rider' => (bool)$order->pickup_confirmed_by_rider,
+            'picked_up_at' => $order->picked_up_at ? $order->picked_up_at->toIso8601String() : null,
+            'rider_arrived_at' => $order->rider_arrived_at ? $order->rider_arrived_at->toIso8601String() : null,
+            'received_at' => $order->received_at ? $order->received_at->toIso8601String() : null,
+            'created_at' => $order->created_at ? $order->created_at->toIso8601String() : null,
+            'shop' => $order->shop ? [
+                'id' => $order->shop->id,
+                'name' => $order->shop->name,
+                'address' => $order->shop->address,
+                'phone' => $order->shop->phone,
+                'lga_id' => $order->shop->lga_id,
+            ] : null,
+            'customer' => $order->customer ? [
+                'id' => $order->customer->id,
+                'name' => $order->customer->name,
+                'phone' => $order->customer->phone,
+            ] : null,
+            'destination_lga' => $order->destinationLga ? [
+                'id' => $order->destinationLga->id,
+                'name' => $order->destinationLga->name,
+            ] : null,
+            'items' => $order->items ? $order->items->map(fn($item) => [
+                'id' => $item->id,
+                'product_name' => $item->product_name,
+                'quantity' => $item->quantity,
+            ])->values()->all() : [],
+        ];
     }
 
     public function verifyPickupOtp(Request $request): JsonResponse

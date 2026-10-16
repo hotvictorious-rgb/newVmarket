@@ -67,6 +67,11 @@ class PaystackPaymentController extends Controller
                 ->with('error', 'Payment settlement error: ' . $settlement['message']);
         }
 
+        if (($settlement['status'] ?? '') === 'REFUND_PENDING' || $order->fresh()->vendor_settlement_status === 'refund_pending') {
+            return redirect()->route('order.status', ['order_number' => $order->order_number, 'token' => $order->guest_access_token])
+                ->with('warning', 'Order was cancelled due to inventory depletion before payment was verified. A full refund of ₦' . number_format((float)$order->grand_total, 2) . ' has been initiated to your bank account.');
+        }
+
         $successMsg = ($settlement['status'] === 'ALREADY_PAID')
             ? 'Payment previously verified and confirmed.'
             : 'Payment verified successfully! Your order is now active.';
