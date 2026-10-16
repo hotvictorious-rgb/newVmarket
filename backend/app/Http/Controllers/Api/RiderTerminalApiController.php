@@ -93,7 +93,7 @@ class RiderTerminalApiController extends Controller
 
         $activeOrdersList = Order::where('rider_id', $rider->id)
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
-            ->with(['shop:id,name,address,phone,lga_id', 'customer:id,name,phone'])
+            ->with(['shop:id,name,address,phone,lga_id', 'customer:id,name,phone', 'items:id,order_id,product_name,quantity', 'destinationLga:id,name'])
             ->get();
 
         return response()->json([
@@ -151,7 +151,7 @@ class RiderTerminalApiController extends Controller
         $rider = $request->user()->riderProfile;
         $orders = Order::where('rider_id', $rider->id)
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
-            ->with(['shop:id,name,address,phone,lga_id', 'customer:id,name,phone'])
+            ->with(['shop:id,name,address,phone,lga_id', 'customer:id,name,phone', 'items:id,order_id,product_name,quantity', 'destinationLga:id,name'])
             ->get();
 
         return response()->json([
@@ -170,7 +170,7 @@ class RiderTerminalApiController extends Controller
         $rider = $request->user()->riderProfile;
         $history = Order::where('rider_id', $rider->id)
             ->where('order_status', 'delivered')
-            ->with(['shop:id,name,address,phone', 'customer:id,name,phone'])
+            ->with(['shop:id,name,address,phone', 'customer:id,name,phone', 'items:id,order_id,product_name,quantity', 'destinationLga:id,name'])
             ->orderBy('updated_at', 'desc')
             ->take(30)
             ->get();
