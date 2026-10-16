@@ -504,9 +504,9 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
     }
 
     /**
-     * Test 6: Customer Change of Mind triggers 50/50 return delivery split.
+     * Test 6: Customer Change of Mind requires customer to pay 100% of delivery fee.
      */
-    public function test_customer_change_of_mind_50_50_split(): void
+    public function test_customer_change_of_mind_pays_100_percent_delivery_fee(): void
     {
         [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
 
@@ -524,7 +524,12 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
 
         $returnCase = ReturnCase::where('order_id', $order->id)->firstOrFail();
         $this->assertEquals('customer_change_of_mind', $returnCase->rejection_category);
-        $this->assertEquals('customer_50_vendor_50', $returnCase->cost_allocation);
+        $this->assertEquals('customer_100', $returnCase->cost_allocation);
+
+        // Verify customer wallet credit: ₦15,000 rejected item minus 100% delivery fee (₦1,500) = ₦13,500.00
+        $credit = CustomerWalletCredit::where('customer_id', $this->customer->id)->first();
+        $this->assertNotNull($credit);
+        $this->assertEquals(13500.00, (float)$credit->amount);
     }
 
     /**

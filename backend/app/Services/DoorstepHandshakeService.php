@@ -197,13 +197,12 @@ class DoorstepHandshakeService
 
                 // Calculate Customer Instant Wallet Credit
                 if ($predominantRejectionCategory === 'customer_change_of_mind') {
-                    // Customer pays 50% return delivery fee, vendor absorbs 50%
-                    $fiftyPercentReturnFee = bcmul($deliveryFee, '0.5000', 2);
-                    $netCustomerCredit = BcMathService::comp($totalRejectedMerchandise, $fiftyPercentReturnFee) > 0
-                        ? BcMathService::sub($totalRejectedMerchandise, $fiftyPercentReturnFee)
-                        : $totalRejectedMerchandise;
+                    // Customer changed mind on correctly delivered goods: Customer pays 100% of delivery fee
+                    $netCustomerCredit = BcMathService::comp($totalRejectedMerchandise, $deliveryFee) > 0
+                        ? BcMathService::sub($totalRejectedMerchandise, $deliveryFee)
+                        : '0.00';
                     $customerRefundWalletAmount = $netCustomerCredit;
-                    $returnCase->cost_allocation = 'customer_50_vendor_50';
+                    $returnCase->cost_allocation = 'customer_100';
                 } elseif ($predominantRejectionCategory === 'transit_damage') {
                     // Transit damage: Vendor 90% payout protected; Courier company absorbs liability
                     $customerRefundWalletAmount = $totalRejectedMerchandise;
@@ -522,8 +521,8 @@ class DoorstepHandshakeService
 
             // Financial Adjustment based on ruling
             if ($ruling === 'uphold_vendor_dispute') {
-                // Vendor dispute upheld: Merchant is innocent. Customer or courier at fault.
-                $lockedCase->cost_allocation = 'customer_50_vendor_50';
+                // Vendor dispute upheld: Merchant is innocent. Customer pays 100% of delivery fee.
+                $lockedCase->cost_allocation = 'customer_100';
             } elseif ($ruling === 'uphold_customer_claim') {
                 // Customer claim upheld: Vendor fault confirmed.
                 $lockedCase->cost_allocation = 'vendor_100';

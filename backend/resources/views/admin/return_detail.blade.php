@@ -197,7 +197,7 @@
                                 @elseif($case->rejection_category === 'transit_damage')
                                     <strong style="color: #D97706;">Transit Damage (Courier Mishap)</strong>
                                 @elseif($case->rejection_category === 'customer_change_of_mind')
-                                    <strong style="color: #2563EB;">Customer Change of Mind (50/50 Split)</strong>
+                                    <strong style="color: #2563EB;">Customer Change of Mind (Customer Pays 100% Delivery Fee)</strong>
                                 @else
                                     <strong>{{ ucfirst(str_replace('_', ' ', $case->rejection_category ?? 'Standard')) }}</strong>
                                 @endif
@@ -622,7 +622,7 @@
                         <div>
                             <strong style="font-size: 13px; color: var(--adm-text);">1. Uphold Vendor Dispute (Merchant Protected)</strong>
                             <div style="font-size: 11.5px; color: var(--adm-text-muted); margin-top: 2px;">
-                                Vendor packaged goods correctly. Condition altered after delivery or by transit mishandling. Return delivery fee split 50/50.
+                                Vendor packaged goods correctly. Condition altered after delivery or customer unboxing. Customer absorbs 100% of delivery fee.
                             </div>
                         </div>
                     </label>
