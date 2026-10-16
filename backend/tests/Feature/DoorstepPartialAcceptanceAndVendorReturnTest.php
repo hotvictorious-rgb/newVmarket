@@ -166,6 +166,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'is_in_stock' => true,
             'is_approved' => true,
             'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now(),
         ]);
 
         $this->kettle = Product::create([
@@ -180,6 +181,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'is_in_stock' => true,
             'is_approved' => true,
             'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now(),
         ]);
 
         // 5. Customer
@@ -204,6 +206,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'vendor_id' => $this->vendorProfile->id,
             'shop_id' => $this->shop->id,
             'rider_id' => $this->riderProfile->id,
+            'logistics_company_id' => $this->logisticsCompany->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'out_for_delivery',
             'payment_status' => 'paid',
@@ -591,4 +594,319 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $response->assertSee('Arbitrate Vendor Return Dispute');
         $response->assertSee('Customer opened sealed carton and broke power plug.');
     }
+
+    /**
+     * Test 9: 100% Doorstep Rejection updates Order Status to 'returned' (Gap 3 Fix).
+     */
+    public function test_100_percent_doorstep_rejection_updates_order_status_to_returned(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+            'order_id' => $order->id,
+            'otp' => '719283',
+            'manifest_items' => [
+                [
+                    'order_item_id' => $item1->id,
+                    'accepted_quantity' => 0,
+                    'rejected_quantity' => 1,
+                    'rejection_category' => 'vendor_issue',
+                    'rejection_notes' => 'Damaged carton sent by vendor',
+                ],
+                [
+                    'order_item_id' => $item2->id,
+                    'accepted_quantity' => 0,
+                    'rejected_quantity' => 1,
+                    'rejection_category' => 'customer_change_of_mind',
+                    'rejection_notes' => 'Customer no longer needs the electric kettle',
+                ],
+            ],
+        ]);
+
+        $response->assertStatus(200);
+
+        $order->refresh();
+        $this->assertEquals('returned', $order->order_status, 'Order status must be returned when 100% of items are rejected.');
+        $this->assertNull($order->received_at, 'Received at must remain null when zero items are accepted.');
+        $this->assertTrue((bool)$order->delivery_confirmed_by_customer);
+
+        // Verify ReturnCase created
+        $returnCase = ReturnCase::where('order_id', $order->id)->firstOrFail();
+        $this->assertEquals('in_transit_back_to_vendor', $returnCase->status);
+        $this->assertNotNull($returnCase->vendor_return_otp);
+    }
+
+    /**
+     * Test 10: Rider logs Delivery Attempt Failure #1 (phone unreachable, order remains out_for_delivery).
+     */
+    public function test_rider_failed_delivery_attempt_first_attempt_allows_redispatch(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->postJson('/api/v1/rider/orders/delivery-attempt-failed', [
+            'order_id' => $order->id,
+            'reason' => 'customer_unreachable',
+            'notes' => 'Customer phone switched off. Gate security says resident is away.',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'status' => true,
+            'data' => [
+                'order_id' => $order->id,
+                'attempt_count' => 1,
+                'reason' => 'customer_unreachable',
+                'max_attempts_reached' => false,
+                'order_status' => 'out_for_delivery',
+            ],
+        ]);
+
+        $order->refresh();
+        $this->assertEquals(1, $order->delivery_attempt_count);
+        $this->assertEquals('customer_unreachable', $order->delivery_failure_reason);
+        $this->assertEquals('out_for_delivery', $order->order_status);
+        $this->assertNotNull($order->last_delivery_attempt_at);
+    }
+
+    /**
+     * Test 11: Rider logs Delivery Attempt Failure #2 (max attempts reached -> converts to return-to-vendor).
+     */
+    public function test_rider_failed_delivery_attempt_max_attempts_converts_to_vendor_return(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+        $order->delivery_attempt_count = 1;
+        $order->save();
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->postJson('/api/v1/rider/orders/delivery-attempt-failed', [
+            'order_id' => $order->id,
+            'reason' => 'gate_locked',
+            'notes' => 'Second attempt failed. Estate gate locked and customer number not connecting.',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'status' => true,
+            'data' => [
+                'order_id' => $order->id,
+                'attempt_count' => 2,
+                'reason' => 'gate_locked',
+                'max_attempts_reached' => true,
+                'order_status' => 'returned',
+            ],
+        ]);
+
+        $order->refresh();
+        $this->assertEquals(2, $order->delivery_attempt_count);
+        $this->assertEquals('returned', $order->order_status);
+
+        // Verify ReturnCase created with vendor return OTP
+        $returnCase = ReturnCase::where('order_id', $order->id)->firstOrFail();
+        $this->assertEquals('delivery_failed_unreachable', $returnCase->source);
+        $this->assertEquals('customer_unreachable', $returnCase->rejection_category);
+        $this->assertEquals('in_transit_back_to_vendor', $returnCase->status);
+        $this->assertNotNull($returnCase->vendor_return_otp);
+
+        // Verify Customer Wallet Refund Credit created for merchandise (₦45,000)
+        $credit = CustomerWalletCredit::where('order_id', $order->id)->firstOrFail();
+        $this->assertEquals(0, bccomp('45000.00', (string)$credit->amount, 2));
+        $this->assertEquals('available', $credit->status);
+
+        // Verify Logistics Courier delivery fee credited (90% of ₦1,500 = ₦1,350)
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'logistics_payable',
+            'amount' => '1350.00',
+            'entry_type' => 'credit',
+        ]);
+    }
+
+    /**
+     * Test 12: Standard Checkout with 100% Refund Wallet Credit completes without Paystack.
+     */
+    public function test_standard_checkout_with_100_percent_wallet_credit_completes_without_paystack(): void
+    {
+        // Give customer ₦50,000 in spendable refund wallet credits
+        CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'amount' => '50000.00',
+            'credit_type' => 'doorstep_refund_credit',
+            'status' => 'available',
+            'notes' => 'Initial refund wallet balance',
+        ]);
+
+        $customerAddress = \App\Models\CustomerAddress::create([
+            'user_id' => $this->customer->id,
+            'contact_name' => 'Emeka Shopper',
+            'phone' => '+2348011223344',
+            'address_line' => '42 Ikot Ekpene Road',
+            'country_id' => $this->uyoLga->state->country_id,
+            'lga_id' => $this->uyoLga->id,
+            'state_id' => $this->uyoLga->state_id,
+            'is_default' => true,
+        ]);
+
+        // In-shop pickup checkout for Kettle (₦15,000)
+        Sanctum::actingAs($this->customer);
+        $response = $this->postJson('/api/v1/customer/orders/checkout', [
+            'shop_id' => $this->shop->id,
+            'fulfillment_type' => 'in_shop_pickup',
+            'items' => [
+                ['product_id' => $this->kettle->id, 'quantity' => 1],
+            ],
+            'redeem_wallet_credit' => true,
+        ]);
+
+        $response->assertStatus(201);
+        $response->assertJson([
+            'status' => true,
+            'data' => [
+                'grand_total' => '0.00',
+                'payment_method' => 'wallet_credit',
+                'payment_status' => 'paid',
+                'wallet_credit_applied' => '15000.00',
+                'paystack' => null,
+            ],
+        ]);
+
+        // Verify order is immediately marked as paid and confirmed
+        $order = Order::where('customer_id', $this->customer->id)->latest('id')->firstOrFail();
+        $this->assertEquals('paid', $order->payment_status);
+        $this->assertEquals('confirmed', $order->order_status);
+        $this->assertEquals('wallet_credit', $order->payment_method);
+        $this->assertEquals('15000.00', (string)$order->wallet_credit_applied);
+        $this->assertEquals('0.00', (string)$order->grand_total);
+
+        // Verify remaining wallet balance is ₦35,000.00
+        $remainingBalance = CustomerWalletCredit::getAvailableBalance($this->customer->id);
+        $this->assertEquals('35000.00', $remainingBalance);
+
+        // Verify Double-Entry Journal balances exactly
+        $debits = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
+        $credits = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
+        $this->assertEquals('15000.00', number_format((float)$debits, 2, '.', ''));
+        $this->assertEquals('15000.00', number_format((float)$credits, 2, '.', ''));
+    }
+
+    /**
+     * Test 13: Two-Phase Checkout Intent with Wallet Credit calculation.
+     */
+    public function test_checkout_intent_with_redeem_wallet_credit(): void
+    {
+        CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'amount' => '10000.00',
+            'credit_type' => 'doorstep_refund_credit',
+            'status' => 'available',
+        ]);
+
+        $customerAddress = \App\Models\CustomerAddress::create([
+            'user_id' => $this->customer->id,
+            'contact_name' => 'Emeka Shopper',
+            'phone' => '+2348011223344',
+            'address_line' => '42 Ikot Ekpene Road',
+            'country_id' => $this->uyoLga->state->country_id,
+            'lga_id' => $this->uyoLga->id,
+            'state_id' => $this->uyoLga->state_id,
+            'is_default' => true,
+        ]);
+
+        Sanctum::actingAs($this->customer);
+        $response = $this->postJson('/api/v1/checkout/intent', [
+            'shop_id' => $this->shop->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'customer_address_id' => $customerAddress->id,
+            'items' => [
+                ['product_id' => $this->blender->id, 'quantity' => 1],
+            ],
+            'redeem_wallet_credit' => true,
+        ]);
+
+        $response->assertStatus(201);
+        $response->assertJson([
+            'status' => true,
+            'data' => [
+                'merchandise_subtotal' => '30000.00',
+                'delivery_fee' => '500.00',
+                'wallet_credit_applied' => '10000.00',
+                'total_payable' => '20500.00',
+            ],
+        ]);
+    }
+
+    /**
+     * Test 14: Partial Wallet Credit Checkout with Paystack Gateway Verification balances double-entry books.
+     */
+    public function test_partial_wallet_credit_checkout_with_paystack_verification(): void
+    {
+        CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'amount' => '10000.00',
+            'credit_type' => 'doorstep_refund_credit',
+            'status' => 'available',
+        ]);
+
+        $customerAddress = \App\Models\CustomerAddress::create([
+            'user_id' => $this->customer->id,
+            'contact_name' => 'Emeka Shopper',
+            'phone' => '+2348011223344',
+            'address_line' => '42 Ikot Ekpene Road',
+            'country_id' => $this->uyoLga->state->country_id,
+            'lga_id' => $this->uyoLga->id,
+            'state_id' => $this->uyoLga->state_id,
+            'is_default' => true,
+        ]);
+
+        Sanctum::actingAs($this->customer);
+        $checkoutRes = $this->postJson('/api/v1/customer/orders/checkout', [
+            'shop_id' => $this->shop->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'customer_address_id' => $customerAddress->id,
+            'items' => [
+                ['product_id' => $this->blender->id, 'quantity' => 1],
+            ],
+            'redeem_wallet_credit' => true,
+            'payment_method' => 'paystack',
+        ]);
+
+        $checkoutRes->assertStatus(201);
+        $orderNumber = $checkoutRes->json('data.order_number');
+        $this->assertEquals('20500.00', $checkoutRes->json('data.grand_total'));
+        $this->assertEquals('10000.00', $checkoutRes->json('data.wallet_credit_applied'));
+
+        $order = Order::where('order_number', $orderNumber)->firstOrFail();
+        $this->assertEquals('pending', $order->payment_status);
+
+        // Simulate successful Paystack server-to-server gateway callback/verification
+        $settlementService = app(\App\Services\OrderSettlementService::class);
+        $paystackPayload = [
+            'status' => 'success',
+            'amount' => 2050000, // 20,500.00 NGN in Kobo
+            'currency' => 'NGN',
+            'reference' => $order->payment_reference,
+            'channel' => 'card',
+            'id' => 9918231,
+            'customer' => ['email' => $this->customer->email],
+        ];
+
+        $settleResult = $settlementService->settlePaystackOrder($order, $paystackPayload, $this->customer);
+        $this->assertTrue($settleResult['success']);
+
+        $order->refresh();
+        $this->assertEquals('paid', $order->payment_status);
+        $this->assertEquals('confirmed', $order->order_status);
+
+        // Verify customer wallet was spent
+        $remainingWallet = CustomerWalletCredit::getAvailableBalance($this->customer->id);
+        $this->assertEquals('0.00', $remainingWallet);
+
+        // Verify Double-Entry Journal balances exactly (₦30,500 debits == ₦30,500 credits)
+        $debits = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
+        $credits = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
+        $this->assertEquals('30500.00', number_format((float)$debits, 2, '.', ''));
+        $this->assertEquals('30500.00', number_format((float)$credits, 2, '.', ''));
+    }
 }
+

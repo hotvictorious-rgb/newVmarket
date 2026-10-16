@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\CheckoutIntent;
 use App\Models\CustomerAddress;
 use App\Models\CustomerCashbackLedger;
+use App\Models\CustomerWalletCredit;
 use App\Models\DeliveryLane;
 use App\Models\DisputeAndReturn;
+use App\Models\FinancialJournalEntry;
 use App\Models\LogisticsCollectionPoint;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -108,7 +110,8 @@ class CustomerOrderApiController extends Controller
             'items.*.product_id' => 'required|integer|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
             'redeem_cashback' => 'nullable|boolean',
-            'payment_method' => 'nullable|string|in:paystack',
+            'redeem_wallet_credit' => 'nullable|boolean',
+            'payment_method' => 'nullable|string|in:paystack,wallet_credit',
         ]);
 
         $user = $request->user();
@@ -209,7 +212,24 @@ class CustomerOrderApiController extends Controller
             $logisticsNet90 = BcMathService::mul($deliveryFee, '0.90');
             $platformDelivery10 = BcMathService::mul($deliveryFee, '0.10');
 
-            $grandTotal = BcMathService::add(BcMathService::sub($merchandiseSubtotal, $cashbackApplied), $deliveryFee);
+            // Instant Refund Wallet Credit redemption (100% spendable, covers up to 100% of order payable)
+            $subtotalAfterCashback = BcMathService::sub($merchandiseSubtotal, $cashbackApplied);
+            $totalBeforeWallet = BcMathService::add($subtotalAfterCashback, $deliveryFee);
+
+            $walletCreditApplied = '0.00';
+            if (!empty($validated['redeem_wallet_credit'])) {
+                $availableWallet = CustomerWalletCredit::getAvailableBalance($user->id);
+                $walletCreditApplied = BcMathService::comp($availableWallet, $totalBeforeWallet) > 0
+                    ? $totalBeforeWallet
+                    : $availableWallet;
+            }
+
+            $grandTotal = BcMathService::sub($totalBeforeWallet, $walletCreditApplied);
+            $isFullyWalletPaid = (BcMathService::comp($grandTotal, '0.00') === 0);
+            $paymentMethod = $isFullyWalletPaid ? 'wallet_credit' : ($validated['payment_method'] ?? 'paystack');
+            $orderStatus = $isFullyWalletPaid ? 'confirmed' : 'pending';
+            $paymentStatus = $isFullyWalletPaid ? 'paid' : 'pending';
+            $paidAt = $isFullyWalletPaid ? Carbon::now() : null;
 
             // Assign active accredited courier from fleet if collection point assigned
             $rider = null;
@@ -254,7 +274,6 @@ class CustomerOrderApiController extends Controller
 
             $orderNumber = 'VM-' . date('Ymd') . '-' . strtoupper(Str::random(4));
             $paymentRef = Order::generateUniquePaymentReference();
-            $paymentMethod = $validated['payment_method'] ?? 'paystack';
 
             $order = Order::create([
                 'order_number' => $orderNumber,
@@ -265,8 +284,9 @@ class CustomerOrderApiController extends Controller
                 'rider_id' => $rider ? $rider->id : null,
                 'logistics_company_id' => $logisticsCompanyId,
                 'fulfillment_type' => $validated['fulfillment_type'],
-                'order_status' => 'pending',
-                'payment_status' => 'pending',
+                'order_status' => $orderStatus,
+                'payment_status' => $paymentStatus,
+                'paid_at' => $paidAt,
                 'payment_method' => $paymentMethod,
                 'payment_reference' => $paymentRef,
                 'guest_access_token' => bin2hex(random_bytes(32)),
@@ -276,6 +296,7 @@ class CustomerOrderApiController extends Controller
                 'merchandise_subtotal' => $merchandiseSubtotal,
                 'delivery_fee' => $deliveryFee,
                 'cashback_redeemed' => $cashbackApplied,
+                'wallet_credit_applied' => $walletCreditApplied,
                 'grand_total' => $grandTotal,
                 'vendor_net_90' => $vendorNet90,
                 'customer_cashback_5' => $customerCashback5,
@@ -294,7 +315,7 @@ class CustomerOrderApiController extends Controller
                     'customer_id' => $user->id,
                     'order_id' => $order->id,
                     'amount' => $cashbackApplied,
-                    'status' => 'reserved',
+                    'status' => $isFullyWalletPaid ? 'consumed' : 'reserved',
                     'expires_at' => Carbon::now()->addMinutes(30),
                 ]);
             }
@@ -315,6 +336,129 @@ class CustomerOrderApiController extends Controller
                 ]);
             }
 
+            // If order is 100% paid via wallet credit, settle double-entry books immediately!
+            if ($isFullyWalletPaid) {
+                CustomerWalletCredit::spendWalletBalance($user->id, $order->id, $walletCreditApplied);
+
+                // Debit: Customer Wallet Liability
+                FinancialJournalEntry::create([
+                    'order_id' => $order->id,
+                    'transaction_reference' => $paymentRef,
+                    'event_id' => 'EVT-WALLET-FULL-' . $paymentRef,
+                    'beneficiary_type' => \App\Models\User::class,
+                    'beneficiary_id' => $user->id,
+                    'account_name' => 'customer_wallet_liability',
+                    'entry_type' => 'debit',
+                    'amount' => $walletCreditApplied,
+                    'currency' => 'NGN',
+                    'description' => "100% Wallet refund credit redemption for Order #{$order->order_number}",
+                ]);
+
+                // Debit: Cashback Liability Redeemed (if any)
+                if (bccomp($cashbackApplied, '0.00', 2) > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $paymentRef,
+                        'event_id' => 'EVT-CB-RED-' . $paymentRef,
+                        'beneficiary_type' => \App\Models\User::class,
+                        'beneficiary_id' => $user->id,
+                        'account_name' => 'cashback_liability',
+                        'entry_type' => 'debit',
+                        'amount' => $cashbackApplied,
+                        'currency' => 'NGN',
+                        'description' => "Customer cashback redeemed for Order #{$order->order_number}",
+                    ]);
+                }
+
+                // Credit: Vendor Payable (90% Merchandise Net)
+                FinancialJournalEntry::create([
+                    'order_id' => $order->id,
+                    'transaction_reference' => $paymentRef,
+                    'event_id' => 'EVT-VND-ESCROW-' . $order->id . '-' . $paymentRef,
+                    'beneficiary_type' => \App\Models\VendorProfile::class,
+                    'beneficiary_id' => $shop->vendor_id,
+                    'account_name' => 'vendor_payable',
+                    'entry_type' => 'credit',
+                    'amount' => $vendorNet90,
+                    'currency' => 'NGN',
+                    'description' => "Merchant 90% Net Payable held in escrow for Order #{$order->order_number}",
+                ]);
+
+                // Credit: Customer Cashback Liability (5% Merchandise Split)
+                if (bccomp($customerCashback5, '0.00', 2) > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $paymentRef,
+                        'event_id' => 'EVT-CB-ACCRUE-' . $order->id . '-' . $paymentRef,
+                        'beneficiary_type' => \App\Models\User::class,
+                        'beneficiary_id' => $user->id,
+                        'account_name' => 'cashback_liability',
+                        'entry_type' => 'credit',
+                        'amount' => $customerCashback5,
+                        'currency' => 'NGN',
+                        'description' => "Customer 5% Cashback Reward Liability accrued for Order #{$order->order_number}",
+                    ]);
+
+                    CustomerCashbackLedger::updateOrCreate([
+                        'order_id' => $order->id,
+                    ], [
+                        'customer_id' => $user->id,
+                        'amount' => $customerCashback5,
+                        'status' => 'pending_maturation',
+                        'matures_at' => Carbon::now()->addDays(365),
+                        'expires_at' => Carbon::now()->addDays(730),
+                    ]);
+                }
+
+                // Credit: Platform Revenue (5% Merchandise Cut)
+                if (bccomp($platformMargin5, '0.00', 2) > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $paymentRef,
+                        'event_id' => 'EVT-PLT-REV-' . $order->id . '-' . $paymentRef,
+                        'beneficiary_type' => \App\Models\User::class,
+                        'beneficiary_id' => null,
+                        'account_name' => 'platform_revenue',
+                        'entry_type' => 'credit',
+                        'amount' => $platformMargin5,
+                        'currency' => 'NGN',
+                        'description' => "Victorious Market 5% Platform Revenue Commission for Order #{$order->order_number}",
+                    ]);
+                }
+
+                // Credit: Logistics Fleet Payable (90% Delivery Net)
+                if (bccomp($logisticsNet90, '0.00', 2) > 0 && $logisticsCompanyId) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $paymentRef,
+                        'event_id' => 'EVT-LOG-ESCROW-' . $order->id . '-' . $paymentRef,
+                        'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                        'beneficiary_id' => $logisticsCompanyId,
+                        'account_name' => 'logistics_payable',
+                        'entry_type' => 'credit',
+                        'amount' => $logisticsNet90,
+                        'currency' => 'NGN',
+                        'description' => "Logistics 90% Delivery Fee held in escrow for Order #{$order->order_number}",
+                    ]);
+                }
+
+                // Credit: Platform Delivery Commission (10% Delivery Cut)
+                if (bccomp($platformDelivery10, '0.00', 2) > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $paymentRef,
+                        'event_id' => 'EVT-PLT-DELIV-' . $order->id . '-' . $paymentRef,
+                        'beneficiary_type' => \App\Models\User::class,
+                        'beneficiary_id' => null,
+                        'account_name' => 'platform_revenue',
+                        'entry_type' => 'credit',
+                        'amount' => $platformDelivery10,
+                        'currency' => 'NGN',
+                        'description' => "Victorious Market 10% Delivery Logistics Platform Fee for Order #{$order->order_number}",
+                    ]);
+                }
+            }
+
             return ['error' => false, 'order' => $order];
         });
 
@@ -327,20 +471,26 @@ class CustomerOrderApiController extends Controller
 
         $order = $result['order'];
 
-        // Initialize Paystack Checkout Transaction OUTSIDE the DB transaction (releases locks immediately)
-        $callbackUrl = route('storefront') . '?order_success=' . $order->order_number;
+        // Initialize Paystack Checkout Transaction OUTSIDE the DB transaction (only if cash payable > ₦0.00)
         $paystackInit = null;
-        if ($order->payment_method === 'paystack') {
+        if ($order->payment_method === 'paystack' && bccomp((string)$order->grand_total, '0.00', 2) > 0) {
+            $callbackUrl = route('storefront') . '?order_success=' . $order->order_number;
             $paystackInit = $this->paystackService->initializeTransaction($order, $callbackUrl, $user->email);
         }
 
+        $message = ($order->payment_status === 'paid')
+            ? 'Order created and paid in full with refund wallet credit.'
+            : 'Order created successfully. Proceed to payment.';
+
         return response()->json([
             'status' => true,
-            'message' => 'Order created successfully. Proceed to payment.',
+            'message' => $message,
             'data' => [
                 'order_number' => $order->order_number,
                 'grand_total' => $order->grand_total,
                 'payment_method' => $order->payment_method,
+                'payment_status' => $order->payment_status,
+                'wallet_credit_applied' => $order->wallet_credit_applied,
                 'paystack' => $paystackInit,
                 'order' => $this->formatOrderFull($order),
             ],

@@ -339,6 +339,31 @@ class OrderSettlementService
                 }
             }
 
+            // Debit: Customer Wallet Liability Redeemed (if customer applied instant refund wallet credit)
+            if (bccomp((string)$lockedOrder->wallet_credit_applied, '0.00', 2) > 0) {
+                FinancialJournalEntry::create([
+                    'order_id' => $lockedOrder->id,
+                    'transaction_reference' => $reference,
+                    'event_id' => 'EVT-WALLET-RED-' . $reference,
+                    'beneficiary_type' => User::class,
+                    'beneficiary_id' => $lockedOrder->customer_id,
+                    'account_name' => 'customer_wallet_liability',
+                    'entry_type' => 'debit',
+                    'amount' => $lockedOrder->wallet_credit_applied,
+                    'currency' => 'NGN',
+                    'description' => "Customer refund wallet credit redeemed for Order #{$lockedOrder->order_number}",
+                ]);
+
+                // Atomically spend customer wallet balance
+                if ($lockedOrder->customer_id) {
+                    \App\Models\CustomerWalletCredit::spendWalletBalance(
+                        $lockedOrder->customer_id,
+                        $lockedOrder->id,
+                        (string)$lockedOrder->wallet_credit_applied
+                    );
+                }
+            }
+
             // Check if this is a Multi-Vendor Parent Order with child orders
             $childOrders = $lockedOrder->children()->get();
             if ($childOrders->count() > 0) {

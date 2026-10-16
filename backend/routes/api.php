@@ -119,7 +119,9 @@ Route::prefix('v1')->group(function () {
             Route::post('toggle-duty', [RiderTerminalApiController::class, 'toggleDuty']);
             Route::get('orders/active', [RiderTerminalApiController::class, 'activeOrders']);
             Route::get('orders/history', [RiderTerminalApiController::class, 'history']);
+            Route::get('returns/active', [RiderTerminalApiController::class, 'activeReturns']);
             Route::post('orders/mark-arrived', [RiderTerminalApiController::class, 'markArrived']);
+            Route::post('orders/delivery-attempt-failed', [RiderTerminalApiController::class, 'recordDeliveryAttemptFailed']);
             Route::post('orders/verify-pickup-otp', [RiderTerminalApiController::class, 'verifyPickupOtp']);
             Route::post('orders/verify-delivery-otp', [RiderTerminalApiController::class, 'verifyDeliveryOtp']);
             Route::post('orders/doorstep-handover', [RiderTerminalApiController::class, 'doorstepHandover']);

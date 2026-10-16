@@ -341,10 +341,11 @@ class DoorstepHandshakeService
             ]);
 
             // 8. Update Order Lifecycle
-            $lockedOrder->order_status = 'delivered';
+            $orderStatus = BcMathService::comp($totalAcceptedMerchandise, '0.00') > 0 ? 'delivered' : 'returned';
+            $lockedOrder->order_status = $orderStatus;
             $lockedOrder->delivery_confirmed_by_customer = true;
-            $lockedOrder->received_at = $now;
-            $lockedOrder->refund_window_expires_at = $now->copy()->addHours($refundHours);
+            $lockedOrder->received_at = BcMathService::comp($totalAcceptedMerchandise, '0.00') > 0 ? $now : null;
+            $lockedOrder->refund_window_expires_at = BcMathService::comp($totalAcceptedMerchandise, '0.00') > 0 ? $now->copy()->addHours($refundHours) : null;
             $lockedOrder->proof_of_delivery_image = $doorstepPhotoPath;
             $lockedOrder->save();
 
@@ -356,7 +357,7 @@ class DoorstepHandshakeService
                 'target_id' => $lockedOrder->id,
                 'old_values' => ['order_status' => 'out_for_delivery'],
                 'new_values' => [
-                    'order_status' => 'delivered',
+                    'order_status' => $orderStatus,
                     'accepted_merchandise' => $totalAcceptedMerchandise,
                     'rejected_merchandise' => $totalRejectedMerchandise,
                     'return_case_id' => $returnCase?->id,

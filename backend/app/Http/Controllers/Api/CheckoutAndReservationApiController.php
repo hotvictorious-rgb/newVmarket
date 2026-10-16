@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CheckoutIntent;
 use App\Models\CustomerAddress;
 use App\Models\CustomerCashbackLedger;
+use App\Models\CustomerWalletCredit;
 use App\Models\DeliveryLane;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -47,6 +48,7 @@ class CheckoutAndReservationApiController extends Controller
             'items.*.product_id' => 'required|integer|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
             'redeem_cashback' => 'nullable|boolean',
+            'redeem_wallet_credit' => 'nullable|boolean',
         ]);
 
         $user = $request->user();
@@ -102,7 +104,7 @@ class CheckoutAndReservationApiController extends Controller
             $deliveryFee = $availability['fee'];
         }
 
-        // Customer Cashback Redemption check
+        // Customer Cashback Redemption check (50% merchandise cap, 24h maturation)
         $cashbackApplied = '0.00';
         if (!empty($validated['redeem_cashback'])) {
             $availableCashback = CustomerCashbackLedger::where('customer_id', $user->id)
@@ -117,7 +119,19 @@ class CheckoutAndReservationApiController extends Controller
             $cashbackApplied = BcMathService::comp($availableCashbackStr, $maxRedemption) > 0 ? $maxRedemption : $availableCashbackStr;
         }
 
-        $totalPayable = BcMathService::add(BcMathService::sub($merchandiseSubtotal, $cashbackApplied), $deliveryFee);
+        // Customer Instant Refund Wallet Credit redemption (100% spendable, covers up to 100% of order payable)
+        $subtotalAfterCashback = BcMathService::sub($merchandiseSubtotal, $cashbackApplied);
+        $totalBeforeWallet = BcMathService::add($subtotalAfterCashback, $deliveryFee);
+
+        $walletCreditApplied = '0.00';
+        if (!empty($validated['redeem_wallet_credit'])) {
+            $availableWallet = CustomerWalletCredit::getAvailableBalance($user->id);
+            $walletCreditApplied = BcMathService::comp($availableWallet, $totalBeforeWallet) > 0
+                ? $totalBeforeWallet
+                : $availableWallet;
+        }
+
+        $totalPayable = BcMathService::sub($totalBeforeWallet, $walletCreditApplied);
 
         $payload = [
             'user_id' => $user->id,
@@ -128,6 +142,7 @@ class CheckoutAndReservationApiController extends Controller
             'merchandise_subtotal' => $merchandiseSubtotal,
             'delivery_fee' => $deliveryFee,
             'cashback_applied' => $cashbackApplied,
+            'wallet_credit_applied' => $walletCreditApplied,
             'total_payable' => $totalPayable,
             'timestamp' => Carbon::now()->timestamp,
         ];
@@ -143,6 +158,7 @@ class CheckoutAndReservationApiController extends Controller
             'merchandise_subtotal' => $merchandiseSubtotal,
             'delivery_fee' => $deliveryFee,
             'cashback_applied' => $cashbackApplied,
+            'wallet_credit_applied' => $walletCreditApplied,
             'total_payable' => $totalPayable,
             'payload_snapshot' => $payload,
             'status' => 'pending',
@@ -158,6 +174,7 @@ class CheckoutAndReservationApiController extends Controller
                 'merchandise_subtotal' => $intent->merchandise_subtotal,
                 'delivery_fee' => $intent->delivery_fee,
                 'cashback_applied' => $intent->cashback_applied,
+                'wallet_credit_applied' => $intent->wallet_credit_applied,
                 'total_payable' => $intent->total_payable,
                 'expires_at' => $intent->expires_at->toIso8601String(),
             ],
