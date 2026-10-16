@@ -38,13 +38,15 @@ class SecurityHeadersMiddleware
             ? ' http://127.0.0.1:8080 http://localhost:8080 http://localhost:3000'
             : '';
 
+        $evalDirective = !$isProduction ? " 'unsafe-eval'" : "";
+
         // Content Security Policy
         $csp = "default-src 'self' 'unsafe-inline'{$devHosts}; "
             . "style-src 'self' 'unsafe-inline'{$devHosts} https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
             . "font-src 'self' data:{$devHosts} https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
             . "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://checkout.paystack.com; "
             . "img-src 'self' data: blob:{$devHosts} https://img.youtube.com https://images.unsplash.com https:; "
-            . "script-src 'self' 'unsafe-inline' 'unsafe-eval'{$devHosts} https://js.paystack.co https://cdnjs.cloudflare.com; "
+            . "script-src 'self' 'unsafe-inline'{$evalDirective}{$devHosts} https://js.paystack.co https://cdnjs.cloudflare.com; "
             . "connect-src 'self'{$devHosts} https://api.paystack.co;";
 
         $response->headers->set('Content-Security-Policy', $csp);

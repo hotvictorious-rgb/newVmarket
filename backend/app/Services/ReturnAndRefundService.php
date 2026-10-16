@@ -213,14 +213,28 @@ class ReturnAndRefundService
             // 7. Attach Evidence
             foreach ($evidencePaths as $ev) {
                 $rawPath = is_array($ev) ? ($ev['path'] ?? '') : (string)$ev;
-                if (str_contains($rawPath, '..') || str_starts_with($rawPath, '/') || str_starts_with($rawPath, '\\')) {
+                if (empty($rawPath) || str_contains($rawPath, '..') || str_starts_with($rawPath, '/') || str_starts_with($rawPath, '\\')) {
                     continue; // Skip directory traversal / local paths
                 }
+
+                // Enforce allowed upload directory prefix
+                $allowedPrefixes = ['evidence/', 'returns/', 'photos/', 'storage/'];
+                $isAllowedPrefix = false;
+                foreach ($allowedPrefixes as $prefix) {
+                    if (str_starts_with($rawPath, $prefix)) {
+                        $isAllowedPrefix = true;
+                        break;
+                    }
+                }
+                if (!$isAllowedPrefix) {
+                    continue;
+                }
+
                 ReturnEvidence::create([
                     'return_case_id' => $returnCase->id,
                     'uploaded_by_id' => $customer->id,
                     'uploaded_by_role' => 'customer',
-                    'file_path' => is_array($ev) ? ($ev['path'] ?? '') : (string)$ev,
+                    'file_path' => $rawPath,
                     'evidence_type' => is_array($ev) ? ($ev['type'] ?? 'photo') : 'photo',
                     'caption' => is_array($ev) ? ($ev['caption'] ?? null) : null,
                 ]);
@@ -405,13 +419,21 @@ class ReturnAndRefundService
             }
 
             // Check instant doorstep wallet credit constraints (Finding 5)
-            $walletCredit = CustomerWalletCredit::where('return_case_id', $lockedCase->id)->first();
-            if ($walletCredit && in_array($walletCredit->status, ['redeemed', 'spent'], true)) {
+            // Guard against both fully and partially redeemed credits (partial redemptions spawn a second row with status 'redeemed')
+            $hasRedeemedWalletCredit = CustomerWalletCredit::where('return_case_id', $lockedCase->id)
+                ->whereIn('status', ['redeemed', 'spent'])
+                ->exists();
+
+            if ($hasRedeemedWalletCredit) {
                 return [
                     'success' => false,
-                    'message' => "Cannot disburse cash refund: Customer has already redeemed the instant wallet credit of ₦{$walletCredit->amount} issued for this return case.",
+                    'message' => "Cannot disburse cash refund: Customer has already partially or fully redeemed the instant wallet credit issued for this return case.",
                 ];
             }
+
+            $walletCredit = CustomerWalletCredit::where('return_case_id', $lockedCase->id)
+                ->where('status', 'available')
+                ->first();
 
             // Calculate exact refund amount
             $merchandiseRefund = $lockedCase->total_refundable_amount;
@@ -436,8 +458,9 @@ class ReturnAndRefundService
             }
 
             // Automated Paystack Gateway Refund Call before DB journal entries (Findings 3 & 10)
-            $paystackRefundId = null;
-            if (!empty($order->payment_reference)) {
+            // Idempotency: If case already has a paystack_refund_id recorded from an earlier call, avoid duplicate gateway payout
+            $paystackRefundId = $lockedCase->paystack_refund_id;
+            if (empty($paystackRefundId) && !empty($order->payment_reference)) {
                 $refundRes = $this->paystackService->initiateRefund(
                     $order->payment_reference,
                     $totalCashRefund,
@@ -599,6 +622,15 @@ class ReturnAndRefundService
             $lockedCase->save();
 
             ReturnItem::where('return_case_id', $lockedCase->id)->update(['status' => 'refunded']);
+
+            // Automatically revoke customer reviews for all items in this refunded case
+            foreach ($lockedCase->items()->get() as $rItem) {
+                app(\App\Services\ReviewService::class)->revokeReviewsForOrder(
+                    $lockedCase->order_id,
+                    $rItem->product_id,
+                    'Item return refunded'
+                );
+            }
 
             AdminAuditLog::create([
                 'user_id' => $adminUser->id,

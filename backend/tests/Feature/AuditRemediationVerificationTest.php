@@ -530,6 +530,8 @@ class AuditRemediationVerificationTest extends TestCase
 
         $this->assertTrue($res['success']);
         $case = $res['case'];
+        $case->status = 'refund_pending';
+        $case->save();
 
         // Line subtotal = ₦10,000. Total merchandise = ₦20,000 (50% share).
         // Proportional discount = 50% of ₦4,000 = ₦2,000.
@@ -718,10 +720,82 @@ class AuditRemediationVerificationTest extends TestCase
 
         $this->assertTrue($res['success']);
         $case = $res['case'];
+        $case->status = 'refund_pending';
+        $case->save();
 
         // Only the valid relative path should be attached
         $evidences = ReturnEvidence::where('return_case_id', $case->id)->get();
         $this->assertEquals(1, $evidences->count());
         $this->assertEquals('evidence/valid_photo.jpg', $evidences->first()->file_path);
+    }
+
+    /**
+     * Hardening Check: Partial wallet credit spend blocks cash refund double-spend
+     */
+    public function test_partial_wallet_credit_spend_blocks_cash_refund(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $item = $fixture['item'];
+
+        $service = app(ReturnAndRefundService::class);
+        $res = $service->createReturnCase(
+            $this->customer,
+            $order,
+            [['order_item_id' => $item->id, 'quantity' => 1]],
+            'defective_product',
+            'Test partial wallet spend'
+        );
+
+        $case = $res['case'];
+        $case->status = 'refund_pending';
+        $case->save();
+
+        // Simulate instant doorstep wallet credit creation
+        CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'return_case_id' => $case->id,
+            'amount' => '1000.00',
+            'credit_type' => 'doorstep_refund',
+            'status' => 'available',
+        ]);
+
+        // Customer spends part of it on another order, spawning a second 'redeemed' lot
+        CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'return_case_id' => $case->id,
+            'amount' => '200.00',
+            'credit_type' => 'doorstep_refund',
+            'status' => 'redeemed',
+            'spent_on_order_id' => $order->id,
+        ]);
+
+        $disburseRes = $service->adminDisburseRefund($this->superAdmin, $case);
+        $this->assertFalse($disburseRes['success']);
+        $this->assertStringContainsString('partially or fully redeemed', $disburseRes['message']);
+    }
+
+    /**
+     * Hardening Check: Production CSP excludes unsafe-eval
+     */
+    public function test_production_csp_excludes_unsafe_eval(): void
+    {
+        $response = $this->get('/');
+        $csp = $response->headers->get('Content-Security-Policy');
+        $this->assertNotNull($csp);
+
+        // In testing / local, it can be present or absent, but let's test middleware directly under production environment
+        $middleware = new \App\Http\Middleware\SecurityHeadersMiddleware();
+        $request = \Illuminate\Http\Request::create('/', 'GET');
+        
+        config(['app.url' => 'https://newvmarket.ng']);
+        $prodResponse = $middleware->handle($request, function () {
+            return new \Illuminate\Http\Response('OK');
+        });
+
+        $prodCsp = $prodResponse->headers->get('Content-Security-Policy');
+        $this->assertStringNotContainsString("'unsafe-eval'", $prodCsp);
     }
 }
