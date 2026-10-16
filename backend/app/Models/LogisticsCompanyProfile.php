@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class LogisticsCompanyProfile extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'user_id',
         'company_name',
@@ -27,6 +30,7 @@ class LogisticsCompanyProfile extends Model
     protected $casts = [
         'wallet_balance' => 'decimal:2',
         'bank_updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     public function user()
@@ -102,5 +106,41 @@ class LogisticsCompanyProfile extends Model
         $this->save();
     }
 
+    /**
+     * Check if this logistics fleet or any of its couriers currently holds packages in transit.
+     */
+    public function hasActiveCustodyOrders(): bool
+    {
+        return Order::where('logistics_company_id', $this->id)
+            ->where('order_status', 'out_for_delivery')
+            ->exists();
+    }
+
+    /**
+     * Clearance guard: Validates whether fleet profile can be deactivated.
+     */
+    public function canBeDeactivated(?string &$reason = null): bool
+    {
+        if ($this->hasActiveCustodyOrders()) {
+            $reason = 'Logistics fleet has active customer parcels in physical custody during transit. Complete all deliveries before deactivation.';
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Deletion guard: In e-commerce & fintech, entities with corporate wallet history
+     * can NEVER be deleted due to double-entry financial ledgers.
+     */
+    public function canBeSafelyDeleted(?string &$reason = null): bool
+    {
+        if (Order::where('logistics_company_id', $this->id)->exists()) {
+            $reason = 'Logistics fleet account cannot be deleted because permanent historical shipment and settlement logs exist.';
+            return false;
+        }
+
+        return true;
+    }
 }
 

@@ -48,15 +48,27 @@ class PaystackService
         // Paystack expects amount in Kobo (1 NGN = 100 Kobo).
         // Enforce exact 2-decimal BCMath normalization to eliminate floating-point drift.
         $grandTotalNormalized = bcadd((string)$order->grand_total, '0', 2);
-        $amountInKobo = (int) bcmul($grandTotalNormalized, '100', 0);
 
-        if ($amountInKobo <= 0) {
+        // Paystack standard monetary invariants (NGN):
+        // 1. Minimum transaction: ₦1.00 (100 Kobo)
+        if (bccomp($grandTotalNormalized, '1.00', 2) < 0) {
             return [
                 'success' => false,
-                'code' => 'INVALID_AMOUNT',
-                'message' => 'Payable amount must be greater than zero.',
+                'code' => 'AMOUNT_BELOW_MINIMUM',
+                'message' => 'Payable amount must be at least ₦1.00 (100 kobo) for Paystack transaction processing.',
             ];
         }
+
+        // 2. Maximum single transaction: ₦100,000,000.00 (100 Million Naira / 10 Billion Kobo)
+        if (bccomp($grandTotalNormalized, '100000000.00', 2) > 0) {
+            return [
+                'success' => false,
+                'code' => 'AMOUNT_EXCEEDS_MAXIMUM',
+                'message' => 'Payable amount exceeds Paystack maximum single transaction limit of ₦100,000,000.00.',
+            ];
+        }
+
+        $amountInKobo = (int) bcmul($grandTotalNormalized, '100', 0);
 
         $reference = $order->payment_reference ?? ('VM-' . date('YmdHis') . '-' . strtoupper(\Illuminate\Support\Str::random(8)));
 
@@ -326,7 +338,22 @@ class PaystackService
             ];
 
             if ($amountInNaira !== null && bccomp($amountInNaira, '0.00', 2) > 0) {
-                $payload['amount'] = (int) bcmul($amountInNaira, '100', 0); // Amount in Kobo
+                $amountInNairaNormalized = bcadd((string)$amountInNaira, '0', 2);
+                if (bccomp($amountInNairaNormalized, '1.00', 2) < 0) {
+                    return [
+                        'success' => false,
+                        'code' => 'AMOUNT_BELOW_MINIMUM',
+                        'message' => 'Paystack refund amount must be at least ₦1.00 (100 kobo).',
+                    ];
+                }
+                if (bccomp($amountInNairaNormalized, '100000000.00', 2) > 0) {
+                    return [
+                        'success' => false,
+                        'code' => 'AMOUNT_EXCEEDS_MAXIMUM',
+                        'message' => 'Refund amount exceeds maximum allowable transaction limit of ₦100,000,000.00.',
+                    ];
+                }
+                $payload['amount'] = (int) bcmul($amountInNairaNormalized, '100', 0); // Amount in Kobo
             }
 
             $response = Http::withToken($this->getSecretKey())

@@ -44,6 +44,7 @@ return new class extends Migration
 
             $table->enum('marketplace_status', ['active', 'suspended', 'probation'])->default('active');
             $table->timestamps();
+            $table->softDeletes();
         });
 
         // 3. Shops (Vendor Physical Branches & Pickup Counters)
@@ -61,6 +62,7 @@ return new class extends Migration
             $table->string('phone')->nullable();
             $table->string('email')->nullable();
             $table->boolean('is_primary_branch')->default(false);
+            $table->boolean('is_active')->default(true);
 
             // Pickup Station Settings
             $table->boolean('pickup_enabled')->default(true);
@@ -68,6 +70,7 @@ return new class extends Migration
             $table->time('pickup_opening_time')->default('08:00:00');
             $table->time('pickup_closing_time')->default('18:00:00');
             $table->timestamps();
+            $table->softDeletes();
 
             $table->index(['lga_id', 'pickup_enabled']);
         });
@@ -99,6 +102,7 @@ return new class extends Migration
             $table->decimal('commission_rate', 5, 2)->default(0.00);
             $table->enum('status', ['active', 'suspended'])->default('active');
             $table->timestamps();
+            $table->softDeletes();
         });
 
         // 6. Rider Profiles (Delivery Dispatch)
@@ -116,6 +120,7 @@ return new class extends Migration
             $table->decimal('current_longitude', 11, 8)->nullable();
             $table->decimal('current_balance', 24, 2)->default(0.00);
             $table->timestamps();
+            $table->softDeletes();
 
             $table->index(['assigned_lga_id', 'is_online', 'is_active']);
         });

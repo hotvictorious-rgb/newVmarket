@@ -49,6 +49,7 @@ return new class extends Migration
             $table->enum('package_tier', ['standard', 'fragile', 'bulky'])->default('standard');
             
             $table->timestamps();
+            $table->softDeletes();
 
             $table->index(['shop_id', 'is_in_stock', 'listing_status']);
             $table->index(['category_id', 'is_approved', 'listing_status']);

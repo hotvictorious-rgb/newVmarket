@@ -39,9 +39,51 @@ class DoorstepHandshakeService
                 return ['success' => false, 'message' => 'Order not found under lock.'];
             }
 
-            // 1. Verify Rider Assignment (Zero Courier Hijacking)
-            if ($lockedOrder->rider_id && (int)$lockedOrder->rider_id !== (int)$rider->id) {
-                return ['success' => false, 'message' => 'Unauthorized: This order is assigned to another delivery courier.'];
+            // 1. Verify Rider Assignment & Active Courier Profile
+            $haltReason = null;
+            if (!$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
+                $haltReason = 'Unauthorized: Dispatch courier profile is suspended or inactive. Delivery halted.';
+            } elseif (!$rider->logistics_company_id || ($rider->logisticsCompany && $rider->logisticsCompany->status !== 'active')) {
+                $haltReason = 'Unauthorized: Parent logistics fleet account is inactive or suspended. Delivery halted.';
+            } elseif ($lockedOrder->rider_id && (int)$lockedOrder->rider_id !== (int)$rider->id) {
+                $haltReason = 'Unauthorized: This order is assigned to another delivery courier.';
+            }
+
+            // 1B. Verify Logistics Company Direct & Merchant Vendor & Shop Active Status
+            if (!$haltReason && $lockedOrder->logisticsCompany && $lockedOrder->logisticsCompany->status !== 'active') {
+                $haltReason = 'Assigned logistics fleet company is suspended or inactive. Delivery halted.';
+            }
+
+            if (!$haltReason && $lockedOrder->vendor) {
+                if ($lockedOrder->vendor->marketplace_status !== 'active' || ($lockedOrder->vendor->user && $lockedOrder->vendor->user->status !== 'active')) {
+                    $haltReason = 'Merchant marketplace account is suspended. Delivery settlement halted.';
+                }
+            }
+
+            if (!$haltReason && $lockedOrder->shop && !$lockedOrder->shop->is_active) {
+                $haltReason = 'Merchant shop branch is inactive or closed. Delivery settlement halted.';
+            }
+
+            if ($haltReason) {
+                $lockedOrder->delivery_halted_reason = $haltReason;
+                $lockedOrder->delivery_halted_at = Carbon::now();
+                $lockedOrder->save();
+
+                AdminAuditLog::create([
+                    'user_id' => $rider->user_id ?? ($lockedOrder->customer_id ?? null),
+                    'action' => 'doorstep_handshake_halted_entity_inactive',
+                    'target_type' => Order::class,
+                    'target_id' => $lockedOrder->id,
+                    'old_values' => ['order_status' => $lockedOrder->order_status],
+                    'new_values' => [
+                        'order_number' => $lockedOrder->order_number,
+                        'delivery_halted_reason' => $haltReason,
+                    ],
+                    'ip_address' => request()->ip() ?? '127.0.0.1',
+                    'user_agent' => request()->userAgent() ?? 'Doorstep Handshake Service',
+                ]);
+
+                return ['success' => false, 'message' => $haltReason];
             }
 
             // 2. Anti-Brute-Force & Lockout Check

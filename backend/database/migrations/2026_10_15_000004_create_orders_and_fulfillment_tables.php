@@ -95,6 +95,8 @@ return new class extends Migration
             $table->timestamp('settled_at')->nullable();
             $table->foreignId('settled_by_admin_id')->nullable()->constrained('users');
             $table->string('settlement_proof_path')->nullable(); // Mandatory transfer screenshot
+            $table->string('delivery_halted_reason')->nullable();
+            $table->timestamp('delivery_halted_at')->nullable();
 
             $table->timestamps();
 

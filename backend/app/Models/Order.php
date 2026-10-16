@@ -65,6 +65,8 @@ class Order extends Model
         'settled_at',
         'settled_by_admin_id',
         'settlement_proof_path',
+        'delivery_halted_reason',
+        'delivery_halted_at',
         'expires_at',
         'paystack_refund_reference',
     ];
@@ -106,6 +108,7 @@ class Order extends Model
         'settled_at' => 'datetime',
         'paid_at' => 'datetime',
         'expires_at' => 'datetime',
+        'delivery_halted_at' => 'datetime',
         'doorstep_rejection_photos' => 'array',
     ];
 
@@ -177,12 +180,12 @@ class Order extends Model
 
     public function vendor()
     {
-        return $this->belongsTo(VendorProfile::class, 'vendor_id');
+        return $this->belongsTo(VendorProfile::class, 'vendor_id')->withTrashed();
     }
 
     public function shop()
     {
-        return $this->belongsTo(Shop::class, 'shop_id');
+        return $this->belongsTo(Shop::class, 'shop_id')->withTrashed();
     }
 
     public function collectionPoint()
@@ -197,14 +200,18 @@ class Order extends Model
 
     public function rider()
     {
-        return $this->belongsTo(RiderProfile::class, 'rider_id');
+        return $this->belongsTo(RiderProfile::class, 'rider_id')->withTrashed();
     }
 
     public function logisticsCompany()
     {
-        return $this->belongsTo(LogisticsCompanyProfile::class, 'logistics_company_id');
+        return $this->belongsTo(LogisticsCompanyProfile::class, 'logistics_company_id')->withTrashed();
     }
 
+        public function orderItems()
+    {
+        return $this->hasMany(OrderItem::class, 'order_id');
+    }
     public function items()
     {
         return $this->hasMany(OrderItem::class);

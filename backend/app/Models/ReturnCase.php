@@ -85,6 +85,11 @@ class ReturnCase extends Model
         return $this->hasMany(ReturnItem::class);
     }
 
+    public function returnItems()
+    {
+        return $this->hasMany(ReturnItem::class);
+    }
+
     public function evidence()
     {
         return $this->hasMany(ReturnEvidence::class);

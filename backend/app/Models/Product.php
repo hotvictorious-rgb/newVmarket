@@ -5,9 +5,12 @@ namespace App\Models;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'vendor_id',
         'shop_id',
@@ -29,16 +32,21 @@ class Product extends Model
         'condition',
         'slash_price',
         'warranty_type',
+        'rating',
+        'reviews_count',
     ];
 
     protected $casts = [
         'unit_price' => 'decimal:2',
         'slash_price' => 'decimal:2',
+        'rating' => 'decimal:2',
+        'reviews_count' => 'integer',
         'is_in_stock' => 'boolean',
         'is_vmarket_flagship' => 'boolean',
         'is_approved' => 'boolean',
         'images' => 'array',
         'listing_confirmed_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -52,12 +60,12 @@ class Product extends Model
 
     public function vendor()
     {
-        return $this->belongsTo(VendorProfile::class, 'vendor_id');
+        return $this->belongsTo(VendorProfile::class, 'vendor_id')->withTrashed();
     }
 
     public function shop()
     {
-        return $this->belongsTo(Shop::class, 'shop_id');
+        return $this->belongsTo(Shop::class, 'shop_id')->withTrashed();
     }
 
     public function category()
@@ -137,9 +145,14 @@ class Product extends Model
             ->whereNotNull('listing_confirmed_at')
             ->where('listing_confirmed_at', '>=', Carbon::now()->subDays(7))
             ->whereHas('vendor', function ($q) {
-                $q->where('marketplace_status', 'active');
+                $q->where('marketplace_status', 'active')
+                    ->whereHas('user', function ($uq) {
+                        $uq->where('status', 'active');
+                    });
             })
-            ->whereHas('shop');
+            ->whereHas('shop', function ($sq) {
+                $sq->where('is_active', true);
+            });
     }
 
     public function getConditionLabelAttribute(): string
@@ -176,5 +189,35 @@ class Product extends Model
         $diff = bcsub((string)$this->slash_price, (string)$this->unit_price, 2);
         $percent = bcmul(bcdiv($diff, (string)$this->slash_price, 4), '100', 0);
         return (int)$percent;
+    }
+
+    public function getDiscountPercentageAttribute(): ?int
+    {
+        return $this->discount_percent;
+    }
+
+    public function reviews()
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    public function activeReviews()
+    {
+        return $this->hasMany(Review::class)->where('status', 'active');
+    }
+
+    /**
+     * Atomically recalculate product rating and total reviews count.
+     */
+    public function recalculateRating(): void
+    {
+        $activeReviews = $this->reviews()->where('status', 'active');
+        $count = $activeReviews->count();
+        $avg = $count > 0 ? round((float)$activeReviews->avg('rating'), 2) : 0.00;
+
+        $this->update([
+            'rating' => $avg,
+            'reviews_count' => $count,
+        ]);
     }
 }

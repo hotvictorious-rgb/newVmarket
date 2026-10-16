@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\BannerApiController;
 use App\Http\Controllers\Api\CheckoutAndReservationApiController;
 use App\Http\Controllers\Api\CustomerAddressApiController;
 use App\Http\Controllers\Api\CustomerOrderApiController;
+use App\Http\Controllers\Api\CustomerReviewApiController;
 use App\Http\Controllers\Api\FulfillmentApiController;
 use App\Http\Controllers\Api\GeographyApiController;
 use App\Http\Controllers\Api\ProductApiController;
@@ -33,6 +34,7 @@ Route::prefix('v1')->group(function () {
     Route::get('categories', [ProductApiController::class, 'categories']);
     Route::get('products', [ProductApiController::class, 'index']);
     Route::get('products/{id}', [ProductApiController::class, 'show']);
+    Route::get('products/{id}/reviews', [CustomerReviewApiController::class, 'indexForProduct']);
 
     // 4. Storefront & Mobile Dynamic Banners (Public)
     Route::get('banners', [BannerApiController::class, 'index']);
@@ -89,6 +91,9 @@ Route::prefix('v1')->group(function () {
         Route::post('pickup-reservations/create', [CheckoutAndReservationApiController::class, 'createPickupReservation']);
 
         // Customer Orders, Handover & 24h Post-Delivery Disputes
+                // Customer Verified Product Reviews (Only Delivered, Non-Returned Purchases)
+        Route::post('customer/reviews', [CustomerReviewApiController::class, 'store']);
+        Route::get('customer/reviews/my-reviews', [CustomerReviewApiController::class, 'myReviews']);
         Route::prefix('customer/orders')->group(function () {
             Route::get('', [CustomerOrderApiController::class, 'index']);
             Route::post('checkout', [CustomerOrderApiController::class, 'executeCheckout']);

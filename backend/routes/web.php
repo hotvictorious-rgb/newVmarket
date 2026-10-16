@@ -193,6 +193,7 @@ Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
     Route::post('/products/{id}/refresh', [PortalController::class, 'vendorRefreshProductFreshness'])->name('vendor.products.refresh');
     Route::post('/shops', [PortalController::class, 'vendorStoreShop'])->name('vendor.shops.store');
     Route::post('/shops/{id}/update', [PortalController::class, 'vendorUpdateShop'])->name('vendor.shops.update');
+    Route::delete('/shops/{id}', [PortalController::class, 'vendorDeleteShop'])->name('vendor.shops.delete');
 });
 
 // Stage 3: Customer Storefront, Product Detail, Checkout & Tracking Routes

@@ -852,25 +852,68 @@ class OrderSettlementService
                 ];
             }
 
-            // Courier Hardening: Validate courier assignment & active status
-            if ($rider) {
-                if (!$rider->is_active) {
-                    return ['success' => false, 'message' => 'Unauthorized: Dispatch courier profile is suspended or inactive.'];
-                }
-                if ($rider->user && $rider->user->status !== 'active') {
-                    return ['success' => false, 'message' => 'Unauthorized: Courier user account is inactive.'];
-                }
-                if ($rider->logisticsCompany && $rider->logisticsCompany->status !== 'active') {
-                    return ['success' => false, 'message' => 'Unauthorized: Parent logistics fleet account is inactive.'];
-                }
-                if ($lockedOrder->rider_id && (int)$lockedOrder->rider_id !== (int)$rider->id) {
-                    return ['success' => false, 'message' => 'Unauthorized: This order is assigned to another delivery courier.'];
+            // 1. Courier & Logistics Fleet Hardening: Validate active status at point of delivery
+            $activeRider = $rider ?? ($lockedOrder->rider_id ? RiderProfile::with(['user', 'logisticsCompany'])->find($lockedOrder->rider_id) : null);
+            $haltReason = null;
+            if ($activeRider) {
+                if (!$activeRider->is_active) {
+                    $haltReason = 'Unauthorized: Dispatch courier profile is suspended or inactive. Delivery halted.';
+                } elseif ($activeRider->user && $activeRider->user->status !== 'active') {
+                    $haltReason = 'Unauthorized: Courier user account is inactive. Delivery halted.';
+                } elseif (!$activeRider->logistics_company_id || ($activeRider->logisticsCompany && $activeRider->logisticsCompany->status !== 'active')) {
+                    $haltReason = 'Unauthorized: Parent logistics fleet account is inactive or suspended. Delivery halted.';
+                } elseif ($lockedOrder->rider_id && (int)$lockedOrder->rider_id !== (int)$activeRider->id) {
+                    $haltReason = 'Unauthorized: This order is assigned to another delivery courier.';
                 }
             }
 
-            // Merchant Hardening: Validate merchant active status
-            if ($lockedOrder->vendor && $lockedOrder->vendor->marketplace_status !== 'active') {
-                return ['success' => false, 'message' => 'Merchant marketplace account is suspended. Delivery settlement halted.'];
+            // 2. Logistics Company Direct Check
+            if (!$haltReason) {
+                $orderFleet = null;
+                if ($lockedOrder->logistics_company_id) {
+                    $orderFleet = LogisticsCompanyProfile::find($lockedOrder->logistics_company_id);
+                } elseif ($activeRider && $activeRider->logistics_company_id) {
+                    $orderFleet = $activeRider->logisticsCompany;
+                }
+                if ($orderFleet && $orderFleet->status !== 'active') {
+                    $haltReason = 'Assigned logistics fleet company is suspended or inactive. Delivery halted.';
+                }
+            }
+
+            // 3. Merchant / Vendor Hardening: Validate merchant active status
+            if (!$haltReason && $lockedOrder->vendor) {
+                if ($lockedOrder->vendor->marketplace_status !== 'active') {
+                    $haltReason = 'Merchant marketplace account is suspended. Delivery settlement halted.';
+                } elseif ($lockedOrder->vendor->user && $lockedOrder->vendor->user->status !== 'active') {
+                    $haltReason = 'Merchant user account is inactive. Delivery settlement halted.';
+                }
+            }
+
+            // 4. Shop Branch Hardening: Validate shop branch is active
+            if (!$haltReason && $lockedOrder->shop && !$lockedOrder->shop->is_active) {
+                $haltReason = 'Merchant shop branch is inactive or closed. Delivery settlement halted.';
+            }
+
+            if ($haltReason) {
+                $lockedOrder->delivery_halted_reason = $haltReason;
+                $lockedOrder->delivery_halted_at = Carbon::now();
+                $lockedOrder->save();
+
+                AdminAuditLog::create([
+                    'user_id' => $activeRider ? $activeRider->user_id : ($lockedOrder->customer_id ?? null),
+                    'action' => 'delivery_handshake_halted_entity_inactive',
+                    'target_type' => Order::class,
+                    'target_id' => $lockedOrder->id,
+                    'old_values' => ['order_status' => $lockedOrder->order_status],
+                    'new_values' => [
+                        'order_number' => $lockedOrder->order_number,
+                        'delivery_halted_reason' => $haltReason,
+                    ],
+                    'ip_address' => request()->ip() ?? '127.0.0.1',
+                    'user_agent' => request()->userAgent() ?? 'System Settlement Worker',
+                ]);
+
+                return ['success' => false, 'message' => $haltReason];
             }
 
             if (!hash_equals((string)$lockedOrder->verification_code, trim($otp))) {

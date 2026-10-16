@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class RiderProfile extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'user_id',
         'logistics_company_id',
@@ -24,6 +27,7 @@ class RiderProfile extends Model
         'is_online' => 'boolean',
         'current_latitude' => 'decimal:8',
         'current_longitude' => 'decimal:8',
+        'deleted_at' => 'datetime',
     ];
 
     public function user()
@@ -33,7 +37,7 @@ class RiderProfile extends Model
 
     public function logisticsCompany()
     {
-        return $this->belongsTo(LogisticsCompanyProfile::class, 'logistics_company_id');
+        return $this->belongsTo(LogisticsCompanyProfile::class, 'logistics_company_id')->withTrashed();
     }
 
     public function assignedLga()
@@ -49,5 +53,42 @@ class RiderProfile extends Model
     public function isFleetRider(): bool
     {
         return !empty($this->logistics_company_id);
+    }
+
+    /**
+     * Check if courier currently holds parcels in physical custody during transit.
+     */
+    public function hasActiveCustodyOrders(): bool
+    {
+        return $this->assignedOrders()
+            ->where('order_status', 'out_for_delivery')
+            ->exists();
+    }
+
+    /**
+     * Clearance guard: Validates whether courier profile can be deactivated.
+     */
+    public function canBeDeactivated(?string &$reason = null): bool
+    {
+        if ($this->hasActiveCustodyOrders()) {
+            $reason = 'Courier has active customer parcels in physical custody (out for delivery). Complete doorstep handovers or return to hub before deactivation.';
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Deletion guard: In e-commerce & fintech, entities with delivery history
+     * can NEVER be deleted due to chain-of-custody audit logs.
+     */
+    public function canBeSafelyDeleted(?string &$reason = null): bool
+    {
+        if ($this->assignedOrders()->exists()) {
+            $reason = 'Courier profile cannot be deleted because permanent historical delivery logs exist.';
+            return false;
+        }
+
+        return true;
     }
 }

@@ -106,16 +106,86 @@ class CustomerOrderApiController extends Controller
             'shop_id' => 'required|integer|exists:shops,id',
             'fulfillment_type' => 'required|in:doorstep_delivery,in_shop_pickup',
             'customer_address_id' => 'nullable|required_if:fulfillment_type,doorstep_delivery|integer|exists:customer_addresses,id',
-            'items' => 'required|array|min:1',
+            'items' => 'required|array|min:1|max:100',
             'items.*.product_id' => 'required|integer|exists:products,id',
-            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.quantity' => 'required|integer|min:1|max:1000',
             'redeem_cashback' => 'nullable|boolean',
             'redeem_wallet_credit' => 'nullable|boolean',
             'payment_method' => 'nullable|string|in:paystack,wallet_credit',
+            'rider_id' => 'nullable|integer|exists:rider_profiles,id',
+            'logistics_company_id' => 'nullable|integer|exists:logistics_company_profiles,id',
+        ], [
+            'items.*.quantity.max' => 'Maximum allowed quantity per line item is 1,000 units.',
         ]);
 
         $user = $request->user();
-        $shop = Shop::with('lga')->findOrFail($validated['shop_id']);
+
+        // Guard 0: Customer Account Invariant
+        if ($user && $user->status !== 'active') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Your customer account is deactivated or suspended.',
+            ], 403);
+        }
+
+        $shop = Shop::withTrashed()->with(['lga', 'vendor.user'])->findOrFail($validated['shop_id']);
+
+        // Guard 1: Shop Branch Invariant
+        if ($shop->trashed() || !$shop->is_active) {
+            return response()->json([
+                'status' => false,
+                'message' => 'The selected shop branch is currently inactive.',
+            ], 422);
+        }
+
+        // Guard 2: Vendor Entity & User Account Invariant
+        if (!$shop->vendor || $shop->vendor->trashed() || $shop->vendor->marketplace_status !== 'active') {
+            return response()->json([
+                'status' => false,
+                'message' => 'The merchant providing this item is currently not active on the marketplace.',
+            ], 422);
+        }
+
+        if (!$shop->vendor->user || $shop->vendor->user->status !== 'active') {
+            return response()->json([
+                'status' => false,
+                'message' => 'The merchant user account is inactive.',
+            ], 422);
+        }
+
+        // Guard 3: Explicit Logistics Company Invariant
+        if (!empty($validated['logistics_company_id'])) {
+            $logistics = \App\Models\LogisticsCompanyProfile::withTrashed()->with('user')->find($validated['logistics_company_id']);
+            if (!$logistics || $logistics->trashed() || $logistics->status !== 'active') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'The selected logistics company is currently inactive or suspended.',
+                ], 422);
+            }
+            if ($logistics->user && $logistics->user->status !== 'active') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'The logistics company user account is inactive.',
+                ], 422);
+            }
+        }
+
+        // Guard 4: Explicit Designated Courier / Rider Invariant
+        if (!empty($validated['rider_id'])) {
+            $rider = \App\Models\RiderProfile::withTrashed()->with(['user', 'logisticsCompany.user'])->find($validated['rider_id']);
+            if (!$rider || $rider->trashed() || !$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'The designated delivery rider is currently inactive or suspended.',
+                ], 422);
+            }
+            if ($rider->logisticsCompany && ($rider->logisticsCompany->trashed() || $rider->logisticsCompany->status !== 'active' || ($rider->logisticsCompany->user && $rider->logisticsCompany->user->status !== 'active'))) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'The logistics fleet for this delivery rider is currently deactivated or suspended.',
+                ], 422);
+            }
+        }
 
         $result = DB::transaction(function () use ($validated, $user, $shop) {
             $merchandiseSubtotal = '0.00';
@@ -147,6 +217,13 @@ class CustomerOrderApiController extends Controller
 
                 $lineTotal = BcMathService::mul($product->unit_price, (string)$item['quantity']);
                 $merchandiseSubtotal = BcMathService::add($merchandiseSubtotal, $lineTotal);
+
+                if (bccomp($merchandiseSubtotal, '100000000.00', 2) > 0) {
+                    return [
+                        'error' => true,
+                        'message' => 'Merchandise subtotal exceeds Paystack maximum single transaction limit of ₦100,000,000.00.',
+                    ];
+                }
 
                 $itemsToCreate[] = [
                     'product' => $product,
@@ -234,50 +311,102 @@ class CustomerOrderApiController extends Controller
             }
 
             $grandTotal = BcMathService::sub($totalBeforeWallet, $walletCreditApplied);
+
+            if (bccomp($grandTotal, '100000000.00', 2) > 0) {
+                return [
+                    'error' => true,
+                    'message' => 'Payable amount exceeds Paystack maximum single transaction limit of ₦100,000,000.00.',
+                ];
+            }
+
             $isFullyWalletPaid = (BcMathService::comp($grandTotal, '0.00') === 0);
             $paymentMethod = $isFullyWalletPaid ? 'wallet_credit' : ($validated['payment_method'] ?? 'paystack');
             $orderStatus = $isFullyWalletPaid ? 'confirmed' : 'pending';
             $paymentStatus = $isFullyWalletPaid ? 'paid' : 'pending';
             $paidAt = $isFullyWalletPaid ? Carbon::now() : null;
 
-            // Assign active accredited courier from fleet if collection point assigned
+            // Assign active accredited courier from fleet if collection point assigned or doorstep delivery
             $rider = null;
-            $logisticsCompanyId = null;
-            if ($collectionPointId) {
-                $cp = LogisticsCollectionPoint::find($collectionPointId);
-                if ($cp && $cp->logistics_company_id) {
-                    $logisticsCompanyId = $cp->logistics_company_id;
-                    $rider = RiderProfile::where('logistics_company_id', $cp->logistics_company_id)
-                        ->where('is_active', true)
-                        ->where('is_online', true)
-                        ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                        ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
-                        ->first()
-                        ?? RiderProfile::where('logistics_company_id', $cp->logistics_company_id)
-                            ->where('is_active', true)
-                            ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                            ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
-                            ->first();
+            $logisticsCompanyId = $validated['logistics_company_id'] ?? null;
+            $riderId = $validated['rider_id'] ?? null;
+
+            if ($riderId) {
+                $rider = RiderProfile::withTrashed()->with(['user', 'logisticsCompany.user'])->find($riderId);
+                if (!$rider || $rider->trashed() || !$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
+                    return [
+                        'error' => true,
+                        'message' => 'The designated delivery rider is currently inactive or suspended.',
+                    ];
                 }
-            }
-            if (!$rider && $validated['fulfillment_type'] === 'doorstep_delivery') {
-                $rider = RiderProfile::where('is_active', true)
-                    ->where('is_online', true)
-                    ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                    ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
-                    ->first()
-                    ?? RiderProfile::where('is_active', true)
-                        ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                        ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
-                        ->first();
-                if ($rider && $rider->logistics_company_id) {
+                if ($rider->logisticsCompany && ($rider->logisticsCompany->trashed() || $rider->logisticsCompany->status !== 'active' || ($rider->logisticsCompany->user && $rider->logisticsCompany->user->status !== 'active'))) {
+                    return [
+                        'error' => true,
+                        'message' => 'The logistics fleet for this delivery rider is currently deactivated or suspended.',
+                    ];
+                }
+                if (!$logisticsCompanyId && $rider->logistics_company_id) {
                     $logisticsCompanyId = $rider->logistics_company_id;
                 }
             }
+
+            if ($collectionPointId) {
+                $cp = LogisticsCollectionPoint::find($collectionPointId);
+                if ($cp && $cp->logistics_company_id) {
+                    if (!$logisticsCompanyId) {
+                        $logisticsCompanyId = $cp->logistics_company_id;
+                    }
+                    if (!$rider) {
+                        $rider = RiderProfile::where('logistics_company_id', $cp->logistics_company_id)
+                            ->where('is_active', true)
+                            ->where('is_online', true)
+                            ->whereHas('user', fn($q) => $q->where('status', 'active'))
+                            ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'))
+                            ->first()
+                            ?? RiderProfile::where('logistics_company_id', $cp->logistics_company_id)
+                                ->where('is_active', true)
+                                ->whereHas('user', fn($q) => $q->where('status', 'active'))
+                                ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'))
+                                ->first();
+                    }
+                }
+            }
+
+            if (!$rider && $validated['fulfillment_type'] === 'doorstep_delivery') {
+                $riderQuery = RiderProfile::where('is_active', true)
+                    ->whereHas('user', fn($q) => $q->where('status', 'active'))
+                    ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'));
+
+                if ($logisticsCompanyId) {
+                    $riderQuery->where('logistics_company_id', $logisticsCompanyId);
+                }
+
+                $rider = (clone $riderQuery)->where('is_online', true)->first() ?? $riderQuery->first();
+                if ($rider && $rider->logistics_company_id && !$logisticsCompanyId) {
+                    $logisticsCompanyId = $rider->logistics_company_id;
+                }
+            }
+
             if (!$logisticsCompanyId && $laneId) {
                 $lane = DeliveryLane::find($laneId);
-                if ($lane && $lane->logistics_company_id) {
-                    $logisticsCompanyId = $lane->logistics_company_id;
+                if ($lane && $lane->assigned_logistics_company_id) {
+                    $logisticsCompanyId = $lane->assigned_logistics_company_id;
+                }
+            }
+
+            // Post-resolution check on logisticsCompanyId
+            if ($logisticsCompanyId) {
+                $logistics = \App\Models\LogisticsCompanyProfile::withTrashed()->with('user')->find($logisticsCompanyId);
+                if (!$logistics || $logistics->trashed() || $logistics->status !== 'active') {
+                    return [
+                        'error' => true,
+                        'message' => 'The selected logistics company is currently inactive or suspended.',
+                    ];
+                }
+                if ($logistics->user && $logistics->user->status !== 'active') {
+                    return [
+                        'error' => true,
+                        'message' => 'The logistics company user account is inactive.',
+                    ];
                 }
             }
 

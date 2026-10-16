@@ -44,15 +44,85 @@ class CheckoutAndReservationApiController extends Controller
             'fulfillment_type' => 'required|in:doorstep_delivery,in_shop_pickup',
             'customer_address_id' => 'nullable|required_if:fulfillment_type,doorstep_delivery|integer|exists:customer_addresses,id',
             'shop_id' => 'required|integer|exists:shops,id',
-            'items' => 'required|array|min:1',
+            'items' => 'required|array|min:1|max:100',
             'items.*.product_id' => 'required|integer|exists:products,id',
-            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.quantity' => 'required|integer|min:1|max:1000',
             'redeem_cashback' => 'nullable|boolean',
             'redeem_wallet_credit' => 'nullable|boolean',
+            'rider_id' => 'nullable|integer|exists:rider_profiles,id',
+            'logistics_company_id' => 'nullable|integer|exists:logistics_company_profiles,id',
+        ], [
+            'items.*.quantity.max' => 'Maximum allowed quantity per line item is 1,000 units.',
         ]);
 
         $user = $request->user();
-        $shop = Shop::findOrFail($validated['shop_id']);
+
+        // Guard 0: Customer Account Invariant
+        if ($user && $user->status !== 'active') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Your customer account is deactivated or suspended.',
+            ], 403);
+        }
+
+        $shop = Shop::withTrashed()->with(['vendor.user'])->findOrFail($validated['shop_id']);
+
+        // Guard 1: Shop Branch Invariant
+        if ($shop->trashed() || !$shop->is_active) {
+            return response()->json([
+                'status' => false,
+                'message' => 'The selected shop branch is currently inactive.',
+            ], 422);
+        }
+
+        // Guard 2: Vendor Entity & User Account Invariant
+        if (!$shop->vendor || $shop->vendor->trashed() || $shop->vendor->marketplace_status !== 'active') {
+            return response()->json([
+                'status' => false,
+                'message' => 'The merchant providing this item is currently not active on the marketplace.',
+            ], 422);
+        }
+
+        if (!$shop->vendor->user || $shop->vendor->user->status !== 'active') {
+            return response()->json([
+                'status' => false,
+                'message' => 'The merchant user account is inactive.',
+            ], 422);
+        }
+
+        // Guard 3: Explicit Logistics Company Invariant
+        if (!empty($validated['logistics_company_id'])) {
+            $logistics = \App\Models\LogisticsCompanyProfile::withTrashed()->with('user')->find($validated['logistics_company_id']);
+            if (!$logistics || $logistics->trashed() || $logistics->status !== 'active') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'The selected logistics company is currently inactive or suspended.',
+                ], 422);
+            }
+            if ($logistics->user && $logistics->user->status !== 'active') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'The logistics company user account is inactive.',
+                ], 422);
+            }
+        }
+
+        // Guard 4: Explicit Designated Courier / Rider Invariant
+        if (!empty($validated['rider_id'])) {
+            $rider = \App\Models\RiderProfile::withTrashed()->with(['user', 'logisticsCompany.user'])->find($validated['rider_id']);
+            if (!$rider || $rider->trashed() || !$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'The designated delivery rider is currently inactive or suspended.',
+                ], 422);
+            }
+            if ($rider->logisticsCompany && ($rider->logisticsCompany->trashed() || $rider->logisticsCompany->status !== 'active' || ($rider->logisticsCompany->user && $rider->logisticsCompany->user->status !== 'active'))) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'The logistics fleet for this delivery rider is currently deactivated or suspended.',
+                ], 422);
+            }
+        }
 
         // Calculate merchandise subtotal using BCMath
         $merchandiseSubtotal = '0.00';
@@ -138,6 +208,13 @@ class CheckoutAndReservationApiController extends Controller
 
         $totalPayable = BcMathService::sub($totalBeforeWallet, $walletCreditApplied);
 
+        if (bccomp($totalPayable, '100000000.00', 2) > 0) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Payable amount exceeds Paystack maximum single transaction limit of ₦100,000,000.00.',
+            ], 422);
+        }
+
         $payload = [
             'user_id' => $user->id,
             'shop_id' => $shop->id,
@@ -194,16 +271,30 @@ class CheckoutAndReservationApiController extends Controller
         $validated = $request->validate([
             'shop_id' => 'required|integer|exists:shops,id',
             'product_id' => 'required|integer|exists:products,id',
-            'quantity' => 'nullable|integer|min:1',
+            'quantity' => 'nullable|integer|min:1|max:1000',
+        ], [
+            'quantity.max' => 'Reservation quantity cannot exceed 1,000 units.',
         ]);
 
         $user = $request->user();
-        $shop = Shop::findOrFail($validated['shop_id']);
-        if (!$shop->is_active) {
+        if ($user && $user->status !== 'active') {
+            return response()->json(['status' => false, 'message' => 'Your customer account is deactivated or suspended.'], 403);
+        }
+
+        $shop = Shop::withTrashed()->with('vendor.user')->findOrFail($validated['shop_id']);
+        if ($shop->trashed() || !$shop->is_active) {
             return response()->json(['status' => false, 'message' => 'This shop branch is not active.'], 422);
         }
         if (!$shop->pickup_enabled) {
             return response()->json(['status' => false, 'message' => 'This shop does not support in-shop pickup.'], 422);
+        }
+
+        if (!$shop->vendor || $shop->vendor->trashed() || $shop->vendor->marketplace_status !== 'active') {
+            return response()->json(['status' => false, 'message' => 'The merchant providing this item is currently not active on the marketplace.'], 422);
+        }
+
+        if (!$shop->vendor->user || $shop->vendor->user->status !== 'active') {
+            return response()->json(['status' => false, 'message' => 'The merchant user account is inactive.'], 422);
         }
 
         $product = Product::marketplaceEligible()->findOrFail($validated['product_id']);
@@ -401,7 +492,31 @@ class CheckoutAndReservationApiController extends Controller
                 ];
             }
 
-            $shop = Shop::findOrFail($reservation->shop_id);
+            $shop = Shop::withTrashed()->with('vendor.user')->findOrFail($reservation->shop_id);
+            if ($shop->trashed() || !$shop->is_active) {
+                return [
+                    'error' => true,
+                    'code' => 422,
+                    'message' => 'The selected shop branch is currently inactive.',
+                ];
+            }
+
+            if (!$shop->vendor || $shop->vendor->trashed() || $shop->vendor->marketplace_status !== 'active') {
+                return [
+                    'error' => true,
+                    'code' => 422,
+                    'message' => 'The merchant providing this item is currently not active on the marketplace.',
+                ];
+            }
+
+            if (!$shop->vendor->user || $shop->vendor->user->status !== 'active') {
+                return [
+                    'error' => true,
+                    'code' => 422,
+                    'message' => 'The merchant user account is inactive.',
+                ];
+            }
+
             $merchandiseSubtotal = $reservation->estimated_total;
 
             // Optional cashback redemption with pessimistic balance reservation
@@ -429,6 +544,14 @@ class CheckoutAndReservationApiController extends Controller
             }
 
             $totalPayable = BcMathService::sub($merchandiseSubtotal, $cashbackApplied);
+
+            if (bccomp($totalPayable, '100000000.00', 2) > 0) {
+                return [
+                    'error' => true,
+                    'code' => 422,
+                    'message' => 'Payable amount exceeds Paystack maximum single transaction limit of ₦100,000,000.00.',
+                ];
+            }
 
             $vendorNet90 = BcMathService::mul($merchandiseSubtotal, '0.90');
             $customerCashback5 = BcMathService::mul($merchandiseSubtotal, '0.05');

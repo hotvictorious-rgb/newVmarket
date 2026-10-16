@@ -293,6 +293,15 @@ class ReturnAndRefundService
             $lockedCase->admin_notes = $adminNotes;
             $lockedCase->save();
 
+            // Automatically revoke reviews for all items in the approved return case
+            foreach ($lockedCase->items()->get() as $rItem) {
+                app(\App\Services\ReviewService::class)->revokeReviewsForOrder(
+                    $lockedCase->order_id,
+                    $rItem->product_id,
+                    'Item return approved for refund'
+                );
+            }
+
             ReturnItem::where('return_case_id', $lockedCase->id)
                 ->where('status', '!=', 'inspected_rejected')
                 ->update(['status' => 'approved']);

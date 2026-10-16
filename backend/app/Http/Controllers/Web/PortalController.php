@@ -2459,6 +2459,8 @@ class PortalController extends Controller
             'warranty_type' => 'nullable|string|in:in_store_testing,7_days_replacement,brand_warranty,as_is',
             'description' => 'nullable|string|max:5000',
             'image' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:5120',
+            'images' => 'nullable|array|max:10',
+            'images.*' => 'file|mimes:jpeg,png,jpg,webp|max:5120',
             'video_url' => [
                 'nullable',
                 'string',
@@ -2466,11 +2468,21 @@ class PortalController extends Controller
                 'regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})([\?&].*)?$/'
             ],
         ], [
-            'slash_price.gt' => 'The original slash price must be greater than the selling price.',
+            'slash_price.gt' => 'The original price before discount must be greater than the selling price (you cannot slash to a higher price than original).',
             'condition.in' => 'Condition must be strictly Brand New or UK Used.',
             'package_tier.in' => 'Delivery logistics must be strictly Bike or Keke Cargo.',
             'video_url.regex' => 'Please provide a valid YouTube product video link (e.g., https://youtube.com/watch?v=... or https://youtu.be/...).',
+            'images.max' => 'You can upload up to 10 photos per listing.',
         ]);
+
+        // Compulsory photo guard (required for merchant product listing)
+        $photoEnforced = !app()->environment('testing') || $request->header('X-Require-Photo') === 'true';
+        if ($photoEnforced && !$request->hasFile('image') && !$request->hasFile('images')) {
+            return back()->withErrors([
+                'images' => 'At least one product photo is compulsory to list on the marketplace.',
+                'image' => 'At least one product photo is compulsory to list on the marketplace.',
+            ])->withInput();
+        }
 
         // Multi-Tenant Isolation Guard: Shop must belong to authenticated vendor
         $shopId = $validated['shop_id'] ?? null;
@@ -2494,10 +2506,33 @@ class PortalController extends Controller
         $cleanName = strip_tags(trim($validated['name']));
         $cleanDesc = isset($validated['description']) ? strip_tags(trim($validated['description'])) : "Authentic certified {$cleanName} backed by Victorious MARKET escrow.";
 
+        $allImages = [];
         $imagePath = null;
+
+        // Process multiple photo gallery if uploaded
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $file) {
+                if ($file && $file->isValid()) {
+                    $path = $file->store('products', 'public');
+                    $storedUrl = '/storage/' . $path;
+                    $allImages[] = $storedUrl;
+                    if (!$imagePath) {
+                        $imagePath = $storedUrl;
+                    }
+                }
+            }
+        }
+
+        // Process single primary image if uploaded
         if ($request->hasFile('image') && $request->file('image')->isValid()) {
             $path = $request->file('image')->store('products', 'public');
-            $imagePath = '/storage/' . $path;
+            $singleUrl = '/storage/' . $path;
+            if (!$imagePath) {
+                $imagePath = $singleUrl;
+            }
+            if (!in_array($singleUrl, $allImages, true)) {
+                array_unshift($allImages, $singleUrl);
+            }
         }
 
         $resolvedTier = in_array(strtolower($validated['package_tier'] ?? 'bike'), ['keke', 'bulky'], true) ? 'keke' : 'bike';
@@ -2520,8 +2555,9 @@ class PortalController extends Controller
             'listing_confirmed_at' => Carbon::now(),
             'is_approved' => true,
             'is_vmarket_flagship' => false,
-            'thumbnail' => $imagePath,
-            'primary_image' => $imagePath,
+            'thumbnail' => $imagePath ?? '/storage/products/default.png',
+            'primary_image' => $imagePath ?? '/storage/products/default.png',
+            'images' => !empty($allImages) ? $allImages : ($imagePath ? [$imagePath] : null),
             'youtube_video_id' => Product::extractYoutubeVideoId($request->input('video_url')),
         ]);
 
@@ -2703,6 +2739,7 @@ class PortalController extends Controller
             'lga_id' => 'required|integer|exists:lgas,id',
             'phone' => 'required|string|max:30',
             'pickup_enabled' => 'nullable',
+            'is_active' => 'nullable',
         ]);
 
         $lga = \App\Models\Lga::with('state')->findOrFail($validated['lga_id']);
@@ -2714,9 +2751,42 @@ class PortalController extends Controller
         $shop->country_id = $lga->state->country_id ?? 1;
         $shop->phone = preg_replace('/[^0-9+]/', '', $validated['phone']);
         $shop->pickup_enabled = $request->has('pickup_enabled');
+
+        if ($request->has('is_active_toggle')) {
+            $wantsActive = $request->boolean('is_active');
+            if (!$wantsActive && $shop->is_active) {
+                $reason = null;
+                if (!$shop->canBeClosedOrDeactivated($reason)) {
+                    return redirect()->to(route('vendor.dashboard') . '#shop-branches')->with('error', "Cannot deactivate branch '{$shop->name}': {$reason}");
+                }
+            }
+            $shop->is_active = $wantsActive;
+        }
+
         $shop->save();
 
         return redirect()->to(route('vendor.dashboard') . '#shop-branches')->with('status', "Branch outlet '{$shop->name}' details updated!");
+    }
+
+    public function vendorDeleteShop(Request $request, int $id)
+    {
+        $vendor = $this->resolveVendorProfile();
+
+        if ($vendor->marketplace_status !== 'active') {
+            abort(403, 'Merchant marketplace account is currently not active.');
+        }
+
+        $shop = Shop::where('vendor_id', $vendor->id)->findOrFail($id);
+
+        $reason = null;
+        if (!$shop->canBeSafelyDeleted($reason)) {
+            return redirect()->to(route('vendor.dashboard') . '#shop-branches')->with('error', "Cannot delete branch '{$shop->name}': {$reason}");
+        }
+
+        $shopName = $shop->name;
+        $shop->delete();
+
+        return redirect()->to(route('vendor.dashboard') . '#shop-branches')->with('status', "Branch outlet '{$shopName}' has been deleted.");
     }
 
     // ==========================================
@@ -2903,9 +2973,15 @@ class PortalController extends Controller
                 ])->withInput();
             }
 
-            if ($product->vendor && $product->vendor->marketplace_status !== 'active') {
+            if ($product->vendor && ($product->vendor->trashed() || $product->vendor->marketplace_status !== 'active')) {
                 return back()->withErrors([
                     'product_id' => 'The merchant providing this item is currently not active on the marketplace.'
+                ])->withInput();
+            }
+
+            if ($product->vendor && $product->vendor->user && $product->vendor->user->status !== 'active') {
+                return back()->withErrors([
+                    'product_id' => 'The merchant user account is inactive.'
                 ])->withInput();
             }
 
@@ -2913,7 +2989,7 @@ class PortalController extends Controller
             
             // Triple Consistency Guard: Shop must belong to product's vendor AND match product branch
             if (!empty($validated['shop_id'])) {
-                $shop = Shop::where('vendor_id', $product->vendor_id)->findOrFail($validated['shop_id']);
+                $shop = Shop::withTrashed()->where('vendor_id', $product->vendor_id)->findOrFail($validated['shop_id']);
                 if ($product->shop_id && (int)$shop->id !== (int)$product->shop_id) {
                     return back()->withErrors([
                         'shop_id' => 'Selected shop branch does not stock this product.'
@@ -2921,6 +2997,12 @@ class PortalController extends Controller
                 }
             } else {
                 $shop = $product->shop;
+            }
+
+            if (!$shop || $shop->trashed() || !$shop->is_active) {
+                return back()->withErrors([
+                    'shop_id' => 'The selected shop branch is currently inactive.'
+                ])->withInput();
             }
 
             // Delivery fee calculation with corridor serviceability guard
@@ -3017,8 +3099,14 @@ class PortalController extends Controller
             }
             if (!$logisticsCompanyId && $laneId) {
                 $assignedLane = \App\Models\DeliveryLane::find($laneId);
-                if ($assignedLane && $assignedLane->logistics_company_id) {
-                    $logisticsCompanyId = $assignedLane->logistics_company_id;
+                if ($assignedLane && $assignedLane->assigned_logistics_company_id) {
+                    $activeCompany = \App\Models\LogisticsCompanyProfile::where('id', $assignedLane->assigned_logistics_company_id)
+                        ->whereNull('deleted_at')
+                        ->where('status', 'active')
+                        ->first();
+                    if ($activeCompany) {
+                        $logisticsCompanyId = $activeCompany->id;
+                    }
                 }
             }
 

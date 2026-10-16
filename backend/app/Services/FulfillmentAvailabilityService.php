@@ -14,11 +14,27 @@ class FulfillmentAvailabilityService
      */
     public function checkDeliveryAvailability(int $shopId, int $destinationLgaId, string $packageTier = 'bike'): array
     {
-        $shop = Shop::with('lga')->find($shopId);
-        if (!$shop) {
+        $shop = Shop::withTrashed()->with(['lga', 'vendor.user'])->find($shopId);
+        if (!$shop || $shop->trashed() || !$shop->is_active) {
             return [
                 'is_available' => false,
-                'message' => 'Shop not found.',
+                'message' => 'The selected shop branch is currently inactive or deactivated.',
+                'fee' => '0.00',
+            ];
+        }
+
+        if (!$shop->vendor || $shop->vendor->trashed() || $shop->vendor->marketplace_status !== 'active') {
+            return [
+                'is_available' => false,
+                'message' => 'The merchant providing this item is currently not active on the marketplace.',
+                'fee' => '0.00',
+            ];
+        }
+
+        if ($shop->vendor->user && $shop->vendor->user->status !== 'active') {
+            return [
+                'is_available' => false,
+                'message' => 'The merchant user account is inactive.',
                 'fee' => '0.00',
             ];
         }
@@ -31,6 +47,24 @@ class FulfillmentAvailabilityService
             ->first();
 
         if ($lane) {
+            // Logistics Company Invariant: If assigned to corridor, fleet must be active and not suspended
+            if ($lane->assigned_logistics_company_id) {
+                $assignedLogistics = \App\Models\LogisticsCompanyProfile::withTrashed()->with('user')->find($lane->assigned_logistics_company_id);
+                if (!$assignedLogistics || $assignedLogistics->trashed() || $assignedLogistics->status !== 'active' || ($assignedLogistics->user && $assignedLogistics->user->status !== 'active')) {
+                    return [
+                        'is_available' => false,
+                        'lane_id' => $lane->id,
+                        'origin_lga_id' => $shop->lga_id,
+                        'destination_lga_id' => $destinationLgaId,
+                        'fee' => '0.00',
+                        'message' => 'The logistics fleet servicing this route corridor is currently deactivated or suspended.',
+                        'rate_tier' => 'logistics_deactivated',
+                        'is_collection_point' => ($shop->lga_id !== $destinationLgaId),
+                        'collection_points' => [],
+                    ];
+                }
+            }
+
             $fee = BcMathService::add($lane->base_fee, '0.00');
             if ($isKekeOrBulky) {
                 $fee = BcMathService::add($fee, $lane->bulky_surcharge);
@@ -242,6 +276,11 @@ class FulfillmentAvailabilityService
     {
         $query = \App\Models\LogisticsCollectionPoint::where('lga_id', $destinationLgaId)
             ->where('is_active', true)
+            ->whereHas('logisticsCompany', function ($q) {
+                $q->whereNull('deleted_at')
+                    ->where('status', 'active')
+                    ->whereHas('user', fn($uq) => $uq->where('status', 'active'));
+            })
             ->with('logisticsCompany');
 
         if ($assignedCompanyId) {
@@ -286,8 +325,11 @@ class FulfillmentAvailabilityService
                 continue;
             }
 
-            $product = Product::with(['shop.lga', 'shop.state', 'vendor'])->find($productId);
-            if (!$product || !$product->shop) {
+            $product = Product::with(['shop.lga', 'shop.state', 'vendor.user'])->find($productId);
+            if (!$product || !$product->shop || $product->shop->trashed() || !$product->shop->is_active) {
+                continue;
+            }
+            if (!$product->vendor || $product->vendor->trashed() || $product->vendor->marketplace_status !== 'active' || ($product->vendor->user && $product->vendor->user->status !== 'active')) {
                 continue;
             }
 

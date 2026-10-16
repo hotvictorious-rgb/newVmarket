@@ -453,6 +453,15 @@ class VendorTerminalApiController extends Controller
                 'days_remaining' => $daysRemaining,
                 'is_approved' => (bool)$product->is_approved,
                 'is_flagship' => (bool)$product->is_vmarket_flagship,
+                'condition' => $product->condition ?? 'brand_new',
+                'condition_label' => $product->condition_label,
+                'package_tier' => $product->package_tier ?? 'bike',
+                'package_tier_label' => $product->package_tier_label,
+                'slash_price' => $product->slash_price,
+                'discount_percent' => $product->discount_percent,
+                'warranty_type' => $product->warranty_type ?? 'in_store_testing',
+                'warranty_label' => $product->warranty_label,
+                'video_url' => $product->video_url,
             ];
         });
 
@@ -483,9 +492,21 @@ class VendorTerminalApiController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'unit_price' => 'required|numeric|min:1',
-            'slash_price' => 'nullable|numeric|gt:unit_price',
-            'inventory_quantity' => 'required|integer|min:0',
+            'unit_price' => [
+                'required',
+                'numeric',
+                'min:1.00',
+                'max:50000000.00',
+                'regex:/^\d+(\.\d{1,2})?$/',
+            ],
+            'slash_price' => [
+                'nullable',
+                'numeric',
+                'gt:unit_price',
+                'max:100000000.00',
+                'regex:/^\d+(\.\d{1,2})?$/',
+            ],
+            'inventory_quantity' => 'required|integer|min:0|max:100000',
             'category_id' => 'required|integer|exists:categories,id',
             'condition' => 'nullable|string|in:brand_new,uk_used',
             'package_tier' => 'nullable|string|in:bike,keke,standard,bulky',
@@ -499,8 +520,13 @@ class VendorTerminalApiController extends Controller
                 'regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})([\?&].*)?$/'
             ],
         ], [
-            'video_url.regex' => 'Please provide a valid YouTube product video link (e.g., https://youtube.com/watch?v=... or https://youtu.be/...).',
+            'unit_price.min' => 'Product unit price must be at least ₦1.00 (Paystack standard minimum).',
+            'unit_price.max' => 'Product unit price cannot exceed ₦50,000,000.00 per unit.',
+            'unit_price.regex' => 'Product unit price must be a valid amount with at most 2 decimal places (kobo).',
             'slash_price.gt' => 'The original slash price must be greater than the selling price.',
+            'slash_price.max' => 'Original slash price cannot exceed ₦100,000,000.00.',
+            'slash_price.regex' => 'Original slash price must be a valid amount with at most 2 decimal places (kobo).',
+            'video_url.regex' => 'Please provide a valid YouTube product video link (e.g., https://youtube.com/watch?v=... or https://youtu.be/...).',
             'condition.in' => 'Condition must be strictly Brand New or UK Used.',
             'package_tier.in' => 'Delivery logistics must be strictly Bike or Keke Cargo.',
         ]);
@@ -516,8 +542,8 @@ class VendorTerminalApiController extends Controller
             'warranty_type' => $validated['warranty_type'] ?? 'in_store_testing',
             'name' => strip_tags(trim($validated['name'])),
             'slug' => Str::slug($validated['name']) . '-' . rand(100, 999),
-            'unit_price' => number_format((float)$validated['unit_price'], 2, '.', ''),
-            'slash_price' => !empty($validated['slash_price']) ? number_format((float)$validated['slash_price'], 2, '.', '') : null,
+            'unit_price' => bcadd((string)$validated['unit_price'], '0', 2),
+            'slash_price' => !empty($validated['slash_price']) ? bcadd((string)$validated['slash_price'], '0', 2) : null,
             'inventory_quantity' => $validated['inventory_quantity'],
             'is_in_stock' => $validated['inventory_quantity'] > 0,
             'description' => isset($validated['description']) ? strip_tags(trim($validated['description'])) : null,
