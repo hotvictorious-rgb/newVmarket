@@ -26,6 +26,7 @@ class Order extends Model
         'origin_lga_id',
         'destination_lga_id',
         'delivery_lane_id',
+        'logistics_company_id',
         'merchandise_subtotal',
         'delivery_fee',
         'cashback_redeemed',
@@ -175,6 +176,11 @@ class Order extends Model
     public function rider()
     {
         return $this->belongsTo(RiderProfile::class, 'rider_id');
+    }
+
+    public function logisticsCompany()
+    {
+        return $this->belongsTo(LogisticsCompanyProfile::class, 'logistics_company_id');
     }
 
     public function items()

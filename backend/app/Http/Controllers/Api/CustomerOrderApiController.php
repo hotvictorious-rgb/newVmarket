@@ -199,9 +199,11 @@ class CustomerOrderApiController extends Controller
 
             // Assign active accredited courier from fleet if collection point assigned
             $rider = null;
+            $logisticsCompanyId = null;
             if ($collectionPointId) {
                 $cp = LogisticsCollectionPoint::find($collectionPointId);
                 if ($cp && $cp->logistics_company_id) {
+                    $logisticsCompanyId = $cp->logistics_company_id;
                     $rider = RiderProfile::where('logistics_company_id', $cp->logistics_company_id)
                         ->where('is_active', true)
                         ->where('is_online', true)
@@ -225,6 +227,15 @@ class CustomerOrderApiController extends Controller
                         ->whereHas('user', fn($q) => $q->where('status', 'active'))
                         ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
                         ->first();
+                if ($rider && $rider->logistics_company_id) {
+                    $logisticsCompanyId = $rider->logistics_company_id;
+                }
+            }
+            if (!$logisticsCompanyId && $laneId) {
+                $lane = DeliveryLane::find($laneId);
+                if ($lane && $lane->logistics_company_id) {
+                    $logisticsCompanyId = $lane->logistics_company_id;
+                }
             }
 
             $orderNumber = 'VM-' . date('Ymd') . '-' . strtoupper(Str::random(4));
@@ -238,6 +249,7 @@ class CustomerOrderApiController extends Controller
                 'shop_id' => $shop->id,
                 'collection_point_id' => $collectionPointId,
                 'rider_id' => $rider ? $rider->id : null,
+                'logistics_company_id' => $logisticsCompanyId,
                 'fulfillment_type' => $validated['fulfillment_type'],
                 'order_status' => 'pending',
                 'payment_status' => 'pending',

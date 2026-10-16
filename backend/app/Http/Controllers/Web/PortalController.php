@@ -1623,81 +1623,89 @@ class PortalController extends Controller
             return back()->with('error', 'Unauthorized: Administrative finance permissions required.');
         }
 
-        $payout = LogisticsPayoutRequest::with('company')->findOrFail($validated['payout_id']);
-        if ($payout->status !== 'pending') {
-            return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
-        }
-
-        $company = $payout->company;
-        if (!$company || $company->status !== 'active') {
-            return back()->with('error', 'Disbursement blocked: Logistics company account is inactive or suspended.');
-        }
-
-        if ($company->isWithinBankCooldown()) {
-            return back()->with('error', 'Disbursement blocked: Logistics company bank account was recently updated and is under a 48-hour security cooldown.');
-        }
-
-        $proofPath = 'storage/payouts/fleet_' . $payout->id . '_' . time() . '.png';
+        $proofPath = 'storage/payouts/fleet_' . $validated['payout_id'] . '_' . time() . '.png';
         if ($request->hasFile('proof')) {
             $path = $request->file('proof')->store('payouts', 'public');
             $proofPath = 'storage/' . $path;
         }
 
-        $payout->status = 'approved';
-        $payout->approved_by_admin_id = $admin->id;
-        $payout->disbursed_at = Carbon::now();
-        $payout->settlement_proof_path = $proofPath;
-        $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Direct corporate NUBAN transfer confirmed.'));
-        $payout->save();
+        return DB::transaction(function () use ($validated, $admin, $proofPath, $request) {
+            $payout = LogisticsPayoutRequest::with('company')->where('id', $validated['payout_id'])->lockForUpdate()->firstOrFail();
+            if ($payout->status !== 'pending') {
+                return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
+            }
 
-        // Multi-channel Treasury WhatsApp & SMS Alert to Fleet HQ
-        \App\Services\NotificationDispatchService::dispatchPayoutDisbursed($payout);
+            $company = $payout->company;
+            if (!$company || $company->status !== 'active') {
+                return back()->with('error', 'Disbursement blocked: Logistics company account is inactive or suspended.');
+            }
 
-        // Authoritative Double-Entry Financial Journal: Discharge payout payable, credit cash_in_escrow outflow
-        $disburseRef = 'FLEET-PAYOUT-' . $payout->id . '-' . date('YmdHis');
-        $formattedPayoutAmount = number_format((float)$payout->amount, 2, '.', '');
-        \App\Models\FinancialJournalEntry::create([
-            'order_id' => null,
-            'transaction_reference' => $disburseRef,
-            'account_name' => 'logistics_payout_payable',
-            'entry_type' => 'debit',
-            'amount' => $formattedPayoutAmount,
-            'currency' => 'NGN',
-            'description' => "Corporate withdrawal liability discharged via bank transfer to {$company->company_name}",
-        ]);
+            if ($company->isWithinBankCooldown()) {
+                return back()->with('error', 'Disbursement blocked: Logistics company bank account was recently updated and is under a 48-hour security cooldown.');
+            }
 
-        \App\Models\FinancialJournalEntry::create([
-            'order_id' => null,
-            'transaction_reference' => $disburseRef,
-            'account_name' => 'cash_in_escrow',
-            'entry_type' => 'credit',
-            'amount' => $formattedPayoutAmount,
-            'currency' => 'NGN',
-            'description' => "Corporate bank transfer disbursement to {$company->company_name} (Acct: {$company->account_number})",
-        ]);
+            $payout->status = 'approved';
+            $payout->approved_by_admin_id = $admin->id;
+            $payout->disbursed_at = Carbon::now();
+            $payout->settlement_proof_path = $proofPath;
+            $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Direct corporate NUBAN transfer confirmed.'));
+            $payout->save();
 
-        AdminAuditLog::create([
-            'user_id' => $admin->id,
-            'action' => 'logistics_payout_disbursed',
-            'target_type' => LogisticsPayoutRequest::class,
-            'target_id' => $payout->id,
-            'old_values' => [
-                'status' => 'pending',
-                'amount' => $payout->amount,
-            ],
-            'new_values' => [
-                'status' => 'approved',
-                'amount' => $payout->amount,
-                'company_id' => $company->id,
-                'company_name' => $company->company_name,
-                'proof_path' => $payout->settlement_proof_path,
-                'admin_notes' => $payout->admin_notes,
-            ],
-            'ip_address' => $request->ip() ?? '127.0.0.1',
-            'user_agent' => $request->userAgent(),
-        ]);
+            // Authoritative Double-Entry Financial Journal: Discharge payout payable, credit cash_in_escrow outflow
+            $disburseRef = 'FLEET-PAYOUT-' . $payout->id . '-' . date('YmdHis');
+            $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
+            \App\Models\FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => $disburseRef,
+                'event_id' => 'EVT-FLEET-PAYOUT-' . $payout->id,
+                'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                'beneficiary_id' => $company->id,
+                'account_name' => 'logistics_payout_payable',
+                'entry_type' => 'debit',
+                'amount' => $formattedPayoutAmount,
+                'currency' => 'NGN',
+                'description' => "Corporate withdrawal liability discharged via bank transfer to {$company->company_name}",
+            ]);
 
-        return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " corporate delivery fee to {$company->company_name}!");
+            \App\Models\FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => $disburseRef,
+                'event_id' => 'EVT-FLEET-PAYOUT-' . $payout->id,
+                'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                'beneficiary_id' => $company->id,
+                'account_name' => 'cash_in_escrow',
+                'entry_type' => 'credit',
+                'amount' => $formattedPayoutAmount,
+                'currency' => 'NGN',
+                'description' => "Corporate bank transfer disbursement to {$company->company_name} (Acct: {$company->account_number})",
+            ]);
+
+            AdminAuditLog::create([
+                'user_id' => $admin->id,
+                'action' => 'logistics_payout_disbursed',
+                'target_type' => LogisticsPayoutRequest::class,
+                'target_id' => $payout->id,
+                'old_values' => [
+                    'status' => 'pending',
+                    'amount' => $payout->amount,
+                ],
+                'new_values' => [
+                    'status' => 'approved',
+                    'amount' => $payout->amount,
+                    'company_id' => $company->id,
+                    'company_name' => $company->company_name,
+                    'proof_path' => $payout->settlement_proof_path,
+                    'admin_notes' => $payout->admin_notes,
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            // Multi-channel Treasury WhatsApp & SMS Alert to Fleet HQ
+            \App\Services\NotificationDispatchService::dispatchPayoutDisbursed($payout);
+
+            return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " corporate delivery fee to {$company->company_name}!");
+        });
     }
 
     /**
@@ -1807,6 +1815,9 @@ class PortalController extends Controller
             \App\Models\FinancialJournalEntry::create([
                 'order_id' => null,
                 'transaction_reference' => $reqRef,
+                'event_id' => 'EVT-FLEET-REQ-' . $payout->id,
+                'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                'beneficiary_id' => $lockedCompany->id,
                 'account_name' => 'logistics_company_wallet',
                 'entry_type' => 'debit',
                 'amount' => $amount,
@@ -1817,6 +1828,9 @@ class PortalController extends Controller
             \App\Models\FinancialJournalEntry::create([
                 'order_id' => null,
                 'transaction_reference' => $reqRef,
+                'event_id' => 'EVT-FLEET-REQ-' . $payout->id,
+                'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                'beneficiary_id' => $lockedCompany->id,
                 'account_name' => 'logistics_payout_payable',
                 'entry_type' => 'credit',
                 'amount' => $amount,
@@ -2856,11 +2870,13 @@ class PortalController extends Controller
             $pickupOtp = Order::generateUniquePickupOtp();
             $guestAccessToken = bin2hex(random_bytes(32));
 
-            // Assign active accredited rider belonging to handling logistics company
+            // Assign active accredited rider and freeze handling logistics company
             $rider = null;
+            $logisticsCompanyId = null;
             if ($collectionPointId) {
                 $assignedCp = \App\Models\LogisticsCollectionPoint::find($collectionPointId);
                 if ($assignedCp && $assignedCp->logistics_company_id) {
+                    $logisticsCompanyId = $assignedCp->logistics_company_id;
                     $rider = RiderProfile::where('logistics_company_id', $assignedCp->logistics_company_id)
                         ->where('is_active', true)
                         ->where('is_online', true)
@@ -2884,6 +2900,15 @@ class PortalController extends Controller
                         ->whereHas('user', fn($q) => $q->where('status', 'active'))
                         ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
                         ->first();
+                if ($rider && $rider->logistics_company_id) {
+                    $logisticsCompanyId = $rider->logistics_company_id;
+                }
+            }
+            if (!$logisticsCompanyId && $laneId) {
+                $assignedLane = \App\Models\DeliveryLane::find($laneId);
+                if ($assignedLane && $assignedLane->logistics_company_id) {
+                    $logisticsCompanyId = $assignedLane->logistics_company_id;
+                }
             }
 
             // Cryptographic CSPRNG Payment Reference Initialization
@@ -2896,6 +2921,7 @@ class PortalController extends Controller
                 'shop_id' => $shop->id,
                 'collection_point_id' => $collectionPointId,
                 'rider_id' => $rider ? $rider->id : null,
+                'logistics_company_id' => $logisticsCompanyId,
                 'fulfillment_type' => $validated['fulfillment_type'],
                 'order_status' => 'pending',
                 'payment_status' => 'pending',
