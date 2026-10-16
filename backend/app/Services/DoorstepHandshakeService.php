@@ -124,6 +124,7 @@ class DoorstepHandshakeService
                     'rejected_qty' => $rejectedQty,
                     'category' => $category,
                     'notes' => $notes,
+                    'defect_photo_path' => $itemInput['defect_photo_path'] ?? null,
                     'accepted_subtotal' => $acceptedSubtotal,
                     'rejected_subtotal' => $rejectedSubtotal,
                 ];
@@ -135,6 +136,9 @@ class DoorstepHandshakeService
                 $line['order_item']->rejected_quantity = $line['rejected_qty'];
                 $line['order_item']->rejection_category = $line['category'];
                 $line['order_item']->rejection_notes = $line['notes'];
+                if (!empty($line['defect_photo_path'])) {
+                    $line['order_item']->defect_photo_path = $line['defect_photo_path'];
+                }
                 $line['order_item']->item_delivery_status = $line['rejected_qty'] > 0
                     ? ($line['accepted_qty'] > 0 ? 'partially_accepted' : 'rejected_in_transit')
                     : 'accepted';
@@ -346,7 +350,23 @@ class DoorstepHandshakeService
             $lockedOrder->delivery_confirmed_by_customer = true;
             $lockedOrder->received_at = BcMathService::comp($totalAcceptedMerchandise, '0.00') > 0 ? $now : null;
             $lockedOrder->refund_window_expires_at = BcMathService::comp($totalAcceptedMerchandise, '0.00') > 0 ? $now->copy()->addHours($refundHours) : null;
-            $lockedOrder->proof_of_delivery_image = $doorstepPhotoPath;
+            if ($doorstepPhotoPath) {
+                $lockedOrder->proof_of_delivery_image = $doorstepPhotoPath;
+            }
+            $rejectionPhotos = [];
+            foreach ($manifestItems as $mi) {
+                if (!empty($mi['defect_photo_path'])) {
+                    $rejectionPhotos[] = [
+                        'order_item_id' => $mi['order_item_id'] ?? null,
+                        'photo_path' => $mi['defect_photo_path'],
+                        'rejection_category' => $mi['rejection_category'] ?? null,
+                        'rejection_notes' => $mi['rejection_notes'] ?? null,
+                    ];
+                }
+            }
+            if (!empty($rejectionPhotos)) {
+                $lockedOrder->doorstep_rejection_photos = $rejectionPhotos;
+            }
             $lockedOrder->save();
 
             // 9. Admin Audit Log
@@ -384,9 +404,9 @@ class DoorstepHandshakeService
      * Handshake 3: Rider returns rejected parcel to Vendor Shop.
      * Vendor inspects physical item and provides the 6-Digit Return OTP to Rider.
      */
-    public function verifyVendorReturnOtp(ReturnCase $case, RiderProfile $rider, string $otp): array
+    public function verifyVendorReturnOtp(ReturnCase $case, RiderProfile $rider, string $otp, ?string $returnPhotoPath = null): array
     {
-        return DB::transaction(function () use ($case, $rider, $otp) {
+        return DB::transaction(function () use ($case, $rider, $otp, $returnPhotoPath) {
             $lockedCase = ReturnCase::where('id', $case->id)->lockForUpdate()->first();
 
             if (!$lockedCase) {
@@ -403,6 +423,9 @@ class DoorstepHandshakeService
 
             $lockedCase->status = 'returned_to_vendor';
             $lockedCase->returned_to_vendor_at = Carbon::now();
+            if ($returnPhotoPath) {
+                $lockedCase->vendor_return_photo_path = $returnPhotoPath;
+            }
             $lockedCase->save();
 
             // Update item statuses to returned_to_vendor

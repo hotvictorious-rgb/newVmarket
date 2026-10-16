@@ -17,6 +17,7 @@ class OrderItem extends Model
         'rejected_quantity',
         'rejection_category',
         'rejection_notes',
+        'defect_photo_path',
         'item_delivery_status',
     ];
 

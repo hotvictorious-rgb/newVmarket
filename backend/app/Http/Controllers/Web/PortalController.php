@@ -699,7 +699,7 @@ class PortalController extends Controller
      */
     public function adminOrdersPage(Request $request)
     {
-        $recentOrders = Order::with(['customer:id,name', 'vendor:id,business_name', 'shop:id,name'])
+        $recentOrders = Order::with(['customer:id,name,phone', 'vendor:id,business_name', 'shop:id,name', 'rider.user', 'items', 'returnCases'])
             ->latest()
             ->get();
 
@@ -987,7 +987,7 @@ class PortalController extends Controller
     {
         $vendor = $this->resolveVendorProfile();
         $orders = Order::where('vendor_id', $vendor->id)
-            ->with(['customer:id,name,phone', 'rider.user', 'shop'])
+            ->with(['customer:id,name,phone', 'rider.user', 'shop', 'items', 'returnCases'])
             ->latest()
             ->get();
 

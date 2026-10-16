@@ -106,6 +106,34 @@
         </div>
     @endif
 
+    @if($order->delivery_attempt_photo_path)
+        <!-- ATTEMPT FAILURE PROOF CARD -->
+        <div style="background: #FFFBEB; border: 2px solid #F59E0B; border-radius: 16px; padding: 20px; margin-bottom: 24px; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.15);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">⚠️</span>
+                    <strong style="font-size: 15px; color: #92400E;">Courier Delivery Attempt Logged</strong>
+                </div>
+                <span style="background: #FEF3C7; color: #B45309; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; border: 1px solid #FDE68A;">
+                    ATTEMPT #{{ $order->delivery_attempt_count ?? 1 }} &bull; {{ $order->last_delivery_attempt_at ? $order->last_delivery_attempt_at->format('h:i A') : 'Today' }}
+                </span>
+            </div>
+            <p style="font-size: 13px; color: #78350F; margin: 0 0 12px; line-height: 1.5;">
+                Our dispatch courier arrived at your address but could not complete handover (e.g., gate locked or recipient unreachable).
+            </p>
+            <div style="background: #FFFFFF; border: 1px solid #FDE68A; border-radius: 10px; padding: 12px; display: flex; align-items: center; gap: 14px;">
+                <img src="{{ asset($order->delivery_attempt_photo_path) }}" alt="Attempt Proof" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid #FCD34D;">
+                <div>
+                    <span style="font-size: 12px; font-weight: 700; color: #92400E; display: block;">📸 Location &amp; Premises Photo Proof</span>
+                    <span style="font-size: 11.5px; color: #78350F;">Live photo captured on courier device at doorstep arrival.</span>
+                    <div style="margin-top: 6px;">
+                        <a href="{{ asset($order->delivery_attempt_photo_path) }}" target="_blank" style="font-size: 11px; font-weight: 700; color: #B45309; text-decoration: none;">View Full Photo ↗</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
     <!-- ========================================================================= -->
     <!-- 2. TAMPER-PROOF CUSTOMER-SIDE HANDSHAKE (PHONE-ONLY CONFIRMATION) -->
     <!-- ========================================================================= -->
@@ -251,10 +279,25 @@
 
                 @if($order->pickup_proof_image)
                     <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px; display: flex; align-items: center; gap: 14px; margin-top: 10px;">
-                        <img src="{{ $order->pickup_proof_image }}" alt="Pickup Condition Proof" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #CBD5E1;">
+                        <img src="{{ asset($order->pickup_proof_image) }}" alt="Pickup Condition Proof" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #CBD5E1;">
                         <div>
                             <span style="font-size: 11.5px; font-weight: 700; color: #0F172A; display: block;">🏬 Courier Counter Pickup Proof Snapped</span>
                             <span style="font-size: 11px; color: #64748B;">Recorded at branch counter ({{ $order->picked_up_at ? $order->picked_up_at->format('d M, h:i A') : 'Handover' }})</span>
+                        </div>
+                    </div>
+                @endif
+
+                @if(is_array($order->doorstep_rejection_photos) && count($order->doorstep_rejection_photos) > 0)
+                    <div style="background: #FEF2F2; border: 1px solid #FECACA; border-radius: 10px; padding: 12px; margin-top: 10px;">
+                        <span style="font-size: 11.5px; font-weight: 700; color: #991B1B; display: block; margin-bottom: 8px;">
+                            ❌ Doorstep Rejected Item Photo Proofs ({{ count($order->doorstep_rejection_photos) }})
+                        </span>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            @foreach($order->doorstep_rejection_photos as $rPhoto)
+                                <a href="{{ asset($rPhoto) }}" target="_blank">
+                                    <img src="{{ asset($rPhoto) }}" alt="Rejection Snap" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px; border: 1px solid #F87171;">
+                                </a>
+                            @endforeach
                         </div>
                     </div>
                 @endif
@@ -361,6 +404,14 @@
                     <div>
                         <strong style="font-size: 13.5px; color: #0F172A; display: block;">{{ $item->product_name }}</strong>
                         <span style="font-size: 12px; color: #64748B;">Qty: {{ $item->quantity }} &bull; Unit: &#8358;{{ number_format((float)$item->unit_price, 2) }}</span>
+                        @if($item->defect_photo_path)
+                            <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
+                                <span style="background: #FEE2E2; color: #DC2626; font-size: 10.5px; font-weight: 800; padding: 2px 7px; border-radius: 4px;">
+                                    ❌ Rejected ({{ ucfirst($item->fulfillment_status) }})
+                                </span>
+                                <a href="{{ asset($item->defect_photo_path) }}" target="_blank" style="font-size: 11px; font-weight: 700; color: #DC2626; text-decoration: none;">📸 View Defect Snap ↗</a>
+                            </div>
+                        @endif
                     </div>
                     <strong style="font-size: 14px; color: #5E17EB;">
                         &#8358;{{ number_format((float)$item->line_total, 2) }}

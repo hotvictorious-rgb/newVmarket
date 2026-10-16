@@ -209,6 +209,10 @@ class RiderTerminalApiController extends Controller
             'rider_arrived_at' => $order->rider_arrived_at ? $order->rider_arrived_at->toIso8601String() : null,
             'received_at' => $order->received_at ? $order->received_at->toIso8601String() : null,
             'created_at' => $order->created_at ? $order->created_at->toIso8601String() : null,
+            'pickup_proof_image' => $order->pickup_proof_image ? url($order->pickup_proof_image) : null,
+            'proof_of_delivery_image' => $order->proof_of_delivery_image ? url($order->proof_of_delivery_image) : null,
+            'delivery_attempt_photo_path' => $order->delivery_attempt_photo_path ? url($order->delivery_attempt_photo_path) : null,
+            'doorstep_rejection_photos' => $order->doorstep_rejection_photos,
             'shop' => $order->shop ? [
                 'id' => $order->shop->id,
                 'name' => $order->shop->name,
@@ -229,6 +233,10 @@ class RiderTerminalApiController extends Controller
                 'id' => $item->id,
                 'product_name' => $item->product_name,
                 'quantity' => $item->quantity,
+                'accepted_quantity' => $item->accepted_quantity,
+                'rejected_quantity' => $item->rejected_quantity,
+                'rejection_category' => $item->rejection_category,
+                'defect_photo_path' => $item->defect_photo_path ? url($item->defect_photo_path) : null,
             ])->values()->all() : [],
         ];
     }
@@ -238,6 +246,7 @@ class RiderTerminalApiController extends Controller
         $validated = $request->validate([
             'order_id' => 'required|integer|exists:orders,id',
             'otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
+            'proof_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:5120',
         ]);
 
         if ($error = $this->guardRiderWithLogistics($request)) {
@@ -247,11 +256,21 @@ class RiderTerminalApiController extends Controller
         $rider = $request->user()->riderProfile;
         $order = Order::findOrFail($validated['order_id']);
 
+        if ($order->pickup_confirmed_by_rider) {
+            return response()->json(['status' => false, 'message' => 'Pickup has already been confirmed and sealed. Photo proof is immutable.'], 422);
+        }
+
         if ($order->rider_id && (int)$order->rider_id !== (int)$rider->id) {
             return response()->json(['status' => false, 'message' => 'Unauthorized: This order is assigned to another dispatch courier.'], 403);
         }
 
-        $result = $this->settlementService->verifyRiderPickupOtp($order, $validated['otp'], $rider);
+        $photoPath = null;
+        if ($request->hasFile('proof_photo')) {
+            $path = $request->file('proof_photo')->store('pickup_proofs', 'public');
+            $photoPath = 'storage/' . $path;
+        }
+
+        $result = $this->settlementService->verifyRiderPickupOtp($order, $validated['otp'], $rider, $photoPath);
 
         return response()->json([
             'status' => $result['success'],
@@ -323,6 +342,9 @@ class RiderTerminalApiController extends Controller
         $order->delivery_attempt_count = ((int)$order->delivery_attempt_count) + 1;
         $order->delivery_failure_reason = $validated['reason'];
         $order->delivery_attempt_notes = $validated['notes'] ?? null;
+        if ($photoPath) {
+            $order->delivery_attempt_photo_path = $photoPath;
+        }
         $order->last_delivery_attempt_at = Carbon::now();
 
         // If max attempts reached (>= 2 attempts), initiate return-to-vendor protocol!
@@ -432,6 +454,7 @@ class RiderTerminalApiController extends Controller
         $validated = $request->validate([
             'order_id' => 'required|integer|exists:orders,id',
             'otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
+            'proof_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:5120',
         ]);
 
         if ($error = $this->guardRiderWithLogistics($request)) {
@@ -441,11 +464,21 @@ class RiderTerminalApiController extends Controller
         $rider = $request->user()->riderProfile;
         $order = Order::findOrFail($validated['order_id']);
 
+        if ($order->order_status === 'delivered') {
+            return response()->json(['status' => false, 'message' => 'Delivery has already been confirmed and sealed. Photo proof is immutable.'], 422);
+        }
+
         if ($order->rider_id && (int)$order->rider_id !== (int)$rider->id) {
             return response()->json(['status' => false, 'message' => 'Unauthorized: This order is assigned to another delivery courier.'], 403);
         }
 
-        $result = $this->settlementService->verifyCustomerDeliveryOtp($order, $validated['otp'], $rider);
+        $photoPath = null;
+        if ($request->hasFile('proof_photo')) {
+            $path = $request->file('proof_photo')->store('doorstep_deliveries', 'public');
+            $photoPath = 'storage/' . $path;
+        }
+
+        $result = $this->settlementService->verifyCustomerDeliveryOtp($order, $validated['otp'], $rider, $photoPath);
 
         return response()->json([
             'status' => $result['success'],
@@ -467,6 +500,7 @@ class RiderTerminalApiController extends Controller
             'manifest_items.*.rejected_quantity' => 'required|integer|min:0',
             'manifest_items.*.rejection_category' => 'nullable|string|in:vendor_issue,transit_damage,customer_change_of_mind',
             'manifest_items.*.rejection_notes' => 'nullable|string|max:500',
+            'manifest_items.*.defect_photo_path' => 'nullable|string',
             'proof_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:5120',
         ]);
 
@@ -477,16 +511,29 @@ class RiderTerminalApiController extends Controller
         $rider = $request->user()->riderProfile;
         $order = Order::findOrFail($validated['order_id']);
 
+        if (in_array($order->order_status, ['delivered', 'returned'])) {
+            return response()->json(['status' => false, 'message' => 'Doorstep handover has already been confirmed and sealed. Photo proof is immutable.'], 422);
+        }
+
         $photoPath = null;
         if ($request->hasFile('proof_photo')) {
             $path = $request->file('proof_photo')->store('doorstep_rejections', 'public');
             $photoPath = 'storage/' . $path;
         }
 
+        $manifestItems = $validated['manifest_items'];
+        foreach ($manifestItems as &$itemInput) {
+            $itemId = $itemInput['order_item_id'] ?? 0;
+            if ($request->hasFile("item_photo_{$itemId}")) {
+                $path = $request->file("item_photo_{$itemId}")->store('item_defects', 'public');
+                $itemInput['defect_photo_path'] = 'storage/' . $path;
+            }
+        }
+
         $result = $handshakeService->processDoorstepHandover(
             $order,
             $rider,
-            $validated['manifest_items'],
+            $manifestItems,
             $validated['otp'],
             $photoPath
         );
@@ -511,6 +558,7 @@ class RiderTerminalApiController extends Controller
         $validated = $request->validate([
             'return_case_id' => 'required|integer|exists:return_cases,id',
             'otp' => ['required', 'string', 'size:6'],
+            'proof_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:5120',
         ]);
 
         if ($error = $this->guardRiderWithLogistics($request)) {
@@ -520,7 +568,17 @@ class RiderTerminalApiController extends Controller
         $rider = $request->user()->riderProfile;
         $case = \App\Models\ReturnCase::findOrFail($validated['return_case_id']);
 
-        $result = $handshakeService->verifyVendorReturnOtp($case, $rider, $validated['otp']);
+        if ($case->status === 'returned_to_vendor') {
+            return response()->json(['status' => false, 'message' => 'Vendor return has already been confirmed and sealed. Photo proof is immutable.'], 422);
+        }
+
+        $photoPath = null;
+        if ($request->hasFile('proof_photo')) {
+            $path = $request->file('proof_photo')->store('vendor_returns', 'public');
+            $photoPath = 'storage/' . $path;
+        }
+
+        $result = $handshakeService->verifyVendorReturnOtp($case, $rider, $validated['otp'], $photoPath);
 
         return response()->json([
             'status' => $result['success'],

@@ -173,6 +173,38 @@
                 </div>
 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+                    <!-- Leg 0: Original Merchant Pickup Counter Photo -->
+                    <div style="background: #fafafa; border: 1px solid var(--adm-border); border-radius: 8px; padding: 14px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                            <strong style="font-size: 13px; color: var(--adm-text);">🏬 Merchant Counter Pickup</strong>
+                            <span class="dash-badge dash-badge-neutral" style="font-size: 10.5px;">Leg 0</span>
+                        </div>
+
+                        @if($case->order && $case->order->pickup_proof_image)
+                            <div style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid var(--adm-border);">
+                                <img src="{{ asset($case->order->pickup_proof_image) }}" alt="Pickup Proof" style="width: 100%; height: 140px; object-fit: cover; display: block;">
+                                <div style="padding: 4px 8px; font-size: 11px; background: #fff; text-align: right;">
+                                    <a href="{{ asset($case->order->pickup_proof_image) }}" target="_blank" style="color: var(--adm-primary); font-weight: 600;">View High-Res &rarr;</a>
+                                </div>
+                            </div>
+                        @else
+                            <div style="padding: 30px 10px; text-align: center; color: var(--adm-text-muted); font-size: 12px; border: 1px dashed var(--adm-border); border-radius: 6px; margin-bottom: 10px;">
+                                No pickup photo attached
+                            </div>
+                        @endif
+
+                        <div style="font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+                            <div>
+                                <span style="color: var(--adm-text-muted);">Collected At:</span>
+                                <strong>{{ $case->order && $case->order->picked_up_at ? $case->order->picked_up_at->format('M d, Y · h:i A') : 'Recorded' }}</strong>
+                            </div>
+                            <div>
+                                <span style="color: var(--adm-text-muted);">Collecting Rider:</span>
+                                <strong>{{ $case->order && $case->order->rider && $case->order->rider->user ? $case->order->rider->user->name : 'Courier' }}</strong>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Leg 1: Doorstep Rejection Record -->
                     <div style="background: #fafafa; border: 1px solid var(--adm-border); border-radius: 8px; padding: 14px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
@@ -224,10 +256,21 @@
                             <span class="dash-badge {{ $case->vendor_disputed ? 'dash-badge-danger' : 'dash-badge-neutral' }}" style="font-size: 10.5px;">Leg 2</span>
                         </div>
 
+                        @if($case->vendor_return_photo_path)
+                            <div style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid var(--adm-border);">
+                                <img src="{{ asset($case->vendor_return_photo_path) }}" alt="Vendor Return Handover Photo" style="width: 100%; height: 140px; object-fit: cover; display: block;">
+                                <div style="padding: 4px 8px; font-size: 11px; background: #fff; text-align: right;">
+                                    <span style="float: left; color: #16A34A; font-weight: 700;">✓ Return Handover Snap</span>
+                                    <a href="{{ asset($case->vendor_return_photo_path) }}" target="_blank" style="color: var(--adm-primary); font-weight: 600;">View High-Res &rarr;</a>
+                                </div>
+                            </div>
+                        @endif
+
                         @if($case->vendor_dispute_photo_path)
                             <div style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid var(--adm-border);">
                                 <img src="{{ asset($case->vendor_dispute_photo_path) }}" alt="Vendor Dispute Photo" style="width: 100%; height: 140px; object-fit: cover; display: block;">
                                 <div style="padding: 4px 8px; font-size: 11px; background: #fff; text-align: right;">
+                                    <span style="float: left; color: #DC2626; font-weight: 700;">⚠️ Vendor Dispute Snap</span>
                                     <a href="{{ asset($case->vendor_dispute_photo_path) }}" target="_blank" style="color: var(--adm-primary); font-weight: 600;">View High-Res &rarr;</a>
                                 </div>
                             </div>

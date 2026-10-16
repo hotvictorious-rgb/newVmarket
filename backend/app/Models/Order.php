@@ -40,6 +40,7 @@ class Order extends Model
         'delivery_attempt_count',
         'delivery_failure_reason',
         'delivery_attempt_notes',
+        'delivery_attempt_photo_path',
         'last_delivery_attempt_at',
         'pickup_verification_code',
         'vendor_handover_ready_at',
@@ -56,6 +57,7 @@ class Order extends Model
         'rider_arrived_at',
         'delivery_confirmed_by_customer',
         'proof_of_delivery_image',
+        'doorstep_rejection_photos',
         'customer_delivery_notes',
         'received_at',
         'refund_window_expires_at',
@@ -104,6 +106,7 @@ class Order extends Model
         'settled_at' => 'datetime',
         'paid_at' => 'datetime',
         'expires_at' => 'datetime',
+        'doorstep_rejection_photos' => 'array',
     ];
 
     public function isPickupLocked(): bool

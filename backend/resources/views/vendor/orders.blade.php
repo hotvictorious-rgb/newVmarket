@@ -124,11 +124,40 @@
                                         <div style="font-size: 11.5px; color: #334155; margin-top: 3px;">
                                             Courier: <strong>{{ $order->rider->user->name ?? 'Assigned Rider' }}</strong>
                                         </div>
-                                        @if($order->pickup_proof_image)
-                                            <button type="button" onclick="openProofModal('{{ $order->pickup_proof_image }}', '{{ $order->order_number }}')" style="margin-top: 6px; background: #FFFFFF; border: 1px solid #CBD5E1; color: #0F172A; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
-                                                <span>📸 View Counter Photo</span>
+                                        <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+                                            <button type="button" 
+                                                onclick='openVendorAuditModal(@json([
+                                                    'order_number' => $order->order_number,
+                                                    'status' => ucfirst(str_replace('_', ' ', $order->order_status)),
+                                                    'customer' => $order->customer->name ?? 'Shopper',
+                                                    'rider' => $order->rider->user->name ?? 'Assigned Courier',
+                                                    'pickup_photo' => $order->pickup_proof_image ? asset($order->pickup_proof_image) : null,
+                                                    'picked_up_at' => $order->picked_up_at ? $order->picked_up_at->format('M d, h:i A') : null,
+                                                    'delivery_photo' => $order->proof_of_delivery_image ? asset($order->proof_of_delivery_image) : null,
+                                                    'delivered_at' => $order->received_at ? $order->received_at->format('M d, h:i A') : null,
+                                                    'attempt_photo' => $order->delivery_attempt_photo_path ? asset($order->delivery_attempt_photo_path) : null,
+                                                    'attempt_at' => $order->last_delivery_attempt_at ? $order->last_delivery_attempt_at->format('M d, h:i A') : null,
+                                                    'rejection_photos' => is_array($order->doorstep_rejection_photos) ? array_map(fn($p) => asset($p), $order->doorstep_rejection_photos) : [],
+                                                    'item_defects' => $order->items ? $order->items->whereNotNull('defect_photo_path')->map(fn($it) => [
+                                                        'name' => $it->product_name,
+                                                        'status' => $it->fulfillment_status,
+                                                        'photo' => asset($it->defect_photo_path),
+                                                    ])->values()->all() : [],
+                                                    'return_photo' => (isset($order->returnCases) && $order->returnCases->isNotEmpty() && $order->returnCases->first()->vendor_return_photo_path) ? asset($order->returnCases->first()->vendor_return_photo_path) : null,
+                                                ]))'
+                                                style="background: #FFFFFF; border: 1.5px solid #6366F1; color: #4338CA; font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
+                                                <span>📸 Handshake Audit Proofs</span>
+                                                @php
+                                                    $vendorProofCount = ($order->pickup_proof_image ? 1 : 0) 
+                                                        + ($order->proof_of_delivery_image ? 1 : 0) 
+                                                        + ($order->delivery_attempt_photo_path ? 1 : 0)
+                                                        + (isset($order->items) && $order->items->whereNotNull('defect_photo_path')->count() > 0 ? 1 : 0);
+                                                @endphp
+                                                @if($vendorProofCount > 0)
+                                                    <span style="background: #EEF2FF; color: #4F46E5; border-radius: 999px; padding: 1px 5px; font-size: 9.5px; font-weight: 800;">{{ $vendorProofCount }}</span>
+                                                @endif
                                             </button>
-                                        @endif
+                                        </div>
                                     </div>
                                 @elseif($order->isVendorHandoverReady())
                                     <!-- Vendor clicked handover ready: reveal secret OTP to show to courier -->
@@ -175,21 +204,38 @@
         </div>
     </div>
 
-    <!-- Package Proof Photo Modal -->
-    <div id="proofPhotoModal" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); z-index: 9999; align-items: center; justify-content: center; padding: 20px;">
-        <div style="background: #FFFFFF; border-radius: 16px; max-width: 480px; width: 100%; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.3);">
-            <div style="padding: 16px 20px; border-bottom: 1px solid #E2E8F0; display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="font-size: 15px; font-weight: 800; margin: 0; color: #0F172A;" id="proofModalTitle">📸 Package Condition at Pickup</h3>
-                <button type="button" onclick="closeProofModal()" style="background: transparent; border: none; font-size: 20px; cursor: pointer; color: #64748B;">&times;</button>
+    <!-- Vendor Visual Audit Dossier Modal -->
+    <div id="vendorAuditModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); z-index: 99999; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px);">
+        <div style="background: #FFFFFF; border-radius: 20px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4); border: 1px solid #E2E8F0;">
+            
+            <!-- Modal Header -->
+            <div style="padding: 20px 24px; border-bottom: 1px solid #E2E8F0; display: flex; justify-content: space-between; align-items: center; background: #0F172A; color: #FFFFFF; border-radius: 20px 20px 0 0;">
+                <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 18px;">📸</span>
+                        <h3 style="font-size: 16px; font-weight: 800; margin: 0; color: #FFFFFF;" id="vendorModalTitle">Order Photographic Audit Trail</h3>
+                    </div>
+                    <span style="font-size: 11.5px; color: #94A3B8; margin-top: 3px; display: block;">
+                        Immutable Multi-Party Evidence &bull; Locked upon Handshake Verification
+                    </span>
+                </div>
+                <button type="button" onclick="closeVendorAuditModal()" style="background: rgba(255,255,255,0.1); border: none; color: #FFFFFF; width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;">&times;</button>
             </div>
-            <div style="padding: 20px; text-align: center;">
-                <img id="proofModalImg" src="" alt="Pickup Proof" style="max-width: 100%; max-height: 380px; object-fit: contain; border-radius: 10px; border: 1px solid #CBD5E1;">
-                <p style="font-size: 12px; color: #64748B; margin: 12px 0 0;">
-                    Snapped by courier on mobile device at branch counter prior to departure.
-                </p>
+
+            <!-- Immutability Security Banner -->
+            <div style="background: #ECFDF5; border-bottom: 1px solid #A7F3D0; padding: 10px 24px; display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: #065F46; font-weight: 700;">
+                <span>🛡️</span>
+                <span>Immutable Proofs: Live camera photos taken at counter pickup and doorstep handover are permanently preserved and cannot be tampered with or deleted.</span>
             </div>
-            <div style="padding: 12px 20px; background: #F8FAFC; border-top: 1px solid #E2E8F0; text-align: right;">
-                <button type="button" onclick="closeProofModal()" style="background: #0F172A; color: #FFFFFF; font-weight: 700; font-size: 12.5px; padding: 7px 16px; border-radius: 8px; border: none; cursor: pointer;">
+
+            <!-- Modal Body -->
+            <div style="padding: 24px;" id="vendorModalBody">
+                <!-- Injected via JavaScript -->
+            </div>
+
+            <!-- Modal Footer -->
+            <div style="padding: 14px 24px; background: #F8FAFC; border-top: 1px solid #E2E8F0; display: flex; justify-content: flex-end; border-radius: 0 0 20px 20px;">
+                <button type="button" onclick="closeVendorAuditModal()" style="background: #0F172A; color: #FFFFFF; font-weight: 700; font-size: 12px; padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer;">
                     Close
                 </button>
             </div>
@@ -197,14 +243,133 @@
     </div>
 
     <script>
-        function openProofModal(imgSrc, orderNumber) {
-            document.getElementById('proofModalImg').src = imgSrc;
-            document.getElementById('proofModalTitle').innerText = '📸 Counter Proof: ' + orderNumber;
-            document.getElementById('proofPhotoModal').style.display = 'flex';
+        function openVendorAuditModal(data) {
+            document.getElementById('vendorModalTitle').innerText = 'Handshake Proofs: ' + data.order_number + ' (' + data.status + ')';
+            
+            let html = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
+                    <div style="background: #F8FAFC; padding: 12px; border-radius: 10px; border: 1px solid #E2E8F0;">
+                        <span style="font-size: 10.5px; color: #64748B; font-weight: 700; display: block; text-transform: uppercase;">Customer</span>
+                        <strong style="font-size: 13px; color: #0F172A;">${data.customer}</strong>
+                    </div>
+                    <div style="background: #F8FAFC; padding: 12px; border-radius: 10px; border: 1px solid #E2E8F0;">
+                        <span style="font-size: 10.5px; color: #64748B; font-weight: 700; display: block; text-transform: uppercase;">Courier</span>
+                        <strong style="font-size: 13px; color: #0F172A;">${data.rider}</strong>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+            `;
+
+            // Leg 0: Courier Merchant Pickup Counter Photo
+            if (data.pickup_photo) {
+                html += `
+                    <div style="background: #FFFFFF; border: 1.5px solid #E2E8F0; border-radius: 14px; padding: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <strong style="font-size: 13.5px; color: #0F172A;">🏬 Shop Counter Pickup Snap (Leg 0)</strong>
+                            <span style="font-size: 11.5px; color: #64748B;">${data.picked_up_at || 'Verified'}</span>
+                        </div>
+                        <div style="display: flex; gap: 14px; align-items: center;">
+                            <img src="${data.pickup_photo}" alt="Pickup Proof" style="width: 140px; height: 100px; object-fit: cover; border-radius: 10px; border: 1px solid #CBD5E1;">
+                            <div>
+                                <span style="font-size: 12px; font-weight: 700; color: #059669; display: block;">✓ Package Released to Courier</span>
+                                <p style="font-size: 11.5px; color: #64748B; margin: 4px 0 8px;">Courier authenticated counter PIN and snapped initial package condition.</p>
+                                <a href="${data.pickup_photo}" target="_blank" style="font-size: 11px; font-weight: 700; color: #4F46E5; text-decoration: none;">View Full Photo ↗</a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Leg 1: Doorstep Delivery Handover Photo
+            if (data.delivery_photo) {
+                html += `
+                    <div style="background: #FFFFFF; border: 1.5px solid #10B981; border-radius: 14px; padding: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <strong style="font-size: 13.5px; color: #0F172A;">🏡 Doorstep Delivery Snap (Leg 1)</strong>
+                            <span style="font-size: 11.5px; color: #64748B;">${data.delivered_at || 'Delivered'}</span>
+                        </div>
+                        <div style="display: flex; gap: 14px; align-items: center;">
+                            <img src="${data.delivery_photo}" alt="Delivery Proof" style="width: 140px; height: 100px; object-fit: cover; border-radius: 10px; border: 1px solid #10B981;">
+                            <div>
+                                <span style="font-size: 12px; font-weight: 700; color: #059669; display: block;">✓ Package Delivered to Customer</span>
+                                <p style="font-size: 11.5px; color: #64748B; margin: 4px 0 8px;">Customer verified PIN at doorstep. Condition captured live by rider.</p>
+                                <a href="${data.delivery_photo}" target="_blank" style="font-size: 11px; font-weight: 700; color: #10B981; text-decoration: none;">View Full Photo ↗</a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Leg 1-Attempt: Delivery Attempt Failure Photo
+            if (data.attempt_photo) {
+                html += `
+                    <div style="background: #FFFBEB; border: 1.5px solid #F59E0B; border-radius: 14px; padding: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <strong style="font-size: 13.5px; color: #92400E;">⚠️ Courier Doorstep Attempt Failure Snap</strong>
+                            <span style="font-size: 11.5px; color: #B45309;">${data.attempt_at || 'Logged'}</span>
+                        </div>
+                        <div style="display: flex; gap: 14px; align-items: center;">
+                            <img src="${data.attempt_photo}" alt="Attempt Proof" style="width: 140px; height: 100px; object-fit: cover; border-radius: 10px; border: 1px solid #F59E0B;">
+                            <div>
+                                <span style="font-size: 12px; font-weight: 700; color: #B45309; display: block;">Locked Gate / Recipient Unreachable</span>
+                                <p style="font-size: 11.5px; color: #78350F; margin: 4px 0 8px;">Courier visited destination and logged physical evidence of inability to hand over.</p>
+                                <a href="${data.attempt_photo}" target="_blank" style="font-size: 11px; font-weight: 700; color: #B45309; text-decoration: none;">View Full Photo ↗</a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Line-Item Doorstep Defects
+            if (data.item_defects && data.item_defects.length > 0) {
+                html += `
+                    <div style="background: #FEF2F2; border: 1.5px solid #EF4444; border-radius: 14px; padding: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <strong style="font-size: 13.5px; color: #991B1B;">❌ Customer Doorstep Defect Rejection Snaps (${data.item_defects.length})</strong>
+                            <span style="font-size: 11.5px; color: #991B1B; font-weight: 700;">Itemized Manifest Evidence</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 10px;">
+                `;
+                data.item_defects.forEach(function(item) {
+                    html += `
+                        <div style="background: #FFFFFF; border: 1px solid #FECACA; border-radius: 10px; padding: 8px; text-align: center;">
+                            <img src="${item.photo}" alt="${item.name}" style="width: 100%; height: 90px; object-fit: cover; border-radius: 6px; margin-bottom: 6px;">
+                            <strong style="font-size: 11px; color: #0F172A; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.name}</strong>
+                            <span style="font-size: 10px; color: #DC2626; font-weight: 800; text-transform: uppercase;">${item.status}</span>
+                        </div>
+                    `;
+                });
+                html += `</div></div>`;
+            }
+
+            // Leg 2: Vendor Return Snap
+            if (data.return_photo) {
+                html += `
+                    <div style="background: #FAF5FF; border: 1.5px solid #A855F7; border-radius: 14px; padding: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <strong style="font-size: 13.5px; color: #6B21A8;">🏬 Inward Return to Shop Counter (Leg 2)</strong>
+                            <span style="font-size: 11.5px; color: #7E22CE; font-weight: 700;">Returned</span>
+                        </div>
+                        <div style="display: flex; gap: 14px; align-items: center;">
+                            <img src="${data.return_photo}" alt="Return Proof" style="width: 140px; height: 100px; object-fit: cover; border-radius: 10px; border: 1px solid #A855F7;">
+                            <div>
+                                <span style="font-size: 12px; font-weight: 700; color: #7E22CE; display: block;">✓ Returned Package Received at Shop</span>
+                                <p style="font-size: 11.5px; color: #581C87; margin: 4px 0 8px;">Courier returned parcel to shop and verified vendor OTP with live condition snap.</p>
+                                <a href="${data.return_photo}" target="_blank" style="font-size: 11px; font-weight: 700; color: #7E22CE; text-decoration: none;">View Full Photo ↗</a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+            document.getElementById('vendorModalBody').innerHTML = html;
+            document.getElementById('vendorAuditModal').style.display = 'flex';
         }
 
-        function closeProofModal() {
-            document.getElementById('proofPhotoModal').style.display = 'none';
+        function closeVendorAuditModal() {
+            document.getElementById('vendorAuditModal').style.display = 'none';
         }
 
         // Live Auto-Polling for Active Handover Orders
@@ -230,10 +395,6 @@
                                     statusCol.innerHTML = '<span class="dash-badge dash-badge-purple">Out for Delivery</span>';
                                 }
                                 if (handshakeCol) {
-                                    let photoBtn = '';
-                                    if (data.pickup_proof_image) {
-                                        photoBtn = '<button type="button" onclick="openProofModal(\'' + data.pickup_proof_image + '\', \'' + orderNum + '\')" style="margin-top: 6px; background: #FFFFFF; border: 1px solid #CBD5E1; color: #0F172A; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;"><span>📸 View Counter Photo</span></button>';
-                                    }
                                     handshakeCol.innerHTML = `
                                         <div style="background: #F0FDF4; border: 1px solid #BBF7D0; padding: 8px 12px; border-radius: 8px;">
                                             <div style="display: flex; align-items: center; gap: 6px;">
@@ -243,7 +404,6 @@
                                             <div style="font-size: 11.5px; color: #334155; margin-top: 3px;">
                                                 Courier: <strong>${data.rider_name || 'Assigned Courier'}</strong>
                                             </div>
-                                            ${photoBtn}
                                         </div>
                                     `;
                                 }

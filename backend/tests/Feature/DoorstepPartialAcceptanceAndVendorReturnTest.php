@@ -908,5 +908,185 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $this->assertEquals('30500.00', number_format((float)$debits, 2, '.', ''));
         $this->assertEquals('30500.00', number_format((float)$credits, 2, '.', ''));
     }
+
+    /**
+     * Test 15: Multi-Item Doorstep Rejection with Live Defect Photo per Item
+     */
+    public function test_multi_item_doorstep_rejection_stores_item_defect_photo(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+
+        $overallPhoto = UploadedFile::fake()->image('doorstep_handover.jpg');
+        $defectPhotoItem2 = UploadedFile::fake()->image('kettle_broken_element.jpg');
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+            'order_id' => $order->id,
+            'otp' => '719283',
+            'manifest_items' => [
+                [
+                    'order_item_id' => $item1->id,
+                    'accepted_quantity' => 1,
+                    'rejected_quantity' => 0,
+                ],
+                [
+                    'order_item_id' => $item2->id,
+                    'accepted_quantity' => 0,
+                    'rejected_quantity' => 1,
+                    'rejection_category' => 'vendor_issue',
+                    'rejection_notes' => 'Element broken.',
+                ],
+            ],
+            'proof_photo' => $overallPhoto,
+            "item_photo_{$item2->id}" => $defectPhotoItem2,
+        ]);
+
+        $response->assertStatus(200);
+
+        $order->refresh();
+        $this->assertNotNull($order->proof_of_delivery_image);
+        $this->assertNotNull($order->doorstep_rejection_photos);
+        $this->assertCount(1, $order->doorstep_rejection_photos);
+        $this->assertEquals($item2->id, $order->doorstep_rejection_photos[0]['order_item_id']);
+
+        $item2->refresh();
+        $this->assertNotNull($item2->defect_photo_path);
+        $this->assertStringContainsString('item_defects', $item2->defect_photo_path);
+    }
+
+    /**
+     * Test 16: Doorstep Unreachable Attempt Stores Gate/Premises Live Photo
+     */
+    public function test_delivery_attempt_failed_stores_locked_gate_photo_proof(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+
+        $gatePhoto = UploadedFile::fake()->image('locked_estate_gate.jpg');
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->postJson('/api/v1/rider/orders/delivery-attempt-failed', [
+            'order_id' => $order->id,
+            'reason' => 'gate_locked',
+            'notes' => 'Estate security refused access without resident pass.',
+            'proof_photo' => $gatePhoto,
+        ]);
+
+        $response->assertStatus(200);
+
+        $order->refresh();
+        $this->assertEquals(1, $order->delivery_attempt_count);
+        $this->assertEquals('gate_locked', $order->delivery_failure_reason);
+        $this->assertNotNull($order->delivery_attempt_photo_path);
+        $this->assertStringContainsString('delivery_attempts', $order->delivery_attempt_photo_path);
+    }
+
+    /**
+     * Test 17: Vendor Return Handshake Stores Vendor Counter Return Photo
+     */
+    public function test_vendor_return_otp_stores_counter_return_photo_proof(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+
+        // Perform rejection to generate return case
+        Sanctum::actingAs($this->riderUser);
+        $doorstepRes = $this->postJson('/api/v1/rider/orders/doorstep-handover', [
+            'order_id' => $order->id,
+            'otp' => '719283',
+            'manifest_items' => [
+                [
+                    'order_item_id' => $item1->id,
+                    'accepted_quantity' => 0,
+                    'rejected_quantity' => 1,
+                    'rejection_category' => 'vendor_issue',
+                    'rejection_notes' => 'Defective',
+                ],
+                [
+                    'order_item_id' => $item2->id,
+                    'accepted_quantity' => 0,
+                    'rejected_quantity' => 1,
+                    'rejection_category' => 'vendor_issue',
+                    'rejection_notes' => 'Defective',
+                ],
+            ],
+        ]);
+
+        $caseData = $doorstepRes->json('data.return_case');
+        $returnCase = ReturnCase::findOrFail($caseData['id']);
+
+        $counterReturnPhoto = UploadedFile::fake()->image('vendor_counter_return.jpg');
+
+        $returnRes = $this->postJson('/api/v1/rider/orders/verify-vendor-return-otp', [
+            'return_case_id' => $returnCase->id,
+            'otp' => $returnCase->vendor_return_otp,
+            'proof_photo' => $counterReturnPhoto,
+        ]);
+
+        $returnRes->assertStatus(200);
+
+        $returnCase->refresh();
+        $this->assertEquals('returned_to_vendor', $returnCase->status);
+        $this->assertNotNull($returnCase->vendor_return_photo_path);
+        $this->assertStringContainsString('vendor_returns', $returnCase->vendor_return_photo_path);
+    }
+
+    /**
+     * Test 18: Photo Proof Immutability Prevents Post-Verification Alteration
+     */
+    public function test_photo_proof_immutability_blocks_post_verification_tampering(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+
+        Sanctum::actingAs($this->riderUser);
+        $firstRes = $this->postJson('/api/v1/rider/orders/verify-delivery-otp', [
+            'order_id' => $order->id,
+            'otp' => '719283',
+            'proof_photo' => UploadedFile::fake()->image('doorstep_photo_1.jpg'),
+        ]);
+        $firstRes->assertStatus(200);
+
+        // Subsequent attempt to re-verify or mutate photo is rejected
+        $tamperRes = $this->postJson('/api/v1/rider/orders/verify-delivery-otp', [
+            'order_id' => $order->id,
+            'otp' => '719283',
+            'proof_photo' => UploadedFile::fake()->image('doorstep_photo_tampered.jpg'),
+        ]);
+        $tamperRes->assertStatus(422);
+        $tamperRes->assertJsonPath('message', 'Delivery has already been confirmed and sealed. Photo proof is immutable.');
+    }
+
+    /**
+     * Test 19: Customer Full Order Details Exposes Visual Audit Trail
+     */
+    public function test_customer_full_order_details_exposes_visual_audit_trail(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+
+        $order->pickup_proof_image = 'storage/pickup_proofs/pickup_sample.jpg';
+        $order->proof_of_delivery_image = 'storage/doorstep_deliveries/delivery_sample.jpg';
+        $order->delivery_attempt_photo_path = 'storage/delivery_attempts/gate_sample.jpg';
+        $order->save();
+
+        Sanctum::actingAs($this->customer);
+        $response = $this->getJson("/api/v1/customer/orders/{$order->order_number}");
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('status', true);
+        $response->assertJsonStructure([
+            'data' => [
+                'visual_audit_trail' => [
+                    'pickup_counter_photo',
+                    'doorstep_delivery_photo',
+                    'delivery_attempt_photo',
+                    'item_rejection_photos',
+                ],
+                'items' => [
+                    '*' => [
+                        'defect_photo',
+                    ],
+                ],
+            ],
+        ]);
+    }
 }
+
 

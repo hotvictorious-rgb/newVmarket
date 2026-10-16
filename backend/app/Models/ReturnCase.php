@@ -19,6 +19,7 @@ class ReturnCase extends Model
         'rejection_category',
         'vendor_return_otp',
         'doorstep_photo_path',
+        'vendor_return_photo_path',
         'returned_to_vendor_at',
         'returned_by_rider_id',
         'vendor_disputed',
