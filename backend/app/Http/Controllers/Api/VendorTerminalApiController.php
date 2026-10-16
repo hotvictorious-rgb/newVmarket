@@ -488,6 +488,14 @@ class VendorTerminalApiController extends Controller
             'category_id' => 'required|integer|exists:categories,id',
             'description' => 'nullable|string|max:2000',
             'image_url' => 'nullable|string|max:500',
+            'video_url' => [
+                'nullable',
+                'string',
+                'max:255',
+                'regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})([\?&].*)?$/'
+            ],
+        ], [
+            'video_url.regex' => 'Please provide a valid YouTube product video link (e.g., https://youtube.com/watch?v=... or https://youtu.be/...).',
         ]);
 
         $product = Product::create([
@@ -501,6 +509,7 @@ class VendorTerminalApiController extends Controller
             'is_in_stock' => $validated['inventory_quantity'] > 0,
             'description' => isset($validated['description']) ? strip_tags(trim($validated['description'])) : null,
             'thumbnail' => $validated['image_url'] ?? 'storage/products/default.png',
+            'youtube_video_id' => Product::extractYoutubeVideoId($request->input('video_url')),
             'listing_status' => 'listed',
             'is_approved' => true,
             'listing_confirmed_at' => Carbon::now(),

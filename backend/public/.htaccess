@@ -40,6 +40,8 @@
     Header set X-XSS-Protection "1; mode=block"
     Header set X-Frame-Options "SAMEORIGIN"
     Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header set Permissions-Policy "geolocation=(), microphone=(), camera=(self)"
+    Header set Content-Security-Policy "default-src 'self'; frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com; img-src 'self' data: https://img.youtube.com https://images.unsplash.com https:; script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.paystack.co;"
 </IfModule>
 
 # GZIP & Deflate Compression for Shared Hosting

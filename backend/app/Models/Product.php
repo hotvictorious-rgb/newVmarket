@@ -16,6 +16,7 @@ class Product extends Model
         'slug',
         'description',
         'thumbnail',
+        'youtube_video_id',
         'images',
         'unit_price',
         'is_in_stock',
@@ -36,6 +37,11 @@ class Product extends Model
         'listing_confirmed_at' => 'datetime',
     ];
 
+    protected $appends = [
+        'video_thumbnail_url',
+        'video_embed_url',
+    ];
+
     public function vendor()
     {
         return $this->belongsTo(VendorProfile::class, 'vendor_id');
@@ -49,6 +55,54 @@ class Product extends Model
     public function category()
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * Deterministic YouTube Thumbnail URL.
+     * Zero SSRF: Backend never fetches this image; clients load directly from Google CDN.
+     */
+    public function getVideoThumbnailUrlAttribute(): ?string
+    {
+        return $this->youtube_video_id
+            ? "https://img.youtube.com/vi/{$this->youtube_video_id}/hqdefault.jpg"
+            : null;
+    }
+
+    /**
+     * Deterministic Privacy-Enhanced YouTube Embed URL.
+     * Zero SSRF & XSS: Bounded to 11-char alphanumeric ID on youtube-nocookie.com.
+     */
+    public function getVideoEmbedUrlAttribute(): ?string
+    {
+        return $this->youtube_video_id
+            ? "https://www.youtube-nocookie.com/embed/{$this->youtube_video_id}"
+            : null;
+    }
+
+    /**
+     * Extract strictly the 11-character alphanumeric YouTube Video ID.
+     * Rejects all non-matching or malicious inputs.
+     */
+    public static function extractYoutubeVideoId(?string $url): ?string
+    {
+        if (empty($url)) {
+            return null;
+        }
+
+        $trimmed = trim($url);
+
+        // If user directly passed an 11-character token
+        if (preg_match('/^[a-zA-Z0-9_-]{11}$/', $trimmed)) {
+            return $trimmed;
+        }
+
+        // Full YouTube URL matching (watch?v=, embed/, shorts/, or youtu.be/)
+        $pattern = '/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/';
+        if (preg_match($pattern, $trimmed, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
     }
 
     /**
