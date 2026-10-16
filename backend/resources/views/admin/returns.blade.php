@@ -102,6 +102,9 @@
                 <a href="{{ route('admin.returns.index', ['status' => 'refunded']) }}" class="btn-dash {{ $statusFilter === 'refunded' ? 'btn-dash-primary' : 'btn-dash-outline' }}" style="font-size: 12px; padding: 6px 12px;">
                     Refunded
                 </a>
+                <a href="{{ route('admin.returns.index', ['status' => 'disputed_by_vendor']) }}" class="btn-dash {{ $statusFilter === 'disputed_by_vendor' ? 'btn-dash-primary' : 'btn-dash-outline' }}" style="font-size: 12px; padding: 6px 12px; border-color: #DC2626; color: {{ $statusFilter === 'disputed_by_vendor' ? '#fff' : '#DC2626' }}; background: {{ $statusFilter === 'disputed_by_vendor' ? '#DC2626' : 'transparent' }};">
+                    ⚠️ Disputed ({{ $metrics['disputed_cases'] ?? 0 }})
+                </a>
             </div>
         </div>
 
@@ -189,8 +192,16 @@
                                     <span class="dash-badge dash-badge-success" style="font-size: 11px;">Refund Disbursed</span>
                                 @elseif($rc->status === 'rejected')
                                     <span class="dash-badge" style="background: rgba(239, 68, 68, 0.1); color: #DC2626; font-size: 11px;">Rejected</span>
+                                @elseif($rc->status === 'disputed_by_vendor' || $rc->vendor_disputed)
+                                    <span class="dash-badge" style="background: rgba(220, 38, 38, 0.15); color: #DC2626; font-size: 11px; font-weight: 700;">⚠️ Vendor Disputed</span>
+                                @elseif($rc->status === 'in_transit_back_to_vendor')
+                                    <span class="dash-badge dash-badge-info" style="font-size: 11px;">Rider Returning</span>
+                                @elseif($rc->status === 'returned_to_vendor')
+                                    <span class="dash-badge dash-badge-purple" style="font-size: 11px;">At Vendor Shop</span>
+                                @elseif($rc->status === 'resolved')
+                                    <span class="dash-badge dash-badge-success" style="font-size: 11px;">Dispute Arbitrated</span>
                                 @else
-                                    <span class="dash-badge dash-badge-neutral" style="font-size: 11px;">{{ ucfirst($rc->status) }}</span>
+                                    <span class="dash-badge dash-badge-neutral" style="font-size: 11px;">{{ ucfirst(str_replace('_', ' ', $rc->status)) }}</span>
                                 @endif
                             </td>
                             <td style="text-align: right;">

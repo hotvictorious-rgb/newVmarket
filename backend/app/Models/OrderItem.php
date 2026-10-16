@@ -13,12 +13,19 @@ class OrderItem extends Model
         'unit_price',
         'quantity',
         'line_total',
+        'accepted_quantity',
+        'rejected_quantity',
+        'rejection_category',
+        'rejection_notes',
+        'item_delivery_status',
     ];
 
     protected $casts = [
         'unit_price' => 'string',
         'line_total' => 'string',
         'quantity' => 'integer',
+        'accepted_quantity' => 'integer',
+        'rejected_quantity' => 'integer',
     ];
 
     public function order()

@@ -662,4 +662,69 @@ class VendorTerminalApiController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Vendor Returns & Inbound Courier Handover Queue
+     */
+    public function returns(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveVendorContext($request);
+        $vendor = $ctx['vendor'];
+
+        $cases = \App\Models\ReturnCase::where('vendor_id', $vendor->id)
+            ->with(['order:id,order_number', 'items.product', 'returnedByRider:id,name,phone'])
+            ->latest()
+            ->paginate(15);
+
+        return response()->json([
+            'status' => true,
+            'data' => $cases->items(),
+            'meta' => [
+                'current_page' => $cases->currentPage(),
+                'last_page' => $cases->lastPage(),
+                'total' => $cases->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * Handshake 3: Vendor Disputes Return Condition at Shop Counter
+     */
+    public function disputeReturn(Request $request, string $caseNumber, \App\Services\DoorstepHandshakeService $handshakeService): JsonResponse
+    {
+        $ctx = $this->resolveVendorContext($request);
+        $vendor = $ctx['vendor'];
+        $user = $ctx['user'];
+
+        $validated = $request->validate([
+            'dispute_reason' => 'required|string|max:1000',
+            'dispute_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:5120',
+        ]);
+
+        $case = \App\Models\ReturnCase::where('vendor_id', $vendor->id)
+            ->where(function ($q) use ($caseNumber) {
+                $q->where('case_number', trim($caseNumber))
+                  ->orWhere('id', trim($caseNumber));
+            })
+            ->firstOrFail();
+
+        $photoPath = null;
+        if ($request->hasFile('dispute_photo')) {
+            $path = $request->file('dispute_photo')->store('vendor_disputes', 'public');
+            $photoPath = 'storage/' . $path;
+        }
+
+        $result = $handshakeService->vendorDisputeReturn(
+            $case,
+            $user,
+            $validated['dispute_reason'],
+            $photoPath
+        );
+
+        return response()->json([
+            'status' => $result['success'],
+            'message' => $result['message'],
+            'data' => $result['success'] ? $result['case'] : null,
+        ], $result['success'] ? 200 : 422);
+    }
 }

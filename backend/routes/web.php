@@ -90,6 +90,7 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/returns/{id}/approve', [PortalController::class, 'adminApproveReturnAction'])->name('admin.returns.approve');
     Route::post('/returns/{id}/disburse', [PortalController::class, 'adminDisburseRefundAction'])->name('admin.returns.disburse');
     Route::post('/returns/{id}/reject', [PortalController::class, 'adminRejectReturnAction'])->name('admin.returns.reject');
+    Route::post('/returns/{id}/arbitrate', [PortalController::class, 'adminArbitrateReturnAction'])->name('admin.returns.arbitrate');
 
     Route::post('/disburse-settlement', [PortalController::class, 'adminDisburseSettlement'])->name('admin.disburse.settlement');
     Route::post('/disburse-logistics-payout', [PortalController::class, 'adminDisburseLogisticsPayout'])->name('admin.disburse.logistics_payout');

@@ -15,6 +15,19 @@ class ReturnCase extends Model
         'collection_point_id',
         'return_reason',
         'customer_description',
+        'source',
+        'rejection_category',
+        'vendor_return_otp',
+        'doorstep_photo_path',
+        'returned_to_vendor_at',
+        'returned_by_rider_id',
+        'vendor_disputed',
+        'vendor_dispute_reason',
+        'vendor_dispute_photo_path',
+        'vendor_disputed_at',
+        'admin_ruling',
+        'admin_ruled_at',
+        'cost_allocation',
         'status',
         'resolution_type',
         'total_refundable_amount',
@@ -34,7 +47,11 @@ class ReturnCase extends Model
         'delivery_fee_refunded' => 'string',
         'refunded_amount' => 'string',
         'refund_delivery_fee' => 'boolean',
+        'vendor_disputed' => 'boolean',
         'refunded_at' => 'datetime',
+        'returned_to_vendor_at' => 'datetime',
+        'vendor_disputed_at' => 'datetime',
+        'admin_ruled_at' => 'datetime',
     ];
 
     public function customer()
@@ -85,6 +102,11 @@ class ReturnCase extends Model
     public function reviewer()
     {
         return $this->belongsTo(User::class, 'reviewed_by_admin_id');
+    }
+
+    public function returnedByRider()
+    {
+        return $this->belongsTo(User::class, 'returned_by_rider_id');
     }
 
     public function getTotalReturnAmountAttribute(): string

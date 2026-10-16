@@ -823,4 +823,94 @@ class CustomerOrderApiController extends Controller
             'data' => $case,
         ]);
     }
+
+    /**
+     * Customer 100% Spendable Refund Wallet Summary
+     */
+    public function walletSummary(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $balance = \App\Models\CustomerWalletCredit::getAvailableBalance($user->id);
+        $credits = \App\Models\CustomerWalletCredit::where('customer_id', $user->id)
+            ->latest()
+            ->take(20)
+            ->get();
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'available_wallet_credit' => $balance,
+                'currency' => 'NGN',
+                'spendable_rate' => '100%',
+                'history' => $credits,
+            ],
+        ]);
+    }
+
+    /**
+     * 1-Click Re-Order for Rejected Doorstep Items using Instant Wallet Credit
+     */
+    public function reorderRejectedItems(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'case_number' => 'required|string',
+        ]);
+
+        $user = $request->user();
+        $case = ReturnCase::where('customer_id', $user->id)
+            ->where('case_number', trim($validated['case_number']))
+            ->with(['items.product.shop', 'order'])
+            ->first();
+
+        if (!$case) {
+            return response()->json(['status' => false, 'message' => 'Return case not found.'], 404);
+        }
+
+        $availableWallet = \App\Models\CustomerWalletCredit::getAvailableBalance($user->id);
+
+        $reorderManifest = [];
+        $totalCost = '0.00';
+
+        foreach ($case->items as $item) {
+            $product = $item->product;
+            if (!$product || !$product->is_in_stock) {
+                continue;
+            }
+
+            $subtotal = bcmul((string)$product->unit_price, (string)$item->quantity, 2);
+            $totalCost = bcadd($totalCost, $subtotal, 2);
+
+            $reorderManifest[] = [
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+                'shop_id' => $product->shop_id,
+                'quantity' => $item->quantity,
+                'unit_price' => $product->unit_price,
+                'subtotal' => $subtotal,
+            ];
+        }
+
+        if (empty($reorderManifest)) {
+            return response()->json(['status' => false, 'message' => 'Products are currently out of stock.'], 422);
+        }
+
+        // Apply wallet credit up to 100% of product subtotal!
+        $walletCreditApplied = \App\Services\BcMathService::comp($availableWallet, $totalCost) >= 0
+            ? $totalCost
+            : $availableWallet;
+
+        $remainingPayable = \App\Services\BcMathService::sub($totalCost, $walletCreditApplied);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Re-order manifest prepared. 100% wallet credit applied.',
+            'data' => [
+                'items' => $reorderManifest,
+                'merchandise_subtotal' => $totalCost,
+                'wallet_credit_available' => $availableWallet,
+                'wallet_credit_applied' => $walletCreditApplied,
+                'net_payable_cash' => $remainingPayable,
+            ],
+        ]);
+    }
 }

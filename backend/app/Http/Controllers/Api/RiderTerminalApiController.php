@@ -301,4 +301,80 @@ class RiderTerminalApiController extends Controller
             'message' => $result['message'],
         ], $result['success'] ? 200 : 422);
     }
+
+    /**
+     * Handshake 2: Itemized Doorstep Handover Manifest (Partial Acceptance & 3-Option Rejection)
+     */
+    public function doorstepHandover(Request $request, \App\Services\DoorstepHandshakeService $handshakeService): JsonResponse
+    {
+        $validated = $request->validate([
+            'order_id' => 'required|integer|exists:orders,id',
+            'otp' => ['required', 'string', 'size:6'],
+            'manifest_items' => ['required', 'array', 'min:1'],
+            'manifest_items.*.order_item_id' => 'required|integer|exists:order_items,id',
+            'manifest_items.*.accepted_quantity' => 'required|integer|min:0',
+            'manifest_items.*.rejected_quantity' => 'required|integer|min:0',
+            'manifest_items.*.rejection_category' => 'nullable|string|in:vendor_issue,transit_damage,customer_change_of_mind',
+            'manifest_items.*.rejection_notes' => 'nullable|string|max:500',
+            'proof_photo' => 'nullable|file|mimes:jpeg,png,jpg|max:5120',
+        ]);
+
+        if ($error = $this->guardRiderWithLogistics($request)) {
+            return $error;
+        }
+
+        $rider = $request->user()->riderProfile;
+        $order = Order::findOrFail($validated['order_id']);
+
+        $photoPath = null;
+        if ($request->hasFile('proof_photo')) {
+            $path = $request->file('proof_photo')->store('doorstep_rejections', 'public');
+            $photoPath = 'storage/' . $path;
+        }
+
+        $result = $handshakeService->processDoorstepHandover(
+            $order,
+            $rider,
+            $validated['manifest_items'],
+            $validated['otp'],
+            $photoPath
+        );
+
+        return response()->json([
+            'status' => $result['success'],
+            'message' => $result['message'],
+            'data' => $result['success'] ? [
+                'accepted_amount' => $result['accepted_amount'],
+                'rejected_amount' => $result['rejected_amount'],
+                'wallet_credited' => $result['wallet_credited'],
+                'return_case' => $result['return_case'],
+            ] : null,
+        ], $result['success'] ? 200 : 422);
+    }
+
+    /**
+     * Handshake 3: Rider returns rejected parcel to Vendor Shop with Vendor Return OTP
+     */
+    public function verifyVendorReturnOtp(Request $request, \App\Services\DoorstepHandshakeService $handshakeService): JsonResponse
+    {
+        $validated = $request->validate([
+            'return_case_id' => 'required|integer|exists:return_cases,id',
+            'otp' => ['required', 'string', 'size:6'],
+        ]);
+
+        if ($error = $this->guardRiderWithLogistics($request)) {
+            return $error;
+        }
+
+        $rider = $request->user()->riderProfile;
+        $case = \App\Models\ReturnCase::findOrFail($validated['return_case_id']);
+
+        $result = $handshakeService->verifyVendorReturnOtp($case, $rider, $validated['otp']);
+
+        return response()->json([
+            'status' => $result['success'],
+            'message' => $result['message'],
+            'data' => $result['success'] ? $result['case'] : null,
+        ], $result['success'] ? 200 : 422);
+    }
 }

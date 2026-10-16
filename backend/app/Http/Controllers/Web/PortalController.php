@@ -30,6 +30,7 @@ use App\Models\ReturnEvidence;
 use App\Services\BcMathService;
 use App\Services\OrderSettlementService;
 use App\Services\ReturnAndRefundService;
+use App\Services\DoorstepHandshakeService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -3654,7 +3655,13 @@ class PortalController extends Controller
             ->latest();
 
         if ($statusFilter && $statusFilter !== 'all') {
-            $query->where('status', $statusFilter);
+            if ($statusFilter === 'disputed_by_vendor') {
+                $query->where(function ($q) {
+                    $q->where('status', 'disputed_by_vendor')->orWhere('vendor_disputed', true);
+                });
+            } else {
+                $query->where('status', $statusFilter);
+            }
         }
 
         $returnCases = $query->paginate(20);
@@ -3664,6 +3671,7 @@ class PortalController extends Controller
             'requested_cases' => ReturnCase::where('status', 'requested')->count(),
             'inspected_cases' => ReturnCase::where('status', 'inspected')->count(),
             'refund_pending_cases' => ReturnCase::where('status', 'refund_pending')->count(),
+            'disputed_cases' => ReturnCase::where('status', 'disputed_by_vendor')->orWhere('vendor_disputed', true)->count(),
             'total_refunded_naira' => ReturnCase::where('status', 'refunded')->sum('refunded_amount'),
         ];
 
@@ -3683,6 +3691,7 @@ class PortalController extends Controller
             'inspections.collectionPoint',
             'inspections.inspector',
             'reviewer',
+            'returnedByRider',
         ])->findOrFail($id);
 
         return view('admin.return_detail', compact('case'));
@@ -3761,5 +3770,29 @@ class PortalController extends Controller
         ]);
 
         return redirect()->route('admin.returns.show', $case->id)->with('status', "Return Case #{$case->case_number} has been rejected.");
+    }
+
+    public function adminArbitrateReturnAction(Request $request, int $id, DoorstepHandshakeService $handshakeService)
+    {
+        $case = ReturnCase::findOrFail($id);
+        $admin = Auth::user();
+
+        $validated = $request->validate([
+            'ruling' => 'required|in:uphold_vendor_dispute,uphold_customer_claim,platform_transit_protection',
+            'admin_notes' => 'nullable|string|max:1000',
+        ]);
+
+        $result = $handshakeService->adminArbitrateDispute(
+            $admin,
+            $case,
+            $validated['ruling'],
+            $validated['admin_notes'] ?? null
+        );
+
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
+
+        return redirect()->route('admin.returns.show', $case->id)->with('status', $result['message']);
     }
 }

@@ -33,6 +33,14 @@
                     <span class="dash-badge dash-badge-success">Refund Disbursed</span>
                 @elseif($case->status === 'rejected')
                     <span class="dash-badge" style="background: rgba(239, 68, 68, 0.1); color: #DC2626;">Rejected</span>
+                @elseif($case->status === 'disputed_by_vendor' || $case->vendor_disputed)
+                    <span class="dash-badge" style="background: rgba(220, 38, 38, 0.15); color: #DC2626; font-weight: 700;">⚠️ Disputed by Vendor</span>
+                @elseif($case->status === 'in_transit_back_to_vendor')
+                    <span class="dash-badge dash-badge-info">Rider Returning to Shop</span>
+                @elseif($case->status === 'returned_to_vendor')
+                    <span class="dash-badge dash-badge-purple">Returned to Vendor Shop</span>
+                @elseif($case->status === 'resolved')
+                    <span class="dash-badge dash-badge-success">Arbitration Resolved</span>
                 @endif
             </div>
             <p class="page-header-subtitle">
@@ -42,6 +50,12 @@
 
         <!-- Action Controls -->
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            @if(($case->vendor_disputed || $case->status === 'disputed_by_vendor') && $case->status !== 'resolved')
+                <button onclick="document.getElementById('arbitrateModal').style.display='flex'" class="btn-dash btn-dash-primary" style="font-size: 12px; padding: 7px 14px; background: #7C3AED; border-color: #7C3AED;">
+                    ⚖️ Arbitrate Vendor Dispute
+                </button>
+            @endif
+
             @if(in_array($case->status, ['inspected', 'received_at_hub', 'requested']))
                 <button onclick="document.getElementById('approveModal').style.display='flex'" class="btn-dash btn-dash-primary" style="font-size: 12px; padding: 7px 14px;">
                     ✓ Approve for Refund
@@ -54,7 +68,7 @@
                 </button>
             @endif
 
-            @if(!in_array($case->status, ['refunded', 'rejected']))
+            @if(!in_array($case->status, ['refunded', 'rejected', 'resolved']))
                 <button onclick="document.getElementById('rejectModal').style.display='flex'" class="btn-dash" style="font-size: 12px; padding: 7px 14px; background: rgba(239, 68, 68, 0.1); color: #DC2626; border: 1px solid rgba(239, 68, 68, 0.3);">
                     ✕ Reject Return Case
                 </button>
@@ -129,6 +143,176 @@
                     <div style="font-size: 12.5px; color: var(--adm-text-muted);">{{ $case->customer_reason ?? 'None provided' }}</div>
                 </div>
             </div>
+
+            @if($case->source === 'doorstep_refusal' || $case->vendor_disputed || $case->doorstep_photo_path)
+            <!-- Triangular Evidence Dossier: Doorstep Rejection, Counter Handshake & Dispute -->
+            <div class="dash-card" style="border: 2px solid {{ $case->vendor_disputed ? '#DC2626' : 'var(--adm-primary)' }};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--adm-border); padding-bottom: 12px;">
+                    <div>
+                        <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--adm-text); display: flex; align-items: center; gap: 8px;">
+                            <span>📐</span>
+                            <span>Triangular Evidence Dossier &amp; Handshake 3 Audit</span>
+                        </h3>
+                        <div style="font-size: 12px; color: var(--adm-text-muted); margin-top: 3px;">
+                            Doorstep Rejection &bull; Counter OTP Handshake &bull; Vendor Shop Counter Dispute
+                        </div>
+                    </div>
+                    @if($case->admin_ruling)
+                        <span class="dash-badge dash-badge-success" style="font-size: 12px; padding: 4px 10px;">
+                            ✓ Binding Ruling Enforced
+                        </span>
+                    @elseif($case->vendor_disputed)
+                        <span class="dash-badge" style="background: rgba(220, 38, 38, 0.15); color: #DC2626; font-size: 12px; padding: 4px 10px; font-weight: 700;">
+                            ⚠️ Super Admin Arbitration Required
+                        </span>
+                    @else
+                        <span class="dash-badge dash-badge-info" style="font-size: 12px; padding: 4px 10px;">
+                            Doorstep Refusal Tracked
+                        </span>
+                    @endif
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+                    <!-- Leg 1: Doorstep Rejection Record -->
+                    <div style="background: #fafafa; border: 1px solid var(--adm-border); border-radius: 8px; padding: 14px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                            <strong style="font-size: 13px; color: var(--adm-text);">🚪 Doorstep Rejection</strong>
+                            <span class="dash-badge dash-badge-neutral" style="font-size: 10.5px;">Leg 1</span>
+                        </div>
+
+                        @if($case->doorstep_photo_path)
+                            <div style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid var(--adm-border);">
+                                <img src="{{ asset($case->doorstep_photo_path) }}" alt="Doorstep Evidence" style="width: 100%; height: 140px; object-fit: cover; display: block;">
+                                <div style="padding: 4px 8px; font-size: 11px; background: #fff; text-align: right;">
+                                    <a href="{{ asset($case->doorstep_photo_path) }}" target="_blank" style="color: var(--adm-primary); font-weight: 600;">View High-Res &rarr;</a>
+                                </div>
+                            </div>
+                        @endif
+
+                        <div style="font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+                            <div>
+                                <span style="color: var(--adm-text-muted);">Rejection Category:</span>
+                                @if($case->rejection_category === 'vendor_issue')
+                                    <strong style="color: #DC2626;">Vendor Issue (Wrong / Defective)</strong>
+                                @elseif($case->rejection_category === 'transit_damage')
+                                    <strong style="color: #D97706;">Transit Damage (Courier Mishap)</strong>
+                                @elseif($case->rejection_category === 'customer_change_of_mind')
+                                    <strong style="color: #2563EB;">Customer Change of Mind (50/50 Split)</strong>
+                                @else
+                                    <strong>{{ ucfirst(str_replace('_', ' ', $case->rejection_category ?? 'Standard')) }}</strong>
+                                @endif
+                            </div>
+                            <div>
+                                <span style="color: var(--adm-text-muted);">Customer Stated Reason:</span>
+                                <div>{{ $case->customer_reason ?? 'None provided' }}</div>
+                            </div>
+                            <div>
+                                <span style="color: var(--adm-text-muted);">Courier Rider:</span>
+                                <strong>{{ $case->returnedByRider->name ?? 'Assigned Rider' }}</strong>
+                            </div>
+                            <div>
+                                <span style="color: var(--adm-text-muted);">Vendor Return OTP:</span>
+                                <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight: 700;">{{ $case->vendor_return_otp ?? 'N/A' }}</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Leg 2: Handshake 3 & Vendor Counter Dispute -->
+                    <div style="background: #fafafa; border: 1px solid {{ $case->vendor_disputed ? '#DC2626' : 'var(--adm-border)' }}; border-radius: 8px; padding: 14px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                            <strong style="font-size: 13px; color: {{ $case->vendor_disputed ? '#DC2626' : 'var(--adm-text)' }};">🏪 Vendor Counter Inspection</strong>
+                            <span class="dash-badge {{ $case->vendor_disputed ? 'dash-badge-danger' : 'dash-badge-neutral' }}" style="font-size: 10.5px;">Leg 2</span>
+                        </div>
+
+                        @if($case->vendor_dispute_photo_path)
+                            <div style="margin-bottom: 10px; border-radius: 6px; overflow: hidden; border: 1px solid var(--adm-border);">
+                                <img src="{{ asset($case->vendor_dispute_photo_path) }}" alt="Vendor Dispute Photo" style="width: 100%; height: 140px; object-fit: cover; display: block;">
+                                <div style="padding: 4px 8px; font-size: 11px; background: #fff; text-align: right;">
+                                    <a href="{{ asset($case->vendor_dispute_photo_path) }}" target="_blank" style="color: var(--adm-primary); font-weight: 600;">View High-Res &rarr;</a>
+                                </div>
+                            </div>
+                        @endif
+
+                        <div style="font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+                            <div>
+                                <span style="color: var(--adm-text-muted);">Vendor Shop:</span>
+                                <strong>{{ $case->vendor->business_name ?? $case->vendor->name ?? 'Merchant' }}</strong>
+                            </div>
+                            <div>
+                                <span style="color: var(--adm-text-muted);">Shop Status:</span>
+                                @if($case->vendor_disputed)
+                                    <span style="color: #DC2626; font-weight: 700;">⚠️ Disputed by Merchant at Counter</span>
+                                @elseif($case->returned_to_vendor_at)
+                                    <span style="color: #059669; font-weight: 600;">✓ Accepted by Vendor ({{ $case->returned_to_vendor_at->format('M d, Y h:i A') }})</span>
+                                @else
+                                    <span style="color: var(--adm-text-muted);">In transit back to vendor shop</span>
+                                @endif
+                            </div>
+                            @if($case->vendor_disputed)
+                                <div>
+                                    <span style="color: var(--adm-text-muted);">Vendor Dispute Stated Reason:</span>
+                                    <div style="background: rgba(220, 38, 38, 0.06); padding: 8px; border-radius: 6px; border: 1px solid rgba(220, 38, 38, 0.2); color: #B91C1C; font-weight: 500;">
+                                        "{{ $case->vendor_dispute_reason }}"
+                                    </div>
+                                </div>
+                                <div>
+                                    <span style="color: var(--adm-text-muted);">Disputed At:</span>
+                                    <span>{{ $case->vendor_disputed_at ? $case->vendor_disputed_at->format('M d, Y · h:i A') : 'N/A' }}</span>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+
+                    <!-- Leg 3: Super Admin Binding Ruling -->
+                    <div style="background: #fafafa; border: 1px solid {{ $case->admin_ruling ? '#059669' : 'var(--adm-border)' }}; border-radius: 8px; padding: 14px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                            <strong style="font-size: 13px; color: {{ $case->admin_ruling ? '#059669' : 'var(--adm-text)' }};">⚖️ Super Admin Ruling</strong>
+                            <span class="dash-badge {{ $case->admin_ruling ? 'dash-badge-success' : 'dash-badge-neutral' }}" style="font-size: 10.5px;">Leg 3</span>
+                        </div>
+
+                        @if($case->admin_ruling)
+                            <div style="padding: 10px; border-radius: 6px; background: rgba(16, 185, 129, 0.08); border: 1px solid #10B981; margin-bottom: 10px;">
+                                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #047857; font-weight: 700;">Binding Resolution:</div>
+                                <div style="font-size: 13px; font-weight: 700; color: #047857; margin-top: 2px;">
+                                    @if($case->admin_ruling === 'uphold_vendor_dispute')
+                                        🛡️ Uphold Vendor Dispute (Merchant Protected)
+                                    @elseif($case->admin_ruling === 'uphold_customer_claim')
+                                        🛑 Uphold Customer Claim (Vendor Liability)
+                                    @elseif($case->admin_ruling === 'platform_transit_protection')
+                                        🛡️ Platform Transit Protection (VMarket Shield)
+                                    @else
+                                        {{ ucfirst(str_replace('_', ' ', $case->admin_ruling)) }}
+                                    @endif
+                                </div>
+                            </div>
+                            <div style="font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+                                <div>
+                                    <span style="color: var(--adm-text-muted);">Cost Allocation:</span>
+                                    <strong style="font-family: monospace;">{{ $case->cost_allocation }}</strong>
+                                </div>
+                                <div>
+                                    <span style="color: var(--adm-text-muted);">Arbitrator Notes:</span>
+                                    <div>{{ $case->admin_notes ?? 'Binding decision recorded in audit log.' }}</div>
+                                </div>
+                                <div>
+                                    <span style="color: var(--adm-text-muted);">Ruled At:</span>
+                                    <span>{{ $case->admin_ruled_at ? $case->admin_ruled_at->format('M d, Y · h:i A') : 'N/A' }}</span>
+                                </div>
+                            </div>
+                        @else
+                            <div style="padding: 16px; background: rgba(245, 158, 11, 0.08); border: 1px dashed #F59E0B; border-radius: 6px; font-size: 12px; color: #92400E; margin-bottom: 12px;">
+                                ⏳ <strong>Pending Admin Arbitration:</strong> Review the Doorstep Photo (Leg 1) and Vendor Counter Photo (Leg 2) above to issue a binding ruling.
+                            </div>
+                            @if($case->vendor_disputed || $case->status === 'disputed_by_vendor')
+                                <button type="button" onclick="document.getElementById('arbitrateModal').style.display='flex'" class="btn-dash btn-dash-primary" style="width: 100%; font-size: 12.5px; justify-content: center; background: #7C3AED; border-color: #7C3AED;">
+                                    ⚖️ Issue Binding Arbitration Ruling
+                                </button>
+                            @endif
+                        @endif
+                    </div>
+                </div>
+            </div>
+            @endif
 
             <!-- Evidence / Media Card -->
             <div class="dash-card">
@@ -219,7 +403,7 @@
                     </div>
                     <div>
                         <div style="color: var(--adm-text-muted); font-size: 11px;">VENDOR / MERCHANT</div>
-                        <strong>{{ $case->vendor->vendorProfile->business_name ?? $case->vendor->name ?? 'Vendor' }}</strong>
+                        <strong>{{ $case->vendor->business_name ?? $case->vendor->name ?? 'Vendor' }}</strong>
                     </div>
                     <div>
                         <div style="color: var(--adm-text-muted); font-size: 11px;">CUSTOMER</div>
@@ -411,6 +595,68 @@
                     <button type="button" onclick="document.getElementById('rejectModal').style.display='none'" class="btn-dash btn-dash-outline" style="font-size: 13px;">Cancel</button>
                     <button type="submit" class="btn-dash" style="font-size: 13px; background: #DC2626; color: #fff; border: 1px solid #DC2626;">
                         Confirm Rejection
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- Super Admin Arbitration Modal -->
+    <div id="arbitrateModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 20px;">
+        <div style="background: var(--adm-card-bg, #FFFFFF); border-radius: 12px; max-width: 560px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.25); border: 1px solid var(--adm-border); overflow: hidden;">
+            <div style="padding: 16px 20px; border-bottom: 1px solid var(--adm-border); display: flex; justify-content: space-between; align-items: center; background: #7C3AED; color: #fff;">
+                <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
+                    <span>⚖️</span>
+                    <span>Arbitrate Vendor Return Dispute</span>
+                </h3>
+                <button type="button" onclick="document.getElementById('arbitrateModal').style.display='none'" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #fff;">&times;</button>
+            </div>
+            <form action="{{ route('admin.returns.arbitrate', $case->id) }}" method="POST" style="padding: 20px;">
+                @csrf
+                <div style="margin-bottom: 16px; font-size: 13px; color: var(--adm-text-muted);">
+                    Select the binding ruling after comparing the Doorstep rejection photo against the Vendor shop counter dispute evidence.
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+                    <label style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1.5px solid var(--adm-border); border-radius: 8px; cursor: pointer; background: #fafafa;">
+                        <input type="radio" name="ruling" value="uphold_vendor_dispute" required style="margin-top: 3px;">
+                        <div>
+                            <strong style="font-size: 13px; color: var(--adm-text);">1. Uphold Vendor Dispute (Merchant Protected)</strong>
+                            <div style="font-size: 11.5px; color: var(--adm-text-muted); margin-top: 2px;">
+                                Vendor packaged goods correctly. Condition altered after delivery or by transit mishandling. Return delivery fee split 50/50.
+                            </div>
+                        </div>
+                    </label>
+
+                    <label style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1.5px solid var(--adm-border); border-radius: 8px; cursor: pointer; background: #fafafa;">
+                        <input type="radio" name="ruling" value="uphold_customer_claim" required style="margin-top: 3px;">
+                        <div>
+                            <strong style="font-size: 13px; color: var(--adm-text);">2. Uphold Customer Claim (Vendor Liability)</strong>
+                            <div style="font-size: 11.5px; color: var(--adm-text-muted); margin-top: 2px;">
+                                Vendor packed defective/wrong/broken item. Customer refund confirmed; delivery fee penalty debited against vendor recovery ledger.
+                            </div>
+                        </div>
+                    </label>
+
+                    <label style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1.5px solid var(--adm-border); border-radius: 8px; cursor: pointer; background: #fafafa;">
+                        <input type="radio" name="ruling" value="platform_transit_protection" required style="margin-top: 3px;">
+                        <div>
+                            <strong style="font-size: 13px; color: var(--adm-text);">3. Platform Transit Protection (VMarket Shield)</strong>
+                            <div style="font-size: 11.5px; color: var(--adm-text-muted); margin-top: 2px;">
+                                Mishap occurred in-transit between vendor and customer. Vendor receives net merchandise payout; platform absorbs the transit loss.
+                            </div>
+                        </div>
+                    </label>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Binding Arbitrator Notes *</label>
+                    <textarea name="admin_notes" required rows="3" placeholder="Enter findings from the photographic evidence and reasoning for this binding decision..." style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border); font-size: 13px;"></textarea>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" onclick="document.getElementById('arbitrateModal').style.display='none'" class="btn-dash btn-dash-outline" style="font-size: 13px;">Cancel</button>
+                    <button type="submit" class="btn-dash btn-dash-primary" style="font-size: 13px; background: #7C3AED; border-color: #7C3AED;">
+                        Confirm Binding Ruling
                     </button>
                 </div>
             </form>

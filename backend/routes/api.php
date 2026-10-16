@@ -104,9 +104,12 @@ Route::prefix('v1')->group(function () {
         Route::post('customer/order/confirm-inshop-pickup', [CustomerOrderApiController::class, 'confirmDeliveryByBody']);
 
         // Customer Item-Level Returns & Collection Points (24h Configurable Window)
+        Route::get('customer/wallet', [CustomerOrderApiController::class, 'walletSummary']);
+        Route::post('customer/orders/reorder-rejected-items', [CustomerOrderApiController::class, 'reorderRejectedItems']);
         Route::prefix('customer/returns')->group(function () {
             Route::get('', [CustomerOrderApiController::class, 'listReturnCases']);
             Route::post('create', [CustomerOrderApiController::class, 'createReturnCase']);
+            Route::post('reorder', [CustomerOrderApiController::class, 'reorderRejectedItems']);
             Route::get('{case_number}', [CustomerOrderApiController::class, 'showReturnCase']);
         });
 
@@ -119,6 +122,9 @@ Route::prefix('v1')->group(function () {
             Route::post('orders/mark-arrived', [RiderTerminalApiController::class, 'markArrived']);
             Route::post('orders/verify-pickup-otp', [RiderTerminalApiController::class, 'verifyPickupOtp']);
             Route::post('orders/verify-delivery-otp', [RiderTerminalApiController::class, 'verifyDeliveryOtp']);
+            Route::post('orders/doorstep-handover', [RiderTerminalApiController::class, 'doorstepHandover']);
+            Route::post('orders/verify-vendor-return-otp', [RiderTerminalApiController::class, 'verifyVendorReturnOtp']);
+            Route::post('returns/verify-vendor-otp', [RiderTerminalApiController::class, 'verifyVendorReturnOtp']);
         });
 
         // Sovereign Vendor App Terminal
@@ -131,6 +137,10 @@ Route::prefix('v1')->group(function () {
             Route::get('orders/{id}', [VendorTerminalApiController::class, 'showOrder']);
             Route::post('orders/{id}/ready-for-handover', [VendorTerminalApiController::class, 'markHandoverReady']);
             Route::post('orders/verify-handover-otp', [VendorTerminalApiController::class, 'verifyHandoverOtp']);
+
+            // Inbound Returns & Counter Dispute
+            Route::get('returns', [VendorTerminalApiController::class, 'returns']);
+            Route::post('returns/{case_number}/dispute', [VendorTerminalApiController::class, 'disputeReturn']);
 
             // ₦0.00 Inspection Reservations
             Route::get('pickup-reservations', [VendorTerminalApiController::class, 'pickupReservations']);
