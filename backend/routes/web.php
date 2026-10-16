@@ -78,6 +78,19 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/products', [PortalController::class, 'adminProductsPage'])->name('admin.products.index');
     Route::post('/products/{id}/toggle-flagship', [PortalController::class, 'adminToggleProductFlagship'])->name('admin.products.toggle_flagship');
 
+    // Collection Points Governance (Return Drop-off Hubs)
+    Route::get('/collection-points', [PortalController::class, 'adminCollectionPointsPage'])->name('admin.collection_points.index');
+    Route::post('/collection-points', [PortalController::class, 'adminStoreCollectionPoint'])->name('admin.collection_points.store');
+    Route::post('/collection-points/{id}/toggle', [PortalController::class, 'adminToggleCollectionPoint'])->name('admin.collection_points.toggle');
+    Route::delete('/collection-points/{id}', [PortalController::class, 'adminDeleteCollectionPoint'])->name('admin.collection_points.destroy');
+
+    // Returns, Refunds & Inspection Desk
+    Route::get('/returns', [PortalController::class, 'adminReturnsPage'])->name('admin.returns.index');
+    Route::get('/returns/{id}', [PortalController::class, 'adminShowReturnCase'])->name('admin.returns.show');
+    Route::post('/returns/{id}/approve', [PortalController::class, 'adminApproveReturnAction'])->name('admin.returns.approve');
+    Route::post('/returns/{id}/disburse', [PortalController::class, 'adminDisburseRefundAction'])->name('admin.returns.disburse');
+    Route::post('/returns/{id}/reject', [PortalController::class, 'adminRejectReturnAction'])->name('admin.returns.reject');
+
     Route::post('/disburse-settlement', [PortalController::class, 'adminDisburseSettlement'])->name('admin.disburse.settlement');
     Route::post('/disburse-logistics-payout', [PortalController::class, 'adminDisburseLogisticsPayout'])->name('admin.disburse.logistics_payout');
     Route::post('/settings/announcement', [PortalController::class, 'adminUpdateAnnouncementSettings'])->name('admin.settings.announcement');

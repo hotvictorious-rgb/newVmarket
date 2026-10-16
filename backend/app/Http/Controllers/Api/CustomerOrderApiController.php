@@ -14,11 +14,14 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\RiderProfile;
 use App\Models\Shop;
+use App\Models\ReturnCase;
+use App\Models\ReturnItem;
 use App\Services\BcMathService;
 use App\Services\FulfillmentAvailabilityService;
 use App\Services\NotificationDispatchService;
 use App\Services\OrderSettlementService;
 use App\Services\PaystackService;
+use App\Services\ReturnAndRefundService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -713,5 +716,111 @@ class CustomerOrderApiController extends Controller
         }
 
         return $this->confirmDelivery($request, $orderNumber);
+    }
+
+    /**
+     * Customer submits an Item-Level Return Request within the 24h Refund Window.
+     */
+    public function createReturnCase(Request $request, ReturnAndRefundService $returnService): JsonResponse
+    {
+        $validated = $request->validate([
+            'order_id' => 'required|integer|exists:orders,id',
+            'return_reason' => 'required|string|in:defective_product,wrong_item_sent,misdescribed_counterfeit,damaged_in_transit,change_of_mind,missing_item,other',
+            'customer_description' => 'nullable|string|max:1000',
+            'collection_point_id' => 'nullable|integer|exists:logistics_collection_points,id',
+            'items' => 'required|array|min:1',
+            'items.*.order_item_id' => 'required|integer|exists:order_items,id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.item_condition' => 'nullable|string|in:unopened_sealed,opened_tested,damaged_defective,used_worn,missing_parts',
+            'evidence' => 'nullable|array',
+        ]);
+
+        $user = $request->user();
+        $order = Order::findOrFail($validated['order_id']);
+
+        if ((int)$order->customer_id !== (int)$user->id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: This order does not belong to your account.',
+            ], 403);
+        }
+
+        $result = $returnService->createReturnCase(
+            $user,
+            $order,
+            $validated['items'],
+            $validated['return_reason'],
+            $validated['customer_description'] ?? null,
+            $validated['collection_point_id'] ?? null,
+            $validated['evidence'] ?? []
+        );
+
+        if (!$result['success']) {
+            return response()->json([
+                'status' => false,
+                'message' => $result['message'],
+            ], 422);
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => $result['message'],
+            'data' => $result['case'],
+        ], 201);
+    }
+
+    /**
+     * List all Return Cases belonging to authenticated customer.
+     */
+    public function listReturnCases(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $cases = ReturnCase::where('customer_id', $user->id)
+            ->with(['order:id,order_number', 'vendor:id,business_name', 'collectionPoint:id,name,address', 'items.product'])
+            ->latest()
+            ->paginate(15);
+
+        return response()->json([
+            'status' => true,
+            'data' => $cases->items(),
+            'meta' => [
+                'current_page' => $cases->currentPage(),
+                'last_page' => $cases->lastPage(),
+                'total' => $cases->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * View specific Return Case details with item status and inspection notes.
+     */
+    public function showReturnCase(Request $request, string $caseNumber): JsonResponse
+    {
+        $user = $request->user();
+
+        $case = ReturnCase::where('customer_id', $user->id)
+            ->where('case_number', trim($caseNumber))
+            ->with([
+                'order:id,order_number',
+                'vendor:id,business_name',
+                'collectionPoint',
+                'items.product',
+                'evidence',
+                'inspections.collectionPoint',
+            ])
+            ->first();
+
+        if (!$case) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Return case not found or unauthorized access.',
+            ], 404);
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => $case,
+        ]);
     }
 }

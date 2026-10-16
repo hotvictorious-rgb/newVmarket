@@ -34,6 +34,18 @@
         <span>Storefront Banners &amp; Promos</span>
     </a>
 </li>
+<li class="sidebar-nav-item">
+    <a href="{{ route('admin.collection_points.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.collection_points.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">🏢</span>
+        <span>Return Hubs &amp; Drop-offs</span>
+    </a>
+</li>
+<li class="sidebar-nav-item">
+    <a href="{{ route('admin.returns.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.returns.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">🔄</span>
+        <span>Returns &amp; Refunds Desk</span>
+    </a>
+</li>
 
 <li class="nav-section-title">ECOSYSTEM ACTORS</li>
 <li class="sidebar-nav-item">

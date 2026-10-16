@@ -23,8 +23,13 @@ use App\Models\VendorProfile;
 use App\Models\VendorEmployeeProfile;
 use App\Models\LogisticsPayoutRequest;
 use App\Models\AdminAuditLog;
+use App\Models\ReturnCase;
+use App\Models\ReturnItem;
+use App\Models\ReturnInspection;
+use App\Models\ReturnEvidence;
 use App\Services\BcMathService;
 use App\Services\OrderSettlementService;
+use App\Services\ReturnAndRefundService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -3524,5 +3529,237 @@ class PortalController extends Controller
         }
 
         abort(403, 'Unauthorized principal: Rider access required.');
+    }
+
+    /**
+     * Super Admin Collection Points Governance (Return Drop-off Hubs)
+     */
+    public function adminCollectionPointsPage(Request $request)
+    {
+        $collectionPoints = LogisticsCollectionPoint::with(['logisticsCompany', 'lga.state', 'state'])
+            ->latest()
+            ->get();
+
+        $companies = LogisticsCompanyProfile::where('status', 'active')->orderBy('company_name', 'asc')->get();
+        $lgas = Lga::where('is_active', true)->with('state')->orderBy('name', 'asc')->get();
+        $states = State::where('is_active', true)->orderBy('name', 'asc')->get();
+
+        $metrics = [
+            'total_points' => $collectionPoints->count(),
+            'active_points' => $collectionPoints->where('is_active', true)->count(),
+            'covered_lgas' => $collectionPoints->pluck('lga_id')->unique()->count(),
+            'total_returns_handled' => ReturnCase::whereNotNull('collection_point_id')->count(),
+        ];
+
+        return view('admin.collection_points', compact('collectionPoints', 'companies', 'lgas', 'states', 'metrics'));
+    }
+
+    public function adminStoreCollectionPoint(Request $request)
+    {
+        $validated = $request->validate([
+            'logistics_company_id' => 'required|integer|exists:logistics_company_profiles,id',
+            'lga_id' => 'required|integer|exists:lgas,id',
+            'name' => 'required|string|max:150',
+            'address' => 'required|string|max:255',
+            'landmark' => 'nullable|string|max:150',
+            'contact_phone' => 'required|string|max:30',
+            'contact_person' => 'nullable|string|max:100',
+            'operating_hours' => 'nullable|string|max:100',
+        ]);
+
+        $lga = Lga::with('state')->findOrFail($validated['lga_id']);
+        $code = LogisticsCollectionPoint::generateUniqueCode($lga->name);
+
+        $cp = LogisticsCollectionPoint::create([
+            'logistics_company_id' => $validated['logistics_company_id'],
+            'state_id' => $lga->state_id,
+            'lga_id' => $lga->id,
+            'name' => strip_tags(trim($validated['name'])),
+            'code' => $code,
+            'address' => strip_tags(trim($validated['address'])),
+            'landmark' => isset($validated['landmark']) ? strip_tags(trim($validated['landmark'])) : null,
+            'contact_phone' => preg_replace('/[^0-9+]/', '', $validated['contact_phone']),
+            'contact_person' => isset($validated['contact_person']) ? strip_tags(trim($validated['contact_person'])) : null,
+            'operating_hours' => isset($validated['operating_hours']) ? strip_tags(trim($validated['operating_hours'])) : '08:00 AM - 06:00 PM',
+            'is_active' => true,
+        ]);
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'admin_collection_point_created',
+            'target_type' => LogisticsCollectionPoint::class,
+            'target_id' => $cp->id,
+            'old_values' => null,
+            'new_values' => [
+                'name' => $cp->name,
+                'code' => $cp->code,
+                'lga_id' => $cp->lga_id,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return redirect()->route('admin.collection_points.index')->with('status', "Collection Point '{$cp->name}' ({$cp->code}) registered successfully!");
+    }
+
+    public function adminToggleCollectionPoint(Request $request, int $id)
+    {
+        $cp = LogisticsCollectionPoint::findOrFail($id);
+        $oldStatus = $cp->is_active;
+        $cp->is_active = !$cp->is_active;
+        $cp->save();
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'admin_collection_point_toggled',
+            'target_type' => LogisticsCollectionPoint::class,
+            'target_id' => $cp->id,
+            'old_values' => ['is_active' => $oldStatus],
+            'new_values' => ['is_active' => $cp->is_active],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        $stateText = $cp->is_active ? 'activated' : 'deactivated';
+        return redirect()->route('admin.collection_points.index')->with('status', "Collection Point '{$cp->name}' has been {$stateText}.");
+    }
+
+    public function adminDeleteCollectionPoint(Request $request, int $id)
+    {
+        $cp = LogisticsCollectionPoint::findOrFail($id);
+        $name = $cp->name;
+        $cp->delete();
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'admin_collection_point_deleted',
+            'target_type' => LogisticsCollectionPoint::class,
+            'target_id' => $id,
+            'old_values' => ['name' => $name],
+            'new_values' => null,
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return redirect()->route('admin.collection_points.index')->with('status', "Collection Point '{$name}' deleted successfully.");
+    }
+
+    /**
+     * Super Admin Returns & Refunds Control Desk
+     */
+    public function adminReturnsPage(Request $request)
+    {
+        $statusFilter = $request->query('status');
+        $query = ReturnCase::with(['customer', 'order', 'vendor', 'collectionPoint', 'items.product', 'inspections'])
+            ->latest();
+
+        if ($statusFilter && $statusFilter !== 'all') {
+            $query->where('status', $statusFilter);
+        }
+
+        $returnCases = $query->paginate(20);
+
+        $metrics = [
+            'total_cases' => ReturnCase::count(),
+            'requested_cases' => ReturnCase::where('status', 'requested')->count(),
+            'inspected_cases' => ReturnCase::where('status', 'inspected')->count(),
+            'refund_pending_cases' => ReturnCase::where('status', 'refund_pending')->count(),
+            'total_refunded_naira' => ReturnCase::where('status', 'refunded')->sum('refunded_amount'),
+        ];
+
+        return view('admin.returns', compact('returnCases', 'metrics', 'statusFilter'));
+    }
+
+    public function adminShowReturnCase(int $id)
+    {
+        $case = ReturnCase::with([
+            'customer',
+            'order.items.product',
+            'vendor',
+            'collectionPoint',
+            'items.orderItem',
+            'items.product',
+            'evidence',
+            'inspections.collectionPoint',
+            'inspections.inspector',
+            'reviewer',
+        ])->findOrFail($id);
+
+        return view('admin.return_detail', compact('case'));
+    }
+
+    public function adminApproveReturnAction(Request $request, int $id, ReturnAndRefundService $service)
+    {
+        $case = ReturnCase::findOrFail($id);
+        $admin = Auth::user();
+
+        $result = $service->adminApproveReturn($admin, $case, $request->input('admin_notes'));
+
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
+
+        return redirect()->route('admin.returns.show', $case->id)->with('status', $result['message']);
+    }
+
+    public function adminDisburseRefundAction(Request $request, int $id, ReturnAndRefundService $service)
+    {
+        $case = ReturnCase::findOrFail($id);
+        $admin = Auth::user();
+
+        $bankReference = $request->input('bank_reference');
+        $proofPath = null;
+
+        if ($request->hasFile('transfer_receipt')) {
+            $file = $request->file('transfer_receipt');
+            $filename = 'refund_' . $case->case_number . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs('refund_proofs', $filename, 'public');
+            $proofPath = 'storage/' . $path;
+        }
+
+        if (empty($proofPath) && empty($bankReference) && app()->environment('production')) {
+            return back()->with('error', 'Refund disbursement rejected: A valid bank transfer receipt upload or bank transaction reference is mandatory.');
+        }
+
+        $refundDeliveryFee = $request->boolean('refund_delivery_fee');
+
+        $result = $service->adminDisburseRefund($admin, $case, $bankReference, $proofPath, $refundDeliveryFee);
+
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
+
+        return redirect()->route('admin.returns.show', $case->id)->with('status', $result['message']);
+    }
+
+    public function adminRejectReturnAction(Request $request, int $id)
+    {
+        $case = ReturnCase::findOrFail($id);
+        $admin = Auth::user();
+
+        $validated = $request->validate([
+            'rejection_reason' => 'required|string|max:500',
+        ]);
+
+        $case->status = 'rejected';
+        $case->resolution_type = 'rejected';
+        $case->reviewed_by_admin_id = $admin->id;
+        $case->admin_notes = $validated['rejection_reason'];
+        $case->save();
+
+        ReturnItem::where('return_case_id', $case->id)->update(['status' => 'rejected']);
+
+        AdminAuditLog::create([
+            'user_id' => $admin->id,
+            'action' => 'return_case_rejected',
+            'target_type' => ReturnCase::class,
+            'target_id' => $case->id,
+            'old_values' => null,
+            'new_values' => ['status' => 'rejected', 'admin_notes' => $validated['rejection_reason']],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return redirect()->route('admin.returns.show', $case->id)->with('status', "Return Case #{$case->case_number} has been rejected.");
     }
 }

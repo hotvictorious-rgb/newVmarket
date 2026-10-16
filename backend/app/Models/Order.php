@@ -229,6 +229,11 @@ class Order extends Model
         return $this->hasMany(FinancialJournalEntry::class);
     }
 
+    public function returnCases()
+    {
+        return $this->hasMany(ReturnCase::class);
+    }
+
     /**
      * Generate cryptographically secure, high-entropy unique payment reference (CSPRNG).
      */

@@ -103,6 +103,13 @@ Route::prefix('v1')->group(function () {
         Route::post('customer/order/confirm-doorstep-delivery', [CustomerOrderApiController::class, 'confirmDeliveryByBody']);
         Route::post('customer/order/confirm-inshop-pickup', [CustomerOrderApiController::class, 'confirmDeliveryByBody']);
 
+        // Customer Item-Level Returns & Collection Points (24h Configurable Window)
+        Route::prefix('customer/returns')->group(function () {
+            Route::get('', [CustomerOrderApiController::class, 'listReturnCases']);
+            Route::post('create', [CustomerOrderApiController::class, 'createReturnCase']);
+            Route::get('{case_number}', [CustomerOrderApiController::class, 'showReturnCase']);
+        });
+
         // Delivery Rider Terminal
         Route::prefix('rider')->group(function () {
             Route::get('dashboard', [RiderTerminalApiController::class, 'dashboard']);

@@ -404,6 +404,38 @@ class OrderSettlementService
                             'description' => "Victorious Market 5% Merchandise Commission for Child Order #{$child->order_number}",
                         ]);
                     }
+
+                    // Credit: Logistics Fleet Payable per Child Order (90% Child Delivery Net)
+                    if (bccomp((string)$child->logistics_fee_retained, '0.00', 2) > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $child->id,
+                            'transaction_reference' => $reference,
+                            'event_id' => 'EVT-FLEET-ESCROW-' . $child->id . '-' . $reference,
+                            'beneficiary_type' => LogisticsCompanyProfile::class,
+                            'beneficiary_id' => $child->logistics_company_id ?: $lockedOrder->logistics_company_id,
+                            'account_name' => 'logistics_payable',
+                            'entry_type' => 'credit',
+                            'amount' => $child->logistics_fee_retained,
+                            'currency' => 'NGN',
+                            'description' => "Logistics Fleet 90% Net Payable held for Child Order #{$child->order_number}",
+                        ]);
+                    }
+
+                    // Credit: Platform Delivery Fee Cut per Child Order (10% Delivery Cut)
+                    if (bccomp((string)$child->platform_delivery_fee, '0.00', 2) > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $child->id,
+                            'transaction_reference' => $reference,
+                            'event_id' => 'EVT-PLATFORM-DELIVERY-REV-' . $child->id . '-' . $reference,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => null,
+                            'account_name' => 'platform_revenue',
+                            'entry_type' => 'credit',
+                            'amount' => $child->platform_delivery_fee,
+                            'currency' => 'NGN',
+                            'description' => "Victorious Market 10% Delivery Fee for Child Order #{$child->order_number}",
+                        ]);
+                    }
                 }
 
                 // Credit: Logistics Payable (90% Delivery Net from parent order delivery fee)
