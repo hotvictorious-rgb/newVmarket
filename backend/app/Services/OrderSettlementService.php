@@ -107,17 +107,78 @@ class OrderSettlementService
                 ];
             }
 
-            // 8. Atomic State Transition
+            // 8. Atomic State Transition & Expiry Race Defense
             $now = Carbon::now();
             $oldPaymentStatus = $lockedOrder->payment_status;
             $lockedOrder->payment_status = 'paid';
             $lockedOrder->paid_at = $now;
             $lockedOrder->payment_channel = (string)($paystackData['channel'] ?? 'paystack');
             $lockedOrder->paystack_transaction_id = (string)($paystackData['id'] ?? $reference);
-            if ($lockedOrder->order_status === 'pending') {
+
+            if ($lockedOrder->order_status === 'cancelled') {
+                // The order was previously cancelled by the expiration worker.
+                // Verify whether stock can be re-reserved atomically.
+                $canReinstate = true;
+                foreach ($lockedOrder->items as $item) {
+                    if ($item->product_id) {
+                        $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
+                        if (!$product || $product->inventory_quantity < $item->quantity) {
+                            $canReinstate = false;
+                            break;
+                        }
+                    }
+                }
+
+                if ($canReinstate) {
+                    // Re-reserve stock and reinstate order to confirmed
+                    foreach ($lockedOrder->items as $item) {
+                        if ($item->product_id) {
+                            $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
+                            if ($product) {
+                                $product->decrement('inventory_quantity', $item->quantity);
+                                $product->is_in_stock = ($product->inventory_quantity > 0);
+                                $product->save();
+                            }
+                        }
+                    }
+                    $lockedOrder->order_status = 'confirmed';
+                    $lockedOrder->vendor_settlement_status = 'held';
+
+                    AdminAuditLog::create([
+                        'user_id' => $lockedOrder->customer_id,
+                        'action' => 'paid_after_expiration_reinstated',
+                        'target_type' => Order::class,
+                        'target_id' => $lockedOrder->id,
+                        'old_values' => ['order_status' => 'cancelled', 'payment_status' => 'pending'],
+                        'new_values' => ['order_status' => 'confirmed', 'payment_status' => 'paid', 'stock_re_reserved' => true],
+                        'ip_address' => request()->ip() ?? '127.0.0.1',
+                        'user_agent' => request()->userAgent(),
+                    ]);
+                } else {
+                    // Stock is depleted. Order remains cancelled; funds held as customer refund liability.
+                    $lockedOrder->order_status = 'cancelled';
+                    $lockedOrder->vendor_settlement_status = 'refund_pending';
+
+                    AdminAuditLog::create([
+                        'user_id' => $lockedOrder->customer_id,
+                        'action' => 'paid_after_expiration_out_of_stock_refund_queued',
+                        'target_type' => Order::class,
+                        'target_id' => $lockedOrder->id,
+                        'old_values' => ['order_status' => 'cancelled', 'payment_status' => 'pending'],
+                        'new_values' => [
+                            'order_status' => 'cancelled',
+                            'payment_status' => 'paid',
+                            'vendor_settlement_status' => 'refund_pending',
+                            'reason' => 'Inventory depleted following cancellation; payment queued for customer refund.',
+                        ],
+                        'ip_address' => request()->ip() ?? '127.0.0.1',
+                        'user_agent' => request()->userAgent(),
+                    ]);
+                }
+            } elseif ($lockedOrder->order_status === 'pending') {
                 $lockedOrder->order_status = 'confirmed';
+                $lockedOrder->vendor_settlement_status = 'held';
             }
-            $lockedOrder->vendor_settlement_status = 'held';
             $lockedOrder->save();
 
             // 9. Authoritative Balanced Double-Entry Financial Journal
@@ -144,15 +205,25 @@ class OrderSettlementService
                     'description' => "Customer cashback redeemed for Order #{$lockedOrder->order_number}",
                 ]);
 
-                // Consume available customer cashback entries
+                // Consume available customer cashback entries under exclusive pessimistic row lock
                 if ($lockedOrder->customer_id) {
-                    $remainingToDeduct = $lockedOrder->cashback_redeemed;
+                    $remainingToDeduct = (string)$lockedOrder->cashback_redeemed;
                     $availableLots = CustomerCashbackLedger::where('customer_id', $lockedOrder->customer_id)
                         ->where('status', 'available')
-                        ->where('matures_at', '<=', Carbon::now())
-                        ->where('expires_at', '>', Carbon::now())
+                        ->where('matures_at', '<=', $now)
+                        ->where('expires_at', '>', $now)
                         ->orderBy('id', 'asc')
+                        ->lockForUpdate()
                         ->get();
+
+                    $totalAvailable = '0.00';
+                    foreach ($availableLots as $lot) {
+                        $totalAvailable = bcadd($totalAvailable, (string)$lot->amount, 2);
+                    }
+
+                    if (bccomp($totalAvailable, $remainingToDeduct, 2) < 0) {
+                        throw new \RuntimeException("Insufficient matured cashback balance to satisfy redemption of ₦{$remainingToDeduct}. Available: ₦{$totalAvailable}.");
+                    }
 
                     foreach ($availableLots as $lot) {
                         if (bccomp($remainingToDeduct, '0.00', 2) <= 0) {
@@ -171,55 +242,68 @@ class OrderSettlementService
                 }
             }
 
-            // Credit: Vendor Payable (90% Merchandise Net)
-            FinancialJournalEntry::create([
-                'order_id' => $lockedOrder->id,
-                'transaction_reference' => $reference,
-                'account_name' => 'vendor_payable',
-                'entry_type' => 'credit',
-                'amount' => $lockedOrder->vendor_net_90,
-                'currency' => 'NGN',
-                'description' => "Merchant 90% Net Payable held in escrow for Order #{$lockedOrder->order_number}",
-            ]);
-
-            // Credit: Logistics Payable (90% Delivery Net)
-            if (bccomp((string)$lockedOrder->logistics_fee_retained, '0.00', 2) > 0) {
+            if ($lockedOrder->vendor_settlement_status === 'refund_pending') {
+                // Out of stock following expiration: Cash in escrow is held as customer refund liability
                 FinancialJournalEntry::create([
                     'order_id' => $lockedOrder->id,
                     'transaction_reference' => $reference,
-                    'account_name' => 'logistics_payable',
+                    'account_name' => 'customer_refund_liability',
                     'entry_type' => 'credit',
-                    'amount' => $lockedOrder->logistics_fee_retained,
+                    'amount' => $lockedOrder->grand_total,
                     'currency' => 'NGN',
-                    'description' => "Logistics Fleet 90% Net Payable held for Order #{$lockedOrder->order_number}",
+                    'description' => "Customer Refund Liability held in escrow for Order #{$lockedOrder->order_number} (Inventory depleted after expiration)",
                 ]);
-            }
-
-            // Credit: Customer Cashback Liability (5% Merchandise Split)
-            if (bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
+            } else {
+                // Credit: Vendor Payable (90% Merchandise Net)
                 FinancialJournalEntry::create([
                     'order_id' => $lockedOrder->id,
                     'transaction_reference' => $reference,
-                    'account_name' => 'cashback_liability',
+                    'account_name' => 'vendor_payable',
                     'entry_type' => 'credit',
-                    'amount' => $lockedOrder->customer_cashback_5,
+                    'amount' => $lockedOrder->vendor_net_90,
                     'currency' => 'NGN',
-                    'description' => "Customer 5% Cashback Reward Liability accrued for Order #{$lockedOrder->order_number}",
+                    'description' => "Merchant 90% Net Payable held in escrow for Order #{$lockedOrder->order_number}",
                 ]);
-            }
 
-            // Credit: Platform Revenue (5% Margin + 10% Delivery Cut)
-            $platformTotalCut = bcadd((string)$lockedOrder->platform_margin_5, (string)$lockedOrder->platform_delivery_fee, 2);
-            if (bccomp($platformTotalCut, '0.00', 2) > 0) {
-                FinancialJournalEntry::create([
-                    'order_id' => $lockedOrder->id,
-                    'transaction_reference' => $reference,
-                    'account_name' => 'platform_revenue',
-                    'entry_type' => 'credit',
-                    'amount' => $platformTotalCut,
-                    'currency' => 'NGN',
-                    'description' => "Victorious Market Gross Retained Commission for Order #{$lockedOrder->order_number}",
-                ]);
+                // Credit: Logistics Payable (90% Delivery Net)
+                if (bccomp((string)$lockedOrder->logistics_fee_retained, '0.00', 2) > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $lockedOrder->id,
+                        'transaction_reference' => $reference,
+                        'account_name' => 'logistics_payable',
+                        'entry_type' => 'credit',
+                        'amount' => $lockedOrder->logistics_fee_retained,
+                        'currency' => 'NGN',
+                        'description' => "Logistics Fleet 90% Net Payable held for Order #{$lockedOrder->order_number}",
+                    ]);
+                }
+
+                // Credit: Customer Cashback Liability (5% Merchandise Split)
+                if (bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $lockedOrder->id,
+                        'transaction_reference' => $reference,
+                        'account_name' => 'cashback_liability',
+                        'entry_type' => 'credit',
+                        'amount' => $lockedOrder->customer_cashback_5,
+                        'currency' => 'NGN',
+                        'description' => "Customer 5% Cashback Reward Liability accrued for Order #{$lockedOrder->order_number}",
+                    ]);
+                }
+
+                // Credit: Platform Revenue (5% Margin + 10% Delivery Cut)
+                $platformTotalCut = bcadd((string)$lockedOrder->platform_margin_5, (string)$lockedOrder->platform_delivery_fee, 2);
+                if (bccomp($platformTotalCut, '0.00', 2) > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $lockedOrder->id,
+                        'transaction_reference' => $reference,
+                        'account_name' => 'platform_revenue',
+                        'entry_type' => 'credit',
+                        'amount' => $platformTotalCut,
+                        'currency' => 'NGN',
+                        'description' => "Victorious Market Gross Retained Commission for Order #{$lockedOrder->order_number}",
+                    ]);
+                }
             }
 
             // 10. Register 5% Customer Cashback Reward in Ledger
@@ -588,10 +672,6 @@ class OrderSettlementService
                 $lane = \App\Models\DeliveryLane::find($lockedOrder->delivery_lane_id);
                 $logisticsCompany = $lane ? $lane->assignedLogisticsCompany : null;
             }
-            if (!$logisticsCompany && !$targetRider) {
-                $logisticsCompany = \App\Models\LogisticsCompanyProfile::where('status', 'active')->first();
-            }
-
             // Authoritative 90% Logistics Net Calculation via BCMath
             $logisticsNetCut = $lockedOrder->logistics_fee_retained;
             if (empty($logisticsNetCut) || bccomp((string)$logisticsNetCut, '0.00', 2) === 0) {
@@ -600,10 +680,46 @@ class OrderSettlementService
 
             // Closed-Loop Platform Settlement:
             // 100% of the delivery proceeds (90% logistics cut) are credited exclusively to the accredited Corporate Fleet Wallet of the Logistics Company.
-            // Riders have NO platform wallets, NO balances, and are NEVER credited directly by the platform or customer.
-            // All courier compensation (salaries/trips) is handled offline by the logistics company.
-            if ($logisticsCompany && bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
+            // Under NO circumstance is an unrelated active logistics company credited.
+            // If no authorized company is resolvable, funds remain safely held in platform escrow pending administrative assignment.
+            if ($logisticsCompany && $logisticsCompany->status === 'active' && bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
                 $logisticsCompany->creditWallet((string)$logisticsNetCut);
+
+                // Authoritative Double-Entry Journal Entry: Transfer from logistics_payable to corporate fleet wallet
+                FinancialJournalEntry::create([
+                    'order_id' => $lockedOrder->id,
+                    'transaction_reference' => 'FLEET-EARN-' . $lockedOrder->order_number,
+                    'account_name' => 'logistics_payable',
+                    'entry_type' => 'debit',
+                    'amount' => (string)$logisticsNetCut,
+                    'currency' => 'NGN',
+                    'description' => "Delivery fee released to {$logisticsCompany->company_name} corporate wallet for Order #{$lockedOrder->order_number}",
+                ]);
+
+                FinancialJournalEntry::create([
+                    'order_id' => $lockedOrder->id,
+                    'transaction_reference' => 'FLEET-EARN-' . $lockedOrder->order_number,
+                    'account_name' => 'logistics_company_wallet',
+                    'entry_type' => 'credit',
+                    'amount' => (string)$logisticsNetCut,
+                    'currency' => 'NGN',
+                    'description' => "Corporate fleet earnings credited from delivery escrow for Order #{$lockedOrder->order_number}",
+                ]);
+            } elseif (bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
+                // Operational Exception Audit: Retain in platform escrow
+                AdminAuditLog::create([
+                    'user_id' => $targetRider ? $targetRider->user_id : null,
+                    'action' => 'unassigned_logistics_fee_held_in_escrow',
+                    'target_type' => Order::class,
+                    'target_id' => $lockedOrder->id,
+                    'old_values' => ['logistics_net_cut' => (string)$logisticsNetCut],
+                    'new_values' => [
+                        'status' => 'held_in_platform_escrow',
+                        'reason' => 'No active accredited logistics company affiliated with order, collection point, rider, or lane.',
+                    ],
+                    'ip_address' => request()->ip() ?? '127.0.0.1',
+                    'user_agent' => request()->userAgent(),
+                ]);
             }
 
             // Update/Enqueue 5% Customer Cashback reward with exact refund window maturation lock
@@ -857,6 +973,28 @@ class OrderSettlementService
             $lockedOrder->settled_by_admin_id = $adminUser->id;
             $lockedOrder->settlement_proof_path = $proofPath;
             $lockedOrder->save();
+
+            // Authoritative Double-Entry Financial Journal: Debit vendor_payable, Credit cash_in_escrow
+            $payoutRef = 'VND-PAY-' . $lockedOrder->order_number . '-' . date('YmdHis');
+            FinancialJournalEntry::create([
+                'order_id' => $lockedOrder->id,
+                'transaction_reference' => $payoutRef,
+                'account_name' => 'vendor_payable',
+                'entry_type' => 'debit',
+                'amount' => $lockedOrder->vendor_net_90,
+                'currency' => 'NGN',
+                'description' => "Bank settlement disbursement of ₦{$lockedOrder->vendor_net_90} to {$vendor->business_name} (Acct: {$vendor->account_number})",
+            ]);
+
+            FinancialJournalEntry::create([
+                'order_id' => $lockedOrder->id,
+                'transaction_reference' => $payoutRef,
+                'account_name' => 'cash_in_escrow',
+                'entry_type' => 'credit',
+                'amount' => $lockedOrder->vendor_net_90,
+                'currency' => 'NGN',
+                'description' => "Escrow cash outflow via verified bank transfer to {$vendor->business_name}",
+            ]);
 
             // Immutable Financial Audit Log
             AdminAuditLog::create([

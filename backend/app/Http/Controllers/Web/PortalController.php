@@ -1653,6 +1653,29 @@ class PortalController extends Controller
         // Multi-channel Treasury WhatsApp & SMS Alert to Fleet HQ
         \App\Services\NotificationDispatchService::dispatchPayoutDisbursed($payout);
 
+        // Authoritative Double-Entry Financial Journal: Discharge payout payable, credit cash_in_escrow outflow
+        $disburseRef = 'FLEET-PAYOUT-' . $payout->id . '-' . date('YmdHis');
+        $formattedPayoutAmount = number_format((float)$payout->amount, 2, '.', '');
+        \App\Models\FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => $disburseRef,
+            'account_name' => 'logistics_payout_payable',
+            'entry_type' => 'debit',
+            'amount' => $formattedPayoutAmount,
+            'currency' => 'NGN',
+            'description' => "Corporate withdrawal liability discharged via bank transfer to {$company->company_name}",
+        ]);
+
+        \App\Models\FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => $disburseRef,
+            'account_name' => 'cash_in_escrow',
+            'entry_type' => 'credit',
+            'amount' => $formattedPayoutAmount,
+            'currency' => 'NGN',
+            'description' => "Corporate bank transfer disbursement to {$company->company_name} (Acct: {$company->account_number})",
+        ]);
+
         AdminAuditLog::create([
             'user_id' => $admin->id,
             'action' => 'logistics_payout_disbursed',
@@ -1770,13 +1793,35 @@ class PortalController extends Controller
             $lockedCompany->debitWallet($amount);
 
             // Record payout request
-            LogisticsPayoutRequest::create([
+            $payout = LogisticsPayoutRequest::create([
                 'logistics_company_id' => $lockedCompany->id,
                 'amount' => $amount,
                 'status' => 'pending',
                 'bank_name' => $lockedCompany->bank_name,
                 'account_number' => $lockedCompany->account_number,
                 'account_name' => $lockedCompany->account_name ?? $lockedCompany->company_name,
+            ]);
+
+            // Authoritative Double-Entry Financial Journal: Debit corporate wallet, credit payout payable
+            $reqRef = 'FLEET-REQ-' . $lockedCompany->id . '-' . date('YmdHis');
+            \App\Models\FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => $reqRef,
+                'account_name' => 'logistics_company_wallet',
+                'entry_type' => 'debit',
+                'amount' => $amount,
+                'currency' => 'NGN',
+                'description' => "Corporate withdrawal request placed by {$lockedCompany->company_name}",
+            ]);
+
+            \App\Models\FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => $reqRef,
+                'account_name' => 'logistics_payout_payable',
+                'entry_type' => 'credit',
+                'amount' => $amount,
+                'currency' => 'NGN',
+                'description' => "Corporate withdrawal liability accrued for {$lockedCompany->company_name}",
             ]);
 
             return back()->with('status', "Withdrawal request for ₦" . number_format((float)$amount, 2) . " submitted! Super Admin will review and disburse to {$lockedCompany->bank_name} ({$lockedCompany->account_number}).");

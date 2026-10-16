@@ -104,7 +104,7 @@ class CustomerOrderApiController extends Controller
             'items.*.product_id' => 'required|integer|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
             'redeem_cashback' => 'nullable|boolean',
-            'payment_method' => 'nullable|string|in:paystack,cash_on_counter,wallet',
+            'payment_method' => 'nullable|string|in:paystack',
         ]);
 
         $user = $request->user();
