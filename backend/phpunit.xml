@@ -32,5 +32,8 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="PAYSTACK_PUBLIC_KEY" value="pk_test_d3811b3c26d0d0603e07601e8bdda44ac8857047"/>
+        <env name="PAYSTACK_SECRET_KEY" value="sk_test_d871eccb6c96d8cd20aa7240a31f2dccf4a657ad"/>
+        <env name="PAYSTACK_PAYMENT_URL" value="https://api.paystack.co"/>
     </php>
 </phpunit>

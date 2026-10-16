@@ -456,6 +456,23 @@ class PortalController extends Controller
     // STOREFRONT BANNER MANAGEMENT (Super Admin)
     // ==========================================
 
+    /**
+     * Defense-in-depth HTML / script sanitization helper.
+     * Completely strips malicious <script>...</script> and <style>...</style> blocks including inner content,
+     * as well as all remaining HTML tags.
+     */
+    protected function sanitizeInput(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $cleaned = preg_replace('/<script\b[^>]*>(.*?)<\/script>/is', '', $value);
+        $cleaned = preg_replace('/<style\b[^>]*>(.*?)<\/style>/is', '', $cleaned);
+        $cleaned = strip_tags($cleaned);
+        return trim($cleaned);
+    }
+
     public function adminBannersPage()
     {
         $banners = Banner::orderBy('banner_type', 'asc')->orderBy('sort_order', 'asc')->orderBy('id', 'desc')->get();
@@ -482,7 +499,7 @@ class PortalController extends Controller
             'text_color' => 'nullable|string|max:50',
             'cta_text' => 'nullable|string|max:100',
             'cta_url' => 'nullable|string|max:255',
-            'sort_order' => 'nullable|integer|min:0',
+            'sort_order' => 'nullable|integer|min:0|max:1000',
             'is_active' => 'nullable',
         ]);
 
@@ -492,21 +509,36 @@ class PortalController extends Controller
             $imagePath = 'storage/' . $path;
         }
 
-        Banner::create([
+        $banner = Banner::create([
             'banner_type' => $validated['banner_type'],
             'template_style' => $validated['template_style'] ?? 'luxury_split',
-            'title' => trim($validated['title']),
-            'subtitle' => !empty($validated['subtitle']) ? trim($validated['subtitle']) : null,
-            'badge_text' => !empty($validated['badge_text']) ? trim($validated['badge_text']) : 'VERIFIED OMNICHANNEL MARKET',
-            'discount_tag' => !empty($validated['discount_tag']) ? trim($validated['discount_tag']) : null,
-            'feature_tags' => !empty($validated['feature_tags']) ? trim($validated['feature_tags']) : null,
+            'title' => $this->sanitizeInput($validated['title']),
+            'subtitle' => !empty($validated['subtitle']) ? $this->sanitizeInput($validated['subtitle']) : null,
+            'badge_text' => !empty($validated['badge_text']) ? $this->sanitizeInput($validated['badge_text']) : 'VERIFIED OMNICHANNEL MARKET',
+            'discount_tag' => !empty($validated['discount_tag']) ? $this->sanitizeInput($validated['discount_tag']) : null,
+            'feature_tags' => !empty($validated['feature_tags']) ? $this->sanitizeInput($validated['feature_tags']) : null,
             'image_path' => $imagePath,
-            'bg_gradient' => !empty($validated['bg_gradient']) ? $validated['bg_gradient'] : 'linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%)',
-            'text_color' => !empty($validated['text_color']) ? $validated['text_color'] : '#0F172A',
-            'cta_text' => !empty($validated['cta_text']) ? $validated['cta_text'] : 'Shop Verified Items',
-            'cta_url' => !empty($validated['cta_url']) ? $validated['cta_url'] : '#catalog',
+            'bg_gradient' => !empty($validated['bg_gradient']) ? $this->sanitizeInput($validated['bg_gradient']) : 'linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%)',
+            'text_color' => !empty($validated['text_color']) ? $this->sanitizeInput($validated['text_color']) : '#0F172A',
+            'cta_text' => !empty($validated['cta_text']) ? $this->sanitizeInput($validated['cta_text']) : 'Shop Verified Items',
+            'cta_url' => !empty($validated['cta_url']) ? $this->sanitizeInput($validated['cta_url']) : '#catalog',
             'sort_order' => (int)($validated['sort_order'] ?? 0),
             'is_active' => $request->has('is_active'),
+        ]);
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'admin_banner_created',
+            'target_type' => Banner::class,
+            'target_id' => $banner->id,
+            'new_values' => [
+                'banner_type' => $banner->banner_type,
+                'title' => $banner->title,
+                'template_style' => $banner->template_style,
+                'is_active' => $banner->is_active,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
         ]);
 
         return redirect()->route('admin.banners.index')->with('status', 'Promotional storefront banner published successfully!');
@@ -530,9 +562,15 @@ class PortalController extends Controller
             'text_color' => 'nullable|string|max:50',
             'cta_text' => 'nullable|string|max:100',
             'cta_url' => 'nullable|string|max:255',
-            'sort_order' => 'nullable|integer|min:0',
+            'sort_order' => 'nullable|integer|min:0|max:1000',
             'is_active' => 'nullable',
         ]);
+
+        $oldValues = [
+            'title' => $banner->title,
+            'template_style' => $banner->template_style,
+            'is_active' => $banner->is_active,
+        ];
 
         $imagePath = $banner->image_path;
         if ($request->hasFile('image')) {
@@ -545,18 +583,33 @@ class PortalController extends Controller
         $banner->update([
             'banner_type' => $validated['banner_type'],
             'template_style' => $validated['template_style'] ?? ($banner->template_style ?: 'luxury_split'),
-            'title' => trim($validated['title']),
-            'subtitle' => !empty($validated['subtitle']) ? trim($validated['subtitle']) : null,
-            'badge_text' => !empty($validated['badge_text']) ? trim($validated['badge_text']) : 'VERIFIED OMNICHANNEL MARKET',
-            'discount_tag' => !empty($validated['discount_tag']) ? trim($validated['discount_tag']) : null,
-            'feature_tags' => !empty($validated['feature_tags']) ? trim($validated['feature_tags']) : null,
+            'title' => $this->sanitizeInput($validated['title']),
+            'subtitle' => !empty($validated['subtitle']) ? $this->sanitizeInput($validated['subtitle']) : null,
+            'badge_text' => !empty($validated['badge_text']) ? $this->sanitizeInput($validated['badge_text']) : 'VERIFIED OMNICHANNEL MARKET',
+            'discount_tag' => !empty($validated['discount_tag']) ? $this->sanitizeInput($validated['discount_tag']) : null,
+            'feature_tags' => !empty($validated['feature_tags']) ? $this->sanitizeInput($validated['feature_tags']) : null,
             'image_path' => $imagePath,
-            'bg_gradient' => !empty($validated['bg_gradient']) ? $validated['bg_gradient'] : 'linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%)',
-            'text_color' => !empty($validated['text_color']) ? $validated['text_color'] : '#0F172A',
-            'cta_text' => !empty($validated['cta_text']) ? $validated['cta_text'] : 'Shop Verified Items',
-            'cta_url' => !empty($validated['cta_url']) ? $validated['cta_url'] : '#catalog',
+            'bg_gradient' => !empty($validated['bg_gradient']) ? $this->sanitizeInput($validated['bg_gradient']) : 'linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%)',
+            'text_color' => !empty($validated['text_color']) ? $this->sanitizeInput($validated['text_color']) : '#0F172A',
+            'cta_text' => !empty($validated['cta_text']) ? $this->sanitizeInput($validated['cta_text']) : 'Shop Verified Items',
+            'cta_url' => !empty($validated['cta_url']) ? $this->sanitizeInput($validated['cta_url']) : '#catalog',
             'sort_order' => (int)($validated['sort_order'] ?? 0),
             'is_active' => $request->has('is_active'),
+        ]);
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'admin_banner_updated',
+            'target_type' => Banner::class,
+            'target_id' => $banner->id,
+            'old_values' => $oldValues,
+            'new_values' => [
+                'title' => $banner->title,
+                'template_style' => $banner->template_style,
+                'is_active' => $banner->is_active,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
         ]);
 
         return redirect()->route('admin.banners.index')->with('status', "Banner #{$banner->id} updated successfully!");
@@ -565,8 +618,20 @@ class PortalController extends Controller
     public function adminToggleBanner(Request $request, int $id)
     {
         $banner = Banner::findOrFail($id);
+        $oldState = (bool)$banner->is_active;
         $banner->is_active = !$banner->is_active;
         $banner->save();
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'admin_banner_toggled',
+            'target_type' => Banner::class,
+            'target_id' => $banner->id,
+            'old_values' => ['is_active' => $oldState],
+            'new_values' => ['is_active' => (bool)$banner->is_active],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
 
         $statusText = $banner->is_active ? 'Activated' : 'Paused';
         return redirect()->route('admin.banners.index')->with('status', "Banner #{$banner->id} is now {$statusText}.");
@@ -575,7 +640,19 @@ class PortalController extends Controller
     public function adminDeleteBanner(Request $request, int $id)
     {
         $banner = Banner::findOrFail($id);
+        $bannerId = $banner->id;
+        $bannerTitle = $banner->title;
         $banner->delete();
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'admin_banner_deleted',
+            'target_type' => Banner::class,
+            'target_id' => $bannerId,
+            'old_values' => ['title' => $bannerTitle],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
 
         return redirect()->route('admin.banners.index')->with('status', 'Banner removed from storefront catalog.');
     }
@@ -673,8 +750,23 @@ class PortalController extends Controller
     public function adminToggleProductFlagship(Request $request, int $id)
     {
         $product = Product::findOrFail($id);
+        $oldFlagship = (bool)$product->is_vmarket_flagship;
         $product->is_vmarket_flagship = !$product->is_vmarket_flagship;
         $product->save();
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'product_flagship_toggled',
+            'target_type' => Product::class,
+            'target_id' => $product->id,
+            'old_values' => ['is_vmarket_flagship' => $oldFlagship],
+            'new_values' => [
+                'is_vmarket_flagship' => (bool)$product->is_vmarket_flagship,
+                'product_name' => $product->name,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
@@ -705,15 +797,40 @@ class PortalController extends Controller
             'announcement_is_active' => 'nullable',
         ]);
 
-        \App\Models\SystemSetting::set('support_phone', $validated['support_phone'], 'contact');
-        \App\Models\SystemSetting::set('support_whatsapp', $validated['support_whatsapp'] ?? $validated['support_phone'], 'contact');
-        \App\Models\SystemSetting::set('support_email', $validated['support_email'] ?? 'support@victoriousmarket.com', 'contact');
-        \App\Models\SystemSetting::set('announcement_type', $validated['announcement_type'], 'announcement');
-        \App\Models\SystemSetting::set('announcement_badge', $validated['announcement_badge'] ?? '💬', 'announcement');
-        \App\Models\SystemSetting::set('announcement_text', $validated['announcement_text'], 'announcement');
-        \App\Models\SystemSetting::set('announcement_bg_color', $validated['announcement_bg_color'], 'announcement');
-        \App\Models\SystemSetting::set('announcement_link', $validated['announcement_link'] ?? '', 'announcement');
-        \App\Models\SystemSetting::set('announcement_is_active', $request->has('announcement_is_active') ? '1' : '0', 'announcement');
+        $phone = strip_tags(trim($validated['support_phone']));
+        $whatsapp = strip_tags(trim($validated['support_whatsapp'] ?? $validated['support_phone']));
+        $email = strip_tags(trim($validated['support_email'] ?? 'support@victoriousmarket.com'));
+        $type = strip_tags(trim($validated['announcement_type']));
+        $badge = strip_tags(trim($validated['announcement_badge'] ?? '💬'));
+        $text = strip_tags(trim($validated['announcement_text']));
+        $bgColor = strip_tags(trim($validated['announcement_bg_color']));
+        $link = strip_tags(trim($validated['announcement_link'] ?? ''));
+        $isActive = $request->has('announcement_is_active') ? '1' : '0';
+
+        \App\Models\SystemSetting::set('support_phone', $phone, 'contact');
+        \App\Models\SystemSetting::set('support_whatsapp', $whatsapp, 'contact');
+        \App\Models\SystemSetting::set('support_email', $email, 'contact');
+        \App\Models\SystemSetting::set('announcement_type', $type, 'announcement');
+        \App\Models\SystemSetting::set('announcement_badge', $badge, 'announcement');
+        \App\Models\SystemSetting::set('announcement_text', $text, 'announcement');
+        \App\Models\SystemSetting::set('announcement_bg_color', $bgColor, 'announcement');
+        \App\Models\SystemSetting::set('announcement_link', $link, 'announcement');
+        \App\Models\SystemSetting::set('announcement_is_active', $isActive, 'announcement');
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'announcement_settings_updated',
+            'target_type' => \App\Models\SystemSetting::class,
+            'target_id' => null,
+            'new_values' => [
+                'support_phone' => $phone,
+                'announcement_type' => $type,
+                'announcement_text' => $text,
+                'announcement_is_active' => $isActive,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
 
         return redirect()->route('admin.dashboard')->with('status', 'Announcement & Support settings updated successfully!');
     }
@@ -808,7 +925,7 @@ class PortalController extends Controller
     public function vendorDashboard(Request $request)
     {
         $vendor = $this->resolveVendorProfile();
-        $primaryShop = $vendor->primaryShop ?? Shop::where('vendor_id', $vendor->id)->first() ?? Shop::first();
+        $primaryShop = $vendor->primaryShop ?? Shop::where('vendor_id', $vendor->id)->first();
 
         $products = Product::where('vendor_id', $vendor->id)->with('category')->get();
         $reservations = PickupReservation::where('vendor_id', $vendor->id)
@@ -1116,6 +1233,10 @@ class PortalController extends Controller
     {
         $company = $this->resolveLogisticsCompany();
 
+        if ($company->status && $company->status !== 'active') {
+            abort(403, 'Logistics fleet account is suspended or not active.');
+        }
+
         $validated = $request->validate([
             'lga_id' => 'required|integer|exists:lgas,id',
             'name' => 'required|string|max:150',
@@ -1133,13 +1254,13 @@ class PortalController extends Controller
             'logistics_company_id' => $company->id,
             'state_id' => $lga->state_id,
             'lga_id' => $lga->id,
-            'name' => $validated['name'],
+            'name' => strip_tags(trim($validated['name'])),
             'code' => $code,
-            'address' => $validated['address'],
-            'landmark' => $validated['landmark'] ?? null,
-            'contact_phone' => $validated['contact_phone'],
-            'contact_person' => $validated['contact_person'] ?? null,
-            'operating_hours' => $validated['operating_hours'] ?? '08:00 AM - 06:00 PM',
+            'address' => strip_tags(trim($validated['address'])),
+            'landmark' => isset($validated['landmark']) ? strip_tags(trim($validated['landmark'])) : null,
+            'contact_phone' => preg_replace('/[^0-9+]/', '', $validated['contact_phone']),
+            'contact_person' => isset($validated['contact_person']) ? strip_tags(trim($validated['contact_person'])) : null,
+            'operating_hours' => isset($validated['operating_hours']) ? strip_tags(trim($validated['operating_hours'])) : '08:00 AM - 06:00 PM',
             'is_active' => true,
         ]);
 
@@ -1453,11 +1574,28 @@ class PortalController extends Controller
      */
     public function adminDisburseSettlement(Request $request, OrderSettlementService $settlementService)
     {
-        $order = Order::findOrFail($request->input('order_id'));
-        $admin = User::where('user_type', 'super_admin')->first();
-        $proof = 'storage/payouts/proof_' . $order->order_number . '.png';
+        $validated = $request->validate([
+            'order_id' => 'required|integer|exists:orders,id',
+            'proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
+        ]);
 
-        $result = $settlementService->disburseVendorSettlement($order, $admin, $proof);
+        $admin = Auth::user();
+        if (!$admin || (!$admin->isSuperAdmin() && !$admin->isAdminEmployee()) || $admin->status !== 'active') {
+            return back()->with('error', 'Unauthorized: Administrative finance permissions required.');
+        }
+
+        $order = Order::findOrFail($validated['order_id']);
+        $proofPath = 'storage/payouts/proof_' . $order->order_number . '.png';
+        if ($request->hasFile('proof')) {
+            $path = $request->file('proof')->store('payouts', 'public');
+            $proofPath = 'storage/' . $path;
+        }
+
+        $result = $settlementService->disburseVendorSettlement($order, $admin, $proofPath);
+
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
 
         return back()->with('status', $result['message']);
     }
@@ -1467,22 +1605,42 @@ class PortalController extends Controller
      */
     public function adminDisburseLogisticsPayout(Request $request)
     {
-        $request->validate([
+        $validated = $request->validate([
             'payout_id' => 'required|exists:logistics_payout_requests,id',
-            'notes' => 'nullable|string',
+            'notes' => 'nullable|string|max:500',
+            'proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
         ]);
 
-        $payout = LogisticsPayoutRequest::with('company')->findOrFail($request->input('payout_id'));
+        $admin = Auth::user() ?? User::where('user_type', 'super_admin')->first();
+        if (!$admin || (!$admin->isSuperAdmin() && !$admin->isAdminEmployee()) || $admin->status !== 'active') {
+            return back()->with('error', 'Unauthorized: Administrative finance permissions required.');
+        }
+
+        $payout = LogisticsPayoutRequest::with('company')->findOrFail($validated['payout_id']);
         if ($payout->status !== 'pending') {
             return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
         }
 
-        $admin = auth()->user() ?? User::where('user_type', 'super_admin')->first();
+        $company = $payout->company;
+        if (!$company || $company->status !== 'active') {
+            return back()->with('error', 'Disbursement blocked: Logistics company account is inactive or suspended.');
+        }
+
+        if ($company->isWithinBankCooldown()) {
+            return back()->with('error', 'Disbursement blocked: Logistics company bank account was recently updated and is under a 48-hour security cooldown.');
+        }
+
+        $proofPath = 'storage/payouts/fleet_' . $payout->id . '_' . time() . '.png';
+        if ($request->hasFile('proof')) {
+            $path = $request->file('proof')->store('payouts', 'public');
+            $proofPath = 'storage/' . $path;
+        }
+
         $payout->status = 'approved';
         $payout->approved_by_admin_id = $admin->id;
         $payout->disbursed_at = Carbon::now();
-        $payout->settlement_proof_path = 'storage/payouts/fleet_' . $payout->id . '_' . time() . '.png';
-        $payout->admin_notes = $request->input('notes', 'Direct corporate NUBAN transfer confirmed.');
+        $payout->settlement_proof_path = $proofPath;
+        $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Direct corporate NUBAN transfer confirmed.'));
         $payout->save();
 
         // Multi-channel Treasury WhatsApp & SMS Alert to Fleet HQ
@@ -1491,13 +1649,25 @@ class PortalController extends Controller
         AdminAuditLog::create([
             'user_id' => $admin->id,
             'action' => 'logistics_payout_disbursed',
-            'entity_type' => 'LogisticsPayoutRequest',
-            'entity_id' => $payout->id,
-            'description' => "Disbursed ₦" . number_format((float)$payout->amount, 2) . " corporate delivery fee payout to " . ($payout->company->company_name ?? 'Logistics Fleet'),
+            'target_type' => LogisticsPayoutRequest::class,
+            'target_id' => $payout->id,
+            'old_values' => [
+                'status' => 'pending',
+                'amount' => $payout->amount,
+            ],
+            'new_values' => [
+                'status' => 'approved',
+                'amount' => $payout->amount,
+                'company_id' => $company->id,
+                'company_name' => $company->company_name,
+                'proof_path' => $payout->settlement_proof_path,
+                'admin_notes' => $payout->admin_notes,
+            ],
             'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
         ]);
 
-        return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " corporate delivery fee to {$payout->company->company_name}!");
+        return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " corporate delivery fee to {$company->company_name}!");
     }
 
     /**
@@ -1509,14 +1679,16 @@ class PortalController extends Controller
 
         $validated = $request->validate([
             'bank_name' => 'required|string|max:100',
-            'account_number' => 'required|string|size:10',
+            'account_number' => 'required|string|regex:/^[0-9]{10}$/',
             'account_name' => 'required|string|max:150',
+        ], [
+            'account_number.regex' => 'NUBAN corporate account number must be exactly 10 digits.',
         ]);
 
-        $company->bank_name = $validated['bank_name'];
-        $company->bank_code = $request->input('bank_code', '000');
-        $company->account_number = $validated['account_number'];
-        $company->account_name = $validated['account_name'];
+        $company->bank_name = strip_tags(trim($validated['bank_name']));
+        $company->bank_code = preg_replace('/[^0-9]/', '', $request->input('bank_code', '000'));
+        $company->account_number = trim($validated['account_number']);
+        $company->account_name = strip_tags(trim($validated['account_name']));
         $company->bank_updated_at = Carbon::now();
         $company->save();
 
@@ -1530,9 +1702,13 @@ class PortalController extends Controller
     {
         $company = $this->resolveLogisticsCompany();
 
-        $request->validate([
-            'amount' => 'required|numeric|min:500',
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:500|max:50000000',
         ]);
+
+        if ($company->status !== 'active') {
+            return back()->with('error', 'Unauthorized: Logistics fleet account is inactive or suspended.');
+        }
 
         if (empty($company->account_number) || empty($company->bank_name)) {
             return back()->with('error', 'Please configure your verified corporate bank account before requesting withdrawal.');
@@ -1542,25 +1718,29 @@ class PortalController extends Controller
             return back()->with('error', 'Security Cooldown Active: Bank account was recently updated. For fraud prevention, withdrawals are locked for 48 hours following bank detail modifications.');
         }
 
-        $amount = number_format((float)$request->input('amount'), 2, '.', '');
-        if (bccomp((string)$company->wallet_balance, $amount, 2) < 0) {
-            return back()->with('error', "Insufficient wallet balance. Available balance: ₦" . number_format((float)$company->wallet_balance, 2));
-        }
+        return DB::transaction(function () use ($company, $validated) {
+            $lockedCompany = LogisticsCompanyProfile::where('id', $company->id)->lockForUpdate()->first();
 
-        // Atomically debit company corporate wallet
-        $company->debitWallet($amount);
+            $amount = number_format((float)$validated['amount'], 2, '.', '');
+            if (bccomp((string)$lockedCompany->wallet_balance, $amount, 2) < 0) {
+                return back()->with('error', "Insufficient wallet balance. Available balance: ₦" . number_format((float)$lockedCompany->wallet_balance, 2));
+            }
 
-        // Record payout request
-        LogisticsPayoutRequest::create([
-            'logistics_company_id' => $company->id,
-            'amount' => $amount,
-            'status' => 'pending',
-            'bank_name' => $company->bank_name,
-            'account_number' => $company->account_number,
-            'account_name' => $company->account_name ?? $company->company_name,
-        ]);
+            // Atomically debit company corporate wallet
+            $lockedCompany->debitWallet($amount);
 
-        return back()->with('status', "Withdrawal request for ₦" . number_format((float)$amount, 2) . " submitted! Super Admin will review and disburse to {$company->bank_name} ({$company->account_number}).");
+            // Record payout request
+            LogisticsPayoutRequest::create([
+                'logistics_company_id' => $lockedCompany->id,
+                'amount' => $amount,
+                'status' => 'pending',
+                'bank_name' => $lockedCompany->bank_name,
+                'account_number' => $lockedCompany->account_number,
+                'account_name' => $lockedCompany->account_name ?? $lockedCompany->company_name,
+            ]);
+
+            return back()->with('status', "Withdrawal request for ₦" . number_format((float)$amount, 2) . " submitted! Super Admin will review and disburse to {$lockedCompany->bank_name} ({$lockedCompany->account_number}).");
+        });
     }
 
     /**
@@ -1569,12 +1749,25 @@ class PortalController extends Controller
     public function vendorApproveInspection(Request $request, OrderSettlementService $settlementService)
     {
         $vendor = $this->resolveVendorProfile();
+
+        if ($vendor->marketplace_status !== 'active') {
+            return back()->with('error', 'Unauthorized: Merchant marketplace account is suspended.');
+        }
+
+        $validated = $request->validate([
+            'reservation_code' => 'required|string|max:50',
+        ]);
+
         $reservation = PickupReservation::where('vendor_id', $vendor->id)
-            ->where('reservation_code', $request->input('reservation_code'))
+            ->where('reservation_code', trim($validated['reservation_code']))
             ->firstOrFail();
         $staff = Auth::user();
 
         $result = $settlementService->approvePickupInspection($reservation, $staff);
+
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
 
         return back()->with('status', $result['message']);
     }
@@ -1604,6 +1797,10 @@ class PortalController extends Controller
         }
 
         $otp = $validated['pickup_otp'] ?? $validated['handover_otp'] ?? '';
+        if (!preg_match('/^[0-9]{6}$/', trim($otp))) {
+            return back()->with('error', 'Handover verification code must be exactly 6 numerical digits.');
+        }
+
         $rider = $order->rider;
         if (!$rider) {
             return back()->with('error', 'No courier assigned to this order yet. Fleet dispatch must assign an approved rider before handover verification.');
@@ -1678,15 +1875,25 @@ class PortalController extends Controller
 
     public function riderVerifyDeliveryOtp(Request $request, OrderSettlementService $settlementService)
     {
-        $request->validate([
+        $validated = $request->validate([
             'order_id' => 'required|exists:orders,id',
-            'delivery_otp' => 'required|string',
+            'delivery_otp' => ['required', 'string', 'regex:/^[0-9]{6}$/'],
+        ], [
+            'delivery_otp.regex' => 'Customer delivery verification code must be exactly 6 numerical digits.',
         ]);
 
-        $order = Order::findOrFail($request->input('order_id'));
+        $order = Order::findOrFail($validated['order_id']);
         $rider = $this->resolveRiderProfile();
 
-        $result = $settlementService->verifyCustomerDeliveryOtp($order, $request->input('delivery_otp'), $rider);
+        if (!$rider || !$rider->is_active) {
+            return back()->with('error', 'Unauthorized: Rider profile is not active or suspended.');
+        }
+
+        $result = $settlementService->verifyCustomerDeliveryOtp($order, $validated['delivery_otp'], $rider);
+
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
 
         return back()->with('status', $result['message']);
     }
@@ -1697,12 +1904,19 @@ class PortalController extends Controller
     public function riderToggleShift(Request $request)
     {
         $rider = $this->resolveRiderProfile();
-        if ($rider) {
-            $rider->is_online = !$rider->is_online;
-            $rider->save();
+
+        if (!$rider || !$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
+            return back()->with('error', 'Unauthorized: Dispatch rider profile is suspended or inactive.');
         }
 
-        $statusText = ($rider && $rider->is_online) ? 'ON DUTY (Ready for Deliveries)' : 'OFF DUTY';
+        if ($rider->logisticsCompany && $rider->logisticsCompany->status !== 'active') {
+            return back()->with('error', 'Unauthorized: Parent logistics fleet is currently suspended or inactive.');
+        }
+
+        $rider->is_online = !$rider->is_online;
+        $rider->save();
+
+        $statusText = $rider->is_online ? 'ON DUTY (Ready for Deliveries)' : 'OFF DUTY';
         return back()->with('status', "Your shift status has been updated to: {$statusText}");
     }
 
@@ -1715,10 +1929,10 @@ class PortalController extends Controller
         $validated = $request->validate([
             'origin_lga_id' => 'required|integer|exists:lgas,id',
             'destination_lga_id' => 'required|integer|exists:lgas,id',
-            'base_fee' => 'required|numeric|min:0',
-            'bulky_surcharge' => 'nullable|numeric|min:0',
-            'estimated_delivery_hours_min' => 'required|integer|min:1',
-            'estimated_delivery_hours_max' => 'required|integer|min:1',
+            'base_fee' => 'required|numeric|min:0|max:1000000',
+            'bulky_surcharge' => 'nullable|numeric|min:0|max:1000000',
+            'estimated_delivery_hours_min' => 'required|integer|min:1|max:720',
+            'estimated_delivery_hours_max' => 'required|integer|min:1|max:720',
             'is_bidirectional' => 'nullable',
         ]);
 
@@ -1728,6 +1942,11 @@ class PortalController extends Controller
         if ($request->filled('lane_id')) {
             $existing = DeliveryLane::find($request->input('lane_id'));
             if ($existing) {
+                $oldValues = [
+                    'base_fee' => $existing->base_fee,
+                    'bulky_surcharge' => $existing->bulky_surcharge,
+                ];
+
                 $existing->update([
                     'origin_lga_id' => $validated['origin_lga_id'],
                     'destination_lga_id' => $validated['destination_lga_id'],
@@ -1751,13 +1970,28 @@ class PortalController extends Controller
                     ]);
                 }
 
+                AdminAuditLog::create([
+                    'user_id' => Auth::id(),
+                    'action' => 'delivery_lane_updated',
+                    'target_type' => DeliveryLane::class,
+                    'target_id' => $existing->id,
+                    'old_values' => $oldValues,
+                    'new_values' => [
+                        'base_fee' => $existing->base_fee,
+                        'origin_lga_id' => $existing->origin_lga_id,
+                        'destination_lga_id' => $existing->destination_lga_id,
+                    ],
+                    'ip_address' => $request->ip() ?? '127.0.0.1',
+                    'user_agent' => $request->userAgent(),
+                ]);
+
                 $hubId = $request->input('hub_lga_id', $validated['origin_lga_id']);
                 return redirect()->route('admin.delivery_lanes.index', ['hub_lga_id' => $hubId])->with('status', "Corridor successfully updated!");
             }
         }
 
         // 1. Forward lane (Origin -> Destination)
-        DeliveryLane::updateOrCreate([
+        $lane = DeliveryLane::updateOrCreate([
             'origin_lga_id' => $validated['origin_lga_id'],
             'destination_lga_id' => $validated['destination_lga_id'],
         ], [
@@ -1782,6 +2016,21 @@ class PortalController extends Controller
             ]);
         }
 
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'delivery_lane_created',
+            'target_type' => DeliveryLane::class,
+            'target_id' => $lane->id,
+            'new_values' => [
+                'origin_lga_id' => $lane->origin_lga_id,
+                'destination_lga_id' => $lane->destination_lga_id,
+                'base_fee' => $lane->base_fee,
+                'is_bidirectional' => $isBidirectional,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
+
         $dirMsg = $isBidirectional ? 'Bidirectional route (A ⇄ B) synchronized!' : 'One-way corridor saved!';
         $hubId = $request->input('hub_lga_id', $validated['origin_lga_id']);
         return redirect()->route('admin.delivery_lanes.index', ['hub_lga_id' => $hubId])->with('status', "Custom corridor successfully saved: {$dirMsg}");
@@ -1790,18 +2039,31 @@ class PortalController extends Controller
     public function adminUpdateZonalRates(Request $request)
     {
         $validated = $request->validate([
-            'zone_intra_lga_fee' => 'required|numeric|min:0',
+            'zone_intra_lga_fee' => 'required|numeric|min:0|max:1000000',
             'zone_intra_lga_eta' => 'required|string|max:50',
-            'zone_inter_lga_fee' => 'required|numeric|min:0',
+            'zone_inter_lga_fee' => 'required|numeric|min:0|max:1000000',
             'zone_inter_lga_eta' => 'required|string|max:50',
-            'zone_inter_state_fee' => 'required|numeric|min:0',
+            'zone_inter_state_fee' => 'required|numeric|min:0|max:1000000',
             'zone_inter_state_eta' => 'required|string|max:50',
-            'zone_bulky_cargo_surcharge' => 'required|numeric|min:0',
+            'zone_bulky_cargo_surcharge' => 'required|numeric|min:0|max:1000000',
         ]);
 
+        $sanitized = [];
         foreach ($validated as $k => $v) {
-            \App\Models\SystemSetting::set($k, (string)$v, 'zonal_rates');
+            $cleanVal = strip_tags(trim((string)$v));
+            \App\Models\SystemSetting::set($k, $cleanVal, 'zonal_rates');
+            $sanitized[$k] = $cleanVal;
         }
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'zonal_rates_updated',
+            'target_type' => \App\Models\SystemSetting::class,
+            'target_id' => null,
+            'new_values' => $sanitized,
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
 
         $hubId = $request->input('hub_lga_id');
         return redirect()->route('admin.delivery_lanes.index', $hubId ? ['hub_lga_id' => $hubId] : [])->with('status', '3-Tier Zonal Distance Baseline Rates saved successfully!');
@@ -1811,7 +2073,23 @@ class PortalController extends Controller
     {
         $lane = DeliveryLane::findOrFail($id);
         $hubId = $request->input('hub_lga_id', $lane->origin_lga_id);
+        $laneId = $lane->id;
+        $originLgaId = $lane->origin_lga_id;
+        $destLgaId = $lane->destination_lga_id;
         $lane->delete();
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'delivery_lane_deleted',
+            'target_type' => DeliveryLane::class,
+            'target_id' => $laneId,
+            'old_values' => [
+                'origin_lga_id' => $originLgaId,
+                'destination_lga_id' => $destLgaId,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
 
         return redirect()->route('admin.delivery_lanes.index', ['hub_lga_id' => $hubId])->with('status', 'Delivery corridor deleted successfully.');
     }
@@ -1819,8 +2097,20 @@ class PortalController extends Controller
     public function adminToggleDeliveryLane(Request $request, int $id)
     {
         $lane = DeliveryLane::findOrFail($id);
+        $oldState = (bool)$lane->is_active;
         $lane->is_active = !$lane->is_active;
         $lane->save();
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'delivery_lane_toggled',
+            'target_type' => DeliveryLane::class,
+            'target_id' => $lane->id,
+            'old_values' => ['is_active' => $oldState],
+            'new_values' => ['is_active' => (bool)$lane->is_active],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
 
         $hubId = $request->input('hub_lga_id', $lane->origin_lga_id);
         return redirect()->route('admin.delivery_lanes.index', ['hub_lga_id' => $hubId])->with('status', "Delivery lane #{$lane->id} toggled " . ($lane->is_active ? 'Active' : 'Inactive') . '.');
@@ -1832,9 +2122,9 @@ class PortalController extends Controller
             'origin_lga_id' => 'required|integer|exists:lgas,id',
             'destination_lga_id' => 'nullable|integer|exists:lgas,id',
             'destination_state_id' => 'nullable|integer|exists:states,id',
-            'base_fee' => 'nullable|numeric|min:0',
-            'estimated_delivery_hours_min' => 'nullable|integer',
-            'estimated_delivery_hours_max' => 'nullable|integer',
+            'base_fee' => 'nullable|numeric|min:0|max:1000000',
+            'estimated_delivery_hours_min' => 'nullable|integer|min:1|max:720',
+            'estimated_delivery_hours_max' => 'nullable|integer|min:1|max:720',
             'set_active' => 'nullable|boolean',
         ]);
 
@@ -1872,6 +2162,20 @@ class PortalController extends Controller
                 }
                 $statusText = $newActive ? 'Active' : 'Suspended';
             }
+
+            AdminAuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'hub_state_corridor_toggled',
+                'target_type' => State::class,
+                'target_id' => $stateId,
+                'new_values' => [
+                    'origin_lga_id' => $originLgaId,
+                    'destination_state_id' => $stateId,
+                    'status' => $statusText,
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent(),
+            ]);
 
             return redirect()->route('admin.delivery_lanes.index', ['hub_lga_id' => $originLgaId])
                 ->with('status', "Out-of-State corridor to destination state set to {$statusText}.");
@@ -1914,6 +2218,20 @@ class PortalController extends Controller
             ]);
         }
 
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'hub_lga_corridor_toggled',
+            'target_type' => DeliveryLane::class,
+            'target_id' => $lane->id,
+            'new_values' => [
+                'origin_lga_id' => $originLgaId,
+                'destination_lga_id' => $destLgaId,
+                'is_active' => (bool)$lane->is_active,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
+
         return redirect()->route('admin.delivery_lanes.index', ['hub_lga_id' => $originLgaId])
             ->with('status', "Corridor toggled " . ($lane->is_active ? 'Active' : 'Suspended') . '.');
     }
@@ -1921,19 +2239,47 @@ class PortalController extends Controller
     public function adminAccreditVendor(Request $request, int $id)
     {
         $vendor = VendorProfile::findOrFail($id);
-        $action = $request->input('action', 'verify');
+        $validated = $request->validate([
+            'action' => 'required|string|in:verify,suspend,reject',
+        ]);
+        $action = $validated['action'];
+
+        $oldValues = [
+            'kyc_status' => $vendor->kyc_status,
+            'marketplace_status' => $vendor->marketplace_status,
+        ];
 
         if ($action === 'verify') {
             $vendor->kyc_status = 'verified';
             $vendor->marketplace_status = 'active';
             $vendor->kyc_reviewed_at = Carbon::now();
             $msg = "Merchant '{$vendor->business_name}' accredited and certified active on Victorious MARKET!";
-        } else {
+        } elseif ($action === 'reject') {
             $vendor->kyc_status = 'rejected';
+            $vendor->marketplace_status = 'suspended';
+            $msg = "Merchant '{$vendor->business_name}' rejected and suspended from public marketplace listings.";
+        } else {
+            // Action is suspend: preserve kyc_status, set marketplace_status to suspended
             $vendor->marketplace_status = 'suspended';
             $msg = "Merchant '{$vendor->business_name}' suspended from public marketplace listings.";
         }
         $vendor->save();
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'vendor_kyc_accreditation',
+            'target_type' => VendorProfile::class,
+            'target_id' => $vendor->id,
+            'old_values' => $oldValues,
+            'new_values' => [
+                'kyc_status' => $vendor->kyc_status,
+                'marketplace_status' => $vendor->marketplace_status,
+                'action_taken' => $action,
+                'business_name' => $vendor->business_name,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
 
         return redirect()->route('admin.merchants.index')->with('status', $msg);
     }
@@ -1946,37 +2292,139 @@ class PortalController extends Controller
     {
         $vendor = $this->resolveVendorProfile();
 
+        if ($vendor->marketplace_status !== 'active') {
+            abort(403, 'Merchant marketplace account is currently not active.');
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category_id' => 'required|integer|exists:categories,id',
             'shop_id' => 'required|integer|exists:shops,id',
-            'unit_price' => 'required|numeric|min:10',
-            'inventory_quantity' => 'required|integer|min:0',
+            'unit_price' => 'required|numeric|min:0.01|max:100000000',
+            'inventory_quantity' => 'required|integer|min:0|max:1000000',
             'package_tier' => 'required|in:standard,bulky',
-            'description' => 'nullable|string',
+            'description' => 'nullable|string|max:5000',
+            'image' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
         // Multi-Tenant Isolation Guard: Shop must belong to authenticated vendor
         $shop = Shop::where('vendor_id', $vendor->id)->findOrFail($validated['shop_id']);
 
+        if (!$shop->is_active) {
+            abort(422, 'Cannot add products to an inactive shop branch.');
+        }
+
+        if (!$shop->lga_id) {
+            abort(422, 'Shop must be registered under an LGA before catalog listing.');
+        }
+
+        $cleanName = strip_tags(trim($validated['name']));
+        $cleanDesc = isset($validated['description']) ? strip_tags(trim($validated['description'])) : "Authentic certified {$cleanName} backed by Victorious MARKET escrow.";
+
+        $imagePath = null;
+        if ($request->hasFile('image') && $request->file('image')->isValid()) {
+            $path = $request->file('image')->store('products', 'public');
+            $imagePath = '/storage/' . $path;
+        }
+
         $product = Product::create([
             'vendor_id' => $vendor->id,
             'shop_id' => $shop->id,
             'category_id' => $validated['category_id'],
-            'name' => $validated['name'],
-            'slug' => \Illuminate\Support\Str::slug($validated['name']) . '-' . rand(1000, 9999),
-            'description' => $validated['description'] ?? "Authentic certified {$validated['name']} backed by Victorious MARKET escrow.",
+            'name' => $cleanName,
+            'slug' => \Illuminate\Support\Str::slug($cleanName) . '-' . rand(1000, 9999),
+            'description' => $cleanDesc,
             'unit_price' => number_format((float)$validated['unit_price'], 2, '.', ''),
             'is_in_stock' => $validated['inventory_quantity'] > 0,
             'inventory_quantity' => $validated['inventory_quantity'],
             'listing_status' => 'listed',
             'listing_confirmed_at' => Carbon::now(),
             'is_approved' => true,
-            'is_vmarket_flagship' => true,
+            'is_vmarket_flagship' => false,
             'package_tier' => $validated['package_tier'],
+            'thumbnail' => $imagePath,
+            'primary_image' => $imagePath,
         ]);
 
         return redirect()->to(route('vendor.dashboard') . '#products-catalog')->with('status', "Product '{$product->name}' successfully published with 7-day certified freshness!");
+    }
+
+    public function vendorUpdateProduct(Request $request, int $id)
+    {
+        $vendor = $this->resolveVendorProfile();
+
+        if ($vendor->marketplace_status !== 'active') {
+            abort(403, 'Merchant marketplace account is currently not active.');
+        }
+
+        $product = Product::where('vendor_id', $vendor->id)->findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'category_id' => 'required|integer|exists:categories,id',
+            'shop_id' => 'required|integer|exists:shops,id',
+            'unit_price' => 'required|numeric|min:0.01|max:100000000',
+            'inventory_quantity' => 'required|integer|min:0|max:1000000',
+            'package_tier' => 'required|in:standard,bulky',
+            'description' => 'nullable|string|max:5000',
+            'image' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:5120',
+        ]);
+
+        $shop = Shop::where('vendor_id', $vendor->id)->findOrFail($validated['shop_id']);
+
+        if (!$shop->is_active) {
+            abort(422, 'Cannot assign products to an inactive shop branch.');
+        }
+
+        $cleanName = strip_tags(trim($validated['name']));
+        $product->name = $cleanName;
+        $product->category_id = $validated['category_id'];
+        $product->shop_id = $shop->id;
+        $product->unit_price = number_format((float)$validated['unit_price'], 2, '.', '');
+        $product->inventory_quantity = $validated['inventory_quantity'];
+        $product->is_in_stock = $validated['inventory_quantity'] > 0;
+        $product->package_tier = $validated['package_tier'];
+        if (isset($validated['description'])) {
+            $product->description = strip_tags(trim($validated['description']));
+        }
+
+        if ($request->hasFile('image') && $request->file('image')->isValid()) {
+            $path = $request->file('image')->store('products', 'public');
+            $product->thumbnail = '/storage/' . $path;
+            $product->primary_image = '/storage/' . $path;
+        }
+
+        $product->save();
+
+        return redirect()->to(route('vendor.dashboard') . '#products-catalog')->with('status', "Product '{$product->name}' updated successfully!");
+    }
+
+    public function vendorUpdateBank(Request $request)
+    {
+        $vendor = $this->resolveVendorProfile();
+
+        $validated = $request->validate([
+            'bank_name' => 'required|string|max:100',
+            'account_number' => 'required|string|regex:/^[0-9]{10}$/',
+            'account_name' => 'required|string|max:150',
+        ], [
+            'account_number.regex' => 'NUBAN account number must be exactly 10 digits.',
+        ]);
+
+        $vendor->bank_name = strip_tags(trim($validated['bank_name']));
+        $vendor->account_number = trim($validated['account_number']);
+        $vendor->account_name = strip_tags(trim($validated['account_name']));
+        $vendor->bank_updated_at = Carbon::now();
+        $vendor->save();
+
+        AdminAuditLog::create([
+            'admin_user_id' => $vendor->user_id,
+            'action' => 'vendor_bank_account_updated',
+            'description' => "Vendor {$vendor->business_name} updated bank details to {$vendor->bank_name} ({$vendor->account_number}). 48h withdrawal cooldown activated.",
+            'ip_address' => $request->ip(),
+        ]);
+
+        return back()->with('status', 'Designated bank account details updated successfully. 48-Hour Anti-Fraud Cooldown is now active.');
     }
 
     public function vendorRefreshProductFreshness(Request $request, int $id)
@@ -1996,6 +2444,10 @@ class PortalController extends Controller
     {
         $vendor = $this->resolveVendorProfile();
 
+        if ($vendor->marketplace_status !== 'active') {
+            abort(403, 'Merchant marketplace account is currently not active.');
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'address' => 'required|string|max:255',
@@ -2004,21 +2456,55 @@ class PortalController extends Controller
             'pickup_enabled' => 'nullable',
         ]);
 
-        $lga = \App\Models\Lga::findOrFail($validated['lga_id']);
+        $lga = \App\Models\Lga::with('state')->findOrFail($validated['lga_id']);
 
         $shop = Shop::create([
             'vendor_id' => $vendor->id,
-            'lga_id' => $validated['lga_id'],
+            'country_id' => $lga->state->country_id ?? 1,
             'state_id' => $lga->state_id,
-            'name' => $validated['name'],
+            'lga_id' => $validated['lga_id'],
+            'name' => strip_tags(trim($validated['name'])),
             'slug' => \Illuminate\Support\Str::slug($validated['name']) . '-' . rand(100, 999),
-            'address' => $validated['address'],
-            'phone' => $validated['phone'],
+            'address' => strip_tags(trim($validated['address'])),
+            'phone' => preg_replace('/[^0-9+]/', '', $validated['phone']),
             'pickup_enabled' => $request->has('pickup_enabled'),
             'is_primary_branch' => false,
+            'is_active' => true,
         ]);
 
         return redirect()->to(route('vendor.dashboard') . '#shop-branches')->with('status', "New branch outlet '{$shop->name}' registered!");
+    }
+
+    public function vendorUpdateShop(Request $request, int $id)
+    {
+        $vendor = $this->resolveVendorProfile();
+
+        if ($vendor->marketplace_status !== 'active') {
+            abort(403, 'Merchant marketplace account is currently not active.');
+        }
+
+        $shop = Shop::where('vendor_id', $vendor->id)->findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'address' => 'required|string|max:255',
+            'lga_id' => 'required|integer|exists:lgas,id',
+            'phone' => 'required|string|max:30',
+            'pickup_enabled' => 'nullable',
+        ]);
+
+        $lga = \App\Models\Lga::with('state')->findOrFail($validated['lga_id']);
+
+        $shop->name = strip_tags(trim($validated['name']));
+        $shop->address = strip_tags(trim($validated['address']));
+        $shop->lga_id = $lga->id;
+        $shop->state_id = $lga->state_id;
+        $shop->country_id = $lga->state->country_id ?? 1;
+        $shop->phone = preg_replace('/[^0-9+]/', '', $validated['phone']);
+        $shop->pickup_enabled = $request->has('pickup_enabled');
+        $shop->save();
+
+        return redirect()->to(route('vendor.dashboard') . '#shop-branches')->with('status', "Branch outlet '{$shop->name}' details updated!");
     }
 
     // ==========================================
@@ -2204,8 +2690,20 @@ class PortalController extends Controller
                 ])->withInput();
             }
 
+            if ($product->vendor && $product->vendor->marketplace_status !== 'active') {
+                return back()->withErrors([
+                    'product_id' => 'The merchant providing this item is currently not active on the marketplace.'
+                ])->withInput();
+            }
+
             $merchandiseSubtotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
-            $shop = !empty($validated['shop_id']) ? Shop::findOrFail($validated['shop_id']) : $product->shop;
+            
+            // Triple Consistency Guard: Shop must belong to product's vendor
+            if (!empty($validated['shop_id'])) {
+                $shop = Shop::where('vendor_id', $product->vendor_id)->findOrFail($validated['shop_id']);
+            } else {
+                $shop = $product->shop;
+            }
 
             // Delivery fee calculation with corridor serviceability guard
             $deliveryFee = '0.00';
@@ -2270,12 +2768,29 @@ class PortalController extends Controller
             if ($collectionPointId) {
                 $assignedCp = \App\Models\LogisticsCollectionPoint::find($collectionPointId);
                 if ($assignedCp && $assignedCp->logistics_company_id) {
-                    $rider = RiderProfile::where('logistics_company_id', $assignedCp->logistics_company_id)->where('is_online', true)->first()
-                        ?? RiderProfile::where('logistics_company_id', $assignedCp->logistics_company_id)->first();
+                    $rider = RiderProfile::where('logistics_company_id', $assignedCp->logistics_company_id)
+                        ->where('is_active', true)
+                        ->where('is_online', true)
+                        ->whereHas('user', fn($q) => $q->where('status', 'active'))
+                        ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
+                        ->first()
+                        ?? RiderProfile::where('logistics_company_id', $assignedCp->logistics_company_id)
+                            ->where('is_active', true)
+                            ->whereHas('user', fn($q) => $q->where('status', 'active'))
+                            ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
+                            ->first();
                 }
             }
             if (!$rider) {
-                $rider = RiderProfile::where('is_online', true)->first() ?? RiderProfile::first();
+                $rider = RiderProfile::where('is_active', true)
+                    ->where('is_online', true)
+                    ->whereHas('user', fn($q) => $q->where('status', 'active'))
+                    ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
+                    ->first()
+                    ?? RiderProfile::where('is_active', true)
+                        ->whereHas('user', fn($q) => $q->where('status', 'active'))
+                        ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
+                        ->first();
             }
 
             // PCI-DSS Verified Paystack Reference Initialization
@@ -2289,8 +2804,8 @@ class PortalController extends Controller
                 'collection_point_id' => $collectionPointId,
                 'rider_id' => $rider ? $rider->id : null,
                 'fulfillment_type' => $validated['fulfillment_type'],
-                'order_status' => 'confirmed',
-                'payment_status' => 'paid',
+                'order_status' => 'pending',
+                'payment_status' => 'pending',
                 'payment_method' => 'paystack_direct',
                 'payment_reference' => $paymentRef,
                 'guest_access_token' => $guestAccessToken,
@@ -2325,24 +2840,19 @@ class PortalController extends Controller
             $product->is_in_stock = ($product->inventory_quantity > 0);
             $product->save();
 
-            // Record 5% Customer Cashback Reward in Ledger (VMarket Business Rule)
-            CustomerCashbackLedger::create([
-                'customer_id' => $user->id,
-                'order_id' => $order->id,
-                'amount' => $splits['customer_cashback_5'],
-                'status' => 'pending_maturation',
-                'matures_at' => Carbon::now()->addHours(24),
-                'expires_at' => Carbon::now()->addDays(90),
-            ]);
-
             // Store guest token in session for seamless tracking access
             session(['order_guest_token_' . $orderNumber => $guestAccessToken]);
 
-            // Multi-channel SMS & WhatsApp alert for new order
-            \App\Services\NotificationDispatchService::dispatchOrderPlaced($order);
+            // Initialize Paystack Checkout Gateway
+            $paystackService = app(\App\Services\PaystackService::class);
+            $callbackUrl = route('payment.paystack.callback');
+            $paystackInit = $paystackService->initializeTransaction($order, $callbackUrl, $user->email);
 
-            return redirect()->route('order.status', ['order_number' => $order->order_number, 'token' => $guestAccessToken])
-                ->with('status', 'Payment verified! Your order has been placed successfully.');
+            if (!$paystackInit['success'] || empty($paystackInit['authorization_url'])) {
+                throw new \RuntimeException($paystackInit['message'] ?? 'Unable to initialize Paystack payment gateway.');
+            }
+
+            return redirect()->away($paystackInit['authorization_url']);
         });
     }
 
@@ -2361,8 +2871,21 @@ class PortalController extends Controller
             'customer_phone' => 'nullable|string|max:30',
         ]);
 
-        $product = Product::findOrFail($validated['product_id']);
-        $shop = Shop::findOrFail($validated['shop_id']);
+        $product = Product::with('vendor')->findOrFail($validated['product_id']);
+
+        if ($product->vendor && $product->vendor->marketplace_status !== 'active') {
+            return back()->withErrors(['product_id' => 'Merchant is not currently active on the marketplace.']);
+        }
+
+        // Multi-Tenant Alignment Guard: Shop must belong to product's vendor AND be active
+        $shop = Shop::where('vendor_id', $product->vendor_id)
+            ->where('is_active', true)
+            ->findOrFail($validated['shop_id']);
+
+        if (!$shop->pickup_enabled) {
+            return back()->withErrors(['shop_id' => 'In-store pickup is not enabled for this branch location.']);
+        }
+
         $quantity = $validated['quantity'] ?? 1;
         $estimatedTotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
 
@@ -2372,7 +2895,7 @@ class PortalController extends Controller
         $reservation = PickupReservation::create([
             'reservation_code' => $code,
             'customer_id' => $user->id,
-            'vendor_id' => $shop->vendor_id,
+            'vendor_id' => $product->vendor_id,
             'shop_id' => $shop->id,
             'product_id' => $product->id,
             'quantity' => $quantity,
@@ -2382,6 +2905,8 @@ class PortalController extends Controller
             'expires_at' => Carbon::now()->addHours(24),
         ]);
 
+        session(['reservation_code_' . $reservation->reservation_code => true]);
+
         return redirect()->route('reservation.pass', ['code' => $reservation->reservation_code])->with('status', 'In-Shop Pickup reservation confirmed! Present this code at the shop counter.');
     }
 
@@ -2390,6 +2915,33 @@ class PortalController extends Controller
         $reservation = PickupReservation::where('reservation_code', strtoupper(trim($code)))
             ->with(['shop.lga', 'product.category', 'customer'])
             ->firstOrFail();
+
+        $user = Auth::user();
+        $isAuthorized = false;
+
+        if ($user) {
+            // Shopper who created reservation
+            if ((int)$user->id === (int)$reservation->customer_id) {
+                $isAuthorized = true;
+            }
+            // Super Admin or Admin Staff
+            elseif (in_array($user->user_type, ['super_admin', 'admin_employee'])) {
+                $isAuthorized = true;
+            }
+            // Merchant owning the shop
+            elseif ($user->vendorProfile && (int)$user->vendorProfile->id === (int)$reservation->vendor_id) {
+                $isAuthorized = true;
+            }
+            // Counter employee assigned to the reservation's shop branch
+            elseif ($user->vendorEmployeeProfile && (int)$user->vendorEmployeeProfile->shop_id === (int)$reservation->shop_id) {
+                $isAuthorized = true;
+            }
+        }
+
+        // Allow guest / direct session pass if created in current session
+        if (!$isAuthorized && session('reservation_code_' . $reservation->reservation_code) !== true) {
+            abort(403, 'Unauthorized access: You do not have permission to view this reservation pass.');
+        }
 
         return view('storefront.reservation_pass', compact('reservation'));
     }
@@ -2453,9 +3005,11 @@ class PortalController extends Controller
     public function customerConfirmDelivery(Request $request, string $orderNumber, OrderSettlementService $settlementService)
     {
         $validated = $request->validate([
-            'delivery_otp' => 'required|string|size:6',
+            'delivery_otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
             'proof_photo' => 'nullable|image|max:10240',
             'customer_notes' => 'nullable|string|max:500',
+        ], [
+            'delivery_otp.regex' => 'Delivery PIN must be exactly 6 digits.',
         ]);
 
         $order = Order::where('order_number', $orderNumber)->firstOrFail();
@@ -2603,9 +3157,11 @@ class PortalController extends Controller
         $validated = $request->validate([
             'order_id' => 'nullable|integer|exists:orders,id',
             'order_number' => 'nullable|string|exists:orders,order_number',
-            'pickup_otp' => 'required|string|size:6',
+            'pickup_otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
             'proof_photo' => 'nullable|image|max:10240',
             'pickup_notes' => 'nullable|string|max:500',
+        ], [
+            'pickup_otp.regex' => 'Pickup OTP must be exactly 6 digits.',
         ]);
 
         $order = null;
@@ -2730,6 +3286,18 @@ class PortalController extends Controller
             $vendor = $this->resolveVendorProfile();
             $shop = Shop::where('vendor_id', $vendor->id)->first();
             if ($shop) return $shop;
+
+            // Auto-provision primary branch for vendor if none exists
+            $lga = Lga::where('name', 'Uyo')->first() ?? Lga::first();
+            return Shop::create([
+                'vendor_id' => $vendor->id,
+                'lga_id' => $lga ? $lga->id : 1,
+                'name' => $vendor->business_name . ' Main Branch',
+                'address' => 'Main Commercial Road, Uyo',
+                'phone' => $vendor->business_phone ?? '08012345678',
+                'is_active' => true,
+                'pickup_enabled' => true,
+            ]);
         }
 
         if ($user && $user->user_type === 'vendor_employee') {
@@ -2737,11 +3305,8 @@ class PortalController extends Controller
             if ($employee && $employee->shop) {
                 return $employee->shop;
             }
-            abort(403, 'No assigned shop branch for this employee.');
+            abort(403, 'No assigned shop branch for this counter staff.');
         }
-
-        $shop = Shop::first();
-        if ($shop) return $shop;
 
         abort(403, 'No shop found for authorized context.');
     }

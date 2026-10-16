@@ -57,6 +57,45 @@ class EnsureUserRole
             ], 403);
         }
 
+        // 4. Cascading Role Profile & Parent Fleet/Merchant Active Checks
+        if ($user->user_type === 'vendor_employee') {
+            $employee = $user->vendorEmployeeProfile;
+            if ($employee && $employee->is_active === false) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+                return redirect()->route('counter.login')->with('error', 'Access terminated: Your employee profile has been deactivated.');
+            }
+            if ($employee && $employee->vendor && $employee->vendor->marketplace_status === 'suspended') {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+                return redirect()->route('counter.login')->with('error', 'Access terminated: Parent merchant organization is suspended.');
+            }
+        } elseif ($user->user_type === 'rider') {
+            $rider = $user->riderProfile;
+            if ($rider && !$rider->is_active) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+                return redirect()->route('rider.login')->with('error', 'Access terminated: Your courier dispatch profile has been deactivated.');
+            }
+            if ($rider && $rider->logisticsCompany && $rider->logisticsCompany->status !== 'active') {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+                return redirect()->route('rider.login')->with('error', 'Access terminated: Parent logistics fleet is suspended or inactive.');
+            }
+        } elseif ($user->user_type === 'logistics_company') {
+            $company = $user->logisticsCompanyProfile;
+            if ($company && $company->status !== 'active') {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+                return redirect()->route('logistics.login')->with('error', "Access terminated: Your fleet profile is currently {$company->status}.");
+            }
+        }
+
         return $next($request);
     }
 

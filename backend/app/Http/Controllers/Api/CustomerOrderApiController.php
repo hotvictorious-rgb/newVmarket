@@ -117,6 +117,20 @@ class CustomerOrderApiController extends Controller
             foreach ($validated['items'] as $item) {
                 $product = Product::marketplaceEligible()->lockForUpdate()->findOrFail($item['product_id']);
                 
+                if ((int)$product->shop_id !== (int)$shop->id) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => "Product '{$product->name}' does not belong to the selected shop branch.",
+                    ], 422);
+                }
+
+                if ((int)$product->vendor_id !== (int)$shop->vendor_id) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => "Product '{$product->name}' does not belong to the selected merchant.",
+                    ], 422);
+                }
+
                 if ($product->inventory_quantity < $item['quantity']) {
                     return response()->json([
                         'status' => false,
@@ -182,17 +196,34 @@ class CustomerOrderApiController extends Controller
 
             $grandTotal = BcMathService::add(BcMathService::sub($merchandiseSubtotal, $cashbackApplied), $deliveryFee);
 
-            // Assign courier from fleet if collection point assigned
+            // Assign active accredited courier from fleet if collection point assigned
             $rider = null;
             if ($collectionPointId) {
                 $cp = LogisticsCollectionPoint::find($collectionPointId);
                 if ($cp && $cp->logistics_company_id) {
-                    $rider = RiderProfile::where('logistics_company_id', $cp->logistics_company_id)->where('is_online', true)->first()
-                        ?? RiderProfile::where('logistics_company_id', $cp->logistics_company_id)->first();
+                    $rider = RiderProfile::where('logistics_company_id', $cp->logistics_company_id)
+                        ->where('is_active', true)
+                        ->where('is_online', true)
+                        ->whereHas('user', fn($q) => $q->where('status', 'active'))
+                        ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
+                        ->first()
+                        ?? RiderProfile::where('logistics_company_id', $cp->logistics_company_id)
+                            ->where('is_active', true)
+                            ->whereHas('user', fn($q) => $q->where('status', 'active'))
+                            ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
+                            ->first();
                 }
             }
             if (!$rider && $validated['fulfillment_type'] === 'doorstep_delivery') {
-                $rider = RiderProfile::where('is_online', true)->first() ?? RiderProfile::first();
+                $rider = RiderProfile::where('is_active', true)
+                    ->where('is_online', true)
+                    ->whereHas('user', fn($q) => $q->where('status', 'active'))
+                    ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
+                    ->first()
+                    ?? RiderProfile::where('is_active', true)
+                        ->whereHas('user', fn($q) => $q->where('status', 'active'))
+                        ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
+                        ->first();
             }
 
             $orderNumber = 'VM-' . date('Ymd') . '-' . strtoupper(Str::random(4));
@@ -207,7 +238,7 @@ class CustomerOrderApiController extends Controller
                 'collection_point_id' => $collectionPointId,
                 'rider_id' => $rider ? $rider->id : null,
                 'fulfillment_type' => $validated['fulfillment_type'],
-                'order_status' => 'confirmed',
+                'order_status' => 'pending',
                 'payment_status' => 'pending',
                 'payment_method' => $paymentMethod,
                 'payment_reference' => $paymentRef,
@@ -274,12 +305,74 @@ class CustomerOrderApiController extends Controller
     }
 
     /**
+     * Authoritative Paystack Payment Verification endpoint for Mobile & SPA clients.
+     * Enforces customer ownership, exact kobo equality, reference validation,
+     * and idempotent order settlement.
+     */
+    public function verifyPayment(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'order_number' => 'required|string',
+            'reference' => 'required|string',
+        ]);
+
+        $user = $request->user();
+
+        $order = Order::where('order_number', trim($validated['order_number']))
+            ->where('customer_id', $user->id)
+            ->first();
+
+        if (!$order) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Order not found or unauthorized access.',
+            ], 404);
+        }
+
+        // Authoritative server-to-server gateway verification
+        $verification = $this->paystackService->verifyTransaction($validated['reference'], $order);
+
+        if (!$verification['success']) {
+            return response()->json([
+                'status' => false,
+                'code' => $verification['code'] ?? 'VERIFICATION_FAILED',
+                'message' => $verification['message'] ?? 'Payment verification failed.',
+            ], 422);
+        }
+
+        // Settle under pessimistic lock
+        $settlement = $this->settlementService->settlePaystackOrder(
+            $order,
+            $verification['data'],
+            $user,
+            'paystack_api'
+        );
+
+        if (!$settlement['success']) {
+            return response()->json([
+                'status' => false,
+                'code' => $settlement['status'] ?? 'SETTLEMENT_FAILED',
+                'message' => $settlement['message'],
+            ], 422);
+        }
+
+        return response()->json([
+            'status' => true,
+            'settlement' => $settlement['status'],
+            'message' => $settlement['message'],
+            'data' => [
+                'order' => $this->formatOrderFull($settlement['order']),
+            ],
+        ], 200);
+    }
+
+    /**
      * Customer Delivery Handshake Confirmation on phone.
      */
     public function confirmDelivery(Request $request, string $orderNumber): JsonResponse
     {
         $validated = $request->validate([
-            'delivery_otp' => 'required|string|size:6',
+            'delivery_otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
         ]);
 
         $user = $request->user();

@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\AdminAuditLog;
 use App\Models\Lga;
 use App\Models\User;
 use App\Services\DemoAccountRegistry;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -324,7 +326,24 @@ class WebAuthController extends Controller
 
     public function loginAdmin(Request $request)
     {
-        return $this->authenticateRole($request, ['super_admin'], redirect()->route('admin.dashboard'));
+        $response = $this->authenticateRole($request, ['super_admin'], redirect()->route('admin.dashboard'));
+
+        if (Auth::check() && Auth::user()->isSuperAdmin()) {
+            AdminAuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'super_admin_login_success',
+                'target_type' => User::class,
+                'target_id' => Auth::id(),
+                'new_values' => [
+                    'session_id' => session()->getId(),
+                    'authenticated_at' => Carbon::now()->toIso8601String(),
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent(),
+            ]);
+        }
+
+        return $response;
     }
 
     // ==========================================
@@ -341,7 +360,25 @@ class WebAuthController extends Controller
 
     public function loginAdminStaff(Request $request)
     {
-        return $this->authenticateRole($request, ['admin_employee'], redirect()->route('admin.staff.dashboard'));
+        $response = $this->authenticateRole($request, ['admin_employee'], redirect()->route('admin.staff.dashboard'));
+
+        if (Auth::check() && Auth::user()->isAdminEmployee()) {
+            AdminAuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'admin_staff_login_success',
+                'target_type' => User::class,
+                'target_id' => Auth::id(),
+                'new_values' => [
+                    'session_id' => session()->getId(),
+                    'role' => Auth::user()->adminEmployeeProfile->role ?? 'support',
+                    'authenticated_at' => Carbon::now()->toIso8601String(),
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent(),
+            ]);
+        }
+
+        return $response;
     }
 
     // ==========================================
@@ -519,6 +556,49 @@ class WebAuthController extends Controller
             throw ValidationException::withMessages([
                 'login' => ["Your account is currently {$user->status}."],
             ]);
+        }
+
+        // Role-Specific Profile & Parent Organization Active Status Invariants
+        if ($user->user_type === 'vendor' && $user->vendorProfile) {
+            if ($user->vendorProfile->marketplace_status === 'suspended') {
+                throw ValidationException::withMessages([
+                    'login' => ['Your merchant account has been suspended by marketplace administration.'],
+                ]);
+            }
+        }
+
+        if ($user->user_type === 'vendor_employee' && $user->vendorEmployeeProfile) {
+            if ($user->vendorEmployeeProfile->is_active === false) {
+                throw ValidationException::withMessages([
+                    'login' => ['Your counter branch employee account has been deactivated.'],
+                ]);
+            }
+            if ($user->vendorEmployeeProfile->vendor && $user->vendorEmployeeProfile->vendor->marketplace_status === 'suspended') {
+                throw ValidationException::withMessages([
+                    'login' => ['Access disabled: Parent merchant organization is currently suspended.'],
+                ]);
+            }
+        }
+
+        if ($user->user_type === 'logistics_company' && $user->logisticsCompanyProfile) {
+            if ($user->logisticsCompanyProfile->status !== 'active') {
+                throw ValidationException::withMessages([
+                    'login' => ["Your logistics fleet account is currently {$user->logisticsCompanyProfile->status}."],
+                ]);
+            }
+        }
+
+        if ($user->user_type === 'rider' && $user->riderProfile) {
+            if (!$user->riderProfile->is_active) {
+                throw ValidationException::withMessages([
+                    'login' => ['Your courier dispatch profile is currently deactivated.'],
+                ]);
+            }
+            if ($user->riderProfile->logisticsCompany && $user->riderProfile->logisticsCompany->status !== 'active') {
+                throw ValidationException::withMessages([
+                    'login' => ['Access disabled: Parent logistics fleet is currently inactive or suspended.'],
+                ]);
+            }
         }
 
         Auth::login($user, $request->boolean('remember'));

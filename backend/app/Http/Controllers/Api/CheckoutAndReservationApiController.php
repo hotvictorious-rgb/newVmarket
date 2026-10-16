@@ -49,6 +49,23 @@ class CheckoutAndReservationApiController extends Controller
 
         foreach ($validated['items'] as $item) {
             $product = Product::marketplaceEligible()->findOrFail($item['product_id']);
+
+            // Multi-tenant check: product must belong to the selected shop branch
+            if ((int)$product->shop_id !== (int)$shop->id) {
+                return response()->json([
+                    'status' => false,
+                    'message' => "Product '{$product->name}' does not belong to the selected shop branch.",
+                ], 422);
+            }
+
+            // Inventory check
+            if ($product->inventory_quantity < $item['quantity']) {
+                return response()->json([
+                    'status' => false,
+                    'message' => "Insufficient stock for {$product->name}. Only {$product->inventory_quantity} available.",
+                ], 422);
+            }
+
             $lineTotal = BcMathService::mul($product->unit_price, (string)$item['quantity']);
             $merchandiseSubtotal = BcMathService::add($merchandiseSubtotal, $lineTotal);
 
@@ -150,12 +167,31 @@ class CheckoutAndReservationApiController extends Controller
 
         $user = $request->user();
         $shop = Shop::findOrFail($validated['shop_id']);
+        if (!$shop->is_active) {
+            return response()->json(['status' => false, 'message' => 'This shop branch is not active.'], 422);
+        }
         if (!$shop->pickup_enabled) {
             return response()->json(['status' => false, 'message' => 'This shop does not support in-shop pickup.'], 422);
         }
 
         $product = Product::marketplaceEligible()->findOrFail($validated['product_id']);
+
+        if ((int)$product->shop_id !== (int)$shop->id) {
+            return response()->json(['status' => false, 'message' => 'Product does not belong to the selected pickup shop branch.'], 422);
+        }
+
+        if ((int)$shop->vendor_id !== (int)$product->vendor_id) {
+            return response()->json(['status' => false, 'message' => 'Shop does not belong to the product merchant.'], 422);
+        }
+
         $quantity = $validated['quantity'] ?? 1;
+        if ($product->inventory_quantity < $quantity) {
+            return response()->json([
+                'status' => false,
+                'message' => "Insufficient stock for {$product->name}. Only {$product->inventory_quantity} available.",
+            ], 422);
+        }
+
         $estimatedTotal = BcMathService::mul($product->unit_price, (string)$quantity);
 
         $reservation = PickupReservation::create([

@@ -67,4 +67,19 @@ class Shop extends Model
     {
         return $this->hasMany(PickupReservation::class, 'shop_id');
     }
+
+    /**
+     * Active state dynamically cascades from parent merchant accreditation
+     */
+    public function getIsActiveAttribute(): bool
+    {
+        return $this->vendor ? $this->vendor->marketplace_status === 'active' : true;
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->whereHas('vendor', function ($q) {
+            $q->where('marketplace_status', 'active');
+        });
+    }
 }

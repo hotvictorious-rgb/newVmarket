@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Web\PaystackPaymentController;
 use App\Http\Controllers\Web\PortalController;
 use App\Http\Controllers\Web\WebAuthController;
 use Illuminate\Support\Facades\Route;
@@ -19,7 +20,7 @@ Route::post('/customer/login', [WebAuthController::class, 'loginCustomer'])->nam
 
 Route::get('/register', [WebAuthController::class, 'showCustomerRegister'])->name('register');
 Route::get('/customer/register', [WebAuthController::class, 'showCustomerRegister'])->name('customer.register');
-Route::post('/customer/register', [WebAuthController::class, 'registerCustomer'])->name('customer.register.post');
+Route::post('/customer/register', [WebAuthController::class, 'registerCustomer'])->name('customer.register.post')->middleware('throttle:10,1');
 
 // Google OAuth & Identity Services
 Route::get('/auth/google/redirect', [WebAuthController::class, 'redirectToGoogle'])->name('auth.google.redirect');
@@ -28,7 +29,7 @@ Route::post('/auth/google/one-tap', [WebAuthController::class, 'handleGoogleOneT
 
 // Portal 2: Super Admin Command Gate
 Route::get('/admin/login', [WebAuthController::class, 'showAdminLogin'])->name('admin.login');
-Route::post('/admin/login', [WebAuthController::class, 'loginAdmin'])->name('admin.login.post')->middleware('throttle:10,1');
+Route::post('/admin/login', [WebAuthController::class, 'loginAdmin'])->name('admin.login.post')->middleware('throttle:5,1');
 
 // Portal 3: Admin Staff (Finance, Dispatch, Support)
 Route::get('/admin-staff/login', [WebAuthController::class, 'showAdminStaffLogin'])->name('admin.staff.login');
@@ -99,6 +100,7 @@ Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
     Route::get('/reservations', [PortalController::class, 'vendorReservationsPage'])->name('vendor.reservations.index');
     Route::get('/shops', [PortalController::class, 'vendorShopsPage'])->name('vendor.shops.index');
     Route::get('/payout-account', [PortalController::class, 'vendorPayoutPage'])->name('vendor.payout.index');
+    Route::post('/bank', [PortalController::class, 'vendorUpdateBank'])->name('vendor.bank.update');
 
     Route::post('/approve-inspection', [PortalController::class, 'vendorApproveInspection'])->name('vendor.approve.inspection');
     Route::post('/orders/{id}/ready-for-handover', [PortalController::class, 'vendorMarkHandoverReady'])->name('vendor.orders.handover_ready');
@@ -172,8 +174,10 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
 // Stage 2: Vendor Commerce Desk Routes
 Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
     Route::post('/products', [PortalController::class, 'vendorStoreProduct'])->name('vendor.products.store');
+    Route::post('/products/{id}/update', [PortalController::class, 'vendorUpdateProduct'])->name('vendor.products.update');
     Route::post('/products/{id}/refresh', [PortalController::class, 'vendorRefreshProductFreshness'])->name('vendor.products.refresh');
     Route::post('/shops', [PortalController::class, 'vendorStoreShop'])->name('vendor.shops.store');
+    Route::post('/shops/{id}/update', [PortalController::class, 'vendorUpdateShop'])->name('vendor.shops.update');
 });
 
 // Stage 3: Customer Storefront, Product Detail, Checkout & Tracking Routes
@@ -181,6 +185,8 @@ Route::get('/shop/{slug}', [PortalController::class, 'showShopStorefront'])->nam
 Route::get('/product/{slug}', [PortalController::class, 'showProductDetail'])->name('product.detail');
 Route::get('/checkout', [PortalController::class, 'showCheckout'])->name('checkout');
 Route::post('/checkout/process', [PortalController::class, 'processCheckout'])->name('checkout.process');
+Route::get('/payment/paystack/callback', [PaystackPaymentController::class, 'handleCallback'])->name('payment.paystack.callback');
+Route::post('/payment/paystack/webhook', [PaystackPaymentController::class, 'handleWebhook'])->name('payment.paystack.webhook');
 Route::post('/reservation/create', [PortalController::class, 'createReservation'])->name('reservation.create');
 Route::get('/reservation/{code}', [PortalController::class, 'showReservationPass'])->name('reservation.pass');
 Route::get('/order/{order_number}', [PortalController::class, 'showOrderStatus'])->name('order.status');

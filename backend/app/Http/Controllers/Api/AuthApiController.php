@@ -18,14 +18,13 @@ class AuthApiController extends Controller
             'email' => 'required|email|unique:users,email',
             'phone' => 'required|string|unique:users,phone',
             'password' => 'required|string|min:8',
-            'user_type' => 'nullable|string|in:customer,vendor,rider',
         ]);
 
         $user = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'phone' => $validated['phone'],
-            'user_type' => $validated['user_type'] ?? 'customer',
+            'name' => strip_tags(trim($validated['name'])),
+            'email' => strtolower(trim($validated['email'])),
+            'phone' => preg_replace('/[^0-9+]/', '', $validated['phone']),
+            'user_type' => 'customer', // STRICT ZERO-TRUST: Public API registration is strictly customer
             'status' => 'active',
             'is_demo' => false, // Real registration is NEVER a demo account
             'password' => Hash::make($validated['password']),

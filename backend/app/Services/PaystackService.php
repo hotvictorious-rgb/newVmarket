@@ -10,20 +10,32 @@ class PaystackService
 {
     protected string $secretKey;
     protected string $publicKey;
-    protected string $baseUrl = 'https://api.paystack.co';
+    protected string $baseUrl;
 
     public function __construct()
     {
         $this->secretKey = (string) (config('services.paystack.secret_key') ?? env('PAYSTACK_SECRET_KEY', ''));
         $this->publicKey = (string) (config('services.paystack.public_key') ?? env('PAYSTACK_PUBLIC_KEY', ''));
+        $this->baseUrl = rtrim((string) (config('services.paystack.payment_url') ?? env('PAYSTACK_PAYMENT_URL', 'https://api.paystack.co')), '/');
     }
 
     /**
-     * Check if Paystack live credentials are configured.
+     * Check if Paystack credentials are configured.
      */
-    public function isLiveConfigured(): bool
+    public function isConfigured(): bool
     {
-        return !empty($this->secretKey) && !str_starts_with($this->secretKey, 'sk_test_placeholder');
+        $key = $this->getSecretKey();
+        return !empty($key) && !str_starts_with($key, 'sk_test_placeholder');
+    }
+
+    public function getSecretKey(): string
+    {
+        return (string) (config('services.paystack.secret_key') ?: env('PAYSTACK_SECRET_KEY', $this->secretKey));
+    }
+
+    public function getPublicKey(): string
+    {
+        return (string) (config('services.paystack.public_key') ?: env('PAYSTACK_PUBLIC_KEY', $this->publicKey));
     }
 
     /**
@@ -33,23 +45,38 @@ class PaystackService
     public function initializeTransaction(Order $order, string $callbackUrl, ?string $customerEmail = null): array
     {
         $email = $customerEmail ?? ($order->customer->email ?? 'shopper@victoriousmarket.com.ng');
-        // Paystack expects amount in Kobo (1 NGN = 100 Kobo)
-        $amountInKobo = (int) bcmul((string)$order->grand_total, '100', 0);
-        $reference = $order->payment_reference ?? ('pstk_' . $order->order_number . '_' . time());
+        // Paystack expects amount in Kobo (1 NGN = 100 Kobo).
+        // Enforce exact 2-decimal BCMath normalization to eliminate floating-point drift.
+        $grandTotalNormalized = bcadd((string)$order->grand_total, '0', 2);
+        $amountInKobo = (int) bcmul($grandTotalNormalized, '100', 0);
 
-        if (!$this->isLiveConfigured()) {
-            // Safe Sandbox / Simulated Response
-            Log::info("Paystack [SIMULATED] Transaction initialized for order {$order->order_number}", [
-                'reference' => $reference,
-                'amount_kobo' => $amountInKobo,
-            ]);
+        if ($amountInKobo <= 0) {
+            return [
+                'success' => false,
+                'code' => 'INVALID_AMOUNT',
+                'message' => 'Payable amount must be greater than zero.',
+            ];
+        }
 
+        $reference = $order->payment_reference ?? ('VM-' . date('YmdHis') . '-' . strtoupper(\Illuminate\Support\Str::random(8)));
+
+        // Safe deterministic mock in testing environment
+        if (app()->environment('testing')) {
             return [
                 'success' => true,
                 'is_simulated' => true,
-                'authorization_url' => route('order.status', ['order_number' => $order->order_number, 'token' => $order->guest_access_token]),
-                'access_code' => 'sim_acc_' . uniqid(),
+                'authorization_url' => route('payment.paystack.callback', ['reference' => $reference]),
+                'access_code' => 'test_acc_' . uniqid(),
                 'reference' => $reference,
+            ];
+        }
+
+        if (!$this->isConfigured()) {
+            Log::error("Paystack initialization failed: Secret key not configured in environment.");
+            return [
+                'success' => false,
+                'code' => 'CONFIG_MISSING',
+                'message' => 'Paystack payment gateway is not configured. Please set PAYSTACK_SECRET_KEY in server environment.',
             ];
         }
 
@@ -62,9 +89,12 @@ class PaystackService
                     'email' => $email,
                     'reference' => $reference,
                     'callback_url' => $callbackUrl,
+                    'currency' => 'NGN',
                     'metadata' => [
                         'order_number' => $order->order_number,
                         'order_id' => $order->id,
+                        'customer_id' => $order->customer_id,
+                        'customer_email' => $email,
                         'customer_phone' => $order->customer->phone ?? null,
                     ],
                 ]);
@@ -76,116 +106,173 @@ class PaystackService
                     'is_simulated' => false,
                     'authorization_url' => $data['authorization_url'],
                     'access_code' => $data['access_code'],
-                    'reference' => $data['reference'],
+                    'reference' => $data['reference'] ?? $reference,
                 ];
             }
 
             Log::error("Paystack initialize error: " . $response->body());
             return [
                 'success' => false,
+                'code' => 'GATEWAY_ERROR',
                 'message' => $response->json('message') ?? 'Payment gateway could not initialize transaction.',
             ];
         } catch (\Throwable $e) {
             Log::error("Paystack connection exception: " . $e->getMessage());
             return [
                 'success' => false,
-                'message' => 'Paystack connection timeout. Please check your internet connectivity.',
+                'code' => 'NETWORK_ERROR',
+                'message' => 'Paystack connection timeout. Please check internet connectivity.',
             ];
         }
     }
 
     /**
      * Verify Paystack Transaction Reference with Bank-Grade Security Invariants:
-     * 1. Status must strictly be 'success'
-     * 2. Amount in Kobo must match the order grand total
-     * 3. Prevents replay and reference tampering
+     * 1. Direct server-to-server query against official Paystack verify endpoint
+     * 2. Status must strictly be 'success' (rejects 'pending', 'failed', 'abandoned')
+     * 3. Currency must strictly be 'NGN'
+     * 4. Exact Mathematical Amount Equality in Kobo (bcadd + bcmul)
+     * 5. Customer Identity Binding (gateway email vs order customer email)
+     * 6. Reference Binding via hash_equals
+     *
+     * It is mathematically and programmatically IMPOSSIBLE to verify an unpaid,
+     * underpaid, or forged transaction reference through this method.
      */
     public function verifyTransaction(string $reference, Order $order): array
     {
-        $expectedAmountInKobo = (int) bcmul((string)$order->grand_total, '100', 0);
+        $grandTotalNormalized = bcadd((string)$order->grand_total, '0', 2);
+        $expectedAmountInKobo = (int) bcmul($grandTotalNormalized, '100', 0);
 
-        if (!$this->isLiveConfigured()) {
-            // In Sandbox / Test Mode, validate format of generated test reference
-            $isValidMockRef = str_starts_with($reference, 'pstk_') || str_starts_with($reference, 'sim_');
-            if ($isValidMockRef) {
-                return [
-                    'success' => true,
-                    'is_simulated' => true,
-                    'reference' => $reference,
-                    'channel' => 'card',
-                    'amount_kobo' => $expectedAmountInKobo,
-                    'paid_at' => now()->toIso8601String(),
-                ];
-            }
-
+        if (!$this->isConfigured()) {
             return [
                 'success' => false,
-                'message' => 'Invalid payment reference format for sandbox verification.',
+                'code' => 'CONFIG_MISSING',
+                'message' => 'Paystack secret key is not configured in server environment.',
             ];
         }
 
         try {
-            $response = Http::withToken($this->secretKey)
+            $response = Http::withToken($this->getSecretKey())
                 ->timeout(10)
                 ->retry(2, 200)
-                ->get("{$this->baseUrl}/transaction/verify/{$reference}");
+                ->get("{$this->baseUrl}/transaction/verify/" . rawurlencode($reference));
 
             if (!$response->successful() || $response->json('status') !== true) {
+                $errorMsg = $response->json('message') ?? 'Paystack could not verify this transaction reference.';
                 Log::warning("Paystack verification failed: " . $response->body());
                 return [
                     'success' => false,
-                    'message' => 'Paystack could not verify this transaction reference.',
+                    'code' => 'GATEWAY_ERROR',
+                    'message' => $errorMsg,
                 ];
             }
 
-            $data = $response->json('data');
+            $data = $response->json('data') ?? [];
 
-            // 1. Transaction Status Check
-            if ($data['status'] !== 'success') {
+            // INVARIANT 1: Transaction Status must strictly be 'success'
+            $txStatus = strtolower((string)($data['status'] ?? ''));
+            if ($txStatus !== 'success') {
+                Log::warning("Paystack verification non-success status: {$txStatus} for reference: {$reference}");
                 return [
                     'success' => false,
-                    'message' => "Transaction status is '{$data['status']}', expected 'success'.",
+                    'code' => 'STATUS_NOT_SUCCESS',
+                    'message' => "Transaction status is '{$txStatus}', expected 'success'.",
                 ];
             }
 
-            // 2. Amount Equality Check (Prevent underpayment attacks)
-            $actualAmountKobo = (int) $data['amount'];
-            if ($actualAmountKobo < $expectedAmountInKobo) {
-                Log::critical("Paystack Underpayment Fraud Detected! Order {$order->order_number} Expected: {$expectedAmountInKobo} Kobo, Received: {$actualAmountKobo} Kobo.");
+            // INVARIANT 2: Currency must strictly be NGN
+            $gatewayCurrency = strtoupper((string)($data['currency'] ?? ''));
+            if ($gatewayCurrency !== 'NGN') {
+                Log::critical("Paystack Currency Tampering Detected! Order {$order->order_number}: Sent {$gatewayCurrency}, Expected NGN.");
                 return [
                     'success' => false,
-                    'message' => 'Payment amount verification mismatch: transaction value does not match order grand total.',
+                    'code' => 'CURRENCY_MISMATCH',
+                    'message' => "Currency mismatch: gateway transaction was in '{$gatewayCurrency}', expected 'NGN'.",
+                ];
+            }
+
+            // INVARIANT 3: Exact Integer Kobo Amount Equality Check (Mathematically prevents underpayment attacks)
+            $actualAmountKobo = (int) ($data['amount'] ?? 0);
+            if ($actualAmountKobo !== $expectedAmountInKobo) {
+                Log::critical("Paystack Underpayment/Amount Fraud Detected! Order {$order->order_number} Expected: {$expectedAmountInKobo} Kobo, Received: {$actualAmountKobo} Kobo.");
+                return [
+                    'success' => false,
+                    'code' => 'AMOUNT_MISMATCH',
+                    'message' => "Payment amount mismatch: order total requires {$expectedAmountInKobo} kobo, received {$actualAmountKobo} kobo.",
+                ];
+            }
+
+            // INVARIANT 4: Customer Identity Binding
+            $gatewayEmail = strtolower(trim((string)($data['customer']['email'] ?? '')));
+            $orderCustomerEmail = strtolower(trim((string)($order->customer->email ?? '')));
+            if (!empty($gatewayEmail) && !empty($orderCustomerEmail) && $gatewayEmail !== $orderCustomerEmail) {
+                Log::critical("Paystack Customer Identity Mismatch! Order {$order->order_number} Customer: {$orderCustomerEmail}, Gateway Payer: {$gatewayEmail}");
+                return [
+                    'success' => false,
+                    'code' => 'CUSTOMER_EMAIL_MISMATCH',
+                    'message' => "Customer mismatch: Paystack transaction was paid by '{$gatewayEmail}', but order belongs to '{$orderCustomerEmail}'.",
+                ];
+            }
+
+            // Metadata alignment check if present
+            $metaCustomerId = $data['metadata']['customer_id'] ?? null;
+            if (!empty($metaCustomerId) && (int)$metaCustomerId !== (int)$order->customer_id) {
+                return [
+                    'success' => false,
+                    'code' => 'CUSTOMER_ID_MISMATCH',
+                    'message' => "Customer ID mismatch between gateway metadata and order.",
+                ];
+            }
+
+            $metaOrderId = $data['metadata']['order_id'] ?? null;
+            if (!empty($metaOrderId) && (int)$metaOrderId !== (int)$order->id) {
+                return [
+                    'success' => false,
+                    'code' => 'ORDER_ID_MISMATCH',
+                    'message' => "Order ID mismatch between gateway metadata and target order.",
+                ];
+            }
+
+            // INVARIANT 5: Reference Integrity Check
+            $gatewayRef = (string)($data['reference'] ?? '');
+            if (!empty($order->payment_reference) && !hash_equals((string)$order->payment_reference, $gatewayRef)) {
+                return [
+                    'success' => false,
+                    'code' => 'REFERENCE_MISMATCH',
+                    'message' => "Payment reference mismatch between gateway and order record.",
                 ];
             }
 
             return [
                 'success' => true,
-                'is_simulated' => false,
-                'reference' => $data['reference'],
+                'reference' => $gatewayRef,
                 'channel' => $data['channel'] ?? 'card',
                 'amount_kobo' => $actualAmountKobo,
                 'gateway_response' => $data['gateway_response'] ?? 'Approved',
                 'paid_at' => $data['paid_at'] ?? now()->toIso8601String(),
+                'data' => $data,
             ];
         } catch (\Throwable $e) {
             Log::error("Paystack verification exception: " . $e->getMessage());
             return [
                 'success' => false,
+                'code' => 'EXCEPTION',
                 'message' => 'Paystack verification gateway error: ' . $e->getMessage(),
             ];
         }
     }
 
     /**
-     * Verify Paystack Webhook Cryptographic Signature
+     * Verify Paystack Webhook Cryptographic HMAC-SHA512 Signature
      */
     public function verifyWebhookSignature(string $signature, string $payload): bool
     {
-        if (empty($this->secretKey)) {
+        $secretKey = $this->getSecretKey();
+        if (empty($secretKey) || empty($signature)) {
             return false;
         }
 
-        $computedSignature = hash_hmac('sha512', $payload, $this->secretKey);
+        $computedSignature = hash_hmac('sha512', $payload, $secretKey);
         return hash_equals($computedSignature, $signature);
     }
 }

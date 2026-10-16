@@ -18,6 +18,9 @@ class Order extends Model
         'fulfillment_type',
         'order_status',
         'payment_status',
+        'paid_at',
+        'payment_channel',
+        'paystack_transaction_id',
         'payment_method',
         'payment_reference',
         'origin_lga_id',
@@ -42,6 +45,8 @@ class Order extends Model
         'pickup_locked_until',
         'guest_access_token',
         'verification_code',
+        'delivery_failed_attempts',
+        'delivery_locked_until',
         'rider_arrived_at',
         'delivery_confirmed_by_customer',
         'proof_of_delivery_image',
@@ -69,16 +74,24 @@ class Order extends Model
         'picked_up_at' => 'datetime',
         'pickup_failed_attempts' => 'integer',
         'pickup_locked_until' => 'datetime',
+        'delivery_failed_attempts' => 'integer',
+        'delivery_locked_until' => 'datetime',
         'rider_arrived_at' => 'datetime',
         'delivery_confirmed_by_customer' => 'boolean',
         'received_at' => 'datetime',
         'refund_window_expires_at' => 'datetime',
         'settled_at' => 'datetime',
+        'paid_at' => 'datetime',
     ];
 
     public function isPickupLocked(): bool
     {
         return !is_null($this->pickup_locked_until) && Carbon::now()->lt($this->pickup_locked_until);
+    }
+
+    public function isDeliveryLocked(): bool
+    {
+        return !is_null($this->delivery_locked_until) && Carbon::now()->lt($this->delivery_locked_until);
     }
 
     public function hasRiderArrived(): bool

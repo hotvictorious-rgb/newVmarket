@@ -73,6 +73,10 @@ class Product extends Model
         return $query->where('is_approved', true)
             ->where('listing_status', 'listed')
             ->whereNotNull('listing_confirmed_at')
-            ->where('listing_confirmed_at', '>=', Carbon::now()->subDays(7));
+            ->where('listing_confirmed_at', '>=', Carbon::now()->subDays(7))
+            ->whereHas('vendor', function ($q) {
+                $q->where('marketplace_status', 'active');
+            })
+            ->whereHas('shop');
     }
 }

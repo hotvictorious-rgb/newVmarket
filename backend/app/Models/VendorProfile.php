@@ -72,7 +72,12 @@ class VendorProfile extends Model
             return false;
         }
 
-        return Carbon::now()->lt($this->bank_updated_at->addHours(48));
+        return Carbon::now()->lt($this->bank_updated_at->copy()->addHours(48));
+    }
+
+    public function isBankCooldownActive(): bool
+    {
+        return $this->isWithinBankCooldown();
     }
 
     public function isKycVerified(): bool

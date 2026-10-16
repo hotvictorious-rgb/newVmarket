@@ -45,16 +45,24 @@ class RiderTerminalApiController extends Controller
     {
         $validated = $request->validate([
             'order_id' => 'required|integer|exists:orders,id',
-            'otp' => 'required|string|size:6',
+            'otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
         ]);
 
         $user = $request->user();
-        if (!$user->isRider()) {
-            return response()->json(['status' => false, 'message' => 'Unauthorized.'], 403);
+        if (!$user->isRider() || $user->status !== 'active') {
+            return response()->json(['status' => false, 'message' => 'Unauthorized: Active delivery rider access required.'], 403);
         }
 
         $rider = $user->riderProfile;
+        if (!$rider || !$rider->is_active) {
+            return response()->json(['status' => false, 'message' => 'Rider account is inactive or suspended.'], 403);
+        }
+
         $order = Order::findOrFail($validated['order_id']);
+
+        if ($order->rider_id && (int)$order->rider_id !== (int)$rider->id) {
+            return response()->json(['status' => false, 'message' => 'Unauthorized: This order is assigned to another dispatch courier.'], 403);
+        }
 
         $result = $this->settlementService->verifyRiderPickupOtp($order, $validated['otp'], $rider);
 
@@ -68,16 +76,24 @@ class RiderTerminalApiController extends Controller
     {
         $validated = $request->validate([
             'order_id' => 'required|integer|exists:orders,id',
-            'otp' => 'required|string|size:6',
+            'otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
         ]);
 
         $user = $request->user();
-        if (!$user->isRider()) {
-            return response()->json(['status' => false, 'message' => 'Unauthorized.'], 403);
+        if (!$user->isRider() || $user->status !== 'active') {
+            return response()->json(['status' => false, 'message' => 'Unauthorized: Active delivery rider access required.'], 403);
         }
 
         $rider = $user->riderProfile;
+        if (!$rider || !$rider->is_active) {
+            return response()->json(['status' => false, 'message' => 'Rider account is inactive or suspended.'], 403);
+        }
+
         $order = Order::findOrFail($validated['order_id']);
+
+        if ($order->rider_id && (int)$order->rider_id !== (int)$rider->id) {
+            return response()->json(['status' => false, 'message' => 'Unauthorized: This order is assigned to another delivery courier.'], 403);
+        }
 
         $result = $this->settlementService->verifyCustomerDeliveryOtp($order, $validated['otp'], $rider);
 

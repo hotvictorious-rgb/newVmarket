@@ -11,6 +11,11 @@ class VendorEmployeeProfile extends Model
         'vendor_id',
         'shop_id',
         'role',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
     ];
 
     public function user()

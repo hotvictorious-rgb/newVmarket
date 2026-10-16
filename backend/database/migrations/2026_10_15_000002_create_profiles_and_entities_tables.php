@@ -79,6 +79,7 @@ return new class extends Migration
             $table->foreignId('vendor_id')->constrained('vendor_profiles')->cascadeOnDelete();
             $table->foreignId('shop_id')->constrained('shops')->cascadeOnDelete();
             $table->enum('role', ['manager', 'inspection_staff', 'cashier', 'inventory_clerk'])->default('inspection_staff');
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
 
             $table->index(['vendor_id', 'shop_id']);

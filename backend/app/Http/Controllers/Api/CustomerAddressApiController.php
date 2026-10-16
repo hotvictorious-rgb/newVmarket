@@ -54,13 +54,13 @@ class CustomerAddressApiController extends Controller
 
         $address = CustomerAddress::create([
             'user_id' => $request->user()->id,
-            'contact_name' => $validated['contact_name'],
-            'phone' => $validated['phone'],
-            'address_line' => $validated['address_line'],
+            'contact_name' => strip_tags(trim($validated['contact_name'])),
+            'phone' => preg_replace('/[^0-9+]/', '', $validated['phone']),
+            'address_line' => strip_tags(trim($validated['address_line'])),
             'country_id' => $validated['country_id'],
             'state_id' => $validated['state_id'],
             'lga_id' => $validated['lga_id'],
-            'landmark' => $validated['landmark'] ?? null,
+            'landmark' => isset($validated['landmark']) ? strip_tags(trim($validated['landmark'])) : null,
             'is_default' => $validated['is_default'] ?? false,
         ]);
 

@@ -56,7 +56,10 @@ return new class extends Migration
                 'canceled',
                 'failed'
             ])->default('pending');
-            $table->enum('payment_status', ['unpaid', 'paid', 'refunded'])->default('unpaid');
+            $table->enum('payment_status', ['unpaid', 'pending', 'paid', 'refunded', 'failed'])->default('pending');
+            $table->timestamp('paid_at')->nullable();
+            $table->string('payment_channel', 50)->nullable();
+            $table->string('paystack_transaction_id', 100)->nullable();
             $table->string('payment_method')->default('paystack');
             $table->string('payment_reference')->nullable()->index();
 

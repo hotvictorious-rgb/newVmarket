@@ -92,7 +92,7 @@
                     <div>
                         <span style="font-size: 11.5px; color: var(--adm-text-muted); text-transform: uppercase; font-weight: 700;">Account Number</span>
                         <div style="font-size: 18px; font-weight: 800; color: var(--adm-primary); font-family: monospace; letter-spacing: 1px;">
-                            {{ $vendor->bank_account_number ?? '1012345678' }}
+                            {{ $vendor->account_number ?? $vendor->bank_account_number ?? '1012345678' }}
                         </div>
                     </div>
                     <div>
@@ -102,6 +102,47 @@
                         </div>
                     </div>
                 </div>
+
+                @if($vendor->isWithinBankCooldown())
+                    <div style="margin-top: 16px; background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px; padding: 12px; font-size: 13px; color: #92400E;">
+                        ⚠️ <strong>48-Hour Anti-Theft Cooldown Active:</strong> Your bank account was updated on {{ $vendor->bank_updated_at ? $vendor->bank_updated_at->format('M d, Y H:i') : 'recently' }}. Payout disbursements remain locked until 48 hours elapse.
+                    </div>
+                @endif
+            </div>
+
+            <!-- Update Bank Details Modal / Form -->
+            <div style="margin-top: 24px; max-width: 600px; background: #FFFFFF; border: 1px solid var(--adm-border); border-radius: 12px; padding: 20px;">
+                <h3 style="font-size: 15px; font-weight: 800; color: var(--adm-text); margin-bottom: 6px;">Modify Designated Bank Details</h3>
+                <p style="font-size: 12.5px; color: var(--adm-text-muted); margin-bottom: 16px;">
+                    🛡️ <em>Security Invariant:</em> Updating your bank account triggers an automatic 48-Hour Security Lock on all payouts.
+                </p>
+
+                <form method="POST" action="{{ route('vendor.bank.update') }}">
+                    @csrf
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 14px;">
+                        <div>
+                            <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; color: var(--adm-text);">Bank Name</label>
+                            <input type="text" name="bank_name" value="{{ old('bank_name', $vendor->bank_name) }}" required class="form-control" style="width: 100%; padding: 9px 12px; border: 1px solid var(--adm-border); border-radius: 8px; font-size: 13.5px;" placeholder="e.g. Zenith Bank PLC">
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div>
+                                <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; color: var(--adm-text);">NUBAN Account (10 Digits)</label>
+                                <input type="text" name="account_number" maxlength="10" pattern="[0-9]{10}" value="{{ old('account_number', $vendor->account_number) }}" required class="form-control" style="width: 100%; padding: 9px 12px; border: 1px solid var(--adm-border); border-radius: 8px; font-size: 13.5px; font-family: monospace;" placeholder="0123456789">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; color: var(--adm-text);">Account Holder Name</label>
+                                <input type="text" name="account_name" value="{{ old('account_name', $vendor->account_name ?? $vendor->business_name) }}" required class="form-control" style="width: 100%; padding: 9px 12px; border: 1px solid var(--adm-border); border-radius: 8px; font-size: 13.5px;" placeholder="Full verified name">
+                            </div>
+                        </div>
+
+                        <div style="padding-top: 6px;">
+                            <button type="submit" class="btn btn-primary" style="background: var(--adm-primary); color: #FFF; padding: 10px 18px; border: none; border-radius: 8px; font-weight: 700; font-size: 13.5px; cursor: pointer;">
+                                Update Bank Account &amp; Initiate 48h Lock
+                            </button>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

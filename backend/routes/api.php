@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\ProductApiController;
 use App\Http\Controllers\Api\RiderTerminalApiController;
 use App\Http\Controllers\Api\SystemConfigApiController;
 use App\Http\Controllers\Api\VendorTerminalApiController;
+use App\Http\Controllers\Web\PaystackPaymentController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -44,6 +45,9 @@ Route::prefix('v1')->group(function () {
         Route::post('login', [AuthApiController::class, 'login'])->middleware('throttle:10,1');
     });
 
+    // Paystack Webhook (Public, Cryptographically Verified via HMAC-SHA512)
+    Route::post('payment/paystack/webhook', [PaystackPaymentController::class, 'handleWebhook']);
+
     // 7. Authenticated Endpoints
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('auth/me', [AuthApiController::class, 'me']);
@@ -63,6 +67,7 @@ Route::prefix('v1')->group(function () {
         Route::prefix('customer/orders')->group(function () {
             Route::get('', [CustomerOrderApiController::class, 'index']);
             Route::post('checkout', [CustomerOrderApiController::class, 'executeCheckout']);
+            Route::post('verify-payment', [CustomerOrderApiController::class, 'verifyPayment']);
             Route::get('{order_number}', [CustomerOrderApiController::class, 'show']);
             Route::post('{order_number}/confirm-delivery', [CustomerOrderApiController::class, 'confirmDelivery']);
         });
@@ -74,10 +79,30 @@ Route::prefix('v1')->group(function () {
             Route::post('orders/verify-delivery-otp', [RiderTerminalApiController::class, 'verifyDeliveryOtp']);
         });
 
-        // Vendor App Terminal
+        // Sovereign Vendor App Terminal
         Route::prefix('vendor')->group(function () {
-            Route::post('pickup-reservations/verify-inspection', [VendorTerminalApiController::class, 'verifyInspection']);
+            // Dashboard & FinTech Metrics
+            Route::get('dashboard', [VendorTerminalApiController::class, 'dashboard']);
+
+            // Orders & Handover Workflow
+            Route::get('orders', [VendorTerminalApiController::class, 'orders']);
+            Route::get('orders/{id}', [VendorTerminalApiController::class, 'showOrder']);
+            Route::post('orders/{id}/ready-for-handover', [VendorTerminalApiController::class, 'markHandoverReady']);
             Route::post('orders/verify-handover-otp', [VendorTerminalApiController::class, 'verifyHandoverOtp']);
+
+            // ₦0.00 Inspection Reservations
+            Route::get('pickup-reservations', [VendorTerminalApiController::class, 'pickupReservations']);
+            Route::post('pickup-reservations/verify-inspection', [VendorTerminalApiController::class, 'verifyInspection']);
+
+            // Products & 7-Day Freshness Governance
+            Route::get('products', [VendorTerminalApiController::class, 'products']);
+            Route::post('products', [VendorTerminalApiController::class, 'storeProduct']);
+            Route::post('products/{id}/freshness', [VendorTerminalApiController::class, 'refreshFreshness']);
+            Route::post('products/{id}/toggle-stock', [VendorTerminalApiController::class, 'toggleStock']);
+
+            // Financial Ledger, Payouts & 48h Cooldown
+            Route::get('payouts', [VendorTerminalApiController::class, 'payouts']);
+            Route::post('bank/update', [VendorTerminalApiController::class, 'updateBank']);
         });
     });
 });
