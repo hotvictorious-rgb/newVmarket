@@ -144,4 +144,20 @@ class CloudflareR2AndGoogleDriveBackupTest extends TestCase
         $this->assertNotNull($backupEvent, 'backup:google-drive is registered in schedule');
         $this->assertEquals('0 2 * * *', $backupEvent->expression);
     }
+
+    /**
+     * Test 6: Missing BACKUP_ENCRYPTION_KEY throws RuntimeException in production environment
+     */
+    public function test_missing_encryption_key_fails_closed_in_production(): void
+    {
+        $this->app->detectEnvironment(fn() => 'production');
+        \Illuminate\Support\Facades\Config::set('services.backup.encryption_key', null);
+
+        $service = app(GoogleDriveBackupService::class);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('BACKUP_ENCRYPTION_KEY must be configured in production');
+
+        $service->executeBackup(dryRun: true);
+    }
 }

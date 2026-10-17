@@ -410,30 +410,37 @@ class ReturnAndRefundService
             return ['success' => false, 'message' => 'Unauthorized: Only Super Admin can disburse treasury refunds.'];
         }
 
-        return DB::transaction(function () use ($adminUser, $case, $bankReference, $proofPath, $refundDeliveryFee) {
-            $lockedCase = ReturnCase::where('id', $case->id)->lockForUpdate()->first();
-            $order = Order::where('id', $lockedCase->order_id)->lockForUpdate()->first();
+        // 1. Initial State Validation & Pre-disbursement Lock
+        $caseId = $case->id;
+        $preValidation = DB::transaction(function () use ($caseId, $adminUser, $refundDeliveryFee) {
+            $lockedCase = ReturnCase::where('id', $caseId)->lockForUpdate()->firstOrFail();
+            $order = Order::where('id', $lockedCase->order_id)->lockForUpdate()->firstOrFail();
 
-            if (!in_array($lockedCase->status, ['refund_pending', 'inspected', 'approved_for_return'])) {
-                return ['success' => false, 'message' => "Cannot disburse refund for case in '{$lockedCase->status}' status."];
+            // Strict Financial Approval State Machine
+            if ($lockedCase->status === 'inspected' && $lockedCase->resolution_type === 'refund') {
+                $lockedCase->status = 'refund_pending';
+                $lockedCase->reviewed_by_admin_id = $adminUser->id;
+                $lockedCase->save();
+            }
+
+            if (!in_array($lockedCase->status, ['refund_pending', 'approved_for_return'], true)) {
+                return [
+                    'valid' => false,
+                    'message' => "Cannot disburse refund for case in '{$lockedCase->status}' status. Requires explicit approval into 'refund_pending'.",
+                ];
             }
 
             // Check instant doorstep wallet credit constraints (Finding 5)
-            // Guard against both fully and partially redeemed credits (partial redemptions spawn a second row with status 'redeemed')
             $hasRedeemedWalletCredit = CustomerWalletCredit::where('return_case_id', $lockedCase->id)
                 ->whereIn('status', ['redeemed', 'spent'])
                 ->exists();
 
             if ($hasRedeemedWalletCredit) {
                 return [
-                    'success' => false,
+                    'valid' => false,
                     'message' => "Cannot disburse cash refund: Customer has already partially or fully redeemed the instant wallet credit issued for this return case.",
                 ];
             }
-
-            $walletCredit = CustomerWalletCredit::where('return_case_id', $lockedCase->id)
-                ->where('status', 'available')
-                ->first();
 
             // Calculate exact refund amount
             $merchandiseRefund = $lockedCase->total_refundable_amount;
@@ -445,6 +452,67 @@ class ReturnAndRefundService
 
             $totalCashRefund = bcadd($merchandiseRefund, $deliveryFeeRefund, 2);
 
+            return [
+                'valid' => true,
+                'order_payment_reference' => $order->payment_reference,
+                'case_number' => $lockedCase->case_number,
+                'existing_paystack_refund_id' => $lockedCase->paystack_refund_id,
+                'total_cash_refund' => $totalCashRefund,
+                'merchandise_refund' => $merchandiseRefund,
+                'delivery_fee_refund' => $deliveryFeeRefund,
+            ];
+        });
+
+        if (!$preValidation['valid']) {
+            return ['success' => false, 'message' => $preValidation['message']];
+        }
+
+        $totalCashRefund = $preValidation['total_cash_refund'];
+        $paystackRefundId = $preValidation['existing_paystack_refund_id'];
+
+        // 2. Out-of-DB-Transaction Paystack Gateway Execution (Guards against local DB rollback ghost refund)
+        if (empty($paystackRefundId) && !empty($preValidation['order_payment_reference'])) {
+            $refundRes = $this->paystackService->initiateRefund(
+                $preValidation['order_payment_reference'],
+                $totalCashRefund,
+                "Manual refund for Return Case #{$preValidation['case_number']}"
+            );
+
+            if (empty($refundRes['success'])) {
+                return [
+                    'success' => false,
+                    'message' => 'Paystack gateway refund failed: ' . ($refundRes['message'] ?? 'Payment provider rejected or timed out.') . '. Return case remains in refund_pending status.',
+                ];
+            }
+
+            $paystackRefundId = $refundRes['refund_reference'] ?? ($refundRes['data']['reference'] ?? null);
+
+            // Persist gateway refund ID immediately so subsequent retries never duplicate payment
+            ReturnCase::where('id', $caseId)->update(['paystack_refund_id' => $paystackRefundId]);
+        }
+
+        // 3. Atomic Financial Journal Entries & State Settlement
+        return DB::transaction(function () use (
+            $adminUser,
+            $caseId,
+            $bankReference,
+            $proofPath,
+            $refundDeliveryFee,
+            $paystackRefundId,
+            $totalCashRefund
+        ) {
+            $lockedCase = ReturnCase::where('id', $caseId)->lockForUpdate()->firstOrFail();
+            $order = Order::where('id', $lockedCase->order_id)->lockForUpdate()->firstOrFail();
+
+            $walletCredit = CustomerWalletCredit::where('return_case_id', $lockedCase->id)
+                ->where('status', 'available')
+                ->first();
+
+            $merchandiseRefund = $lockedCase->total_refundable_amount;
+            $deliveryFeeRefund = ($refundDeliveryFee && bccomp((string)$order->delivery_fee, '0.00', 2) > 0)
+                ? (string)$order->delivery_fee
+                : '0.00';
+
             // Calculate 90/5/5 Merchandise Reversal Splits
             $vendorNetDebit = bcmul($merchandiseRefund, '0.9000', 2);
             $customerCashbackDebit = bcmul($merchandiseRefund, '0.0500', 2);
@@ -455,24 +523,6 @@ class ReturnAndRefundService
             if (bccomp($calculatedMerchandiseTotal, $merchandiseRefund, 2) !== 0) {
                 $diff = bcsub($merchandiseRefund, $calculatedMerchandiseTotal, 2);
                 $vendorNetDebit = bcadd($vendorNetDebit, $diff, 2);
-            }
-
-            // Automated Paystack Gateway Refund Call before DB journal entries (Findings 3 & 10)
-            // Idempotency: If case already has a paystack_refund_id recorded from an earlier call, avoid duplicate gateway payout
-            $paystackRefundId = $lockedCase->paystack_refund_id;
-            if (empty($paystackRefundId) && !empty($order->payment_reference)) {
-                $refundRes = $this->paystackService->initiateRefund(
-                    $order->payment_reference,
-                    $totalCashRefund,
-                    "Manual refund for Return Case #{$lockedCase->case_number}"
-                );
-                if (empty($refundRes['success'])) {
-                    return [
-                        'success' => false,
-                        'message' => 'Paystack gateway refund failed: ' . ($refundRes['message'] ?? 'Payment provider rejected or timed out.') . '. Return case remains in ' . $lockedCase->status . ' status.',
-                    ];
-                }
-                $paystackRefundId = $refundRes['refund_reference'] ?? ($refundRes['data']['reference'] ?? null);
             }
 
             // Reverse available instant wallet credit to prevent duplicate cash payout

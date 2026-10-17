@@ -37,10 +37,17 @@ class GoogleDriveBackupService
         $dumpPath = $this->generateDatabaseDump($connection, $backupDir, $timestamp);
         $dumpSize = File::exists($dumpPath) ? File::size($dumpPath) : 0;
 
-        // 2. Package into timestamped Zip Archive with optional password protection
+        // 2. Package into timestamped Zip Archive with AES-256 encryption
         $zipFilename = "vmarket_backup_{$connection}_{$timestamp}.zip";
         $zipPath = $backupDir . DIRECTORY_SEPARATOR . $zipFilename;
         $zipPassword = Config::get('services.backup.encryption_key', env('BACKUP_ENCRYPTION_KEY', null));
+
+        // Fail-Closed: Mandatory encryption in production environment
+        if (empty($zipPassword) && app()->environment('production')) {
+            throw new \RuntimeException(
+                'Disaster Recovery Security Violation: BACKUP_ENCRYPTION_KEY must be configured in production to prevent unencrypted database backup exposure.'
+            );
+        }
 
         $this->packageZipArchive($dumpPath, $zipPath, $zipPassword, [
             'backup_timestamp' => Carbon::now()->toIso8601String(),
@@ -84,8 +91,12 @@ class GoogleDriveBackupService
             $uploadStatus = 'LOCAL_SAVED_CREDENTIALS_MISSING';
         }
 
+        $isOffsiteVerified = ($uploadStatus === 'UPLOADED_TO_GOOGLE_DRIVE');
+
         return [
             'success' => in_array($uploadStatus, ['UPLOADED_TO_GOOGLE_DRIVE', 'DRY_RUN_COMPLETED', 'LOCAL_SAVED', 'LOCAL_SAVED_CREDENTIALS_MISSING']),
+            'offsite_verified' => $isOffsiteVerified,
+            'local_saved' => File::exists($zipPath),
             'connection' => $connection,
             'timestamp' => $timestamp,
             'dump_size_bytes' => $dumpSize,
@@ -149,27 +160,52 @@ class GoogleDriveBackupService
 
         // MySQL / MariaDB Dump
         if ($connection === 'mysql') {
-            $host = Config::get('database.connections.mysql.host', '127.0.0.1');
-            $port = Config::get('database.connections.mysql.port', '3306');
-            $database = Config::get('database.connections.mysql.database');
-            $username = Config::get('database.connections.mysql.username');
-            $password = Config::get('database.connections.mysql.password');
+            $host = (string) Config::get('database.connections.mysql.host', '127.0.0.1');
+            $port = (string) Config::get('database.connections.mysql.port', '3306');
+            $database = (string) Config::get('database.connections.mysql.database');
+            $username = (string) Config::get('database.connections.mysql.username');
+            $password = (string) Config::get('database.connections.mysql.password');
 
             $dumpBinary = env('MYSQLDUMP_PATH', 'mysqldump');
-            $cmd = sprintf(
-                '"%s" --host=%s --port=%s --user=%s --password=%s --single-transaction --quick --skip-lock-tables %s > "%s"',
-                $dumpBinary,
-                escapeshellarg($host),
-                escapeshellarg($port),
-                escapeshellarg($username),
-                escapeshellarg($password),
-                escapeshellarg($database),
-                $dumpPath
-            );
 
-            @exec($cmd, $output, $returnVar);
+            // Security Hardening: Write ALL connection credentials to a temporary 
+            // permissioned options file to eliminate any sensitive parameters from ps aux / process list
+            $tempCnf = tempnam(sys_get_temp_dir(), 'mycnf_');
+            $normalizedCnf = str_replace('\\', '/', $tempCnf);
+            $escapedPassword = addcslashes($password, "\\\"");
+            $escapedUsername = addcslashes($username, "\\\"");
 
-            if (!File::exists($dumpPath) || File::size($dumpPath) === 0) {
+            $cnfContent = "[client]\n"
+                . "user=\"{$escapedUsername}\"\n"
+                . "password=\"{$escapedPassword}\"\n"
+                . "host=\"{$host}\"\n"
+                . "port={$port}\n";
+
+            File::put($tempCnf, $cnfContent);
+            @chmod($tempCnf, 0600);
+
+            $returnVar = -1;
+            try {
+                $cmd = sprintf(
+                    '"%s" --defaults-extra-file="%s" --single-transaction --quick --skip-lock-tables %s > "%s"',
+                    $dumpBinary,
+                    $normalizedCnf,
+                    escapeshellarg($database),
+                    $dumpPath
+                );
+
+                @exec($cmd, $output, $returnVar);
+            } finally {
+                if (File::exists($tempCnf)) {
+                    @File::delete($tempCnf);
+                }
+            }
+
+            // Validate both exit code AND file integrity
+            if ($returnVar !== 0 || !File::exists($dumpPath) || File::size($dumpPath) === 0) {
+                if (File::exists($dumpPath)) {
+                    @File::delete($dumpPath);
+                }
                 // Fallback table-by-table dump via Eloquent / PDO
                 $this->fallbackDatabaseExport($dumpPath);
             }
@@ -182,6 +218,7 @@ class GoogleDriveBackupService
 
     /**
      * Fallback database table export via PDO when external CLI dump tools are unavailable.
+     * Streams via chunks to prevent PHP memory exhaustion.
      */
     protected function fallbackDatabaseExport(string $dumpPath): void
     {
@@ -189,19 +226,50 @@ class GoogleDriveBackupService
         fwrite($handle, "-- Victorious Marketplace Fallback SQL Dump\n");
         fwrite($handle, "-- Generated: " . Carbon::now()->toIso8601String() . "\n\n");
 
-        $tables = DB::select("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
-        foreach ($tables as $tableObj) {
-            $table = $tableObj->name ?? $tableObj->{'Tables_in_' . Config::get('database.connections.mysql.database', '')};
-            if (!$table) continue;
+        $driver = DB::getDriverName();
+        $tableNames = [];
+
+        if ($driver === 'sqlite') {
+            $tables = DB::select("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+            foreach ($tables as $t) {
+                if (!empty($t->name)) {
+                    $tableNames[] = $t->name;
+                }
+            }
+        } else {
+            $tables = DB::select('SHOW TABLES');
+            foreach ($tables as $tableObj) {
+                $values = array_values((array) $tableObj);
+                if (!empty($values[0])) {
+                    $tableNames[] = $values[0];
+                }
+            }
+        }
+
+        foreach ($tableNames as $table) {
             fwrite($handle, "-- Table: `{$table}`\n");
-            $rows = DB::table($table)->get();
-            foreach ($rows as $row) {
-                $cols = array_keys((array)$row);
-                $values = array_map(function ($val) {
-                    return is_null($val) ? 'NULL' : "'" . addslashes((string)$val) . "'";
-                }, (array)$row);
-                $sql = "INSERT INTO `{$table}` (`" . implode('`,`', $cols) . "`) VALUES (" . implode(',', $values) . ");\n";
-                fwrite($handle, $sql);
+            try {
+                DB::table($table)->orderBy(DB::raw('1'))->chunk(250, function ($rows) use ($handle, $table) {
+                    foreach ($rows as $row) {
+                        $cols = array_keys((array) $row);
+                        $values = array_map(function ($val) {
+                            return is_null($val) ? 'NULL' : "'" . addslashes((string) $val) . "'";
+                        }, (array) $row);
+                        $sql = "INSERT INTO `{$table}` (`" . implode('`,`', $cols) . "`) VALUES (" . implode(',', $values) . ");\n";
+                        fwrite($handle, $sql);
+                    }
+                });
+            } catch (\Throwable $e) {
+                // If orderBy 1 fails on certain table schemas, fall back to unchunked query
+                $rows = DB::table($table)->limit(5000)->get();
+                foreach ($rows as $row) {
+                    $cols = array_keys((array) $row);
+                    $values = array_map(function ($val) {
+                        return is_null($val) ? 'NULL' : "'" . addslashes((string) $val) . "'";
+                    }, (array) $row);
+                    $sql = "INSERT INTO `{$table}` (`" . implode('`,`', $cols) . "`) VALUES (" . implode(',', $values) . ");\n";
+                    fwrite($handle, $sql);
+                }
             }
         }
         fclose($handle);

@@ -576,4 +576,163 @@ class VendorAndLogisticsUnifiedPayoutTest extends TestCase
         $response->assertSee('Approve (Paystack)');
         $response->assertSee('Reject');
     }
+
+    /**
+     * Webhook Test: transfer.success reconciles and appends delivery confirmation.
+     */
+    public function test_paystack_webhook_transfer_success_confirms_payout(): void
+    {
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '15000.00',
+            'status' => 'approved',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Test Vendor',
+            'settlement_proof_path' => 'paystack_transfer:TRF_CONFIRM_123',
+            'admin_notes' => 'Automated Paystack NUBAN Transfer (TRF_CONFIRM_123)',
+        ]);
+
+        $payloadData = [
+            'event' => 'transfer.success',
+            'data' => [
+                'reference' => 'VND-PAYOUT-CONFIRM-01',
+                'transfer_code' => 'TRF_CONFIRM_123',
+                'amount' => 1500000,
+            ],
+        ];
+
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['status' => true]);
+
+        $payout->refresh();
+        $this->assertStringContainsString('Paystack Gateway Delivery Confirmed', (string)$payout->admin_notes);
+    }
+
+    /**
+     * Webhook Test: transfer.failed restores logistics company wallet balance and reverses ledger.
+     */
+    public function test_paystack_webhook_transfer_failed_restores_logistics_wallet_and_ledger(): void
+    {
+        $this->company->wallet_balance = '5000.00';
+        $this->company->save();
+
+        $payout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '10000.00',
+            'status' => 'approved',
+            'bank_name' => 'Access Bank',
+            'account_number' => '0123456789',
+            'account_name' => 'Swift Logistics',
+            'settlement_proof_path' => 'paystack_transfer:TRF_FLEET_FAIL_99',
+            'admin_notes' => 'Automated Paystack NUBAN Transfer (TRF_FLEET_FAIL_99)',
+        ]);
+
+        $payloadData = [
+            'event' => 'transfer.failed',
+            'data' => [
+                'reference' => 'FLEET-PAYOUT-FAIL-01',
+                'transfer_code' => 'TRF_FLEET_FAIL_99',
+                'reason' => 'Destination bank network failure',
+            ],
+        ];
+
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+        $payout->refresh();
+        $this->assertEquals('rejected', $payout->status);
+        $this->assertStringContainsString('Destination bank network failure', (string)$payout->rejection_reason);
+
+        // Wallet atomically refunded: 5000 + 10000 = 15000
+        $this->company->refresh();
+        $this->assertEquals('15000.00', $this->company->wallet_balance);
+
+        // Financial journal reversal entries exist
+        $this->assertTrue(FinancialJournalEntry::where('description', 'like', '%Corporate payout liability restored after Paystack transfer failure%')->exists());
+        $this->assertTrue(FinancialJournalEntry::where('description', 'like', '%Escrow cash restored after Paystack transfer failure%')->exists());
+    }
+
+    /**
+     * Webhook Test: transfer.failed restores merchant settled orders back to eligible and reverses ledger.
+     */
+    public function test_paystack_webhook_transfer_failed_restores_merchant_orders_and_ledger(): void
+    {
+        $order = Order::create([
+            'order_number' => 'ORD-VND-REVERSE-01',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'order_type' => 'delivery',
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'settled',
+            'merchandise_subtotal' => '20000.00',
+            'delivery_fee' => '1000.00',
+            'grand_total' => '21000.00',
+            'total_amount' => '21000.00',
+            'vendor_net_90' => '18000.00',
+            'customer_cashback_5' => '1000.00',
+            'platform_margin_5' => '1000.00',
+            'logistics_fee_retained' => '900.00',
+            'platform_delivery_fee' => '100.00',
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '18000.00',
+            'status' => 'approved',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Victorious Electronics Ltd',
+            'settlement_proof_path' => 'paystack_transfer:TRF_VND_FAIL_88',
+            'admin_notes' => 'Automated Paystack NUBAN Transfer (TRF_VND_FAIL_88)',
+        ]);
+
+        $payloadData = [
+            'event' => 'transfer.failed',
+            'data' => [
+                'reference' => 'VND-PAYOUT-FAIL-01',
+                'transfer_code' => 'TRF_VND_FAIL_88',
+                'reason' => 'Account number does not exist on NIBSS',
+            ],
+        ];
+
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+        $payout->refresh();
+        $this->assertEquals('rejected', $payout->status);
+        $this->assertStringContainsString('Account number does not exist on NIBSS', (string)$payout->rejection_reason);
+
+        // Order is restored back to eligible so merchant withdrawable balance reflects it!
+        $order->refresh();
+        $this->assertEquals('eligible', $order->vendor_settlement_status);
+
+        // Financial journal reversal entries exist
+        $this->assertTrue(FinancialJournalEntry::where('description', 'like', '%Merchant escrow holding restored after Paystack transfer failure%')->exists());
+        $this->assertTrue(FinancialJournalEntry::where('description', 'like', '%Escrow cash restored after Paystack transfer failure%')->exists());
+    }
 }
