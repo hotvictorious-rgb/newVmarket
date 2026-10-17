@@ -1725,77 +1725,99 @@
             }
 
             // Done Button / Location Submit (Dynamic Product Swapper)
-            if (doneBtn) {
-                doneBtn.addEventListener('click', function () {
+            function applyLocationChange(targetCity, targetState, targetLgaId) {
+                if (doneBtn) {
                     doneBtn.disabled = true;
                     doneBtn.innerHTML = '<span>Saving...</span>';
+                }
 
-                    fetch('{{ route("set.location") }}', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            city: selectedCity,
-                            state: selectedState,
-                            lga_id: selectedLgaId
-                        })
+                fetch('{{ route("set.location") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        city: targetCity,
+                        state: targetState || 'Akwa Ibom',
+                        lga_id: targetLgaId
                     })
-                    .then(res => res.json())
-                    .then(data => {
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (doneBtn) {
                         doneBtn.disabled = false;
                         doneBtn.innerHTML = '<span>Done</span>';
+                    }
 
-                        if (data.success) {
-                            // Update Header Pill
-                            if (activeCityLabel) activeCityLabel.textContent = data.city;
+                    if (data.success) {
+                        selectedCity = data.city;
+                        selectedState = data.state;
+                        // Update Header Pill
+                        if (activeCityLabel) activeCityLabel.textContent = data.city;
 
-                            // Update Proximity Strip on Homepage
-                            const proximityCityText = document.getElementById('vmProximityCityText');
-                            if (proximityCityText) proximityCityText.textContent = `${data.city}, ${data.state}`;
-                            const proximityStatusTag = document.getElementById('vmProximityStatusTag');
-                            if (proximityStatusTag && data.status_badge) proximityStatusTag.textContent = data.status_badge;
+                        // Update Proximity Strip on Homepage
+                        const proximityCityText = document.getElementById('vmProximityCityText');
+                        if (proximityCityText) proximityCityText.textContent = `${data.city}, ${data.state}`;
+                        const proximityStatusTag = document.getElementById('vmProximityStatusTag');
+                        if (proximityStatusTag && data.status_badge) proximityStatusTag.textContent = data.status_badge;
 
-                            // Update Dynamic City Labels across Page
-                            document.querySelectorAll('.vm-dynamic-city-label').forEach(el => el.textContent = data.city);
+                        // Update Dynamic City Labels across Page
+                        document.querySelectorAll('.vm-dynamic-city-label').forEach(el => el.textContent = data.city);
 
-                            // Close modal
-                            closeLocationModal();
+                        // Close modal
+                        closeLocationModal();
 
-                            // DYNAMICALLY FETCH PRODUCTS FOR THIS LGA
-                            const productsGrid = document.getElementById('vmProductsGridContainer');
-                            const shopsWrap = document.getElementById('vmShopsGridContainer');
+                        // DYNAMICALLY FETCH PRODUCTS FOR THIS LGA PRESERVING FILTERS
+                        const productsGrid = document.getElementById('vmProductsGridContainer');
+                        const shopsWrap = document.getElementById('vmShopsGridContainer');
 
-                            if (productsGrid) {
-                                productsGrid.style.opacity = '0.4';
+                        if (productsGrid) {
+                            productsGrid.style.opacity = '0.4';
 
-                                fetch(`{{ route("storefront") }}?ajax=1&city=${encodeURIComponent(data.city)}&state=${encodeURIComponent(data.state)}`, {
-                                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-                                })
-                                .then(r => r.json())
-                                .then(catalogData => {
-                                    productsGrid.style.opacity = '1';
-                                    if (catalogData.products_html) {
-                                        productsGrid.innerHTML = catalogData.products_html;
-                                    }
-                                    if (shopsWrap && catalogData.shops_html) {
-                                        shopsWrap.innerHTML = catalogData.shops_html;
-                                    }
-                                })
-                                .catch(err => {
-                                    console.error('Error refreshing products dynamically:', err);
-                                    productsGrid.style.opacity = '1';
-                                });
-                            }
+                            const currentUrl = new URL(window.location.href);
+                            const fetchParams = new URLSearchParams(currentUrl.search);
+                            fetchParams.set('ajax', '1');
+                            fetchParams.set('city', data.city);
+                            fetchParams.set('state', data.state);
+
+                            fetch(`{{ route("storefront") }}?${fetchParams.toString()}`, {
+                                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                            })
+                            .then(r => r.json())
+                            .then(catalogData => {
+                                productsGrid.style.opacity = '1';
+                                if (catalogData.products_html) {
+                                    productsGrid.innerHTML = catalogData.products_html;
+                                }
+                                if (shopsWrap && catalogData.shops_html) {
+                                    shopsWrap.innerHTML = catalogData.shops_html;
+                                }
+                            })
+                            .catch(err => {
+                                console.error('Error refreshing products dynamically:', err);
+                                productsGrid.style.opacity = '1';
+                            });
                         }
-                    })
-                    .catch(err => {
-                        console.error('Error setting location:', err);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error setting location:', err);
+                    if (doneBtn) {
                         doneBtn.disabled = false;
                         doneBtn.innerHTML = '<span>Done</span>';
-                    });
+                    }
+                });
+            }
+
+            window.vmSelectLga = function(city, state, lgaId) {
+                applyLocationChange(city, state, lgaId);
+            };
+
+            if (doneBtn) {
+                doneBtn.addEventListener('click', function () {
+                    applyLocationChange(selectedCity, selectedState, selectedLgaId);
                 });
             }
 

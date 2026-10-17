@@ -115,21 +115,49 @@ class PaystackPaymentController extends Controller
             ], 400);
         }
 
-        // Authoritative Webhook Idempotency Guard (Audit Finding C)
-        // Atomic DB Unique Constraint pre-insertion prevents concurrent delivery race condition
+        // Authoritative Webhook Inbox State Machine (Audit P0 Resolution)
+        // Transactional Inbox prevents permanent event skipping on server crash
         $eventHash = hash('sha256', (string)$request->getContent());
         $eventId = (string)($event['id'] ?? ($event['event'] . '_' . ($event['data']['reference'] ?? ($event['data']['transfer_code'] ?? $eventHash))));
 
-        try {
-            \App\Models\ProcessedWebhookEvent::create([
-                'event_id' => $eventId,
-                'event_type' => $event['event'] ?? 'unknown',
-                'payload_hash' => $eventHash,
-                'processed_at' => Carbon::now(),
-            ]);
-        } catch (\Illuminate\Database\QueryException $e) {
-            Log::info("Paystack Webhook: Duplicate event prevented atomically: {$eventId}");
-            return response()->json(['status' => true, 'message' => 'Event already processed.'], 200);
+        $existingEvent = \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->first();
+        if ($existingEvent) {
+            if ($existingEvent->status === 'completed') {
+                return response()->json(['status' => true, 'message' => 'Event already processed.'], 200);
+            }
+            if ($existingEvent->status === 'processing') {
+                // If in-flight by a live worker (< 60 seconds ago), signal retry backoff
+                if ($existingEvent->updated_at && $existingEvent->updated_at->diffInSeconds(Carbon::now()) < 60) {
+                    return response()->json(['status' => false, 'message' => 'Event is currently being processed.'], 429);
+                }
+                // If > 60 seconds, previous worker timed out or crashed; resume and take ownership
+                $existingEvent->increment('attempts');
+                $existingEvent->status = 'processing';
+                $existingEvent->save();
+            } elseif ($existingEvent->status === 'failed') {
+                // Previous attempt failed, retry attempt
+                $existingEvent->increment('attempts');
+                $existingEvent->status = 'processing';
+                $existingEvent->save();
+            }
+            $processedEvent = $existingEvent;
+        } else {
+            try {
+                $processedEvent = \App\Models\ProcessedWebhookEvent::create([
+                    'event_id' => $eventId,
+                    'event_type' => $event['event'] ?? 'unknown',
+                    'payload_hash' => $eventHash,
+                    'status' => 'processing',
+                    'attempts' => 1,
+                ]);
+            } catch (\Illuminate\Database\QueryException $e) {
+                // Concurrency race: another worker created it simultaneously
+                $existing = \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->first();
+                if ($existing && $existing->status === 'completed') {
+                    return response()->json(['status' => true, 'message' => 'Event already processed.'], 200);
+                }
+                return response()->json(['status' => false, 'message' => 'Concurrent delivery, please retry.'], 429);
+            }
         }
 
         // Handle Paystack Transfer Webhooks (Automated Fleet & Vendor Payout Reconciliation)
@@ -192,10 +220,21 @@ class PaystackPaymentController extends Controller
 
             if ($vendorPayout) {
                 $vendorPayout->disbursed_at = $vendorPayout->disbursed_at ?? Carbon::now();
+                $vendorPayout->gateway_status = 'success';
                 $vendorPayout->admin_notes = ($vendorPayout->admin_notes ? $vendorPayout->admin_notes . ' | ' : '') . "Paystack Gateway Delivery Confirmed ({$tCode})";
                 $vendorPayout->save();
                 \App\Services\NotificationDispatchService::dispatchPayoutDisbursed($vendorPayout);
             }
+
+            if ($logisticsPayout) {
+                $logisticsPayout->gateway_status = 'success';
+                $logisticsPayout->save();
+            }
+
+            $processedEvent->update([
+                'status' => 'completed',
+                'processed_at' => Carbon::now(),
+            ]);
 
             return response()->json(['status' => true, 'message' => 'Transfer success confirmed and reconciled.'], 200);
         }
@@ -313,10 +352,14 @@ class PaystackPaymentController extends Controller
                     $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . "Reversed by Paystack Webhook ({$event['event']}): {$reason}";
                     $lockedPayout->save();
 
-                    // Restore ONLY the exact orders that were allocated to this failed payout request (Finding 1)
+                    // Restore ONLY the exact orders that were allocated to this failed payout request (Finding 1 & P1)
                     $allocations = \App\Models\VendorPayoutAllocation::where('vendor_payout_request_id', $lockedPayout->id)->get();
                     if ($allocations->isNotEmpty()) {
                         foreach ($allocations as $alloc) {
+                            $alloc->update([
+                                'status' => 'reversed',
+                                'reversed_at' => Carbon::now(),
+                            ]);
                             $order = \App\Models\Order::where('id', $alloc->order_id)->lockForUpdate()->first();
                             if ($order && $order->vendor_settlement_status === 'settled') {
                                 $order->vendor_settlement_status = 'eligible';
@@ -362,7 +405,20 @@ class PaystackPaymentController extends Controller
                     ]);
                 });
             }
-            if ($vendorPayout) { \App\Services\NotificationDispatchService::dispatchPayoutRejected($vendorPayout, "Paystack transfer {$event['event']}: {$reason}"); }
+            if ($vendorPayout) {
+                $vendorPayout->gateway_status = 'failed';
+                $vendorPayout->save();
+                \App\Services\NotificationDispatchService::dispatchPayoutRejected($vendorPayout, "Paystack transfer {$event['event']}: {$reason}");
+            }
+            if ($logisticsPayout) {
+                $logisticsPayout->gateway_status = 'failed';
+                $logisticsPayout->save();
+            }
+
+            $processedEvent->update([
+                'status' => 'completed',
+                'processed_at' => Carbon::now(),
+            ]);
 
             return response()->json(['status' => true, 'message' => "Transfer {$event['event']} processed and refunded."], 200);
         }
@@ -388,7 +444,10 @@ class PaystackPaymentController extends Controller
         $order = Order::where('payment_reference', $reference)->first();
 
         if (!$order) {
-            \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->delete();
+            $processedEvent->update([
+                'status' => 'failed',
+                'error_reason' => "Order not found for reference '{$reference}'.",
+            ]);
             Log::warning("Paystack Webhook: Order not found for reference '{$reference}'.");
             return response()->json([
                 'status' => false,
@@ -405,14 +464,21 @@ class PaystackPaymentController extends Controller
         );
 
         if (!$settlement['success']) {
-            // Delete pre-recorded event so Paystack retry mechanism can re-deliver and settle successfully
-            \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->delete();
+            $processedEvent->update([
+                'status' => 'failed',
+                'error_reason' => $settlement['message'] ?? 'Settlement failed',
+            ]);
             Log::error("Paystack Webhook settlement failed for order #{$order->id}: " . ($settlement['message'] ?? ''));
             return response()->json([
                 'status' => false,
                 'message' => $settlement['message'],
             ], 422);
         }
+
+        $processedEvent->update([
+            'status' => 'completed',
+            'processed_at' => Carbon::now(),
+        ]);
 
         return response()->json([
             'status' => true,

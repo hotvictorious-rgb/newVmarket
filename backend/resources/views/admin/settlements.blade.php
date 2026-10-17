@@ -218,13 +218,23 @@
                                 <td>
                                     @if($payout->status === 'pending')
                                         <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                                            <form method="POST" action="{{ route('admin.disburse.vendor_payout') }}" style="margin: 0;" onsubmit="return confirm('Authorize automated Paystack transfer of &#8358;{{ number_format((float)$payout->amount, 2) }} to {{ $payout->vendor->business_name ?? 'Merchant' }} ({{ $payout->bank_name }} - {{ $payout->account_number }})?');">
-                                                @csrf
-                                                <input type="hidden" name="payout_id" value="{{ $payout->id }}">
-                                                <button type="submit" class="btn-dash btn-dash-success" style="padding: 6px 12px; font-size: 11.5px; font-weight: 700;">
-                                                    ✓ Approve (Paystack)
-                                                </button>
-                                            </form>
+                                            @if($payout->processing_token === 'HOLD_TIMEOUT_RECONCILIATION')
+                                                <form method="POST" action="{{ route('admin.reconcile.vendor_payout') }}" style="margin: 0;" onsubmit="return confirm('Query Paystack Gateway to verify if transfer for Payout #{{ $payout->id }} completed?');">
+                                                    @csrf
+                                                    <input type="hidden" name="payout_id" value="{{ $payout->id }}">
+                                                    <button type="submit" class="btn-dash" style="padding: 6px 12px; font-size: 11.5px; font-weight: 700; background: #eab308; color: #000; border: none; border-radius: 4px; cursor: pointer;">
+                                                        ⚡ Reconcile Hold
+                                                    </button>
+                                                </form>
+                                            @else
+                                                <form method="POST" action="{{ route('admin.disburse.vendor_payout') }}" style="margin: 0;" onsubmit="return confirm('Authorize automated Paystack transfer of &#8358;{{ number_format((float)$payout->amount, 2) }} to {{ $payout->vendor->business_name ?? 'Merchant' }} ({{ $payout->bank_name }} - {{ $payout->account_number }})?');">
+                                                    @csrf
+                                                    <input type="hidden" name="payout_id" value="{{ $payout->id }}">
+                                                    <button type="submit" class="btn-dash btn-dash-success" style="padding: 6px 12px; font-size: 11.5px; font-weight: 700;">
+                                                        ✓ Approve (Paystack)
+                                                    </button>
+                                                </form>
+                                            @endif
 
                                             <button type="button" onclick="openRejectVendorModal({{ $payout->id }}, '{{ number_format((float)$payout->amount, 2) }}', '{{ addslashes($payout->vendor->business_name ?? 'Merchant') }}')" class="btn-dash btn-dash-danger" style="padding: 6px 10px; font-size: 11.5px; font-weight: 700;">
                                                 ✕ Reject
@@ -323,13 +333,23 @@
                                 <td>
                                     @if($payout->status === 'pending')
                                         <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                                            <form method="POST" action="{{ route('admin.disburse.logistics_payout') }}" style="margin: 0;" onsubmit="return confirm('Authorize automated Paystack transfer of &#8358;{{ number_format((float)$payout->amount, 2) }} to {{ $payout->company->company_name ?? 'Logistics Fleet' }} ({{ $payout->bank_name }} - {{ $payout->account_number }})?');">
-                                                @csrf
-                                                <input type="hidden" name="payout_id" value="{{ $payout->id }}">
-                                                <button type="submit" class="btn-dash btn-dash-success" style="padding: 6px 12px; font-size: 11.5px; font-weight: 700;">
-                                                    ✓ Approve (Paystack)
-                                                </button>
-                                            </form>
+                                            @if($payout->processing_token === 'HOLD_TIMEOUT_RECONCILIATION')
+                                                <form method="POST" action="{{ route('admin.reconcile.logistics_payout') }}" style="margin: 0;" onsubmit="return confirm('Query Paystack Gateway to verify if transfer for Logistics Payout #{{ $payout->id }} completed?');">
+                                                    @csrf
+                                                    <input type="hidden" name="payout_id" value="{{ $payout->id }}">
+                                                    <button type="submit" class="btn-dash" style="padding: 6px 12px; font-size: 11.5px; font-weight: 700; background: #eab308; color: #000; border: none; border-radius: 4px; cursor: pointer;">
+                                                        ⚡ Reconcile Hold
+                                                    </button>
+                                                </form>
+                                            @else
+                                                <form method="POST" action="{{ route('admin.disburse.logistics_payout') }}" style="margin: 0;" onsubmit="return confirm('Authorize automated Paystack transfer of &#8358;{{ number_format((float)$payout->amount, 2) }} to {{ $payout->company->company_name ?? 'Logistics Fleet' }} ({{ $payout->bank_name }} - {{ $payout->account_number }})?');">
+                                                    @csrf
+                                                    <input type="hidden" name="payout_id" value="{{ $payout->id }}">
+                                                    <button type="submit" class="btn-dash btn-dash-success" style="padding: 6px 12px; font-size: 11.5px; font-weight: 700;">
+                                                        ✓ Approve (Paystack)
+                                                    </button>
+                                                </form>
+                                            @endif
 
                                             <button type="button" onclick="openRejectLogisticsModal({{ $payout->id }}, '{{ number_format((float)$payout->amount, 2) }}', '{{ addslashes($payout->company->company_name ?? 'Logistics Fleet') }}')" class="btn-dash btn-dash-danger" style="padding: 6px 10px; font-size: 11.5px; font-weight: 700;">
                                                 ✕ Reject

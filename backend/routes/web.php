@@ -97,6 +97,8 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/reject-logistics-payout', [PortalController::class, 'adminRejectLogisticsPayout'])->name('admin.reject.logistics_payout');
     Route::post('/disburse-vendor-payout', [PortalController::class, 'adminDisburseVendorPayout'])->name('admin.disburse.vendor_payout');
     Route::post('/reject-vendor-payout', [PortalController::class, 'adminRejectVendorPayout'])->name('admin.reject.vendor_payout');
+    Route::post('/reconcile-vendor-payout', [PortalController::class, 'adminReconcileVendorPayout'])->name('admin.reconcile.vendor_payout');
+    Route::post('/reconcile-logistics-payout', [PortalController::class, 'adminReconcileLogisticsPayout'])->name('admin.reconcile.logistics_payout');
     Route::post('/settings/announcement', [PortalController::class, 'adminUpdateAnnouncementSettings'])->name('admin.settings.announcement');
     Route::post('/settings/financial', [PortalController::class, 'adminUpdateFinancialSettings'])->name('admin.settings.financial');
 

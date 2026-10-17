@@ -265,6 +265,7 @@ class Order extends Model
     {
         $net = (string)($this->vendor_net_90 ?? '0.00');
         $allocated = (string)$this->payoutAllocations()
+            ->where('status', '!=', 'reversed')
             ->whereHas('payoutRequest', function ($q) {
                 $q->where('status', '!=', 'rejected');
             })

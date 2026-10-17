@@ -17,6 +17,7 @@ class LogisticsPayoutRequest extends Model
         'disbursed_at',
         'settlement_proof_path',
         'transfer_reference',
+        'gateway_status',
         'paystack_transfer_code',
         'processing_token',
         'processing_started_at',

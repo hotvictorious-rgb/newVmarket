@@ -427,16 +427,17 @@
                     <span style="color: var(--vm-primary); font-size: 18px; font-weight: 700; flex-shrink: 0;">&rsaquo;</span>
                 </a>
             @empty
-                <div class="vm-merchant-box" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 14px;">
-                    <div style="width: 56px; height: 56px; border-radius: 10px; background: #F8FAFC; border: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;">
-                        <img src="{{ asset('assets/img/vm_icon.jpg') }}" alt="Emeka Electronics" style="width: 100%; height: 100%; object-fit: cover;">
+                <div class="vm-merchant-box" style="grid-column: 1 / -1; background: #FFFFFF; border: 1.5px dashed var(--vm-border); border-radius: 12px; padding: 24px; text-align: center;">
+                    <div style="width: 44px; height: 44px; border-radius: 50%; background: #EFF6FF; color: #2563EB; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 20px;">
+                        🏬
                     </div>
-                    <div class="vm-merchant-details">
-                        <strong class="vm-merchant-name" style="display: block; font-size: 14px; font-weight: 700; color: #0F172A;">Emeka Electronics Plaza</strong>
-                        <span class="vm-merchant-location" style="display: block; font-size: 12px; color: #64748B; margin-top: 2px;">
-                            📍 Uyo, Akwa Ibom • In-Shop Ready
-                        </span>
-                    </div>
+                    <strong style="display: block; font-size: 14.5px; font-weight: 700; color: #0F172A; margin-bottom: 4px;">No Physical Plazas in <span class="vm-dynamic-city-label">{{ $activeCity ?? 'this LGA' }}</span> Yet</strong>
+                    <span style="display: block; font-size: 12.5px; color: #64748B; max-width: 460px; margin: 0 auto 12px; line-height: 1.4;">
+                        Local merchant accreditation is ongoing. Orders delivering to <span class="vm-dynamic-city-label">{{ $activeCity ?? 'this LGA' }}</span> are fulfilled via verified transit corridors from regional partner plazas.
+                    </span>
+                    <button type="button" onclick="if(window.vmOpenLocationModal) window.vmOpenLocationModal();" style="background: #F8FAFC; border: 1px solid #CBD5E1; color: #334155; font-size: 11.5px; font-weight: 700; padding: 6px 14px; border-radius: 6px; cursor: pointer;">
+                        Change LGA
+                    </button>
                 </div>
             @endforelse
         </div>
@@ -453,23 +454,37 @@
     <!-- 5. Latest Products in Market (Filtered Dynamically by Active Location) -->
     <div class="vm-section-block" id="catalog">
         
-        <!-- Active Filter Indicator Banner (Gap 3 Fix) -->
-        @if(request('category') || request('search'))
+        <!-- Active Filter Indicator Banner -->
+        @if(request('category') || request('search') || request('condition') || (request('scope') && request('scope') === 'all'))
             <div style="background: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 12px; padding: 12px 18px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px;">
                     <strong style="color: #0F172A; font-weight: 700;">Filtered Results:</strong>
+                    @if(request('scope') === 'all')
+                        <span style="background: #EFF6FF; border: 1px solid #BFDBFE; color: #1D4ED8; padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                            <span>🚚</span>
+                            <span>Scope: All Delivering (Local + Transit)</span>
+                            <a href="{{ route('storefront', array_filter(['category' => request('category'), 'search' => request('search'), 'condition' => request('condition')])) }}#catalog" style="color: #1D4ED8; text-decoration: none; font-weight: 900; margin-left: 2px; font-size: 14px;" title="Reset to local shops only">&times;</a>
+                        </span>
+                    @endif
+                    @if(request('condition'))
+                        <span style="background: {{ request('condition') === 'uk_used' ? '#FEF3C7' : '#ECFDF5' }}; border: 1px solid {{ request('condition') === 'uk_used' ? '#FDE68A' : '#A7F3D0' }}; color: {{ request('condition') === 'uk_used' ? '#92400E' : '#065F46' }}; padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                            <span>{{ request('condition') === 'uk_used' ? '🇬🇧' : '✨' }}</span>
+                            <span>Condition: {{ request('condition') === 'uk_used' ? 'UK Used' : 'Brand New' }}</span>
+                            <a href="{{ route('storefront', array_filter(['scope' => request('scope'), 'category' => request('category'), 'search' => request('search')])) }}#catalog" style="color: inherit; text-decoration: none; font-weight: 900; margin-left: 2px; font-size: 14px;" title="Remove condition filter">&times;</a>
+                        </span>
+                    @endif
                     @if(request('category'))
                         <span style="background: #EDE9FE; border: 1px solid #DDD6FE; color: #5E17EB; padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
                             <span>🏷️</span>
                             <span>Category: {{ ucwords(str_replace('-', ' ', request('category'))) }}</span>
-                            <a href="{{ route('storefront', array_filter(['search' => request('search')])) }}#catalog" style="color: #5E17EB; text-decoration: none; font-weight: 900; margin-left: 2px; font-size: 14px;" title="Remove category filter">&times;</a>
+                            <a href="{{ route('storefront', array_filter(['scope' => request('scope'), 'search' => request('search'), 'condition' => request('condition')])) }}#catalog" style="color: #5E17EB; text-decoration: none; font-weight: 900; margin-left: 2px; font-size: 14px;" title="Remove category filter">&times;</a>
                         </span>
                     @endif
                     @if(request('search'))
                         <span style="background: #FEF3C7; border: 1px solid #FDE68A; color: #92400E; padding: 3px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
                             <span>🔍</span>
                             <span>Keyword: "{{ request('search') }}"</span>
-                            <a href="{{ route('storefront', array_filter(['category' => request('category')])) }}#catalog" style="color: #92400E; text-decoration: none; font-weight: 900; margin-left: 2px; font-size: 14px;" title="Remove search filter">&times;</a>
+                            <a href="{{ route('storefront', array_filter(['scope' => request('scope'), 'category' => request('category'), 'condition' => request('condition')])) }}#catalog" style="color: #92400E; text-decoration: none; font-weight: 900; margin-left: 2px; font-size: 14px;" title="Remove search filter">&times;</a>
                         </span>
                     @endif
                 </div>
@@ -478,6 +493,59 @@
                 </a>
             </div>
         @endif
+
+        <!-- Dynamic Filter & Scope Pills -->
+        <div class="vm-catalog-filter-bar" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid #E2E8F0;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <!-- Scope: Local Shops vs All Delivering -->
+                <a href="{{ route('storefront', array_filter(['scope' => 'local', 'category' => request('category'), 'search' => request('search'), 'condition' => request('condition')])) }}#catalog" 
+                   class="vm-filter-pill {{ ($scope ?? 'local') === 'local' ? 'active' : '' }}"
+                   style="font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;
+                   {{ ($scope ?? 'local') === 'local' ? 'background: #5E17EB; color: #FFFFFF;' : 'background: #F1F5F9; color: #475569; border: 1px solid #E2E8F0;' }}">
+                    <span>🏬 In <span class="vm-dynamic-city-label">{{ $activeCity ?? 'Uyo' }}</span> Shops</span>
+                    @if(isset($localProductsCount))
+                        <span style="font-size: 10px; opacity: 0.9; background: {{ ($scope ?? 'local') === 'local' ? 'rgba(255,255,255,0.25)' : '#E2E8F0' }}; padding: 1px 6px; border-radius: 999px;">{{ $localProductsCount }}</span>
+                    @endif
+                </a>
+
+                <a href="{{ route('storefront', array_filter(['scope' => 'all', 'category' => request('category'), 'search' => request('search'), 'condition' => request('condition')])) }}#catalog" 
+                   class="vm-filter-pill {{ ($scope ?? '') === 'all' ? 'active' : '' }}"
+                   style="font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;
+                   {{ ($scope ?? '') === 'all' ? 'background: #5E17EB; color: #FFFFFF;' : 'background: #F1F5F9; color: #475569; border: 1px solid #E2E8F0;' }}">
+                    <span>🚚 All Delivering to <span class="vm-dynamic-city-label">{{ $activeCity ?? 'Uyo' }}</span></span>
+                    @if(isset($localProductsCount) && isset($corridorProductsCount))
+                        <span style="font-size: 10px; opacity: 0.9; background: {{ ($scope ?? '') === 'all' ? 'rgba(255,255,255,0.25)' : '#E2E8F0' }}; padding: 1px 6px; border-radius: 999px;">{{ $localProductsCount + $corridorProductsCount }}</span>
+                    @endif
+                </a>
+
+                <span style="color: #CBD5E1; font-weight: 300;">|</span>
+
+                <!-- Condition Filter Pills -->
+                <a href="{{ route('storefront', array_filter(['scope' => request('scope'), 'category' => request('category'), 'search' => request('search'), 'condition' => request('condition') === 'brand_new' ? null : 'brand_new'])) }}#catalog" 
+                   class="vm-filter-pill"
+                   style="font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease;
+                   {{ request('condition') === 'brand_new' ? 'background: #059669; color: #FFFFFF;' : 'background: #F8FAFC; color: #334155; border: 1px solid #E2E8F0;' }}">
+                    <span>✨ Brand New</span>
+                    @if(request('condition') === 'brand_new')
+                        <span style="font-size: 11px; margin-left: 2px;">✕</span>
+                    @endif
+                </a>
+
+                <a href="{{ route('storefront', array_filter(['scope' => request('scope'), 'category' => request('category'), 'search' => request('search'), 'condition' => request('condition') === 'uk_used' ? null : 'uk_used'])) }}#catalog" 
+                   class="vm-filter-pill"
+                   style="font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease;
+                   {{ request('condition') === 'uk_used' ? 'background: #D97706; color: #FFFFFF;' : 'background: #F8FAFC; color: #334155; border: 1px solid #E2E8F0;' }}">
+                    <span>🇬🇧 UK Used</span>
+                    @if(request('condition') === 'uk_used')
+                        <span style="font-size: 11px; margin-left: 2px;">✕</span>
+                    @endif
+                </a>
+            </div>
+
+            <div style="font-size: 12px; color: #64748B;">
+                <span>Verified Stock</span> • <span style="color: #059669; font-weight: 700;">+5% Cashback</span>
+            </div>
+        </div>
 
         <div class="vm-section-header" style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px;">
             <div style="border-left: 4px solid var(--vm-info); padding-left: 12px;">

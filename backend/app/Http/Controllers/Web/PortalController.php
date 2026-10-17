@@ -73,17 +73,56 @@ class PortalController extends Controller
         // Check local merchant availability in this LGA
         $hasLocalShops = Shop::where('lga_id', $selectedLgaId)->where('pickup_enabled', true)->exists();
 
+        // Count local products vs corridor transit products
+        $localProductsCount = Product::marketplaceEligible()
+            ->whereHas('shop', function ($q) use ($selectedLgaId) {
+                $q->where('lga_id', $selectedLgaId);
+            })->count();
+
+        $corridorProductsCount = Product::marketplaceEligible()
+            ->whereHas('shop', function ($q) use ($eligibleOriginLgaIds, $selectedLgaId) {
+                $q->whereIn('lga_id', $eligibleOriginLgaIds)->where('lga_id', '!=', $selectedLgaId);
+            })->count();
+
+        // Scope: 'local' (vendor shop in this LGA), 'corridor' (transit lanes), or 'all' (delivering to this LGA)
+        // If customer selects LGA, default to 'local' if local items exist, otherwise allow 'all' with clear corridor labeling
+        $defaultScope = ($localProductsCount > 0) ? 'local' : 'all';
+        $scope = $request->input('scope', $defaultScope);
+
         // Query eligible products
         $query = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
-            ->whereHas('shop', function ($q) use ($eligibleOriginLgaIds) {
-                $q->whereIn('lga_id', $eligibleOriginLgaIds);
+            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug']);
+
+        if ($scope === 'local') {
+            $query->whereHas('shop', function ($q) use ($selectedLgaId) {
+                $q->where('lga_id', $selectedLgaId);
             });
+        } elseif ($scope === 'corridor') {
+            $query->whereHas('shop', function ($q) use ($eligibleOriginLgaIds, $selectedLgaId) {
+                $q->whereIn('lga_id', $eligibleOriginLgaIds)->where('lga_id', '!=', $selectedLgaId);
+            });
+        } else {
+            // All delivering: local shops prioritized first, then active corridors
+            $query->whereHas('shop', function ($q) use ($eligibleOriginLgaIds) {
+                $q->whereIn('lga_id', $eligibleOriginLgaIds);
+            })->orderByRaw("CASE WHEN shop_id IN (SELECT id FROM shops WHERE lga_id = ?) THEN 0 ELSE 1 END", [$selectedLgaId]);
+        }
 
         if ($request->filled('category')) {
             $query->whereHas('category', function ($q) use ($request) {
                 $q->where('slug', $request->input('category'));
             });
+        }
+
+        if ($request->filled('condition')) {
+            $condition = $request->input('condition');
+            if (in_array($condition, ['brand_new', 'uk_used'], true)) {
+                $query->where('condition', $condition);
+            }
+        }
+
+        if ($request->filled('package_tier')) {
+            $query->where('package_tier', $request->input('package_tier'));
         }
 
         if ($request->filled('search')) {
@@ -93,15 +132,30 @@ class PortalController extends Controller
 
         $products = $query->latest()->take(12)->get();
         $isFallbackCatalog = false;
+        $isCorridorCatalog = false;
 
-        // If an LGA has no direct items yet, fall back to flagship items so catalog isn't empty
+        // If local catalog is empty without search/category filters, provide clear corridor transit items
         if ($products->isEmpty() && !$request->filled('search') && !$request->filled('category')) {
-            $products = Product::marketplaceEligible()
-                ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
-                ->latest()
-                ->take(12)
-                ->get();
-            $isFallbackCatalog = true;
+            if ($scope === 'local' && $corridorProductsCount > 0) {
+                // Fetch corridor products with clear transit indication
+                $products = Product::marketplaceEligible()
+                    ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
+                    ->whereHas('shop', function ($q) use ($eligibleOriginLgaIds, $selectedLgaId) {
+                        $q->whereIn('lga_id', $eligibleOriginLgaIds)->where('lga_id', '!=', $selectedLgaId);
+                    })
+                    ->latest()
+                    ->take(12)
+                    ->get();
+                $isCorridorCatalog = true;
+            } elseif ($corridorProductsCount === 0) {
+                // Truly empty LGA: load flagship items as explicit regional dispatch
+                $products = Product::marketplaceEligible()
+                    ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
+                    ->latest()
+                    ->take(12)
+                    ->get();
+                $isFallbackCatalog = true;
+            }
         }
 
         $latestProducts = Product::marketplaceEligible()
@@ -110,15 +164,12 @@ class PortalController extends Controller
             ->take(6)
             ->get();
 
+        // Stores Closer to You: Strictly physical shops located in this LGA
         $shops = Shop::with('lga:id,name')
             ->where('pickup_enabled', true)
-            ->whereIn('lga_id', $eligibleOriginLgaIds)
+            ->where('lga_id', $selectedLgaId)
             ->take(6)
             ->get();
-
-        if ($shops->isEmpty()) {
-            $shops = Shop::with('lga:id,name')->where('pickup_enabled', true)->take(6)->get();
-        }
 
         $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
 
@@ -141,8 +192,13 @@ class PortalController extends Controller
 
         // Return dynamic JSON for AJAX requests
         if ($request->ajax() || $request->wantsJson() || $request->has('ajax')) {
-            $productsHtml = view('storefront.partials._products_grid', compact('products', 'activeCity', 'selectedLgaId', 'activeLanes', 'isFallbackCatalog'))->render();
-            $shopsHtml = view('storefront.partials._shops_grid', compact('shops', 'activeCity'))->render();
+            $productsHtml = view('storefront.partials._products_grid', compact(
+                'products', 'activeCity', 'selectedLgaId', 'activeLanes', 
+                'isFallbackCatalog', 'isCorridorCatalog', 'scope', 
+                'localProductsCount', 'corridorProductsCount'
+            ))->render();
+            
+            $shopsHtml = view('storefront.partials._shops_grid', compact('shops', 'activeCity', 'selectedLgaId'))->render();
 
             return response()->json([
                 'success' => true,
@@ -153,9 +209,13 @@ class PortalController extends Controller
                 'status_badge' => $statusBadge,
                 'preview_status' => $previewStatus,
                 'products_count' => $products->count(),
+                'local_products_count' => $localProductsCount,
+                'corridor_products_count' => $corridorProductsCount,
+                'scope' => $scope,
                 'products_html' => $productsHtml,
                 'shops_html' => $shopsHtml,
                 'is_fallback' => $isFallbackCatalog,
+                'is_corridor' => $isCorridorCatalog,
             ]);
         }
 
@@ -167,6 +227,7 @@ class PortalController extends Controller
             'categories', 'products', 'latestProducts', 'shops', 'lgas',
             'activeCity', 'activeState', 'selectedLgaId', 'activeLanes',
             'coverageStatus', 'statusBadge', 'previewStatus', 'isFallbackCatalog',
+            'isCorridorCatalog', 'scope', 'localProductsCount', 'corridorProductsCount',
             'heroBanners', 'promoBanners'
         ));
     }
@@ -1740,6 +1801,10 @@ class PortalController extends Controller
                 return ['valid' => false, 'message' => "Payout request #{$payout->id} has already been {$payout->status}."];
             }
 
+            if ($payout->processing_token === 'HOLD_TIMEOUT_RECONCILIATION' || str_contains((string)$payout->admin_notes, 'GATEWAY_TIMEOUT')) {
+                return ['valid' => false, 'message' => "Payout request #{$payout->id} is locked in GATEWAY_TIMEOUT hold state. An automated transfer was already dispatched to Paystack and may have completed. You must perform Gateway Reconciliation before any retry."];
+            }
+
             $company = $payout->company;
             if (!$company || $company->trashed() || $company->status !== 'active') {
                 return ['valid' => false, 'message' => 'Disbursement blocked: Logistics company account is inactive, suspended, or archived.'];
@@ -1836,15 +1901,16 @@ class PortalController extends Controller
             $isNetworkError = ($transferRes['code'] ?? '') === 'NETWORK_EXCEPTION';
             DB::transaction(function () use ($payoutId, $transferRes, $isNetworkError) {
                 LogisticsPayoutRequest::where('id', $payoutId)->update([
-                    'processing_token' => null,
-                    'processing_started_at' => null,
+                    'processing_token' => $isNetworkError ? 'HOLD_TIMEOUT_RECONCILIATION' : null,
+                    'processing_started_at' => $isNetworkError ? Carbon::now() : null,
+                    'gateway_status' => $isNetworkError ? 'processing' : 'failed',
                     'admin_notes' => $isNetworkError
-                        ? 'GATEWAY_TIMEOUT: Transfer outcome uncertain. Gateway verification required before retry: ' . ($transferRes['message'] ?? '')
+                        ? 'GATEWAY_TIMEOUT: Transfer outcome uncertain. Locked in HOLD_TIMEOUT_RECONCILIATION awaiting gateway verification: ' . ($transferRes['message'] ?? '')
                         : 'Transfer initiation failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request'),
                 ]);
             });
             $msg = $isNetworkError
-                ? 'Gateway connection timeout. Payout flagged for gateway verification to prevent duplicate disbursement.'
+                ? 'Gateway connection timeout. Payout locked in HOLD_TIMEOUT_RECONCILIATION state. Use Reconcile with Paystack before retry.'
                 : ('Paystack Automated Transfer Failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request.') . ' Payout reverted to pending review.');
             return back()->with('error', $msg);
         }
@@ -2128,15 +2194,16 @@ class PortalController extends Controller
             $isNetworkError = ($transferRes['code'] ?? '') === 'NETWORK_EXCEPTION';
             DB::transaction(function () use ($payoutId, $transferRes, $isNetworkError) {
                 \App\Models\VendorPayoutRequest::where('id', $payoutId)->update([
-                    'processing_token' => null,
-                    'processing_started_at' => null,
+                    'processing_token' => $isNetworkError ? 'HOLD_TIMEOUT_RECONCILIATION' : null,
+                    'processing_started_at' => $isNetworkError ? Carbon::now() : null,
+                    'gateway_status' => $isNetworkError ? 'processing' : 'failed',
                     'admin_notes' => $isNetworkError
-                        ? 'GATEWAY_TIMEOUT: Transfer outcome uncertain. Gateway verification required before retry: ' . ($transferRes['message'] ?? '')
+                        ? 'GATEWAY_TIMEOUT: Transfer outcome uncertain. Locked in HOLD_TIMEOUT_RECONCILIATION awaiting gateway verification: ' . ($transferRes['message'] ?? '')
                         : 'Transfer initiation failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request'),
                 ]);
             });
             $msg = $isNetworkError
-                ? 'Gateway connection timeout. Payout flagged for gateway verification to prevent duplicate disbursement.'
+                ? 'Gateway connection timeout. Payout locked in HOLD_TIMEOUT_RECONCILIATION state. Use Reconcile with Paystack before retry.'
                 : ('Paystack Transfer Initiation Error: ' . ($transferRes['message'] ?? 'Automated transfer could not be initiated with bank gateway. Payout reverted to pending.'));
             return back()->with('error', $msg);
         }
@@ -5076,5 +5143,224 @@ class PortalController extends Controller
         $count = \App\Models\UserDeviceToken::where('last_seen_at', '<', $cutoff)->orWhere('is_active', false)->delete();
 
         return back()->with('status', "Pruned {$count} inactive or decommissioned device tokens from the registry.");
+    }
+
+    /**
+     * Authoritative Gateway Reconciliation Action for Locked Vendor Payouts (Audit P0 & P1)
+     */
+    public function adminReconcileVendorPayout(Request $request, \App\Services\PaystackService $paystackService)
+    {
+        $admin = auth()->user();
+        $payoutId = $request->input('payout_id');
+        $payout = \App\Models\VendorPayoutRequest::with('vendor')->findOrFail($payoutId);
+
+        $ref = $payout->transfer_reference ?? ('VND-DISBURSE-' . $payout->id);
+        $verify = $paystackService->verifyTransfer($ref);
+
+        if (!$verify['success']) {
+            if (($verify['status'] ?? '') === 'network_exception') {
+                return back()->with('error', 'Paystack Gateway remains unreachable. Timeout hold maintained to prevent duplicate disbursement.');
+            }
+            // Transfer was never initiated at gateway: safely unlock to pending
+            $payout->processing_token = null;
+            $payout->processing_started_at = null;
+            $payout->gateway_status = 'failed';
+            $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'Reconciled: Gateway confirms transfer was not executed. Payout safely unlocked for retry.';
+            $payout->save();
+            return back()->with('status', "Gateway reconciliation complete: Payout #{$payout->id} was not executed at Paystack. Safely unlocked for review.");
+        }
+
+        $status = $verify['status'] ?? 'unknown';
+        if ($status === 'success') {
+            // Transfer succeeded at bank! Finalize settlement under lock
+            return DB::transaction(function () use ($payout, $admin, $verify, $ref) {
+                $payout = \App\Models\VendorPayoutRequest::with('vendor')->where('id', $payout->id)->lockForUpdate()->firstOrFail();
+                if ($payout->status === 'approved') {
+                    return back()->with('status', "Payout #{$payout->id} is already approved and settled.");
+                }
+
+                $transferCode = $verify['transfer_code'] ?? $payout->paystack_transfer_code;
+                $proofPath = $transferCode ? ('paystack_transfer:' . $transferCode) : ('paystack_transfer_ref:' . $ref);
+
+                $payout->status = 'approved';
+                $payout->processing_token = null;
+                $payout->processing_started_at = null;
+                $payout->approved_by_admin_id = $admin->id;
+                $payout->disbursed_at = Carbon::now();
+                $payout->gateway_status = 'success';
+                $payout->settlement_proof_path = $proofPath;
+                $payout->paystack_transfer_code = $transferCode;
+                $payout->transfer_reference = $ref;
+                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'Reconciled: Bank delivery verified at gateway (' . ($transferCode ?? $ref) . ')';
+                $payout->save();
+
+                // Allocate orders
+                $remainingToSettle = (string)$payout->amount;
+                $eligibleOrders = Order::where('vendor_id', $payout->vendor_id)
+                    ->where('vendor_settlement_status', 'eligible')
+                    ->where('payment_status', 'paid')
+                    ->where('order_status', 'delivered')
+                    ->with(['payoutAllocations.payoutRequest'])
+                    ->orderBy('id', 'asc')
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($eligibleOrders as $order) {
+                    if (bccomp($remainingToSettle, '0.00', 2) <= 0) break;
+                    $orderAvailable = $order->remaining_payable_to_vendor;
+                    if (bccomp($orderAvailable, '0.00', 2) <= 0) continue;
+
+                    $allocated = (bccomp($remainingToSettle, $orderAvailable, 2) >= 0) ? $orderAvailable : $remainingToSettle;
+                    \App\Models\VendorPayoutAllocation::create([
+                        'vendor_payout_request_id' => $payout->id,
+                        'order_id' => $order->id,
+                        'allocated_amount' => $allocated,
+                        'status' => 'allocated',
+                    ]);
+
+                    $newRemaining = bcsub($orderAvailable, $allocated, 2);
+                    if (bccomp($newRemaining, '0.00', 2) === 0) {
+                        $order->vendor_settlement_status = 'settled';
+                        $order->settled_at = Carbon::now();
+                        $order->settled_by_admin_id = $admin->id;
+                        $order->settlement_proof_path = $proofPath;
+                        $order->save();
+                    }
+                    $remainingToSettle = bcsub($remainingToSettle, $allocated, 2);
+                }
+
+                // Financial journal
+                $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
+                \App\Models\FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $ref,
+                    'event_id' => 'EVT-VND-PAYOUT-' . $payout->id,
+                    'beneficiary_type' => \App\Models\VendorProfile::class,
+                    'beneficiary_id' => $payout->vendor_id,
+                    'account_name' => 'vendor_payable',
+                    'entry_type' => 'debit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Merchant payable liability discharged after timeout reconciliation",
+                ]);
+                \App\Models\FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $ref,
+                    'event_id' => 'EVT-VND-PAYOUT-' . $payout->id,
+                    'beneficiary_type' => \App\Models\VendorProfile::class,
+                    'beneficiary_id' => $payout->vendor_id,
+                    'account_name' => 'cash_in_escrow',
+                    'entry_type' => 'credit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Cash in escrow discharged after timeout reconciliation",
+                ]);
+
+                return back()->with('status', "Gateway reconciliation complete: Transfer verified as successful at Paystack. Payout #{$payout->id} marked approved and orders settled.");
+            });
+        }
+
+        if (in_array($status, ['failed', 'reversed'], true)) {
+            $payout->processing_token = null;
+            $payout->processing_started_at = null;
+            $payout->gateway_status = 'failed';
+            $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . "Reconciled: Paystack confirms transfer {$status}. Unlocked for retry.";
+            $payout->save();
+            return back()->with('status', "Gateway reconciliation complete: Transfer {$status} at gateway. Unlocked for retry.");
+        }
+
+        return back()->with('status', "Transfer is currently in status '{$status}' at Paystack. Hold maintained until final confirmation.");
+    }
+
+    /**
+     * Authoritative Gateway Reconciliation Action for Locked Logistics Payouts (Audit P0 & P1)
+     */
+    public function adminReconcileLogisticsPayout(Request $request, \App\Services\PaystackService $paystackService)
+    {
+        $admin = auth()->user();
+        $payoutId = $request->input('payout_id');
+        $payout = \App\Models\LogisticsPayoutRequest::with('company')->findOrFail($payoutId);
+
+        $ref = $payout->transfer_reference ?? ('FLEET-DISBURSE-' . $payout->id);
+        $verify = $paystackService->verifyTransfer($ref);
+
+        if (!$verify['success']) {
+            if (($verify['status'] ?? '') === 'network_exception') {
+                return back()->with('error', 'Paystack Gateway remains unreachable. Timeout hold maintained to prevent duplicate disbursement.');
+            }
+            $payout->processing_token = null;
+            $payout->processing_started_at = null;
+            $payout->gateway_status = 'failed';
+            $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'Reconciled: Gateway confirms transfer was not executed. Payout safely unlocked for retry.';
+            $payout->save();
+            return back()->with('status', "Gateway reconciliation complete: Payout #{$payout->id} was not executed at Paystack. Safely unlocked for review.");
+        }
+
+        $status = $verify['status'] ?? 'unknown';
+        if ($status === 'success') {
+            return DB::transaction(function () use ($payout, $admin, $verify, $ref) {
+                $payout = \App\Models\LogisticsPayoutRequest::with('company')->where('id', $payout->id)->lockForUpdate()->firstOrFail();
+                if ($payout->status === 'approved') {
+                    return back()->with('status', "Payout #{$payout->id} is already approved and settled.");
+                }
+
+                $transferCode = $verify['transfer_code'] ?? $payout->paystack_transfer_code;
+                $proofPath = $transferCode ? ('paystack_transfer:' . $transferCode) : ('paystack_transfer_ref:' . $ref);
+
+                $payout->status = 'approved';
+                $payout->processing_token = null;
+                $payout->processing_started_at = null;
+                $payout->approved_by_admin_id = $admin->id;
+                $payout->disbursed_at = Carbon::now();
+                $payout->gateway_status = 'success';
+                $payout->settlement_proof_path = $proofPath;
+                $payout->paystack_transfer_code = $transferCode;
+                $payout->transfer_reference = $ref;
+                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'Reconciled: Bank delivery verified at gateway (' . ($transferCode ?? $ref) . ')';
+                $payout->save();
+
+                $company = $payout->company;
+                $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
+
+                \App\Models\FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $ref,
+                    'event_id' => 'EVT-FLEET-PAYOUT-' . $payout->id,
+                    'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $company->id,
+                    'account_name' => 'logistics_payout_payable',
+                    'entry_type' => 'debit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Corporate withdrawal liability discharged after timeout reconciliation",
+                ]);
+
+                \App\Models\FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $ref,
+                    'event_id' => 'EVT-FLEET-PAYOUT-' . $payout->id,
+                    'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $company->id,
+                    'account_name' => 'cash_in_escrow',
+                    'entry_type' => 'credit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Corporate Paystack bank transfer disbursement after timeout reconciliation",
+                ]);
+
+                return back()->with('status', "Gateway reconciliation complete: Logistics payout #{$payout->id} verified and settled.");
+            });
+        }
+
+        if (in_array($status, ['failed', 'reversed'], true)) {
+            $payout->processing_token = null;
+            $payout->processing_started_at = null;
+            $payout->gateway_status = 'failed';
+            $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . "Reconciled: Paystack confirms transfer {$status}. Unlocked for retry.";
+            $payout->save();
+            return back()->with('status', "Gateway reconciliation complete: Transfer {$status} at gateway. Unlocked for retry.");
+        }
+
+        return back()->with('status', "Transfer is currently in status '{$status}' at Paystack. Hold maintained until final confirmation.");
     }
 }

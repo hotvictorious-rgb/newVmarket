@@ -180,4 +180,56 @@ class StorefrontWiringAndShopTest extends TestCase
         $response->assertSee('Customer Account Required');
         $response->assertSee('vmOpenAuthModal');
     }
+
+    public function test_storefront_filters_products_by_vendor_shop_lga()
+    {
+        // When user chooses Eket, it should prioritize products where vendor shop is in Eket
+        $response = $this->get('/?city=Eket');
+        $response->assertStatus(200);
+        $response->assertSee('Stores Closer to You in');
+        $response->assertSee('Eket');
+
+        // Check Ibom Fresh Eket Coldroom & Depot exists in Eket
+        $eketShop = Shop::whereHas('lga', fn($q) => $q->where('name', 'Eket'))->first();
+        if ($eketShop) {
+            $response->assertSee($eketShop->name);
+        }
+    }
+
+    public function test_storefront_supports_condition_filtering()
+    {
+        // Test condition filter parameters
+        $response = $this->get('/?condition=brand_new');
+        $response->assertStatus(200);
+        $response->assertSee('Brand New');
+
+        $responseUk = $this->get('/?condition=uk_used');
+        $responseUk->assertStatus(200);
+        $responseUk->assertSee('UK Used');
+    }
+
+    public function test_storefront_ajax_location_switch_returns_expected_json_and_scope()
+    {
+        $response = $this->getJson('/?ajax=1&city=Eket&state=Akwa+Ibom');
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'success',
+            'city',
+            'state',
+            'lga_id',
+            'coverage_status',
+            'status_badge',
+            'preview_status',
+            'products_count',
+            'local_products_count',
+            'corridor_products_count',
+            'scope',
+            'products_html',
+            'shops_html',
+        ]);
+        $response->assertJson([
+            'success' => true,
+            'city' => 'Eket',
+        ]);
+    }
 }

@@ -10,10 +10,13 @@ class VendorPayoutAllocation extends Model
         'vendor_payout_request_id',
         'order_id',
         'allocated_amount',
+        'status',
+        'reversed_at',
     ];
 
     protected $casts = [
         'allocated_amount' => 'decimal:2',
+        'reversed_at' => 'datetime',
     ];
 
     public function payoutRequest()
