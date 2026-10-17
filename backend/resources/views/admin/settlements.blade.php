@@ -16,10 +16,10 @@
         <div>
             <h1 class="page-header-title">
                 <span style="font-size: 26px;">🏛️</span>
-                <span>Treasury Payout Approvals &amp; Sovereign Escrow Desk</span>
+                <span>Dual-Commission Escrow &amp; Corporate Settlement Desk</span>
             </h1>
             <p class="page-header-subtitle">
-                Super Admin Treasury Governance &mdash; Authorize or reject automated Paystack NUBAN bank transfers for both <strong>Merchants (90% Sales)</strong> and <strong>Logistics Fleets (90% Delivery)</strong>. Zero manual receipts. Rejections atomically restore claimant balances.
+                Dual-Commission Escrow &amp; Corporate Settlement Desk &mdash; Super Admin Treasury Governance &mdash; Authorize or reject automated Paystack NUBAN bank transfers for both <strong>Merchants (90% Sales)</strong> and <strong>Logistics Fleets (90% Delivery)</strong>. Zero manual receipts. Rejections atomically restore claimant balances.
             </p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -154,7 +154,7 @@
                 <div class="dash-card-title">
                     <span>🏪</span>
                     <div>
-                        <div>Merchant 90% Withdrawal Requests Queue ({{ $pendingVendorsList->where('status', 'pending')->count() }} Pending)</div>
+                        <div>Merchant 90% Merchandise Escrow Queue &amp; Withdrawal Requests ({{ $pendingVendorsList->where('status', 'pending')->count() }} Pending)</div>
                         <span class="dash-card-subtitle">Merchants requesting automated Paystack bank disbursement of cleared merchandise earnings.</span>
                     </div>
                 </div>
