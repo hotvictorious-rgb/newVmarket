@@ -735,4 +735,225 @@ class VendorAndLogisticsUnifiedPayoutTest extends TestCase
         $this->assertTrue(FinancialJournalEntry::where('description', 'like', '%Merchant escrow holding restored after Paystack transfer failure%')->exists());
         $this->assertTrue(FinancialJournalEntry::where('description', 'like', '%Escrow cash restored after Paystack transfer failure%')->exists());
     }
+
+    /**
+     * Test P0: Vendor payout records immutable allocations and guarantees zero over-settlement.
+     */
+    public function test_vendor_payout_records_immutable_allocations_and_prevents_oversettlement(): void
+    {
+        // Order A: 18,000 net
+        $orderA = Order::create([
+            'order_number' => 'ORD-ALLOC-A',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'order_type' => 'delivery',
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'eligible',
+            'merchandise_subtotal' => '20000.00',
+            'delivery_fee' => '1000.00',
+            'grand_total' => '21000.00',
+            'total_amount' => '21000.00',
+            'vendor_net_90' => '18000.00',
+            'customer_cashback_5' => '1000.00',
+            'platform_margin_5' => '1000.00',
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+        ]);
+
+        // Order B: 27,000 net
+        $orderB = Order::create([
+            'order_number' => 'ORD-ALLOC-B',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'order_type' => 'delivery',
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'eligible',
+            'merchandise_subtotal' => '30000.00',
+            'delivery_fee' => '1000.00',
+            'grand_total' => '31000.00',
+            'total_amount' => '31000.00',
+            'vendor_net_90' => '27000.00',
+            'customer_cashback_5' => '1500.00',
+            'platform_margin_5' => '1500.00',
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+        ]);
+
+        // Vendor requests payout of exactly 18,000.00
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '18000.00',
+            'status' => 'pending',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Victorious Electronics Ltd',
+        ]);
+
+        $mockPaystack = Mockery::mock(PaystackService::class);
+        $mockPaystack->shouldReceive('createTransferRecipient')
+            ->once()
+            ->andReturn([
+                'success' => true,
+                'recipient_code' => 'RCP_MOCK_ALLOC_123',
+            ]);
+        $mockPaystack->shouldReceive('initiateTransfer')
+            ->once()
+            ->andReturn([
+                'success' => true,
+                'transfer_code' => 'TRF_MOCK_ALLOC_456',
+                'status' => 'success',
+            ]);
+        $this->app->instance(PaystackService::class, $mockPaystack);
+
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
+            'payout_id' => $payout->id,
+            'notes' => 'Disbursing 18k payout test',
+        ]);
+
+        $response->assertSessionHas('status');
+
+        $payout->refresh();
+        $this->assertEquals('approved', $payout->status);
+        $this->assertEquals('TRF_MOCK_ALLOC_456', $payout->paystack_transfer_code);
+
+        // Verify Order A is settled
+        $this->assertEquals('settled', $orderA->fresh()->vendor_settlement_status);
+
+        // Invariant: Order B is NOT over-settled; remains eligible
+        $this->assertEquals('eligible', $orderB->fresh()->vendor_settlement_status);
+
+        // Verify allocation record exists
+        $allocations = \App\Models\VendorPayoutAllocation::where('vendor_payout_request_id', $payout->id)->get();
+        $this->assertCount(1, $allocations);
+        $this->assertEquals($orderA->id, $allocations->first()->order_id);
+        $this->assertEquals('18000.00', (string)$allocations->first()->allocated_amount);
+    }
+
+    /**
+     * Test P0: Webhook reversal restores ONLY the exact orders allocated to that payout.
+     */
+    public function test_vendor_payout_reversal_restores_only_allocated_orders_and_not_prior_settled(): void
+    {
+        // Prior Order X: Settled weeks ago in a previous payout
+        $orderX = Order::create([
+            'order_number' => 'ORD-PRIOR-X',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'order_type' => 'delivery',
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'settled',
+            'merchandise_subtotal' => '50000.00',
+            'delivery_fee' => '0.00',
+            'grand_total' => '50000.00',
+            'total_amount' => '50000.00',
+            'vendor_net_90' => '45000.00',
+            'customer_cashback_5' => '2500.00',
+            'platform_margin_5' => '2500.00',
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+        ]);
+
+        // Order Y: Belongs to the current payout
+        $orderY = Order::create([
+            'order_number' => 'ORD-CURRENT-Y',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'order_type' => 'delivery',
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'settled',
+            'merchandise_subtotal' => '20000.00',
+            'delivery_fee' => '0.00',
+            'grand_total' => '20000.00',
+            'total_amount' => '20000.00',
+            'vendor_net_90' => '18000.00',
+            'customer_cashback_5' => '1000.00',
+            'platform_margin_5' => '1000.00',
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '18000.00',
+            'status' => 'approved',
+            'transfer_reference' => 'VND-PAYOUT-TEST-EXACT-01',
+            'paystack_transfer_code' => 'TRF_EXACT_999',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Victorious Electronics Ltd',
+        ]);
+
+        // Explicit immutable allocation linking payout to Order Y only
+        \App\Models\VendorPayoutAllocation::create([
+            'vendor_payout_request_id' => $payout->id,
+            'order_id' => $orderY->id,
+            'allocated_amount' => '18000.00',
+        ]);
+
+        $payloadData = [
+            'event' => 'transfer.failed',
+            'data' => [
+                'reference' => 'VND-PAYOUT-TEST-EXACT-01',
+                'transfer_code' => 'TRF_EXACT_999',
+                'reason' => 'Bank destination account frozen',
+            ],
+        ];
+
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+
+        // Order Y is restored back to eligible
+        $this->assertEquals('eligible', $orderY->fresh()->vendor_settlement_status);
+
+        // Invariant: Prior Order X is untouched and strictly remains 'settled'
+        $this->assertEquals('settled', $orderX->fresh()->vendor_settlement_status);
+    }
+
+    /**
+     * Test P1: Webhook idempotency ignores duplicate events.
+     */
+    public function test_webhook_idempotency_blocks_duplicate_event_processing(): void
+    {
+        $payloadData = [
+            'event' => 'transfer.success',
+            'id' => 'evt_unique_test_12345',
+            'data' => [
+                'reference' => 'VND-IDEM-001',
+                'transfer_code' => 'TRF_IDEM_001',
+                'amount' => 500000,
+            ],
+        ];
+
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+
+        // First call
+        $first = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+        $first->assertStatus(200);
+
+        // Second call (replay)
+        $second = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+        $second->assertStatus(200);
+        $second->assertJson(['status' => true, 'message' => 'Event already processed.']);
+    }
 }

@@ -303,6 +303,81 @@ class GoogleDriveBackupService
     }
 
     /**
+     * Restore Drill & Cryptographic Integrity Verification (Auditor Finding 8).
+     * Extracts and validates manifest and decrypted payload from archive.
+     */
+    public function verifyBackupIntegrity(string $zipPath, ?string $password = null): array
+    {
+        if (!File::exists($zipPath)) {
+            return ['valid' => false, 'error' => 'Archive file does not exist.'];
+        }
+
+        $zip = new ZipArchive();
+        $openResult = $zip->open($zipPath);
+        if ($openResult !== true) {
+            return ['valid' => false, 'error' => "Failed to open zip archive (code: {$openResult})."];
+        }
+
+        if (!empty($password)) {
+            $zip->setPassword($password);
+        }
+
+        $manifestIndex = $zip->locateName('manifest.json');
+        if ($manifestIndex === false) {
+            $zip->close();
+            return ['valid' => false, 'error' => 'Archive missing manifest.json metadata descriptor.'];
+        }
+
+        $manifestRaw = $zip->getFromIndex($manifestIndex);
+        if ($manifestRaw === false) {
+            $zip->close();
+            return ['valid' => false, 'error' => 'Failed to read manifest.json (incorrect password or corrupted archive).'];
+        }
+
+        $manifest = json_decode($manifestRaw, true);
+        if (!is_array($manifest) || empty($manifest['backup_timestamp'])) {
+            $zip->close();
+            return ['valid' => false, 'error' => 'Manifest payload is malformed or missing backup_timestamp.'];
+        }
+
+        // Validate presence and readability of dump file
+        $numFiles = $zip->numFiles;
+        $dumpFound = false;
+        $extractedBytes = 0;
+
+        for ($i = 0; $i < $numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+            if (str_ends_with($name, '.sql')) {
+                $dumpFound = true;
+                $stream = $zip->getStream($name);
+                if ($stream === false) {
+                    $zip->close();
+                    return ['valid' => false, 'error' => "Cannot decrypt dump file {$name}: invalid password or corrupted cipher."];
+                }
+                while (!feof($stream)) {
+                    $chunk = fread($stream, 8192);
+                    $extractedBytes += strlen($chunk);
+                }
+                fclose($stream);
+                break;
+            }
+        }
+
+        $zip->close();
+
+        if (!$dumpFound) {
+            return ['valid' => false, 'error' => 'No SQL database dump found inside archive.'];
+        }
+
+        return [
+            'valid' => true,
+            'manifest' => $manifest,
+            'extracted_dump_bytes' => $extractedBytes,
+            'files_count' => $numFiles,
+        ];
+    }
+
+    /**
      * Authenticate via Google Service Account JWT and acquire OAuth2 Bearer Access Token.
      */
     public function getServiceAccountAccessToken(): string

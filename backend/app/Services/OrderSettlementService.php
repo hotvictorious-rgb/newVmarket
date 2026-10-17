@@ -33,7 +33,7 @@ class OrderSettlementService
      */
     public function settlePaystackOrder(Order $order, array $paystackData, ?User $actorUser = null, string $channel = 'paystack_webhook'): array
     {
-        return DB::transaction(function () use ($order, $paystackData, $actorUser, $channel) {
+        $result = DB::transaction(function () use ($order, $paystackData, $actorUser, $channel) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
             if (!$lockedOrder) {
@@ -229,18 +229,6 @@ class OrderSettlementService
                     ->where('status', 'reserved')
                     ->update(['status' => 'released']);
 
-                // Invoke automated Paystack refund API
-                $refundRes = $this->paystackService->initiateRefund(
-                    $reference,
-                    (string)$lockedOrder->grand_total,
-                    "Automated refund for out-of-stock/cancelled Order #{$lockedOrder->order_number}"
-                );
-
-                if (!empty($refundRes['success']) && !empty($refundRes['refund_reference'])) {
-                    $lockedOrder->paystack_refund_reference = $refundRes['refund_reference'];
-                    $lockedOrder->save();
-                }
-
                 AdminAuditLog::create([
                     'user_id' => $lockedOrder->customer_id,
                     'action' => 'paystack_settlement_refund_pending_recorded',
@@ -264,6 +252,11 @@ class OrderSettlementService
                     'is_refund_only' => true,
                     'message' => 'Order was cancelled prior to payment and inventory is depleted. 100% of payment held in escrow as customer refund liability and automated refund requested.',
                     'order' => $lockedOrder,
+                    'trigger_gateway_refund' => true,
+                    'refund_reference' => $reference,
+                    'refund_amount' => (string)$lockedOrder->grand_total,
+                    'refund_order_id' => $lockedOrder->id,
+                    'refund_order_number' => $lockedOrder->order_number,
                 ];
             }
 
@@ -609,6 +602,26 @@ class OrderSettlementService
                 'order' => $lockedOrder,
             ];
         });
+
+        // Out-of-DB-Transaction Paystack Refund Execution (Guards against DB rollback ghost refund)
+        if (!empty($result['trigger_gateway_refund'])) {
+            $refundRes = $this->paystackService->initiateRefund(
+                $result['refund_reference'],
+                $result['refund_amount'],
+                "Automated refund for out-of-stock/cancelled Order #{$result['refund_order_number']}"
+            );
+
+            if (!empty($refundRes['success']) && !empty($refundRes['refund_reference'])) {
+                Order::where('id', $result['refund_order_id'])->update([
+                    'paystack_refund_reference' => $refundRes['refund_reference'],
+                ]);
+                if (isset($result['order'])) {
+                    $result['order']->paystack_refund_reference = $refundRes['refund_reference'];
+                }
+            }
+        }
+
+        return $result;
     }
     /**
      * Handshake 1A: Vendor signals courier arrival / handover readiness at branch counter.

@@ -412,21 +412,25 @@ class ReturnAndRefundService
 
         // 1. Initial State Validation & Pre-disbursement Lock
         $caseId = $case->id;
-        $preValidation = DB::transaction(function () use ($caseId, $adminUser, $refundDeliveryFee) {
+        $claimToken = 'CLAIM-' . $caseId . '-' . \Illuminate\Support\Str::random(16);
+
+        $preValidation = DB::transaction(function () use ($caseId, $adminUser, $refundDeliveryFee, $claimToken) {
             $lockedCase = ReturnCase::where('id', $caseId)->lockForUpdate()->firstOrFail();
             $order = Order::where('id', $lockedCase->order_id)->lockForUpdate()->firstOrFail();
 
-            // Strict Financial Approval State Machine
-            if ($lockedCase->status === 'inspected' && $lockedCase->resolution_type === 'refund') {
-                $lockedCase->status = 'refund_pending';
-                $lockedCase->reviewed_by_admin_id = $adminUser->id;
-                $lockedCase->save();
-            }
-
+            // Strict Financial Approval State Machine: requires prior explicit approval
             if (!in_array($lockedCase->status, ['refund_pending', 'approved_for_return'], true)) {
                 return [
                     'valid' => false,
-                    'message' => "Cannot disburse refund for case in '{$lockedCase->status}' status. Requires explicit approval into 'refund_pending'.",
+                    'message' => "Cannot disburse refund for case in '{$lockedCase->status}' status. Requires prior Super Admin approval into 'refund_pending'.",
+                ];
+            }
+
+            // Concurrency Race Guard: check for active unexpired claim from another worker/admin
+            if (!empty($lockedCase->refund_claim_token) && $lockedCase->refund_claimed_at && $lockedCase->refund_claimed_at->gt(Carbon::now()->subMinutes(5))) {
+                return [
+                    'valid' => false,
+                    'message' => "Refund operation is currently being processed by another worker or administrator. Please wait for settlement confirmation.",
                 ];
             }
 
@@ -441,6 +445,11 @@ class ReturnAndRefundService
                     'message' => "Cannot disburse cash refund: Customer has already partially or fully redeemed the instant wallet credit issued for this return case.",
                 ];
             }
+
+            // Atomically acquire claim token under lock to block concurrent threads
+            $lockedCase->refund_claim_token = $claimToken;
+            $lockedCase->refund_claimed_at = Carbon::now();
+            $lockedCase->save();
 
             // Calculate exact refund amount
             $merchandiseRefund = $lockedCase->total_refundable_amount;
@@ -479,6 +488,12 @@ class ReturnAndRefundService
             );
 
             if (empty($refundRes['success'])) {
+                // Clear the concurrency claim token on gateway rejection so it can be retried
+                ReturnCase::where('id', $caseId)->update([
+                    'refund_claim_token' => null,
+                    'refund_claimed_at' => null,
+                ]);
+
                 return [
                     'success' => false,
                     'message' => 'Paystack gateway refund failed: ' . ($refundRes['message'] ?? 'Payment provider rejected or timed out.') . '. Return case remains in refund_pending status.',
@@ -666,6 +681,8 @@ class ReturnAndRefundService
             $lockedCase->refund_delivery_fee = $refundDeliveryFee;
             $lockedCase->delivery_fee_refunded = $deliveryFeeRefund;
             $lockedCase->paystack_refund_id = $paystackRefundId;
+            $lockedCase->refund_claim_token = null;
+            $lockedCase->refund_claimed_at = null;
             $lockedCase->bank_reference = $refToStore;
             $lockedCase->refund_proof_path = $proofPath;
             $lockedCase->refunded_at = Carbon::now();

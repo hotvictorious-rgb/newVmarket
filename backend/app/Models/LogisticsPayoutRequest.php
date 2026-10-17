@@ -16,6 +16,10 @@ class LogisticsPayoutRequest extends Model
         'approved_by_admin_id',
         'disbursed_at',
         'settlement_proof_path',
+        'transfer_reference',
+        'paystack_transfer_code',
+        'processing_token',
+        'processing_started_at',
         'admin_notes',
         'rejection_reason',
     ];
@@ -23,6 +27,7 @@ class LogisticsPayoutRequest extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'disbursed_at' => 'datetime',
+        'processing_started_at' => 'datetime',
     ];
 
     public function company()

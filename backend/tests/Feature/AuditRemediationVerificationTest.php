@@ -798,4 +798,146 @@ class AuditRemediationVerificationTest extends TestCase
         $prodCsp = $prodResponse->headers->get('Content-Security-Policy');
         $this->assertStringNotContainsString("'unsafe-eval'", $prodCsp);
     }
+
+    /**
+     * Test P0 (Finding 2): Concurrent refund initiation is blocked by atomic claim token.
+     */
+    public function test_finding_2_concurrent_refund_initiation_is_blocked_by_claim_token(): void
+    {
+        $order = Order::create([
+            'order_number' => 'ORD-RACE-001',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'order_type' => 'delivery',
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'grand_total' => '10000.00',
+            'total_amount' => '10000.00',
+            'merchandise_subtotal' => '10000.00',
+            'delivery_fee' => '0.00',
+            'vendor_net_90' => '9000.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '500.00',
+            'origin_lga_id' => $this->lga->id,
+            'destination_lga_id' => $this->lga->id,
+            'payment_reference' => 'ref_race_123',
+        ]);
+
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'refund_claim_token' => 'CLAIM-ACTIVE-12345',
+            'refund_claimed_at' => \Illuminate\Support\Carbon::now(),
+        ]);
+
+        $service = app(ReturnAndRefundService::class);
+        $res = $service->adminDisburseRefund($this->superAdmin, $case);
+
+        $this->assertFalse($res['success']);
+        $this->assertStringContainsString('currently being processed by another worker', $res['message']);
+    }
+
+    /**
+     * Test P1 (Finding 3): Refund disbursement strictly requires prior approval into 'refund_pending'.
+     */
+    public function test_finding_3_refund_disbursement_strictly_requires_prior_approval(): void
+    {
+        $order = Order::create([
+            'order_number' => 'ORD-APPR-001',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'order_type' => 'delivery',
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'grand_total' => '5000.00',
+            'total_amount' => '5000.00',
+            'merchandise_subtotal' => '5000.00',
+            'delivery_fee' => '0.00',
+            'vendor_net_90' => '4500.00',
+            'customer_cashback_5' => '250.00',
+            'platform_margin_5' => '250.00',
+            'origin_lga_id' => $this->lga->id,
+            'destination_lga_id' => $this->lga->id,
+            'payment_reference' => 'ref_appr_123',
+        ]);
+
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'wrong_item_sent',
+            'status' => 'inspected',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '5000.00',
+        ]);
+
+        $service = app(ReturnAndRefundService::class);
+        $res = $service->adminDisburseRefund($this->superAdmin, $case);
+
+        $this->assertFalse($res['success']);
+        $this->assertStringContainsString("Requires prior Super Admin approval into 'refund_pending'", $res['message']);
+    }
+
+    /**
+     * Test P1 (Finding 4): Late-payment settlement for out-of-stock orders initiates refund outside DB transaction.
+     */
+    public function test_finding_4_late_payment_settlement_initiates_gateway_refund(): void
+    {
+        $order = Order::create([
+            'order_number' => 'ORD-LATE-001',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'order_type' => 'delivery',
+            'order_status' => 'cancelled',
+            'payment_status' => 'pending',
+            'grand_total' => '15000.00',
+            'total_amount' => '15000.00',
+            'merchandise_subtotal' => '15000.00',
+            'delivery_fee' => '0.00',
+            'vendor_net_90' => '13500.00',
+            'customer_cashback_5' => '750.00',
+            'platform_margin_5' => '750.00',
+            'origin_lga_id' => $this->lga->id,
+            'destination_lga_id' => $this->lga->id,
+            'payment_reference' => 'ref_late_pay_777',
+        ]);
+
+        $mockPaystack = Mockery::mock(PaystackService::class);
+        $mockPaystack->shouldReceive('initiateRefund')
+            ->once()
+            ->with('ref_late_pay_777', '15000.00', Mockery::type('string'))
+            ->andReturn([
+                'success' => true,
+                'refund_reference' => 'RFD-AUTO-LATE-999',
+            ]);
+        $this->app->instance(PaystackService::class, $mockPaystack);
+
+        $settlementService = app(\App\Services\OrderSettlementService::class);
+        $res = $settlementService->settlePaystackOrder($order, [
+            'status' => 'success',
+            'reference' => 'ref_late_pay_777',
+            'amount' => 1500000,
+            'currency' => 'NGN',
+            'id' => 999111,
+            'channel' => 'card',
+            'customer' => ['email' => $this->customer->email],
+        ]);
+
+        $this->assertTrue($res['success']);
+        $this->assertEquals('REFUND_PENDING', $res['status']);
+        $this->assertEquals('RFD-AUTO-LATE-999', $order->fresh()->paystack_refund_reference);
+        $this->assertEquals('paid', $order->fresh()->payment_status);
+        $this->assertEquals('cancelled', $order->fresh()->order_status);
+        $this->assertEquals('refund_pending', $order->fresh()->vendor_settlement_status);
+    }
 }

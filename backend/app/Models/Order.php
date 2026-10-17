@@ -252,6 +252,11 @@ class Order extends Model
         return $this->hasMany(ReturnCase::class);
     }
 
+    public function payoutAllocations()
+    {
+        return $this->hasMany(VendorPayoutAllocation::class);
+    }
+
     /**
      * Generate cryptographically secure, high-entropy unique payment reference (CSPRNG).
      */

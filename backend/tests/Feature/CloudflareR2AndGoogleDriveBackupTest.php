@@ -160,4 +160,31 @@ class CloudflareR2AndGoogleDriveBackupTest extends TestCase
 
         $service->executeBackup(dryRun: true);
     }
+
+    /**
+     * Test 7: Restore Drill & Cryptographic Integrity Verification (Finding 8)
+     */
+    public function test_backup_archive_cryptographic_integrity_and_restore_verification(): void
+    {
+        $password = 'TestRestoreDrillPass123!@#';
+        \Illuminate\Support\Facades\Config::set('services.backup.encryption_key', $password);
+
+        $service = app(GoogleDriveBackupService::class);
+        $result = $service->executeBackup(dryRun: false);
+
+        $this->assertTrue($result['success']);
+        $zipPath = $result['zip_path'];
+        $this->assertFileExists($zipPath);
+
+        // Perform restore verification drill
+        $drill = $service->verifyBackupIntegrity($zipPath, $password);
+
+        $this->assertTrue($drill['valid']);
+        $this->assertNotEmpty($drill['manifest']['backup_timestamp']);
+        $this->assertGreaterThan(0, $drill['extracted_dump_bytes']);
+
+        // Negative check: wrong password fails decryption
+        $failedDrill = $service->verifyBackupIntegrity($zipPath, 'WrongPassword999!');
+        $this->assertFalse($failedDrill['valid']);
+    }
 }

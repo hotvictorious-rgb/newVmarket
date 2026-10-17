@@ -1729,29 +1729,29 @@ class PortalController extends Controller
             return back()->with('error', 'Unauthorized: Administrative finance permissions required.');
         }
 
-        // Concurrency Guard: Atomic Lock with Status Transition to 'processing'
-        return DB::transaction(function () use ($validated, $admin, $request) {
+        // Phase 1: Pre-validation & Atomic Status Transition to 'processing' under lock
+        $preValidation = DB::transaction(function () use ($validated, $admin) {
             $payout = LogisticsPayoutRequest::with(['company.user'])->where('id', $validated['payout_id'])->lockForUpdate()->firstOrFail();
             if ($payout->status !== 'pending') {
-                return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
+                return ['valid' => false, 'message' => "Payout request #{$payout->id} has already been {$payout->status}."];
             }
 
             $company = $payout->company;
             if (!$company || $company->trashed() || $company->status !== 'active') {
-                return back()->with('error', 'Disbursement blocked: Logistics company account is inactive, suspended, or archived.');
+                return ['valid' => false, 'message' => 'Disbursement blocked: Logistics company account is inactive, suspended, or archived.'];
             }
 
             if (!$company->user || $company->user->status !== 'active') {
-                return back()->with('error', 'Disbursement blocked: Logistics company user account is inactive or suspended.');
+                return ['valid' => false, 'message' => 'Disbursement blocked: Logistics company user account is inactive or suspended.'];
             }
 
             if ($company->isWithinBankCooldown()) {
-                return back()->with('error', 'Disbursement blocked: Logistics company bank account was recently updated and is under a 48-hour security cooldown.');
+                return ['valid' => false, 'message' => 'Disbursement blocked: Logistics company bank account was recently updated and is under a 48-hour security cooldown.'];
             }
 
             // Executive Authorization Guard: Transfers > N10,000,000 require SuperAdmin
             if (\App\Services\BcMathService::comp((string)$payout->amount, '10000000.00') > 0 && !$admin->isSuperAdmin()) {
-                return back()->with('error', 'Disbursement ceiling exceeded: Transfers above ₦10,000,000 require Super Admin executive authorization.');
+                return ['valid' => false, 'message' => 'Disbursement ceiling exceeded: Transfers above ₦10,000,000 require Super Admin executive authorization.'];
             }
 
             // Validate corporate bank details
@@ -1761,50 +1761,100 @@ class PortalController extends Controller
             $accountName = trim((string)($company->account_name ?? $payout->account_name));
 
             if (empty($accountNum) || empty($accountName)) {
-                return back()->with('error', 'Disbursement blocked: Incomplete corporate NUBAN bank details on company profile.');
+                return ['valid' => false, 'message' => 'Disbursement blocked: Incomplete corporate NUBAN bank details on company profile.'];
             }
 
-            // Atomically flag as processing under lock to block concurrent executions
-
-
-            $paystackService = app(\App\Services\PaystackService::class);
             $createdTs = $payout->created_at ? $payout->created_at->format('YmdHis') : date('YmdHis');
             $disburseRef = 'FLEET-PAYOUT-' . $payout->id . '-' . $createdTs;
 
-            // 1. Resolve or Create Paystack Transfer Recipient
-            $recipientRes = $paystackService->createTransferRecipient(
-                $accountName,
-                $accountNum,
-                $bankCode ?: $bankName
-            );
-
-            if (!$recipientRes['success']) {
-
-                return back()->with('error', 'Paystack Transfer Recipient Error: ' . ($recipientRes['message'] ?? 'Unable to resolve bank account on NIBSS.'));
+            // Concurrency Guard: Check for active in-flight processing claim
+            if (!empty($payout->processing_token) && $payout->processing_started_at && $payout->processing_started_at->gt(Carbon::now()->subMinutes(5))) {
+                return ['valid' => false, 'message' => 'Disbursement is already currently being processed by gateway. Please wait for completion.'];
             }
 
-            $recipientCode = $recipientRes['recipient_code'];
+            // Atomically acquire processing claim token under lock to block concurrent executions
+            $payout->processing_token = 'CLAIM-FLEET-' . $payout->id . '-' . \Illuminate\Support\Str::random(16);
+            $payout->processing_started_at = Carbon::now();
+            $payout->transfer_reference = $disburseRef;
+            $payout->save();
 
-            // 2. Authoritative Paystack Automated Transfer Execution
-            $transferRes = $paystackService->initiateTransfer(
-                $recipientCode,
-                (string)$payout->amount,
-                "Corporate fleet payout for {$company->company_name}",
-                $disburseRef
-            );
+            return [
+                'valid' => true,
+                'payout_id' => $payout->id,
+                'amount' => (string)$payout->amount,
+                'company_name' => $company->company_name,
+                'company_id' => $company->id,
+                'account_num' => $accountNum,
+                'account_name' => $accountName,
+                'bank_code' => $bankCode,
+                'bank_name' => $bankName,
+                'disburse_ref' => $disburseRef,
+            ];
+        });
 
-            if (!$transferRes['success']) {
+        if (!$preValidation['valid']) {
+            return back()->with('error', $preValidation['message']);
+        }
 
-                return back()->with('error', 'Paystack Automated Transfer Failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request.') . ' Payout reverted to pending review.');
-            }
+        // Phase 2: Authoritative Gateway Execution OUTSIDE Database Transaction
+        $paystackService = app(\App\Services\PaystackService::class);
+        $payoutId = $preValidation['payout_id'];
 
-            $transferCode = $transferRes['transfer_code'] ?? ('TRF_AUTO_' . $payout->id);
-            $proofPath = 'paystack_transfer:' . $transferCode;
+        // 1. Resolve or Create Paystack Transfer Recipient
+        $recipientRes = $paystackService->createTransferRecipient(
+            $preValidation['account_name'],
+            $preValidation['account_num'],
+            $preValidation['bank_code'] ?: $preValidation['bank_name']
+        );
+
+        if (!$recipientRes['success']) {
+            DB::transaction(function () use ($payoutId, $recipientRes) {
+                LogisticsPayoutRequest::where('id', $payoutId)->update([
+                    'processing_token' => null,
+                    'processing_started_at' => null,
+                    'admin_notes' => 'Recipient resolution failed: ' . ($recipientRes['message'] ?? 'NIBSS resolution failed'),
+                ]);
+            });
+            return back()->with('error', 'Paystack Transfer Recipient Error: ' . ($recipientRes['message'] ?? 'Unable to resolve bank account on NIBSS.'));
+        }
+
+        $recipientCode = $recipientRes['recipient_code'];
+
+        // 2. Authoritative Paystack Automated Transfer Execution
+        $transferRes = $paystackService->initiateTransfer(
+            $recipientCode,
+            $preValidation['amount'],
+            "Corporate fleet payout for {$preValidation['company_name']}",
+            $preValidation['disburse_ref']
+        );
+
+        if (!$transferRes['success']) {
+            DB::transaction(function () use ($payoutId, $transferRes) {
+                LogisticsPayoutRequest::where('id', $payoutId)->update([
+                    'processing_token' => null,
+                    'processing_started_at' => null,
+                    'admin_notes' => 'Transfer initiation failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request'),
+                ]);
+            });
+            return back()->with('error', 'Paystack Automated Transfer Failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request.') . ' Payout reverted to pending review.');
+        }
+
+        $transferCode = $transferRes['transfer_code'] ?? ('TRF_AUTO_' . $payoutId);
+        $proofPath = 'paystack_transfer:' . $transferCode;
+
+        // Phase 3: Final Atomic Settlement & Journal Transaction
+        return DB::transaction(function () use ($validated, $admin, $request, $payoutId, $preValidation, $transferCode, $proofPath) {
+            $payout = LogisticsPayoutRequest::with(['company'])->where('id', $payoutId)->lockForUpdate()->firstOrFail();
+            $company = $payout->company;
 
             $payout->status = 'approved';
+            $payout->processing_token = null;
+            $payout->processing_started_at = null;
             $payout->approved_by_admin_id = $admin->id;
             $payout->disbursed_at = Carbon::now();
             $payout->settlement_proof_path = $proofPath;
+            $payout->paystack_transfer_code = $transferCode;
+            $payout->transfer_reference = $preValidation['disburse_ref'];
             $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Automated Paystack NUBAN Transfer (' . $transferCode . '). Approved by Admin #' . $admin->id));
             $payout->save();
 
@@ -1812,7 +1862,7 @@ class PortalController extends Controller
             $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
             \App\Models\FinancialJournalEntry::create([
                 'order_id' => null,
-                'transaction_reference' => $disburseRef,
+                'transaction_reference' => $preValidation['disburse_ref'],
                 'event_id' => 'EVT-FLEET-PAYOUT-' . $payout->id,
                 'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
                 'beneficiary_id' => $company->id,
@@ -1825,7 +1875,7 @@ class PortalController extends Controller
 
             \App\Models\FinancialJournalEntry::create([
                 'order_id' => null,
-                'transaction_reference' => $disburseRef,
+                'transaction_reference' => $preValidation['disburse_ref'],
                 'event_id' => 'EVT-FLEET-PAYOUT-' . $payout->id,
                 'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
                 'beneficiary_id' => $company->id,
@@ -1856,8 +1906,6 @@ class PortalController extends Controller
                 'ip_address' => $request->ip() ?? '127.0.0.1',
                 'user_agent' => $request->userAgent(),
             ]);
-
-
 
             return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " to {$company->company_name} via Paystack!");
         });
@@ -1956,24 +2004,24 @@ class PortalController extends Controller
             return back()->with('error', 'Unauthorized: Administrative finance permissions required.');
         }
 
-        // Concurrency Guard: Atomic Lock with Status Transition to 'processing'
-        return DB::transaction(function () use ($validated, $admin, $request) {
+        // Phase 1: Pre-validation & Atomic Status Transition to 'processing' under lock
+        $preValidation = DB::transaction(function () use ($validated, $admin) {
             $payout = \App\Models\VendorPayoutRequest::with(['vendor.user'])->where('id', $validated['payout_id'])->lockForUpdate()->firstOrFail();
             if ($payout->status !== 'pending') {
-                return back()->with('error', "Vendor payout request #{$payout->id} has already been {$payout->status}.");
+                return ['valid' => false, 'message' => "Vendor payout request #{$payout->id} has already been {$payout->status}."];
             }
 
             $vendor = $payout->vendor;
             if (!$vendor || $vendor->trashed() || $vendor->marketplace_status !== 'active') {
-                return back()->with('error', 'Disbursement blocked: Merchant store is inactive, suspended, or archived.');
+                return ['valid' => false, 'message' => 'Disbursement blocked: Merchant store is inactive, suspended, or archived.'];
             }
 
             if (!$vendor->user || $vendor->user->status !== 'active') {
-                return back()->with('error', 'Disbursement blocked: Merchant user account is inactive or suspended.');
+                return ['valid' => false, 'message' => 'Disbursement blocked: Merchant user account is inactive or suspended.'];
             }
 
             if ($vendor->isWithinBankCooldown()) {
-                return back()->with('error', 'Disbursement blocked: Merchant bank account was recently updated and is under a 48-hour security cooldown.');
+                return ['valid' => false, 'message' => 'Disbursement blocked: Merchant bank account was recently updated and is under a 48-hour security cooldown.'];
             }
 
             // Verify they actually sold: must have legitimate delivered and paid orders
@@ -1982,12 +2030,12 @@ class PortalController extends Controller
                 ->where('order_status', 'delivered')
                 ->exists();
             if (!$hasDeliveredSales) {
-                return back()->with('error', 'Disbursement blocked: Merchant has no verified delivered sales records.');
+                return ['valid' => false, 'message' => 'Disbursement blocked: Merchant has no verified delivered sales records.'];
             }
 
             // Executive Authorization Guard: Transfers > N10,000,000 require SuperAdmin
             if (\App\Services\BcMathService::comp((string)$payout->amount, '10000000.00') > 0 && !$admin->isSuperAdmin()) {
-                return back()->with('error', 'Disbursement ceiling exceeded: Transfers above ₦10,000,000 require Super Admin executive authorization.');
+                return ['valid' => false, 'message' => 'Disbursement ceiling exceeded: Transfers above ₦10,000,000 require Super Admin executive authorization.'];
             }
 
             // Validate Merchant bank details
@@ -1997,56 +2045,106 @@ class PortalController extends Controller
             $accountName = trim((string)($vendor->account_name ?? $payout->account_name));
 
             if (empty($accountNum) || empty($accountName)) {
-                return back()->with('error', 'Disbursement blocked: Incomplete NUBAN bank details on merchant profile.');
+                return ['valid' => false, 'message' => 'Disbursement blocked: Incomplete NUBAN bank details on merchant profile.'];
             }
 
-            // Atomically flag as processing under lock to block concurrent executions
-
-
-            $paystackService = app(\App\Services\PaystackService::class);
             $createdTs = $payout->created_at ? $payout->created_at->format('YmdHis') : date('YmdHis');
             $disburseRef = 'VND-PAYOUT-' . $payout->id . '-' . $createdTs;
 
-            // 1. Resolve or Create Paystack Transfer Recipient
-            $recipientRes = $paystackService->createTransferRecipient(
-                $accountName,
-                $accountNum,
-                $bankCode ?: $bankName
-            );
-
-            if (!$recipientRes['success']) {
-
-                return back()->with('error', 'Paystack Transfer Recipient Error: ' . ($recipientRes['message'] ?? 'Unable to resolve merchant bank account on NIBSS.'));
+            // Concurrency Guard: Check for active in-flight processing claim
+            if (!empty($payout->processing_token) && $payout->processing_started_at && $payout->processing_started_at->gt(Carbon::now()->subMinutes(5))) {
+                return ['valid' => false, 'message' => 'Disbursement is already currently being processed by gateway. Please wait for completion.'];
             }
 
-            $recipientCode = $recipientRes['recipient_code'];
+            // Atomically acquire processing claim token under lock to block concurrent executions
+            $payout->processing_token = 'CLAIM-VND-' . $payout->id . '-' . \Illuminate\Support\Str::random(16);
+            $payout->processing_started_at = Carbon::now();
+            $payout->transfer_reference = $disburseRef;
+            $payout->save();
 
-            // 2. Authoritative Paystack Automated Transfer Execution
-            $transferRes = $paystackService->initiateTransfer(
-                $recipientCode,
-                (string)$payout->amount,
-                "Merchant 90% earnings payout for {$vendor->business_name}",
-                $disburseRef
-            );
+            return [
+                'valid' => true,
+                'payout_id' => $payout->id,
+                'amount' => (string)$payout->amount,
+                'business_name' => $vendor->business_name,
+                'vendor_id' => $vendor->id,
+                'account_num' => $accountNum,
+                'account_name' => $accountName,
+                'bank_code' => $bankCode,
+                'bank_name' => $bankName,
+                'disburse_ref' => $disburseRef,
+            ];
+        });
 
-            if (!$transferRes['success']) {
+        if (!$preValidation['valid']) {
+            return back()->with('error', $preValidation['message']);
+        }
 
-                return back()->with('error', 'Paystack Transfer Initiation Error: ' . ($transferRes['message'] ?? 'Automated transfer could not be initiated with bank gateway. Payout reverted to pending.'));
-            }
+        // Phase 2: Authoritative Gateway Execution OUTSIDE Database Transaction
+        $paystackService = app(\App\Services\PaystackService::class);
+        $payoutId = $preValidation['payout_id'];
 
-            $transferCode = $transferRes['transfer_code'] ?? ('TRF_AUTO_VND_' . $payout->id);
-            $proofPath = 'paystack_transfer:' . $transferCode;
+        // 1. Resolve or Create Paystack Transfer Recipient
+        $recipientRes = $paystackService->createTransferRecipient(
+            $preValidation['account_name'],
+            $preValidation['account_num'],
+            $preValidation['bank_code'] ?: $preValidation['bank_name']
+        );
+
+        if (!$recipientRes['success']) {
+            DB::transaction(function () use ($payoutId, $recipientRes) {
+                \App\Models\VendorPayoutRequest::where('id', $payoutId)->update([
+                    'processing_token' => null,
+                    'processing_started_at' => null,
+                    'admin_notes' => 'Recipient resolution failed: ' . ($recipientRes['message'] ?? 'NIBSS resolution failed'),
+                ]);
+            });
+            return back()->with('error', 'Paystack Transfer Recipient Error: ' . ($recipientRes['message'] ?? 'Unable to resolve merchant bank account on NIBSS.'));
+        }
+
+        $recipientCode = $recipientRes['recipient_code'];
+
+        // 2. Authoritative Paystack Automated Transfer Execution
+        $transferRes = $paystackService->initiateTransfer(
+            $recipientCode,
+            $preValidation['amount'],
+            "Merchant 90% earnings payout for {$preValidation['business_name']}",
+            $preValidation['disburse_ref']
+        );
+
+        if (!$transferRes['success']) {
+            DB::transaction(function () use ($payoutId, $transferRes) {
+                \App\Models\VendorPayoutRequest::where('id', $payoutId)->update([
+                    'processing_token' => null,
+                    'processing_started_at' => null,
+                    'admin_notes' => 'Transfer initiation failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request'),
+                ]);
+            });
+            return back()->with('error', 'Paystack Transfer Initiation Error: ' . ($transferRes['message'] ?? 'Automated transfer could not be initiated with bank gateway. Payout reverted to pending.'));
+        }
+
+        $transferCode = $transferRes['transfer_code'] ?? ('TRF_AUTO_VND_' . $payoutId);
+        $proofPath = 'paystack_transfer:' . $transferCode;
+
+        // Phase 3: Final Atomic Settlement, Immutable Allocations & Journal Transaction
+        return DB::transaction(function () use ($validated, $admin, $request, $payoutId, $preValidation, $transferCode, $proofPath) {
+            $payout = \App\Models\VendorPayoutRequest::with(['vendor'])->where('id', $payoutId)->lockForUpdate()->firstOrFail();
+            $vendor = $payout->vendor;
 
             $payout->status = 'approved';
+            $payout->processing_token = null;
+            $payout->processing_started_at = null;
             $payout->approved_by_admin_id = $admin->id;
             $payout->disbursed_at = Carbon::now();
             $payout->settlement_proof_path = $proofPath;
+            $payout->paystack_transfer_code = $transferCode;
+            $payout->transfer_reference = $preValidation['disburse_ref'];
             $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Automated Paystack NUBAN Transfer (' . $transferCode . '). Approved by Admin #' . $admin->id));
             $payout->save();
 
-            // Transition eligible merchant orders up to payout amount to settled
-            // Strict filter: only orders that are delivered, paid, and without active return cases or disputes
-            $remainingToSettle = (float)$payout->amount;
+            // Transition eligible merchant orders up to payout amount with immutable allocation tracking
+            // Strict non-oversettlement invariant: only orders that are fully covered are marked settled
+            $remainingToSettle = (string)$payout->amount;
             $eligibleOrders = Order::where('vendor_id', $vendor->id)
                 ->where('vendor_settlement_status', 'eligible')
                 ->where('payment_status', 'paid')
@@ -2062,20 +2160,34 @@ class PortalController extends Controller
                 ->get();
 
             foreach ($eligibleOrders as $order) {
-                if ($remainingToSettle <= 0) break;
-                $order->vendor_settlement_status = 'settled';
-                $order->settled_at = Carbon::now();
-                $order->settled_by_admin_id = $admin->id;
-                $order->settlement_proof_path = $proofPath;
-                $order->save();
-                $remainingToSettle -= (float)$order->vendor_net_90;
+                if (bccomp($remainingToSettle, '0.00', 2) <= 0) break;
+                $orderNet = (string)($order->vendor_net_90 ?? '0.00');
+                if (bccomp($orderNet, '0.00', 2) <= 0) continue;
+
+                $allocated = (bccomp($remainingToSettle, $orderNet, 2) >= 0) ? $orderNet : $remainingToSettle;
+
+                \App\Models\VendorPayoutAllocation::create([
+                    'vendor_payout_request_id' => $payout->id,
+                    'order_id' => $order->id,
+                    'allocated_amount' => $allocated,
+                ]);
+
+                if (bccomp($allocated, $orderNet, 2) === 0) {
+                    $order->vendor_settlement_status = 'settled';
+                    $order->settled_at = Carbon::now();
+                    $order->settled_by_admin_id = $admin->id;
+                    $order->settlement_proof_path = $proofPath;
+                    $order->save();
+                }
+
+                $remainingToSettle = bcsub($remainingToSettle, $allocated, 2);
             }
 
             // Double-Entry Financial Journal: Discharge vendor payable, credit cash_in_escrow outflow
             $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
             \App\Models\FinancialJournalEntry::create([
                 'order_id' => null,
-                'transaction_reference' => $disburseRef,
+                'transaction_reference' => $preValidation['disburse_ref'],
                 'event_id' => 'EVT-VND-PAYOUT-' . $payout->id,
                 'beneficiary_type' => \App\Models\VendorProfile::class,
                 'beneficiary_id' => $vendor->id,
@@ -2088,7 +2200,7 @@ class PortalController extends Controller
 
             \App\Models\FinancialJournalEntry::create([
                 'order_id' => null,
-                'transaction_reference' => $disburseRef,
+                'transaction_reference' => $preValidation['disburse_ref'],
                 'event_id' => 'EVT-VND-PAYOUT-' . $payout->id,
                 'beneficiary_type' => \App\Models\VendorProfile::class,
                 'beneficiary_id' => $vendor->id,
@@ -2115,8 +2227,6 @@ class PortalController extends Controller
                 'ip_address' => $request->ip() ?? '127.0.0.1',
                 'user_agent' => $request->userAgent(),
             ]);
-
-
 
             return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " merchandise earnings to {$vendor->business_name}!");
         });

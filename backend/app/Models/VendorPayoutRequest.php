@@ -17,6 +17,10 @@ class VendorPayoutRequest extends Model
         'approved_by_admin_id',
         'disbursed_at',
         'settlement_proof_path',
+        'transfer_reference',
+        'paystack_transfer_code',
+        'processing_token',
+        'processing_started_at',
         'admin_notes',
         'rejection_reason',
     ];
@@ -24,6 +28,7 @@ class VendorPayoutRequest extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'disbursed_at' => 'datetime',
+        'processing_started_at' => 'datetime',
     ];
 
     public function vendor()
@@ -34,5 +39,10 @@ class VendorPayoutRequest extends Model
     public function approvedByAdmin()
     {
         return $this->belongsTo(User::class, 'approved_by_admin_id');
+    }
+
+    public function allocations()
+    {
+        return $this->hasMany(VendorPayoutAllocation::class, 'vendor_payout_request_id');
     }
 }

@@ -368,7 +368,7 @@ class AuditHardeningAndSecurityProofTest extends TestCase
             'order_id' => $order->id,
             'vendor_id' => $this->vendor->id,
             'return_reason' => 'defective_product',
-            'status' => 'inspected',
+            'status' => 'refund_pending',
             'resolution_type' => 'refund',
             'total_refundable_amount' => '10000.00',
         ]);
