@@ -81,6 +81,35 @@ class FinancialCrashRecoveryAndAdversarialTest extends TestCase
     /**
      * P0 Test: Webhook Inbox recovers after a crashed worker and completes on retry.
      */
+    protected function createTestOrder(array $attributes = []): Order
+    {
+        $amount = $attributes['merchandise_subtotal'] ?? '10000.00';
+        $net90 = $attributes['vendor_net_90'] ?? bcmul((string)$amount, '0.90', 2);
+        $cb5 = bcmul((string)$amount, '0.05', 2);
+        $pm5 = bcmul((string)$amount, '0.05', 2);
+
+        return Order::create(array_merge([
+            'customer_id' => $this->customer->id,
+            'shop_id' => $this->shop->id,
+            'vendor_id' => $this->vendor->id,
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_number' => 'ORD-TST-' . uniqid(),
+            'payment_reference' => 'REF-TST-' . uniqid(),
+            'payment_status' => 'paid',
+            'order_status' => 'delivered',
+            'vendor_settlement_status' => 'eligible',
+            'merchandise_subtotal' => $amount,
+            'grand_total' => $amount,
+            'delivery_fee' => '0.00',
+            'cashback_redeemed' => '0.00',
+            'vendor_net_90' => $net90,
+            'customer_cashback_5' => $cb5,
+            'platform_margin_5' => $pm5,
+        ], $attributes));
+    }
+
     public function test_webhook_inbox_recovers_after_crash_and_retries_successfully(): void
     {
         $payout = VendorPayoutRequest::create([
@@ -212,21 +241,12 @@ class FinancialCrashRecoveryAndAdversarialTest extends TestCase
      */
     public function test_admin_reconcile_vendor_payout_finalizes_on_gateway_success(): void
     {
-        $order = Order::create([
+        $order = $this->createTestOrder([
             'order_number' => 'ORD-RECONCILE-01',
-            'customer_id' => $this->customer->id,
-            'vendor_id' => $this->vendor->id,
-            'shop_id' => $this->shop->id,
-            'order_type' => 'delivery',
-            'order_status' => 'delivered',
-            'payment_status' => 'paid',
-            'vendor_settlement_status' => 'eligible',
-            'origin_lga_id' => $this->uyoLga->id,
-            'destination_lga_id' => $this->uyoLga->id,
             'merchandise_subtotal' => '10000.00',
             'vendor_net_90' => '9000.00',
             'grand_total' => '10000.00',
-            'total_amount' => '10000.00',
+            'vendor_settlement_status' => 'eligible',
         ]);
 
         $payout = VendorPayoutRequest::create([
@@ -320,21 +340,12 @@ class FinancialCrashRecoveryAndAdversarialTest extends TestCase
      */
     public function test_allocation_lifecycle_tracks_reversed_status_and_timestamp(): void
     {
-        $order = Order::create([
+        $order = $this->createTestOrder([
             'order_number' => 'ORD-ALLOC-REV-01',
-            'customer_id' => $this->customer->id,
-            'vendor_id' => $this->vendor->id,
-            'shop_id' => $this->shop->id,
-            'order_type' => 'delivery',
-            'order_status' => 'delivered',
-            'payment_status' => 'paid',
-            'vendor_settlement_status' => 'settled',
-            'origin_lga_id' => $this->uyoLga->id,
-            'destination_lga_id' => $this->uyoLga->id,
             'merchandise_subtotal' => '15000.00',
             'vendor_net_90' => '13500.00',
             'grand_total' => '15000.00',
-            'total_amount' => '15000.00',
+            'vendor_settlement_status' => 'settled',
         ]);
 
         $payout = VendorPayoutRequest::create([

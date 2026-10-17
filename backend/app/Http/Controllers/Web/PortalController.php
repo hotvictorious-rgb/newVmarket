@@ -2089,6 +2089,10 @@ class PortalController extends Controller
                 return ['valid' => false, 'message' => "Vendor payout request #{$payout->id} has already been {$payout->status}."];
             }
 
+            if ($payout->processing_token === 'HOLD_TIMEOUT_RECONCILIATION' || str_contains((string)$payout->admin_notes, 'GATEWAY_TIMEOUT')) {
+                return ['valid' => false, 'message' => "Payout request #{$payout->id} is locked in GATEWAY TIMEOUT state. An automated transfer was already dispatched to Paystack and may have completed. You must perform Gateway Reconciliation before any retry."];
+            }
+
             $vendor = $payout->vendor;
             if (!$vendor || $vendor->trashed() || $vendor->marketplace_status !== 'active') {
                 return ['valid' => false, 'message' => 'Disbursement blocked: Merchant store is inactive, suspended, or archived.'];
