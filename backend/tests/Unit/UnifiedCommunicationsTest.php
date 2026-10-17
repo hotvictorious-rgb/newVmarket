@@ -19,6 +19,8 @@ class UnifiedCommunicationsTest extends TestCase
         parent::setUp();
         $this->service = new UnifiedCommunicationsService();
         putenv('TERMII_API_KEY=test_termii_key');
+        $_ENV['TERMII_API_KEY'] = 'test_termii_key';
+        $_SERVER['TERMII_API_KEY'] = 'test_termii_key';
     }
 
     public function test_nigerian_phone_number_formatting(): void

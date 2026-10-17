@@ -11,7 +11,6 @@ class LogisticsCompanyProfile extends Model
 
     protected $fillable = [
         'user_id',
-        'wallet_balance',
         'company_name',
         'registration_number',
         'contact_email',
