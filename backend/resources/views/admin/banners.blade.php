@@ -266,6 +266,12 @@
                         <label style="font-size: 12px; font-weight: 700; color: var(--adm-text); margin-bottom: 6px; display: block;">CUSTOM IMAGE UPLOAD (OPTIONAL)</label>
                         <input type="file" name="image" id="inputImage" accept="image/*" style="width: 100%; padding: 8px; border: 1px solid var(--adm-border); border-radius: 8px; font-size: 12px; background: #F8FAFC;">
                         <span style="display: block; font-size: 11px; color: #64748B; margin-top: 3px;">Full cover image for Template 2, or product cutout photo for split templates.</span>
+                        <div id="bannerOptBadge" style="display: none; margin-top: 6px; padding: 6px 10px; background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 6px; font-size: 11.5px; color: #065F46; font-weight: 600;">
+                            ⚡ <span id="bannerOptDetails">Optimized on-device for ultra-fast CDN loading</span>
+                        </div>
+                        <div id="bannerCompressing" style="display: none; margin-top: 6px; font-size: 11.5px; color: #2563EB;">
+                            ⏳ Compressing high-res banner on-device to WebP...
+                        </div>
                     </div>
 
                     <div style="display: flex; gap: 20px; align-items: center; margin-top: 10px;">
@@ -419,6 +425,7 @@
     </div>
 
     <!-- Live Simulation Interactive JavaScript Engine -->
+    <script src="{{ asset('assets/js/client-image-optimizer.js') }}"></script>
     <script>
         let currentTemplate = 'luxury_split';
 
@@ -619,11 +626,44 @@
                 });
             }
             if (inputImage && simImage) {
-                inputImage.addEventListener('change', function () {
+                inputImage.addEventListener('change', async function () {
                     if (this.files && this.files[0]) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => simImage.src = e.target.result;
-                        reader.readAsDataURL(this.files[0]);
+                        const rawFile = this.files[0];
+                        const bannerCompressing = document.getElementById('bannerCompressing');
+                        const bannerOptBadge = document.getElementById('bannerOptBadge');
+                        const bannerOptDetails = document.getElementById('bannerOptDetails');
+
+                        if (bannerCompressing) bannerCompressing.style.display = 'block';
+
+                        if (window.ClientImageOptimizer && typeof window.ClientImageOptimizer.compressFile === 'function') {
+                            try {
+                                const result = await window.ClientImageOptimizer.compressFile(rawFile, {
+                                    maxDimension: 1920,
+                                    quality: 0.85
+                                });
+
+                                simImage.src = result.previewUrl;
+
+                                // Sync compressed file back into inputImage via DataTransfer
+                                inputImage.files = window.ClientImageOptimizer.createFileList([result.file]);
+
+                                if (bannerOptBadge && bannerOptDetails) {
+                                    bannerOptDetails.textContent = `Optimized banner on-device: ${window.ClientImageOptimizer.formatBytes(result.originalSize)} → ${window.ClientImageOptimizer.formatBytes(result.optimizedSize)} (${result.reductionPercent}% saved) ⚡`;
+                                    bannerOptBadge.style.display = 'block';
+                                }
+                            } catch (err) {
+                                console.error('Banner compression fallback:', err);
+                                const reader = new FileReader();
+                                reader.onload = (e) => simImage.src = e.target.result;
+                                reader.readAsDataURL(rawFile);
+                            } finally {
+                                if (bannerCompressing) bannerCompressing.style.display = 'none';
+                            }
+                        } else {
+                            const reader = new FileReader();
+                            reader.onload = (e) => simImage.src = e.target.result;
+                            reader.readAsDataURL(rawFile);
+                        }
                     }
                 });
             }

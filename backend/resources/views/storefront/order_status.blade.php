@@ -190,12 +190,18 @@
                             </div>
 
                             <!-- Preview Thumbnail (revealed on selection) -->
-                            <div id="proofPhotoPreviewContainer" style="display: none; margin-top: 12px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 10px; max-width: 220px;">
-                                <img id="proofPhotoPreviewImg" src="" alt="Proof Preview" style="width: 100%; height: 130px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); display: block; margin-bottom: 6px;">
+                            <div id="proofPhotoPreviewContainer" style="display: none; margin-top: 12px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 10px; max-width: 260px;">
+                                <img id="proofPhotoPreviewImg" src="" alt="Proof Preview" style="width: 100%; height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); display: block; margin-bottom: 6px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-size: 11px; color: #A7F3D0; font-weight: 700;">✓ Photo Attached</span>
                                     <button type="button" onclick="removeProofPhoto()" style="background: transparent; border: none; color: #F87171; font-size: 11.5px; font-weight: 700; cursor: pointer;">Remove</button>
                                 </div>
+                                <div id="customerProofOptBadge" style="display: none; margin-top: 6px; font-size: 10.5px; color: #6EE7B7; font-weight: 700;">
+                                    ⚡ Optimized on-device (<span id="customerProofOptDetails"></span>)
+                                </div>
+                            </div>
+                            <div id="customerProofCompressing" style="display: none; margin-top: 6px; font-size: 11.5px; color: #93C5FD;">
+                                ⏳ Compressing photo &amp; protecting privacy...
                             </div>
                         </div>
 
@@ -454,16 +460,58 @@
 </div>
 
 <!-- Real-time Polling & Camera Preview Script -->
+<script src="{{ asset('assets/js/client-image-optimizer.js') }}"></script>
 <script>
-    function previewProofImage(input) {
+    async function previewProofImage(input) {
         if (input.files && input.files[0]) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById('proofPhotoPreviewImg').src = e.target.result;
-                document.getElementById('proofPhotoPreviewContainer').style.display = 'block';
-                document.getElementById('snapButtonText').innerText = 'Change Snapped Photo';
-            };
-            reader.readAsDataURL(input.files[0]);
+            const rawFile = input.files[0];
+            const previewImg = document.getElementById('proofPhotoPreviewImg');
+            const container = document.getElementById('proofPhotoPreviewContainer');
+            const compressingEl = document.getElementById('customerProofCompressing');
+            const optBadge = document.getElementById('customerProofOptBadge');
+            const optDetails = document.getElementById('customerProofOptDetails');
+
+            if (compressingEl) compressingEl.style.display = 'block';
+
+            if (window.ClientImageOptimizer && typeof window.ClientImageOptimizer.compressFile === 'function') {
+                try {
+                    const result = await window.ClientImageOptimizer.compressFile(rawFile, {
+                        maxDimension: 1200,
+                        quality: 0.80
+                    });
+
+                    previewImg.src = result.previewUrl;
+                    container.style.display = 'block';
+                    document.getElementById('snapButtonText').innerText = 'Change Snapped Photo';
+
+                    // Sync compressed file back into input.files via DataTransfer
+                    input.files = window.ClientImageOptimizer.createFileList([result.file]);
+
+                    if (optBadge && optDetails) {
+                        optDetails.textContent = `${window.ClientImageOptimizer.formatBytes(result.originalSize)} → ${window.ClientImageOptimizer.formatBytes(result.optimizedSize)}, ${result.reductionPercent}% saved`;
+                        optBadge.style.display = 'block';
+                    }
+                } catch (err) {
+                    console.error('Customer proof compression fallback:', err);
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        previewImg.src = e.target.result;
+                        container.style.display = 'block';
+                        document.getElementById('snapButtonText').innerText = 'Change Snapped Photo';
+                    };
+                    reader.readAsDataURL(rawFile);
+                } finally {
+                    if (compressingEl) compressingEl.style.display = 'none';
+                }
+            } else {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    container.style.display = 'block';
+                    document.getElementById('snapButtonText').innerText = 'Change Snapped Photo';
+                };
+                reader.readAsDataURL(rawFile);
+            }
         }
     }
 
@@ -472,6 +520,8 @@
         input.value = '';
         document.getElementById('proofPhotoPreviewImg').src = '';
         document.getElementById('proofPhotoPreviewContainer').style.display = 'none';
+        const optBadge = document.getElementById('customerProofOptBadge');
+        if (optBadge) optBadge.style.display = 'none';
         document.getElementById('snapButtonText').innerText = 'Tap to Snap / Upload Photo';
     }
 

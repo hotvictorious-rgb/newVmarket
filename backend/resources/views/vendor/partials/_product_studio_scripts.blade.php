@@ -1,9 +1,12 @@
+    <script src="{{ asset('assets/js/client-image-optimizer.js') }}"></script>
     <!-- Facebook Marketplace Listing Interactive JavaScript Engine -->
     <script>
         // State
         let uploadedFiles = [];
         let activeHeroIndex = 0;
         let isPriceValid = true;
+        let totalOriginalBytes = 0;
+        let totalOptimizedBytes = 0;
 
         function openNewProductModal() {
             const modal = document.getElementById('vmNewProductModal');
@@ -44,27 +47,64 @@
             document.getElementById('fbFileInput').click();
         }
 
-        // Handle File Selection
-        function handlePhotosSelected(fileList) {
-            const newFiles = Array.from(fileList);
+        // Handle File Selection with On-Device Compression & Privacy Strip
+        async function handlePhotosSelected(fileList) {
+            const newFiles = Array.from(fileList || []);
             const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
-            const maxSize = 5 * 1024 * 1024; // 5MB
+            const spinner = document.getElementById('fbOptimizingSpinner');
+            const statsCard = document.getElementById('fbOptimizationStats');
 
+            const candidateFiles = [];
             for (let file of newFiles) {
                 if (!validTypes.includes(file.type)) {
-                    alert('Photo must be JPG, PNG, JPEG or WEBP format.');
+                    alert(`"${file.name}" is not a supported format. Please select JPG, PNG, JPEG or WEBP.`);
                     continue;
                 }
-                if (file.size > maxSize) {
-                    alert(`"${file.name}" exceeds 5MB size limit.`);
-                    continue;
-                }
-                if (uploadedFiles.length < 10) {
-                    uploadedFiles.push(file);
-                } else {
+                if (uploadedFiles.length + candidateFiles.length >= 10) {
                     alert('Maximum 10 photos allowed per listing.');
                     break;
                 }
+                candidateFiles.push(file);
+            }
+
+            if (candidateFiles.length === 0) return;
+
+            if (spinner) spinner.style.display = 'block';
+
+            try {
+                for (let rawFile of candidateFiles) {
+                    let fileToAdd = rawFile;
+                    let origSize = rawFile.size;
+                    let optSize = rawFile.size;
+
+                    if (window.ClientImageOptimizer && typeof window.ClientImageOptimizer.compressFile === 'function') {
+                        const result = await window.ClientImageOptimizer.compressFile(rawFile, {
+                            maxDimension: 1600,
+                            quality: 0.82
+                        });
+                        fileToAdd = result.file;
+                        origSize = result.originalSize;
+                        optSize = result.optimizedSize;
+                    }
+
+                    uploadedFiles.push(fileToAdd);
+                    totalOriginalBytes += origSize;
+                    totalOptimizedBytes += optSize;
+                }
+
+                // Update Optimization Statistics Feedback
+                if (statsCard && totalOriginalBytes > 0 && window.ClientImageOptimizer) {
+                    const savingsPercent = Math.max(0, Math.round(((totalOriginalBytes - totalOptimizedBytes) / totalOriginalBytes) * 100));
+                    document.getElementById('fbOptimizationSummary').innerHTML = 
+                        `<strong>${uploadedFiles.length} photo(s) optimized on-device:</strong> ${window.ClientImageOptimizer.formatBytes(totalOriginalBytes)} &rarr; ${window.ClientImageOptimizer.formatBytes(totalOptimizedBytes)}`;
+                    const savingsBadge = document.getElementById('fbOptimizationSavings');
+                    savingsBadge.textContent = `${savingsPercent}% data saved ⚡`;
+                    statsCard.style.display = 'flex';
+                }
+            } catch (err) {
+                console.error('Client compression error:', err);
+            } finally {
+                if (spinner) spinner.style.display = 'none';
             }
 
             updateGalleryUI();
@@ -95,6 +135,14 @@
             if (activeHeroIndex >= uploadedFiles.length) {
                 activeHeroIndex = Math.max(0, uploadedFiles.length - 1);
             }
+
+            if (uploadedFiles.length === 0) {
+                totalOriginalBytes = 0;
+                totalOptimizedBytes = 0;
+                const statsCard = document.getElementById('fbOptimizationStats');
+                if (statsCard) statsCard.style.display = 'none';
+            }
+
             updateGalleryUI();
             updateFileInputDataTransfer();
             validatePhotoRequirement();

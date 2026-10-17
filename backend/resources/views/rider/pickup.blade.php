@@ -174,12 +174,18 @@
                         </div>
 
                         <!-- Preview Container -->
-                        <div id="pickupPhotoPreviewContainer" style="display: none; margin-top: 12px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 10px; max-width: 220px;">
-                            <img id="pickupPhotoPreviewImg" src="" alt="Proof Preview" style="width: 100%; height: 130px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); display: block; margin-bottom: 6px;">
+                        <div id="pickupPhotoPreviewContainer" style="display: none; margin-top: 12px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 10px; max-width: 260px;">
+                            <img id="pickupPhotoPreviewImg" src="" alt="Proof Preview" style="width: 100%; height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.3); display: block; margin-bottom: 6px;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <span style="font-size: 11px; color: #A7F3D0; font-weight: 700;">✓ Photo Attached</span>
                                 <button type="button" onclick="removePickupPhoto()" style="background: transparent; border: none; color: #F87171; font-size: 11.5px; font-weight: 700; cursor: pointer;">Remove</button>
                             </div>
+                            <div id="pickupOptBadge" style="display: none; margin-top: 6px; font-size: 10.5px; color: #6EE7B7; font-weight: 700;">
+                                ⚡ Optimized on-device (<span id="pickupOptDetails"></span>)
+                            </div>
+                        </div>
+                        <div id="pickupCompressing" style="display: none; margin-top: 6px; font-size: 11.5px; color: #93C5FD;">
+                            ⏳ Compressing photo &amp; stripping GPS data...
                         </div>
                     </div>
 
@@ -221,22 +227,66 @@
         </div>
     @endif
 
+    <script src="{{ asset('assets/js/client-image-optimizer.js') }}"></script>
     <script>
-        function previewPickupImage(input) {
+        async function previewPickupImage(input) {
             if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    document.getElementById('pickupPhotoPreviewImg').src = e.target.result;
-                    document.getElementById('pickupPhotoPreviewContainer').style.display = 'block';
-                    document.getElementById('snapPickupBtnText').innerText = 'Change Photo';
-                };
-                reader.readAsDataURL(input.files[0]);
+                const rawFile = input.files[0];
+                const previewImg = document.getElementById('pickupPhotoPreviewImg');
+                const container = document.getElementById('pickupPhotoPreviewContainer');
+                const compressingEl = document.getElementById('pickupCompressing');
+                const optBadge = document.getElementById('pickupOptBadge');
+                const optDetails = document.getElementById('pickupOptDetails');
+
+                if (compressingEl) compressingEl.style.display = 'block';
+
+                if (window.ClientImageOptimizer && typeof window.ClientImageOptimizer.compressFile === 'function') {
+                    try {
+                        const result = await window.ClientImageOptimizer.compressFile(rawFile, {
+                            maxDimension: 1200,
+                            quality: 0.80
+                        });
+
+                        previewImg.src = result.previewUrl;
+                        container.style.display = 'block';
+                        document.getElementById('snapPickupBtnText').innerText = 'Change Photo';
+
+                        // Sync compressed WebP file into input.files via DataTransfer
+                        input.files = window.ClientImageOptimizer.createFileList([result.file]);
+
+                        if (optBadge && optDetails) {
+                            optDetails.textContent = `${window.ClientImageOptimizer.formatBytes(result.originalSize)} → ${window.ClientImageOptimizer.formatBytes(result.optimizedSize)}, ${result.reductionPercent}% saved`;
+                            optBadge.style.display = 'block';
+                        }
+                    } catch (err) {
+                        console.error('Pickup photo compression fallback:', err);
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            previewImg.src = e.target.result;
+                            container.style.display = 'block';
+                            document.getElementById('snapPickupBtnText').innerText = 'Change Photo';
+                        };
+                        reader.readAsDataURL(rawFile);
+                    } finally {
+                        if (compressingEl) compressingEl.style.display = 'none';
+                    }
+                } else {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        previewImg.src = e.target.result;
+                        container.style.display = 'block';
+                        document.getElementById('snapPickupBtnText').innerText = 'Change Photo';
+                    };
+                    reader.readAsDataURL(rawFile);
+                }
             }
         }
 
         function removePickupPhoto() {
             document.getElementById('proof_photo').value = '';
             document.getElementById('pickupPhotoPreviewContainer').style.display = 'none';
+            const optBadge = document.getElementById('pickupOptBadge');
+            if (optBadge) optBadge.style.display = 'none';
             document.getElementById('snapPickupBtnText').innerText = 'Tap to Snap / Upload Photo';
         }
 

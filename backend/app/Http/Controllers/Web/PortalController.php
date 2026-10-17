@@ -440,6 +440,7 @@ class PortalController extends Controller
 
         // Logistics Corporate Payout Requests
         $pendingLogisticsPayouts = LogisticsPayoutRequest::with('company')->latest()->get();
+        $pendingVendorPayouts = VendorPayoutRequest::with('vendor')->latest()->get();
         $totalLogisticsEscrowBalance = LogisticsCompanyProfile::sum('wallet_balance');
         $refundWindowHours = (int) \App\Models\SystemSetting::get('refund_window_hours', 24);
 
@@ -452,6 +453,7 @@ class PortalController extends Controller
             'totalDeliveryCommission',
             'totalVMarketEarnings',
             'pendingLogisticsPayouts',
+            'pendingVendorPayouts',
             'totalLogisticsEscrowBalance',
             'refundWindowHours'
         ));
@@ -1029,19 +1031,95 @@ class PortalController extends Controller
     {
         $vendor = $this->resolveVendorProfile();
 
-        $grossSales = Order::where('vendor_id', $vendor->id)->sum('total_amount');
-        $netEarnings = Order::where('vendor_id', $vendor->id)->sum('vendor_earning_90');
-        $settledAmount = Order::where('vendor_id', $vendor->id)->where('vendor_settlement_status', 'settled')->sum('vendor_earning_90');
-        $pendingSettlement = Order::where('vendor_id', $vendor->id)->whereIn('vendor_settlement_status', ['eligible', 'held'])->sum('vendor_earning_90');
-
         $vendorMetrics = [
-            'gross_sales' => $grossSales,
-            'net_earnings' => $netEarnings,
-            'settled_amount' => $settledAmount,
-            'pending_settlement' => $pendingSettlement,
+            'gross_sales' => $vendor->getGrossSales(),
+            'net_earnings' => $vendor->getLifetimeNetEarnings(),
+            'escrow_held' => $vendor->getEscrowHeldBalance(),
+            'withdrawable_balance' => $vendor->getWithdrawableBalance(),
+            'pending_payout' => $vendor->getPendingPayoutBalance(),
+            'settled_amount' => $vendor->getTotalSettledBalance(),
         ];
 
-        return view('vendor.payout', compact('vendor', 'vendorMetrics'));
+        $payoutRequests = VendorPayoutRequest::where('vendor_id', $vendor->id)
+            ->latest()
+            ->take(20)
+            ->get();
+
+        return view('vendor.payout', compact('vendor', 'vendorMetrics', 'payoutRequests'));
+    }
+
+    /**
+     * Interactive Action: Merchant requests payout from cleared eligible withdrawable balance
+     */
+    public function vendorRequestPayout(Request $request)
+    {
+        $vendor = $this->resolveVendorProfile();
+
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:1000|max:50000000',
+        ]);
+
+        if ($vendor->marketplace_status !== 'active') {
+            return back()->with('error', 'Unauthorized: Merchant store is inactive or suspended.');
+        }
+
+        if (empty($vendor->account_number) || empty($vendor->bank_name)) {
+            return back()->with('error', 'Please configure your verified commercial bank account before requesting withdrawal.');
+        }
+
+        if ($vendor->isWithinBankCooldown()) {
+            return back()->with('error', 'Security Cooldown Active: Bank account was recently updated. For fraud prevention, withdrawals are locked for 48 hours following bank detail modifications.');
+        }
+
+        return DB::transaction(function () use ($vendor, $validated) {
+            $lockedVendor = VendorProfile::where('id', $vendor->id)->lockForUpdate()->first();
+            $withdrawable = $lockedVendor->getWithdrawableBalance();
+            $amount = number_format((float)$validated['amount'], 2, '.', '');
+
+            if (\App\Services\BcMathService::comp((string)$amount, (string)$withdrawable) > 0) {
+                return back()->with('error', "Insufficient withdrawable balance. Your available cleared balance is ₦" . number_format((float)$withdrawable, 2) . ". In-transit or pending orders are held in platform escrow.");
+            }
+
+            $payout = VendorPayoutRequest::create([
+                'vendor_id' => $lockedVendor->id,
+                'amount' => $amount,
+                'status' => 'pending',
+                'bank_name' => $lockedVendor->bank_name,
+                'bank_code' => $lockedVendor->bank_code,
+                'account_number' => $lockedVendor->account_number,
+                'account_name' => $lockedVendor->account_name ?? $lockedVendor->business_name,
+            ]);
+
+            // Authoritative double-entry financial journal
+            $reqRef = 'MERCHANT-REQ-' . $lockedVendor->id . '-' . date('YmdHis');
+            \App\Models\FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => $reqRef,
+                'event_id' => 'EVT-MERCHANT-REQ-' . $payout->id,
+                'beneficiary_type' => VendorProfile::class,
+                'beneficiary_id' => $lockedVendor->id,
+                'account_name' => 'vendor_escrow_holding',
+                'entry_type' => 'debit',
+                'amount' => $amount,
+                'currency' => 'NGN',
+                'description' => "Merchant payout request placed by {$lockedVendor->business_name}",
+            ]);
+
+            \App\Models\FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => $reqRef,
+                'event_id' => 'EVT-MERCHANT-REQ-' . $payout->id,
+                'beneficiary_type' => VendorProfile::class,
+                'beneficiary_id' => $lockedVendor->id,
+                'account_name' => 'vendor_payout_payable',
+                'entry_type' => 'credit',
+                'amount' => $amount,
+                'currency' => 'NGN',
+                'description' => "Merchant withdrawal liability accrued for {$lockedVendor->business_name}",
+            ]);
+
+            return back()->with('status', "Withdrawal request of ₦" . number_format((float)$amount, 2) . " submitted successfully for Super Admin audit & disbursement.");
+        });
     }
 
     /**
@@ -1207,6 +1285,11 @@ class PortalController extends Controller
             'on_road' => $activeRiders->where('is_online', true)->count(),
             'accumulated_fees' => $totalRevenue,
             'payouts_count' => $payoutRequests->count(),
+            'total_delivery_earnings' => $company->getTotalDeliveryEarnings(),
+            'in_transit_escrow' => $company->getInTransitEscrowBalance(),
+            'pending_payout' => $company->getPendingPayoutBalance(),
+            'total_disbursed' => $company->getTotalDisbursedBalance(),
+            'withdrawable_balance' => $company->getWithdrawableBalance(),
         ];
 
         return view('logistics.wallet', compact('company', 'completedRuns', 'fleetMetrics', 'payoutRequests'));
@@ -1774,6 +1857,265 @@ class PortalController extends Controller
     /**
      * Interactive Action: Super Admin configures Platform Escrow & Cashback Maturation Refund Window
      */
+    
+    /**
+     * Interactive Action: Admin rejects a logistics company withdrawal request and atomically restores wallet balance
+     */
+    public function adminRejectLogisticsPayout(Request $request)
+    {
+        $validated = $request->validate([
+            'payout_id' => 'required|exists:logistics_payout_requests,id',
+            'rejection_reason' => 'required|string|min:5|max:1000',
+        ]);
+
+        $admin = Auth::user() ?? User::where('user_type', 'super_admin')->first();
+        if (!$admin || (!$admin->isSuperAdmin() && !$admin->isAdminEmployee()) || $admin->status !== 'active') {
+            return back()->with('error', 'Unauthorized: Administrative finance permissions required.');
+        }
+
+        return DB::transaction(function () use ($validated, $admin, $request) {
+            $payout = LogisticsPayoutRequest::with('company')->where('id', $validated['payout_id'])->lockForUpdate()->firstOrFail();
+            if ($payout->status !== 'pending') {
+                return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
+            }
+
+            $company = $payout->company;
+            $payout->status = 'rejected';
+            $payout->rejection_reason = strip_tags(trim($validated['rejection_reason']));
+            $payout->save();
+
+            // Atomic Wallet Refund
+            $company->creditWallet($payout->amount);
+
+            // Double-entry journal reversal
+            $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
+            \App\Models\FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => 'FLEET-REJECT-' . $payout->id . '-' . date('YmdHis'),
+                'event_id' => 'EVT-FLEET-REJECT-' . $payout->id,
+                'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                'beneficiary_id' => $company->id,
+                'account_name' => 'logistics_payout_payable',
+                'entry_type' => 'credit',
+                'amount' => $formattedPayoutAmount,
+                'currency' => 'NGN',
+                'description' => "Corporate withdrawal request rejected - wallet balance restored for {$company->company_name}: {$payout->rejection_reason}",
+            ]);
+
+            AdminAuditLog::create([
+                'user_id' => $admin->id,
+                'action' => 'logistics_payout_rejected',
+                'target_type' => LogisticsPayoutRequest::class,
+                'target_id' => $payout->id,
+                'old_values' => ['status' => 'pending'],
+                'new_values' => [
+                    'status' => 'rejected',
+                    'rejection_reason' => $payout->rejection_reason,
+                    'restored_balance' => $company->wallet_balance,
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return back()->with('status', 'Logistics corporate withdrawal request rejected and wallet balance refunded successfully.');
+        });
+    }
+
+    /**
+     * Interactive Action: Admin disburses 90% merchandise earnings payout to Merchant via Paystack Transfer API
+     */
+    public function adminDisburseVendorPayout(Request $request)
+    {
+        $validated = $request->validate([
+            'payout_id' => 'required|exists:vendor_payout_requests,id',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $admin = Auth::user() ?? User::where('user_type', 'super_admin')->first();
+        if (!$admin || (!$admin->isSuperAdmin() && !$admin->isAdminEmployee()) || $admin->status !== 'active') {
+            return back()->with('error', 'Unauthorized: Administrative finance permissions required.');
+        }
+
+        $payout = \App\Models\VendorPayoutRequest::with('vendor')->where('id', $validated['payout_id'])->firstOrFail();
+        if ($payout->status !== 'pending') {
+            return back()->with('error', "Vendor payout request #{$payout->id} has already been {$payout->status}.");
+        }
+
+        $vendor = $payout->vendor;
+        if (!$vendor || $vendor->marketplace_status !== 'active') {
+            return back()->with('error', 'Disbursement blocked: Merchant shop is inactive or suspended.');
+        }
+
+        if ($vendor->isWithinBankCooldown()) {
+            return back()->with('error', 'Disbursement blocked: Merchant bank account was recently updated and is under a 48-hour security cooldown.');
+        }
+
+        // Validate Merchant bank details
+        $accountNum = trim((string)($vendor->account_number ?? $payout->account_number));
+        $bankName = trim((string)($vendor->bank_name ?? $payout->bank_name));
+        $bankCode = trim((string)($vendor->bank_code ?? ''));
+        $accountName = trim((string)($vendor->account_name ?? $payout->account_name));
+
+        if (empty($accountNum) || empty($accountName)) {
+            return back()->with('error', 'Disbursement blocked: Incomplete NUBAN bank details on merchant profile.');
+        }
+
+        $paystackService = app(\App\Services\PaystackService::class);
+        $disburseRef = 'VND-PAYOUT-' . $payout->id . '-' . date('YmdHis');
+
+        // 1. Resolve or Create Paystack Transfer Recipient
+        $recipientRes = $paystackService->createTransferRecipient(
+            $accountName,
+            $accountNum,
+            $bankCode ?: $bankName
+        );
+
+        if (!$recipientRes['success']) {
+            return back()->with('error', 'Paystack Transfer Recipient Error: ' . ($recipientRes['message'] ?? 'Unable to resolve merchant bank account on NIBSS.'));
+        }
+
+        $recipientCode = $recipientRes['recipient_code'];
+
+        // 2. Authoritative Paystack Automated Transfer Execution
+        $transferRes = $paystackService->initiateTransfer(
+            $recipientCode,
+            (string)$payout->amount,
+            "Merchant 90% earnings payout for {$vendor->business_name}",
+            $disburseRef
+        );
+
+        if (!$transferRes['success']) {
+            return back()->with('error', 'Paystack Transfer Initiation Error: ' . ($transferRes['message'] ?? 'Automated transfer could not be initiated with bank gateway.'));
+        }
+
+        $transferCode = $transferRes['transfer_code'] ?? ('TRF_AUTO_VND_' . $payout->id);
+        $proofPath = 'paystack_transfer:' . $transferCode;
+
+        return DB::transaction(function () use ($validated, $admin, $proofPath, $disburseRef, $transferCode, $request) {
+            $payout = \App\Models\VendorPayoutRequest::with('vendor')->where('id', $validated['payout_id'])->lockForUpdate()->firstOrFail();
+            if ($payout->status !== 'pending') {
+                return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
+            }
+
+            $vendor = $payout->vendor;
+            $payout->status = 'approved';
+            $payout->approved_by_admin_id = $admin->id;
+            $payout->disbursed_at = Carbon::now();
+            $payout->settlement_proof_path = $proofPath;
+            $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Automated Paystack NUBAN Transfer (' . $transferCode . '). Approved by Admin #' . $admin->id));
+            $payout->save();
+
+            // Transition eligible merchant orders up to payout amount to settled
+            $remainingToSettle = (float)$payout->amount;
+            $eligibleOrders = Order::where('vendor_id', $vendor->id)
+                ->where('vendor_settlement_status', 'eligible')
+                ->orderBy('id', 'asc')
+                ->lockForUpdate()
+                ->get();
+            foreach ($eligibleOrders as $order) {
+                if ($remainingToSettle <= 0) break;
+                $order->vendor_settlement_status = 'settled';
+                $order->settled_at = Carbon::now();
+                $order->settled_by_admin_id = $admin->id;
+                $order->settlement_proof_path = $proofPath;
+                $order->save();
+                $remainingToSettle -= (float)$order->vendor_net_90;
+            }
+
+            // Double-Entry Financial Journal: Discharge vendor payable, credit cash_in_escrow outflow
+            $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
+            \App\Models\FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => $disburseRef,
+                'event_id' => 'EVT-VND-PAYOUT-' . $payout->id,
+                'beneficiary_type' => \App\Models\VendorProfile::class,
+                'beneficiary_id' => $vendor->id,
+                'account_name' => 'vendor_payable',
+                'entry_type' => 'debit',
+                'amount' => $formattedPayoutAmount,
+                'currency' => 'NGN',
+                'description' => "Merchant withdrawal liability discharged via Paystack automated transfer ({$transferCode}) to {$vendor->business_name}",
+            ]);
+
+            \App\Models\FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => $disburseRef,
+                'event_id' => 'EVT-VND-PAYOUT-' . $payout->id,
+                'beneficiary_type' => \App\Models\VendorProfile::class,
+                'beneficiary_id' => $vendor->id,
+                'account_name' => 'cash_in_escrow',
+                'entry_type' => 'credit',
+                'amount' => $formattedPayoutAmount,
+                'currency' => 'NGN',
+                'description' => "Merchant Paystack bank transfer disbursement to {$vendor->business_name} (Acct: {$vendor->account_number}, Code: {$transferCode})",
+            ]);
+
+            AdminAuditLog::create([
+                'user_id' => $admin->id,
+                'action' => 'vendor_payout_disbursed',
+                'target_type' => \App\Models\VendorPayoutRequest::class,
+                'target_id' => $payout->id,
+                'old_values' => ['status' => 'pending'],
+                'new_values' => [
+                    'status' => 'approved',
+                    'amount' => $payout->amount,
+                    'vendor_id' => $vendor->id,
+                    'vendor_name' => $vendor->business_name,
+                    'proof_path' => $payout->settlement_proof_path,
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " merchandise earnings to {$vendor->business_name}!");
+        });
+    }
+
+    /**
+     * Interactive Action: Admin rejects a merchant withdrawal request and atomically frees withdrawable balance
+     */
+    public function adminRejectVendorPayout(Request $request)
+    {
+        $validated = $request->validate([
+            'payout_id' => 'required|exists:vendor_payout_requests,id',
+            'rejection_reason' => 'required|string|min:5|max:1000',
+        ]);
+
+        $admin = Auth::user() ?? User::where('user_type', 'super_admin')->first();
+        if (!$admin || (!$admin->isSuperAdmin() && !$admin->isAdminEmployee()) || $admin->status !== 'active') {
+            return back()->with('error', 'Unauthorized: Administrative finance permissions required.');
+        }
+
+        return DB::transaction(function () use ($validated, $admin, $request) {
+            $payout = \App\Models\VendorPayoutRequest::with('vendor')->where('id', $validated['payout_id'])->lockForUpdate()->firstOrFail();
+            if ($payout->status !== 'pending') {
+                return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
+            }
+
+            $vendor = $payout->vendor;
+            $payout->status = 'rejected';
+            $payout->rejection_reason = strip_tags(trim($validated['rejection_reason']));
+            $payout->save();
+
+            AdminAuditLog::create([
+                'user_id' => $admin->id,
+                'action' => 'vendor_payout_rejected',
+                'target_type' => \App\Models\VendorPayoutRequest::class,
+                'target_id' => $payout->id,
+                'old_values' => ['status' => 'pending'],
+                'new_values' => [
+                    'status' => 'rejected',
+                    'rejection_reason' => $payout->rejection_reason,
+                    'vendor_id' => $vendor->id,
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return back()->with('status', 'Merchant withdrawal request rejected and funds restored successfully.');
+        });
+    }
+
     public function adminUpdateFinancialSettings(Request $request)
     {
         $admin = Auth::user();

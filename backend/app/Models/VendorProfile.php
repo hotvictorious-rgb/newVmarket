@@ -175,7 +175,7 @@ class VendorProfile extends Model
     {
         $sum = Order::where('vendor_id', $this->id)
             ->where('payment_status', 'paid')
-            ->sum('total_amount');
+            ->sum('merchandise_subtotal');
         return number_format((float)$sum, 2, '.', '');
     }
 

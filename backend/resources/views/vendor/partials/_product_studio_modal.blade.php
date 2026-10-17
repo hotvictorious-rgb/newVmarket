@@ -94,6 +94,18 @@
 
                             <!-- Dynamic Photo Gallery Thumbnails -->
                             <div id="fbThumbnailGallery" class="fb-thumbnail-gallery" style="display: none;"></div>
+
+                            <!-- Client-Side Zero-Latency Optimization Status -->
+                            <div id="fbOptimizationStats" style="display: none; margin-top: 10px; padding: 10px 14px; background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 8px; font-size: 12px; color: #065F46; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 16px;">⚡</span>
+                                    <span id="fbOptimizationSummary">Optimized on-device for instant upload</span>
+                                </div>
+                                <span id="fbOptimizationSavings" style="font-weight: 700; background: #10B981; color: #ffffff; padding: 2px 8px; border-radius: 999px; font-size: 11px;">0% saved</span>
+                            </div>
+                            <div id="fbOptimizingSpinner" style="display: none; margin-top: 10px; padding: 8px 12px; background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; font-size: 12px; color: #1E40AF; text-align: center;">
+                                ⏳ Optimizing photos on-device (converting to fast WebP &amp; stripping GPS data)...
+                            </div>
                         </div>
 
                         <!-- ITEM DETAILS -->
