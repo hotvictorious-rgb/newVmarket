@@ -47,4 +47,9 @@ return [
         'payment_url' => env('PAYSTACK_PAYMENT_URL', 'https://api.paystack.co'),
     ],
 
+    'termii' => [
+        'key' => env('TERMII_API_KEY'),
+        'sender_id' => env('TERMII_SENDER_ID', 'VMARKET'),
+    ],
+
 ];

@@ -17,6 +17,7 @@ class LogisticsPayoutRequest extends Model
         'disbursed_at',
         'settlement_proof_path',
         'admin_notes',
+        'rejection_reason',
     ];
 
     protected $casts = [

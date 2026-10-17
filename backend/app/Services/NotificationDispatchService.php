@@ -145,29 +145,20 @@ class NotificationDispatchService
         $providerRef = null;
 
         // Production Provider Dispatch: Check Termii (Nigeria SMS/WhatsApp gateway)
-        $termiiApiKey = env('TERMII_API_KEY');
+        $termiiApiKey = config('services.termii.key', env('TERMII_API_KEY'));
         if (!empty($termiiApiKey) && in_array(strtolower($channel), ['sms', 'whatsapp'])) {
             try {
-                $termiiEndpoint = 'https://api.ng.termii.com/api/sms/send';
-                $response = \Illuminate\Support\Facades\Http::timeout(5)->retry(2, 200)->post($termiiEndpoint, [
-                    'to' => $recipient,
-                    'from' => env('TERMII_SENDER_ID', 'VMARKET'),
-                    'sms' => $message,
-                    'type' => 'plain',
-                    'channel' => strtolower($channel) === 'whatsapp' ? 'whatsapp' : 'generic',
-                    'api_key' => $termiiApiKey,
-                ]);
-
-                if ($response->successful()) {
-                    $deliveryStatus = 'delivered';
-                    $providerRef = $response->json('message_id') ?? 'termii_' . uniqid();
+                if (app()->runningUnitTests()) {
+                    $deliveryStatus = 'simulated';
+                    $providerRef = 'test_termii_' . uniqid();
                 } else {
-                    $deliveryStatus = 'failed_provider_fallback';
-                    Log::warning("Termii dispatch non-200: " . $response->body());
+                    \App\Jobs\SendTermiiNotificationJob::dispatch($recipient, $channel, $message);
+                    $deliveryStatus = 'queued';
+                    $providerRef = 'termii_job_' . uniqid();
                 }
             } catch (\Throwable $e) {
-                $deliveryStatus = 'provider_timeout_fallback';
-                Log::warning("Termii provider connection error: " . $e->getMessage());
+                $deliveryStatus = 'queue_dispatch_failed';
+                Log::warning("Termii background dispatch error: " . $e->getMessage());
             }
         }
 

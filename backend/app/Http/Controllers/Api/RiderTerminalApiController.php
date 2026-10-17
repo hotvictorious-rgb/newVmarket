@@ -268,8 +268,8 @@ class RiderTerminalApiController extends Controller
 
         $photoPath = null;
         if ($request->hasFile('proof_photo')) {
-            $path = $request->file('proof_photo')->store('pickup_proofs', 'public');
-            $photoPath = 'storage/' . $path;
+            $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('proof_photo'), 'pickup_proofs');
+            $photoPath = $opt['path'];
         }
 
         $result = $this->settlementService->verifyRiderPickupOtp($order, $validated['otp'], $rider, $photoPath);
@@ -339,8 +339,8 @@ class RiderTerminalApiController extends Controller
 
         $photoPath = null;
         if ($request->hasFile('proof_photo')) {
-            $path = $request->file('proof_photo')->store('delivery_attempts', 'public');
-            $photoPath = 'storage/' . $path;
+            $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('proof_photo'), 'delivery_attempts');
+            $photoPath = $opt['path'];
         }
 
         $order->delivery_attempt_count = ((int)$order->delivery_attempt_count) + 1;
@@ -480,8 +480,8 @@ class RiderTerminalApiController extends Controller
 
         $photoPath = null;
         if ($request->hasFile('proof_photo')) {
-            $path = $request->file('proof_photo')->store('doorstep_deliveries', 'public');
-            $photoPath = 'storage/' . $path;
+            $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('proof_photo'), 'doorstep_deliveries');
+            $photoPath = $opt['path'];
         }
 
         $result = $this->settlementService->verifyCustomerDeliveryOtp($order, $validated['otp'], $rider, $photoPath);
@@ -525,16 +525,16 @@ class RiderTerminalApiController extends Controller
 
         $photoPath = null;
         if ($request->hasFile('proof_photo')) {
-            $path = $request->file('proof_photo')->store('doorstep_rejections', 'public');
-            $photoPath = 'storage/' . $path;
+            $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('proof_photo'), 'doorstep_rejections');
+            $photoPath = $opt['path'];
         }
 
         $manifestItems = $validated['manifest_items'];
         foreach ($manifestItems as &$itemInput) {
             $itemId = $itemInput['order_item_id'] ?? 0;
             if ($request->hasFile("item_photo_{$itemId}")) {
-                $path = $request->file("item_photo_{$itemId}")->store('item_defects', 'public');
-                $itemInput['defect_photo_path'] = 'storage/' . $path;
+                $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file("item_photo_{$itemId}"), 'item_defects');
+                $itemInput['defect_photo_path'] = $opt['path'];
             } elseif (($itemInput['rejected_quantity'] ?? 0) > 0 && empty($itemInput['defect_photo_path'])) {
                 return response()->json([
                     'status' => false,
@@ -592,8 +592,8 @@ class RiderTerminalApiController extends Controller
 
         $photoPath = null;
         if ($request->hasFile('proof_photo')) {
-            $path = $request->file('proof_photo')->store('vendor_returns', 'public');
-            $photoPath = 'storage/' . $path;
+            $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('proof_photo'), 'vendor_returns');
+            $photoPath = $opt['path'];
         }
 
         $result = $handshakeService->verifyVendorReturnOtp($case, $rider, $validated['otp'], $photoPath);

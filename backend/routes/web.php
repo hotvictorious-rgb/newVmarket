@@ -94,6 +94,9 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
 
     Route::post('/disburse-settlement', [PortalController::class, 'adminDisburseSettlement'])->name('admin.disburse.settlement');
     Route::post('/disburse-logistics-payout', [PortalController::class, 'adminDisburseLogisticsPayout'])->name('admin.disburse.logistics_payout');
+    Route::post('/reject-logistics-payout', [PortalController::class, 'adminRejectLogisticsPayout'])->name('admin.reject.logistics_payout');
+    Route::post('/disburse-vendor-payout', [PortalController::class, 'adminDisburseVendorPayout'])->name('admin.disburse.vendor_payout');
+    Route::post('/reject-vendor-payout', [PortalController::class, 'adminRejectVendorPayout'])->name('admin.reject.vendor_payout');
     Route::post('/settings/announcement', [PortalController::class, 'adminUpdateAnnouncementSettings'])->name('admin.settings.announcement');
     Route::post('/settings/financial', [PortalController::class, 'adminUpdateFinancialSettings'])->name('admin.settings.financial');
 });
@@ -116,6 +119,7 @@ Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
     Route::get('/shops', [PortalController::class, 'vendorShopsPage'])->name('vendor.shops.index');
     Route::get('/payout-account', [PortalController::class, 'vendorPayoutPage'])->name('vendor.payout.index');
     Route::post('/bank', [PortalController::class, 'vendorUpdateBank'])->name('vendor.bank.update');
+    Route::post('/payout-request', [PortalController::class, 'vendorRequestPayout'])->name('vendor.payout.request');
 
     Route::post('/approve-inspection', [PortalController::class, 'vendorApproveInspection'])->name('vendor.approve.inspection');
     Route::post('/orders/{id}/ready-for-handover', [PortalController::class, 'vendorMarkHandoverReady'])->name('vendor.orders.handover_ready');

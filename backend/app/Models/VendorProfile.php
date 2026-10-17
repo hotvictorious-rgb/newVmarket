@@ -67,6 +67,11 @@ class VendorProfile extends Model
         return $this->hasMany(Order::class, 'vendor_id');
     }
 
+    public function payoutRequests()
+    {
+        return $this->hasMany(VendorPayoutRequest::class, 'vendor_id');
+    }
+
     /**
      * Check if merchant has in-flight unfulfilled orders across all branches.
      */
@@ -164,5 +169,64 @@ class VendorProfile extends Model
     public function isKycVerified(): bool
     {
         return $this->kyc_status === 'verified';
+    }
+
+    public function getGrossSales(): string
+    {
+        $sum = Order::where('vendor_id', $this->id)
+            ->where('payment_status', 'paid')
+            ->sum('total_amount');
+        return number_format((float)$sum, 2, '.', '');
+    }
+
+    public function getLifetimeNetEarnings(): string
+    {
+        $sum = Order::where('vendor_id', $this->id)
+            ->where('payment_status', 'paid')
+            ->whereNotIn('vendor_settlement_status', ['refunded'])
+            ->sum('vendor_net_90');
+        return number_format((float)$sum, 2, '.', '');
+    }
+
+    public function getEscrowHeldBalance(): string
+    {
+        $sum = Order::where('vendor_id', $this->id)
+            ->where('payment_status', 'paid')
+            ->whereIn('vendor_settlement_status', ['held', 'disputed'])
+            ->sum('vendor_net_90');
+        return number_format((float)$sum, 2, '.', '');
+    }
+
+    public function getPendingPayoutBalance(): string
+    {
+        $sum = VendorPayoutRequest::where('vendor_id', $this->id)
+            ->where('status', 'pending')
+            ->sum('amount');
+        return number_format((float)$sum, 2, '.', '');
+    }
+
+    public function getTotalSettledBalance(): string
+    {
+        $sum = Order::where('vendor_id', $this->id)
+            ->where('vendor_settlement_status', 'settled')
+            ->sum('vendor_net_90');
+        return number_format((float)$sum, 2, '.', '');
+    }
+
+    public function getWithdrawableBalance(): string
+    {
+        $eligible = Order::where('vendor_id', $this->id)
+            ->where('vendor_settlement_status', 'eligible')
+            ->sum('vendor_net_90');
+
+        $pending = VendorPayoutRequest::where('vendor_id', $this->id)
+            ->where('status', 'pending')
+            ->sum('amount');
+
+        $diff = \App\Services\BcMathService::sub((string)$eligible, (string)$pending);
+        if (\App\Services\BcMathService::comp($diff, '0.00') < 0) {
+            return '0.00';
+        }
+        return number_format((float)$diff, 2, '.', '');
     }
 }

@@ -22,6 +22,7 @@ use App\Models\User;
 use App\Models\VendorProfile;
 use App\Models\VendorEmployeeProfile;
 use App\Models\LogisticsPayoutRequest;
+use App\Models\VendorPayoutRequest;
 use App\Models\AdminAuditLog;
 use App\Models\ReturnCase;
 use App\Models\ReturnItem;
@@ -2537,8 +2538,8 @@ class PortalController extends Controller
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $file) {
                 if ($file && $file->isValid()) {
-                    $path = $file->store('products', 'public');
-                    $storedUrl = '/storage/' . $path;
+                    $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($file, 'products', ['max_dimension' => 1600, 'quality' => 84]);
+                    $storedUrl = '/' . $opt['path'];
                     $allImages[] = $storedUrl;
                     if (!$imagePath) {
                         $imagePath = $storedUrl;
@@ -2549,8 +2550,8 @@ class PortalController extends Controller
 
         // Process single primary image if uploaded
         if ($request->hasFile('image') && $request->file('image')->isValid()) {
-            $path = $request->file('image')->store('products', 'public');
-            $singleUrl = '/storage/' . $path;
+            $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('image'), 'products', ['max_dimension' => 1600, 'quality' => 84]);
+            $singleUrl = '/' . $opt['path'];
             if (!$imagePath) {
                 $imagePath = $singleUrl;
             }
@@ -2661,9 +2662,9 @@ class PortalController extends Controller
         }
 
         if ($request->hasFile('image') && $request->file('image')->isValid()) {
-            $path = $request->file('image')->store('products', 'public');
-            $product->thumbnail = '/storage/' . $path;
-            $product->primary_image = '/storage/' . $path;
+            $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('image'), 'products', ['max_dimension' => 1600, 'quality' => 84]);
+            $product->thumbnail = '/' . $opt['path'];
+            $product->primary_image = '/' . $opt['path'];
         }
 
         $product->save();

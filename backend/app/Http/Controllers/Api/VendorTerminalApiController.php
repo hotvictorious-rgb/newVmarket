@@ -758,8 +758,8 @@ class VendorTerminalApiController extends Controller
 
         $photoPath = null;
         if ($request->hasFile('dispute_photo')) {
-            $path = $request->file('dispute_photo')->store('vendor_disputes', 'public');
-            $photoPath = 'storage/' . $path;
+            $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('dispute_photo'), 'vendor_disputes');
+            $photoPath = $opt['path'];
         }
 
         $result = $handshakeService->vendorDisputeReturn(

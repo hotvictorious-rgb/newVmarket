@@ -142,5 +142,41 @@ class LogisticsCompanyProfile extends Model
 
         return true;
     }
-}
 
+    public function getTotalDeliveryEarnings(): string
+    {
+        $sum = Order::where('logistics_company_id', $this->id)
+            ->where('order_status', 'delivered')
+            ->sum('delivery_fee');
+        return number_format((float)$sum, 2, '.', '');
+    }
+
+    public function getInTransitEscrowBalance(): string
+    {
+        $sum = Order::where('logistics_company_id', $this->id)
+            ->where('order_status', 'out_for_delivery')
+            ->sum('delivery_fee');
+        return number_format((float)$sum, 2, '.', '');
+    }
+
+    public function getPendingPayoutBalance(): string
+    {
+        $sum = LogisticsPayoutRequest::where('logistics_company_id', $this->id)
+            ->where('status', 'pending')
+            ->sum('amount');
+        return number_format((float)$sum, 2, '.', '');
+    }
+
+    public function getTotalDisbursedBalance(): string
+    {
+        $sum = LogisticsPayoutRequest::where('logistics_company_id', $this->id)
+            ->where('status', 'approved')
+            ->sum('amount');
+        return number_format((float)$sum, 2, '.', '');
+    }
+
+    public function getWithdrawableBalance(): string
+    {
+        return number_format((float)($this->wallet_balance ?? 0), 2, '.', '');
+    }
+}
