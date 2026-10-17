@@ -8,10 +8,6 @@ class DemoAccountRegistry
 
     /**
      * Determine if demo mode is active.
-     * HARD INVARIANT: Permanently disabled in production regardless of config/env.
-     */
-    /**
-     * Determine if demo mode is active.
      * MULTI-LAYER HARDENED INVARIANT:
      * Layer 1: Permanently disabled in production (APP_ENV=production).
      * Layer 2: Must be explicitly enabled via config (app.demo_mode / DEMO_MODE=true).
@@ -46,7 +42,7 @@ class DemoAccountRegistry
     }
 
     /**
-     * Get the 3 registered demo accounts for a specific portal role.
+     * Get the 3 featured demo accounts for a specific portal role.
      * Note: Super Admin returns EMPTY array — Superadmin credentials come strictly from ENV.
      */
     public static function getDemoAccounts(string $role): array
@@ -61,11 +57,13 @@ class DemoAccountRegistry
 
         $catalog = self::demoCatalog();
 
-        return $catalog[$role] ?? [];
+        // Return first 3 featured demo accounts for the portal view
+        $roleAccounts = $catalog[$role] ?? [];
+        return array_slice($roleAccounts, 0, 3);
     }
 
     /**
-     * Lookup demo account metadata by email.
+     * Lookup demo account metadata by email across all registered and alias demo accounts.
      */
     public static function findDemoAccount(string $email): ?array
     {
@@ -73,11 +71,11 @@ class DemoAccountRegistry
             return null;
         }
 
-        foreach (self::demoCatalog() as $role => $accounts) {
-            foreach ($accounts as $account) {
-                if (strtolower($account['email']) === strtolower($email)) {
-                    return $account;
-                }
+        $searchEmail = strtolower(trim($email));
+
+        foreach (self::allDemoAccounts() as $account) {
+            if (strtolower($account['email']) === $searchEmail) {
+                return $account;
             }
         }
 
@@ -85,7 +83,7 @@ class DemoAccountRegistry
     }
 
     /**
-     * Complete catalog of demo personas.
+     * Primary catalog of 3 featured demo personas per portal role.
      */
     public static function demoCatalog(): array
     {
@@ -96,7 +94,7 @@ class DemoAccountRegistry
                     'name' => 'Emeka Okonkwo',
                     'badge' => 'VIP Gold Shopper',
                     'role_label' => 'Customer',
-                    'description' => 'Uyo Municipal Lane • ₦4,500 Cashback Rewards Ledger Active',
+                    'description' => 'Uyo Municipal Lane • ₦72,500 Cashback Rewards Ledger Active',
                     'password' => self::DEMO_PASSWORD,
                 ],
                 [
@@ -104,7 +102,7 @@ class DemoAccountRegistry
                     'name' => 'Amina Bello',
                     'badge' => 'Active Buyer',
                     'role_label' => 'Customer',
-                    'description' => 'Eket Inter-LGA Lane • 3 In-Transit Doorstep Deliveries',
+                    'description' => 'Eket Inter-LGA Lane • In-Transit Doorstep Deliveries with Live OTP',
                     'password' => self::DEMO_PASSWORD,
                 ],
                 [
@@ -112,7 +110,7 @@ class DemoAccountRegistry
                     'name' => 'Chinedu Eze',
                     'badge' => 'Fresh Market Buyer',
                     'role_label' => 'Customer',
-                    'description' => 'Ikot Ekpene Corridor • 5 Completed Orders & Reviews',
+                    'description' => 'Ikot Ekpene Corridor • Completed Orders, Reviews & Pickup Passes',
                     'password' => self::DEMO_PASSWORD,
                 ],
             ],
@@ -150,7 +148,7 @@ class DemoAccountRegistry
                     'name' => 'Victor Bassey (Victor Tech)',
                     'badge' => 'Flagship Electronics',
                     'role_label' => 'Vendor Merchant',
-                    'description' => 'Victor Tech Plaza (Uyo) • ₦1.8M Gross Sales & 14 Products',
+                    'description' => 'Victor Tech Plaza (Uyo) • ₦1.8M Gross Sales & 5 Active Products',
                     'password' => self::DEMO_PASSWORD,
                 ],
                 [
@@ -158,7 +156,7 @@ class DemoAccountRegistry
                     'name' => 'Mercy Etim (Ibom Fresh)',
                     'badge' => 'Farm Produce & Groceries',
                     'role_label' => 'Vendor Merchant',
-                    'description' => 'Ibom Fresh Farm Hub • 48 Fresh Produce SKU Inventory',
+                    'description' => 'Ibom Fresh Farm Hub (Eket) • Grade-A Palm Oil, Crayfish & Produce',
                     'password' => self::DEMO_PASSWORD,
                 ],
                 [
@@ -166,7 +164,7 @@ class DemoAccountRegistry
                     'name' => 'David Okon (Eket Style)',
                     'badge' => 'Apparel & Accessories',
                     'role_label' => 'Vendor Merchant',
-                    'description' => 'Eket Fashion Emporium • Verified Merchant Badge Active',
+                    'description' => 'Eket Fashion Emporium • Verified Merchant Badge & African Wear',
                     'password' => self::DEMO_PASSWORD,
                 ],
             ],
@@ -177,7 +175,7 @@ class DemoAccountRegistry
                     'name' => 'Idara Bassey',
                     'badge' => 'Senior Station Officer',
                     'role_label' => 'Counter Staff',
-                    'description' => 'Uyo Plaza Station 1 • Physical Quality Inspection Desk',
+                    'description' => 'Victor Tech Uyo Station • Physical Quality Inspection Desk',
                     'password' => self::DEMO_PASSWORD,
                 ],
                 [
@@ -185,7 +183,7 @@ class DemoAccountRegistry
                     'name' => 'Samuel Udoh',
                     'badge' => 'Customer Handover Lead',
                     'role_label' => 'Counter Staff',
-                    'description' => 'Station Handover Station • OTP Release & Inspection Check',
+                    'description' => 'Ibom Fresh Eket Station • OTP Release & Freshness Verification',
                     'password' => self::DEMO_PASSWORD,
                 ],
                 [
@@ -193,7 +191,7 @@ class DemoAccountRegistry
                     'name' => 'Grace Sunday',
                     'badge' => 'Intake & Returns Clerk',
                     'role_label' => 'Counter Staff',
-                    'description' => 'Inbound Waybill Staging & Customer Returns Terminal',
+                    'description' => 'Eket Style Station • Inbound Waybill Staging & Returns Terminal',
                     'password' => self::DEMO_PASSWORD,
                 ],
             ],
@@ -204,7 +202,7 @@ class DemoAccountRegistry
                     'name' => 'Akwa Express Logistics Ltd',
                     'badge' => 'Licensed Fleet Carrier',
                     'role_label' => 'Logistics Fleet',
-                    'description' => '15 Active Couriers • 98.4% On-Time SLA • Escrow Wallet Active',
+                    'description' => '18 Active Couriers • 98.4% On-Time SLA • Escrow Wallet Active',
                     'password' => self::DEMO_PASSWORD,
                 ],
                 [
@@ -212,15 +210,15 @@ class DemoAccountRegistry
                     'name' => 'Cross River FastWay Cargo',
                     'badge' => 'Regional Corridor Carrier',
                     'role_label' => 'Logistics Fleet',
-                    'description' => 'Inter-State Freight & Regional Distribution Fleet',
+                    'description' => '12 Heavy Freight & Parcel Vans • Inter-LGA Distribution',
                     'password' => self::DEMO_PASSWORD,
                 ],
                 [
                     'email' => 'demo.logistics3@victoriousmarket.com.ng',
-                    'name' => 'Urban Swift Couriers',
+                    'name' => 'Urban Swift Couriers Ltd',
                     'badge' => 'Express Urban Dispatch',
                     'role_label' => 'Logistics Fleet',
-                    'description' => 'Municipal On-Demand Motorcycle Dispatch Roster',
+                    'description' => 'Speedy Parcel Express • 10 Motorcycle & Keke Dispatch Units',
                     'password' => self::DEMO_PASSWORD,
                 ],
             ],
@@ -239,7 +237,7 @@ class DemoAccountRegistry
                     'name' => 'Aniefiok Ekpo',
                     'badge' => 'Express Inter-LGA Rider',
                     'role_label' => 'Delivery Rider',
-                    'description' => 'Eket ↔ Uyo Highway Corridor • 18 Scheduled Drops Today',
+                    'description' => 'Eket ↔ Uyo Highway Corridor • Keke Cargo Shuttle • 18 Drops',
                     'password' => self::DEMO_PASSWORD,
                 ],
                 [
@@ -252,5 +250,112 @@ class DemoAccountRegistry
                 ],
             ],
         ];
+    }
+
+    /**
+     * All registered demo personas, including base platform accounts and mobile app quick-fill accounts.
+     */
+    public static function allDemoAccounts(): array
+    {
+        $primary = [];
+        foreach (self::demoCatalog() as $role => $accounts) {
+            foreach ($accounts as $acc) {
+                $primary[] = $acc;
+            }
+        }
+
+        $additional = [
+            // Base platform accounts updated as demo accounts
+            [
+                'email' => 'finance@victoriousmarket.com.ng',
+                'name' => 'Finance Controller (Treasury)',
+                'badge' => 'Treasury Settlement',
+                'role_label' => 'Admin Staff',
+                'description' => 'Treasury Settlement, Escrow Release & Ledger Audit Desk',
+                'password' => self::DEMO_PASSWORD,
+            ],
+            [
+                'email' => 'demo.staff.compliance@victoriousmarket.com.ng',
+                'name' => 'Bassey Ntuk (Compliance Auditor)',
+                'badge' => 'KYC & Legal Auditor',
+                'role_label' => 'Admin Staff',
+                'description' => 'Merchant CAC Verification, KYC Enforcement & Risk Audit',
+                'password' => self::DEMO_PASSWORD,
+            ],
+            [
+                'email' => 'vendor@victoriousmarket.com.ng',
+                'name' => 'Victor Tech Solutions (Base)',
+                'badge' => 'Flagship Electronics',
+                'role_label' => 'Vendor Merchant',
+                'description' => 'Victor Tech Uyo Flagship Plaza • Primary Merchant Terminal',
+                'password' => self::DEMO_PASSWORD,
+            ],
+            [
+                'email' => 'vendor@example.com',
+                'name' => 'Victor Tech Solutions (Mobile Quick-Fill)',
+                'badge' => 'Flagship Electronics',
+                'role_label' => 'Vendor Merchant',
+                'description' => 'Vendor Mobile Terminal One-Tap Demo Merchant Account',
+                'password' => self::DEMO_PASSWORD,
+            ],
+            [
+                'email' => 'demo.vendor4@victoriousmarket.com.ng',
+                'name' => 'Anietie Archibong (Calabar Living)',
+                'badge' => 'Home Appliances & Living',
+                'role_label' => 'Vendor Merchant',
+                'description' => 'Calabar Living Depot • Kitchen & Home Appliances Store',
+                'password' => self::DEMO_PASSWORD,
+            ],
+            [
+                'email' => 'staff@victoriousmarket.com.ng',
+                'name' => 'Counter Inspection Clerk (Base)',
+                'badge' => 'Inspection Desk',
+                'role_label' => 'Counter Staff',
+                'description' => 'Victor Tech Uyo Plaza • Physical Quality Handshake Station',
+                'password' => self::DEMO_PASSWORD,
+            ],
+            [
+                'email' => 'logistics@victoriousmarket.com.ng',
+                'name' => 'Akwa Express Logistics Ltd (Base)',
+                'badge' => 'Licensed Fleet Carrier',
+                'role_label' => 'Logistics Fleet',
+                'description' => 'Akwa Express Central Hub • Primary Fleet Operator',
+                'password' => self::DEMO_PASSWORD,
+            ],
+            [
+                'email' => 'rider@victoriousmarket.com.ng',
+                'name' => 'Edidiong Udoh (Base)',
+                'badge' => 'Lead City Courier',
+                'role_label' => 'Delivery Rider',
+                'description' => 'Akwa Express Motorcycle Courier • Terminal Quick Fill',
+                'password' => self::DEMO_PASSWORD,
+            ],
+            [
+                'email' => 'musa@speedyfleet.ng',
+                'name' => 'Musa Danjuma (Speedy Fleet)',
+                'badge' => 'Speedy Express Motorbike',
+                'role_label' => 'Delivery Rider',
+                'description' => 'Urban Swift Couriers • Mobile App Development Quick-Fill Courier',
+                'password' => self::DEMO_PASSWORD,
+            ],
+            [
+                'email' => 'ubong.rider@vanlogistics.ng',
+                'name' => 'Ubong Etim (Van Logistics)',
+                'badge' => 'Cargo Van Courier',
+                'role_label' => 'Delivery Rider',
+                'description' => 'Cross River FastWay Cargo • Van Logistics Development Quick Fill',
+                'password' => self::DEMO_PASSWORD,
+            ],
+            [
+                'email' => 'customer@victoriousmarket.com.ng',
+                'name' => 'Emeka Okonkwo (Base)',
+                'badge' => 'VIP Gold Shopper',
+                'role_label' => 'Customer',
+                'description' => 'Primary Customer Account • ₦72,500 Cashback Rewards Ledger',
+                'password' => self::DEMO_PASSWORD,
+            ],
+        ];
+
+        return array_merge($primary, $additional);
     }
 }

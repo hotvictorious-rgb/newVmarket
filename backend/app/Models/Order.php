@@ -258,6 +258,26 @@ class Order extends Model
     }
 
     /**
+     * Authoritative unallocated vendor payable balance.
+     * Prevents oversettlement and partial-allocation double withdrawals.
+     */
+    public function getRemainingPayableToVendorAttribute(): string
+    {
+        $net = (string)($this->vendor_net_90 ?? '0.00');
+        $allocated = (string)$this->payoutAllocations()
+            ->whereHas('payoutRequest', function ($q) {
+                $q->where('status', '!=', 'rejected');
+            })
+            ->sum('allocated_amount');
+
+        $remaining = \App\Services\BcMathService::sub($net, $allocated);
+        if (\App\Services\BcMathService::comp($remaining, '0.00') <= 0) {
+            return '0.00';
+        }
+        return $remaining;
+    }
+
+    /**
      * Generate cryptographically secure, high-entropy unique payment reference (CSPRNG).
      */
     public static function generateUniquePaymentReference(): string

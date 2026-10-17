@@ -216,7 +216,8 @@ class VendorProfile extends Model
     public function getWithdrawableBalance(): string
     {
         // Must be paid, delivered, and have zero active return cases or disputes
-        $eligible = Order::where('vendor_id', $this->id)
+        // Authoritative Partial-Allocation Accounting: Sum only unallocated remaining payable
+        $eligibleOrders = Order::where('vendor_id', $this->id)
             ->where('vendor_settlement_status', 'eligible')
             ->where('payment_status', 'paid')
             ->where('order_status', 'delivered')
@@ -226,7 +227,13 @@ class VendorProfile extends Model
             ->whereDoesntHave('dispute', function ($q) {
                 $q->whereIn('status', ['filed', 'under_review']);
             })
-            ->sum('vendor_net_90');
+            ->with(['payoutAllocations.payoutRequest'])
+            ->get();
+
+        $eligible = '0.00';
+        foreach ($eligibleOrders as $order) {
+            $eligible = \App\Services\BcMathService::add($eligible, $order->remaining_payable_to_vendor);
+        }
 
         $pending = VendorPayoutRequest::where('vendor_id', $this->id)
             ->where('status', 'pending')

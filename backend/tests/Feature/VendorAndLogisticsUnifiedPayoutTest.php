@@ -133,6 +133,7 @@ class VendorAndLogisticsUnifiedPayoutTest extends TestCase
         $mock->shouldReceive('initiateTransfer')
             ->andReturn([
                 'success' => true,
+                'status' => 'success',
                 'transfer_code' => $transferCode,
                 'message' => 'Transfer queued for execution',
             ]);
@@ -705,6 +706,12 @@ class VendorAndLogisticsUnifiedPayoutTest extends TestCase
             'admin_notes' => 'Automated Paystack NUBAN Transfer (TRF_VND_FAIL_88)',
         ]);
 
+        \App\Models\VendorPayoutAllocation::create([
+            'vendor_payout_request_id' => $payout->id,
+            'order_id' => $order->id,
+            'allocated_amount' => '18000.00',
+        ]);
+
         $payloadData = [
             'event' => 'transfer.failed',
             'data' => [
@@ -955,5 +962,122 @@ class VendorAndLogisticsUnifiedPayoutTest extends TestCase
         ]);
         $second->assertStatus(200);
         $second->assertJson(['status' => true, 'message' => 'Event already processed.']);
+    }
+
+    /**
+     * Audit Test A: Partial payout allocations reduce withdrawable balance and prevent double withdrawals.
+     */
+    public function test_partial_payout_allocation_reduces_withdrawable_balance_and_prevents_double_withdrawal(): void
+    {
+        $this->mockPaystackTransferSuccess('TRF_PARTIAL_TEST_01');
+
+        $order = $this->createTestOrder([
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+            'vendor_settlement_status' => 'eligible',
+        ]);
+
+        $this->assertEquals('9000.00', $this->vendor->getWithdrawableBalance());
+
+        // Step 1: Vendor requests partial payout of ₦4,000
+        $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
+            'amount' => '4000.00',
+        ]);
+
+        $payout1 = VendorPayoutRequest::where('vendor_id', $this->vendor->id)->first();
+        $this->assertNotNull($payout1);
+
+        // Step 2: Admin approves partial payout of ₦4,000
+        $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
+            'payout_id' => $payout1->id,
+            'notes' => 'Partial settlement round 1',
+        ]);
+
+        // Order remains eligible because ₦5,000 is still unallocated!
+        $order->refresh();
+        $this->assertEquals('eligible', $order->vendor_settlement_status);
+        $this->assertEquals('5000.00', $order->remaining_payable_to_vendor);
+
+        // Critical Audit Finding A Invariant: Withdrawable balance must be exactly ₦5,000, NOT raw ₦9,000!
+        $this->assertEquals('5000.00', $this->vendor->fresh()->getWithdrawableBalance());
+
+        // Double-withdrawal prevention: Vendor cannot request ₦6,000
+        $overRequest = $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
+            'amount' => '6000.00',
+        ]);
+        $overRequest->assertSessionHas('error');
+
+        // Step 3: Vendor requests remaining ₦5,000
+        $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
+            'amount' => '5000.00',
+        ]);
+
+        $payout2 = VendorPayoutRequest::where('vendor_id', $this->vendor->id)->where('id', '!=', $payout1->id)->first();
+        $this->assertNotNull($payout2);
+
+        // Step 4: Admin approves second partial payout
+        $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
+            'payout_id' => $payout2->id,
+            'notes' => 'Final settlement round 2',
+        ]);
+
+        // Order is now fully settled!
+        $order->refresh();
+        $this->assertEquals('settled', $order->vendor_settlement_status);
+        $this->assertEquals('0.00', $order->remaining_payable_to_vendor);
+        $this->assertEquals('0.00', $this->vendor->fresh()->getWithdrawableBalance());
+    }
+
+    /**
+     * Audit Test D: Reversal of payout without allocation records halts and never mutates arbitrary orders.
+     */
+    public function test_webhook_reversal_without_allocations_halts_and_does_not_mutate_unrelated_orders(): void
+    {
+        $unrelatedSettledOrder = $this->createTestOrder([
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+            'vendor_settlement_status' => 'settled',
+        ]);
+
+        $unallocatedPayout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '9000.00',
+            'status' => 'approved',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Victorious Electronics Ltd',
+            'settlement_proof_path' => 'paystack_transfer:TRF_UNALLOC_999',
+            'admin_notes' => 'Automated Paystack NUBAN Transfer (TRF_UNALLOC_999)',
+        ]);
+
+        $payloadData = [
+            'event' => 'transfer.failed',
+            'data' => [
+                'reference' => 'UNALLOC-PAYOUT-FAIL-01',
+                'transfer_code' => 'TRF_UNALLOC_999',
+                'reason' => 'Bank technical error',
+            ],
+        ];
+
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+
+        // Audit Finding D Invariant: The unrelated settled order must NOT have been guessed and un-settled!
+        $unrelatedSettledOrder->refresh();
+        $this->assertEquals('settled', $unrelatedSettledOrder->vendor_settlement_status);
+
+        // Payout flagged for manual review
+        $unallocatedPayout->refresh();
+        $this->assertEquals('rejected', $unallocatedPayout->status);
+        $this->assertStringContainsString('Requires treasury audit', (string)$unallocatedPayout->admin_notes);
     }
 }

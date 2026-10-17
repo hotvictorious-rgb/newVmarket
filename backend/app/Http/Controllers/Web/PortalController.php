@@ -1833,33 +1833,41 @@ class PortalController extends Controller
         );
 
         if (!$transferRes['success']) {
-            DB::transaction(function () use ($payoutId, $transferRes) {
+            $isNetworkError = ($transferRes['code'] ?? '') === 'NETWORK_EXCEPTION';
+            DB::transaction(function () use ($payoutId, $transferRes, $isNetworkError) {
                 LogisticsPayoutRequest::where('id', $payoutId)->update([
                     'processing_token' => null,
                     'processing_started_at' => null,
-                    'admin_notes' => 'Transfer initiation failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request'),
+                    'admin_notes' => $isNetworkError
+                        ? 'GATEWAY_TIMEOUT: Transfer outcome uncertain. Gateway verification required before retry: ' . ($transferRes['message'] ?? '')
+                        : 'Transfer initiation failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request'),
                 ]);
             });
-            return back()->with('error', 'Paystack Automated Transfer Failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request.') . ' Payout reverted to pending review.');
+            $msg = $isNetworkError
+                ? 'Gateway connection timeout. Payout flagged for gateway verification to prevent duplicate disbursement.'
+                : ('Paystack Automated Transfer Failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request.') . ' Payout reverted to pending review.');
+            return back()->with('error', $msg);
         }
 
-        $transferCode = $transferRes['transfer_code'] ?? ('TRF_AUTO_' . $payoutId);
-        $proofPath = 'paystack_transfer:' . $transferCode;
+        $transferCode = $transferRes['transfer_code'] ?? null;
+        $proofPath = $transferCode ? ('paystack_transfer:' . $transferCode) : ('paystack_transfer_ref:' . $preValidation['disburse_ref']);
 
         // Phase 3: Final Atomic Settlement & Journal Transaction
-        return DB::transaction(function () use ($validated, $admin, $request, $payoutId, $preValidation, $transferCode, $proofPath) {
+        return DB::transaction(function () use ($validated, $admin, $request, $payoutId, $preValidation, $transferCode, $proofPath, $transferRes) {
             $payout = LogisticsPayoutRequest::with(['company'])->where('id', $payoutId)->lockForUpdate()->firstOrFail();
             $company = $payout->company;
+
+            $isImmediateSuccess = ($transferRes['status'] ?? '') === 'success';
 
             $payout->status = 'approved';
             $payout->processing_token = null;
             $payout->processing_started_at = null;
             $payout->approved_by_admin_id = $admin->id;
-            $payout->disbursed_at = Carbon::now();
+            $payout->disbursed_at = $isImmediateSuccess ? Carbon::now() : null;
             $payout->settlement_proof_path = $proofPath;
             $payout->paystack_transfer_code = $transferCode;
             $payout->transfer_reference = $preValidation['disburse_ref'];
-            $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Automated Paystack NUBAN Transfer (' . $transferCode . '). Approved by Admin #' . $admin->id));
+            $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Automated Paystack NUBAN Transfer (' . ($transferCode ?? $preValidation['disburse_ref']) . '). Approved by Admin #' . $admin->id));
             $payout->save();
 
             // Authoritative Double-Entry Financial Journal: Discharge payout payable, credit cash_in_escrow outflow
@@ -2117,33 +2125,41 @@ class PortalController extends Controller
         );
 
         if (!$transferRes['success']) {
-            DB::transaction(function () use ($payoutId, $transferRes) {
+            $isNetworkError = ($transferRes['code'] ?? '') === 'NETWORK_EXCEPTION';
+            DB::transaction(function () use ($payoutId, $transferRes, $isNetworkError) {
                 \App\Models\VendorPayoutRequest::where('id', $payoutId)->update([
                     'processing_token' => null,
                     'processing_started_at' => null,
-                    'admin_notes' => 'Transfer initiation failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request'),
+                    'admin_notes' => $isNetworkError
+                        ? 'GATEWAY_TIMEOUT: Transfer outcome uncertain. Gateway verification required before retry: ' . ($transferRes['message'] ?? '')
+                        : 'Transfer initiation failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request'),
                 ]);
             });
-            return back()->with('error', 'Paystack Transfer Initiation Error: ' . ($transferRes['message'] ?? 'Automated transfer could not be initiated with bank gateway. Payout reverted to pending.'));
+            $msg = $isNetworkError
+                ? 'Gateway connection timeout. Payout flagged for gateway verification to prevent duplicate disbursement.'
+                : ('Paystack Transfer Initiation Error: ' . ($transferRes['message'] ?? 'Automated transfer could not be initiated with bank gateway. Payout reverted to pending.'));
+            return back()->with('error', $msg);
         }
 
-        $transferCode = $transferRes['transfer_code'] ?? ('TRF_AUTO_VND_' . $payoutId);
-        $proofPath = 'paystack_transfer:' . $transferCode;
+        $transferCode = $transferRes['transfer_code'] ?? null;
+        $proofPath = $transferCode ? ('paystack_transfer:' . $transferCode) : ('paystack_transfer_ref:' . $preValidation['disburse_ref']);
 
         // Phase 3: Final Atomic Settlement, Immutable Allocations & Journal Transaction
-        return DB::transaction(function () use ($validated, $admin, $request, $payoutId, $preValidation, $transferCode, $proofPath) {
+        return DB::transaction(function () use ($validated, $admin, $request, $payoutId, $preValidation, $transferCode, $proofPath, $transferRes) {
             $payout = \App\Models\VendorPayoutRequest::with(['vendor'])->where('id', $payoutId)->lockForUpdate()->firstOrFail();
             $vendor = $payout->vendor;
+
+            $isImmediateSuccess = ($transferRes['status'] ?? '') === 'success';
 
             $payout->status = 'approved';
             $payout->processing_token = null;
             $payout->processing_started_at = null;
             $payout->approved_by_admin_id = $admin->id;
-            $payout->disbursed_at = Carbon::now();
+            $payout->disbursed_at = $isImmediateSuccess ? Carbon::now() : null;
             $payout->settlement_proof_path = $proofPath;
             $payout->paystack_transfer_code = $transferCode;
             $payout->transfer_reference = $preValidation['disburse_ref'];
-            $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Automated Paystack NUBAN Transfer (' . $transferCode . '). Approved by Admin #' . $admin->id));
+            $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Automated Paystack NUBAN Transfer (' . ($transferCode ?? $preValidation['disburse_ref']) . '). Approved by Admin #' . $admin->id));
             $payout->save();
 
             // Transition eligible merchant orders up to payout amount with immutable allocation tracking
@@ -2159,16 +2175,17 @@ class PortalController extends Controller
                 ->whereDoesntHave('dispute', function ($q) {
                     $q->whereIn('status', ['filed', 'under_review']);
                 })
+                ->with(['payoutAllocations.payoutRequest'])
                 ->orderBy('id', 'asc')
                 ->lockForUpdate()
                 ->get();
 
             foreach ($eligibleOrders as $order) {
                 if (bccomp($remainingToSettle, '0.00', 2) <= 0) break;
-                $orderNet = (string)($order->vendor_net_90 ?? '0.00');
-                if (bccomp($orderNet, '0.00', 2) <= 0) continue;
+                $orderAvailable = $order->remaining_payable_to_vendor;
+                if (bccomp($orderAvailable, '0.00', 2) <= 0) continue;
 
-                $allocated = (bccomp($remainingToSettle, $orderNet, 2) >= 0) ? $orderNet : $remainingToSettle;
+                $allocated = (bccomp($remainingToSettle, $orderAvailable, 2) >= 0) ? $orderAvailable : $remainingToSettle;
 
                 \App\Models\VendorPayoutAllocation::create([
                     'vendor_payout_request_id' => $payout->id,
@@ -2176,7 +2193,8 @@ class PortalController extends Controller
                     'allocated_amount' => $allocated,
                 ]);
 
-                if (bccomp($allocated, $orderNet, 2) === 0) {
+                $newRemaining = bcsub($orderAvailable, $allocated, 2);
+                if (bccomp($newRemaining, '0.00', 2) === 0) {
                     $order->vendor_settlement_status = 'settled';
                     $order->settled_at = Carbon::now();
                     $order->settled_by_admin_id = $admin->id;

@@ -571,7 +571,7 @@ class PaystackService
             $data = $response->json('data') ?? [];
             return [
                 'success' => true,
-                'transfer_code' => $data['transfer_code'] ?? ('TRF_' . uniqid()),
+                'transfer_code' => $data['transfer_code'] ?? null,
                 'status' => $data['status'] ?? 'pending',
                 'reference' => $data['reference'] ?? $transferReference,
                 'data' => $data,

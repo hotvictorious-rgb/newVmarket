@@ -115,10 +115,20 @@ class PaystackPaymentController extends Controller
             ], 400);
         }
 
-        // Webhook Idempotency Guard (Finding 5)
+        // Authoritative Webhook Idempotency Guard (Audit Finding C)
+        // Atomic DB Unique Constraint pre-insertion prevents concurrent delivery race condition
         $eventHash = hash('sha256', (string)$request->getContent());
         $eventId = (string)($event['id'] ?? ($event['event'] . '_' . ($event['data']['reference'] ?? ($event['data']['transfer_code'] ?? $eventHash))));
-        if (\App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->exists()) {
+
+        try {
+            \App\Models\ProcessedWebhookEvent::create([
+                'event_id' => $eventId,
+                'event_type' => $event['event'] ?? 'unknown',
+                'payload_hash' => $eventHash,
+                'processed_at' => Carbon::now(),
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            Log::info("Paystack Webhook: Duplicate event prevented atomically: {$eventId}");
             return response()->json(['status' => true, 'message' => 'Event already processed.'], 200);
         }
 
@@ -129,38 +139,63 @@ class PaystackPaymentController extends Controller
             $tCode = (string)($tData['transfer_code'] ?? '');
             Log::info("Paystack Webhook: Automated transfer success for reference: {$tRef}, code: {$tCode}");
 
-            // 1. Reconcile Logistics Payout via indexed lookup
-            $logisticsPayout = \App\Models\LogisticsPayoutRequest::where('transfer_reference', $tRef)
-                ->orWhere('paystack_transfer_code', $tCode)
-                ->orWhere('settlement_proof_path', 'like', "%{$tCode}%")
-                ->orWhere('admin_notes', 'like', "%{$tRef}%")
-                ->first();
+            // 1. Reconcile Logistics Payout via strict exact match (Audit Finding E)
+            $logisticsPayout = null;
+            if (!empty($tRef) || !empty($tCode)) {
+                $logisticsPayout = \App\Models\LogisticsPayoutRequest::where(function ($q) use ($tRef, $tCode) {
+                    $hasCondition = false;
+                    if (!empty($tRef)) {
+                        $q->where('transfer_reference', $tRef)
+                          ->orWhere('settlement_proof_path', 'paystack_transfer_ref:' . $tRef);
+                        $hasCondition = true;
+                    }
+                    if (!empty($tCode)) {
+                        if ($hasCondition) {
+                            $q->orWhere('paystack_transfer_code', $tCode)
+                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
+                        } else {
+                            $q->where('paystack_transfer_code', $tCode)
+                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
+                        }
+                    }
+                })->first();
+            }
 
             if ($logisticsPayout) {
+                $logisticsPayout->disbursed_at = $logisticsPayout->disbursed_at ?? Carbon::now();
                 $logisticsPayout->admin_notes = ($logisticsPayout->admin_notes ? $logisticsPayout->admin_notes . ' | ' : '') . "Paystack Gateway Delivery Confirmed ({$tCode})";
                 $logisticsPayout->save();
                 \App\Services\NotificationDispatchService::dispatchPayoutDisbursed($logisticsPayout);
             }
 
-            // 2. Reconcile Vendor Payout via indexed lookup
-            $vendorPayout = \App\Models\VendorPayoutRequest::where('transfer_reference', $tRef)
-                ->orWhere('paystack_transfer_code', $tCode)
-                ->orWhere('settlement_proof_path', 'like', "%{$tCode}%")
-                ->orWhere('admin_notes', 'like', "%{$tRef}%")
-                ->first();
+            // 2. Reconcile Vendor Payout via strict exact match (Audit Finding E & G)
+            $vendorPayout = null;
+            if (!empty($tRef) || !empty($tCode)) {
+                $vendorPayout = \App\Models\VendorPayoutRequest::where(function ($q) use ($tRef, $tCode) {
+                    $hasCondition = false;
+                    if (!empty($tRef)) {
+                        $q->where('transfer_reference', $tRef)
+                          ->orWhere('settlement_proof_path', 'paystack_transfer_ref:' . $tRef);
+                        $hasCondition = true;
+                    }
+                    if (!empty($tCode)) {
+                        if ($hasCondition) {
+                            $q->orWhere('paystack_transfer_code', $tCode)
+                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
+                        } else {
+                            $q->where('paystack_transfer_code', $tCode)
+                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
+                        }
+                    }
+                })->first();
+            }
 
             if ($vendorPayout) {
+                $vendorPayout->disbursed_at = $vendorPayout->disbursed_at ?? Carbon::now();
                 $vendorPayout->admin_notes = ($vendorPayout->admin_notes ? $vendorPayout->admin_notes . ' | ' : '') . "Paystack Gateway Delivery Confirmed ({$tCode})";
                 $vendorPayout->save();
                 \App\Services\NotificationDispatchService::dispatchPayoutDisbursed($vendorPayout);
             }
-
-            \App\Models\ProcessedWebhookEvent::create([
-                'event_id' => $eventId,
-                'event_type' => $event['event'],
-                'payload_hash' => $eventHash,
-                'processed_at' => Carbon::now(),
-            ]);
 
             return response()->json(['status' => true, 'message' => 'Transfer success confirmed and reconciled.'], 200);
         }
@@ -172,12 +207,27 @@ class PaystackPaymentController extends Controller
             $reason = (string)($tData['reason'] ?? 'Bank reversal / recipient rejected');
             Log::warning("Paystack Webhook: Transfer {$event['event']} for ref '{$tRef}', code '{$tCode}'", $tData);
 
-            // A. Handle Logistics Fleet Payout Reversal
-            $logisticsPayout = \App\Models\LogisticsPayoutRequest::where('transfer_reference', $tRef)
-                ->orWhere('paystack_transfer_code', $tCode)
-                ->orWhere('settlement_proof_path', 'like', "%{$tCode}%")
-                ->orWhere('admin_notes', 'like', "%{$tRef}%")
-                ->first();
+            // A. Handle Logistics Fleet Payout Reversal via strict exact match
+            $logisticsPayout = null;
+            if (!empty($tRef) || !empty($tCode)) {
+                $logisticsPayout = \App\Models\LogisticsPayoutRequest::where(function ($q) use ($tRef, $tCode) {
+                    $hasCondition = false;
+                    if (!empty($tRef)) {
+                        $q->where('transfer_reference', $tRef)
+                          ->orWhere('settlement_proof_path', 'paystack_transfer_ref:' . $tRef);
+                        $hasCondition = true;
+                    }
+                    if (!empty($tCode)) {
+                        if ($hasCondition) {
+                            $q->orWhere('paystack_transfer_code', $tCode)
+                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
+                        } else {
+                            $q->where('paystack_transfer_code', $tCode)
+                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
+                        }
+                    }
+                })->first();
+            }
 
             if ($logisticsPayout && $logisticsPayout->status === 'approved') {
                 \Illuminate\Support\Facades\DB::transaction(function () use ($logisticsPayout, $tData, $event, $reason) {
@@ -227,12 +277,27 @@ class PaystackPaymentController extends Controller
             }
             if ($logisticsPayout) { \App\Services\NotificationDispatchService::dispatchPayoutRejected($logisticsPayout, "Paystack transfer {$event['event']}: {$reason}"); }
 
-            // B. Handle Merchant Vendor Payout Reversal via Exact Allocations
-            $vendorPayout = \App\Models\VendorPayoutRequest::where('transfer_reference', $tRef)
-                ->orWhere('paystack_transfer_code', $tCode)
-                ->orWhere('settlement_proof_path', 'like', "%{$tCode}%")
-                ->orWhere('admin_notes', 'like', "%{$tRef}%")
-                ->first();
+            // B. Handle Merchant Vendor Payout Reversal via strict exact match
+            $vendorPayout = null;
+            if (!empty($tRef) || !empty($tCode)) {
+                $vendorPayout = \App\Models\VendorPayoutRequest::where(function ($q) use ($tRef, $tCode) {
+                    $hasCondition = false;
+                    if (!empty($tRef)) {
+                        $q->where('transfer_reference', $tRef)
+                          ->orWhere('settlement_proof_path', 'paystack_transfer_ref:' . $tRef);
+                        $hasCondition = true;
+                    }
+                    if (!empty($tCode)) {
+                        if ($hasCondition) {
+                            $q->orWhere('paystack_transfer_code', $tCode)
+                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
+                        } else {
+                            $q->where('paystack_transfer_code', $tCode)
+                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
+                        }
+                    }
+                })->first();
+            }
 
             if ($vendorPayout && $vendorPayout->status === 'approved') {
                 \Illuminate\Support\Facades\DB::transaction(function () use ($vendorPayout, $tData, $event, $reason) {
@@ -259,20 +324,11 @@ class PaystackPaymentController extends Controller
                             }
                         }
                     } else {
-                        // Safe legacy fallback if payout was created before allocations table
-                        $remainingToRestore = (string)$lockedPayout->amount;
-                        $settledOrders = \App\Models\Order::where('vendor_id', $vendor->id)
-                            ->where('vendor_settlement_status', 'settled')
-                            ->orderBy('id', 'desc')
-                            ->lockForUpdate()
-                            ->get();
-
-                        foreach ($settledOrders as $order) {
-                            if (bccomp($remainingToRestore, '0.00', 2) <= 0) break;
-                            $order->vendor_settlement_status = 'eligible';
-                            $order->save();
-                            $remainingToRestore = bcsub($remainingToRestore, (string)($order->vendor_net_90 ?? '0.00'), 2);
-                        }
+                        // Audit Finding D: Halt Unsafe Guessed Reversals
+                        // If allocations are missing, never guess and un-settle arbitrary recent orders
+                        Log::alert("Paystack Webhook Reversal: Payout #{$lockedPayout->id} has no allocation records. Halting order reversal for manual treasury review.");
+                        $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . 'Order allocations missing; orders not reversed to prevent ledger corruption. Requires treasury audit.';
+                        $lockedPayout->save();
                     }
 
                     // Reversing Journal Entries: discharge vendor payable liability and restore escrow cash
@@ -308,13 +364,6 @@ class PaystackPaymentController extends Controller
             }
             if ($vendorPayout) { \App\Services\NotificationDispatchService::dispatchPayoutRejected($vendorPayout, "Paystack transfer {$event['event']}: {$reason}"); }
 
-            \App\Models\ProcessedWebhookEvent::create([
-                'event_id' => $eventId,
-                'event_type' => $event['event'],
-                'payload_hash' => $eventHash,
-                'processed_at' => Carbon::now(),
-            ]);
-
             return response()->json(['status' => true, 'message' => "Transfer {$event['event']} processed and refunded."], 200);
         }
 
@@ -339,6 +388,7 @@ class PaystackPaymentController extends Controller
         $order = Order::where('payment_reference', $reference)->first();
 
         if (!$order) {
+            \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->delete();
             Log::warning("Paystack Webhook: Order not found for reference '{$reference}'.");
             return response()->json([
                 'status' => false,
@@ -355,19 +405,14 @@ class PaystackPaymentController extends Controller
         );
 
         if (!$settlement['success']) {
+            // Delete pre-recorded event so Paystack retry mechanism can re-deliver and settle successfully
+            \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->delete();
             Log::error("Paystack Webhook settlement failed for order #{$order->id}: " . ($settlement['message'] ?? ''));
             return response()->json([
                 'status' => false,
                 'message' => $settlement['message'],
             ], 422);
         }
-
-        \App\Models\ProcessedWebhookEvent::create([
-            'event_id' => $eventId,
-            'event_type' => $event['event'],
-            'payload_hash' => $eventHash,
-            'processed_at' => Carbon::now(),
-        ]);
 
         return response()->json([
             'status' => true,
