@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\Review;
 use App\Services\ReviewService;
@@ -22,6 +23,12 @@ class CustomerReviewApiController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        if (!$request->filled('order_id') && $request->filled('order_number')) {
+            $resolvedOrderId = Order::where('order_number', trim((string)$request->input('order_number')))->value('id');
+            if ($resolvedOrderId) {
+                $request->merge(['order_id' => $resolvedOrderId]);
+            }
+        }
         $validated = $request->validate([
             'order_id' => 'required|integer|exists:orders,id',
             'product_id' => 'required|integer|exists:products,id',
