@@ -1209,7 +1209,7 @@ class OrderSettlementService
 
             // Check if active dispute exists or active return case exists
             $hasDispute = $lockedOrder->dispute()->whereIn('status', ['filed', 'under_review'])->exists();
-            $hasReturnCase = $lockedOrder->returnCases()->whereNotIn('status', ['resolved', 'rejected'])->exists();
+            $hasReturnCase = $lockedOrder->returnCases()->whereNotIn('status', ['resolved', 'refunded', 'replacement_completed', 'rejected', 'closed'])->exists();
 
             if ($hasDispute || $hasReturnCase) {
                 $lockedOrder->vendor_settlement_status = 'disputed';

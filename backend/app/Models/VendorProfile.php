@@ -200,7 +200,7 @@ class VendorProfile extends Model
     public function getPendingPayoutBalance(): string
     {
         $sum = VendorPayoutRequest::where('vendor_id', $this->id)
-            ->whereIn('status', ['pending', 'processing'])
+            ->where('status', 'pending')
             ->sum('amount');
         return number_format((float)$sum, 2, '.', '');
     }
@@ -221,7 +221,7 @@ class VendorProfile extends Model
             ->where('payment_status', 'paid')
             ->where('order_status', 'delivered')
             ->whereDoesntHave('returnCases', function ($q) {
-                $q->whereNotIn('status', ['resolved', 'rejected']);
+                $q->whereNotIn('status', ['resolved', 'refunded', 'replacement_completed', 'rejected', 'closed']);
             })
             ->whereDoesntHave('dispute', function ($q) {
                 $q->whereIn('status', ['filed', 'under_review']);
@@ -229,7 +229,7 @@ class VendorProfile extends Model
             ->sum('vendor_net_90');
 
         $pending = VendorPayoutRequest::where('vendor_id', $this->id)
-            ->whereIn('status', ['pending', 'processing'])
+            ->where('status', 'pending')
             ->sum('amount');
 
         // Deduct unrecovered liabilities/debts from previous returns or penalties
