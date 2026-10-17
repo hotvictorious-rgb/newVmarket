@@ -916,6 +916,8 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
                 'account_name' => $lockedVendor->account_name ?? $lockedVendor->business_name,
             ]);
 
+            \App\Services\NotificationDispatchService::dispatchPayoutRequested($payout);
+
             // Authoritative double-entry financial journal
             $reqRef = 'MERCHANT-REQ-' . $lockedVendor->id . '-' . date('YmdHis');
             FinancialJournalEntry::create([

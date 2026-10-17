@@ -977,6 +977,38 @@
                         </svg>
                         <span>{{ Str::limit(Auth::user()->name, 10) }}</span>
                     </a>
+
+                    <!-- Customer In-App Notification Bell & Live Alerts -->
+                    <div class="vm-notif-dropdown-wrapper" id="vmCustomerNotifWrap" style="position: relative; display: inline-flex; align-items: center;">
+                        <button type="button" class="vm-action-btn" id="vmCustomerNotifBtn" title="My Notifications & OTPs" style="background: none; border: none; cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; padding: 6px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                            </svg>
+                            <span class="vm-action-badge" id="vmCustomerNotifBadge" style="display: none; background: #EF4444; color: #fff; font-size: 10px; font-weight: 800; min-width: 17px; height: 17px; border-radius: 999px; position: absolute; top: -2px; right: -2px; align-items: center; justify-content: center; padding: 0 4px; box-shadow: 0 0 0 2px #FFFFFF;">0</span>
+                        </button>
+                        
+                        <div class="vm-customer-notif-menu" id="vmCustomerNotifMenu" style="display: none; position: absolute; right: 0; top: calc(100% + 8px); width: 340px; background: #0F172A; border: 1px solid rgba(255, 215, 0, 0.25); border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,0.45); z-index: 1060; overflow: hidden; backdrop-filter: blur(12px);">
+                            <div style="padding: 12px 16px; background: rgba(30, 41, 59, 0.9); border-bottom: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-weight: 800; font-size: 13px; color: #F8FAFC; letter-spacing: 0.3px;">Alerts &amp; OTPs</span>
+                                    <span id="vmCustomerNotifPill" style="font-size: 10px; font-weight: 700; background: rgba(255, 215, 0, 0.15); color: #FFD700; border: 1px solid rgba(255, 215, 0, 0.3); padding: 2px 7px; border-radius: 999px;">0 New</span>
+                                </div>
+                                <button type="button" id="vmCustomerMarkAllRead" style="background: none; border: none; color: #94A3B8; font-size: 11px; font-weight: 600; cursor: pointer; text-decoration: underline;">Mark all read</button>
+                            </div>
+                            <div id="vmCustomerNotifList" style="max-height: 320px; overflow-y: auto; padding: 6px 0;">
+                                <div id="vmCustomerNotifEmpty" style="padding: 24px 16px; text-align: center; color: #64748B; font-size: 12px;">
+                                    <div style="font-size: 24px; margin-bottom: 4px;">🔔</div>
+                                    No new notifications on your account.
+                                </div>
+                                <div id="vmCustomerNotifItems"></div>
+                            </div>
+                            <div style="padding: 8px 16px; background: rgba(15, 23, 42, 0.95); border-top: 1px solid rgba(255, 255, 255, 0.06); display: flex; align-items: center; justify-content: space-between;">
+                                <span style="font-size: 10.5px; color: #64748B;">Sovereign Security Bus</span>
+                                <a href="{{ route('customer.dashboard') }}" style="font-size: 11px; color: #FFD700; text-decoration: none; font-weight: 700;">My Dashboard &rsaquo;</a>
+                            </div>
+                        </div>
+                    </div>
                 @else
                     <a href="{{ route('customer.login') }}" class="vm-action-btn" title="Sign In">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2041,6 +2073,119 @@
             }
         });
     </script>
+    @auth
+    <script>
+    (function() {
+        const btn = document.getElementById('vmCustomerNotifBtn');
+        const menu = document.getElementById('vmCustomerNotifMenu');
+        const badge = document.getElementById('vmCustomerNotifBadge');
+        const pill = document.getElementById('vmCustomerNotifPill');
+        const itemsContainer = document.getElementById('vmCustomerNotifItems');
+        const emptyState = document.getElementById('vmCustomerNotifEmpty');
+        const markAllBtn = document.getElementById('vmCustomerMarkAllRead');
+        if (!btn || !menu) return;
+
+        let csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+        function getIcon(type) {
+            if (!type) return '🔔';
+            const t = type.toLowerCase();
+            if (t.includes('delivery') || t.includes('doorstep')) return '🚚';
+            if (t.includes('wallet') || t.includes('cashback') || t.includes('refund')) return '💰';
+            if (t.includes('order')) return '🛍️';
+            if (t.includes('dispute') || t.includes('arbitration')) return '⚖️';
+            return '🔔';
+        }
+
+        async function loadNotifs() {
+            try {
+                const res = await fetch('/portal/notifications/in-app', {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const unread = data.unread_count || 0;
+                if (unread > 0) {
+                    badge.textContent = unread > 99 ? '99+' : unread;
+                    badge.style.display = 'flex';
+                    pill.textContent = unread + ' New';
+                } else {
+                    badge.style.display = 'none';
+                    pill.textContent = '0 New';
+                }
+
+                const items = data.notifications || data.data || [];
+                if (items.length === 0) {
+                    emptyState.style.display = 'block';
+                    itemsContainer.innerHTML = '';
+                } else {
+                    emptyState.style.display = 'none';
+                    itemsContainer.innerHTML = items.map(n => {
+                        const isUnread = !n.read_at;
+                        const icon = getIcon(n.type);
+                        const safeTitle = (n.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        const safeBody = (n.body || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        const actionUrl = n.action_url || '';
+                        return `
+                            <div style="padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; cursor: pointer; transition: background 0.15s; background: ${isUnread ? 'rgba(94, 23, 235, 0.12)' : 'transparent'};" onclick="markCustomerRead('${n.id}', '${actionUrl}')">
+                                <span style="font-size: 18px;">${icon}</span>
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="font-size: 12px; font-weight: 700; color: #F8FAFC; display: flex; align-items: center; justify-content: space-between;">
+                                        <span>${safeTitle}</span>
+                                        ${isUnread ? '<span style="width: 6px; height: 6px; border-radius: 50%; background: #FFD700; display: inline-block;"></span>' : ''}
+                                    </div>
+                                    <div style="font-size: 11px; color: #94A3B8; margin-top: 2px; line-height: 1.35;">${safeBody}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch(e) {}
+        }
+
+        window.markCustomerRead = async function(id, url) {
+            try {
+                await fetch('/portal/notifications/mark-read/' + id, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                loadNotifs();
+            } catch(e) {}
+            if (url && url !== '#' && url !== '') {
+                window.location.href = url;
+            }
+        };
+
+        if (markAllBtn) {
+            markAllBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                try {
+                    await fetch('/portal/notifications/mark-read', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    loadNotifs();
+                } catch(e) {}
+            });
+        }
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+            if (menu.style.display === 'block') loadNotifs();
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!menu.contains(e.target) && !btn.contains(e.target)) {
+                menu.style.display = 'none';
+            }
+        });
+
+        loadNotifs();
+        setInterval(loadNotifs, 45000);
+    })();
+    </script>
+    @endauth
     @stack('scripts')
 </body>
 </html>

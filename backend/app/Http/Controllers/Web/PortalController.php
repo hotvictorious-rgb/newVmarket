@@ -1092,6 +1092,8 @@ class PortalController extends Controller
                 'account_name' => $lockedVendor->account_name ?? $lockedVendor->business_name,
             ]);
 
+            \App\Services\NotificationDispatchService::dispatchPayoutRequested($payout);
+
             // Authoritative double-entry financial journal
             $reqRef = 'MERCHANT-REQ-' . $lockedVendor->id . '-' . date('YmdHis');
             \App\Models\FinancialJournalEntry::create([
@@ -2407,6 +2409,8 @@ class PortalController extends Controller
                 'account_number' => $lockedCompany->account_number,
                 'account_name' => $lockedCompany->account_name ?? $lockedCompany->company_name,
             ]);
+
+            \App\Services\NotificationDispatchService::dispatchPayoutRequested($payout);
 
             // Authoritative Double-Entry Financial Journal: Debit corporate wallet, credit payout payable
             $reqRef = 'FLEET-REQ-' . $lockedCompany->id . '-' . date('YmdHis');

@@ -11,6 +11,7 @@ use App\Models\ReturnCase;
 use App\Models\User;
 use App\Models\SystemNotification;
 use App\Models\SystemSetting;
+use App\Models\VendorEmployeeProfile;
 use App\Models\VendorPayoutRequest;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -99,7 +100,7 @@ class NotificationDispatchService
             }
         }
 
-        // 2. Vendor Alert
+        // 2. Vendor HQ & Branch Counter Staff Alert
         if ($order->vendor && $order->vendor->user) {
             $vendorUserId = $order->vendor->user_id;
             $vendorPhone = $order->vendor->business_phone ?? '+2348000000001';
@@ -113,6 +114,22 @@ class NotificationDispatchService
             }
             if (self::isChannelActive('fcm', $eventType)) {
                 self::dispatchPush($vendorUserId, "New Order Received! #{$order->order_number}", "A customer has placed an order. Please inspect inventory.", ['type' => 'order_placed', 'order_id' => $order->id], $eventType);
+            }
+
+            // Security Hardening: Alert active counter staff assigned STRICTLY to this branch shop
+            if (!empty($order->shop_id)) {
+                $counterUserIds = VendorEmployeeProfile::where('shop_id', $order->shop_id)
+                    ->where('is_active', true)
+                    ->pluck('user_id');
+
+                foreach ($counterUserIds as $cUserId) {
+                    if (self::isChannelActive('in_app', $eventType)) {
+                        self::createInApp($cUserId, "New Branch Order Received!", "Order #{$order->order_number} assigned to your branch counter. Prepare for packing.", $eventType, ['order_id' => $order->id]);
+                    }
+                    if (self::isChannelActive('fcm', $eventType)) {
+                        self::dispatchPush($cUserId, "New Branch Order! #{$order->order_number}", "Prepare parcel for counter inspection.", ['type' => 'order_placed', 'order_id' => $order->id], $eventType);
+                    }
+                }
             }
         }
 
@@ -138,6 +155,22 @@ class NotificationDispatchService
             }
             if (self::isChannelActive('in_app', $eventType)) {
                 self::createInApp($vendorUserId, "Handover PIN Issued", "Pickup OTP for Order #{$order->order_number} is: {$order->pickup_verification_code}", $eventType, ['order_id' => $order->id, 'pickup_otp' => $order->pickup_verification_code]);
+            }
+
+            // Security Hardening: Supply Handover OTP to active branch counter staff strictly for this shop
+            if (!empty($order->shop_id)) {
+                $counterUserIds = VendorEmployeeProfile::where('shop_id', $order->shop_id)
+                    ->where('is_active', true)
+                    ->pluck('user_id');
+
+                foreach ($counterUserIds as $cUserId) {
+                    if (self::isChannelActive('in_app', $eventType)) {
+                        self::createInApp($cUserId, "Handover PIN Issued", "Pickup OTP for Order #{$order->order_number} is: {$order->pickup_verification_code}", $eventType, ['order_id' => $order->id, 'pickup_otp' => $order->pickup_verification_code]);
+                    }
+                    if (self::isChannelActive('fcm', $eventType)) {
+                        self::dispatchPush($cUserId, "Handover PIN: {$order->pickup_verification_code}", "Order #{$order->order_number}. Verify courier identity before releasing package.", ['type' => 'pickup_otp', 'order_id' => $order->id, 'pickup_otp' => $order->pickup_verification_code], $eventType);
+                    }
+                }
             }
         }
 
@@ -377,7 +410,7 @@ class NotificationDispatchService
         $order = $returnCase->order;
         $orderNumber = $order->order_number ?? $returnCase->case_number;
 
-        // Alert Vendor
+        // Alert Vendor & Branch Counter Staff
         if ($returnCase->vendor && $returnCase->vendor->user) {
             $vendorUserId = $returnCase->vendor->user_id;
             $vendorPhone = $returnCase->vendor->business_phone ?? '+2348000000001';
@@ -398,10 +431,28 @@ class NotificationDispatchService
             if (self::isChannelActive('whatsapp', $eventType)) {
                 $dispatches[] = self::record('whatsapp', $vendorPhone, 'Vendor', "Victorious Market: " . $body);
             }
+
+            // Security Hardening: Alert active counter staff strictly for this branch shop
+            if (!empty($order->shop_id)) {
+                $counterUserIds = VendorEmployeeProfile::where('shop_id', $order->shop_id)
+                    ->where('is_active', true)
+                    ->pluck('user_id');
+
+                foreach ($counterUserIds as $cUserId) {
+                    if (self::isChannelActive('in_app', $eventType)) {
+                        self::createInApp($cUserId, $title, $body, $eventType, ['return_case_id' => $returnCase->id]);
+                    }
+                    if (self::isChannelActive('fcm', $eventType)) {
+                        self::dispatchPush($cUserId, $title, $body, ['type' => 'doorstep_return', 'return_case_id' => $returnCase->id], $eventType);
+                    }
+                }
+            }
         }
 
-        // Alert Super Admin
-        $adminUsers = User::where('user_type', 'super_admin')->get();
+        // Alert Super Admin & Operations/Moderation Staff
+        $adminUsers = User::whereIn('user_type', ['super_admin', 'admin_employee'])
+            ->where('status', 'active')
+            ->get();
         foreach ($adminUsers as $admin) {
             self::createInApp($admin->id, "Doorstep Return Alert", "Order #{$orderNumber} experienced doorstep refusal ({$returnCase->rejection_category}).", $eventType, ['return_case_id' => $returnCase->id]);
         }
@@ -438,6 +489,22 @@ class NotificationDispatchService
             }
             if (self::isChannelActive('sms', $eventType)) {
                 $dispatches[] = self::record('sms', $vendorPhone, 'Vendor Counter', "Victorious Market: " . $body);
+            }
+
+            // Security Hardening: Send Return OTP to active branch counter staff strictly for this shop
+            if (!empty($order->shop_id)) {
+                $counterUserIds = VendorEmployeeProfile::where('shop_id', $order->shop_id)
+                    ->where('is_active', true)
+                    ->pluck('user_id');
+
+                foreach ($counterUserIds as $cUserId) {
+                    if (self::isChannelActive('in_app', $eventType)) {
+                        self::createInApp($cUserId, $title, $body, $eventType, ['return_case_id' => $returnCase->id, 'return_otp' => $otp]);
+                    }
+                    if (self::isChannelActive('fcm', $eventType)) {
+                        self::dispatchPush($cUserId, $title, $body, ['type' => 'return_otp', 'otp' => $otp, 'return_case_id' => $returnCase->id], $eventType);
+                    }
+                }
             }
         }
 
@@ -496,8 +563,10 @@ class NotificationDispatchService
             self::dispatchPush($returnCase->customer_id, $title, $body, ['type' => 'dispute_escalated', 'return_case_id' => $returnCase->id], $eventType);
         }
 
-        // Alert Super Admin
-        $adminUsers = User::where('user_type', 'super_admin')->get();
+        // Alert Super Admin & Operations/Moderation Staff
+        $adminUsers = User::whereIn('user_type', ['super_admin', 'admin_employee'])
+            ->where('status', 'active')
+            ->get();
         foreach ($adminUsers as $admin) {
             self::createInApp($admin->id, "Urgent: Dispute Filed", "Return #{$returnCase->case_number} was disputed by vendor: {$reason}", $eventType, ['return_case_id' => $returnCase->id]);
         }

@@ -19,11 +19,25 @@ class DeviceTokenApiController extends Controller
         $validated = $request->validate([
             'device_token' => 'required|string|max:512',
             'device_type' => 'required|string|in:android,ios,web',
-            'app_type' => 'required|string|in:rider,vendor,customer,admin',
+            'app_type' => 'required|string|in:rider,vendor,customer,admin,logistics,vendor_staff',
             'device_name' => 'nullable|string|max:128',
         ]);
 
         $user = $request->user();
+
+        // Security Role Affinity Verification
+        if ($validated['app_type'] === 'admin' && !$user->isSuperAdmin() && !$user->isAdminEmployee()) {
+            return response()->json(['status' => false, 'message' => 'Unauthorized device role binding for admin terminal.'], 403);
+        }
+        if ($validated['app_type'] === 'vendor' && !$user->isVendor() && !$user->isVendorEmployee()) {
+            return response()->json(['status' => false, 'message' => 'Unauthorized device role binding for merchant terminal.'], 403);
+        }
+        if ($validated['app_type'] === 'rider' && !$user->isRider()) {
+            return response()->json(['status' => false, 'message' => 'Unauthorized device role binding for dispatch courier terminal.'], 403);
+        }
+        if ($validated['app_type'] === 'logistics' && !$user->isLogisticsCompany()) {
+            return response()->json(['status' => false, 'message' => 'Unauthorized device role binding for logistics fleet terminal.'], 403);
+        }
 
         $tokenRecord = UserDeviceToken::updateOrCreate(
             [
@@ -93,6 +107,7 @@ class DeviceTokenApiController extends Controller
             'status' => true,
             'unread_count' => $unreadCount,
             'notifications' => $notifications,
+            'data' => $notifications,
         ], 200);
     }
 

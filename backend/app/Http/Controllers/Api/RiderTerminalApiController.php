@@ -497,6 +497,13 @@ class RiderTerminalApiController extends Controller
      */
     public function doorstepHandover(Request $request, \App\Services\DoorstepHandshakeService $handshakeService): JsonResponse
     {
+        if ($request->has('manifest_items') && is_string($request->input('manifest_items'))) {
+            $decoded = json_decode($request->input('manifest_items'), true);
+            if (is_array($decoded)) {
+                $request->merge(['manifest_items' => $decoded]);
+            }
+        }
+
         $validated = $request->validate([
             'order_id' => 'required|integer|exists:orders,id',
             'otp' => ['required', 'string', 'size:6'],
