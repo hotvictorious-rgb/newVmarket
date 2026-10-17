@@ -16,10 +16,10 @@
         <div>
             <h1 class="page-header-title">
                 <span style="font-size: 26px;">🏛️</span>
-                <span>Dual-Commission Escrow &amp; Corporate Settlement Desk</span>
+                <span>90/5/5 Sovereign Escrow &amp; Settlement Desk</span>
             </h1>
             <p class="page-header-subtitle">
-                Dual-Commission Escrow &amp; Corporate Settlement Desk &mdash; Super Admin Treasury Governance &mdash; Authorize or reject automated Paystack NUBAN bank transfers for both <strong>Merchants (90% Sales)</strong> and <strong>Logistics Fleets (90% Delivery)</strong>. Zero manual receipts. Rejections atomically restore claimant balances.
+                Dual-Commission Escrow &amp; Corporate Settlement Desk &mdash; Sovereign 90/5/5 Mathematical Split Formula &mdash; Super Admin Treasury Governance &mdash; Authorize or reject automated Paystack NUBAN bank transfers for both <strong>Merchants (90% Sales)</strong> and <strong>Logistics Fleets (90% Delivery)</strong>. Zero manual receipts. Rejections atomically restore claimant balances.
             </p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
