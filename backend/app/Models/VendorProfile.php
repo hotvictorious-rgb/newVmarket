@@ -200,7 +200,7 @@ class VendorProfile extends Model
     public function getPendingPayoutBalance(): string
     {
         $sum = VendorPayoutRequest::where('vendor_id', $this->id)
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'processing'])
             ->sum('amount');
         return number_format((float)$sum, 2, '.', '');
     }
@@ -215,15 +215,30 @@ class VendorProfile extends Model
 
     public function getWithdrawableBalance(): string
     {
+        // Must be paid, delivered, and have zero active return cases or disputes
         $eligible = Order::where('vendor_id', $this->id)
             ->where('vendor_settlement_status', 'eligible')
+            ->where('payment_status', 'paid')
+            ->where('order_status', 'delivered')
+            ->whereDoesntHave('returnCases', function ($q) {
+                $q->whereNotIn('status', ['resolved', 'rejected']);
+            })
+            ->whereDoesntHave('dispute', function ($q) {
+                $q->whereIn('status', ['filed', 'under_review']);
+            })
             ->sum('vendor_net_90');
 
         $pending = VendorPayoutRequest::where('vendor_id', $this->id)
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'processing'])
             ->sum('amount');
 
-        $diff = \App\Services\BcMathService::sub((string)$eligible, (string)$pending);
+        // Deduct unrecovered liabilities/debts from previous returns or penalties
+        $unrecoveredDebt = \App\Models\VendorRecoveryLedger::where('vendor_id', $this->id)
+            ->where('status', 'pending_recovery')
+            ->sum('amount');
+
+        $totalDeductions = \App\Services\BcMathService::add((string)$pending, (string)$unrecoveredDebt);
+        $diff = \App\Services\BcMathService::sub((string)$eligible, (string)$totalDeductions);
         if (\App\Services\BcMathService::comp($diff, '0.00') < 0) {
             return '0.00';
         }

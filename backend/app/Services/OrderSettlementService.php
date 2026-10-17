@@ -1207,9 +1207,11 @@ class OrderSettlementService
         DB::transaction(function () use ($order) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
-            // Check if active dispute exists
+            // Check if active dispute exists or active return case exists
             $hasDispute = $lockedOrder->dispute()->whereIn('status', ['filed', 'under_review'])->exists();
-            if ($hasDispute) {
+            $hasReturnCase = $lockedOrder->returnCases()->whereNotIn('status', ['resolved', 'rejected'])->exists();
+
+            if ($hasDispute || $hasReturnCase) {
                 $lockedOrder->vendor_settlement_status = 'disputed';
                 $lockedOrder->save();
 
