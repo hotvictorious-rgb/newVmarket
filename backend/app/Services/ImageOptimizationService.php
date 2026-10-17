@@ -9,6 +9,36 @@ use Illuminate\Support\Str;
 class ImageOptimizationService
 {
     /**
+     * Resolve public CDN / URL for any stored media path.
+     * Automatically routes through Cloudflare R2 when configured.
+     */
+    public static function url(?string $path): ?string
+    {
+        if (empty($path)) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        $mediaDisk = config('filesystems.media_disk', 'public');
+        if ($mediaDisk !== 'public') {
+            $relative = str_starts_with($path, 'storage/') ? substr($path, 8) : $path;
+            $baseUrl = config("filesystems.disks.{$mediaDisk}.url");
+            if ($baseUrl) {
+                return rtrim($baseUrl, '/') . '/' . ltrim($relative, '/');
+            }
+            $cdnUrl = Storage::disk($mediaDisk)->url($relative);
+            if ($cdnUrl) {
+                return $cdnUrl;
+            }
+        }
+
+        return str_starts_with($path, 'storage/') ? url($path) : url('storage/' . $path);
+    }
+
+    /**
      * Default maximum dimension (width or height) for stored proofs and catalog images.
      */
     public const DEFAULT_MAX_DIMENSION = 1600;
@@ -32,6 +62,13 @@ class ImageOptimizationService
      * @param array $options [max_dimension => 1600, quality => 82, generate_thumb => true, format => 'webp']
      * @return array Proof audit metadata
      */
+    /**
+     * Alias for optimizeAndStoreProof
+     */
+    public function optimizeAndStore(UploadedFile $file, string $directory = 'proofs', array $options = []): array
+    {
+        return $this->optimizeAndStoreProof($file, $directory, $options);
+    }
     public function optimizeAndStoreProof(UploadedFile $file, string $directory, array $options = []): array
     {
         $maxDimension = (int) ($options['max_dimension'] ?? self::DEFAULT_MAX_DIMENSION);
@@ -86,8 +123,24 @@ class ImageOptimizationService
             mkdir($dirPath, 0755, true);
         }
 
+        $targetDisk = $options['disk'] ?? config('filesystems.media_disk', 'public');
+
         $this->saveResourceToDisk($optimizedResource, $absoluteDiskPath, $extension, $quality);
         $optimizedSize = file_exists($absoluteDiskPath) ? filesize($absoluteDiskPath) : $originalSize;
+
+        // If target disk is external (Cloudflare R2 or S3), upload optimized binary to cloud
+        if ($targetDisk !== 'public') {
+            $masterBinary = file_get_contents($absoluteDiskPath);
+            Storage::disk($targetDisk)->put($relativeStoragePath, $masterBinary, 'public');
+            $baseUrl = config("filesystems.disks.{$targetDisk}.url");
+            if ($baseUrl) {
+                $finalPath = rtrim($baseUrl, '/') . '/' . ltrim($relativeStoragePath, '/');
+            } else {
+                $finalPath = Storage::disk($targetDisk)->url($relativeStoragePath) ?: ('storage/' . $relativeStoragePath);
+            }
+        } else {
+            $finalPath = 'storage/' . $relativeStoragePath;
+        }
 
         // 5. Generate lightweight thumbnail if requested
         $thumbRelativePath = null;
@@ -103,7 +156,19 @@ class ImageOptimizationService
             $thumbResource = $this->resizeResource($optimizedResource, $optWidth, $optHeight, self::THUMBNAIL_DIMENSION);
             $this->saveResourceToDisk($thumbResource, $thumbAbsoluteDiskPath, $extension, 75);
             imagedestroy($thumbResource);
-            $thumbRelativePath = 'storage/' . $thumbRelativeStoragePath;
+
+            if ($targetDisk !== 'public') {
+                $thumbBinary = file_get_contents($thumbAbsoluteDiskPath);
+                Storage::disk($targetDisk)->put($thumbRelativeStoragePath, $thumbBinary, 'public');
+                $baseUrl = config("filesystems.disks.{$targetDisk}.url");
+                if ($baseUrl) {
+                    $thumbRelativePath = rtrim($baseUrl, '/') . '/' . ltrim($thumbRelativeStoragePath, '/');
+                } else {
+                    $thumbRelativePath = Storage::disk($targetDisk)->url($thumbRelativeStoragePath) ?: ('storage/' . $thumbRelativeStoragePath);
+                }
+            } else {
+                $thumbRelativePath = 'storage/' . $thumbRelativeStoragePath;
+            }
         }
 
         // Cleanup resources
@@ -117,7 +182,7 @@ class ImageOptimizationService
 
         return [
             'success' => true,
-            'path' => 'storage/' . $relativeStoragePath,
+            'path' => $finalPath,
             'thumbnail_path' => $thumbRelativePath,
             'original_size' => $originalSize,
             'optimized_size' => $optimizedSize,

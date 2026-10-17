@@ -9,3 +9,6 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('orders:expire-unpaid')->everyTenMinutes();
+
+// Automated Nightly Disaster Recovery Backup to Google Drive (02:00 AM WAT)
+Schedule::command('backup:google-drive')->dailyAt('02:00');

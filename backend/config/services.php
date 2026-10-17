@@ -52,4 +52,16 @@ return [
         'sender_id' => env('TERMII_SENDER_ID', 'VMARKET'),
     ],
 
+    'google_drive' => [
+        'service_account_json' => env('GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON'),
+        'client_email' => env('GOOGLE_DRIVE_CLIENT_EMAIL'),
+        'private_key' => env('GOOGLE_DRIVE_PRIVATE_KEY'),
+        'folder_id' => env('GOOGLE_DRIVE_FOLDER_ID'),
+    ],
+
+    'backup' => [
+        'encryption_key' => env('BACKUP_ENCRYPTION_KEY'),
+        'retention_days' => (int) env('BACKUP_RETENTION_DAYS', 30),
+    ],
+
 ];
