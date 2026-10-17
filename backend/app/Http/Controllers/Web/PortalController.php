@@ -1638,8 +1638,6 @@ class PortalController extends Controller
         $validated = $request->validate([
             'payout_id' => 'required|exists:logistics_payout_requests,id',
             'notes' => 'nullable|string|max:500',
-            'bank_reference' => 'nullable|string|min:6|max:64',
-            'proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
         ]);
 
         $admin = Auth::user() ?? User::where('user_type', 'super_admin')->first();
@@ -1647,50 +1645,76 @@ class PortalController extends Controller
             return back()->with('error', 'Unauthorized: Administrative finance permissions required.');
         }
 
-        if (!$request->hasFile('proof') && empty(trim($request->input('bank_reference', '')))) {
-            if (!app()->environment('testing')) {
-                return back()->with('error', 'Disbursement rejected: A valid corporate bank transfer receipt upload or bank transaction reference is mandatory.');
-            }
+        $payout = LogisticsPayoutRequest::with('company')->where('id', $validated['payout_id'])->firstOrFail();
+        if ($payout->status !== 'pending') {
+            return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
         }
 
-        $proofPath = null;
-        if ($request->hasFile('proof')) {
-            $path = $request->file('proof')->store('payouts', 'public');
-            $proofPath = 'storage/' . $path;
-        } elseif (!empty(trim($request->input('bank_reference', '')))) {
-            $proofPath = 'bank_ref:' . trim($request->input('bank_reference'));
-        } elseif (app()->environment('testing')) {
-            $proofPath = 'storage/payouts/fleet_' . $validated['payout_id'] . '_' . time() . '.png';
+        $company = $payout->company;
+        if (!$company || $company->status !== 'active') {
+            return back()->with('error', 'Disbursement blocked: Logistics company account is inactive or suspended.');
         }
 
-        if (empty($proofPath)) {
-            return back()->with('error', 'Disbursement rejected: Documented proof of corporate fleet transfer is required.');
+        if ($company->isWithinBankCooldown()) {
+            return back()->with('error', 'Disbursement blocked: Logistics company bank account was recently updated and is under a 48-hour security cooldown.');
         }
 
-        return DB::transaction(function () use ($validated, $admin, $proofPath, $request) {
+        // Validate corporate bank details
+        $accountNum = trim((string)($company->account_number ?? $payout->account_number));
+        $bankName = trim((string)($company->bank_name ?? $payout->bank_name));
+        $bankCode = trim((string)($company->bank_code ?? ''));
+        $accountName = trim((string)($company->account_name ?? $payout->account_name));
+
+        if (empty($accountNum) || empty($accountName)) {
+            return back()->with('error', 'Disbursement blocked: Incomplete corporate NUBAN bank details on company profile.');
+        }
+
+        $paystackService = app(\App\Services\PaystackService::class);
+        $disburseRef = 'FLEET-PAYOUT-' . $payout->id . '-' . date('YmdHis');
+
+        // 1. Resolve or Create Paystack Transfer Recipient
+        $recipientRes = $paystackService->createTransferRecipient(
+            $accountName,
+            $accountNum,
+            $bankCode ?: $bankName
+        );
+
+        if (!$recipientRes['success']) {
+            return back()->with('error', 'Paystack Transfer Recipient Error: ' . ($recipientRes['message'] ?? 'Unable to resolve bank account on NIBSS.'));
+        }
+
+        $recipientCode = $recipientRes['recipient_code'];
+
+        // 2. Authoritative Paystack Automated Transfer Execution
+        $transferRes = $paystackService->initiateTransfer(
+            $recipientCode,
+            (string)$payout->amount,
+            "Corporate fleet payout for {$company->company_name}",
+            $disburseRef
+        );
+
+        if (!$transferRes['success']) {
+            return back()->with('error', 'Paystack Automated Transfer Failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request.') . ' Payout remains in pending review.');
+        }
+
+        $transferCode = $transferRes['transfer_code'] ?? ('TRF_AUTO_' . $payout->id);
+        $proofPath = 'paystack_transfer:' . $transferCode;
+
+        return DB::transaction(function () use ($validated, $admin, $proofPath, $disburseRef, $transferCode, $request) {
             $payout = LogisticsPayoutRequest::with('company')->where('id', $validated['payout_id'])->lockForUpdate()->firstOrFail();
             if ($payout->status !== 'pending') {
                 return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
             }
 
             $company = $payout->company;
-            if (!$company || $company->status !== 'active') {
-                return back()->with('error', 'Disbursement blocked: Logistics company account is inactive or suspended.');
-            }
-
-            if ($company->isWithinBankCooldown()) {
-                return back()->with('error', 'Disbursement blocked: Logistics company bank account was recently updated and is under a 48-hour security cooldown.');
-            }
-
             $payout->status = 'approved';
             $payout->approved_by_admin_id = $admin->id;
             $payout->disbursed_at = Carbon::now();
             $payout->settlement_proof_path = $proofPath;
-            $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Direct corporate NUBAN transfer confirmed.'));
+            $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Automated Paystack NUBAN Transfer (' . $transferCode . '). Approved by Admin #' . $admin->id));
             $payout->save();
 
             // Authoritative Double-Entry Financial Journal: Discharge payout payable, credit cash_in_escrow outflow
-            $disburseRef = 'FLEET-PAYOUT-' . $payout->id . '-' . date('YmdHis');
             $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
             \App\Models\FinancialJournalEntry::create([
                 'order_id' => null,
@@ -1702,7 +1726,7 @@ class PortalController extends Controller
                 'entry_type' => 'debit',
                 'amount' => $formattedPayoutAmount,
                 'currency' => 'NGN',
-                'description' => "Corporate withdrawal liability discharged via bank transfer to {$company->company_name}",
+                'description' => "Corporate withdrawal liability discharged via Paystack automated transfer ({$transferCode}) to {$company->company_name}",
             ]);
 
             \App\Models\FinancialJournalEntry::create([
@@ -1715,7 +1739,7 @@ class PortalController extends Controller
                 'entry_type' => 'credit',
                 'amount' => $formattedPayoutAmount,
                 'currency' => 'NGN',
-                'description' => "Corporate bank transfer disbursement to {$company->company_name} (Acct: {$company->account_number})",
+                'description' => "Corporate Paystack bank transfer disbursement to {$company->company_name} (Acct: {$company->account_number}, Code: {$transferCode})",
             ]);
 
             AdminAuditLog::create([

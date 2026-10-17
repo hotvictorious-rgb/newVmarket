@@ -114,6 +114,66 @@ class PaystackPaymentController extends Controller
             ], 400);
         }
 
+        // Handle Paystack Transfer Webhooks (Automated Fleet Payout Reconciliation)
+        if ($event['event'] === 'transfer.success') {
+            Log::info("Paystack Webhook: Automated transfer success for reference: " . ($event['data']['reference'] ?? ''));
+            return response()->json(['status' => true, 'message' => 'Transfer success confirmed.'], 200);
+        }
+
+        if (in_array($event['event'], ['transfer.failed', 'transfer.reversed'], true)) {
+            $tData = $event['data'] ?? [];
+            $tRef = (string)($tData['reference'] ?? '');
+            $tCode = (string)($tData['transfer_code'] ?? '');
+            Log::warning("Paystack Webhook: Transfer {$event['event']} for ref '{$tRef}', code '{$tCode}'", $tData);
+
+            $payout = \App\Models\LogisticsPayoutRequest::where('settlement_proof_path', 'like', "%{$tCode}%")
+                ->orWhere('admin_notes', 'like', "%{$tRef}%")
+                ->first();
+
+            if ($payout && $payout->status === 'approved') {
+                \Illuminate\Support\Facades\DB::transaction(function () use ($payout, $tData, $event) {
+                    $company = $payout->company;
+                    // Restore company corporate wallet balance
+                    $company->wallet_balance = \App\Services\BcMathService::add((string)$company->wallet_balance, (string)$payout->amount);
+                    $company->save();
+
+                    $payout->status = 'rejected';
+                    $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . "Reversed by Paystack Webhook ({$event['event']}): " . ($tData['reason'] ?? 'Bank reversal');
+                    $payout->save();
+
+                    // Reversing Journal Entries
+                    $revRef = 'REV-FLEET-' . $payout->id . '-' . date('YmdHis');
+                    \App\Models\FinancialJournalEntry::create([
+                        'order_id' => null,
+                        'transaction_reference' => $revRef,
+                        'event_id' => 'EVT-REV-FLEET-' . $payout->id,
+                        'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                        'beneficiary_id' => $company->id,
+                        'account_name' => 'logistics_payout_payable',
+                        'entry_type' => 'credit',
+                        'amount' => (string)$payout->amount,
+                        'currency' => 'NGN',
+                        'description' => "Corporate payout liability restored after Paystack transfer failure: {$company->company_name}",
+                    ]);
+
+                    \App\Models\FinancialJournalEntry::create([
+                        'order_id' => null,
+                        'transaction_reference' => $revRef,
+                        'event_id' => 'EVT-REV-FLEET-' . $payout->id,
+                        'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                        'beneficiary_id' => $company->id,
+                        'account_name' => 'cash_in_escrow',
+                        'entry_type' => 'debit',
+                        'amount' => (string)$payout->amount,
+                        'currency' => 'NGN',
+                        'description' => "Escrow cash restored after Paystack transfer failure: {$company->company_name}",
+                    ]);
+                });
+            }
+
+            return response()->json(['status' => true, 'message' => "Transfer {$event['event']} processed and refunded."], 200);
+        }
+
         // Only process charge.success events
         if ($event['event'] !== 'charge.success') {
             return response()->json([
