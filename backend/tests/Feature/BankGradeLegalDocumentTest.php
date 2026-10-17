@@ -434,5 +434,184 @@ class BankGradeLegalDocumentTest extends TestCase
             ]
         ]);
     }
+
+    /**
+     * Test P0: Super Admin can save a working draft without altering the active public version.
+     */
+    public function test_super_admin_can_save_working_draft_without_affecting_live_storefront(): void
+    {
+        $terms = LegalDocument::where('slug', 'terms-of-service')->firstOrFail();
+        $this->assertEquals('1.0.0', $terms->current_version);
+        $this->assertFalse($terms->has_draft);
+
+        $draftPayload = [
+            'title' => 'Terms of Service (Draft Revision)',
+            'version' => '1.1.0-draft',
+            'effective_date' => '2026-11-01',
+            'summary_of_changes' => 'Drafting new drone courier clause',
+            'summary' => 'Draft working summary description',
+            'content' => "# UNRELEASED DRAFT\n\nThis is a private draft not visible to the public.",
+        ];
+
+        // 1. Super Admin Saves Draft
+        $response = $this->actingAs($this->superAdmin)
+            ->post(route('admin.legal.draft.save', $terms->id), $draftPayload);
+
+        $response->assertRedirect(route('admin.legal.edit', $terms->id));
+        $response->assertSessionHas('status');
+
+        $terms->refresh();
+        $this->assertTrue($terms->has_draft);
+        $this->assertEquals('Terms of Service (Draft Revision)', $terms->draft_title);
+        $this->assertEquals('1.1.0-draft', $terms->draft_version);
+        $this->assertStringContainsString('UNRELEASED DRAFT', $terms->draft_content);
+
+        // 2. Active Public Version MUST Remain Untouched (v1.0.0)
+        $this->assertEquals('1.0.0', $terms->current_version);
+        $this->assertEquals('Terms and Conditions of Service', $terms->title);
+
+        // 3. Public Storefront MUST NOT Serve the Draft Content
+        $publicRes = $this->get(route('terms'));
+        $publicRes->assertStatus(200);
+        $publicRes->assertSee('v1.0.0');
+        $publicRes->assertDontSee('UNRELEASED DRAFT');
+
+        // 4. Public API MUST NOT Serve the Draft Content
+        $apiRes = $this->getJson('/api/v1/legal/terms-of-service');
+        $apiRes->assertStatus(200);
+        $apiRes->assertJson([
+            'success' => true,
+            'data' => [
+                'version' => '1.0.0',
+            ]
+        ]);
+        $this->assertStringNotContainsString('UNRELEASED DRAFT', $apiRes->json('data.content_markdown'));
+    }
+
+    /**
+     * Test P0: Super Admin can preview saved draft with draft warning ribbon, but public is forbidden.
+     */
+    public function test_super_admin_can_preview_saved_draft_in_storefront_context(): void
+    {
+        $terms = LegalDocument::where('slug', 'terms-of-service')->firstOrFail();
+        $terms->update([
+            'has_draft' => true,
+            'draft_title' => 'Terms of Service (Under Review)',
+            'draft_version' => '1.2.0',
+            'draft_content' => "# DRAFT PREVIEW HEADING\n\nSecret clauses being evaluated.",
+            'draft_summary' => 'Under review summary',
+            'draft_effective_date' => '2026-12-01',
+            'draft_updated_at' => now(),
+        ]);
+
+        // Unauthenticated access redirects to login
+        $this->get(route('admin.legal.preview_draft', $terms->id))
+            ->assertRedirect(route('admin.login'));
+
+        // Customer access forbidden
+        $this->actingAs($this->customer)
+            ->get(route('admin.legal.preview_draft', $terms->id))
+            ->assertStatus(403);
+
+        // Super Admin gets 200 with draft warning ribbon and dynamic TOC
+        $response = $this->actingAs($this->superAdmin)
+            ->get(route('admin.legal.preview_draft', $terms->id));
+
+        $response->assertStatus(200);
+        $response->assertSee('SUPER ADMIN DRAFT PREVIEW');
+        $response->assertSee('Terms of Service (Under Review)');
+        $response->assertSee('v1.2.0 (Draft)');
+        $response->assertSee('DRAFT PREVIEW HEADING');
+        $response->assertSee('Return to Editor');
+    }
+
+    /**
+     * Test P1: Real-time raw markdown preview endpoint returns parsed HTML with tables and GFM.
+     */
+    public function test_live_raw_markdown_preview_endpoint_returns_rendered_html(): void
+    {
+        $markdown = "# Section 1\n\nThis is **bold**.\n\n| Feature | Status |\n|---|---|\n| Escrow | Active |";
+
+        $response = $this->actingAs($this->superAdmin)
+            ->postJson(route('admin.legal.preview_raw'), [
+                'content' => $markdown,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+        ]);
+        $this->assertStringContainsString('<h1>Section 1</h1>', $response->json('html'));
+        $this->assertStringContainsString('<strong>bold</strong>', $response->json('html'));
+        $this->assertStringContainsString('<table>', $response->json('html'));
+        $this->assertStringContainsString('<td>Escrow</td>', $response->json('html'));
+    }
+
+    /**
+     * Test P0: Super Admin can discard a working draft and restore editor state.
+     */
+    public function test_super_admin_can_discard_working_draft(): void
+    {
+        $terms = LegalDocument::where('slug', 'terms-of-service')->firstOrFail();
+        $terms->update([
+            'has_draft' => true,
+            'draft_title' => 'Temporary Discardable Draft',
+            'draft_version' => '9.9.9',
+            'draft_content' => 'Temporary text',
+        ]);
+
+        $response = $this->actingAs($this->superAdmin)
+            ->post(route('admin.legal.draft.discard', $terms->id));
+
+        $response->assertRedirect(route('admin.legal.edit', $terms->id));
+        $response->assertSessionHas('status');
+
+        $terms->refresh();
+        $this->assertFalse($terms->has_draft);
+        $this->assertNull($terms->draft_title);
+        $this->assertNull($terms->draft_version);
+        $this->assertNull($terms->draft_content);
+    }
+
+    /**
+     * Test P0: Publishing a draft promotes it to live version and atomically clears draft fields.
+     */
+    public function test_publishing_promotes_version_and_clears_draft_state(): void
+    {
+        $terms = LegalDocument::where('slug', 'terms-of-service')->firstOrFail();
+        $terms->update([
+            'has_draft' => true,
+            'draft_title' => 'Terms of Service (Promoted Release)',
+            'draft_version' => '1.5.0',
+            'draft_content' => "# OFFICIAL PROMOTED RELEASE\n\nLive for all users.",
+        ]);
+
+        $publishPayload = [
+            'title' => 'Terms of Service (Promoted Release)',
+            'version' => '1.5.0',
+            'effective_date' => '2026-10-18',
+            'summary_of_changes' => 'Promoting draft v1.5.0 to live',
+            'summary' => 'Official v1.5.0 live release',
+            'content' => "# OFFICIAL PROMOTED RELEASE\n\nLive for all users.",
+            'is_published' => '1',
+        ];
+
+        $response = $this->actingAs($this->superAdmin)
+            ->post(route('admin.legal.update', $terms->id), $publishPayload);
+
+        $response->assertRedirect(route('admin.legal.index'));
+
+        $terms->refresh();
+        $this->assertEquals('1.5.0', $terms->current_version);
+        $this->assertEquals('Terms of Service (Promoted Release)', $terms->title);
+        $this->assertFalse($terms->has_draft);
+        $this->assertNull($terms->draft_content);
+
+        // Storefront immediately serves promoted release
+        $publicRes = $this->get(route('terms'));
+        $publicRes->assertStatus(200);
+        $publicRes->assertSee('v1.5.0');
+        $publicRes->assertSee('OFFICIAL PROMOTED RELEASE');
+    }
 }
 

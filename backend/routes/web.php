@@ -104,11 +104,18 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/notifications', [PortalController::class, 'adminNotificationSettingsPage'])->name('admin.notifications.index');
     Route::post('/notifications/update', [PortalController::class, 'adminUpdateNotificationSettings'])->name('admin.notifications.update');
     Route::post('/notifications/test-push', [PortalController::class, 'adminSendTestPush'])->name('admin.notifications.test_push');
+    Route::post('/notifications/test-sms', [PortalController::class, 'adminSendTestSms'])->name('admin.notifications.test_sms');
+    Route::post('/notifications/revoke-token/{id}', [PortalController::class, 'adminRevokeDeviceToken'])->name('admin.notifications.revoke_token');
+    Route::post('/notifications/prune-tokens', [PortalController::class, 'adminPruneDeviceTokens'])->name('admin.notifications.prune_tokens');
 
     // Legal & Policy Management Desk
     Route::get('/legal', [PortalController::class, 'adminLegalIndex'])->name('admin.legal.index');
     Route::get('/legal/{id}/edit', [PortalController::class, 'adminLegalEdit'])->name('admin.legal.edit');
     Route::post('/legal/{id}/update', [PortalController::class, 'adminLegalUpdate'])->name('admin.legal.update');
+    Route::post('/legal/{id}/draft', [PortalController::class, 'adminLegalSaveDraft'])->name('admin.legal.draft.save');
+    Route::post('/legal/{id}/draft/discard', [PortalController::class, 'adminLegalDiscardDraft'])->name('admin.legal.draft.discard');
+    Route::get('/legal/{id}/preview-draft', [PortalController::class, 'adminLegalPreviewDraft'])->name('admin.legal.preview_draft');
+    Route::post('/legal/preview-raw', [PortalController::class, 'adminLegalPreviewRaw'])->name('admin.legal.preview_raw');
     Route::get('/legal/{id}/history', [PortalController::class, 'adminLegalHistory'])->name('admin.legal.history');
 });
 

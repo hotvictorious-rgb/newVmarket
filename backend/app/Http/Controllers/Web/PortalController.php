@@ -4423,6 +4423,8 @@ class PortalController extends Controller
             return back()->with('error', $result['message']);
         }
 
+        \App\Services\NotificationDispatchService::dispatchDisputeArbitrationRuling($case, $validated['ruling'], $validated['admin_notes'] ?? null);
+
         return redirect()->route('admin.returns.show', $case->id)->with('status', $result['message']);
     }
 
@@ -4452,6 +4454,8 @@ class PortalController extends Controller
         if (!$result['success']) {
             return back()->with('error', $result['message']);
         }
+
+        \App\Services\NotificationDispatchService::dispatchDisputeArbitrationRuling($case, $validated['ruling'], $validated['admin_notes'] ?? null);
 
         return redirect()->route('admin.returns.show', $case->id)->with('status', $result['message']);
     }
@@ -4507,6 +4511,8 @@ class PortalController extends Controller
         if (!$result['success']) {
             return back()->with('error', $result['message']);
         }
+
+        \App\Services\NotificationDispatchService::dispatchDisputeArbitrationRuling($case, $validated['ruling'], $validated['admin_notes'] ?? null);
 
         return redirect()->route('admin.returns.show', $case->id)->with('status', $result['message']);
     }
@@ -4635,6 +4641,14 @@ class PortalController extends Controller
             'effective_date' => $validated['effective_date'],
             'summary' => $validated['summary'] ?? $document->summary,
             'is_published' => $isPublished,
+            'has_draft' => false,
+            'draft_title' => null,
+            'draft_version' => null,
+            'draft_content' => null,
+            'draft_summary' => null,
+            'draft_summary_of_changes' => null,
+            'draft_effective_date' => null,
+            'draft_updated_at' => null,
         ]);
 
         $document->purgeCache();
@@ -4660,6 +4674,104 @@ class PortalController extends Controller
     }
 
     /**
+     * Super Admin: Legal Draft & Preview Desk
+     */
+    /**
+     * Super Admin: Save Working Draft without Publishing
+     */
+    public function adminLegalSaveDraft(Request $request, int $id)
+    {
+        $document = LegalDocument::findOrFail($id);
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'version' => 'required|string|max:32',
+            'effective_date' => 'nullable|date',
+            'summary_of_changes' => 'nullable|string|max:500',
+            'summary' => 'nullable|string|max:500',
+            'content' => 'required|string',
+        ]);
+
+        $document->update([
+            'has_draft' => true,
+            'draft_title' => $validated['title'],
+            'draft_version' => $validated['version'],
+            'draft_content' => $validated['content'],
+            'draft_summary' => $validated['summary'] ?? null,
+            'draft_summary_of_changes' => $validated['summary_of_changes'] ?? null,
+            'draft_effective_date' => $validated['effective_date'] ?? null,
+            'draft_updated_at' => now(),
+        ]);
+
+        return redirect()->route('admin.legal.edit', $document->id)
+            ->with('status', "Draft version (v{$validated['version']}) saved successfully! Active public version remains v{$document->current_version}.");
+    }
+
+    /**
+     * Super Admin: Discard Active Working Draft
+     */
+    public function adminLegalDiscardDraft(Request $request, int $id)
+    {
+        $document = LegalDocument::findOrFail($id);
+
+        $document->update([
+            'has_draft' => false,
+            'draft_title' => null,
+            'draft_version' => null,
+            'draft_content' => null,
+            'draft_summary' => null,
+            'draft_summary_of_changes' => null,
+            'draft_effective_date' => null,
+            'draft_updated_at' => null,
+        ]);
+
+        return redirect()->route('admin.legal.edit', $document->id)
+            ->with('status', "Draft discarded. Editor restored to active published version (v{$document->current_version}).");
+    }
+
+    /**
+     * Super Admin: Preview Saved Working Draft in Storefront Context
+     */
+    public function adminLegalPreviewDraft(int $id)
+    {
+        $document = LegalDocument::findOrFail($id);
+
+        if (!$document->has_draft && empty($document->draft_content)) {
+            return redirect()->route('admin.legal.edit', $document->id)
+                ->with('error', 'No active draft found for this document.');
+        }
+
+        $currentVersion = (object)[
+            'version' => $document->draft_version ?? $document->current_version,
+            'title' => $document->draft_title ?? $document->title,
+            'rendered_html' => $document->rendered_draft_html,
+            'effective_date' => $document->draft_effective_date ?? $document->effective_date,
+        ];
+
+        $allLegalDocs = LegalDocument::where('is_published', true)->get();
+        $isDraftPreview = true;
+
+        return view('admin.legal.preview_draft', compact('document', 'currentVersion', 'allLegalDocs', 'isDraftPreview'));
+    }
+
+    /**
+     * Super Admin: Render Unsaved Markdown to Storefront HTML for Live Modal Preview
+     */
+    public function adminLegalPreviewRaw(Request $request)
+    {
+        $request->validate([
+            'content' => 'nullable|string',
+        ]);
+
+        $html = \Illuminate\Support\Str::markdown($request->input('content', ''));
+
+        return response()->json([
+            'success' => true,
+            'html' => $html,
+        ]);
+    }
+
+    /**
      * Super Admin: View Revision Audit History
      */
     public function adminLegalHistory(int $id)
@@ -4679,10 +4791,19 @@ class PortalController extends Controller
             'sms_enabled' => (bool)\App\Models\SystemSetting::get('notification_sms_enabled', true),
             'inapp_enabled' => (bool)\App\Models\SystemSetting::get('notification_inapp_enabled', true),
             'whatsapp_enabled' => (bool)\App\Models\SystemSetting::get('notification_whatsapp_enabled', false),
+
+            // Termii SMS Gateway
+            'termii_api_key' => \App\Models\SystemSetting::get('termii_api_key', config('services.termii.key', env('TERMII_API_KEY', ''))),
+            'termii_sender_id' => \App\Models\SystemSetting::get('termii_sender_id', config('services.termii.sender_id', env('TERMII_SENDER_ID', 'VMARKET'))),
+            'termii_channel' => \App\Models\SystemSetting::get('termii_channel', env('TERMII_CHANNEL', 'dnd')),
+
+            // Google Firebase Credentials
             'firebase_project_id' => \App\Models\SystemSetting::get('firebase_project_id', ''),
             'firebase_client_email' => \App\Models\SystemSetting::get('firebase_client_email', ''),
             'firebase_private_key' => \App\Models\SystemSetting::get('firebase_private_key', ''),
             'firebase_credentials_path' => \App\Models\SystemSetting::get('firebase_credentials_path', ''),
+
+            // Multi-Event Routing Matrix
             'matrix' => \App\Models\SystemSetting::get('notification_event_matrix', [
                 'order_placed' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
                 'vendor_handover_ready' => ['fcm' => true, 'sms' => false, 'in_app' => true, 'whatsapp' => false],
@@ -4690,23 +4811,38 @@ class PortalController extends Controller
                 'doorstep_arrived' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
                 'delivery_completed' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
                 'doorstep_return_dispute' => ['fcm' => true, 'sms' => false, 'in_app' => true, 'whatsapp' => false],
+                'vendor_return_otp' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
+                'return_accepted' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
+                'dispute_escalated' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
+                'dispute_arbitration' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
+                'payout_requested' => ['fcm' => true, 'sms' => false, 'in_app' => true, 'whatsapp' => false],
                 'payout_disbursed' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
+                'payout_rejected' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
+                'wallet_credit' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
                 'security_bank_cooldown' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
             ]),
+
+            // Customizable Message Templates
+            'templates' => \App\Models\SystemSetting::get('notification_templates', []),
         ];
 
-        $recentLogs = \App\Models\NotificationDeliveryLog::latest()->take(20)->get();
+        $recentLogs = \App\Models\NotificationDeliveryLog::latest()->take(25)->get();
+        $registeredDevices = \App\Models\UserDeviceToken::with('user')->latest('last_seen_at')->take(50)->get();
+
         $activeTokensCount = \App\Models\UserDeviceToken::active()->count();
         $ridersWithTokensCount = \App\Models\UserDeviceToken::active()->where('app_type', 'rider')->distinct('user_id')->count('user_id');
         $vendorsWithTokensCount = \App\Models\UserDeviceToken::active()->where('app_type', 'vendor')->distinct('user_id')->count('user_id');
+        $customersWithTokensCount = \App\Models\UserDeviceToken::active()->where('app_type', 'customer')->distinct('user_id')->count('user_id');
         $pendingSettlementsCount = \App\Models\Order::where('vendor_settlement_status', 'eligible')->count();
 
         return view('admin.notifications', compact(
             'settings',
             'recentLogs',
+            'registeredDevices',
             'activeTokensCount',
             'ridersWithTokensCount',
             'vendorsWithTokensCount',
+            'customersWithTokensCount',
             'pendingSettlementsCount'
         ));
     }
@@ -4716,11 +4852,49 @@ class PortalController extends Controller
      */
     public function adminUpdateNotificationSettings(\Illuminate\Http\Request $request)
     {
+        // 1. Master Channel Toggles
         \App\Models\SystemSetting::set('notification_fcm_enabled', $request->has('fcm_enabled'), 'notifications');
         \App\Models\SystemSetting::set('notification_sms_enabled', $request->has('sms_enabled'), 'notifications');
         \App\Models\SystemSetting::set('notification_inapp_enabled', $request->has('inapp_enabled'), 'notifications');
         \App\Models\SystemSetting::set('notification_whatsapp_enabled', $request->has('whatsapp_enabled'), 'notifications');
 
+        // 2. Termii SMS Gateway Configuration
+        if ($request->filled('termii_api_key')) {
+            \App\Models\SystemSetting::set('termii_api_key', trim($request->input('termii_api_key')), 'sms');
+        }
+        if ($request->filled('termii_sender_id')) {
+            \App\Models\SystemSetting::set('termii_sender_id', trim($request->input('termii_sender_id')), 'sms');
+        }
+        if ($request->filled('termii_channel')) {
+            \App\Models\SystemSetting::set('termii_channel', trim($request->input('termii_channel')), 'sms');
+        }
+
+        // 3. Google Firebase Service Account JSON File Upload (Direct & Foolproof)
+        $uploadedJsonNotice = '';
+        if ($request->hasFile('firebase_service_account_json')) {
+            try {
+                $file = $request->file('firebase_service_account_json');
+                $rawContent = file_get_contents($file->getRealPath());
+                $parsedJson = json_decode($rawContent, true);
+
+                if (is_array($parsedJson)) {
+                    if (!empty($parsedJson['project_id'])) {
+                        \App\Models\SystemSetting::set('firebase_project_id', $parsedJson['project_id'], 'firebase');
+                    }
+                    if (!empty($parsedJson['client_email'])) {
+                        \App\Models\SystemSetting::set('firebase_client_email', $parsedJson['client_email'], 'firebase');
+                    }
+                    if (!empty($parsedJson['private_key'])) {
+                        \App\Models\SystemSetting::set('firebase_private_key', $parsedJson['private_key'], 'firebase');
+                    }
+                    $uploadedJsonNotice = ' Google Service Account JSON file parsed and loaded successfully.';
+                }
+            } catch (\Throwable $e) {
+                // Fallback to text fields if file was unparseable
+            }
+        }
+
+        // 4. Text Input Firebase Overrides
         if ($request->filled('firebase_project_id')) {
             \App\Models\SystemSetting::set('firebase_project_id', trim($request->input('firebase_project_id')), 'firebase');
         }
@@ -4734,6 +4908,7 @@ class PortalController extends Controller
             \App\Models\SystemSetting::set('firebase_credentials_path', trim($request->input('firebase_credentials_path')), 'firebase');
         }
 
+        // 5. Granular Event-by-Event Routing Matrix
         $matrixInput = $request->input('matrix', []);
         $formattedMatrix = [];
         $events = [
@@ -4743,7 +4918,14 @@ class PortalController extends Controller
             'doorstep_arrived',
             'delivery_completed',
             'doorstep_return_dispute',
+            'vendor_return_otp',
+            'return_accepted',
+            'dispute_escalated',
+            'dispute_arbitration',
+            'payout_requested',
             'payout_disbursed',
+            'payout_rejected',
+            'wallet_credit',
             'security_bank_cooldown',
         ];
 
@@ -4758,7 +4940,12 @@ class PortalController extends Controller
 
         \App\Models\SystemSetting::set('notification_event_matrix', $formattedMatrix, 'notifications');
 
-        return back()->with('status', 'Multi-channel notification settings and event routing matrix updated successfully.');
+        // 6. Message Templates & Wording Customization
+        if ($request->has('templates') && is_array($request->input('templates'))) {
+            \App\Models\SystemSetting::set('notification_templates', $request->input('templates'), 'notifications');
+        }
+
+        return back()->with('status', 'Multi-channel notification settings, SMS gateway, and event routing matrix updated successfully.' . $uploadedJsonNotice);
     }
 
     /**
@@ -4804,5 +4991,68 @@ class PortalController extends Controller
         }
 
         return back()->with('error', 'Push dispatch failed: ' . ($res['message'] ?? 'Check Firebase credentials or registered device tokens.'));
+    }
+
+    /**
+     * Live Test Termii SMS Gateway Dispatcher
+     */
+    public function adminSendTestSms(\Illuminate\Http\Request $request)
+    {
+        $validated = $request->validate([
+            'recipient' => 'required|string|max:20',
+            'message' => 'required|string|max:160',
+        ]);
+
+        $apiKey = \App\Models\SystemSetting::get('termii_api_key') ?: config('services.termii.key', env('TERMII_API_KEY'));
+        $sender = \App\Models\SystemSetting::get('termii_sender_id') ?: config('services.termii.sender_id', env('TERMII_SENDER_ID', 'VMARKET'));
+
+        if (empty($apiKey)) {
+            \App\Models\NotificationDeliveryLog::log('sms', $validated['recipient'], 'test_sms', 'Termii SMS Test', 'skipped', null, 'Termii API Key not configured in Admin Portal or .env');
+            return back()->with('error', 'Termii SMS API key is not configured. Please save your API Key above.');
+        }
+
+        try {
+            $res = \Illuminate\Support\Facades\Http::timeout(6)->post('https://api.ng.termii.com/api/sms/send', [
+                'to' => $validated['recipient'],
+                'from' => $sender,
+                'sms' => $validated['message'],
+                'type' => 'plain',
+                'channel' => \App\Models\SystemSetting::get('termii_channel', 'generic'),
+                'api_key' => $apiKey,
+            ]);
+
+            if ($res->successful()) {
+                \App\Models\NotificationDeliveryLog::log('sms', $validated['recipient'], 'test_sms', 'Termii SMS Test', 'delivered', $res->json());
+                return back()->with('status', "Test SMS successfully dispatched to {$validated['recipient']}! Gateway Ref: " . ($res->json('message_id') ?? 'Confirmed'));
+            }
+
+            \App\Models\NotificationDeliveryLog::log('sms', $validated['recipient'], 'test_sms', 'Termii SMS Test', 'failed', null, $res->body());
+            return back()->with('error', 'Termii dispatch rejected: ' . $res->body());
+        } catch (\Throwable $e) {
+            \App\Models\NotificationDeliveryLog::log('sms', $validated['recipient'], 'test_sms', 'Termii SMS Test', 'failed', null, $e->getMessage());
+            return back()->with('error', 'SMS connection exception: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Revoke single device token from Admin Portal
+     */
+    public function adminRevokeDeviceToken(int $id)
+    {
+        $token = \App\Models\UserDeviceToken::findOrFail($id);
+        $token->update(['is_active' => false]);
+
+        return back()->with('status', "Device token for user #{$token->user_id} ({$token->device_type} - {$token->app_type}) has been revoked.");
+    }
+
+    /**
+     * Prune inactive tokens (>30 days inactive) from Admin Portal
+     */
+    public function adminPruneDeviceTokens()
+    {
+        $cutoff = \Carbon\Carbon::now()->subDays(30);
+        $count = \App\Models\UserDeviceToken::where('last_seen_at', '<', $cutoff)->orWhere('is_active', false)->delete();
+
+        return back()->with('status', "Pruned {$count} inactive or decommissioned device tokens from the registry.");
     }
 }

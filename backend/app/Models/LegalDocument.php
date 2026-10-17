@@ -22,12 +22,31 @@ class LegalDocument extends Model
         'effective_date',
         'is_published',
         'summary',
+        'has_draft',
+        'draft_title',
+        'draft_version',
+        'draft_content',
+        'draft_summary',
+        'draft_summary_of_changes',
+        'draft_effective_date',
+        'draft_updated_at',
     ];
 
     protected $casts = [
         'effective_date' => 'date',
         'is_published' => 'boolean',
+        'has_draft' => 'boolean',
+        'draft_effective_date' => 'date',
+        'draft_updated_at' => 'datetime',
     ];
+
+    /**
+     * Render draft Markdown to sanitized HTML for preview
+     */
+    public function getRenderedDraftHtmlAttribute(): string
+    {
+        return \Illuminate\Support\Str::markdown($this->draft_content ?? '');
+    }
 
     /**
      * All versions of this document

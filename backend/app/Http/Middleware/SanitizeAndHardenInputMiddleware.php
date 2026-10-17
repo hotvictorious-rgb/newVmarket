@@ -23,6 +23,15 @@ class SanitizeAndHardenInputMiddleware
     ];
 
     /**
+     * Multiline markdown fields that must preserve linebreaks, formatting, and tables
+     * while still neutralizing malicious script tags, iframes, and dangerous protocols.
+     */
+    protected array $markdownFields = [
+        'content',
+        'draft_content',
+    ];
+
+    /**
      * Handle an incoming request.
      * Recursively sanitizes all input fields across all Web and API routes.
      */
@@ -51,6 +60,11 @@ class SanitizeAndHardenInputMiddleware
 
             if (in_array(strtolower($cleanKey), $this->except, true)) {
                 $result[$cleanKey] = $value;
+                continue;
+            }
+
+            if (in_array(strtolower($cleanKey), $this->markdownFields, true)) {
+                $result[$cleanKey] = is_string($value) ? $this->sanitizeMarkdown($value) : $value;
                 continue;
             }
 
@@ -97,6 +111,37 @@ class SanitizeAndHardenInputMiddleware
         // If an input was non-empty malicious markup that got stripped to zero,
         // prevent it from converting to null so subsequent validators can reject it with 422.
         if ($wasNotEmpty && strlen($clean) === 0) {
+            return '[blocked-markup]';
+        }
+
+        return $clean;
+    }
+
+    /**
+     * Sanitize multiline markdown and document content.
+     * Preserves newlines, lists, tables, and CommonMark formatting while neutralizing
+     * embedded script tags, iframe tags, styles, and dangerous pseudo-protocols.
+     */
+    protected function sanitizeMarkdown(string $value): string
+    {
+        $wasNotEmpty = strlen(trim($value)) > 0;
+
+        // 1. Strip null bytes
+        $clean = str_replace(chr(0), '', $value);
+
+        // 2. Strip invisible control characters (preserve newlines and tabs)
+        $clean = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}\x{202E}]/u', '', $clean) ?? $clean;
+
+        // 3. Strip entire script, style, and iframe blocks completely (tags + inner malicious content)
+        $clean = preg_replace('/<script\b[^>]*>(.*?)<\/script>/is', '', $clean) ?? $clean;
+        $clean = preg_replace('/<style\b[^>]*>(.*?)<\/style>/is', '', $clean) ?? $clean;
+        $clean = preg_replace('/<iframe\b[^>]*>(.*?)<\/iframe>/is', '', $clean) ?? $clean;
+
+        // 4. Neutralize dangerous pseudo-protocols
+        $clean = preg_replace('/(javascript|vbscript|data\s*:\s*text\/html)\s*:/i', 'blocked:', $clean) ?? $clean;
+
+        // 5. Ensure non-empty malicious markup that got stripped to zero is flagged
+        if ($wasNotEmpty && strlen(trim($clean)) === 0) {
             return '[blocked-markup]';
         }
 

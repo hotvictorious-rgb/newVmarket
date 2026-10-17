@@ -87,6 +87,13 @@
                                 <span style="background: #EFF6FF; color: #1D4ED8; font-weight: 700; font-family: monospace; padding: 4px 10px; border-radius: 6px; font-size: 12px; border: 1px solid #BFDBFE;">
                                     v{{ $doc->current_version }}
                                 </span>
+                                @if($doc->has_draft)
+                                    <div style="margin-top: 4px;">
+                                        <span style="background: #FEF3C7; color: #B45309; font-weight: 700; font-family: monospace; padding: 2px 6px; border-radius: 4px; font-size: 11px; border: 1px solid #FCD34D;">
+                                            📝 Draft v{{ $doc->draft_version ?? $doc->current_version }}
+                                        </span>
+                                    </div>
+                                @endif
                             </td>
                             <td style="padding: 16px; color: #334155; font-size: 13px;">
                                 {{ $doc->effective_date ? $doc->effective_date->format('M d, Y') : 'N/A' }}
@@ -103,17 +110,22 @@
                                     </span>
                                 @else
                                     <span style="background: #FEF3C7; color: #D97706; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px;">
-                                        ○ Draft
+                                        ○ Hidden
                                     </span>
                                 @endif
                             </td>
                             <td style="padding: 16px; text-align: right;">
-                                <div style="display: inline-flex; gap: 8px; align-items: center;">
+                                <div style="display: inline-flex; gap: 6px; align-items: center;">
                                     <a href="{{ route('admin.legal.edit', $doc->id) }}" class="btn-dash btn-dash-primary" style="font-size: 12px; padding: 6px 12px;">
-                                        ✏️ Revise / Edit
+                                        {{ $doc->has_draft ? '✏️ Edit Draft' : '✏️ Revise' }}
                                     </a>
-                                    <a href="{{ $doc->slug === 'terms-of-service' ? route('terms') : route('legal.show', $doc->slug) }}" target="_blank" class="btn-dash btn-dash-outline" style="font-size: 12px; padding: 6px 10px;" title="View public page">
-                                        👁️ View
+                                    @if($doc->has_draft)
+                                        <a href="{{ route('admin.legal.preview_draft', $doc->id) }}" target="_blank" class="btn-dash" style="background: #F59E0B; color: #FFFFFF; font-size: 11.5px; padding: 6px 10px; font-weight: 700;" title="Preview working draft in storefront layout">
+                                            👁️ Preview Draft
+                                        </a>
+                                    @endif
+                                    <a href="{{ $doc->slug === 'terms-of-service' ? route('terms') : route('legal.show', $doc->slug) }}" target="_blank" class="btn-dash btn-dash-outline" style="font-size: 12px; padding: 6px 10px;" title="View public live page">
+                                        🌐 Live
                                     </a>
                                 </div>
                             </td>
