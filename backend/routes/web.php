@@ -234,3 +234,9 @@ Route::middleware(['role:rider'])->prefix('rider')->group(function () {
 Route::get('/terms', [PortalController::class, 'showTermsOfService'])->name('terms');
 Route::get('/legal/{slug}', [PortalController::class, 'showLegalDocument'])->name('legal.show');
 
+
+// Universal In-App Notification Hub for Authenticated Web Portals
+Route::middleware(['auth'])->group(function () {
+    Route::get('/portal/notifications/in-app', [\App\Http\Controllers\Api\DeviceTokenApiController::class, 'listInApp'])->name('portal.notifications.in_app');
+    Route::post('/portal/notifications/mark-read/{id?}', [\App\Http\Controllers\Api\DeviceTokenApiController::class, 'markAsRead'])->name('portal.notifications.mark_read');
+});
