@@ -1149,10 +1149,9 @@
                         <a href="javascript:void(0)" onclick="vmOpenPolicyModal('contact')">Contact &amp; Help Center</a>
                         <a href="javascript:void(0)" onclick="vmOpenPolicyModal('faq')">Frequently Asked Questions</a>
                         <a href="javascript:void(0)" onclick="vmOpenPolicyModal('about')">About Us</a>
-                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('terms')">Terms And Conditions</a>
-                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('privacy')">Privacy Policy</a>
-                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('refund')">Refund Policy</a>
-                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('return')">Return Policy</a>
+                        <a href="{{ route('terms') }}">Terms And Conditions</a>
+                        <a href="{{ route('legal.show', 'privacy-policy') }}">Privacy Policy</a>
+                        <a href="{{ route('legal.show', 'return-and-refund-policy') }}">Return &amp; Refund Policy</a>
                         <a href="javascript:void(0)" onclick="vmOpenPolicyModal('cancellation')">Cancellation Policy</a>
                     </div>
                 </div>

@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             NigeriaGeographySeeder::class,
             InitialDeliveryLanesSeeder::class,
             EcosystemDemoSeeder::class,
+            LegalDocumentSeeder::class,
         ]);
     }
 }

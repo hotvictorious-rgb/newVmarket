@@ -99,6 +99,12 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/reject-vendor-payout', [PortalController::class, 'adminRejectVendorPayout'])->name('admin.reject.vendor_payout');
     Route::post('/settings/announcement', [PortalController::class, 'adminUpdateAnnouncementSettings'])->name('admin.settings.announcement');
     Route::post('/settings/financial', [PortalController::class, 'adminUpdateFinancialSettings'])->name('admin.settings.financial');
+
+    // Legal & Policy Management Desk
+    Route::get('/legal', [PortalController::class, 'adminLegalIndex'])->name('admin.legal.index');
+    Route::get('/legal/{id}/edit', [PortalController::class, 'adminLegalEdit'])->name('admin.legal.edit');
+    Route::post('/legal/{id}/update', [PortalController::class, 'adminLegalUpdate'])->name('admin.legal.update');
+    Route::get('/legal/{id}/history', [PortalController::class, 'adminLegalHistory'])->name('admin.legal.history');
 });
 
 // 2. Admin Staff (Support, Moderation, Operations)
@@ -218,3 +224,8 @@ Route::post('/order/{order_number}/confirm-delivery', [PortalController::class, 
 Route::middleware(['role:rider'])->prefix('rider')->group(function () {
     Route::post('/verify-pickup-otp', [PortalController::class, 'riderVerifyPickupOtp'])->name('rider.verify.pickup.otp');
 });
+
+// Stage 5: Bank-Grade Legal & Policy Presentation
+Route::get('/terms', [PortalController::class, 'showTermsOfService'])->name('terms');
+Route::get('/legal/{slug}', [PortalController::class, 'showLegalDocument'])->name('legal.show');
+

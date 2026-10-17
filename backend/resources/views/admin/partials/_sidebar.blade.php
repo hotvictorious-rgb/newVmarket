@@ -46,6 +46,12 @@
         <span>Returns &amp; Refunds Desk</span>
     </a>
 </li>
+<li class="sidebar-nav-item">
+    <a href="{{ route('admin.legal.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.legal.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">📜</span>
+        <span>Legal &amp; Policy CMS</span>
+    </a>
+</li>
 
 <li class="nav-section-title">ECOSYSTEM ACTORS</li>
 <li class="sidebar-nav-item">

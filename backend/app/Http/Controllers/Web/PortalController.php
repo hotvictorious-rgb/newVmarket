@@ -28,6 +28,8 @@ use App\Models\ReturnCase;
 use App\Models\ReturnItem;
 use App\Models\ReturnInspection;
 use App\Models\ReturnEvidence;
+use App\Models\LegalDocument;
+use App\Models\LegalDocumentVersion;
 use App\Services\BcMathService;
 use App\Services\OrderSettlementService;
 use App\Services\ReturnAndRefundService;
@@ -4507,5 +4509,131 @@ class PortalController extends Controller
         }
 
         return redirect()->route('admin.returns.show', $case->id)->with('status', $result['message']);
+    }
+
+    /**
+     * Public View for Terms and Conditions of Service
+     */
+    public function showTermsOfService(Request $request)
+    {
+        return $this->showLegalDocument('terms-of-service');
+    }
+
+    /**
+     * Public View for any Legal Policy by Slug
+     */
+    public function showLegalDocument(string $slug)
+    {
+        $document = LegalDocument::getBySlug($slug);
+
+        if (!$document) {
+            abort(404, "Legal document '{$slug}' not found.");
+        }
+
+        $currentVersion = $document->currentVersion;
+        $allLegalDocs = LegalDocument::where('is_published', true)->get();
+
+        return view('storefront.legal.show', compact('document', 'currentVersion', 'allLegalDocs'));
+    }
+
+    /**
+     * Super Admin Command Tower: Legal Documents Index
+     */
+    public function adminLegalIndex()
+    {
+        $documents = LegalDocument::withCount('versions')
+            ->with('currentVersion')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        return view('admin.legal.index', compact('documents'));
+    }
+
+    /**
+     * Super Admin: Edit Legal Document
+     */
+    public function adminLegalEdit(int $id)
+    {
+        $document = LegalDocument::with(['currentVersion', 'versions'])->findOrFail($id);
+
+        return view('admin.legal.edit', compact('document'));
+    }
+
+    /**
+     * Super Admin: Update Legal Document & Publish New Version
+     */
+    public function adminLegalUpdate(Request $request, int $id)
+    {
+        $document = LegalDocument::findOrFail($id);
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'version' => 'required|string|max:32',
+            'effective_date' => 'required|date',
+            'summary_of_changes' => 'nullable|string|max:500',
+            'summary' => 'nullable|string|max:500',
+            'content' => 'required|string',
+            'is_published' => 'nullable|boolean',
+        ]);
+
+        $admin = Auth::user();
+        $isPublished = $request->boolean('is_published', true);
+
+        // Create or update the version row
+        $version = LegalDocumentVersion::updateOrCreate(
+            [
+                'legal_document_id' => $document->id,
+                'version' => $validated['version'],
+            ],
+            [
+                'title' => $validated['title'],
+                'content' => $validated['content'],
+                'summary_of_changes' => $validated['summary_of_changes'] ?? 'Version updated by Super Admin',
+                'effective_date' => $validated['effective_date'],
+                'published_by' => $admin ? $admin->id : null,
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+            ]
+        );
+
+        $oldVersion = $document->current_version;
+
+        $document->update([
+            'title' => $validated['title'],
+            'current_version' => $validated['version'],
+            'effective_date' => $validated['effective_date'],
+            'summary' => $validated['summary'] ?? $document->summary,
+            'is_published' => $isPublished,
+        ]);
+
+        $document->purgeCache();
+
+        AdminAuditLog::create([
+            'user_id' => $admin ? $admin->id : null,
+            'action' => 'legal_document_version_published',
+            'target_type' => LegalDocument::class,
+            'target_id' => $document->id,
+            'old_values' => ['version' => $oldVersion],
+            'new_values' => [
+                'version' => $validated['version'],
+                'title' => $validated['title'],
+                'effective_date' => $validated['effective_date'],
+                'summary_of_changes' => $validated['summary_of_changes'] ?? null,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return redirect()->route('admin.legal.index')
+            ->with('status', "Legal document '{$document->title}' (v{$validated['version']}) successfully updated and published.");
+    }
+
+    /**
+     * Super Admin: View Revision Audit History
+     */
+    public function adminLegalHistory(int $id)
+    {
+        $document = LegalDocument::with(['versions.publisher'])->findOrFail($id);
+
+        return view('admin.legal.history', compact('document'));
     }
 }
