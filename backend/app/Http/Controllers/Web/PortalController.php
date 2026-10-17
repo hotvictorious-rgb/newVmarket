@@ -243,15 +243,19 @@ class PortalController extends Controller
             'lga_id' => 'nullable|integer',
         ]);
 
-        $city = $request->input('city');
+        $city = trim((string)$request->input('city'));
         $state = $request->input('state', 'Akwa Ibom');
 
-        $lga = null;
-        if ($request->filled('lga_id')) {
-            $lga = Lga::find($request->input('lga_id'));
+        // Prioritize finding LGA by city name so a stale or mismatched lga_id never overrides user selection
+        $lga = Lga::where('name', $city)->first();
+        if (!$lga && $request->filled('lga_id')) {
+            $candidate = Lga::find($request->input('lga_id'));
+            if ($candidate && (empty($city) || strcasecmp($candidate->name, $city) === 0)) {
+                $lga = $candidate;
+            }
         }
         if (!$lga) {
-            $lga = Lga::where('name', $city)->first();
+            $lga = Lga::where('name', 'like', "%{$city}%")->first();
         }
 
         $lgaId = $lga ? $lga->id : 69;

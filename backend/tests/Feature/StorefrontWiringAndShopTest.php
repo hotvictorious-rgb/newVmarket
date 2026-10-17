@@ -232,4 +232,25 @@ class StorefrontWiringAndShopTest extends TestCase
             'city' => 'Eket',
         ]);
     }
+
+    public function test_set_location_prioritizes_city_name_over_mismatched_stale_lga_id()
+    {
+        // When client sends city "Eket" with old/stale lga_id 69 (Uyo), it must resolve to Eket
+        $eketLga = Lga::where('name', 'Eket')->firstOrFail();
+        $response = $this->postJson(route('set.location'), [
+            'city' => 'Eket',
+            'state' => 'Akwa Ibom',
+            'lga_id' => 69, // Deliberately passing Uyo's ID to test resilient resolution
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'city' => 'Eket',
+            'lga_id' => $eketLga->id,
+        ]);
+
+        $this->assertEquals('Eket', session('customer_city'));
+        $this->assertEquals($eketLga->id, session('customer_lga_id'));
+    }
 }

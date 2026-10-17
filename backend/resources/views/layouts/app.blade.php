@@ -1290,9 +1290,13 @@
                     @php
                         $popularCities = ['Abak', 'Eket', 'Ikot Abasi', 'Ikot Ekpene', 'Oron', 'Uyo'];
                         $currentActiveCity = session('customer_city', 'Uyo');
+                        $popularLgas = \App\Models\Lga::whereIn('name', $popularCities)->pluck('id', 'name')->toArray();
                     @endphp
                     @foreach($popularCities as $pCity)
-                        <button type="button" class="vm-city-chip {{ $currentActiveCity === $pCity ? 'active' : '' }}" data-city="{{ $pCity }}" data-state="Akwa Ibom">
+                        <button type="button" class="vm-city-chip {{ $currentActiveCity === $pCity ? 'active' : '' }}" 
+                                data-city="{{ $pCity }}" 
+                                data-id="{{ $popularLgas[$pCity] ?? '' }}"
+                                data-state="Akwa Ibom">
                             <span class="vm-chip-dot"></span>
                             <span class="vm-chip-name">{{ $pCity }}</span>
                         </button>
@@ -1620,9 +1624,20 @@
             window.vmOpenLocationModal = openLocationModal;
 
             // Update preview feedback card
-            function updatePreview(cityName, stateName, statusText) {
+            function updatePreview(cityName, stateName, statusText, lgaId) {
                 selectedCity = cityName;
                 selectedState = stateName || 'Akwa Ibom';
+                
+                // Synchronize selectedLgaId
+                if (lgaId) {
+                    selectedLgaId = parseInt(lgaId, 10);
+                } else if (allLgas && allLgas.length > 0) {
+                    const matched = allLgas.find(l => l.name.toLowerCase() === cityName.toLowerCase());
+                    if (matched) {
+                        selectedLgaId = matched.id;
+                    }
+                }
+
                 if (previewCity) previewCity.textContent = `${selectedCity}, ${selectedState}`;
                 if (lgaInput) lgaInput.value = selectedCity;
                 
@@ -1656,12 +1671,29 @@
                 chip.addEventListener('click', function () {
                     const city = this.dataset.city;
                     const state = this.dataset.state || 'Akwa Ibom';
-                    updatePreview(city, state);
+                    const id = this.dataset.id;
+                    updatePreview(city, state, null, id);
                 });
             });
 
             // Live Autocomplete Search
             if (lgaInput && lgaDropdown) {
+                // Enter key support inside LGA input
+                lgaInput.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const q = this.value.trim().toLowerCase();
+                        if (q.length > 0 && allLgas && allLgas.length > 0) {
+                            const matched = allLgas.find(l => l.name.toLowerCase() === q) || allLgas.find(l => l.name.toLowerCase().includes(q));
+                            if (matched) {
+                                updatePreview(matched.name, matched.state, null, matched.id);
+                            }
+                        }
+                        lgaDropdown.style.display = 'none';
+                        if (doneBtn) doneBtn.click();
+                    }
+                });
+
                 lgaInput.addEventListener('input', function () {
                     const q = this.value.trim().toLowerCase();
                     if (q.length === 0) {
@@ -1700,8 +1732,8 @@
                         item.addEventListener('click', function () {
                             const c = this.dataset.city;
                             const s = this.dataset.state;
-                            selectedLgaId = this.dataset.id;
-                            updatePreview(c, s);
+                            const id = this.dataset.id;
+                            updatePreview(c, s, null, id);
                             lgaDropdown.style.display = 'none';
                         });
                     });
@@ -1731,6 +1763,12 @@
                     doneBtn.innerHTML = '<span>Saving...</span>';
                 }
 
+                // Ensure targetLgaId matches targetCity from canonical list if available
+                if ((!targetLgaId || isNaN(targetLgaId)) && allLgas && allLgas.length > 0) {
+                    const m = allLgas.find(l => l.name.toLowerCase() === (targetCity || '').toLowerCase());
+                    if (m) targetLgaId = m.id;
+                }
+
                 fetch('{{ route("set.location") }}', {
                     method: 'POST',
                     headers: {
@@ -1754,6 +1792,8 @@
                     if (data.success) {
                         selectedCity = data.city;
                         selectedState = data.state;
+                        selectedLgaId = data.lga_id;
+
                         // Update Header Pill
                         if (activeCityLabel) activeCityLabel.textContent = data.city;
 
@@ -1766,6 +1806,12 @@
                         // Update Dynamic City Labels across Page
                         document.querySelectorAll('.vm-dynamic-city-label').forEach(el => el.textContent = data.city);
 
+                        // Synchronize address bar URL so refreshes and direct links preserve the chosen city
+                        const currentUrl = new URL(window.location.href);
+                        currentUrl.searchParams.set('city', data.city);
+                        currentUrl.searchParams.set('state', data.state);
+                        window.history.replaceState({}, '', currentUrl.toString());
+
                         // Close modal
                         closeLocationModal();
 
@@ -1776,7 +1822,6 @@
                         if (productsGrid) {
                             productsGrid.style.opacity = '0.4';
 
-                            const currentUrl = new URL(window.location.href);
                             const fetchParams = new URLSearchParams(currentUrl.search);
                             fetchParams.set('ajax', '1');
                             fetchParams.set('city', data.city);
@@ -1799,6 +1844,10 @@
                                 console.error('Error refreshing products dynamically:', err);
                                 productsGrid.style.opacity = '1';
                             });
+                        } else {
+                            // On non-storefront pages (e.g. checkout, product detail, shop profile),
+                            // reload page so updated delivery fee calculations and stock take effect
+                            window.location.reload();
                         }
                     }
                 })
