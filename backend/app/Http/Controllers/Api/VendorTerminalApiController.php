@@ -15,6 +15,12 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
+use App\Services\ImageOptimizationService;
+use App\Services\BcMathService;
+use App\Models\VendorRecoveryLedger;
+use App\Models\VendorPayoutRequest;
+use App\Models\FinancialJournalEntry;
 
 class VendorTerminalApiController extends Controller
 {
@@ -157,6 +163,11 @@ class VendorTerminalApiController extends Controller
                     'net_90_earnings' => number_format((float)$netEarnings, 2, '.', ''),
                     'settled_amount' => number_format((float)$settledAmount, 2, '.', ''),
                     'pending_escrow' => number_format((float)$pendingEscrow, 2, '.', ''),
+                    'withdrawable_balance' => $vendor->getWithdrawableBalance(),
+                    'escrow_held_balance' => $vendor->getEscrowHeldBalance(),
+                    'pending_payout_balance' => $vendor->getPendingPayoutBalance(),
+                    'total_settled_balance' => $vendor->getTotalSettledBalance(),
+                    'unrecovered_debt' => VendorRecoveryLedger::where('vendor_id', $vendor->id)->where('status', 'pending_recovery')->sum('amount') ?? '0.00',
                     'currency' => 'NGN',
                     'currency_symbol' => '₦',
                 ],
@@ -202,6 +213,7 @@ class VendorTerminalApiController extends Controller
             ->with([
                 'customer:id,name,phone',
                 'shop:id,name,address',
+                'logisticsCompany:id,company_name,contact_phone',
                 'rider:id,user_id,plate_number,vehicle_type',
                 'rider.user:id,name,phone',
                 'items.product:id,name,unit_price,thumbnail',
@@ -260,6 +272,7 @@ class VendorTerminalApiController extends Controller
             ->with([
                 'customer:id,name,phone,email',
                 'shop:id,name,address,phone',
+                'logisticsCompany:id,company_name,contact_phone',
                 'rider:id,user_id,plate_number,vehicle_type',
                 'rider.user:id,name,phone',
                 'items.product',
@@ -513,6 +526,9 @@ class VendorTerminalApiController extends Controller
             'warranty_type' => 'nullable|string|in:in_store_testing,7_days_replacement,brand_warranty,as_is',
             'description' => 'nullable|string|max:2000',
             'image_url' => 'nullable|string|max:500',
+            'image' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:5120',
+            'images' => 'nullable|array|max:10',
+            'images.*' => 'file|mimes:jpeg,png,jpg,webp|max:5120',
             'video_url' => [
                 'nullable',
                 'string',
@@ -533,6 +549,33 @@ class VendorTerminalApiController extends Controller
 
         $resolvedTier = in_array(strtolower($validated['package_tier'] ?? 'bike'), ['keke', 'bulky'], true) ? 'keke' : 'bike';
 
+        $allImages = [];
+        $thumbnailUrl = $validated['image_url'] ?? null;
+
+        // Process gallery photos via ImageOptimizationService
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $imgFile) {
+                if ($imgFile->isValid()) {
+                    $opt = app(ImageOptimizationService::class)->optimizeAndStoreProof($imgFile, 'products', ['max_dimension' => 1600, 'quality' => 84]);
+                    $allImages[] = '/' . $opt['path'];
+                }
+            }
+        }
+
+        // Process primary photo
+        if ($request->hasFile('image') && $request->file('image')->isValid()) {
+            $opt = app(ImageOptimizationService::class)->optimizeAndStoreProof($request->file('image'), 'products', ['max_dimension' => 1600, 'quality' => 84]);
+            $singleUrl = '/' . $opt['path'];
+            $thumbnailUrl = $singleUrl;
+            if (!in_array($singleUrl, $allImages, true)) {
+                array_unshift($allImages, $singleUrl);
+            }
+        }
+
+        if (empty($thumbnailUrl) && !empty($allImages)) {
+            $thumbnailUrl = $allImages[0];
+        }
+
         $product = Product::create([
             'vendor_id' => $vendor->id,
             'shop_id' => $shop->id,
@@ -547,7 +590,8 @@ class VendorTerminalApiController extends Controller
             'inventory_quantity' => $validated['inventory_quantity'],
             'is_in_stock' => $validated['inventory_quantity'] > 0,
             'description' => isset($validated['description']) ? strip_tags(trim($validated['description'])) : null,
-            'thumbnail' => $validated['image_url'] ?? 'storage/products/default.png',
+            'thumbnail' => $thumbnailUrl ?? 'storage/products/default.png',
+            'images' => !empty($allImages) ? $allImages : ($thumbnailUrl ? [$thumbnailUrl] : null),
             'youtube_video_id' => Product::extractYoutubeVideoId($request->input('video_url')),
             'listing_status' => 'listed',
             'is_approved' => true,
@@ -562,10 +606,126 @@ class VendorTerminalApiController extends Controller
     }
 
     /**
-     * POST /api/v1/vendor/products/{id}/freshness
-     * Refresh 7-Day Product Freshness Lifecycle
+     * POST /api/v1/vendor/products/{id}
+     * Update Existing Product in Catalog
      */
-    public function refreshFreshness(Request $request, int $id): JsonResponse
+    public function updateProduct(Request $request, int $id): JsonResponse
+    {
+        $ctx = $this->resolveVendorContext($request);
+        $vendor = $ctx['vendor'];
+        $shop = $ctx['shop'];
+
+        $query = Product::where('vendor_id', $vendor->id);
+        if ($ctx['is_employee'] && $shop) {
+            $query->where('shop_id', $shop->id);
+        }
+        $product = $query->findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'unit_price' => [
+                'sometimes',
+                'required',
+                'numeric',
+                'min:1.00',
+                'max:50000000.00',
+                'regex:/^\d+(\.\d{1,2})?$/',
+            ],
+            'slash_price' => [
+                'nullable',
+                'numeric',
+                'max:100000000.00',
+                'regex:/^\d+(\.\d{1,2})?$/',
+            ],
+            'inventory_quantity' => 'sometimes|required|integer|min:0|max:100000',
+            'category_id' => 'sometimes|required|integer|exists:categories,id',
+            'condition' => 'nullable|string|in:brand_new,uk_used',
+            'package_tier' => 'nullable|string|in:bike,keke,standard,bulky',
+            'warranty_type' => 'nullable|string|in:in_store_testing,7_days_replacement,brand_warranty,as_is',
+            'description' => 'nullable|string|max:2000',
+            'image_url' => 'nullable|string|max:500',
+            'image' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:5120',
+            'images' => 'nullable|array|max:10',
+            'images.*' => 'file|mimes:jpeg,png,jpg,webp|max:5120',
+            'video_url' => [
+                'nullable',
+                'string',
+                'max:255',
+                'regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})([\?&].*)?$/'
+            ],
+        ]);
+
+        if (isset($validated['name'])) {
+            $product->name = strip_tags(trim($validated['name']));
+        }
+        if (isset($validated['unit_price'])) {
+            $product->unit_price = bcadd((string)$validated['unit_price'], '0', 2);
+        }
+        if (array_key_exists('slash_price', $validated)) {
+            $product->slash_price = !empty($validated['slash_price']) ? bcadd((string)$validated['slash_price'], '0', 2) : null;
+        }
+        if (isset($validated['inventory_quantity'])) {
+            $product->inventory_quantity = $validated['inventory_quantity'];
+            $product->is_in_stock = $validated['inventory_quantity'] > 0;
+        }
+        if (isset($validated['category_id'])) {
+            $product->category_id = $validated['category_id'];
+        }
+        if (isset($validated['condition'])) {
+            $product->condition = $validated['condition'];
+        }
+        if (isset($validated['package_tier'])) {
+            $product->package_tier = in_array(strtolower($validated['package_tier']), ['keke', 'bulky'], true) ? 'keke' : 'bike';
+        }
+        if (isset($validated['warranty_type'])) {
+            $product->warranty_type = $validated['warranty_type'];
+        }
+        if (array_key_exists('description', $validated)) {
+            $product->description = !empty($validated['description']) ? strip_tags(trim($validated['description'])) : null;
+        }
+        if ($request->has('video_url')) {
+            $product->youtube_video_id = Product::extractYoutubeVideoId($request->input('video_url'));
+        }
+
+        $existingImages = is_array($product->images) ? $product->images : [];
+        $uploadedUrls = [];
+
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $file) {
+                if ($file->isValid()) {
+                    $opt = app(ImageOptimizationService::class)->optimizeAndStoreProof($file, 'products', ['max_dimension' => 1600, 'quality' => 84]);
+                    $uploadedUrls[] = '/' . $opt['path'];
+                }
+            }
+        }
+
+        if ($request->hasFile('image') && $request->file('image')->isValid()) {
+            $opt = app(ImageOptimizationService::class)->optimizeAndStoreProof($request->file('image'), 'products', ['max_dimension' => 1600, 'quality' => 84]);
+            $primaryUrl = '/' . $opt['path'];
+            $product->thumbnail = $primaryUrl;
+            if (!in_array($primaryUrl, $uploadedUrls, true)) {
+                array_unshift($uploadedUrls, $primaryUrl);
+            }
+        } elseif (!empty($validated['image_url'])) {
+            $product->thumbnail = $validated['image_url'];
+        }
+
+        if (!empty($uploadedUrls)) {
+            $product->images = array_values(array_unique(array_merge($uploadedUrls, $existingImages)));
+            if (empty($product->thumbnail) || $product->thumbnail === 'storage/products/default.png') {
+                $product->thumbnail = $uploadedUrls[0];
+            }
+        }
+
+        $product->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => "Product '{$product->name}' updated successfully.",
+            'data' => $product,
+        ]);
+    }
+public function refreshFreshness(Request $request, int $id): JsonResponse
     {
         $ctx = $this->resolveVendorContext($request);
         $vendor = $ctx['vendor'];
@@ -642,16 +802,30 @@ class VendorTerminalApiController extends Controller
             ->take(30)
             ->get();
 
+        $payoutRequests = VendorPayoutRequest::where('vendor_id', $vendor->id)
+            ->select('id', 'amount', 'status', 'bank_name', 'account_number', 'account_name', 'created_at', 'disbursed_at', 'rejection_reason')
+            ->latest()
+            ->take(20)
+            ->get();
+
         $isCooldown = $vendor->isWithinBankCooldown();
         $cooldownExpiresAt = $vendor->bank_updated_at ? $vendor->bank_updated_at->copy()->addHours(48) : null;
+        $unrecoveredDebt = VendorRecoveryLedger::where('vendor_id', $vendor->id)->where('status', 'pending_recovery')->sum('amount') ?? '0.00';
+
+        $withdrawable = $vendor->getWithdrawableBalance();
+        $escrowHeld = $vendor->getEscrowHeldBalance();
+        $pendingPayout = $vendor->getPendingPayoutBalance();
+        $totalSettled = $vendor->getTotalSettledBalance();
 
         return response()->json([
             'status' => true,
             'data' => [
                 'bank_details' => [
                     'bank_name' => $vendor->bank_name,
+                    'bank_code' => $vendor->bank_code,
                     'account_number_masked' => $vendor->account_number ? '******' . substr($vendor->account_number, -4) : null,
                     'account_name' => $vendor->account_name,
+                    'is_configured' => (!empty($vendor->account_number) && !empty($vendor->bank_name)),
                 ],
                 'security_cooldown' => [
                     'is_active' => $isCooldown,
@@ -659,14 +833,123 @@ class VendorTerminalApiController extends Controller
                     'cooldown_expires_at' => $cooldownExpiresAt?->toIso8601String(),
                     'hours_remaining' => $isCooldown && $cooldownExpiresAt ? max(1, Carbon::now()->diffInHours($cooldownExpiresAt, false)) : 0,
                 ],
-                'totals' => [
-                    'settled_sum' => Order::where('vendor_id', $vendor->id)->where('vendor_settlement_status', 'settled')->sum('vendor_net_90') ?? '0.00',
-                    'eligible_sum' => Order::where('vendor_id', $vendor->id)->where('vendor_settlement_status', 'eligible')->sum('vendor_net_90') ?? '0.00',
+                'balances' => [
+                    'withdrawable_balance' => $withdrawable,
+                    'escrow_held_balance' => $escrowHeld,
+                    'pending_payout_balance' => $pendingPayout,
+                    'total_settled_balance' => $totalSettled,
+                    'unrecovered_debt' => number_format((float)$unrecoveredDebt, 2, '.', ''),
                 ],
+                'totals' => [
+                    'settled_sum' => $totalSettled,
+                    'eligible_sum' => $withdrawable,
+                ],
+                'payout_requests' => $payoutRequests,
                 'settled_history' => $settledOrders,
                 'eligible_pending' => $eligibleOrders,
             ],
         ]);
+    }
+
+    /**
+     * POST /api/v1/vendor/payouts
+     * Merchant Mobile Payout Request
+     */
+    public function requestPayout(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveVendorContext($request);
+        if ($ctx['is_employee']) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: Only merchant store owners can request payout withdrawals.',
+            ], 403);
+        }
+        $vendor = $ctx['vendor'];
+
+        if ($vendor->marketplace_status !== 'active' || ($vendor->user && $vendor->user->status !== 'active')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: Merchant store account is suspended or inactive.',
+            ], 403);
+        }
+
+        if (empty($vendor->account_number) || empty($vendor->bank_name)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Please configure your verified commercial bank account before requesting withdrawal.',
+            ], 422);
+        }
+
+        if ($vendor->isWithinBankCooldown()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Security Cooldown Active: Bank account was recently updated. For fraud prevention, withdrawals are locked for 48 hours following bank detail modifications.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:1000|max:50000000',
+        ], [
+            'amount.min' => 'Minimum payout request amount is ₦1,000.00.',
+            'amount.max' => 'Maximum single payout request cannot exceed ₦50,000,000.00.',
+        ]);
+
+        return DB::transaction(function () use ($vendor, $validated) {
+            $lockedVendor = VendorProfile::where('id', $vendor->id)->lockForUpdate()->first();
+            $withdrawable = $lockedVendor->getWithdrawableBalance();
+            $amount = number_format((float)$validated['amount'], 2, '.', '');
+
+            if (BcMathService::comp((string)$amount, (string)$withdrawable) > 0) {
+                return response()->json([
+                    'status' => false,
+                    'message' => "Insufficient withdrawable balance. Your available cleared balance is ₦" . number_format((float)$withdrawable, 2) . ". In-transit or pending orders are held in platform escrow.",
+                ], 422);
+            }
+
+            $payout = VendorPayoutRequest::create([
+                'vendor_id' => $lockedVendor->id,
+                'amount' => $amount,
+                'status' => 'pending',
+                'bank_name' => $lockedVendor->bank_name,
+                'bank_code' => $lockedVendor->bank_code,
+                'account_number' => $lockedVendor->account_number,
+                'account_name' => $lockedVendor->account_name ?? $lockedVendor->business_name,
+            ]);
+
+            // Authoritative double-entry financial journal
+            $reqRef = 'MERCHANT-REQ-' . $lockedVendor->id . '-' . date('YmdHis');
+            FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => $reqRef,
+                'event_id' => 'EVT-MERCHANT-REQ-' . $payout->id,
+                'beneficiary_type' => VendorProfile::class,
+                'beneficiary_id' => $lockedVendor->id,
+                'account_name' => 'vendor_escrow_holding',
+                'entry_type' => 'debit',
+                'amount' => $amount,
+                'currency' => 'NGN',
+                'description' => "Merchant payout request placed by {$lockedVendor->business_name}",
+            ]);
+
+            FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => $reqRef,
+                'event_id' => 'EVT-MERCHANT-REQ-' . $payout->id,
+                'beneficiary_type' => VendorProfile::class,
+                'beneficiary_id' => $lockedVendor->id,
+                'account_name' => 'vendor_payout_payable',
+                'entry_type' => 'credit',
+                'amount' => $amount,
+                'currency' => 'NGN',
+                'description' => "Merchant withdrawal liability accrued for {$lockedVendor->business_name}",
+            ]);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Withdrawal request submitted successfully. Treasury will process after audit review.',
+                'data' => $payout,
+            ], 201);
+        });
     }
 
     /**

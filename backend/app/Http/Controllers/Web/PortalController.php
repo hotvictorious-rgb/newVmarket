@@ -4636,4 +4636,141 @@ class PortalController extends Controller
 
         return view('admin.legal.history', compact('document'));
     }
+
+    /**
+     * Super Admin Notification Orchestration & Firebase Control Tower
+     */
+    public function adminNotificationSettingsPage(\Illuminate\Http\Request $request)
+    {
+        $settings = [
+            'fcm_enabled' => (bool)\App\Models\SystemSetting::get('notification_fcm_enabled', true),
+            'sms_enabled' => (bool)\App\Models\SystemSetting::get('notification_sms_enabled', true),
+            'inapp_enabled' => (bool)\App\Models\SystemSetting::get('notification_inapp_enabled', true),
+            'whatsapp_enabled' => (bool)\App\Models\SystemSetting::get('notification_whatsapp_enabled', false),
+            'firebase_project_id' => \App\Models\SystemSetting::get('firebase_project_id', ''),
+            'firebase_client_email' => \App\Models\SystemSetting::get('firebase_client_email', ''),
+            'firebase_private_key' => \App\Models\SystemSetting::get('firebase_private_key', ''),
+            'firebase_credentials_path' => \App\Models\SystemSetting::get('firebase_credentials_path', ''),
+            'matrix' => \App\Models\SystemSetting::get('notification_event_matrix', [
+                'order_placed' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
+                'vendor_handover_ready' => ['fcm' => true, 'sms' => false, 'in_app' => true, 'whatsapp' => false],
+                'out_for_delivery' => ['fcm' => true, 'sms' => false, 'in_app' => true, 'whatsapp' => false],
+                'doorstep_arrived' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
+                'delivery_completed' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
+                'doorstep_return_dispute' => ['fcm' => true, 'sms' => false, 'in_app' => true, 'whatsapp' => false],
+                'payout_disbursed' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
+                'security_bank_cooldown' => ['fcm' => true, 'sms' => true, 'in_app' => true, 'whatsapp' => false],
+            ]),
+        ];
+
+        $recentLogs = \App\Models\NotificationDeliveryLog::latest()->take(20)->get();
+        $activeTokensCount = \App\Models\UserDeviceToken::active()->count();
+        $ridersWithTokensCount = \App\Models\UserDeviceToken::active()->where('app_type', 'rider')->distinct('user_id')->count('user_id');
+        $vendorsWithTokensCount = \App\Models\UserDeviceToken::active()->where('app_type', 'vendor')->distinct('user_id')->count('user_id');
+        $pendingSettlementsCount = \App\Models\Order::where('vendor_settlement_status', 'eligible')->count();
+
+        return view('admin.notifications', compact(
+            'settings',
+            'recentLogs',
+            'activeTokensCount',
+            'ridersWithTokensCount',
+            'vendorsWithTokensCount',
+            'pendingSettlementsCount'
+        ));
+    }
+
+    /**
+     * Save Multi-Channel Notification Settings & Event Routing Matrix
+     */
+    public function adminUpdateNotificationSettings(\Illuminate\Http\Request $request)
+    {
+        \App\Models\SystemSetting::set('notification_fcm_enabled', $request->has('fcm_enabled'), 'notifications');
+        \App\Models\SystemSetting::set('notification_sms_enabled', $request->has('sms_enabled'), 'notifications');
+        \App\Models\SystemSetting::set('notification_inapp_enabled', $request->has('inapp_enabled'), 'notifications');
+        \App\Models\SystemSetting::set('notification_whatsapp_enabled', $request->has('whatsapp_enabled'), 'notifications');
+
+        if ($request->filled('firebase_project_id')) {
+            \App\Models\SystemSetting::set('firebase_project_id', trim($request->input('firebase_project_id')), 'firebase');
+        }
+        if ($request->filled('firebase_client_email')) {
+            \App\Models\SystemSetting::set('firebase_client_email', trim($request->input('firebase_client_email')), 'firebase');
+        }
+        if ($request->filled('firebase_private_key')) {
+            \App\Models\SystemSetting::set('firebase_private_key', trim($request->input('firebase_private_key')), 'firebase');
+        }
+        if ($request->filled('firebase_credentials_path')) {
+            \App\Models\SystemSetting::set('firebase_credentials_path', trim($request->input('firebase_credentials_path')), 'firebase');
+        }
+
+        $matrixInput = $request->input('matrix', []);
+        $formattedMatrix = [];
+        $events = [
+            'order_placed',
+            'vendor_handover_ready',
+            'out_for_delivery',
+            'doorstep_arrived',
+            'delivery_completed',
+            'doorstep_return_dispute',
+            'payout_disbursed',
+            'security_bank_cooldown',
+        ];
+
+        foreach ($events as $evt) {
+            $formattedMatrix[$evt] = [
+                'fcm' => !empty($matrixInput[$evt]['fcm']),
+                'sms' => !empty($matrixInput[$evt]['sms']),
+                'in_app' => !empty($matrixInput[$evt]['in_app']),
+                'whatsapp' => !empty($matrixInput[$evt]['whatsapp']),
+            ];
+        }
+
+        \App\Models\SystemSetting::set('notification_event_matrix', $formattedMatrix, 'notifications');
+
+        return back()->with('status', 'Multi-channel notification settings and event routing matrix updated successfully.');
+    }
+
+    /**
+     * Live Test Push Dispatcher Tool
+     */
+    public function adminSendTestPush(\Illuminate\Http\Request $request)
+    {
+        $validated = $request->validate([
+            'target_type' => 'required|string|in:user,token',
+            'target_id' => 'nullable|integer',
+            'device_token' => 'nullable|string',
+            'title' => 'required|string|max:100',
+            'body' => 'required|string|max:300',
+        ]);
+
+        $fcmService = app(\App\Services\FirebaseCloudMessagingService::class);
+
+        if ($validated['target_type'] === 'token' && !empty($validated['device_token'])) {
+            $res = $fcmService->sendToToken(
+                $validated['device_token'],
+                $validated['title'],
+                $validated['body'],
+                ['type' => 'test_push', 'dispatched_by' => 'admin'],
+                'admin_test'
+            );
+        } else {
+            $targetUserId = !empty($validated['target_id']) ? $validated['target_id'] : auth()->id();
+            $user = \App\Models\User::find($targetUserId);
+            if (!$user) {
+                return back()->with('error', 'Target user #' . $targetUserId . ' not found.');
+            }
+            $res = $fcmService->sendToUser(
+                $user->id,
+                $validated['title'],
+                $validated['body'],
+                ['type' => 'test_push', 'dispatched_by' => 'admin'],
+                'admin_test'
+            );
+        }
+
+        if (!empty($res['success'])) {
+            return back()->with('status', 'Test push notification dispatched successfully! ' . ($res['message'] ?? ''));
+        }
+
+        return back()->with('error', 'Push dispatch failed: ' . ($res['message'] ?? 'Check Firebase credentials or registered device tokens.'));
+    }
 }

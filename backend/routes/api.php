@@ -60,6 +60,13 @@ Route::prefix('v1')->group(function () {
 
     // 7. Authenticated Endpoints
     Route::middleware('auth:sanctum')->group(function () {
+        // Unified Multi-Channel Notification & FCM Token Registry
+        Route::prefix('notifications')->group(function () {
+            Route::post('device-token', [\App\Http\Controllers\Api\DeviceTokenApiController::class, 'registerToken']);
+            Route::delete('device-token', [\App\Http\Controllers\Api\DeviceTokenApiController::class, 'revokeToken']);
+            Route::get('in-app', [\App\Http\Controllers\Api\DeviceTokenApiController::class, 'listInApp']);
+            Route::post('mark-read/{id?}', [\App\Http\Controllers\Api\DeviceTokenApiController::class, 'markAsRead']);
+        });
         // Customer Profile & Session
         Route::get('auth/me', [AuthApiController::class, 'me']);
         Route::get('customer/info', [AuthApiController::class, 'me']);
@@ -125,6 +132,7 @@ Route::prefix('v1')->group(function () {
 
         // Delivery Rider Terminal
         Route::prefix('rider')->group(function () {
+            Route::post('device-token', [\App\Http\Controllers\Api\DeviceTokenApiController::class, 'registerToken']);
             Route::get('dashboard', [RiderTerminalApiController::class, 'dashboard']);
             Route::post('toggle-duty', [RiderTerminalApiController::class, 'toggleDuty']);
             Route::get('orders/active', [RiderTerminalApiController::class, 'activeOrders']);
@@ -161,11 +169,13 @@ Route::prefix('v1')->group(function () {
             // Products & 7-Day Freshness Governance
             Route::get('products', [VendorTerminalApiController::class, 'products']);
             Route::post('products', [VendorTerminalApiController::class, 'storeProduct']);
+            Route::post('products/{id}', [VendorTerminalApiController::class, 'updateProduct']);
             Route::post('products/{id}/freshness', [VendorTerminalApiController::class, 'refreshFreshness']);
             Route::post('products/{id}/toggle-stock', [VendorTerminalApiController::class, 'toggleStock']);
 
             // Financial Ledger, Payouts & 48h Cooldown
             Route::get('payouts', [VendorTerminalApiController::class, 'payouts']);
+            Route::post('payouts', [VendorTerminalApiController::class, 'requestPayout']);
             Route::post('bank/update', [VendorTerminalApiController::class, 'updateBank']);
         });
     });

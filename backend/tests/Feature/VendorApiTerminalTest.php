@@ -17,6 +17,8 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 class VendorApiTerminalTest extends TestCase
 {
@@ -250,5 +252,203 @@ class VendorApiTerminalTest extends TestCase
         ])->getJson('/api/v1/vendor/dashboard');
 
         $res->assertStatus(403);
+    }
+    public function test_vendor_payouts_endpoint_returns_fintech_balances_and_history(): void
+    {
+        [$user, $vendor, $shop] = $this->createVendor('Pay Store', 'pay@example.com', '08099112233');
+        Sanctum::actingAs($user);
+
+        $res = $this->getJson('/api/v1/vendor/payouts');
+
+        $res->assertStatus(200)
+            ->assertJsonPath('status', true)
+            ->assertJsonStructure([
+                'data' => [
+                    'bank_details' => ['bank_name', 'account_number_masked', 'account_name', 'is_configured'],
+                    'security_cooldown' => ['is_active'],
+                    'balances' => ['withdrawable_balance', 'escrow_held_balance', 'pending_payout_balance', 'total_settled_balance', 'unrecovered_debt'],
+                    'payout_requests',
+                    'settled_history',
+                    'eligible_pending',
+                ]
+            ]);
+    }
+
+    public function test_vendor_can_request_payout_within_withdrawable_balance(): void
+    {
+        [$user, $vendor, $shop] = $this->createVendor('Fast Payouts', 'fast@example.com', '08099223344');
+        Sanctum::actingAs($user);
+
+        $customer = User::create([
+            'name' => 'Buyer Joe',
+            'email' => 'joe.buyer@example.com',
+            'phone' => '08012344321',
+            'password' => bcrypt('test'),
+            'user_type' => 'customer',
+            'status' => 'active',
+        ]);
+
+        // Seed delivered and eligible order
+        Order::create([
+            'order_number' => 'VM-TEST-PAY-01',
+            'customer_id' => $customer->id,
+            'vendor_id' => $vendor->id,
+            'shop_id' => $shop->id,
+            'origin_lga_id' => 1,
+            'destination_lga_id' => 1,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'delivered',
+            'merchandise_subtotal' => 20000.00,
+            'delivery_fee' => 1500.00,
+            'cashback_redeemed' => 0.00,
+            'grand_total' => 21500.00,
+            'vendor_net_90' => 18000.00,
+            'customer_cashback_5' => 1000.00,
+            'platform_margin_5' => 1000.00,
+            'logistics_fee_retained' => 1350.00,
+            'platform_delivery_fee' => 150.00,
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'eligible',
+            'delivered_at' => Carbon::now()->subHours(25),
+        ]);
+
+        $this->assertEquals('18000.00', $vendor->getWithdrawableBalance());
+
+        $res = $this->postJson('/api/v1/vendor/payouts', [
+            'amount' => 5000.00,
+        ]);
+
+        $res->assertStatus(201)
+            ->assertJsonPath('status', true)
+            ->assertJsonPath('data.amount', '5000.00')
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->assertDatabaseHas('vendor_payout_requests', [
+            'vendor_id' => $vendor->id,
+            'amount' => 5000.00,
+            'status' => 'pending',
+        ]);
+
+        // Financial journal double entry recorded
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'beneficiary_id' => $vendor->id,
+            'account_name' => 'vendor_escrow_holding',
+            'entry_type' => 'debit',
+            'amount' => 5000.00,
+        ]);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'beneficiary_id' => $vendor->id,
+            'account_name' => 'vendor_payout_payable',
+            'entry_type' => 'credit',
+            'amount' => 5000.00,
+        ]);
+    }
+
+    public function test_vendor_payout_rejected_when_amount_exceeds_withdrawable_balance(): void
+    {
+        [$user, $vendor, $shop] = $this->createVendor('Low Balance Store', 'low@example.com', '08099334455');
+        Sanctum::actingAs($user);
+
+        $res = $this->postJson('/api/v1/vendor/payouts', [
+            'amount' => 10000.00,
+        ]);
+
+        $res->assertStatus(422)
+            ->assertJsonPath('status', false)
+            ->assertJsonFragment(['status' => false]);
+    }
+
+    public function test_vendor_payout_rejected_during_48h_cooldown(): void
+    {
+        [$user, $vendor, $shop] = $this->createVendor('Cooldown Store', 'cool@example.com', '08099445566');
+        Sanctum::actingAs($user);
+
+        // Update bank to trigger cooldown
+        $this->postJson('/api/v1/vendor/bank/update', [
+            'bank_name' => 'GTBank',
+            'account_number' => '0987654321',
+            'account_name' => 'COOLDOWN ENTERPRISES',
+        ]);
+
+        $res = $this->postJson('/api/v1/vendor/payouts', [
+            'amount' => 2000.00,
+        ]);
+
+        $res->assertStatus(403)
+            ->assertJsonPath('status', false)
+            ->assertJsonPath('message', 'Security Cooldown Active: Bank account was recently updated. For fraud prevention, withdrawals are locked for 48 hours following bank detail modifications.');
+    }
+
+    public function test_vendor_can_upload_product_with_photo_file_and_gallery(): void
+    {
+        Storage::fake('public');
+        [$user, $vendor, $shop] = $this->createVendor('Photo Store', 'photo@example.com', '08099556677');
+        Sanctum::actingAs($user);
+
+        $category = Category::create([
+            'name' => 'Electronics',
+            'slug' => 'electronics',
+            'is_active' => true,
+        ]);
+
+        $filePrimary = UploadedFile::fake()->image('tv_front.jpg', 800, 600);
+        $fileGallery1 = UploadedFile::fake()->image('tv_side.jpg', 800, 600);
+
+        $res = $this->postJson('/api/v1/vendor/products', [
+            'name' => 'Samsung 55 inch OLED 4K TV',
+            'unit_price' => 450000.00,
+            'inventory_quantity' => 5,
+            'category_id' => $category->id,
+            'package_tier' => 'keke',
+            'condition' => 'brand_new',
+            'image' => $filePrimary,
+            'images' => [$fileGallery1],
+        ]);
+
+        $res->assertStatus(201)
+            ->assertJsonPath('status', true);
+
+        $product = Product::where('name', 'Samsung 55 inch OLED 4K TV')->first();
+        $this->assertNotNull($product);
+        $this->assertNotEquals('storage/products/default.png', $product->thumbnail);
+        $this->assertNotEmpty($product->images);
+    }
+
+    public function test_vendor_can_update_product(): void
+    {
+        [$user, $vendor, $shop] = $this->createVendor('Update Store', 'update@example.com', '08099667788');
+        Sanctum::actingAs($user);
+
+        $category = Category::create([
+            'name' => 'Home Appliances',
+            'slug' => 'home-appliances',
+            'is_active' => true,
+        ]);
+
+        $product = Product::create([
+            'vendor_id' => $vendor->id,
+            'shop_id' => $shop->id,
+            'category_id' => $category->id,
+            'name' => 'Electric Blender 1000W',
+            'slug' => 'electric-blender-1000w',
+            'unit_price' => 25000.00,
+            'inventory_quantity' => 10,
+            'is_in_stock' => true,
+            'thumbnail' => 'storage/products/default.png',
+        ]);
+
+        $res = $this->postJson("/api/v1/vendor/products/{$product->id}", [
+            'unit_price' => 28000.00,
+            'inventory_quantity' => 15,
+            'slash_price' => 35000.00,
+        ]);
+
+        $res->assertStatus(200)
+            ->assertJsonPath('status', true);
+
+        $product->refresh();
+        $this->assertEquals('28000.00', $product->unit_price);
+        $this->assertEquals(15, $product->inventory_quantity);
+        $this->assertEquals('35000.00', $product->slash_price);
     }
 }

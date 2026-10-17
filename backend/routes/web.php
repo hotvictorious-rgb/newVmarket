@@ -100,6 +100,11 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/settings/announcement', [PortalController::class, 'adminUpdateAnnouncementSettings'])->name('admin.settings.announcement');
     Route::post('/settings/financial', [PortalController::class, 'adminUpdateFinancialSettings'])->name('admin.settings.financial');
 
+    // Multi-Channel Notifications & Firebase Control Center
+    Route::get('/notifications', [PortalController::class, 'adminNotificationSettingsPage'])->name('admin.notifications.index');
+    Route::post('/notifications/update', [PortalController::class, 'adminUpdateNotificationSettings'])->name('admin.notifications.update');
+    Route::post('/notifications/test-push', [PortalController::class, 'adminSendTestPush'])->name('admin.notifications.test_push');
+
     // Legal & Policy Management Desk
     Route::get('/legal', [PortalController::class, 'adminLegalIndex'])->name('admin.legal.index');
     Route::get('/legal/{id}/edit', [PortalController::class, 'adminLegalEdit'])->name('admin.legal.edit');

@@ -188,4 +188,102 @@ class BankGradeLegalDocumentTest extends TestCase
         $this->assertNotEmpty($docRes->json('data.content_markdown'));
         $this->assertNotEmpty($docRes->json('data.content_html'));
     }
+
+    /**
+     * Test P0: Merchant Accreditation Agreement contains B2B covenants, 2h SLA, and offset debt recovery.
+     */
+    public function test_merchant_agreement_seeded_with_kyb_and_indemnity_covenants(): void
+    {
+        $merchantDoc = LegalDocument::getBySlug('merchant-agreement');
+
+        $this->assertNotNull($merchantDoc);
+        $this->assertEquals('Merchant Accreditation & Commercial Seller Agreement', $merchantDoc->title);
+        $this->assertEquals('merchant', $merchantDoc->category);
+        $this->assertEquals('1.0.0', $merchantDoc->current_version);
+
+        $version = $merchantDoc->currentVersion;
+        $this->assertNotNull($version);
+        $this->assertStringContainsString('Merchant Vetting, KYB & Physical Shop Accreditation', $version->content);
+        $this->assertStringContainsString('2-Hour Handover SLA', $version->content);
+        $this->assertStringContainsString('Debt Recovery, Deficit Balances & Right of Offset', $version->content);
+        $this->assertStringContainsString('Prohibition of Off-Platform Dealing', $version->content);
+
+        // Public Web Route
+        $response = $this->get(route('legal.show', 'merchant-agreement'));
+        $response->assertStatus(200);
+        $response->assertSee('Merchant Accreditation &amp; Commercial Seller Agreement', false);
+        $response->assertSee('Zero Counterfeit Tolerance');
+
+        // Public API Route
+        $apiRes = $this->getJson('/api/v1/legal/merchant-agreement');
+        $apiRes->assertStatus(200);
+        $apiRes->assertJson([
+            'success' => true,
+            'data' => [
+                'slug' => 'merchant-agreement',
+                'category' => 'merchant',
+            ]
+        ]);
+    }
+
+    /**
+     * Test P0: Logistics SLA binds fleet operators to OTP verification, photographic proof, and strict liability.
+     */
+    public function test_logistics_sla_seeded_with_otp_custody_and_fleet_liability(): void
+    {
+        $logisticsDoc = LegalDocument::getBySlug('logistics-service-agreement');
+
+        $this->assertNotNull($logisticsDoc);
+        $this->assertEquals('Logistics Fleet Operations & Chain-of-Custody SLA', $logisticsDoc->title);
+        $this->assertEquals('logistics', $logisticsDoc->category);
+        $this->assertEquals('1.0.0', $logisticsDoc->current_version);
+
+        $version = $logisticsDoc->currentVersion;
+        $this->assertNotNull($version);
+        $this->assertStringContainsString('Cryptographic OTP Handshake & Chain of Custody Invariants', $version->content);
+        $this->assertStringContainsString('Strict Liability for Bypassed OTP', $version->content);
+        $this->assertStringContainsString('Photographic Evidence & R2 Storage Protocol', $version->content);
+        $this->assertStringContainsString('Cargo Tiers & Vehicle Classifications', $version->content);
+
+        // Public Web Route
+        $response = $this->get(route('legal.show', 'logistics-service-agreement'));
+        $response->assertStatus(200);
+        $response->assertSee('Logistics Fleet Operations &amp; Chain-of-Custody SLA', false);
+        $response->assertSee('Verifiable Chain of Custody');
+
+        // Public API Route
+        $apiRes = $this->getJson('/api/v1/legal/logistics-service-agreement');
+        $apiRes->assertStatus(200);
+        $apiRes->assertJson([
+            'success' => true,
+            'data' => [
+                'slug' => 'logistics-service-agreement',
+                'category' => 'logistics',
+            ]
+        ]);
+    }
+
+    /**
+     * Test P1: All 5 canonical legal policies are indexed and accessible in the system.
+     */
+    public function test_all_five_legal_documents_available_in_public_index_and_api(): void
+    {
+        $allDocs = LegalDocument::where('is_published', true)->get();
+        $this->assertCount(5, $allDocs);
+
+        $expectedSlugs = [
+            'terms-of-service',
+            'return-and-refund-policy',
+            'privacy-policy',
+            'merchant-agreement',
+            'logistics-service-agreement',
+        ];
+
+        $this->assertEqualsCanonicalizing($expectedSlugs, $allDocs->pluck('slug')->toArray());
+
+        $indexRes = $this->getJson('/api/v1/legal');
+        $indexRes->assertStatus(200);
+        $this->assertCount(5, $indexRes->json('data'));
+    }
 }
+
