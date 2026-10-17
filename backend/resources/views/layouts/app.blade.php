@@ -879,36 +879,37 @@
                 <!-- 7 Connected Login Portals Switcher -->
                 <div class="vm-portal-dropdown">
                     <span class="vm-portal-trigger">
-                        <span>⚡ 7 Portals Gate</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                        <span>7 Portals Gate</span>
                         <span>▾</span>
                     </span>
                     <div class="vm-portal-menu">
                         <a href="{{ route('customer.login') }}" class="vm-portal-item">
-                            <span>🛍️</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
                             <span>Customer Shopper Login</span>
                         </a>
                         <a href="{{ route('admin.login') }}" class="vm-portal-item">
-                            <span>👑</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>
                             <span>Super Admin Gate</span>
                         </a>
                         <a href="{{ route('admin.staff.login') }}" class="vm-portal-item">
-                            <span>🏢</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
                             <span>Super Admin Staff Portal</span>
                         </a>
                         <a href="{{ route('vendor.login') }}" class="vm-portal-item">
-                            <span>🏪</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
                             <span>Vendor Merchant Desk</span>
                         </a>
                         <a href="{{ route('counter.login') }}" class="vm-portal-item">
-                            <span>📟</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
                             <span>Branch Counter Terminal</span>
                         </a>
                         <a href="{{ route('logistics.login') }}" class="vm-portal-item">
-                            <span>🚚</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
                             <span>Logistics Company Fleet</span>
                         </a>
                         <a href="{{ route('rider.login') }}" class="vm-portal-item">
-                            <span>🛵</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"></circle><circle cx="18.5" cy="17.5" r="3.5"></circle><path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5V14l-3-3 4-3 2 3h4"></path></svg>
                             <span>Delivery Rider Portal</span>
                         </a>
                     </div>
@@ -998,7 +999,12 @@
                             </div>
                             <div id="vmCustomerNotifList" style="max-height: 320px; overflow-y: auto; padding: 6px 0;">
                                 <div id="vmCustomerNotifEmpty" style="padding: 24px 16px; text-align: center; color: #64748B; font-size: 12px;">
-                                    <div style="font-size: 24px; margin-bottom: 4px;">🔔</div>
+                                    <div style="margin-bottom: 6px; color: #94A3B8; display: flex; justify-content: center;">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                                        </svg>
+                                    </div>
                                     No new notifications on your account.
                                 </div>
                                 <div id="vmCustomerNotifItems"></div>
@@ -1057,19 +1063,31 @@
                         <div class="vm-nav-dropdown-grid">
                             <a href="{{ route('storefront', ['category' => 'electronics-gadgets']) }}" class="vm-nav-dropdown-item">
                                 <span class="vm-nav-cat-bullet">●</span>
-                                <span>📱 Electronics &amp; Gadgets</span>
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                                    <span>Electronics &amp; Gadgets</span>
+                                </span>
                             </a>
                             <a href="{{ route('storefront', ['category' => 'home-appliances']) }}" class="vm-nav-dropdown-item">
                                 <span class="vm-nav-cat-bullet">●</span>
-                                <span>🔌 Home &amp; Kitchen Appliances</span>
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                                    <span>Home &amp; Kitchen Appliances</span>
+                                </span>
                             </a>
                             <a href="{{ route('storefront', ['category' => 'groceries-farm-produce']) }}" class="vm-nav-dropdown-item">
                                 <span class="vm-nav-cat-bullet">●</span>
-                                <span>🌾 Groceries &amp; Produce</span>
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 0 1 10 10 10 10 0 0 1-10 10A10 10 0 0 1 2 12a10 10 0 0 1 10-10m0 4a6 6 0 0 0-6 6c0 3.31 2.69 6 6 6s6-2.69 6-6-2.69-6-6-6"></path></svg>
+                                    <span>Groceries &amp; Produce</span>
+                                </span>
                             </a>
                             <a href="{{ route('storefront') }}?search=Phone" class="vm-nav-dropdown-item">
                                 <span class="vm-nav-cat-bullet">●</span>
-                                <span>💻 Phones &amp; Laptops</span>
+                                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="2" y1="20" x2="22" y2="20"></line></svg>
+                                    <span>Phones &amp; Laptops</span>
+                                </span>
                             </a>
                         </div>
                         <div class="vm-nav-dropdown-footer">
@@ -1092,7 +1110,7 @@
                 @if(session('status'))
                     <div style="background: #ECFDF5; border: 1.5px solid #10B981; color: #065F46; padding: 12px 18px; border-radius: 12px; font-size: 13.5px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.1);">
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 18px;">✅</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                             <span>{{ session('status') }}</span>
                         </div>
                         <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 20px; color: #065F46; cursor: pointer; padding: 0 4px;">&times;</button>
@@ -1101,7 +1119,7 @@
                 @if(session('info'))
                     <div style="background: #EFF6FF; border: 1.5px solid #3B82F6; color: #1E40AF; padding: 12px 18px; border-radius: 12px; font-size: 13.5px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.1);">
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 18px;">ℹ️</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                             <span>{{ session('info') }}</span>
                         </div>
                         <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 20px; color: #1E40AF; cursor: pointer; padding: 0 4px;">&times;</button>
@@ -1110,7 +1128,7 @@
                 @if(session('error'))
                     <div style="background: #FEF2F2; border: 1.5px solid #EF4444; color: #991B1B; padding: 12px 18px; border-radius: 12px; font-size: 13.5px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.1);">
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 18px;">⚠️</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
                             <span>{{ session('error') }}</span>
                         </div>
                         <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 20px; color: #991B1B; cursor: pointer; padding: 0 4px;">&times;</button>
@@ -1119,7 +1137,7 @@
                 @if(session('warning'))
                     <div style="background: #FFFBEB; border: 1.5px solid #F59E0B; color: #92400E; padding: 12px 18px; border-radius: 12px; font-size: 13.5px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.1);">
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 18px;">🔔</span>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                             <span>{{ session('warning') }}</span>
                         </div>
                         <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 20px; color: #92400E; cursor: pointer; padding: 0 4px;">&times;</button>
@@ -1150,15 +1168,17 @@
                         Nigeria’s omnichannel marketplace and delivery logistics ecosystem. Connecting verified merchants across Akwa Ibom with guaranteed in-shop inspection and swift door-to-door delivery.
                     </p>
                     <div style="font-size: 13.5px; line-height: 1.5; color: #CBD5E1; margin-bottom: 14px; display: flex; align-items: flex-start; gap: 8px;">
-                        <span style="font-size: 16px; line-height: 1.2;">🏢</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFD700" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
                         <span><strong style="color: #FFFFFF;">Head Office:</strong> Lagos, Nigeria</span>
                     </div>
                     <div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px;">
                         <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $sysWhatsApp ?? '09118949035') }}" target="_blank" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
-                            <span>📞</span> {{ $sysPhone }}
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                            <span>{{ $sysPhone }}</span>
                         </a>
                         <a href="mailto:{{ $sysEmail }}" style="color: #94A3B8; display: inline-flex; align-items: center; gap: 6px;">
-                            <span>✉️</span> {{ $sysEmail }}
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                            <span>{{ $sysEmail }}</span>
                         </a>
                     </div>
                 </div>
@@ -1193,21 +1213,27 @@
                     <h4 class="vm-footer-title">Platform Guarantees</h4>
                     <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13px;">
                         <div style="display: flex; gap: 10px; align-items: flex-start;">
-                            <span style="font-size: 18px;">🛡️</span>
+                            <div style="width: 24px; height: 24px; border-radius: 6px; background: rgba(16, 185, 129, 0.15); display: flex; align-items: center; justify-content: center; color: #10B981; flex-shrink: 0; margin-top: 1px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+                            </div>
                             <div>
                                 <strong style="color: #FFFFFF;">Paystack Verified Escrow</strong>
                                 <p style="font-size: 12px; color: #94A3B8; margin-top: 2px;">100% secure payments via card, bank transfer, and USSD.</p>
                             </div>
                         </div>
                         <div style="display: flex; gap: 10px; align-items: flex-start;">
-                            <span style="font-size: 18px;">🏪</span>
+                            <div style="width: 24px; height: 24px; border-radius: 6px; background: rgba(94, 23, 235, 0.2); display: flex; align-items: center; justify-content: center; color: #A78BFA; flex-shrink: 0; margin-top: 1px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                            </div>
                             <div>
                                 <strong style="color: #FFFFFF;">In-Shop Inspection</strong>
                                 <p style="font-size: 12px; color: #94A3B8; margin-top: 2px;">Reserve items and inspect physically before collection.</p>
                             </div>
                         </div>
                         <div style="display: flex; gap: 10px; align-items: flex-start;">
-                            <span style="font-size: 18px;">⚡</span>
+                            <div style="width: 24px; height: 24px; border-radius: 6px; background: rgba(255, 215, 0, 0.15); display: flex; align-items: center; justify-content: center; color: #FFD700; flex-shrink: 0; margin-top: 1px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+                            </div>
                             <div>
                                 <strong style="color: #FFFFFF;">Directional LGA Delivery</strong>
                                 <p style="font-size: 12px; color: #94A3B8; margin-top: 2px;">Predictable logistics rates and dedicated rider tracking.</p>
@@ -1224,7 +1250,10 @@
                     <span>Copyright Victorious MARKET &copy; {{ date('Y') }}</span>
                 </div>
                 <div style="display: flex; gap: 20px; align-items: center;">
-                    <span>🔒 SSL 256-Bit Encrypted</span>
+                    <span style="display: inline-flex; align-items: center; gap: 5px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <span>SSL 256-Bit Encrypted</span>
+                    </span>
                     <span>🇳🇬 Made for Nigeria</span>
                 </div>
             </div>
@@ -1307,7 +1336,12 @@
             <!-- Active Selected Location Feedback Card -->
             <div class="vm-selected-location-card" id="vmSelectedLocCard">
                 <div class="vm-selected-loc-left">
-                    <span class="vm-selected-pin">📍</span>
+                    <span class="vm-selected-pin">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E17EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                            <circle cx="12" cy="10" r="3"></circle>
+                        </svg>
+                    </span>
                     <div>
                         <strong class="vm-selected-city-text" id="vmPreviewCity">{{ session('customer_city', 'Uyo') }}, {{ session('customer_state', 'Akwa Ibom') }}</strong>
                         <small class="vm-selected-status-text" id="vmPreviewStatus">Pickup and delivery available in this local government</small>
@@ -1349,7 +1383,13 @@
         </div>
         <div class="vm-cart-drawer-body" id="vmCartItemsContainer">
             <div style="text-align: center; padding: 40px 10px; color: #94A3B8;">
-                <span style="font-size: 48px; display: block; margin-bottom: 12px;">🛍️</span>
+                <div style="width: 56px; height: 56px; border-radius: 50%; background: #F8FAFC; border: 1.5px solid #E2E8F0; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; color: #94A3B8;">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="9" cy="21" r="1"></circle>
+                        <circle cx="20" cy="21" r="1"></circle>
+                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                    </svg>
+                </div>
                 <strong style="color: #334155; font-size: 16px; display: block; margin-bottom: 6px;">Your cart is empty</strong>
                 <p style="font-size: 13px;">Explore verified items with 5% cashback reward</p>
             </div>
@@ -1359,8 +1399,8 @@
                 <span style="font-size: 14px; color: #64748B;">Estimated Subtotal:</span>
                 <strong id="vmCartSubtotal" style="font-size: 18px; color: #0F172A;">₦0.00</strong>
             </div>
-            <div style="display: flex; gap: 8px; margin-bottom: 16px; font-size: 12px; color: #059669; background: #ECFDF5; padding: 8px 12px; border-radius: 6px;">
-                <span>🎁</span>
+            <div style="display: flex; gap: 8px; margin-bottom: 16px; font-size: 12px; color: #059669; background: #ECFDF5; padding: 8px 12px; border-radius: 6px; align-items: center;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v12M9 9h6a2 2 0 0 1 0 4H9m7 0a2 2 0 0 1 0 4H8"></path></svg>
                 <span>You will earn <strong>5% Cashback (<span id="vmCartCashbackEstimate">₦0.00</span>)</strong> upon receipt sign-off</span>
             </div>
             <a href="{{ route('checkout') }}" id="vmCartCheckoutBtn" style="display: block; text-align: center; background: linear-gradient(135deg, #FFD700 0%, #F59E0B 100%); color: #0F172A; font-weight: 800; font-size: 14px; padding: 13px; border-radius: 10px; text-decoration: none; box-shadow: 0 4px 14px rgba(255, 215, 0, 0.35); transition: transform 0.15s ease;">
@@ -1374,7 +1414,15 @@
         <div style="background: #FFFFFF; border-radius: 16px; width: 100%; max-width: 620px; max-height: 85vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #E2E8F0; position: relative;">
             <div style="padding: 20px 24px; border-bottom: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: #FFFFFF; z-index: 10;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <span id="vmPolicyIcon" style="font-size: 24px;">📋</span>
+                    <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(94, 23, 235, 0.1); color: #5E17EB; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                    </div>
                     <div>
                         <h3 id="vmPolicyTitle" style="font-size: 18px; font-weight: 700; color: #0F172A; margin: 0;">Policy Information</h3>
                         <p style="font-size: 12px; color: #64748B; margin: 2px 0 0 0;">Victorious Market — Akwa Ibom Trusted Commerce</p>
@@ -1400,7 +1448,8 @@
             <div style="background: linear-gradient(135deg, #1E1B4B 0%, #312E81 50%, #4338CA 100%); padding: 22px 24px; color: #FFFFFF; position: relative; border-radius: 19px 19px 0 0;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                     <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 215, 0, 0.15); border: 1px solid rgba(255, 215, 0, 0.35); padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; color: #FFD700; text-transform: uppercase; letter-spacing: 0.5px;">
-                        <span>🔒 Customer Account Required</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <span>Customer Account Required</span>
                     </div>
                     <button type="button" onclick="vmCloseAuthModal()" style="background: rgba(255, 255, 255, 0.15); border: none; width: 30px; height: 30px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #FFFFFF;">&times;</button>
                 </div>
@@ -1413,14 +1462,17 @@
 
                 <!-- Value Chips -->
                 <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
-                    <span style="font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, 0.12); padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
-                        <span>🛡️</span> Escrow Safe
+                    <span style="font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, 0.12); padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+                        <span>Escrow Safe</span>
                     </span>
-                    <span style="font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, 0.12); padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
-                        <span>🪙</span> 5% Cashback
+                    <span style="font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, 0.12); padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v12M9 9h6a2 2 0 0 1 0 4H9m7 0a2 2 0 0 1 0 4H8"></path></svg>
+                        <span>5% Cashback</span>
                     </span>
-                    <span style="font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, 0.12); padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
-                        <span>📱</span> Delivery OTP
+                    <span style="font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, 0.12); padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                        <span>Delivery OTP</span>
                     </span>
                 </div>
             </div>
@@ -1552,26 +1604,55 @@
     <!-- Mobile Bottom App Navigation Bar (Mockup Screen 5 Parity) -->
     <div class="vm-mobile-bottom-nav">
         <a href="{{ route('storefront') }}" class="vm-mob-nav-item {{ request()->routeIs('storefront') ? 'active' : '' }}">
-            <span class="vm-mob-nav-icon">🏠</span>
+            <span class="vm-mob-nav-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+            </span>
             <span class="vm-mob-nav-text">Home</span>
         </a>
         <a href="{{ route('storefront') }}#merchants" class="vm-mob-nav-item">
-            <span class="vm-mob-nav-icon">🏪</span>
+            <span class="vm-mob-nav-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <line x1="3.27" y1="6.96" x2="12" y2="12.01"></line>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+            </span>
             <span class="vm-mob-nav-text">Plazas</span>
         </a>
         <button type="button" class="vm-mob-nav-item vm-mob-cart-trigger" onclick="if(window.vmCart) window.vmCart.openDrawer();" style="background: none; border: none; cursor: pointer;">
-            <div style="position: relative; display: inline-block;">
-                <span class="vm-mob-nav-icon">🛒</span>
+            <div style="position: relative; display: inline-flex; align-items: center; justify-content: center;">
+                <span class="vm-mob-nav-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="9" cy="21" r="1"></circle>
+                        <circle cx="20" cy="21" r="1"></circle>
+                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                    </svg>
+                </span>
                 <span class="vm-mob-nav-badge" id="vmMobCartBadge">0</span>
             </div>
             <span class="vm-mob-nav-text">Cart</span>
         </button>
         <a href="{{ route('customer.dashboard') }}" class="vm-mob-nav-item {{ request()->routeIs('customer.dashboard') ? 'active' : '' }}">
-            <span class="vm-mob-nav-icon">📦</span>
+            <span class="vm-mob-nav-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line>
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+            </span>
             <span class="vm-mob-nav-text">Orders</span>
         </a>
         <a href="{{ Auth::check() ? route('customer.dashboard') : route('customer.login') }}" class="vm-mob-nav-item {{ request()->routeIs('customer.login', 'customer.register') ? 'active' : '' }}">
-            <span class="vm-mob-nav-icon">👤</span>
+            <span class="vm-mob-nav-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+            </span>
             <span class="vm-mob-nav-text">{{ Auth::check() ? 'Account' : 'Login' }}</span>
         </a>
     </div>

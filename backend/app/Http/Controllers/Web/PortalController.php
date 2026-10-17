@@ -1922,76 +1922,28 @@ class PortalController extends Controller
         $transferCode = $transferRes['transfer_code'] ?? null;
         $proofPath = $transferCode ? ('paystack_transfer:' . $transferCode) : ('paystack_transfer_ref:' . $preValidation['disburse_ref']);
 
-        // Phase 3: Final Atomic Settlement & Journal Transaction
-        return DB::transaction(function () use ($validated, $admin, $request, $payoutId, $preValidation, $transferCode, $proofPath, $transferRes) {
-            $payout = LogisticsPayoutRequest::with(['company'])->where('id', $payoutId)->lockForUpdate()->firstOrFail();
-            $company = $payout->company;
+        // Phase 3: Final Atomic Settlement & Journal Transaction via Unified Finalization Service
+        $payout = LogisticsPayoutRequest::with('company')->findOrFail($payoutId);
+        app(\App\Services\PayoutFinalizationService::class)->finalizeLogisticsPayout($payout, [
+            'transfer_code' => $transferCode,
+            'reference' => $preValidation['disburse_ref'],
+        ], $admin);
 
-            $isImmediateSuccess = ($transferRes['status'] ?? '') === 'success';
+        \App\Models\AdminAuditLog::create([
+            'user_id' => $admin->id,
+            'action' => 'logistics_payout_disbursed',
+            'target_type' => LogisticsPayoutRequest::class,
+            'target_id' => $payout->id,
+            'old_values' => ['status' => 'pending', 'amount' => $payout->amount],
+            'new_values' => ['status' => 'approved', 'amount' => $payout->amount],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
 
-            $payout->status = 'approved';
-            $payout->processing_token = null;
-            $payout->processing_started_at = null;
-            $payout->approved_by_admin_id = $admin->id;
-            $payout->disbursed_at = $isImmediateSuccess ? Carbon::now() : null;
-            $payout->settlement_proof_path = $proofPath;
-            $payout->paystack_transfer_code = $transferCode;
-            $payout->transfer_reference = $preValidation['disburse_ref'];
-            $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Automated Paystack NUBAN Transfer (' . ($transferCode ?? $preValidation['disburse_ref']) . '). Approved by Admin #' . $admin->id));
-            $payout->save();
-
-            // Authoritative Double-Entry Financial Journal: Discharge payout payable, credit cash_in_escrow outflow
-            $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
-            \App\Models\FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $preValidation['disburse_ref'],
-                'event_id' => 'EVT-FLEET-PAYOUT-' . $payout->id,
-                'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
-                'beneficiary_id' => $company->id,
-                'account_name' => 'logistics_payout_payable',
-                'entry_type' => 'debit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Corporate withdrawal liability discharged via Paystack automated transfer ({$transferCode}) to {$company->company_name}",
-            ]);
-
-            \App\Models\FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $preValidation['disburse_ref'],
-                'event_id' => 'EVT-FLEET-PAYOUT-' . $payout->id,
-                'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
-                'beneficiary_id' => $company->id,
-                'account_name' => 'cash_in_escrow',
-                'entry_type' => 'credit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Corporate Paystack bank transfer disbursement to {$company->company_name} (Acct: {$company->account_number}, Code: {$transferCode})",
-            ]);
-
-            AdminAuditLog::create([
-                'user_id' => $admin->id,
-                'action' => 'logistics_payout_disbursed',
-                'target_type' => LogisticsPayoutRequest::class,
-                'target_id' => $payout->id,
-                'old_values' => [
-                    'status' => 'pending',
-                    'amount' => $payout->amount,
-                ],
-                'new_values' => [
-                    'status' => 'approved',
-                    'amount' => $payout->amount,
-                    'company_id' => $company->id,
-                    'company_name' => $company->company_name,
-                    'proof_path' => $payout->settlement_proof_path,
-                    'admin_notes' => $payout->admin_notes,
-                ],
-                'ip_address' => $request->ip() ?? '127.0.0.1',
-                'user_agent' => $request->userAgent(),
-            ]);
-
-            return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " to {$company->company_name} via Paystack!");
-        });
+        return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " to " . ($payout->company?->company_name ?? 'Fleet') . " via Paystack!");
     }
+
+    
 
     /**
      * Interactive Action: Admin rejects a logistics company withdrawal request and atomically restores wallet balance
@@ -2219,115 +2171,17 @@ class PortalController extends Controller
         $transferCode = $transferRes['transfer_code'] ?? null;
         $proofPath = $transferCode ? ('paystack_transfer:' . $transferCode) : ('paystack_transfer_ref:' . $preValidation['disburse_ref']);
 
-        // Phase 3: Final Atomic Settlement, Immutable Allocations & Journal Transaction
-        return DB::transaction(function () use ($validated, $admin, $request, $payoutId, $preValidation, $transferCode, $proofPath, $transferRes) {
-            $payout = \App\Models\VendorPayoutRequest::with(['vendor'])->where('id', $payoutId)->lockForUpdate()->firstOrFail();
-            $vendor = $payout->vendor;
+        // Phase 3: Final Atomic Settlement, Immutable Allocations & Journal Transaction via Unified Finalization Service
+        $payout = \App\Models\VendorPayoutRequest::findOrFail($payoutId);
+        app(\App\Services\PayoutFinalizationService::class)->finalizeVendorPayout($payout, [
+            'transfer_code' => $transferCode,
+            'reference' => $preValidation['disburse_ref'],
+        ], $admin);
 
-            $isImmediateSuccess = ($transferRes['status'] ?? '') === 'success';
-
-            $payout->status = 'approved';
-            $payout->processing_token = null;
-            $payout->processing_started_at = null;
-            $payout->approved_by_admin_id = $admin->id;
-            $payout->disbursed_at = $isImmediateSuccess ? Carbon::now() : null;
-            $payout->settlement_proof_path = $proofPath;
-            $payout->paystack_transfer_code = $transferCode;
-            $payout->transfer_reference = $preValidation['disburse_ref'];
-            $payout->admin_notes = strip_tags(trim($validated['notes'] ?? 'Automated Paystack NUBAN Transfer (' . ($transferCode ?? $preValidation['disburse_ref']) . '). Approved by Admin #' . $admin->id));
-            $payout->save();
-
-            // Transition eligible merchant orders up to payout amount with immutable allocation tracking
-            // Strict non-oversettlement invariant: only orders that are fully covered are marked settled
-            $remainingToSettle = (string)$payout->amount;
-            $eligibleOrders = Order::where('vendor_id', $vendor->id)
-                ->where('vendor_settlement_status', 'eligible')
-                ->where('payment_status', 'paid')
-                ->where('order_status', 'delivered')
-                ->whereDoesntHave('returnCases', function ($q) {
-                    $q->whereNotIn('status', ['resolved', 'rejected']);
-                })
-                ->whereDoesntHave('dispute', function ($q) {
-                    $q->whereIn('status', ['filed', 'under_review']);
-                })
-                ->with(['payoutAllocations.payoutRequest'])
-                ->orderBy('id', 'asc')
-                ->lockForUpdate()
-                ->get();
-
-            foreach ($eligibleOrders as $order) {
-                if (bccomp($remainingToSettle, '0.00', 2) <= 0) break;
-                $orderAvailable = $order->remaining_payable_to_vendor;
-                if (bccomp($orderAvailable, '0.00', 2) <= 0) continue;
-
-                $allocated = (bccomp($remainingToSettle, $orderAvailable, 2) >= 0) ? $orderAvailable : $remainingToSettle;
-
-                \App\Models\VendorPayoutAllocation::create([
-                    'vendor_payout_request_id' => $payout->id,
-                    'order_id' => $order->id,
-                    'allocated_amount' => $allocated,
-                ]);
-
-                $newRemaining = bcsub($orderAvailable, $allocated, 2);
-                if (bccomp($newRemaining, '0.00', 2) === 0) {
-                    $order->vendor_settlement_status = 'settled';
-                    $order->settled_at = Carbon::now();
-                    $order->settled_by_admin_id = $admin->id;
-                    $order->settlement_proof_path = $proofPath;
-                    $order->save();
-                }
-
-                $remainingToSettle = bcsub($remainingToSettle, $allocated, 2);
-            }
-
-            // Double-Entry Financial Journal: Discharge vendor payable, credit cash_in_escrow outflow
-            $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
-            \App\Models\FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $preValidation['disburse_ref'],
-                'event_id' => 'EVT-VND-PAYOUT-' . $payout->id,
-                'beneficiary_type' => \App\Models\VendorProfile::class,
-                'beneficiary_id' => $vendor->id,
-                'account_name' => 'vendor_payable',
-                'entry_type' => 'debit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Merchant withdrawal liability discharged via Paystack automated transfer ({$transferCode}) to {$vendor->business_name}",
-            ]);
-
-            \App\Models\FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $preValidation['disburse_ref'],
-                'event_id' => 'EVT-VND-PAYOUT-' . $payout->id,
-                'beneficiary_type' => \App\Models\VendorProfile::class,
-                'beneficiary_id' => $vendor->id,
-                'account_name' => 'cash_in_escrow',
-                'entry_type' => 'credit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Merchant Paystack bank transfer disbursement to {$vendor->business_name} (Acct: {$vendor->account_number}, Code: {$transferCode})",
-            ]);
-
-            AdminAuditLog::create([
-                'user_id' => $admin->id,
-                'action' => 'vendor_payout_disbursed',
-                'target_type' => \App\Models\VendorPayoutRequest::class,
-                'target_id' => $payout->id,
-                'old_values' => ['status' => 'pending'],
-                'new_values' => [
-                    'status' => 'approved',
-                    'amount' => $payout->amount,
-                    'vendor_id' => $vendor->id,
-                    'vendor_name' => $vendor->business_name,
-                    'proof_path' => $payout->settlement_proof_path,
-                ],
-                'ip_address' => $request->ip() ?? '127.0.0.1',
-                'user_agent' => $request->userAgent(),
-            ]);
-
-            return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " merchandise earnings to {$vendor->business_name}!");
-        });
+        return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " merchandise earnings to {$preValidation['business_name']}!");
     }
+
+    
 
     /**
      * Interactive Action: Admin rejects a merchant withdrawal request and atomically frees withdrawable balance
@@ -5180,105 +5034,26 @@ class PortalController extends Controller
 
         $status = $verify['status'] ?? 'unknown';
         if ($status === 'success') {
-            // Transfer succeeded at bank! Finalize settlement under lock
-            return DB::transaction(function () use ($payout, $admin, $verify, $ref) {
-                $payout = \App\Models\VendorPayoutRequest::with('vendor')->where('id', $payout->id)->lockForUpdate()->firstOrFail();
-                if ($payout->status === 'approved') {
-                    return back()->with('status', "Payout #{$payout->id} is already approved and settled.");
-                }
-
-                $transferCode = $verify['transfer_code'] ?? $payout->paystack_transfer_code;
-                $proofPath = $transferCode ? ('paystack_transfer:' . $transferCode) : ('paystack_transfer_ref:' . $ref);
-
-                $payout->status = 'approved';
-                $payout->processing_token = null;
-                $payout->processing_started_at = null;
-                $payout->approved_by_admin_id = $admin->id;
-                $payout->disbursed_at = Carbon::now();
-                $payout->gateway_status = 'success';
-                $payout->settlement_proof_path = $proofPath;
-                $payout->paystack_transfer_code = $transferCode;
-                $payout->transfer_reference = $ref;
-                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'Reconciled: Bank delivery verified at gateway (' . ($transferCode ?? $ref) . ')';
-                $payout->save();
-
-                // Allocate orders
-                $remainingToSettle = (string)$payout->amount;
-                $eligibleOrders = Order::where('vendor_id', $payout->vendor_id)
-                    ->where('vendor_settlement_status', 'eligible')
-                    ->where('payment_status', 'paid')
-                    ->where('order_status', 'delivered')
-                    ->with(['payoutAllocations.payoutRequest'])
-                    ->orderBy('id', 'asc')
-                    ->lockForUpdate()
-                    ->get();
-
-                foreach ($eligibleOrders as $order) {
-                    if (bccomp($remainingToSettle, '0.00', 2) <= 0) break;
-                    $orderAvailable = $order->remaining_payable_to_vendor;
-                    if (bccomp($orderAvailable, '0.00', 2) <= 0) continue;
-
-                    $allocated = (bccomp($remainingToSettle, $orderAvailable, 2) >= 0) ? $orderAvailable : $remainingToSettle;
-                    \App\Models\VendorPayoutAllocation::create([
-                        'vendor_payout_request_id' => $payout->id,
-                        'order_id' => $order->id,
-                        'allocated_amount' => $allocated,
-                        'status' => 'allocated',
-                    ]);
-
-                    $newRemaining = bcsub($orderAvailable, $allocated, 2);
-                    if (bccomp($newRemaining, '0.00', 2) === 0) {
-                        $order->vendor_settlement_status = 'settled';
-                        $order->settled_at = Carbon::now();
-                        $order->settled_by_admin_id = $admin->id;
-                        $order->settlement_proof_path = $proofPath;
-                        $order->save();
-                    }
-                    $remainingToSettle = bcsub($remainingToSettle, $allocated, 2);
-                }
-
-                // Financial journal
-                $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
-                \App\Models\FinancialJournalEntry::create([
-                    'order_id' => null,
-                    'transaction_reference' => $ref,
-                    'event_id' => 'EVT-VND-PAYOUT-' . $payout->id,
-                    'beneficiary_type' => \App\Models\VendorProfile::class,
-                    'beneficiary_id' => $payout->vendor_id,
-                    'account_name' => 'vendor_payable',
-                    'entry_type' => 'debit',
-                    'amount' => $formattedPayoutAmount,
-                    'currency' => 'NGN',
-                    'description' => "Merchant payable liability discharged after timeout reconciliation",
-                ]);
-                \App\Models\FinancialJournalEntry::create([
-                    'order_id' => null,
-                    'transaction_reference' => $ref,
-                    'event_id' => 'EVT-VND-PAYOUT-' . $payout->id,
-                    'beneficiary_type' => \App\Models\VendorProfile::class,
-                    'beneficiary_id' => $payout->vendor_id,
-                    'account_name' => 'cash_in_escrow',
-                    'entry_type' => 'credit',
-                    'amount' => $formattedPayoutAmount,
-                    'currency' => 'NGN',
-                    'description' => "Cash in escrow discharged after timeout reconciliation",
-                ]);
-
-                return back()->with('status', "Gateway reconciliation complete: Transfer verified as successful at Paystack. Payout #{$payout->id} marked approved and orders settled.");
-            });
+            app(\App\Services\PayoutFinalizationService::class)->finalizeVendorPayout($payout, [
+                'transfer_code' => $verify['transfer_code'] ?? $payout->paystack_transfer_code,
+                'reference' => $ref,
+            ], $admin);
+            return back()->with('status', "Gateway reconciliation complete: Payout #{$payout->id} bank transfer confirmed and accounting finalized.");
         }
 
         if (in_array($status, ['failed', 'reversed'], true)) {
-            $payout->processing_token = null;
-            $payout->processing_started_at = null;
-            $payout->gateway_status = 'failed';
-            $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . "Reconciled: Paystack confirms transfer {$status}. Unlocked for retry.";
-            $payout->save();
-            return back()->with('status', "Gateway reconciliation complete: Transfer {$status} at gateway. Unlocked for retry.");
+            app(\App\Services\PayoutFinalizationService::class)->revertVendorPayout(
+                $payout,
+                'Gateway Reconcile: ' . ($verify['message'] ?? 'Transfer failed at Paystack'),
+                $admin
+            );
+            return back()->with('status', "Gateway reconciliation complete: Payout #{$payout->id} marked failed and order allocations restored.");
         }
 
-        return back()->with('status', "Transfer is currently in status '{$status}' at Paystack. Hold maintained until final confirmation.");
+        return back()->with('error', "Gateway returned status '{$status}'. Timeout hold maintained.");
     }
+
+    
 
     /**
      * Authoritative Gateway Reconciliation Action for Locked Logistics Payouts (Audit P0 & P1)
@@ -5306,69 +5081,22 @@ class PortalController extends Controller
 
         $status = $verify['status'] ?? 'unknown';
         if ($status === 'success') {
-            return DB::transaction(function () use ($payout, $admin, $verify, $ref) {
-                $payout = \App\Models\LogisticsPayoutRequest::with('company')->where('id', $payout->id)->lockForUpdate()->firstOrFail();
-                if ($payout->status === 'approved') {
-                    return back()->with('status', "Payout #{$payout->id} is already approved and settled.");
-                }
-
-                $transferCode = $verify['transfer_code'] ?? $payout->paystack_transfer_code;
-                $proofPath = $transferCode ? ('paystack_transfer:' . $transferCode) : ('paystack_transfer_ref:' . $ref);
-
-                $payout->status = 'approved';
-                $payout->processing_token = null;
-                $payout->processing_started_at = null;
-                $payout->approved_by_admin_id = $admin->id;
-                $payout->disbursed_at = Carbon::now();
-                $payout->gateway_status = 'success';
-                $payout->settlement_proof_path = $proofPath;
-                $payout->paystack_transfer_code = $transferCode;
-                $payout->transfer_reference = $ref;
-                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'Reconciled: Bank delivery verified at gateway (' . ($transferCode ?? $ref) . ')';
-                $payout->save();
-
-                $company = $payout->company;
-                $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
-
-                \App\Models\FinancialJournalEntry::create([
-                    'order_id' => null,
-                    'transaction_reference' => $ref,
-                    'event_id' => 'EVT-FLEET-PAYOUT-' . $payout->id,
-                    'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
-                    'beneficiary_id' => $company->id,
-                    'account_name' => 'logistics_payout_payable',
-                    'entry_type' => 'debit',
-                    'amount' => $formattedPayoutAmount,
-                    'currency' => 'NGN',
-                    'description' => "Corporate withdrawal liability discharged after timeout reconciliation",
-                ]);
-
-                \App\Models\FinancialJournalEntry::create([
-                    'order_id' => null,
-                    'transaction_reference' => $ref,
-                    'event_id' => 'EVT-FLEET-PAYOUT-' . $payout->id,
-                    'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
-                    'beneficiary_id' => $company->id,
-                    'account_name' => 'cash_in_escrow',
-                    'entry_type' => 'credit',
-                    'amount' => $formattedPayoutAmount,
-                    'currency' => 'NGN',
-                    'description' => "Corporate Paystack bank transfer disbursement after timeout reconciliation",
-                ]);
-
-                return back()->with('status', "Gateway reconciliation complete: Logistics payout #{$payout->id} verified and settled.");
-            });
+            app(\App\Services\PayoutFinalizationService::class)->finalizeLogisticsPayout($payout, [
+                'transfer_code' => $verify['transfer_code'] ?? $payout->paystack_transfer_code,
+                'reference' => $ref,
+            ], $admin);
+            return back()->with('status', "Gateway reconciliation complete: Payout #{$payout->id} bank transfer confirmed and accounting finalized.");
         }
 
         if (in_array($status, ['failed', 'reversed'], true)) {
-            $payout->processing_token = null;
-            $payout->processing_started_at = null;
-            $payout->gateway_status = 'failed';
-            $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . "Reconciled: Paystack confirms transfer {$status}. Unlocked for retry.";
-            $payout->save();
-            return back()->with('status', "Gateway reconciliation complete: Transfer {$status} at gateway. Unlocked for retry.");
+            app(\App\Services\PayoutFinalizationService::class)->revertLogisticsPayout(
+                $payout,
+                'Gateway Reconcile: ' . ($verify['message'] ?? 'Transfer failed at Paystack'),
+                $admin
+            );
+            return back()->with('status', "Gateway reconciliation complete: Payout #{$payout->id} marked failed and wallet refunded.");
         }
 
-        return back()->with('status', "Transfer is currently in status '{$status}' at Paystack. Hold maintained until final confirmation.");
+        return back()->with('error', "Gateway returned status '{$status}'. Timeout hold maintained.");
     }
 }

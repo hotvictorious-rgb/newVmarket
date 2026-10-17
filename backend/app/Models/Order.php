@@ -69,6 +69,7 @@ class Order extends Model
         'delivery_halted_at',
         'expires_at',
         'paystack_refund_reference',
+        'paystack_refund_status',
     ];
 
     /**

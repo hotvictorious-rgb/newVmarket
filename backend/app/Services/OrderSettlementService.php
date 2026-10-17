@@ -614,9 +614,18 @@ class OrderSettlementService
             if (!empty($refundRes['success']) && !empty($refundRes['refund_reference'])) {
                 Order::where('id', $result['refund_order_id'])->update([
                     'paystack_refund_reference' => $refundRes['refund_reference'],
+                    'paystack_refund_status' => 'completed',
                 ]);
                 if (isset($result['order'])) {
                     $result['order']->paystack_refund_reference = $refundRes['refund_reference'];
+                    $result['order']->paystack_refund_status = 'completed';
+                }
+            } else {
+                Order::where('id', $result['refund_order_id'])->update([
+                    'paystack_refund_status' => 'pending',
+                ]);
+                if (isset($result['order'])) {
+                    $result['order']->paystack_refund_status = 'pending';
                 }
             }
         }

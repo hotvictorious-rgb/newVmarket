@@ -422,4 +422,188 @@ class FinancialCrashRecoveryAndAdversarialTest extends TestCase
         $response->assertStatus(422);
         $response->assertJsonValidationErrors(['login']);
     }
+
+    /**
+     * Audit Finding 1 Resolution:
+     * Automatic reconciliation engine must allocate orders and write balanced double-entry financial journal.
+     */
+    public function test_automatic_reconciliation_engine_allocates_orders_and_writes_balanced_financial_journal(): void
+    {
+        $order = $this->createTestOrder([
+            'order_number' => 'ORD-AUTO-RECON-01',
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+            'vendor_settlement_status' => 'eligible',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '9000.00',
+            'status' => 'pending',
+            'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
+            'transfer_reference' => 'VND-AUTO-RECON-REF-99',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Test Vendor',
+            'admin_notes' => 'GATEWAY_TIMEOUT: Awaiting scheduled reconciliation.',
+        ]);
+
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldReceive('verifyTransfer')
+            ->with('VND-AUTO-RECON-REF-99')
+            ->andReturn([
+                'success' => true,
+                'status' => 'success',
+                'transfer_code' => 'TRF_AUTO_RECON_99',
+            ]);
+        $mock->shouldReceive('initiateRefund')->andReturn(['success' => true, 'refund_reference' => 'rf_auto_99']);
+        $this->app->instance(PaystackService::class, $mock);
+
+        $engine = app(\App\Services\FinancialReconciliationEngine::class);
+        $result = $engine->reconcilePayouts();
+
+        $this->assertEquals(1, $result['vendor_reconciled']);
+
+        $payout->refresh();
+        $this->assertEquals('approved', $payout->status);
+        $this->assertEquals('success', $payout->gateway_status);
+        $this->assertNull($payout->processing_token);
+        $this->assertNotNull($payout->disbursed_at);
+
+        // Order is transitioned to settled
+        $order->refresh();
+        $this->assertEquals('settled', $order->vendor_settlement_status);
+
+        // Exact allocation line item created
+        $allocation = VendorPayoutAllocation::where('vendor_payout_request_id', $payout->id)
+            ->where('order_id', $order->id)
+            ->first();
+        $this->assertNotNull($allocation);
+        $this->assertEquals('9000.00', $allocation->allocated_amount);
+        $this->assertEquals('allocated', $allocation->status);
+
+        // Balanced double-entry financial journal written
+        $debitEntry = \App\Models\FinancialJournalEntry::where('beneficiary_id', $this->vendor->id)
+            ->where('account_name', 'vendor_payable')
+            ->where('entry_type', 'debit')
+            ->where('amount', '9000.00')
+            ->first();
+        $this->assertNotNull($debitEntry);
+
+        $creditEntry = \App\Models\FinancialJournalEntry::where('beneficiary_id', $this->vendor->id)
+            ->where('account_name', 'cash_in_escrow')
+            ->where('entry_type', 'credit')
+            ->where('amount', '9000.00')
+            ->first();
+        $this->assertNotNull($creditEntry);
+    }
+
+    /**
+     * Audit Finding 3 Resolution:
+     * Webhook transfer.success arriving before admin request finalizes allocations and journal without double counting.
+     */
+    public function test_webhook_transfer_success_finalizes_allocations_and_journal_if_webhook_arrives_first(): void
+    {
+        $order = $this->createTestOrder([
+            'order_number' => 'ORD-WEBHOOK-RECON-01',
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+            'vendor_settlement_status' => 'eligible',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '9000.00',
+            'status' => 'pending',
+            'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
+            'transfer_reference' => 'VND-WEBHOOK-FAST-REF-88',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Test Vendor',
+            'admin_notes' => 'GATEWAY_TIMEOUT: In-flight transfer.',
+        ]);
+
+        $payloadData = [
+            'id' => 'evt_fast_webhook_88',
+            'event' => 'transfer.success',
+            'data' => [
+                'reference' => 'VND-WEBHOOK-FAST-REF-88',
+                'transfer_code' => 'TRF_WEBHOOK_FAST_88',
+                'amount' => 900000,
+                'status' => 'success',
+            ],
+        ];
+
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+
+        $payout->refresh();
+        $this->assertEquals('approved', $payout->status);
+        $this->assertEquals('success', $payout->gateway_status);
+        $this->assertNotNull($payout->disbursed_at);
+
+        // Order is settled
+        $order->refresh();
+        $this->assertEquals('settled', $order->vendor_settlement_status);
+
+        // Allocation exists
+        $allocation = VendorPayoutAllocation::where('vendor_payout_request_id', $payout->id)->first();
+        $this->assertNotNull($allocation);
+        $this->assertEquals('9000.00', $allocation->allocated_amount);
+
+        // Calling finalization again is completely idempotent
+        $finalizer = app(\App\Services\PayoutFinalizationService::class);
+        $secondResult = $finalizer->finalizeVendorPayout($payout, [
+            'transfer_code' => 'TRF_WEBHOOK_FAST_88',
+            'reference' => 'VND-WEBHOOK-FAST-REF-88',
+        ]);
+
+        $this->assertTrue($secondResult['idempotent']);
+        $this->assertEquals(1, VendorPayoutAllocation::where('vendor_payout_request_id', $payout->id)->count());
+    }
+
+    /**
+     * Audit Finding 5 Resolution:
+     * Refund reconciliation engine recovers pending refunds.
+     */
+    public function test_reconciliation_engine_recovers_pending_refunds(): void
+    {
+        $order = $this->createTestOrder([
+            'order_number' => 'ORD-REFUND-PENDING-01',
+            'payment_status' => 'paid',
+            'order_status' => 'cancelled',
+            'paystack_refund_status' => 'pending',
+            'paystack_refund_reference' => null,
+            'payment_reference' => 'REF-PAY-PENDING-99',
+            'grand_total' => '5000.00',
+        ]);
+
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldReceive('initiateRefund')
+            ->with('REF-PAY-PENDING-99', '5000.00', Mockery::any())
+            ->andReturn([
+                'success' => true,
+                'refund_reference' => 'rf_reconciled_99',
+                'status' => 'completed',
+            ]);
+        $this->app->instance(PaystackService::class, $mock);
+
+        $engine = app(\App\Services\FinancialReconciliationEngine::class);
+        $reconciledCount = $engine->reconcileRefunds();
+
+        $this->assertEquals(1, $reconciledCount);
+
+        $order->refresh();
+        $this->assertEquals('completed', $order->paystack_refund_status);
+        $this->assertEquals('rf_reconciled_99', $order->paystack_refund_reference);
+    }
 }

@@ -10,6 +10,7 @@ class ProcessedWebhookEvent extends Model
         'event_id',
         'event_type',
         'payload_hash',
+        'payload',
         'status',
         'error_reason',
         'attempts',

@@ -13,20 +13,32 @@ class FinancialReconciliationEngine
 {
     protected PaystackService $paystackService;
     protected OrderSettlementService $settlementService;
+    protected PayoutFinalizationService $finalizationService;
 
-    public function __construct(PaystackService $paystackService, OrderSettlementService $settlementService)
-    {
+    public function __construct(
+        PaystackService $paystackService,
+        OrderSettlementService $settlementService,
+        PayoutFinalizationService $finalizationService
+    ) {
         $this->paystackService = $paystackService;
         $this->settlementService = $settlementService;
+        $this->finalizationService = $finalizationService;
     }
 
     /**
      * Authoritative Gateway Payout Reconciliation.
      * Scans all payouts in HOLD_TIMEOUT_RECONCILIATION or processing gateway_status.
+     * Delegates 100% of settlement, order allocations, and double-entry bookkeeping
+     * to the idempotent PayoutFinalizationService.
      */
     public function reconcilePayouts(): array
     {
-        $results = ['vendor_reconciled' => 0, 'logistics_reconciled' => 0, 'errors' => []];
+        $results = [
+            'vendor_reconciled' => 0,
+            'logistics_reconciled' => 0,
+            'refunds_reconciled' => 0,
+            'errors' => [],
+        ];
 
         // 1. Vendor Payouts
         $vendorPayouts = VendorPayoutRequest::where('processing_token', 'HOLD_TIMEOUT_RECONCILIATION')
@@ -38,20 +50,16 @@ class FinancialReconciliationEngine
             $verify = $this->paystackService->verifyTransfer($ref);
 
             if ($verify['success'] && ($verify['status'] ?? '') === 'success') {
-                $payout->status = 'approved';
-                $payout->processing_token = null;
-                $payout->processing_started_at = null;
-                $payout->disbursed_at = $payout->disbursed_at ?? Carbon::now();
-                $payout->gateway_status = 'success';
-                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'Auto-Reconciled by Engine: Verified Success at Paystack';
-                $payout->save();
+                $this->finalizationService->finalizeVendorPayout($payout, [
+                    'transfer_code' => $verify['transfer_code'] ?? $payout->paystack_transfer_code,
+                    'reference' => $ref,
+                ]);
                 $results['vendor_reconciled']++;
             } elseif ($verify['success'] && in_array($verify['status'] ?? '', ['failed', 'reversed'], true)) {
-                $payout->processing_token = null;
-                $payout->processing_started_at = null;
-                $payout->gateway_status = 'failed';
-                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'Auto-Reconciled by Engine: Verified Failed at Paystack';
-                $payout->save();
+                $this->finalizationService->revertVendorPayout(
+                    $payout,
+                    'Auto-Reconciled by Engine: Verified Failed at Paystack'
+                );
                 $results['vendor_reconciled']++;
             }
         }
@@ -66,23 +74,22 @@ class FinancialReconciliationEngine
             $verify = $this->paystackService->verifyTransfer($ref);
 
             if ($verify['success'] && ($verify['status'] ?? '') === 'success') {
-                $payout->status = 'approved';
-                $payout->processing_token = null;
-                $payout->processing_started_at = null;
-                $payout->disbursed_at = $payout->disbursed_at ?? Carbon::now();
-                $payout->gateway_status = 'success';
-                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'Auto-Reconciled by Engine: Verified Success at Paystack';
-                $payout->save();
+                $this->finalizationService->finalizeLogisticsPayout($payout, [
+                    'transfer_code' => $verify['transfer_code'] ?? $payout->paystack_transfer_code,
+                    'reference' => $ref,
+                ]);
                 $results['logistics_reconciled']++;
             } elseif ($verify['success'] && in_array($verify['status'] ?? '', ['failed', 'reversed'], true)) {
-                $payout->processing_token = null;
-                $payout->processing_started_at = null;
-                $payout->gateway_status = 'failed';
-                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'Auto-Reconciled by Engine: Verified Failed at Paystack';
-                $payout->save();
+                $this->finalizationService->revertLogisticsPayout(
+                    $payout,
+                    'Auto-Reconciled by Engine: Verified Failed at Paystack'
+                );
                 $results['logistics_reconciled']++;
             }
         }
+
+        // 3. Reconcile Customer Refunds
+        $results['refunds_reconciled'] = $this->reconcileRefunds();
 
         return $results;
     }
@@ -99,5 +106,46 @@ class FinancialReconciliationEngine
                 'status' => 'failed',
                 'error_reason' => 'TIMEOUT_STALE_WORKER: Event was abandoned in processing state for over 5 minutes. Reset to failed for retry.',
             ]);
+    }
+
+    /**
+     * Autonomous Customer Refund Reconciliation (Audit Finding 5).
+     * Scans cancelled orders with pending Paystack refunds and ensures gateway synchronization.
+     */
+    public function reconcileRefunds(): int
+    {
+        $reconciled = 0;
+        $pendingRefundOrders = Order::where(function ($q) {
+            $q->where('paystack_refund_status', 'pending')
+              ->orWhere(function ($sub) {
+                  $sub->where('order_status', 'cancelled')
+                      ->where('payment_status', 'paid')
+                      ->whereNull('paystack_refund_status');
+              });
+        })->whereNotNull('payment_reference')->get();
+
+        foreach ($pendingRefundOrders as $order) {
+            if (empty($order->paystack_refund_reference)) {
+                // Attempt to initiate refund if not yet initiated
+                $refundRes = $this->paystackService->initiateRefund(
+                    $order->payment_reference,
+                    (string)$order->grand_total,
+                    "Automated reconciliation refund for cancelled Order #{$order->order_number}"
+                );
+                if (!empty($refundRes['success'])) {
+                    $order->update([
+                        'paystack_refund_reference' => $refundRes['refund_reference'] ?? ('rf_' . uniqid()),
+                        'paystack_refund_status' => 'completed',
+                    ]);
+                    $reconciled++;
+                }
+            } else {
+                // If reference exists, mark completed
+                $order->update(['paystack_refund_status' => 'completed']);
+                $reconciled++;
+            }
+        }
+
+        return $reconciled;
     }
 }

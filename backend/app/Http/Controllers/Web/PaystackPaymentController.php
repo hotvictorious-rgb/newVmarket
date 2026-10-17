@@ -17,7 +17,8 @@ class PaystackPaymentController extends Controller
 {
     public function __construct(
         protected PaystackService $paystackService,
-        protected OrderSettlementService $settlementService
+        protected OrderSettlementService $settlementService,
+        protected \App\Services\PayoutFinalizationService $finalizationService
     ) {}
 
     /**
@@ -120,45 +121,69 @@ class PaystackPaymentController extends Controller
         $eventHash = hash('sha256', (string)$request->getContent());
         $eventId = (string)($event['id'] ?? ($event['event'] . '_' . ($event['data']['reference'] ?? ($event['data']['transfer_code'] ?? $eventHash))));
 
-        $existingEvent = \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->first();
-        if ($existingEvent) {
-            if ($existingEvent->status === 'completed') {
-                return response()->json(['status' => true, 'message' => 'Event already processed.'], 200);
-            }
-            if ($existingEvent->status === 'processing') {
-                // If in-flight by a live worker (< 60 seconds ago), signal retry backoff
-                if ($existingEvent->updated_at && $existingEvent->updated_at->diffInSeconds(Carbon::now()) < 60) {
-                    return response()->json(['status' => false, 'message' => 'Event is currently being processed.'], 429);
+        // Authoritative Webhook Inbox State Machine (Audit P0 & P1 Concurrency-Safe Resolution)
+        // Transactional Row-Level Lock prevents concurrent race conditions and permanent event skipping
+        $claimResult = \Illuminate\Support\Facades\DB::transaction(function () use ($eventId, $event, $payload, $eventHash) {
+            $existingEvent = \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingEvent) {
+                if ($existingEvent->status === 'completed') {
+                    return ['action' => 'completed', 'message' => 'Event already processed.'];
                 }
-                // If > 60 seconds, previous worker timed out or crashed; resume and take ownership
-                $existingEvent->increment('attempts');
-                $existingEvent->status = 'processing';
-                $existingEvent->save();
-            } elseif ($existingEvent->status === 'failed') {
-                // Previous attempt failed, retry attempt
-                $existingEvent->increment('attempts');
-                $existingEvent->status = 'processing';
-                $existingEvent->save();
+                if ($existingEvent->status === 'processing') {
+                    // If in-flight by a live worker (< 60 seconds ago), signal retry backoff
+                    if ($existingEvent->updated_at && $existingEvent->updated_at->diffInSeconds(\Carbon\Carbon::now()) < 60) {
+                        return ['action' => 'throttled', 'message' => 'Event is currently being processed.'];
+                    }
+                    // Worker timed out/crashed (> 60s): atomically claim ownership
+                    $existingEvent->increment('attempts');
+                    $existingEvent->status = 'processing';
+                    $existingEvent->payload = $payload;
+                    $existingEvent->updated_at = \Carbon\Carbon::now();
+                    $existingEvent->save();
+                    return ['action' => 'process', 'event' => $existingEvent];
+                }
+                if ($existingEvent->status === 'failed') {
+                    // Previous attempt failed, atomically retry attempt
+                    $existingEvent->increment('attempts');
+                    $existingEvent->status = 'processing';
+                    $existingEvent->payload = $payload;
+                    $existingEvent->updated_at = \Carbon\Carbon::now();
+                    $existingEvent->save();
+                    return ['action' => 'process', 'event' => $existingEvent];
+                }
             }
-            $processedEvent = $existingEvent;
-        } else {
+
+            // First-time arrival: atomically insert with status = 'processing' and stored payload
             try {
-                $processedEvent = \App\Models\ProcessedWebhookEvent::create([
+                $newEvent = \App\Models\ProcessedWebhookEvent::create([
                     'event_id' => $eventId,
-                    'event_type' => $event['event'] ?? 'unknown',
+                    'event_type' => (string)($event['event'] ?? 'unknown'),
                     'payload_hash' => $eventHash,
+                    'payload' => $payload,
                     'status' => 'processing',
                     'attempts' => 1,
                 ]);
+                return ['action' => 'process', 'event' => $newEvent];
             } catch (\Illuminate\Database\QueryException $e) {
-                // Concurrency race: another worker created it simultaneously
                 $existing = \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->first();
                 if ($existing && $existing->status === 'completed') {
-                    return response()->json(['status' => true, 'message' => 'Event already processed.'], 200);
+                    return ['action' => 'completed', 'message' => 'Event already processed.'];
                 }
-                return response()->json(['status' => false, 'message' => 'Concurrent delivery, please retry.'], 429);
+                return ['action' => 'throttled', 'message' => 'Event is currently being processed.'];
             }
+        });
+
+        if ($claimResult['action'] === 'completed') {
+            return response()->json(['status' => true, 'message' => $claimResult['message']], 200);
         }
+        if ($claimResult['action'] === 'throttled') {
+            return response()->json(['status' => false, 'message' => $claimResult['message']], 429);
+        }
+
+        $processedEvent = $claimResult['event'];
 
         // Handle Paystack Transfer Webhooks (Automated Fleet & Vendor Payout Reconciliation)
         if ($event['event'] === 'transfer.success') {
@@ -189,13 +214,6 @@ class PaystackPaymentController extends Controller
                 })->first();
             }
 
-            if ($logisticsPayout) {
-                $logisticsPayout->disbursed_at = $logisticsPayout->disbursed_at ?? Carbon::now();
-                $logisticsPayout->admin_notes = ($logisticsPayout->admin_notes ? $logisticsPayout->admin_notes . ' | ' : '') . "Paystack Gateway Delivery Confirmed ({$tCode})";
-                $logisticsPayout->save();
-                \App\Services\NotificationDispatchService::dispatchPayoutDisbursed($logisticsPayout);
-            }
-
             // 2. Reconcile Vendor Payout via strict exact match (Audit Finding E & G)
             $vendorPayout = null;
             if (!empty($tRef) || !empty($tCode)) {
@@ -218,17 +236,13 @@ class PaystackPaymentController extends Controller
                 })->first();
             }
 
+            // Delegate 100% of payout finalization to idempotent PayoutFinalizationService
             if ($vendorPayout) {
-                $vendorPayout->disbursed_at = $vendorPayout->disbursed_at ?? Carbon::now();
-                $vendorPayout->gateway_status = 'success';
-                $vendorPayout->admin_notes = ($vendorPayout->admin_notes ? $vendorPayout->admin_notes . ' | ' : '') . "Paystack Gateway Delivery Confirmed ({$tCode})";
-                $vendorPayout->save();
-                \App\Services\NotificationDispatchService::dispatchPayoutDisbursed($vendorPayout);
+                $this->finalizationService->finalizeVendorPayout($vendorPayout, $tData);
             }
 
             if ($logisticsPayout) {
-                $logisticsPayout->gateway_status = 'success';
-                $logisticsPayout->save();
+                $this->finalizationService->finalizeLogisticsPayout($logisticsPayout, $tData);
             }
 
             $processedEvent->update([
