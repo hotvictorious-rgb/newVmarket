@@ -67,6 +67,10 @@ class ProductApiController extends Controller
             }
         }
 
+        if ($request->filled('shop_id')) {
+            $query->where('shop_id', $request->integer('shop_id'));
+        }
+
         $products = $query->paginate(20);
 
         return response()->json([
@@ -92,6 +96,37 @@ class ProductApiController extends Controller
         return response()->json([
             'status' => true,
             'data' => $product,
+        ]);
+    }
+    public function shops(Request $request): JsonResponse
+    {
+        $query = \App\Models\Shop::where('is_active', true)
+            ->with(['lga:id,name', 'vendor:id,business_name,user_id'])
+            ->orderBy('is_primary_branch', 'desc');
+
+        if ($request->filled('lga_id')) {
+            $query->where('lga_id', $request->integer('lga_id'));
+        }
+
+        $shops = $query->get()->map(function ($shop) {
+            return [
+                'id' => $shop->id,
+                'name' => $shop->name ?: ($shop->vendor?->business_name ?? 'Merchant Shop'),
+                'slug' => $shop->slug,
+                'address' => $shop->address,
+                'lga_id' => $shop->lga_id,
+                'lga_name' => $shop->lga?->name,
+                'logo_url' => url('assets/img/vm_icon.jpg'),
+                'pickup_enabled' => (bool)$shop->pickup_enabled,
+                'pickup_opening_time' => $shop->pickup_opening_time ? substr((string)$shop->pickup_opening_time, 0, 5) : '08:00',
+                'pickup_closing_time' => $shop->pickup_closing_time ? substr((string)$shop->pickup_closing_time, 0, 5) : '18:00',
+            ];
+        });
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Shops retrieved successfully.',
+            'data' => $shops,
         ]);
     }
 }

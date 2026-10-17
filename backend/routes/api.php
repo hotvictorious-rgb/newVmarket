@@ -37,6 +37,7 @@ Route::prefix('v1')->group(function () {
 
     // 3. Catalog & Products (Public)
     Route::get('categories', [ProductApiController::class, 'categories']);
+    Route::get('shops', [ProductApiController::class, 'shops']);
     Route::get('products', [ProductApiController::class, 'index']);
     Route::get('products/{id}', [ProductApiController::class, 'show']);
     Route::get('products/{id}/reviews', [CustomerReviewApiController::class, 'indexForProduct']);

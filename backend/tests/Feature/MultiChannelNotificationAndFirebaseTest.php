@@ -612,4 +612,205 @@ class MultiChannelNotificationAndFirebaseTest extends TestCase
             'type' => 'payout_rejected',
         ]);
     }
+
+    /**
+     * Security Test: Active branch counter staff receives notifications strictly for their assigned shop
+     * Counter staff of Shop B must NEVER receive orders or OTPs for Shop A.
+     */
+    public function test_branch_counter_employee_receives_order_notification_scoped_strictly_to_assigned_shop(): void
+    {
+        // Create Shop B
+        $shopB = Shop::create([
+            'vendor_id' => $this->vendor->id,
+            'country_id' => $this->shop->country_id,
+            'state_id' => $this->shop->state_id,
+            'name' => 'Shop Branch B (Eket)',
+            'slug' => 'shop-branch-b-eket',
+            'address' => '45 Eket Road',
+            'lga_id' => $this->shop->lga_id,
+            'status' => 'approved',
+            'is_active' => true,
+        ]);
+
+        // Create Counter Employee A assigned to Shop A
+        $staffUserA = User::create([
+            'name' => 'Counter Staff A',
+            'email' => 'counterA@vmarket.ng',
+            'phone' => '08011223344',
+            'password' => bcrypt('password'),
+            'user_type' => 'vendor_employee',
+            'status' => 'active',
+        ]);
+        \App\Models\VendorEmployeeProfile::create([
+            'user_id' => $staffUserA->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'role' => 'inspection_staff',
+            'is_active' => true,
+        ]);
+
+        // Create Counter Employee B assigned to Shop B
+        $staffUserB = User::create([
+            'name' => 'Counter Staff B',
+            'email' => 'counterB@vmarket.ng',
+            'phone' => '08022334455',
+            'password' => bcrypt('password'),
+            'user_type' => 'vendor_employee',
+            'status' => 'active',
+        ]);
+        \App\Models\VendorEmployeeProfile::create([
+            'user_id' => $staffUserB->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $shopB->id,
+            'role' => 'inspection_staff',
+            'is_active' => true,
+        ]);
+
+        // Create Order for Shop A
+        $orderA = Order::create([
+            'order_number' => 'VM-SEC-SHOPA-001',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'order_status' => 'processing',
+            'origin_lga_id' => $this->shop->lga_id,
+            'destination_lga_id' => $this->shop->lga_id,
+            'delivery_type' => 'doorstep',
+            'pickup_verification_code' => '998877',
+            'verification_code' => '112233',
+            'subtotal' => '15000.00',
+            'total_amount' => '16000.00',
+            'merchandise_subtotal' => '15000.00',
+            'delivery_fee' => '1000.00',
+            'grand_total' => '16000.00',
+            'vendor_net_90' => '13500.00',
+            'customer_cashback_5' => '750.00',
+            'platform_margin_5' => '750.00',
+        ]);
+
+        NotificationDispatchService::dispatchOrderPlaced($orderA);
+        NotificationDispatchService::dispatchVendorHandoverReady($orderA);
+
+        // Assert Staff A received in-app notification
+        $this->assertDatabaseHas('system_notifications', [
+            'user_id' => $staffUserA->id,
+            'type' => 'order_placed',
+        ]);
+        $this->assertDatabaseHas('system_notifications', [
+            'user_id' => $staffUserA->id,
+            'type' => 'vendor_handover_ready',
+        ]);
+
+        // Strict Boundary Assertion: Staff B of Shop B must NEVER receive notifications for Shop A
+        $this->assertDatabaseMissing('system_notifications', [
+            'user_id' => $staffUserB->id,
+            'type' => 'order_placed',
+        ]);
+        $this->assertDatabaseMissing('system_notifications', [
+            'user_id' => $staffUserB->id,
+            'type' => 'vendor_handover_ready',
+        ]);
+    }
+
+    /**
+     * Security Test: Admin employees receive dispute and return alerts alongside Super Admin
+     */
+    public function test_admin_employee_receives_dispute_and_return_notifications(): void
+    {
+        $adminStaff = User::create([
+            'name' => 'Moderation Desk Staff',
+            'email' => 'moderator@vmarket.ng',
+            'phone' => '08099881122',
+            'password' => bcrypt('password'),
+            'user_type' => 'admin_employee',
+            'status' => 'active',
+        ]);
+
+        $order = Order::create([
+            'order_number' => 'VM-SEC-DISP-001',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'order_status' => 'delivered',
+            'origin_lga_id' => $this->shop->lga_id,
+            'destination_lga_id' => $this->shop->lga_id,
+            'delivery_type' => 'doorstep',
+            'subtotal' => '20000.00',
+            'total_amount' => '21200.00',
+            'merchandise_subtotal' => '20000.00',
+            'delivery_fee' => '1200.00',
+            'grand_total' => '21200.00',
+            'vendor_net_90' => '18000.00',
+            'customer_cashback_5' => '1000.00',
+            'platform_margin_5' => '1000.00',
+        ]);
+
+        $case = \App\Models\ReturnCase::create([
+            'order_id' => $order->id,
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'case_number' => 'RET-SEC-001',
+            'return_reason' => 'defective_product',
+            'status' => 'vendor_disputed',
+            'rejection_category' => 'defective_seal',
+            'vendor_return_otp' => '445566',
+            'total_refundable_amount' => '20000.00',
+        ]);
+
+        NotificationDispatchService::dispatchVendorCounterDispute($case, 'Item was altered by buyer');
+
+        // Both Super Admin and Admin Staff must receive alert
+        $this->assertDatabaseHas('system_notifications', [
+            'user_id' => $this->superAdmin->id,
+            'type' => 'dispute_escalated',
+        ]);
+        $this->assertDatabaseHas('system_notifications', [
+            'user_id' => $adminStaff->id,
+            'type' => 'dispute_escalated',
+        ]);
+    }
+
+    /**
+     * Security Test: Role affinity protection prevents customers from registering as admin terminal
+     */
+    public function test_customer_cannot_register_device_token_as_admin(): void
+    {
+        Sanctum::actingAs($this->customer);
+
+        $response = $this->postJson('/api/v1/notifications/device-token', [
+            'device_token' => 'fcm_malicious_admin_spoof',
+            'device_type' => 'android',
+            'app_type' => 'admin',
+        ]);
+
+        $response->assertStatus(403);
+        $response->assertJson([
+            'status' => false,
+            'message' => 'Unauthorized device role binding for admin terminal.',
+        ]);
+    }
+
+    /**
+     * API Test: In-app notifications endpoint returns both 'notifications' and 'data' keys for multi-app parity
+     */
+    public function test_in_app_notifications_returns_both_keys(): void
+    {
+        SystemNotification::create([
+            'user_id' => $this->customer->id,
+            'title' => 'Test Notification',
+            'body' => 'Testing mobile parity',
+            'type' => 'general',
+        ]);
+
+        Sanctum::actingAs($this->customer);
+
+        $response = $this->getJson('/api/v1/notifications/in-app');
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'status',
+            'unread_count',
+            'notifications',
+            'data',
+        ]);
+    }
 }
