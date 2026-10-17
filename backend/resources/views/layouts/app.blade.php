@@ -1146,13 +1146,13 @@
                 <div>
                     <h4 class="vm-footer-title">Customer Care</h4>
                     <div class="vm-footer-links">
-                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('contact')">Contact &amp; Help Center</a>
-                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('faq')">Frequently Asked Questions</a>
-                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('about')">About Us</a>
+                        <a href="{{ route('contact') }}">Contact &amp; Help Center</a>
+                        <a href="{{ route('faq') }}">Frequently Asked Questions</a>
+                        <a href="{{ route('about') }}">About Us</a>
                         <a href="{{ route('terms') }}">Terms And Conditions</a>
                         <a href="{{ route('legal.show', 'privacy-policy') }}">Privacy Policy</a>
                         <a href="{{ route('legal.show', 'return-and-refund-policy') }}">Return &amp; Refund Policy</a>
-                        <a href="javascript:void(0)" onclick="vmOpenPolicyModal('cancellation')">Cancellation Policy</a>
+                        <a href="{{ route('cancellation') }}">Cancellation Policy</a>
                     </div>
                 </div>
 
@@ -1801,6 +1801,9 @@
                             Hours: Mon – Sat, 8:00 AM – 6:00 PM (WAT)
                         </div>
                         <p style="font-size: 13px; color: #64748B;">For rider escalations or shop pickup verification, please quote your <strong>Order Ref Number</strong> when calling.</p>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0;">
+                            <a href="{{ route('contact') }}" style="color: #6B21A8; font-weight: 700; text-decoration: underline; font-size: 13px;">View Complete Help Center &amp; Support Directory &rarr;</a>
+                        </div>
                     `
                 },
                 faq: {
@@ -1825,16 +1828,22 @@
                                 <p style="margin-top: 4px; font-size: 13px;">Every verified order earns 5% cashback credited directly to your customer balance upon confirmed OTP delivery sign-off.</p>
                             </div>
                         </div>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0;">
+                            <a href="{{ route('faq') }}" style="color: #6B21A8; font-weight: 700; text-decoration: underline; font-size: 13px;">View Complete Frequently Asked Questions Guide &rarr;</a>
+                        </div>
                     `
                 },
                 about: {
                     icon: '🏪',
                     title: 'About Victorious Market',
                     html: `
-                        <p style="margin-bottom: 12px;">Victorious Market is Akwa Ibom\\'s premier multi-merchant marketplace connecting verified plaza shops in Uyo, Ikot Ekpene, Eket, and beyond with shoppers across Nigeria.</p>
+                        <p style="margin-bottom: 12px;">Victorious Market is Akwa Ibom's premier multi-merchant marketplace connecting verified plaza shops in Uyo, Ikot Ekpene, Eket, and beyond with shoppers across Nigeria.</p>
                         <p style="margin-bottom: 12px;">We bridge physical shopping with digital convenience through accredited merchant verifications, directional LGA-to-LGA logistics, Paystack escrow security, and in-shop physical reservation.</p>
                         <div style="background: #FAF5FF; border: 1px solid #E9D5FF; padding: 12px; border-radius: 8px; font-size: 13px; color: #581C87;">
                             <strong>Our Core Values:</strong> 100% Genuine Products, Secure Escrow Settlement, Transparent LGA Logistics, and Empowering Local Nigerian Plaza Merchants.
+                        </div>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0;">
+                            <a href="{{ route('about') }}" style="color: #6B21A8; font-weight: 700; text-decoration: underline; font-size: 13px;">Read Full Institutional Charter &amp; Vision &rarr;</a>
                         </div>
                     `
                 },
@@ -1849,6 +1858,9 @@
                             <li>Merchants are accredited business owners operating registered shops and commercial stalls in verified commercial plazas.</li>
                             <li>Fraudulent cancellation after rider dispatch may incur standard transit logistics recovery fees.</li>
                         </ul>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0;">
+                            <a href="{{ route('terms') }}" style="color: #6B21A8; font-weight: 700; text-decoration: underline; font-size: 13px;">Read Complete Terms &amp; Conditions of Service &rarr;</a>
+                        </div>
                     `
                 },
                 privacy: {
@@ -1858,9 +1870,12 @@
                         <p style="margin-bottom: 10px;">We take your data confidentiality and personal privacy seriously:</p>
                         <ul style="padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
                             <li>We collect necessary contact information (phone number, delivery LGA, street address) strictly for order fulfillment and OTP confirmation.</li>
-                            <li>Financial credentials and card numbers are processed directly through Paystack\\'s PCI-DSS compliant payment gateway. Victorious Market never stores card CVVs or pins.</li>
+                            <li>Financial credentials and card numbers are processed directly through Paystack's PCI-DSS compliant payment gateway. Victorious Market never stores card CVVs or pins.</li>
                             <li>Your contact details are shared only with the assigned verified rider delivering your specific package.</li>
                         </ul>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0;">
+                            <a href="{{ route('legal.show', 'privacy-policy') }}" style="color: #6B21A8; font-weight: 700; text-decoration: underline; font-size: 13px;">Read Full Privacy &amp; Data Protection Policy &rarr;</a>
+                        </div>
                     `
                 },
                 refund: {
@@ -1869,10 +1884,13 @@
                     html: `
                         <p style="margin-bottom: 10px;">Our Paystack escrow system ensures you never lose money on unfulfilled or defective goods:</p>
                         <ul style="padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
-                            <li>If an item is unavailable at the merchant\\'s plaza after payment, a full 100% refund is initiated immediately to your source account or customer wallet.</li>
+                            <li>If an item is unavailable at the merchant's plaza after payment, a full 100% refund is initiated immediately to your source account or customer wallet.</li>
                             <li>If a delivered item does not match product specifications upon arrival, reject the delivery OTP and notify our support desk within 2 hours.</li>
                             <li>Approved refunds are processed within 24 business hours back through Paystack gateway.</li>
                         </ul>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0;">
+                            <a href="{{ route('legal.show', 'return-and-refund-policy') }}" style="color: #6B21A8; font-weight: 700; text-decoration: underline; font-size: 13px;">Read Full Return &amp; Refund SLA &rarr;</a>
+                        </div>
                     `
                 },
                 return: {
@@ -1883,8 +1901,11 @@
                         <ul style="padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
                             <li>Electronics, gadgets, and home appliances carry a minimum 48-hour testing window for manufacturer defects.</li>
                             <li>Returned items must be intact with original packaging, warranty seals, and accessories.</li>
-                            <li>Items can be returned directly to the vendor\\'s physical shop address or collected by a verified Victorious Market rider.</li>
+                            <li>Items can be returned directly to the vendor's physical shop address or collected by a verified Victorious Market rider.</li>
                         </ul>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0;">
+                            <a href="{{ route('legal.show', 'return-and-refund-policy') }}" style="color: #6B21A8; font-weight: 700; text-decoration: underline; font-size: 13px;">Read Full Return &amp; Refund SLA &rarr;</a>
+                        </div>
                     `
                 },
                 cancellation: {
@@ -1897,6 +1918,9 @@
                             <li>In-Shop reservations that are not claimed within the designated 24-hour pickup window are automatically cancelled with zero penalty.</li>
                             <li>To cancel an active order, navigate to your <strong>Customer Portal &rarr; Orders</strong> or call customer care.</li>
                         </ul>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0;">
+                            <a href="{{ route('cancellation') }}" style="color: #6B21A8; font-weight: 700; text-decoration: underline; font-size: 13px;">Read Complete Order Cancellation &amp; Reversal Policy &rarr;</a>
+                        </div>
                     `
                 }
             };

@@ -264,12 +264,12 @@ class BankGradeLegalDocumentTest extends TestCase
     }
 
     /**
-     * Test P1: All 5 canonical legal policies are indexed and accessible in the system.
+     * Test P1: All 9 canonical legal policies are indexed and accessible in the system.
      */
-    public function test_all_five_legal_documents_available_in_public_index_and_api(): void
+    public function test_all_nine_legal_documents_available_in_public_index_and_api(): void
     {
         $allDocs = LegalDocument::where('is_published', true)->get();
-        $this->assertCount(5, $allDocs);
+        $this->assertCount(9, $allDocs);
 
         $expectedSlugs = [
             'terms-of-service',
@@ -277,13 +277,162 @@ class BankGradeLegalDocumentTest extends TestCase
             'privacy-policy',
             'merchant-agreement',
             'logistics-service-agreement',
+            'about-us',
+            'cancellation-policy',
+            'frequently-asked-questions',
+            'contact-and-help-center',
         ];
 
         $this->assertEqualsCanonicalizing($expectedSlugs, $allDocs->pluck('slug')->toArray());
 
         $indexRes = $this->getJson('/api/v1/legal');
         $indexRes->assertStatus(200);
-        $this->assertCount(5, $indexRes->json('data'));
+        $this->assertCount(9, $indexRes->json('data'));
+    }
+
+    /**
+     * Test P0: About Us charter is seeded with brand promise, 90/5/5 model, and resolves via /about.
+     */
+    public function test_about_us_seeded_with_operating_charter_and_canonical_route(): void
+    {
+        $aboutDoc = LegalDocument::getBySlug('about-us');
+
+        $this->assertNotNull($aboutDoc);
+        $this->assertEquals('About Victorious Market — Operating Charter', $aboutDoc->title);
+        $this->assertEquals('about', $aboutDoc->category);
+        $this->assertEquals('1.0.0', $aboutDoc->current_version);
+
+        $version = $aboutDoc->currentVersion;
+        $this->assertNotNull($version);
+        $this->assertStringContainsString('Your Trusted Online Market for Quality Products', $version->content);
+        $this->assertStringContainsString('The Controlled Marketplace Model', $version->content);
+        $this->assertStringContainsString('The 90/5/5 Allocation', $version->content);
+        $this->assertStringContainsString('Uyo, Akwa Ibom State', $version->content);
+
+        // Canonical Web Route
+        $response = $this->get(route('about'));
+        $response->assertStatus(200);
+        $response->assertSee('About Victorious Market — Operating Charter');
+        $response->assertSee('INSTITUTIONAL CHARTER &amp; VISION', false);
+
+        // Public API Route
+        $apiRes = $this->getJson('/api/v1/legal/about-us');
+        $apiRes->assertStatus(200);
+        $apiRes->assertJson([
+            'success' => true,
+            'data' => [
+                'slug' => 'about-us',
+                'category' => 'about',
+            ]
+        ]);
+    }
+
+    /**
+     * Test P0: Cancellation policy is seeded with pre-dispatch, transit, and escrow reversal clauses.
+     */
+    public function test_cancellation_policy_seeded_with_reversals_and_canonical_route(): void
+    {
+        $cancelDoc = LegalDocument::getBySlug('cancellation-policy');
+
+        $this->assertNotNull($cancelDoc);
+        $this->assertEquals('Order Cancellation & Pre-Dispatch Policy', $cancelDoc->title);
+        $this->assertEquals('returns', $cancelDoc->category);
+        $this->assertEquals('1.0.0', $cancelDoc->current_version);
+
+        $version = $cancelDoc->currentVersion;
+        $this->assertNotNull($version);
+        $this->assertStringContainsString('Pre-Dispatch Customer Cancellation', $version->content);
+        $this->assertStringContainsString('Post-Dispatch In-Transit Policy', $version->content);
+        $this->assertStringContainsString('In-Shop Pickup Reservations (24-Hour Expiry)', $version->content);
+
+        // Canonical Web Route
+        $response = $this->get(route('cancellation'));
+        $response->assertStatus(200);
+        $response->assertSee('Order Cancellation &amp; Pre-Dispatch Policy', false);
+        $response->assertSee('ORDER CANCELLATION &amp; REVERSAL POLICY', false);
+
+        // Public API Route
+        $apiRes = $this->getJson('/api/v1/legal/cancellation-policy');
+        $apiRes->assertStatus(200);
+        $apiRes->assertJson([
+            'success' => true,
+            'data' => [
+                'slug' => 'cancellation-policy',
+                'category' => 'returns',
+            ]
+        ]);
+    }
+
+    /**
+     * Test P0: FAQ is seeded with escrow, pickup inspection, 5% cashback, and delivery speeds.
+     */
+    public function test_frequently_asked_questions_seeded_and_canonical_route(): void
+    {
+        $faqDoc = LegalDocument::getBySlug('frequently-asked-questions');
+
+        $this->assertNotNull($faqDoc);
+        $this->assertEquals('Frequently Asked Questions (FAQ) & Knowledge Base', $faqDoc->title);
+        $this->assertEquals('faq', $faqDoc->category);
+        $this->assertEquals('1.0.0', $faqDoc->current_version);
+
+        $version = $faqDoc->currentVersion;
+        $this->assertNotNull($version);
+        $this->assertStringContainsString('How does Escrow Protection work?', $version->content);
+        $this->assertStringContainsString('Can I inspect an item before paying?', $version->content);
+        $this->assertStringContainsString('What is the 5% Customer Cashback Program?', $version->content);
+
+        // Canonical Web Route
+        $response = $this->get(route('faq'));
+        $response->assertStatus(200);
+        $response->assertSee('Frequently Asked Questions (FAQ) &amp; Knowledge Base', false);
+        $response->assertSee('OPERATIONS KNOWLEDGE BASE &amp; FAQ', false);
+
+        // Public API Route
+        $apiRes = $this->getJson('/api/v1/legal/frequently-asked-questions');
+        $apiRes->assertStatus(200);
+        $apiRes->assertJson([
+            'success' => true,
+            'data' => [
+                'slug' => 'frequently-asked-questions',
+                'category' => 'faq',
+            ]
+        ]);
+    }
+
+    /**
+     * Test P0: Contact & Help Center directory is seeded with omnichannel channels, SLAs, and hub addresses.
+     */
+    public function test_contact_and_help_center_seeded_and_canonical_route(): void
+    {
+        $contactDoc = LegalDocument::getBySlug('contact-and-help-center');
+
+        $this->assertNotNull($contactDoc);
+        $this->assertEquals('Contact & Customer Care Center', $contactDoc->title);
+        $this->assertEquals('support', $contactDoc->category);
+        $this->assertEquals('1.0.0', $contactDoc->current_version);
+
+        $version = $contactDoc->currentVersion;
+        $this->assertNotNull($version);
+        $this->assertStringContainsString('Customer Care & Hotlines', $version->content);
+        $this->assertStringContainsString('Operational Headquarters & Physical Hub', $version->content);
+        $this->assertStringContainsString('Collection Points & Hub Drop-Off Network', $version->content);
+
+        // Canonical Web Route
+        $response = $this->get(route('contact'));
+        $response->assertStatus(200);
+        $response->assertSee('Contact &amp; Customer Care Center', false);
+        $response->assertSee('OMNICHANNEL SUPPORT &amp; HELP DESK', false);
+
+        // Public API Route
+        $apiRes = $this->getJson('/api/v1/legal/contact-and-help-center');
+        $apiRes->assertStatus(200);
+        $apiRes->assertJson([
+            'success' => true,
+            'data' => [
+                'slug' => 'contact-and-help-center',
+                'category' => 'support',
+            ]
+        ]);
     }
 }
 

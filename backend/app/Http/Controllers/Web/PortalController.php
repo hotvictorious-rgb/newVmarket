@@ -4520,6 +4520,38 @@ class PortalController extends Controller
     }
 
     /**
+     * Public View for About Us & Operating Charter
+     */
+    public function showAboutUs()
+    {
+        return $this->showLegalDocument('about-us');
+    }
+
+    /**
+     * Public View for Contact & Customer Care Desk
+     */
+    public function showContactUs()
+    {
+        return $this->showLegalDocument('contact-and-help-center');
+    }
+
+    /**
+     * Public View for Frequently Asked Questions & Knowledge Base
+     */
+    public function showFaq()
+    {
+        return $this->showLegalDocument('frequently-asked-questions');
+    }
+
+    /**
+     * Public View for Order Cancellation & Dispute Resolution Policy
+     */
+    public function showCancellationPolicy()
+    {
+        return $this->showLegalDocument('cancellation-policy');
+    }
+
+    /**
      * Public View for any Legal Policy by Slug
      */
     public function showLegalDocument(string $slug)

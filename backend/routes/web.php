@@ -232,6 +232,10 @@ Route::middleware(['role:rider'])->prefix('rider')->group(function () {
 
 // Stage 5: Bank-Grade Legal & Policy Presentation
 Route::get('/terms', [PortalController::class, 'showTermsOfService'])->name('terms');
+Route::get('/about', [PortalController::class, 'showAboutUs'])->name('about');
+Route::get('/contact', [PortalController::class, 'showContactUs'])->name('contact');
+Route::get('/faq', [PortalController::class, 'showFaq'])->name('faq');
+Route::get('/cancellation', [PortalController::class, 'showCancellationPolicy'])->name('cancellation');
 Route::get('/legal/{slug}', [PortalController::class, 'showLegalDocument'])->name('legal.show');
 
 

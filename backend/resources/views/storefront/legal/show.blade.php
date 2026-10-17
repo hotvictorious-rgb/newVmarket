@@ -22,7 +22,17 @@
         <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; position: relative; z-index: 2;">
             <div>
                 <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.4); color: #FACC15; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-bottom: 12px; letter-spacing: 0.5px;">
-                    🛡️ CENTRALLY GOVERNED MARKETPLACE CONTRACT
+                    @if($document->category === 'about')
+                        🏛️ INSTITUTIONAL CHARTER &amp; VISION
+                    @elseif($document->category === 'support')
+                        🎧 OMNICHANNEL SUPPORT &amp; HELP DESK
+                    @elseif($document->category === 'faq')
+                        💡 OPERATIONS KNOWLEDGE BASE &amp; FAQ
+                    @elseif($document->category === 'returns' && $document->slug === 'cancellation-policy')
+                        🛡️ ORDER CANCELLATION &amp; REVERSAL POLICY
+                    @else
+                        🛡️ CENTRALLY GOVERNED MARKETPLACE CONTRACT
+                    @endif
                 </div>
                 <h1 style="font-family: 'Cinzel', serif, system-ui; font-size: 32px; font-weight: 800; margin: 0 0 10px; color: #FFFFFF; letter-spacing: -0.5px;">
                     {{ $document->title }}
@@ -54,8 +64,18 @@
         <!-- Document Policy Tabs -->
         <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 20px;">
             @foreach($allLegalDocs as $doc)
-                <a href="{{ $doc->slug === 'terms-of-service' ? route('terms') : route('legal.show', $doc->slug) }}" 
-                   style="padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; transition: all 0.2s ease; {{ $doc->id === $document->id ? 'background: #3B82F6; color: #FFFFFF;' : 'background: rgba(255, 255, 255, 0.05); color: #CBD5E1; hover:background: rgba(255, 255, 255, 0.1);' }}">
+                @php
+                    $tabUrl = match($doc->slug) {
+                        'terms-of-service' => route('terms'),
+                        'about-us' => route('about'),
+                        'contact-and-help-center' => route('contact'),
+                        'frequently-asked-questions' => route('faq'),
+                        'cancellation-policy' => route('cancellation'),
+                        default => route('legal.show', $doc->slug),
+                    };
+                @endphp
+                <a href="{{ $tabUrl }}" 
+                   style="padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; transition: all 0.2s ease; {{ $doc->id === $document->id ? 'background: #3B82F6; color: #FFFFFF;' : 'background: rgba(255, 255, 255, 0.05); color: #CBD5E1;' }}">
                     {{ $doc->title }}
                 </a>
             @endforeach
@@ -78,8 +98,12 @@
             <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 20px 0 16px;">
 
             <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px; font-size: 12px; color: #64748B; line-height: 1.4;">
-                <div style="font-weight: 700; color: #0F172A; margin-bottom: 4px;">Jurisdiction</div>
-                High Court of Akwa Ibom State, Federal Republic of Nigeria.
+                <div style="font-weight: 700; color: #0F172A; margin-bottom: 4px;">
+                    {{ in_array($document->category, ['about', 'support', 'faq']) ? 'Platform Headquarter' : 'Governing Law & Jurisdiction' }}
+                </div>
+                {{ in_array($document->category, ['about', 'support', 'faq']) 
+                    ? 'Victorious Market Operations Desk, Uyo, Akwa Ibom State, Federal Republic of Nigeria.' 
+                    : 'High Court of Akwa Ibom State, Federal Republic of Nigeria.' }}
             </div>
         </aside>
 

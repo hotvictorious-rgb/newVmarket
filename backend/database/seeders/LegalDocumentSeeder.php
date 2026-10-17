@@ -479,5 +479,338 @@ MARKDOWN;
                 'ip_address' => '127.0.0.1',
             ]
         );
+
+        // 6. ABOUT US & FOUNDATIONAL OPERATING CHARTER
+        $aboutContent = <<<'MARKDOWN'
+# ABOUT VICTORIOUS MARKET
+## Building Nigeria's Trusted Online Market for Quality Products
+
+**Brand Promise:** Your Trusted Online Market for Quality Products.  
+**Operating Philosophy:** Trust First. Quality Always. Accountability at Every Stage.  
+**Launch Headquarter:** Uyo, Akwa Ibom State, Federal Republic of Nigeria  
+
+---
+
+### 1. Executive Overview
+**VICTORIOUS MARKET** is an institutional digital commerce platform designed to make buying and selling safer, more structured, more transparent, and reliably accountable in Nigeria.
+
+The vision is to establish an online marketplace where consumers discover quality products from verified merchants, complete secure payments, receive products through accountable logistics channels, and access fair resolutions when transactions do not go as expected.
+
+Unlike an unrestricted classifieds board where buyers and sellers negotiate privately and send money through unmonitored bank accounts, VICTORIOUS MARKET is a **managed, centrally governed marketplace**. The platform coordinates merchant verification, catalog governance, escrow custody, directional logistics, delivery OTP handshakes, customer returns, and vendor settlements.
+
+---
+
+### 2. The Problem We Intend to Solve
+Many Nigerian consumers are hesitant to purchase products online, especially from unfamiliar merchants. Common concerns include:
+* Paying for products that are never delivered.
+* Receiving inferior products different from advertised photos.
+* Sellers who block buyers on WhatsApp after receiving bank transfers.
+* Hidden or unexpected delivery charges.
+* Unclear return and refund procedures.
+* Total lack of verifiable evidence when disputes arise.
+
+Merchants also experience significant challenges, including fake orders, customers refusing legitimate deliveries, delayed settlements, stock-management issues, and unreliable delivery partners.
+
+Victorious Market solves these problems through **one coordinated system** where trust does not depend solely on a seller's verbal promise, but is enforced by verification, transparent procedures, financial controls, cryptographic evidence, and enforceable accountability.
+
+---
+
+### 3. The Controlled Marketplace Model
+Participation in Victorious Market is subject to verification and accreditation:
+* **Vetted Merchants:** Merchants register a business profile, provide CAC credentials where applicable, and pass physical shop inspections.
+* **Governed Transactions:** Customers see approved business identities, but private phone numbers and off-platform dealing are protected.
+* **Suspension Powers:** Any merchant or courier violating platform standards is suspended, protecting customer funds and overall market integrity.
+
+---
+
+### 4. Financial Integrity: The 90/5/5 Allocation
+* **90% Merchant Settlement:** Legitimate merchants receive 90% net earnings upon confirmed delivery.
+* **5% Customer Cashback:** Rewarding repeat customer loyalty with a structured 365-day maturation schedule.
+* **5% Platform Sustainability Margin:** Powering platform engineering, customer support, and dispute arbitration.
+* **Logistics Split:** 90% retained by the accredited Logistics Fleet, 10% platform routing fee.
+
+---
+
+### 5. Geographic Discipline & Expansion
+Our commercial beachhead is centered in **Uyo, Akwa Ibom State**, expanding across verified transit corridors into Ikot Ekpene, Eket, and subsequent regional centers. Rather than promising unfulfilled nationwide deliveries, Victorious Market expands through verified physical collection hubs, trusted local couriers, and guaranteed fulfillment corridors.
+MARKDOWN;
+
+        $doc6 = LegalDocument::updateOrCreate(
+            ['slug' => 'about-us'],
+            [
+                'title' => 'About Victorious Market — Operating Charter',
+                'category' => 'about',
+                'current_version' => '1.0.0',
+                'effective_date' => $effectiveDate,
+                'is_published' => true,
+                'summary' => 'Foundational operating philosophy, managed marketplace vision, geographic discipline in Akwa Ibom State, and core brand promise.',
+            ]
+        );
+
+        LegalDocumentVersion::updateOrCreate(
+            [
+                'legal_document_id' => $doc6->id,
+                'version' => '1.0.0',
+            ],
+            [
+                'title' => 'About Victorious Market — Operating Charter',
+                'content' => $aboutContent,
+                'summary_of_changes' => 'Initial publication of foundational operating charter.',
+                'effective_date' => $effectiveDate,
+                'ip_address' => '127.0.0.1',
+            ]
+        );
+
+        // 7. ORDER CANCELLATION POLICY
+        $cancellationContent = <<<'MARKDOWN'
+# VICTORIOUS MARKET — ORDER CANCELLATION & PRE-DISPATCH POLICY
+**Effective Date:** October 17, 2026  
+**Version:** 1.0.0  
+**Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
+
+---
+
+### 1. Overview
+Victorious Market operates an escrow-protected, deterministic cancellation workflow designed to balance customer flexibility with merchant preparation and logistics costs.
+
+---
+
+### 2. Pre-Dispatch Customer Cancellation (100% Instant Refund)
+* **Permitted Window:** A customer may cancel an order for any reason **prior to merchant packaging and rider dispatch** (while order status is `pending` or `confirmed`).
+* **100% Refund:** Upon cancellation in this window, 100% of the customer's payment (including merchandise total and delivery fee) is immediately returned to the customer's wallet or queued for automated Paystack card reversal.
+* **Zero Cancellation Fees:** No penalty or administrative surcharge is deducted for pre-dispatch cancellations.
+
+---
+
+### 3. In-Shop Pickup Reservations (24-Hour Expiry)
+* **Reservation Window:** In-Shop Inspection reservations hold reserved merchant stock for exactly **twenty-four (24) hours**.
+* **Automatic Expiration:** If the customer does not visit the merchant's physical plaza to inspect and complete payment within 24 hours, the reservation automatically expires with zero penalty, and stock is returned to active catalog inventory.
+
+---
+
+### 4. Post-Dispatch In-Transit Policy
+* **No Mid-Transit Cancellations:** Once an order status progresses to `out_for_delivery` and is with the courier rider, the order cannot be cancelled in transit because logistics resources and transit costs are already committed.
+* **Doorstep Decision:** The customer must await the rider's arrival and exercise their **Doorstep Acceptance & Partial Rejection** rights at physical handover.
+* **Refusal Without Cause:** Repeated arbitrary refusals of conforming orders at doorstep delivery without valid defect grounds may lead to customer account review and suspension of cash-on-delivery or delivery privileges.
+
+---
+
+### 5. Merchant Stockout Cancellations
+* **Immediate Customer Remedy:** If an accredited merchant cannot fulfill an order due to sudden stockout or inventory discrepancy, the platform automatically cancels the order, initiates an immediate 100% refund to the customer, and notifies the customer via SMS/Email.
+* **Merchant Accountability:** Preventable merchant stockouts are logged against the vendor's fulfillment rating. Repeated stockouts trigger temporary catalog delisting.
+
+---
+
+### 6. Cashback Treatment on Cancelled Orders
+* Any 5% cashback reward queued for maturation on an order is instantly voided and revoked if the order is cancelled.
+* Any previously earned cashback applied as a discount on a cancelled order is refunded back to the customer's cashback ledger balance.
+MARKDOWN;
+
+        $doc7 = LegalDocument::updateOrCreate(
+            ['slug' => 'cancellation-policy'],
+            [
+                'title' => 'Order Cancellation & Pre-Dispatch Policy',
+                'category' => 'returns',
+                'current_version' => '1.0.0',
+                'effective_date' => $effectiveDate,
+                'is_published' => true,
+                'summary' => 'Comprehensive guidelines covering pre-dispatch 100% refunds, in-shop 24-hour reservation expiries, and mid-transit doorstep rules.',
+            ]
+        );
+
+        LegalDocumentVersion::updateOrCreate(
+            [
+                'legal_document_id' => $doc7->id,
+                'version' => '1.0.0',
+            ],
+            [
+                'title' => 'Order Cancellation & Pre-Dispatch Policy',
+                'content' => $cancellationContent,
+                'summary_of_changes' => 'Initial release of standardized marketplace cancellation policy.',
+                'effective_date' => $effectiveDate,
+                'ip_address' => '127.0.0.1',
+            ]
+        );
+
+        // 8. FREQUENTLY ASKED QUESTIONS (FAQ) & KNOWLEDGE BASE
+        $faqContent = <<<'MARKDOWN'
+# VICTORIOUS MARKET — FREQUENTLY ASKED QUESTIONS (FAQ)
+**Knowledge Base & Operational Answers**  
+**Effective Date:** October 17, 2026 &bull; Version: 1.0.0  
+
+---
+
+### General & Platform Trust
+
+#### What is Victorious Market?
+Victorious Market is a managed, centrally governed online marketplace and fulfillment network in Nigeria. We connect customers with accredited plaza merchants, provide escrow payment protection, ensure verified courier deliveries with OTP handshakes, and guarantee a 24-hour return window.
+
+#### How is Victorious Market different from open classifieds or social media sellers?
+On open social media platforms (like Instagram or WhatsApp), you send money to unknown sellers with zero delivery guarantee and no return recourse. On Victorious Market, **we govern the transaction**:
+* Merchants are vetted and physically inspected.
+* Your payment is held in safe internal escrow until you verify the package.
+* Riders must exchange an OTP before delivery is valid.
+* You can partially reject defective items at your doorstep.
+
+#### Where are your services currently available?
+We are headquartered in **Uyo, Akwa Ibom State**. Our delivery coverage spans Uyo Local Government Area and primary transit corridors across Akwa Ibom State, with planned expansion into neighboring commercial centers.
+
+---
+
+### Shopping, Payments & Cashback
+
+#### How does Escrow Protection work?
+When you pay for an order, 100% of your funds are placed in our secured internal escrow vault (`cash_in_escrow`). The seller **cannot** withdraw this money until twenty-four (24) hours after you have physically received and inspected the item via your delivery OTP.
+
+#### Can I inspect an item before paying?
+Yes! Select **In-Shop Pickup (Pay on Inspection)** at checkout. This reserves the item at the vendor's physical shop for 24 hours. You visit the shop, physically test the product, and only pay if you are 100% satisfied.
+
+#### What payment methods do you accept?
+We accept all Nigerian debit/credit cards (Mastercard, Visa, Verve), Bank Transfers, and USSD payments securely processed through Paystack.
+
+#### What is the 5% Customer Cashback Program?
+On every non-returned merchandise order, you automatically earn 5% cashback credited to your account. This matures into spendable customer balance and can be redeemed on future platform purchases.
+
+---
+
+### Delivery, Logistics & Doorstep Handover
+
+#### How fast is delivery within Uyo?
+Standard intra-Uyo deliveries arrive within 1 to 3 hours from merchant handover. Directional LGA deliveries are completed on the same business day along verified corridors.
+
+#### What is the Delivery OTP Handshake?
+When your order is dispatched, a secret 6-digit One-Time Password (OTP) is sent to your phone and email. When the rider arrives, you inspect the parcel and only give the rider the OTP once you are satisfied. Possession of the package legally transfers only when the rider enters your valid OTP.
+
+#### What is "Doorstep Partial Rejection"?
+If you order 3 items (e.g. a phone, a case, and a charger) and the charger is wrong or damaged, you do **not** have to reject the whole package! You can accept the phone and case, and reject only the charger right at your doorstep. You will be refunded for the rejected item while keeping the rest.
+
+#### What vehicles are used for fragile goods?
+Electronics such as television sets, desktop computers, and large home appliances are strictly transported using covered Keke tricycles or logistics vans with padded securing, never on motorbikes.
+
+---
+
+### Returns, Inspections & Refunds
+
+#### How long do I have to report a problem?
+You have exactly **twenty-four (24) hours** from the timestamp of confirmed delivery OTP verification to submit a return request through your Customer Portal.
+
+#### Where do I drop off a returned product?
+You can drop off returned items at any accredited **Victorious Market Collection Point / Hub** in Uyo. An inspection officer physically verifies the serial numbers, packaging, and reported fault.
+
+#### When will I receive my refund?
+Once the Collection Point inspection passes and Super Admin approves the case, refunds are processed immediately. You can choose:
+* **Instant Wallet Credit:** Available in 0 seconds for purchasing an alternative item.
+* **Paystack Bank/Card Reversal:** Funds return to your bank account within 3 to 7 business banking days.
+
+---
+
+### Merchant & Logistics Operations
+
+#### How can a merchant sell on Victorious Market?
+Prospective merchants must register via the Vendor Portal, provide business registration documents, and pass a physical shop inspection conducted by our compliance team.
+
+#### What are the product condition rules?
+Merchants must explicitly disclose whether goods are **Brand New** (factory-sealed OEM with warranty) or **UK Used / Pre-Owned** (tested, with disclosed battery health and cosmetic grade). Counterfeits are strictly banned.
+MARKDOWN;
+
+        $doc8 = LegalDocument::updateOrCreate(
+            ['slug' => 'frequently-asked-questions'],
+            [
+                'title' => 'Frequently Asked Questions (FAQ) & Knowledge Base',
+                'category' => 'faq',
+                'current_version' => '1.0.0',
+                'effective_date' => $effectiveDate,
+                'is_published' => true,
+                'summary' => 'Comprehensive answers covering escrow protection, in-shop pickup, doorstep partial rejection, 24-hour returns, and merchant accreditation.',
+            ]
+        );
+
+        LegalDocumentVersion::updateOrCreate(
+            [
+                'legal_document_id' => $doc8->id,
+                'version' => '1.0.0',
+            ],
+            [
+                'title' => 'Frequently Asked Questions (FAQ) & Knowledge Base',
+                'content' => $faqContent,
+                'summary_of_changes' => 'Initial operational knowledge base release.',
+                'effective_date' => $effectiveDate,
+                'ip_address' => '127.0.0.1',
+            ]
+        );
+
+        // 9. CONTACT & CUSTOMER CARE CENTER
+        $contactContent = <<<'MARKDOWN'
+# VICTORIOUS MARKET — CONTACT & CUSTOMER CARE CENTER
+**Support Desk & Operational Hubs**  
+**Effective Date:** October 17, 2026 &bull; Version: 1.0.0  
+
+---
+
+### 1. Customer Care & Hotlines
+Our dedicated customer care team is available to assist shoppers, merchants, and riders with order inquiries, delivery tracking, and dispute escalations:
+
+* **Customer Care Telephone:** `0800-VMARKET` / `+234 802 000 0000`
+* **Operating Hours:** Monday – Saturday, 8:00 AM – 6:00 PM (West Africa Time)
+* **General Support Email:** `support@victoriousmarket.ng`
+* **Disputes & Legal Inquiries:** `disputes@victoriousmarket.ng` / `compliance@victoriousmarket.ng`
+
+> **Urgent Handover Tip:** When calling regarding an active delivery run or rider handshake, please have your **Order Number** (e.g. `ORD-2026-XXXX`) ready for instant verification.
+
+---
+
+### 2. Operational Headquarters & Physical Hub
+* **Physical Address:** Victorious Market Central Operations Tower, Uyo, Akwa Ibom State, Nigeria.
+* **In-Person Business Desk:** Monday – Friday, 9:00 AM – 5:00 PM.
+
+---
+
+### 3. Collection Points & Hub Drop-Off Network
+Victorious Market Collection Points function as secure holding hubs for in-shop customer pickups and return drop-offs across Akwa Ibom:
+* **Uyo Central Hub:** Plaza Commercial Axis, Uyo LGA.
+* **Corridor Hubs:** Expanding along designated logistics lanes in Ikot Ekpene and Eket corridors.
+* **Hub Operating Hours:** Monday – Saturday, 8:30 AM – 5:30 PM.
+
+---
+
+### 4. Administrative Arbitration & Dispute Escalation
+If you have an unresolved dispute with a merchant regarding product condition or a rider regarding delivery timing:
+1. Open your **Customer Portal &rarr; Orders &rarr; Request Assistance / Dispute**.
+2. Upload clear photographic or video evidence.
+3. Our Administrative Arbitration Desk reviews the order history, GPS coordinates, and inspection findings to issue an explainable, binding ruling within twenty-four (24) hours.
+
+---
+
+### 5. Whistleblower & Anti-Fraud Reporting
+Victorious Market enforces strict zero tolerance for commercial malpractice:
+* To report counterfeit products, stolen goods, off-platform solicitation, or bribery attempts by any staff, merchant, or rider, email: `whistleblower@victoriousmarket.ng`.
+* All whistleblower reports are treated with strict confidentiality.
+MARKDOWN;
+
+        $doc9 = LegalDocument::updateOrCreate(
+            ['slug' => 'contact-and-help-center'],
+            [
+                'title' => 'Contact & Customer Care Center',
+                'category' => 'support',
+                'current_version' => '1.0.0',
+                'effective_date' => $effectiveDate,
+                'is_published' => true,
+                'summary' => 'Official hotlines, Uyo operational headquarters address, collection point hubs, administrative dispute escalation, and whistleblower reporting.',
+            ]
+        );
+
+        LegalDocumentVersion::updateOrCreate(
+            [
+                'legal_document_id' => $doc9->id,
+                'version' => '1.0.0',
+            ],
+            [
+                'title' => 'Contact & Customer Care Center',
+                'content' => $contactContent,
+                'summary_of_changes' => 'Initial publication of customer care center and escalation matrix.',
+                'effective_date' => $effectiveDate,
+                'ip_address' => '127.0.0.1',
+            ]
+        );
     }
 }
