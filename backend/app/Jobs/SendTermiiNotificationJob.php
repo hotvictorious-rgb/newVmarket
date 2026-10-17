@@ -27,12 +27,19 @@ class SendTermiiNotificationJob implements ShouldQueue
 
     public function handle(): void
     {
-        $apiKey = config('services.termii.key', env('TERMII_API_KEY'));
+        $apiKey = \App\Models\SystemSetting::get('termii_api_key') ?: config('services.termii.key', env('TERMII_API_KEY'));
         if (empty($apiKey)) {
             return;
         }
 
-        $sender = $this->senderId ?? config('services.termii.sender_id', env('TERMII_SENDER_ID', 'VMARKET'));
+        $defaultChannel = \App\Models\SystemSetting::get('termii_channel') ?: 'generic';
+        $channel = strtolower($this->channel) === 'whatsapp' ? 'whatsapp' : $defaultChannel;
+        $sender = $this->senderId ?? \App\Models\SystemSetting::get('termii_sender_id') ?? config('services.termii.sender_id', env('TERMII_SENDER_ID', 'VMARKET'));
+        if (empty($apiKey)) {
+            return;
+        }
+
+        
         $termiiEndpoint = 'https://api.ng.termii.com/api/sms/send';
 
         try {
@@ -41,7 +48,7 @@ class SendTermiiNotificationJob implements ShouldQueue
                 'from' => $sender,
                 'sms' => $this->message,
                 'type' => 'plain',
-                'channel' => strtolower($this->channel) === 'whatsapp' ? 'whatsapp' : 'generic',
+                'channel' => $channel,
                 'api_key' => $apiKey,
             ]);
 

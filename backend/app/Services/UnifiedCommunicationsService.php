@@ -110,7 +110,7 @@ class UnifiedCommunicationsService
         }
 
         // 2. Primary .env Gateway (Termii, Sendchamp, etc.)
-        $envTermiiKey = env('TERMII_API_KEY');
+        $envTermiiKey = \App\Models\SystemSetting::get('termii_api_key') ?: env('TERMII_API_KEY');
         if (!empty($envTermiiKey)) {
             $candidates[] = [
                 'name' => 'termii',
@@ -178,12 +178,12 @@ class UnifiedCommunicationsService
      */
     protected function callTermii(string $phone, string $message, array $config): array
     {
-        $apiKey = $config['api_key'] ?? env('TERMII_API_KEY');
+        $apiKey = $config['api_key'] ?? (\App\Models\SystemSetting::get('termii_api_key') ?: env('TERMII_API_KEY'));
         if (empty($apiKey)) {
             return ['success' => false, 'error' => 'Termii API Key missing'];
         }
 
-        $sender = $config['sender'] ?? env('TERMII_SENDER_ID', 'VMARKET');
+        $sender = $config['sender'] ?? (\App\Models\SystemSetting::get('termii_sender_id') ?: env('TERMII_SENDER_ID', 'VMARKET'));
         $channel = $config['channel'] ?? 'dnd';
 
         $response = Http::timeout(8)->post('https://api.ng.termii.com/api/sms/send', [

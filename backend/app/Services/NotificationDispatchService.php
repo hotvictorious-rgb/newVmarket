@@ -363,7 +363,7 @@ class NotificationDispatchService
         ];
 
         // Production Async Dispatch via Termii Job
-        if (config('services.termii.key') || env('TERMII_API_KEY')) {
+        if (SystemSetting::get('termii_api_key') || config('services.termii.key') || env('TERMII_API_KEY')) {
             try {
                 SendTermiiNotificationJob::dispatch($recipient, $channel, $message);
                 $logPayload['status'] = 'queued_live';
