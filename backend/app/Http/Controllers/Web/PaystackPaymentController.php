@@ -139,6 +139,7 @@ class PaystackPaymentController extends Controller
             if ($logisticsPayout) {
                 $logisticsPayout->admin_notes = ($logisticsPayout->admin_notes ? $logisticsPayout->admin_notes . ' | ' : '') . "Paystack Gateway Delivery Confirmed ({$tCode})";
                 $logisticsPayout->save();
+                \App\Services\NotificationDispatchService::dispatchPayoutDisbursed($logisticsPayout);
             }
 
             // 2. Reconcile Vendor Payout via indexed lookup
@@ -151,6 +152,7 @@ class PaystackPaymentController extends Controller
             if ($vendorPayout) {
                 $vendorPayout->admin_notes = ($vendorPayout->admin_notes ? $vendorPayout->admin_notes . ' | ' : '') . "Paystack Gateway Delivery Confirmed ({$tCode})";
                 $vendorPayout->save();
+                \App\Services\NotificationDispatchService::dispatchPayoutDisbursed($vendorPayout);
             }
 
             \App\Models\ProcessedWebhookEvent::create([
@@ -223,6 +225,7 @@ class PaystackPaymentController extends Controller
                     ]);
                 });
             }
+            if ($logisticsPayout) { \App\Services\NotificationDispatchService::dispatchPayoutRejected($logisticsPayout, "Paystack transfer {$event['event']}: {$reason}"); }
 
             // B. Handle Merchant Vendor Payout Reversal via Exact Allocations
             $vendorPayout = \App\Models\VendorPayoutRequest::where('transfer_reference', $tRef)
@@ -303,6 +306,7 @@ class PaystackPaymentController extends Controller
                     ]);
                 });
             }
+            if ($vendorPayout) { \App\Services\NotificationDispatchService::dispatchPayoutRejected($vendorPayout, "Paystack transfer {$event['event']}: {$reason}"); }
 
             \App\Models\ProcessedWebhookEvent::create([
                 'event_id' => $eventId,

@@ -400,4 +400,216 @@ class MultiChannelNotificationAndFirebaseTest extends TestCase
             'type' => 'order_placed',
         ]);
     }
+
+    public function test_admin_can_configure_termii_sms_settings(): void
+    {
+        $payload = [
+            'fcm_enabled' => '1',
+            'sms_enabled' => '1',
+            'in_app_enabled' => '1',
+            'termii_api_key' => 'live_termii_key_abc123',
+            'termii_sender_id' => 'VMARKET_TEST',
+            'termii_channel' => 'generic',
+            'firebase_project_id' => 'victorious-live',
+        ];
+
+        $response = $this->from('/admin/notifications')
+            ->actingAs($this->superAdmin)
+            ->post('/admin/notifications/update', $payload);
+
+        $response->assertRedirect('/admin/notifications');
+        $response->assertSessionHas('status');
+
+        $this->assertEquals('live_termii_key_abc123', \App\Models\SystemSetting::get('termii_api_key'));
+        $this->assertEquals('VMARKET_TEST', \App\Models\SystemSetting::get('termii_sender_id'));
+        $this->assertEquals('generic', \App\Models\SystemSetting::get('termii_channel'));
+    }
+
+    public function test_admin_can_upload_service_account_json_file(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+
+        $serviceAccountData = [
+            'type' => 'service_account',
+            'project_id' => 'victorious-market-prod',
+            'client_email' => 'firebase-adminsdk@victorious-market-prod.iam.gserviceaccount.com',
+            'private_key' => "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDTestKey\n-----END PRIVATE KEY-----\n",
+        ];
+
+        $uploadedFile = \Illuminate\Http\UploadedFile::fake()->createWithContent(
+            'service-account.json',
+            json_encode($serviceAccountData)
+        );
+
+        $response = $this->from('/admin/notifications')
+            ->actingAs($this->superAdmin)
+            ->post('/admin/notifications/update', [
+                'fcm_enabled' => '1',
+                'firebase_service_account_json' => $uploadedFile,
+            ]);
+
+        $response->assertRedirect('/admin/notifications');
+        $this->assertEquals('victorious-market-prod', \App\Models\SystemSetting::get('firebase_project_id'));
+        $this->assertEquals('firebase-adminsdk@victorious-market-prod.iam.gserviceaccount.com', \App\Models\SystemSetting::get('firebase_client_email'));
+        $this->assertStringContainsString('MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDTestKey', \App\Models\SystemSetting::get('firebase_private_key'));
+    }
+
+    public function test_admin_can_configure_custom_templates_and_render_dynamic_tags(): void
+    {
+        $payload = [
+            'templates' => [
+                'doorstep_return_initiated' => [
+                    'customer' => [
+                        'title' => 'Return #{order_number} Initiated',
+                        'body' => 'Your return for order #{order_number} worth NGN {amount} is being processed.',
+                    ],
+                ],
+            ],
+        ];
+
+        $response = $this->from('/admin/notifications')
+            ->actingAs($this->superAdmin)
+            ->post('/admin/notifications/update', $payload);
+        $response->assertRedirect('/admin/notifications');
+
+        $title = NotificationDispatchService::renderTemplate(
+            'doorstep_return_initiated',
+            'customer',
+            'title',
+            ['order_number' => 'ORD-TEST-777', 'amount' => '25,000.00'],
+            'Default Title'
+        );
+
+        $body = NotificationDispatchService::renderTemplate(
+            'doorstep_return_initiated',
+            'customer',
+            'body',
+            ['order_number' => 'ORD-TEST-777', 'amount' => '25,000.00'],
+            'Default Body'
+        );
+
+        $this->assertEquals('Return #ORD-TEST-777 Initiated', $title);
+        $this->assertEquals('Your return for order #ORD-TEST-777 worth NGN 25,000.00 is being processed.', $body);
+    }
+
+    public function test_admin_can_revoke_and_prune_device_tokens(): void
+    {
+        $tokenToRevoke = \App\Models\UserDeviceToken::create([
+            'user_id' => $this->customer->id,
+            'device_token' => 'fcm_token_to_revoke_123',
+            'device_type' => 'android',
+            'app_type' => 'customer',
+            'is_active' => true,
+            'last_seen_at' => now(),
+        ]);
+
+        $staleInactiveToken = \App\Models\UserDeviceToken::create([
+            'user_id' => $this->customer->id,
+            'device_token' => 'fcm_token_stale_old',
+            'device_type' => 'ios',
+            'app_type' => 'customer',
+            'is_active' => false,
+            'last_seen_at' => now()->subDays(60),
+        ]);
+
+        $activeToken = \App\Models\UserDeviceToken::create([
+            'user_id' => $this->customer->id,
+            'device_token' => 'fcm_token_healthy_active_999',
+            'device_type' => 'android',
+            'app_type' => 'customer',
+            'is_active' => true,
+            'last_seen_at' => now(),
+        ]);
+
+        // 1. Admin revokes tokenToRevoke
+        $revokeRes = $this->from('/admin/notifications')
+            ->actingAs($this->superAdmin)
+            ->post("/admin/notifications/revoke-token/{$tokenToRevoke->id}");
+        $revokeRes->assertRedirect('/admin/notifications');
+        $this->assertFalse((bool)$tokenToRevoke->fresh()->is_active);
+
+        // 2. Admin prunes inactive/decommissioned tokens
+        $pruneRes = $this->from('/admin/notifications')
+            ->actingAs($this->superAdmin)
+            ->post('/admin/notifications/prune-tokens');
+        $pruneRes->assertRedirect('/admin/notifications');
+
+        // Decommissioned/inactive tokens are pruned
+        $this->assertDatabaseMissing('user_device_tokens', ['id' => $staleInactiveToken->id]);
+        $this->assertDatabaseMissing('user_device_tokens', ['id' => $tokenToRevoke->id]);
+
+        // Healthy active token remains in registry
+        $this->assertDatabaseHas('user_device_tokens', ['id' => $activeToken->id]);
+    }
+
+    public function test_admin_can_send_test_sms(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'https://api.ng.termii.com/*' => \Illuminate\Support\Facades\Http::response([
+                'message_id' => 'MSG-TERMII-12345',
+                'message' => 'Successfully Sent',
+                'balance' => 450.50,
+            ], 200),
+        ]);
+
+        \App\Models\SystemSetting::set('termii_api_key', 'live_termii_key_123');
+        \App\Models\SystemSetting::set('termii_sender_id', 'VMARKET');
+
+        $response = $this->from('/admin/notifications')
+            ->actingAs($this->superAdmin)
+            ->post('/admin/notifications/test-sms', [
+                'recipient' => '+2348012345678',
+                'message' => 'Test SMS dispatch from Super Admin Portal',
+            ]);
+
+        $response->assertRedirect('/admin/notifications');
+        $response->assertSessionHas('status');
+
+        $this->assertDatabaseHas('notification_delivery_logs', [
+            'channel' => 'sms',
+            'recipient' => '+2348012345678',
+            'status' => 'delivered',
+        ]);
+    }
+
+    public function test_payout_and_return_events_dispatch_notifications(): void
+    {
+        // 1. Customer Wallet Credited
+        NotificationDispatchService::dispatchCustomerWalletCredited($this->customer, '5000.00', 'Doorstep return refund');
+        $this->assertDatabaseHas('system_notifications', [
+            'user_id' => $this->customer->id,
+            'type' => 'wallet_credit',
+        ]);
+
+        // 2. Vendor Payout Requested
+        $vendorPayout = \App\Models\VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '45000.00',
+            'status' => 'pending',
+            'bank_name' => 'Access Bank',
+            'account_number' => '0123456789',
+            'account_name' => 'Victorious Vendor Store',
+        ]);
+
+        NotificationDispatchService::dispatchPayoutRequested($vendorPayout);
+        // Alert sent to merchant owner user
+        $this->assertDatabaseHas('system_notifications', [
+            'user_id' => $this->vendorUser->id,
+            'type' => 'payout_requested',
+        ]);
+
+        // 3. Vendor Payout Disbursed
+        NotificationDispatchService::dispatchPayoutDisbursed($vendorPayout);
+        $this->assertDatabaseHas('system_notifications', [
+            'user_id' => $this->vendorUser->id,
+            'type' => 'payout_disbursed',
+        ]);
+
+        // 4. Vendor Payout Rejected
+        NotificationDispatchService::dispatchPayoutRejected($vendorPayout, 'Invalid account number');
+        $this->assertDatabaseHas('system_notifications', [
+            'user_id' => $this->vendorUser->id,
+            'type' => 'payout_rejected',
+        ]);
+    }
 }

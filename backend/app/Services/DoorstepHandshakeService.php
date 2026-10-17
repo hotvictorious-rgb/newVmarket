@@ -13,6 +13,7 @@ use App\Models\ReturnCase;
 use App\Models\ReturnItem;
 use App\Models\RiderProfile;
 use App\Models\User;
+use App\Services\NotificationDispatchService;
 use App\Models\VendorProfile;
 use App\Models\VendorRecoveryLedger;
 use Carbon\Carbon;
@@ -297,6 +298,17 @@ class DoorstepHandshakeService
                     'status' => 'available',
                     'notes' => "Instant refund wallet credit for doorstep rejection on Order #{$lockedOrder->order_number}",
                 ]);
+
+                // Trigger sovereign multi-channel notifications
+                NotificationDispatchService::dispatchDoorstepReturnInitiated($returnCase);
+                NotificationDispatchService::dispatchVendorReturnOtpIssued($returnCase);
+                if (BcMathService::comp($customerRefundWalletAmount, '0.00') > 0 && $lockedOrder->customer) {
+                    NotificationDispatchService::dispatchCustomerWalletCredited(
+                        $lockedOrder->customer,
+                        $customerRefundWalletAmount,
+                        "Doorstep return refund on Order #{$lockedOrder->order_number}"
+                    );
+                }
             }
 
             // 7. Post Balanced Double-Entry Journal Entries
@@ -497,6 +509,9 @@ class DoorstepHandshakeService
             }
             $lockedCase->save();
 
+            // Trigger sovereign return accepted notification
+            NotificationDispatchService::dispatchReturnAccepted($lockedCase);
+
             // Update item statuses to returned_to_vendor
             OrderItem::where('order_id', $lockedCase->order_id)
                 ->where('rejected_quantity', '>', 0)
@@ -552,6 +567,9 @@ class DoorstepHandshakeService
             $lockedCase->vendor_dispute_photo_path = $disputePhotoPath;
             $lockedCase->vendor_disputed_at = Carbon::now();
             $lockedCase->save();
+
+            // Trigger dispute escalation notification
+            NotificationDispatchService::dispatchVendorCounterDispute($lockedCase, $disputeReason);
 
             // Update item statuses to disputed_by_vendor
             OrderItem::where('order_id', $lockedCase->order_id)

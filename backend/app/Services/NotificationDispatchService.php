@@ -7,6 +7,8 @@ use App\Jobs\SendTermiiNotificationJob;
 use App\Models\LogisticsPayoutRequest;
 use App\Models\NotificationDeliveryLog;
 use App\Models\Order;
+use App\Models\ReturnCase;
+use App\Models\User;
 use App\Models\SystemNotification;
 use App\Models\SystemSetting;
 use App\Models\VendorPayoutRequest;
@@ -344,6 +346,278 @@ class NotificationDispatchService
                     self::dispatchPush($userId, "Earnings Disbursed! ₦" . number_format((float)$payout->amount, 2), "Bank transfer to {$payout->bank_name} confirmed.", ['type' => 'payout_disbursed', 'payout_id' => $payout->id], $eventType);
                 }
             }
+        }
+
+        return $dispatches;
+    }
+
+
+    /**
+     * Render customizable message template with dynamic business placeholders
+     */
+    public static function renderTemplate(string $eventKey, string $targetRole, string $field, array $replacements, string $default): string
+    {
+        $templates = SystemSetting::get('notification_templates', []);
+        $templateString = $templates[$eventKey][$targetRole][$field] ?? $default;
+
+        foreach ($replacements as $k => $v) {
+            $templateString = str_replace('{' . $k . '}', (string)$v, $templateString);
+        }
+
+        return $templateString;
+    }
+
+    /**
+     * Event 7: Doorstep Return Initiated (Customer refused item at doorstep)
+     */
+    public static function dispatchDoorstepReturnInitiated(ReturnCase $returnCase): array
+    {
+        $dispatches = [];
+        $eventType = 'doorstep_return_dispute';
+        $order = $returnCase->order;
+        $orderNumber = $order->order_number ?? $returnCase->case_number;
+
+        // Alert Vendor
+        if ($returnCase->vendor && $returnCase->vendor->user) {
+            $vendorUserId = $returnCase->vendor->user_id;
+            $vendorPhone = $returnCase->vendor->business_phone ?? '+2348000000001';
+
+            $title = self::renderTemplate($eventType, 'vendor', 'title', ['order_number' => $orderNumber], "Doorstep Return Initiated");
+            $body = self::renderTemplate($eventType, 'vendor', 'body', [
+                'order_number' => $orderNumber,
+                'category' => $returnCase->rejection_category,
+                'amount' => number_format((float)$returnCase->total_refundable_amount, 2),
+            ], "Order #{$orderNumber} items were rejected at doorstep ({$returnCase->rejection_category}). Package is returning via courier.");
+
+            if (self::isChannelActive('in_app', $eventType)) {
+                self::createInApp($vendorUserId, $title, $body, $eventType, ['return_case_id' => $returnCase->id]);
+            }
+            if (self::isChannelActive('fcm', $eventType)) {
+                self::dispatchPush($vendorUserId, $title, $body, ['type' => 'doorstep_return', 'return_case_id' => $returnCase->id], $eventType);
+            }
+            if (self::isChannelActive('whatsapp', $eventType)) {
+                $dispatches[] = self::record('whatsapp', $vendorPhone, 'Vendor', "Victorious Market: " . $body);
+            }
+        }
+
+        // Alert Super Admin
+        $adminUsers = User::where('user_type', 'super_admin')->get();
+        foreach ($adminUsers as $admin) {
+            self::createInApp($admin->id, "Doorstep Return Alert", "Order #{$orderNumber} experienced doorstep refusal ({$returnCase->rejection_category}).", $eventType, ['return_case_id' => $returnCase->id]);
+        }
+
+        return $dispatches;
+    }
+
+    /**
+     * Event 8: Vendor Return Handshake OTP Issued (Courier arriving back at shop)
+     */
+    public static function dispatchVendorReturnOtpIssued(ReturnCase $returnCase): array
+    {
+        $dispatches = [];
+        $eventType = 'vendor_return_otp';
+        $order = $returnCase->order;
+        $orderNumber = $order->order_number ?? $returnCase->case_number;
+
+        if ($returnCase->vendor && $returnCase->vendor->user) {
+            $vendorUserId = $returnCase->vendor->user_id;
+            $vendorPhone = $returnCase->vendor->business_phone ?? '+2348000000001';
+            $otp = $returnCase->vendor_return_otp;
+
+            $title = self::renderTemplate($eventType, 'vendor', 'title', ['order_number' => $orderNumber], "Return Package Arrived at Counter");
+            $body = self::renderTemplate($eventType, 'vendor', 'body', [
+                'order_number' => $orderNumber,
+                'otp' => $otp,
+            ], "Courier has arrived with return parcel for Order #{$orderNumber}. Security Return OTP: [{$otp}]. Verify items before releasing OTP.");
+
+            if (self::isChannelActive('in_app', $eventType)) {
+                self::createInApp($vendorUserId, $title, $body, $eventType, ['return_case_id' => $returnCase->id, 'return_otp' => $otp]);
+            }
+            if (self::isChannelActive('fcm', $eventType)) {
+                self::dispatchPush($vendorUserId, $title, $body, ['type' => 'return_otp', 'otp' => $otp, 'return_case_id' => $returnCase->id], $eventType);
+            }
+            if (self::isChannelActive('sms', $eventType)) {
+                $dispatches[] = self::record('sms', $vendorPhone, 'Vendor Counter', "Victorious Market: " . $body);
+            }
+        }
+
+        return $dispatches;
+    }
+
+    /**
+     * Event 9: Vendor Accepted Return (Return Handshake Sealed)
+     */
+    public static function dispatchReturnAccepted(ReturnCase $returnCase): array
+    {
+        $dispatches = [];
+        $eventType = 'return_accepted';
+        $order = $returnCase->order;
+        $orderNumber = $order->order_number ?? $returnCase->case_number;
+
+        if ($returnCase->customer) {
+            $customerId = $returnCase->customer_id;
+            $customerPhone = $returnCase->customer->phone ?? '+2348000000000';
+            $amountFormatted = number_format((float)$returnCase->total_refundable_amount, 2);
+
+            $title = self::renderTemplate($eventType, 'customer', 'title', ['order_number' => $orderNumber], "Return Accepted & Refund Processed");
+            $body = self::renderTemplate($eventType, 'customer', 'body', [
+                'order_number' => $orderNumber,
+                'amount' => $amountFormatted,
+            ], "Merchant accepted returned items for Order #{$orderNumber}. ₦{$amountFormatted} has been credited to your Victorious Wallet.");
+
+            if (self::isChannelActive('in_app', $eventType)) {
+                self::createInApp($customerId, $title, $body, $eventType, ['return_case_id' => $returnCase->id]);
+            }
+            if (self::isChannelActive('fcm', $eventType)) {
+                self::dispatchPush($customerId, $title, $body, ['type' => 'return_accepted', 'return_case_id' => $returnCase->id], $eventType);
+            }
+            if (self::isChannelActive('sms', $eventType)) {
+                $dispatches[] = self::record('sms', $customerPhone, 'Customer', "Victorious Market: " . $body);
+            }
+        }
+
+        return $dispatches;
+    }
+
+    /**
+     * Event 10: Vendor Counter Dispute Escalated
+     */
+    public static function dispatchVendorCounterDispute(ReturnCase $returnCase, string $reason): array
+    {
+        $dispatches = [];
+        $eventType = 'dispute_escalated';
+
+        // Alert Customer
+        if ($returnCase->customer) {
+            $title = "Return Escalated for Review";
+            $body = "Merchant submitted a dispute on Return #{$returnCase->case_number} ({$reason}). Victorious Sovereign Arbitration will review within 24h.";
+
+            self::createInApp($returnCase->customer_id, $title, $body, $eventType, ['return_case_id' => $returnCase->id]);
+            self::dispatchPush($returnCase->customer_id, $title, $body, ['type' => 'dispute_escalated', 'return_case_id' => $returnCase->id], $eventType);
+        }
+
+        // Alert Super Admin
+        $adminUsers = User::where('user_type', 'super_admin')->get();
+        foreach ($adminUsers as $admin) {
+            self::createInApp($admin->id, "Urgent: Dispute Filed", "Return #{$returnCase->case_number} was disputed by vendor: {$reason}", $eventType, ['return_case_id' => $returnCase->id]);
+        }
+
+        return $dispatches;
+    }
+
+    /**
+     * Event 11: Super Admin Arbitration Ruling
+     */
+    public static function dispatchDisputeArbitrationRuling(ReturnCase $returnCase, string $ruling, ?string $notes = null): array
+    {
+        $dispatches = [];
+        $eventType = 'dispute_arbitration';
+        $rulingText = strtoupper(str_replace('_', ' ', $ruling));
+
+        // Alert Customer
+        if ($returnCase->customer) {
+            $title = "Arbitration Ruling: {$rulingText}";
+            $body = "Victorious Market arbitration panel has resolved Case #{$returnCase->case_number} as: {$rulingText}. " . ($notes ? "Notes: {$notes}" : '');
+
+            self::createInApp($returnCase->customer_id, $title, $body, $eventType, ['return_case_id' => $returnCase->id]);
+            self::dispatchPush($returnCase->customer_id, $title, $body, ['type' => 'arbitration_ruling', 'return_case_id' => $returnCase->id], $eventType);
+        }
+
+        // Alert Vendor
+        if ($returnCase->vendor && $returnCase->vendor->user) {
+            $title = "Arbitration Ruling: {$rulingText}";
+            $body = "Super Admin has ruled on Return Case #{$returnCase->case_number}: {$rulingText}. " . ($notes ? "Notes: {$notes}" : '');
+
+            self::createInApp($returnCase->vendor->user_id, $title, $body, $eventType, ['return_case_id' => $returnCase->id]);
+            self::dispatchPush($returnCase->vendor->user_id, $title, $body, ['type' => 'arbitration_ruling', 'return_case_id' => $returnCase->id], $eventType);
+        }
+
+        return $dispatches;
+    }
+
+    /**
+     * Event 12: Payout Withdrawal Requested
+     */
+    public static function dispatchPayoutRequested(LogisticsPayoutRequest|VendorPayoutRequest $payout): array
+    {
+        $dispatches = [];
+        $eventType = 'payout_requested';
+        $amountFormatted = number_format((float)$payout->amount, 2);
+
+        // Alert Requester
+        if ($payout instanceof LogisticsPayoutRequest && $payout->company && $payout->company->user) {
+            $userId = $payout->company->user_id;
+            $title = "Payout Request Submitted";
+            $body = "Your corporate payout withdrawal for ₦{$amountFormatted} has been logged and is awaiting Super Admin approval.";
+
+            self::createInApp($userId, $title, $body, $eventType, ['payout_id' => $payout->id]);
+            self::dispatchPush($userId, $title, $body, ['type' => 'payout_requested', 'payout_id' => $payout->id], $eventType);
+        } elseif ($payout instanceof VendorPayoutRequest && $payout->vendor && $payout->vendor->user) {
+            $userId = $payout->vendor->user_id;
+            $title = "Payout Request Submitted";
+            $body = "Your merchant earnings payout for ₦{$amountFormatted} has been submitted to treasury for review.";
+
+            self::createInApp($userId, $title, $body, $eventType, ['payout_id' => $payout->id]);
+            self::dispatchPush($userId, $title, $body, ['type' => 'payout_requested', 'payout_id' => $payout->id], $eventType);
+        }
+
+        // Alert Super Admin Tower
+        $adminUsers = User::where('user_type', 'super_admin')->get();
+        foreach ($adminUsers as $admin) {
+            self::createInApp($admin->id, "New Payout Request: ₦{$amountFormatted}", "A new payout withdrawal request #{$payout->id} is pending review.", $eventType, ['payout_id' => $payout->id]);
+        }
+
+        return $dispatches;
+    }
+
+    /**
+     * Event 13: Payout Request Rejected
+     */
+    public static function dispatchPayoutRejected(LogisticsPayoutRequest|VendorPayoutRequest $payout, string $reason): array
+    {
+        $dispatches = [];
+        $eventType = 'payout_rejected';
+        $amountFormatted = number_format((float)$payout->amount, 2);
+
+        if ($payout instanceof LogisticsPayoutRequest && $payout->company && $payout->company->user) {
+            $userId = $payout->company->user_id;
+            $title = "Payout Request Rejected";
+            $body = "Your payout request #{$payout->id} (₦{$amountFormatted}) was rejected. Reason: {$reason}. Funds have been restored to your wallet.";
+
+            self::createInApp($userId, $title, $body, $eventType, ['payout_id' => $payout->id]);
+            self::dispatchPush($userId, $title, $body, ['type' => 'payout_rejected', 'payout_id' => $payout->id], $eventType);
+        } elseif ($payout instanceof VendorPayoutRequest && $payout->vendor && $payout->vendor->user) {
+            $userId = $payout->vendor->user_id;
+            $title = "Payout Request Rejected";
+            $body = "Your payout request #{$payout->id} (₦{$amountFormatted}) was rejected. Reason: {$reason}. Orders restored to eligible status.";
+
+            self::createInApp($userId, $title, $body, $eventType, ['payout_id' => $payout->id]);
+            self::dispatchPush($userId, $title, $body, ['type' => 'payout_rejected', 'payout_id' => $payout->id], $eventType);
+        }
+
+        return $dispatches;
+    }
+
+    /**
+     * Event 14: Customer Wallet Credited (Instant refunds & cashback)
+     */
+    public static function dispatchCustomerWalletCredited(User $customer, string $amount, string $reason): array
+    {
+        $dispatches = [];
+        $eventType = 'wallet_credit';
+        $amountFormatted = number_format((float)$amount, 2);
+
+        $title = "Victorious Wallet Credited! +₦{$amountFormatted}";
+        $body = "₦{$amountFormatted} has been credited to your sovereign customer wallet. ({$reason})";
+
+        if (self::isChannelActive('in_app', $eventType)) {
+            self::createInApp($customer->id, $title, $body, $eventType);
+        }
+        if (self::isChannelActive('fcm', $eventType)) {
+            self::dispatchPush($customer->id, $title, $body, ['type' => 'wallet_credit', 'amount' => $amount], $eventType);
+        }
+        if (self::isChannelActive('sms', $eventType) && !empty($customer->phone)) {
+            $dispatches[] = self::record('sms', $customer->phone, 'Customer', "Victorious Market: " . $body);
         }
 
         return $dispatches;
