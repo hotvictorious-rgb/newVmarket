@@ -123,6 +123,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         ]);
         $mock->shouldReceive('initiateTransfer')->andReturn([
             'success' => true,
+            'status' => 'success',
             'transfer_code' => 'TRF_MOCK_777',
             'message' => 'Transfer queued for execution',
         ]);

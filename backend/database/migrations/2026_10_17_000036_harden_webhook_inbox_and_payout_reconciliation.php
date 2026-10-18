@@ -12,7 +12,7 @@ return new class extends Migration
         if (Schema::hasTable('processed_webhook_events')) {
             Schema::table('processed_webhook_events', function (Blueprint $table) {
                 if (!Schema::hasColumn('processed_webhook_events', 'status')) {
-                    $table->enum('status', ['processing', 'completed', 'failed'])->default('completed')->after('payload_hash');
+                    $table->string('status', 32)->default('completed')->after('payload_hash');
                 }
                 if (!Schema::hasColumn('processed_webhook_events', 'error_reason')) {
                     $table->text('error_reason')->nullable()->after('status');

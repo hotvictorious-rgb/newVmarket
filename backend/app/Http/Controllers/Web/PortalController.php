@@ -1921,26 +1921,56 @@ class PortalController extends Controller
 
         $transferCode = $transferRes['transfer_code'] ?? null;
         $proofPath = $transferCode ? ('paystack_transfer:' . $transferCode) : ('paystack_transfer_ref:' . $preValidation['disburse_ref']);
+        $transferStatus = strtolower($transferRes['status'] ?? 'pending');
 
         // Phase 3: Final Atomic Settlement & Journal Transaction via Unified Finalization Service
         $payout = LogisticsPayoutRequest::with('company')->findOrFail($payoutId);
-        app(\App\Services\PayoutFinalizationService::class)->finalizeLogisticsPayout($payout, [
-            'transfer_code' => $transferCode,
-            'reference' => $preValidation['disburse_ref'],
-        ], $admin);
 
-        \App\Models\AdminAuditLog::create([
-            'user_id' => $admin->id,
-            'action' => 'logistics_payout_disbursed',
-            'target_type' => LogisticsPayoutRequest::class,
-            'target_id' => $payout->id,
-            'old_values' => ['status' => 'pending', 'amount' => $payout->amount],
-            'new_values' => ['status' => 'approved', 'amount' => $payout->amount],
-            'ip_address' => $request->ip() ?? '127.0.0.1',
-            'user_agent' => $request->userAgent(),
-        ]);
+        // Audit Finding 1 (P0): Distinguish transfer submitted / processing vs confirmed successful
+        if ($transferStatus === 'success') {
+            app(\App\Services\PayoutFinalizationService::class)->finalizeLogisticsPayout($payout, [
+                'transfer_code' => $transferCode,
+                'reference' => $preValidation['disburse_ref'],
+                'status' => 'success',
+            ], $admin);
 
-        return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " to " . ($payout->company?->company_name ?? 'Fleet') . " via Paystack!");
+            \App\Models\AdminAuditLog::create([
+                'user_id' => $admin->id,
+                'action' => 'logistics_payout_disbursed',
+                'target_type' => LogisticsPayoutRequest::class,
+                'target_id' => $payout->id,
+                'old_values' => ['status' => 'pending', 'amount' => $payout->amount],
+                'new_values' => ['status' => 'approved', 'amount' => $payout->amount],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " to " . ($payout->company?->company_name ?? 'Fleet') . " via Paystack!");
+        } else {
+            // Transfer queued at gateway / pending bank execution (e.g. 'received', 'pending', 'processing', 'otp')
+            $payout->status = 'pending';
+            $payout->gateway_status = 'processing';
+            $payout->processing_token = null;
+            $payout->processing_started_at = null;
+            $payout->paystack_transfer_code = $transferCode;
+            $payout->transfer_reference = $preValidation['disburse_ref'];
+            $payout->settlement_proof_path = $proofPath;
+            $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . "Transfer queued at Paystack ({$transferCode}). Gateway status: {$transferStatus}. Awaiting bank delivery confirmation.";
+            $payout->save();
+
+            \App\Models\AdminAuditLog::create([
+                'user_id' => $admin->id,
+                'action' => 'logistics_payout_processing',
+                'target_type' => LogisticsPayoutRequest::class,
+                'target_id' => $payout->id,
+                'old_values' => ['status' => 'pending', 'amount' => $payout->amount],
+                'new_values' => ['status' => 'pending', 'gateway_status' => 'processing', 'amount' => $payout->amount],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return back()->with('status', "Transfer of ₦" . number_format((float)$payout->amount, 2) . " queued at Paystack. Marked as processing awaiting bank delivery confirmation.");
+        }
     }
 
     
@@ -2071,6 +2101,36 @@ class PortalController extends Controller
                 return ['valid' => false, 'message' => 'Disbursement blocked: Merchant has no verified delivered sales records.'];
             }
 
+            // Allocation Conservation Pre-check (Audit Finding P0):
+            // Ensure sum of remaining payable amounts across eligible delivered orders covers payout amount
+            $eligibleOrders = Order::where('vendor_id', $vendor->id)
+                ->where('vendor_settlement_status', 'eligible')
+                ->where('payment_status', 'paid')
+                ->where('order_status', 'delivered')
+                ->whereDoesntHave('returnCases', function ($q) {
+                    $q->whereNotIn('status', ['resolved', 'rejected']);
+                })
+                ->whereDoesntHave('dispute', function ($q) {
+                    $q->whereIn('status', ['filed', 'under_review']);
+                })
+                ->lockForUpdate()
+                ->get();
+
+            $totalEligibleToSettle = '0.00';
+            foreach ($eligibleOrders as $elOrder) {
+                $totalEligibleToSettle = bcadd($totalEligibleToSettle, (string)$elOrder->remaining_payable_to_vendor, 2);
+            }
+
+            $existingAllocSum = (string)$payout->allocations()->where('status', 'allocated')->sum('allocated_amount');
+            $remainingNeeded = bcsub((string)$payout->amount, $existingAllocSum, 2);
+
+            if (bccomp($totalEligibleToSettle, $remainingNeeded, 2) < 0) {
+                return [
+                    'valid' => false,
+                    'message' => "Disbursement blocked: Eligible unallocated orders (₦{$totalEligibleToSettle}) cannot cover requested payout amount of ₦" . number_format((float)$payout->amount, 2) . ". Active disputes or pending returns may have reduced withdrawable earnings.",
+                ];
+            }
+
             // Executive Authorization Guard: Transfers > N10,000,000 require SuperAdmin
             if (\App\Services\BcMathService::comp((string)$payout->amount, '10000000.00') > 0 && !$admin->isSuperAdmin()) {
                 return ['valid' => false, 'message' => 'Disbursement ceiling exceeded: Transfers above ₦10,000,000 require Super Admin executive authorization.'];
@@ -2170,15 +2230,34 @@ class PortalController extends Controller
 
         $transferCode = $transferRes['transfer_code'] ?? null;
         $proofPath = $transferCode ? ('paystack_transfer:' . $transferCode) : ('paystack_transfer_ref:' . $preValidation['disburse_ref']);
+        $transferStatus = strtolower($transferRes['status'] ?? 'pending');
 
         // Phase 3: Final Atomic Settlement, Immutable Allocations & Journal Transaction via Unified Finalization Service
         $payout = \App\Models\VendorPayoutRequest::findOrFail($payoutId);
-        app(\App\Services\PayoutFinalizationService::class)->finalizeVendorPayout($payout, [
-            'transfer_code' => $transferCode,
-            'reference' => $preValidation['disburse_ref'],
-        ], $admin);
 
-        return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " merchandise earnings to {$preValidation['business_name']}!");
+        // Audit Finding 1 (P0): Distinguish transfer submitted / processing vs confirmed successful
+        if ($transferStatus === 'success') {
+            app(\App\Services\PayoutFinalizationService::class)->finalizeVendorPayout($payout, [
+                'transfer_code' => $transferCode,
+                'reference' => $preValidation['disburse_ref'],
+                'status' => 'success',
+            ], $admin);
+
+            return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " merchandise earnings to {$preValidation['business_name']}!");
+        } else {
+            // Transfer queued at gateway / pending bank execution (e.g. 'received', 'pending', 'processing', 'otp')
+            $payout->status = 'pending';
+            $payout->gateway_status = 'processing';
+            $payout->processing_token = null;
+            $payout->processing_started_at = null;
+            $payout->paystack_transfer_code = $transferCode;
+            $payout->transfer_reference = $preValidation['disburse_ref'];
+            $payout->settlement_proof_path = $proofPath;
+            $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . "Transfer queued at Paystack ({$transferCode}). Gateway status: {$transferStatus}. Awaiting bank delivery confirmation.";
+            $payout->save();
+
+            return back()->with('status', "Transfer of ₦" . number_format((float)$payout->amount, 2) . " queued at Paystack. Marked as processing awaiting bank delivery confirmation.");
+        }
     }
 
     

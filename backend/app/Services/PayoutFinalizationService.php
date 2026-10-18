@@ -23,18 +23,25 @@ class PayoutFinalizationService
      */
     public function finalizeVendorPayout(VendorPayoutRequest $payout, array $gatewayData = [], ?User $admin = null): array
     {
-        return DB::transaction(function () use ($payout, $gatewayData, $admin) {
+        $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
+
+        $result = DB::transaction(function () use ($payout, $gatewayData, $admin, $formattedPayoutAmount) {
             $lockedPayout = VendorPayoutRequest::with(['vendor', 'allocations'])
                 ->where('id', $payout->id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $existingAllocationsCount = $lockedPayout->allocations()->where('status', 'allocated')->count();
+            // Terminal Gate: Require verified gateway confirmation
+            $gwStatus = strtolower($gatewayData['status'] ?? 'success');
+            if (!in_array($gwStatus, ['success', 'processed', 'completed'], true)) {
+                throw new \InvalidArgumentException("Payout finalization requires verified gateway success. Received gateway status: '{$gwStatus}'");
+            }
 
-            // 1. Idempotency Guard: If already allocated, ensure terminal state without duplicating ledger/allocations
-            if ($existingAllocationsCount > 0) {
-                $lockedPayout->status = 'approved';
-                $lockedPayout->gateway_status = 'success';
+            $existingAllocationsSum = (string)$lockedPayout->allocations()->where('status', 'allocated')->sum('allocated_amount');
+            $hasJournalEntry = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $lockedPayout->id)->exists();
+
+            // 1. Idempotency Guard: If already allocated and journaled, ensure terminal state without duplicating ledger/allocations
+            if ($lockedPayout->status === 'approved' && $lockedPayout->gateway_status === 'success' && $hasJournalEntry) {
                 $lockedPayout->processing_token = null;
                 $lockedPayout->processing_started_at = null;
                 $lockedPayout->disbursed_at = $lockedPayout->disbursed_at ?? Carbon::now();
@@ -67,7 +74,7 @@ class PayoutFinalizationService
             $lockedPayout->gateway_status = 'success';
             $lockedPayout->processing_token = null;
             $lockedPayout->processing_started_at = null;
-            $lockedPayout->disbursed_at = Carbon::now();
+            $lockedPayout->disbursed_at = $lockedPayout->disbursed_at ?? Carbon::now();
             $lockedPayout->approved_by_admin_id = $admin?->id ?? $lockedPayout->approved_by_admin_id;
             $lockedPayout->paystack_transfer_code = $transferCode;
             $lockedPayout->transfer_reference = $transferRef;
@@ -76,79 +83,142 @@ class PayoutFinalizationService
             $lockedPayout->save();
 
             // 3. Exact Order Allocations under Row Locks
-            $remainingToSettle = (string)$lockedPayout->amount;
-            $eligibleOrders = Order::where('vendor_id', $lockedPayout->vendor_id)
-                ->where('vendor_settlement_status', 'eligible')
-                ->where('payment_status', 'paid')
-                ->where('order_status', 'delivered')
-                ->whereDoesntHave('returnCases', function ($q) {
-                    $q->whereNotIn('status', ['resolved', 'rejected']);
-                })
-                ->whereDoesntHave('dispute', function ($q) {
-                    $q->whereIn('status', ['filed', 'under_review']);
-                })
-                ->with(['payoutAllocations.payoutRequest'])
-                ->orderBy('id', 'asc')
-                ->lockForUpdate()
-                ->get();
+            // If already partially allocated to this request, only settle the remaining difference
+            $remainingToSettle = bccomp($existingAllocationsSum, '0.00', 2) > 0
+                ? bcsub($formattedPayoutAmount, $existingAllocationsSum, 2)
+                : $formattedPayoutAmount;
 
-            foreach ($eligibleOrders as $order) {
-                if (bccomp($remainingToSettle, '0.00', 2) <= 0) {
-                    break;
-                }
-                $orderAvailable = $order->remaining_payable_to_vendor;
-                if (bccomp($orderAvailable, '0.00', 2) <= 0) {
-                    continue;
-                }
+            $totalNewlyAllocated = '0.00';
 
-                $allocated = (bccomp($remainingToSettle, $orderAvailable, 2) >= 0) ? $orderAvailable : $remainingToSettle;
+            if (bccomp($remainingToSettle, '0.00', 2) > 0) {
+                $eligibleOrders = Order::where('vendor_id', $lockedPayout->vendor_id)
+                    ->where('vendor_settlement_status', 'eligible')
+                    ->where('payment_status', 'paid')
+                    ->where('order_status', 'delivered')
+                    ->whereDoesntHave('returnCases', function ($q) {
+                        $q->whereNotIn('status', ['resolved', 'rejected']);
+                    })
+                    ->whereDoesntHave('dispute', function ($q) {
+                        $q->whereIn('status', ['filed', 'under_review']);
+                    })
+                    ->with(['payoutAllocations.payoutRequest'])
+                    ->orderBy('id', 'asc')
+                    ->lockForUpdate()
+                    ->get();
 
-                VendorPayoutAllocation::create([
-                    'vendor_payout_request_id' => $lockedPayout->id,
-                    'order_id' => $order->id,
-                    'allocated_amount' => $allocated,
-                    'status' => 'allocated',
-                ]);
+                foreach ($eligibleOrders as $order) {
+                    if (bccomp($remainingToSettle, '0.00', 2) <= 0) {
+                        break;
+                    }
+                    $orderAvailable = $order->remaining_payable_to_vendor;
+                    if (bccomp($orderAvailable, '0.00', 2) <= 0) {
+                        continue;
+                    }
 
-                $remainingToSettle = bcsub($remainingToSettle, $allocated, 2);
+                    $allocated = (bccomp($remainingToSettle, $orderAvailable, 2) >= 0) ? $orderAvailable : $remainingToSettle;
 
-                // Reload and check if order is fully settled
-                $order->refresh();
-                if (bccomp($order->remaining_payable_to_vendor, '0.00', 2) <= 0) {
-                    $order->update(['vendor_settlement_status' => 'settled']);
+                    VendorPayoutAllocation::create([
+                        'vendor_payout_request_id' => $lockedPayout->id,
+                        'order_id' => $order->id,
+                        'allocated_amount' => $allocated,
+                        'status' => 'allocated',
+                    ]);
+
+                    $remainingToSettle = bcsub($remainingToSettle, $allocated, 2);
+                    $totalNewlyAllocated = bcadd($totalNewlyAllocated, $allocated, 2);
+
+                    // Reload and check if order is fully settled
+                    $order->refresh();
+                    if (bccomp($order->remaining_payable_to_vendor, '0.00', 2) <= 0) {
+                        $order->update(['vendor_settlement_status' => 'settled']);
+                    }
                 }
             }
 
-            // 4. Balanced Double-Entry Financial Journal Entries
-            $formattedPayoutAmount = bcadd((string)$lockedPayout->amount, '0', 2);
-            FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $transferRef,
-                'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
-                'beneficiary_type' => VendorProfile::class,
-                'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
-                'account_name' => 'vendor_payable',
-                'entry_type' => 'debit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Merchant withdrawal liability discharged via Paystack automated transfer ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
-            ]);
+            // 4. Allocation Conservation & Balanced Double-Entry Financial Journal Entries
+            // Total allocated across existing + newly allocated
+            $grandTotalAllocated = bcadd($existingAllocationsSum, $totalNewlyAllocated, 2);
+            $unallocatedDiscrepancy = bcsub($formattedPayoutAmount, $grandTotalAllocated, 2);
 
-            FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $transferRef,
-                'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
-                'beneficiary_type' => VendorProfile::class,
-                'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
-                'account_name' => 'cash_in_escrow',
-                'entry_type' => 'credit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Escrow cash disbursed via Paystack automated transfer ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
-            ]);
+            if (bccomp($unallocatedDiscrepancy, '0.00', 2) > 0) {
+                // Audit Finding P0: Payout amount exceeded eligible allocated orders.
+                // Log critical alert and route unexplained difference to treasury suspense
+                Log::emergency("Treasury Discrepancy: Payout #{$lockedPayout->id} amount (₦{$formattedPayoutAmount}) exceeds eligible order allocations (₦{$grandTotalAllocated}) by ₦{$unallocatedDiscrepancy}. Booking difference to reconciliation suspense.");
+                $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . "ALLOCATION_DISCREPANCY: Disbursed ₦{$formattedPayoutAmount} exceeded eligible order allocations by ₦{$unallocatedDiscrepancy}. Suspense booked.";
+                $lockedPayout->save();
 
-            // 5. Notify Merchant
-            NotificationDispatchService::dispatchPayoutDisbursed($lockedPayout);
+                if (bccomp($grandTotalAllocated, '0.00', 2) > 0 && !$hasJournalEntry) {
+                    FinancialJournalEntry::create([
+                        'order_id' => null,
+                        'transaction_reference' => $transferRef,
+                        'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                        'account_name' => 'vendor_payable',
+                        'entry_type' => 'debit',
+                        'amount' => $grandTotalAllocated,
+                        'currency' => 'NGN',
+                        'description' => "Merchant withdrawal liability discharged via Paystack ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
+                    ]);
+                }
+
+                if (!$hasJournalEntry) {
+                    FinancialJournalEntry::create([
+                        'order_id' => null,
+                        'transaction_reference' => $transferRef,
+                        'event_id' => 'EVT-VND-SUSPENSE-' . $lockedPayout->id,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                        'account_name' => 'treasury_reconciliation_suspense',
+                        'entry_type' => 'debit',
+                        'amount' => $unallocatedDiscrepancy,
+                        'currency' => 'NGN',
+                        'description' => "Treasury suspense booked for unallocated payout discrepancy on Payout #{$lockedPayout->id} to " . ($vendor?->business_name ?? 'Vendor'),
+                    ]);
+
+                    FinancialJournalEntry::create([
+                        'order_id' => null,
+                        'transaction_reference' => $transferRef,
+                        'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                        'account_name' => 'cash_in_escrow',
+                        'entry_type' => 'credit',
+                        'amount' => $formattedPayoutAmount,
+                        'currency' => 'NGN',
+                        'description' => "Escrow cash disbursed via Paystack automated transfer ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
+                    ]);
+                }
+            } else {
+                // Exact balanced allocation
+                if (!$hasJournalEntry) {
+                    FinancialJournalEntry::create([
+                        'order_id' => null,
+                        'transaction_reference' => $transferRef,
+                        'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                        'account_name' => 'vendor_payable',
+                        'entry_type' => 'debit',
+                        'amount' => $formattedPayoutAmount,
+                        'currency' => 'NGN',
+                        'description' => "Merchant withdrawal liability discharged via Paystack automated transfer ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
+                    ]);
+
+                    FinancialJournalEntry::create([
+                        'order_id' => null,
+                        'transaction_reference' => $transferRef,
+                        'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                        'account_name' => 'cash_in_escrow',
+                        'entry_type' => 'credit',
+                        'amount' => $formattedPayoutAmount,
+                        'currency' => 'NGN',
+                        'description' => "Escrow cash disbursed via Paystack automated transfer ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
+                    ]);
+                }
+            }
 
             return [
                 'success' => true,
@@ -157,6 +227,17 @@ class PayoutFinalizationService
                 'message' => 'Vendor payout finalized successfully with complete allocations and journal records.',
             ];
         });
+
+        // 5. Audit Finding P1: Dispatch notification OUTSIDE database transaction
+        if (!empty($result['success']) && empty($result['idempotent'])) {
+            try {
+                NotificationDispatchService::dispatchPayoutDisbursed($result['payout']);
+            } catch (\Throwable $e) {
+                Log::warning('Payout notification dispatch error: ' . $e->getMessage());
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -164,11 +245,17 @@ class PayoutFinalizationService
      */
     public function finalizeLogisticsPayout(LogisticsPayoutRequest $payout, array $gatewayData = [], ?User $admin = null): array
     {
-        return DB::transaction(function () use ($payout, $gatewayData, $admin) {
+        $result = DB::transaction(function () use ($payout, $gatewayData, $admin) {
             $lockedPayout = LogisticsPayoutRequest::with('company')
                 ->where('id', $payout->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            // Terminal Gate: Require verified gateway confirmation
+            $gwStatus = strtolower($gatewayData['status'] ?? 'success');
+            if (!in_array($gwStatus, ['success', 'processed', 'completed'], true)) {
+                throw new \InvalidArgumentException("Logistics payout finalization requires verified gateway success. Received status: '{$gwStatus}'");
+            }
 
             // 1. Idempotency Guard
             if ($lockedPayout->status === 'approved' && $lockedPayout->gateway_status === 'success' && $lockedPayout->disbursed_at !== null) {
@@ -190,7 +277,7 @@ class PayoutFinalizationService
             $lockedPayout->gateway_status = 'success';
             $lockedPayout->processing_token = null;
             $lockedPayout->processing_started_at = null;
-            $lockedPayout->disbursed_at = Carbon::now();
+            $lockedPayout->disbursed_at = $lockedPayout->disbursed_at ?? Carbon::now();
             $lockedPayout->approved_by_admin_id = $admin?->id ?? $lockedPayout->approved_by_admin_id;
             $lockedPayout->paystack_transfer_code = $transferCode;
             $lockedPayout->transfer_reference = $transferRef;
@@ -200,34 +287,35 @@ class PayoutFinalizationService
 
             // 3. Balanced Double-Entry Financial Journal Entries
             $formattedPayoutAmount = bcadd((string)$lockedPayout->amount, '0', 2);
-            FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $transferRef,
-                'event_id' => 'EVT-FLEET-PAYOUT-' . $lockedPayout->id,
-                'beneficiary_type' => LogisticsCompanyProfile::class,
-                'beneficiary_id' => $company ? $company->id : $lockedPayout->logistics_company_id,
-                'account_name' => 'logistics_payout_payable',
-                'entry_type' => 'debit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Logistics fleet payout liability discharged via Paystack automated transfer ({$transferCode}) to " . ($company?->company_name ?? 'Fleet'),
-            ]);
+            $hasJournalEntry = FinancialJournalEntry::where('event_id', 'EVT-FLEET-PAYOUT-' . $lockedPayout->id)->exists();
 
-            FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $transferRef,
-                'event_id' => 'EVT-FLEET-PAYOUT-' . $lockedPayout->id,
-                'beneficiary_type' => LogisticsCompanyProfile::class,
-                'beneficiary_id' => $company ? $company->id : $lockedPayout->logistics_company_id,
-                'account_name' => 'cash_in_escrow',
-                'entry_type' => 'credit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Escrow cash disbursed via Paystack automated transfer ({$transferCode}) to " . ($company?->company_name ?? 'Fleet'),
-            ]);
+            if (!$hasJournalEntry) {
+                FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $transferRef,
+                    'event_id' => 'EVT-FLEET-PAYOUT-' . $lockedPayout->id,
+                    'beneficiary_type' => LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $company ? $company->id : $lockedPayout->logistics_company_id,
+                    'account_name' => 'logistics_payout_payable',
+                    'entry_type' => 'debit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Logistics fleet payout liability discharged via Paystack automated transfer ({$transferCode}) to " . ($company?->company_name ?? 'Fleet'),
+                ]);
 
-            // 4. Notify Fleet Owner
-            NotificationDispatchService::dispatchPayoutDisbursed($lockedPayout);
+                FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $transferRef,
+                    'event_id' => 'EVT-FLEET-PAYOUT-' . $lockedPayout->id,
+                    'beneficiary_type' => LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $company ? $company->id : $lockedPayout->logistics_company_id,
+                    'account_name' => 'cash_in_escrow',
+                    'entry_type' => 'credit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Escrow cash disbursed via Paystack automated transfer ({$transferCode}) to " . ($company?->company_name ?? 'Fleet'),
+                ]);
+            }
 
             return [
                 'success' => true,
@@ -236,6 +324,17 @@ class PayoutFinalizationService
                 'message' => 'Logistics payout finalized successfully.',
             ];
         });
+
+        // 4. Audit Finding P1: Dispatch notification OUTSIDE database transaction
+        if (!empty($result['success']) && empty($result['idempotent'])) {
+            try {
+                NotificationDispatchService::dispatchPayoutDisbursed($result['payout']);
+            } catch (\Throwable $e) {
+                Log::warning('Logistics payout notification dispatch error: ' . $e->getMessage());
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -243,13 +342,23 @@ class PayoutFinalizationService
      */
     public function revertVendorPayout(VendorPayoutRequest $payout, string $reason, ?User $admin = null): array
     {
-        return DB::transaction(function () use ($payout, $reason, $admin) {
+        $result = DB::transaction(function () use ($payout, $reason, $admin) {
             $lockedPayout = VendorPayoutRequest::with(['allocations.order', 'vendor'])
                 ->where('id', $payout->id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            // Restore ONLY the exact orders that were allocated to this failed payout request (Finding 1 & P1)
+            // Terminal Guard (P0): Idempotent if already rejected/failed
+            if ($lockedPayout->status === 'rejected' && $lockedPayout->gateway_status === 'failed') {
+                return [
+                    'success' => true,
+                    'idempotent' => true,
+                    'payout' => $lockedPayout,
+                    'message' => 'Vendor payout already marked failed/reverted.',
+                ];
+            }
+
+            // Restore ONLY the exact orders that were allocated to this failed payout request
             $allocatedItems = $lockedPayout->allocations()->where('status', 'allocated')->get();
             if ($allocatedItems->isNotEmpty()) {
                 foreach ($allocatedItems as $alloc) {
@@ -265,13 +374,13 @@ class PayoutFinalizationService
                     }
                 }
             } else {
-                // Audit Finding D: Halt Unsafe Guessed Reversals
                 Log::alert("Payout Reversal: Payout #{$lockedPayout->id} has no allocation records. Halting order reversal for manual treasury review.");
                 $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . 'Order allocations missing; orders not reversed to prevent ledger corruption. Requires treasury audit.';
             }
 
             $lockedPayout->status = 'rejected';
             $lockedPayout->gateway_status = 'failed';
+            $lockedPayout->rejection_reason = $reason;
             $lockedPayout->processing_token = null;
             $lockedPayout->processing_started_at = null;
             $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . 'Transfer Reversal: ' . $reason;
@@ -307,8 +416,19 @@ class PayoutFinalizationService
                 'description' => "Escrow cash restored after Paystack transfer failure: " . ($vendor?->business_name ?? 'Merchant'),
             ]);
 
-            return ['success' => true, 'payout' => $lockedPayout];
+            return ['success' => true, 'idempotent' => false, 'payout' => $lockedPayout];
         });
+
+        // Audit Finding P1: Dispatch notification OUTSIDE database transaction
+        if (!empty($result['success']) && empty($result['idempotent'])) {
+            try {
+                NotificationDispatchService::dispatchPayoutRejected($result['payout'], $reason);
+            } catch (\Throwable $e) {
+                Log::warning('Payout rejection notification dispatch error: ' . $e->getMessage());
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -316,20 +436,23 @@ class PayoutFinalizationService
      */
     public function revertLogisticsPayout(LogisticsPayoutRequest $payout, string $reason, ?User $admin = null): array
     {
-        return DB::transaction(function () use ($payout, $reason, $admin) {
+        $result = DB::transaction(function () use ($payout, $reason, $admin) {
             $lockedPayout = LogisticsPayoutRequest::with('company')
                 ->where('id', $payout->id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $company = $lockedPayout->company;
-            $wallet = $company?->wallet;
-            if ($wallet) {
-                $wallet->lockForUpdate();
-                $wallet->balance = bcadd((string)$wallet->balance, (string)$payout->amount, 2);
-                $wallet->save();
+            // Terminal Guard (P0): Idempotent if already rejected/failed (prevents duplicate wallet balance credits)
+            if ($lockedPayout->status === 'rejected' && $lockedPayout->gateway_status === 'failed') {
+                return [
+                    'success' => true,
+                    'idempotent' => true,
+                    'payout' => $lockedPayout,
+                    'message' => 'Logistics payout already marked failed/reverted.',
+                ];
             }
 
+            $company = $lockedPayout->company;
             if ($company) {
                 $company->wallet_balance = bcadd((string)$company->wallet_balance, (string)$payout->amount, 2);
                 $company->save();
@@ -337,6 +460,7 @@ class PayoutFinalizationService
 
             $lockedPayout->status = 'rejected';
             $lockedPayout->gateway_status = 'failed';
+            $lockedPayout->rejection_reason = $reason;
             $lockedPayout->processing_token = null;
             $lockedPayout->processing_started_at = null;
             $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . 'Transfer Reversal: ' . $reason;
@@ -371,7 +495,18 @@ class PayoutFinalizationService
                 'description' => "Escrow cash restored after Paystack transfer failure: " . ($company?->company_name ?? 'Logistics'),
             ]);
 
-            return ['success' => true, 'payout' => $lockedPayout];
+            return ['success' => true, 'idempotent' => false, 'payout' => $lockedPayout];
         });
+
+        // Audit Finding P1: Dispatch notification OUTSIDE database transaction
+        if (!empty($result['success']) && empty($result['idempotent'])) {
+            try {
+                NotificationDispatchService::dispatchPayoutRejected($result['payout'], $reason);
+            } catch (\Throwable $e) {
+                Log::warning('Logistics payout rejection notification dispatch error: ' . $e->getMessage());
+            }
+        }
+
+        return $result;
     }
 }

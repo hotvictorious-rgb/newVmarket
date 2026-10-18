@@ -389,8 +389,67 @@ class PaystackService
     }
 
     /**
-     * Resolve standard 3-digit or 6-digit Paystack CBN Bank Code from name or code.
+     * Authoritatively verify refund status with Paystack Gateway.
+     * https://docs-v2.paystack.com/api/refund/
      */
+    public function verifyRefund(string $referenceOrId): array
+    {
+        if (app()->environment('testing')) {
+            $status = 'processed';
+            if (str_contains($referenceOrId, 'failed')) {
+                $status = 'failed';
+            } elseif (str_contains($referenceOrId, 'pending')) {
+                $status = 'pending';
+            }
+
+            return [
+                'success' => true,
+                'is_simulated' => true,
+                'refund_reference' => $referenceOrId,
+                'status' => $status,
+                'message' => 'Simulated test refund verified successfully.',
+            ];
+        }
+
+        if (!$this->isConfigured()) {
+            return [
+                'success' => false,
+                'code' => 'CONFIG_MISSING',
+                'message' => 'Paystack secret key is not configured in server environment.',
+            ];
+        }
+
+        try {
+            $response = Http::withToken($this->getSecretKey())
+                ->timeout(12)
+                ->retry(2, 200)
+                ->get("{$this->baseUrl}/refund/" . urlencode($referenceOrId));
+
+            if ($response->successful() && $response->json('status') === true) {
+                $data = $response->json('data') ?? [];
+                return [
+                    'success' => true,
+                    'refund_reference' => (string)($data['reference'] ?? ($data['id'] ?? $referenceOrId)),
+                    'status' => strtolower((string)($data['status'] ?? 'pending')),
+                    'data' => $data,
+                    'message' => $response->json('message') ?? 'Refund retrieved successfully.',
+                ];
+            }
+
+            return [
+                'success' => false,
+                'code' => 'GATEWAY_ERROR',
+                'message' => $response->json('message') ?? 'Paystack could not verify refund status.',
+            ];
+        } catch (\Throwable $e) {
+            Log::error('Paystack verifyRefund exception: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'code' => 'EXCEPTION',
+                'message' => 'Paystack verifyRefund error: ' . $e->getMessage(),
+            ];
+        }
+    }
     public function resolveBankCode(string $bankName, ?string $providedCode = null): string
     {
         $clean = preg_replace('/[^0-9]/', '', (string)$providedCode);

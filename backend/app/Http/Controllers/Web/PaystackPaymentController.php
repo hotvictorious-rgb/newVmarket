@@ -169,7 +169,7 @@ class PaystackPaymentController extends Controller
                 return ['action' => 'process', 'event' => $newEvent];
             } catch (\Illuminate\Database\QueryException $e) {
                 $existing = \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->first();
-                if ($existing && $existing->status === 'completed') {
+                if ($existing && in_array($existing->status, ['completed', 'unmatched'], true)) {
                     return ['action' => 'completed', 'message' => 'Event already processed.'];
                 }
                 return ['action' => 'throttled', 'message' => 'Event is currently being processed.'];
@@ -237,12 +237,27 @@ class PaystackPaymentController extends Controller
             }
 
             // Delegate 100% of payout finalization to idempotent PayoutFinalizationService
+            $matched = false;
             if ($vendorPayout) {
                 $this->finalizationService->finalizeVendorPayout($vendorPayout, $tData);
+                $matched = true;
             }
 
             if ($logisticsPayout) {
                 $this->finalizationService->finalizeLogisticsPayout($logisticsPayout, $tData);
+                $matched = true;
+            }
+
+            if (!$matched) {
+                // Audit Finding 43 (P1): Webhook event marked complete without matching a payout
+                $processedEvent->update([
+                    'status' => 'unmatched',
+                    'error_reason' => "No matching vendor or logistics payout request found for reference '{$tRef}' or transfer_code '{$tCode}'",
+                    'processed_at' => Carbon::now(),
+                ]);
+                Log::warning("Paystack Webhook: Unmatched transfer.success event #{$processedEvent->id} for ref '{$tRef}', code '{$tCode}'");
+
+                return response()->json(['status' => false, 'message' => 'Unmatched transfer.success event recorded for treasury audit.'], 200);
             }
 
             $processedEvent->update([
@@ -259,6 +274,8 @@ class PaystackPaymentController extends Controller
             $tCode = (string)($tData['transfer_code'] ?? '');
             $reason = (string)($tData['reason'] ?? 'Bank reversal / recipient rejected');
             Log::warning("Paystack Webhook: Transfer {$event['event']} for ref '{$tRef}', code '{$tCode}'", $tData);
+
+            $matched = false;
 
             // A. Handle Logistics Fleet Payout Reversal via strict exact match
             $logisticsPayout = null;
@@ -282,53 +299,13 @@ class PaystackPaymentController extends Controller
                 })->first();
             }
 
-            if ($logisticsPayout && $logisticsPayout->status === 'approved') {
-                \Illuminate\Support\Facades\DB::transaction(function () use ($logisticsPayout, $tData, $event, $reason) {
-                    $lockedPayout = \App\Models\LogisticsPayoutRequest::where('id', $logisticsPayout->id)->lockForUpdate()->firstOrFail();
-                    if ($lockedPayout->status === 'rejected') {
-                        return;
-                    }
-
-                    $company = $lockedPayout->company;
-                    // Restore company corporate wallet balance
-                    $company->wallet_balance = \App\Services\BcMathService::add((string)$company->wallet_balance, (string)$lockedPayout->amount);
-                    $company->save();
-
-                    $lockedPayout->status = 'rejected';
-                    $lockedPayout->rejection_reason = "Paystack transfer {$event['event']}: {$reason}";
-                    $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . "Reversed by Paystack Webhook ({$event['event']}): {$reason}";
-                    $lockedPayout->save();
-
-                    // Reversing Journal Entries
-                    $revRef = 'REV-FLEET-' . $lockedPayout->id . '-' . date('YmdHis');
-                    \App\Models\FinancialJournalEntry::create([
-                        'order_id' => null,
-                        'transaction_reference' => $revRef,
-                        'event_id' => 'EVT-REV-FLEET-' . $lockedPayout->id,
-                        'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
-                        'beneficiary_id' => $company->id,
-                        'account_name' => 'logistics_payout_payable',
-                        'entry_type' => 'credit',
-                        'amount' => (string)$lockedPayout->amount,
-                        'currency' => 'NGN',
-                        'description' => "Corporate payout liability restored after Paystack transfer failure: {$company->company_name}",
-                    ]);
-
-                    \App\Models\FinancialJournalEntry::create([
-                        'order_id' => null,
-                        'transaction_reference' => $revRef,
-                        'event_id' => 'EVT-REV-FLEET-' . $lockedPayout->id,
-                        'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
-                        'beneficiary_id' => $company->id,
-                        'account_name' => 'cash_in_escrow',
-                        'entry_type' => 'debit',
-                        'amount' => (string)$lockedPayout->amount,
-                        'currency' => 'NGN',
-                        'description' => "Escrow cash restored after Paystack transfer failure: {$company->company_name}",
-                    ]);
-                });
+            if ($logisticsPayout) {
+                $this->finalizationService->revertLogisticsPayout(
+                    $logisticsPayout,
+                    "Paystack transfer {$event['event']}: {$reason}"
+                );
+                $matched = true;
             }
-            if ($logisticsPayout) { \App\Services\NotificationDispatchService::dispatchPayoutRejected($logisticsPayout, "Paystack transfer {$event['event']}: {$reason}"); }
 
             // B. Handle Merchant Vendor Payout Reversal via strict exact match
             $vendorPayout = null;
@@ -352,81 +329,24 @@ class PaystackPaymentController extends Controller
                 })->first();
             }
 
-            if ($vendorPayout && $vendorPayout->status === 'approved') {
-                \Illuminate\Support\Facades\DB::transaction(function () use ($vendorPayout, $tData, $event, $reason) {
-                    $lockedPayout = \App\Models\VendorPayoutRequest::where('id', $vendorPayout->id)->lockForUpdate()->firstOrFail();
-                    if ($lockedPayout->status === 'rejected') {
-                        return;
-                    }
-
-                    $vendor = $lockedPayout->vendor;
-
-                    $lockedPayout->status = 'rejected';
-                    $lockedPayout->rejection_reason = "Paystack transfer {$event['event']}: {$reason}";
-                    $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . "Reversed by Paystack Webhook ({$event['event']}): {$reason}";
-                    $lockedPayout->save();
-
-                    // Restore ONLY the exact orders that were allocated to this failed payout request (Finding 1 & P1)
-                    $allocations = \App\Models\VendorPayoutAllocation::where('vendor_payout_request_id', $lockedPayout->id)->get();
-                    if ($allocations->isNotEmpty()) {
-                        foreach ($allocations as $alloc) {
-                            $alloc->update([
-                                'status' => 'reversed',
-                                'reversed_at' => Carbon::now(),
-                            ]);
-                            $order = \App\Models\Order::where('id', $alloc->order_id)->lockForUpdate()->first();
-                            if ($order && $order->vendor_settlement_status === 'settled') {
-                                $order->vendor_settlement_status = 'eligible';
-                                $order->save();
-                            }
-                        }
-                    } else {
-                        // Audit Finding D: Halt Unsafe Guessed Reversals
-                        // If allocations are missing, never guess and un-settle arbitrary recent orders
-                        Log::alert("Paystack Webhook Reversal: Payout #{$lockedPayout->id} has no allocation records. Halting order reversal for manual treasury review.");
-                        $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . 'Order allocations missing; orders not reversed to prevent ledger corruption. Requires treasury audit.';
-                        $lockedPayout->save();
-                    }
-
-                    // Reversing Journal Entries: discharge vendor payable liability and restore escrow cash
-                    $formattedPayoutAmount = bcadd((string)$lockedPayout->amount, '0', 2);
-                    $revRef = 'REV-VND-' . $lockedPayout->id . '-' . date('YmdHis');
-
-                    \App\Models\FinancialJournalEntry::create([
-                        'order_id' => null,
-                        'transaction_reference' => $revRef,
-                        'event_id' => 'EVT-REV-VND-' . $lockedPayout->id,
-                        'beneficiary_type' => \App\Models\VendorProfile::class,
-                        'beneficiary_id' => $vendor->id,
-                        'account_name' => 'vendor_escrow_holding',
-                        'entry_type' => 'credit',
-                        'amount' => $formattedPayoutAmount,
-                        'currency' => 'NGN',
-                        'description' => "Merchant escrow holding restored after Paystack transfer failure: {$vendor->business_name}",
-                    ]);
-
-                    \App\Models\FinancialJournalEntry::create([
-                        'order_id' => null,
-                        'transaction_reference' => $revRef,
-                        'event_id' => 'EVT-REV-VND-' . $lockedPayout->id,
-                        'beneficiary_type' => \App\Models\VendorProfile::class,
-                        'beneficiary_id' => $vendor->id,
-                        'account_name' => 'cash_in_escrow',
-                        'entry_type' => 'debit',
-                        'amount' => $formattedPayoutAmount,
-                        'currency' => 'NGN',
-                        'description' => "Escrow cash restored after Paystack transfer failure: {$vendor->business_name}",
-                    ]);
-                });
-            }
             if ($vendorPayout) {
-                $vendorPayout->gateway_status = 'failed';
-                $vendorPayout->save();
-                \App\Services\NotificationDispatchService::dispatchPayoutRejected($vendorPayout, "Paystack transfer {$event['event']}: {$reason}");
+                $this->finalizationService->revertVendorPayout(
+                    $vendorPayout,
+                    "Paystack transfer {$event['event']}: {$reason}"
+                );
+                $matched = true;
             }
-            if ($logisticsPayout) {
-                $logisticsPayout->gateway_status = 'failed';
-                $logisticsPayout->save();
+
+            if (!$matched) {
+                // Audit Finding 43 (P1): Webhook event marked complete without matching a payout
+                $processedEvent->update([
+                    'status' => 'unmatched',
+                    'error_reason' => "No matching vendor or logistics payout request found for reference '{$tRef}' or transfer_code '{$tCode}'",
+                    'processed_at' => Carbon::now(),
+                ]);
+                Log::warning("Paystack Webhook: Unmatched {$event['event']} event #{$processedEvent->id} for ref '{$tRef}', code '{$tCode}'");
+
+                return response()->json(['status' => false, 'message' => "Unmatched {$event['event']} event recorded for treasury audit."], 200);
             }
 
             $processedEvent->update([
