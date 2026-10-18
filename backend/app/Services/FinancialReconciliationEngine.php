@@ -182,29 +182,50 @@ class FinancialReconciliationEngine
     public function reconcileRefunds(): int
     {
         $reconciled = 0;
+        // Require explicit authorization: pending refund status or authorized return case instruction (Audit Findings P0 & P1)
         $pendingRefundOrders = Order::where(function ($q) {
-            $q->where('paystack_refund_status', 'pending')
-              ->orWhere(function ($sub) {
-                  $sub->where('order_status', 'cancelled')
-                      ->where('payment_status', 'paid')
-                      ->whereNull('paystack_refund_status');
+            $q->whereIn('paystack_refund_status', ['pending', 'authorized'])
+              ->orWhereHas('returnCases', function ($sub) {
+                  $sub->whereIn('status', ['refund_pending', 'refund_approved']);
               });
         })->whereNotNull('payment_reference')->get();
 
-        foreach ($pendingRefundOrders as $order) {
-            if (empty($order->paystack_refund_reference)) {
-                // 1. Attempt to initiate refund via Paystack Refund API
+        foreach ($pendingRefundOrders as $candidateOrder) {
+            // Durable Claim: Atomically acquire processing lock under transaction to prevent double worker execution
+            $claimedOrder = \Illuminate\Support\Facades\DB::transaction(function () use ($candidateOrder) {
+                $ord = Order::where('id', $candidateOrder->id)->lockForUpdate()->first();
+                if (!$ord) return null;
+
+                if (in_array($ord->paystack_refund_status, ['completed', 'failed'], true)) {
+                    return null;
+                }
+
+                if ($ord->paystack_refund_status === 'processing' && $ord->updated_at && $ord->updated_at->gt(Carbon::now()->subMinutes(5))) {
+                    return null; // actively claimed by another worker
+                }
+
+                $ord->paystack_refund_status = 'processing';
+                $ord->save();
+                return $ord;
+            });
+
+            if (!$claimedOrder) {
+                continue;
+            }
+
+            if (empty($claimedOrder->paystack_refund_reference)) {
+                // 1. Authoritative refund initiation with durable state recording
                 $refundRes = $this->paystackService->initiateRefund(
-                    $order->payment_reference,
-                    (string)$order->grand_total,
-                    "Automated reconciliation refund for cancelled Order #{$order->order_number}"
+                    $claimedOrder->payment_reference,
+                    (string)$claimedOrder->grand_total,
+                    "Automated reconciliation refund for authorized Order #{$claimedOrder->order_number}"
                 );
 
                 if (!empty($refundRes['success']) && !empty($refundRes['refund_reference'])) {
                     $gwStatus = strtolower($refundRes['status'] ?? 'pending');
                     $isCompleted = in_array($gwStatus, ['processed', 'success', 'completed'], true);
 
-                    $order->update([
+                    $claimedOrder->update([
                         'paystack_refund_reference' => $refundRes['refund_reference'],
                         'paystack_refund_status' => $isCompleted ? 'completed' : 'pending',
                     ]);
@@ -213,25 +234,36 @@ class FinancialReconciliationEngine
                         $reconciled++;
                     }
                 } else {
-                    Log::error("Paystack refund initiation failed for order #{$order->id}: " . ($refundRes['message'] ?? 'Gateway rejected refund.'));
+                    $claimedOrder->update([
+                        'paystack_refund_status' => 'pending',
+                    ]);
+                    Log::error("Paystack refund initiation failed for order #{$claimedOrder->id}: " . ($refundRes['message'] ?? 'Gateway rejected refund.'));
                 }
             } else {
-                // 2. Authoritatively verify refund status with Paystack Gateway (Never assume completed!)
-                $verifyRes = $this->paystackService->verifyRefund($order->paystack_refund_reference);
+                // 2. Authoritatively verify existing refund status with Paystack Gateway
+                $verifyRes = $this->paystackService->verifyRefund($claimedOrder->paystack_refund_reference);
 
                 if (!empty($verifyRes['success'])) {
                     $gwStatus = strtolower($verifyRes['status'] ?? 'pending');
                     if (in_array($gwStatus, ['processed', 'success', 'completed'], true)) {
-                        $order->update([
+                        $claimedOrder->update([
                             'paystack_refund_status' => 'completed',
                         ]);
                         $reconciled++;
                     } elseif (in_array($gwStatus, ['failed', 'reversed'], true)) {
-                        $order->update([
+                        $claimedOrder->update([
                             'paystack_refund_status' => 'failed',
                         ]);
-                        Log::error("Paystack refund #{$order->paystack_refund_reference} for order #{$order->id} was marked failed by gateway.");
+                        Log::error("Paystack refund #{$claimedOrder->paystack_refund_reference} for order #{$claimedOrder->id} was marked failed by gateway.");
+                    } else {
+                        $claimedOrder->update([
+                            'paystack_refund_status' => 'pending',
+                        ]);
                     }
+                } else {
+                    $claimedOrder->update([
+                        'paystack_refund_status' => 'pending',
+                    ]);
                 }
             }
         }

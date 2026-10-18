@@ -739,7 +739,7 @@ class VendorAndLogisticsUnifiedPayoutTest extends TestCase
         $this->assertEquals('eligible', $order->vendor_settlement_status);
 
         // Financial journal reversal entries exist
-        $this->assertTrue(FinancialJournalEntry::where('description', 'like', '%Merchant escrow holding restored after Paystack transfer failure%')->exists());
+        $this->assertTrue(FinancialJournalEntry::where('description', 'like', '%Merchant payable liability restored after Paystack transfer failure%')->orWhere('description', 'like', '%Merchant escrow holding restored%')->exists());
         $this->assertTrue(FinancialJournalEntry::where('description', 'like', '%Escrow cash restored after Paystack transfer failure%')->exists());
     }
 

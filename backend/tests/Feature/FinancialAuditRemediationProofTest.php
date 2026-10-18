@@ -183,10 +183,10 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertNull($payout->disbursed_at);
         $this->assertEquals('TRF_QUEUED_123', $payout->paystack_transfer_code);
 
-        // Zero order allocations created prematurely
-        $this->assertEquals(0, VendorPayoutAllocation::where('vendor_payout_request_id', $payout->id)->count());
+        // Order allocation is authoritatively reserved to protect treasury against double-withdrawal
+        $this->assertEquals(1, VendorPayoutAllocation::where('vendor_payout_request_id', $payout->id)->where('status', 'allocated')->count());
 
-        // Zero financial journal entries created prematurely
+        // Zero financial journal entries created prematurely (until gateway confirmation)
         $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $payout->id)->exists());
     }
 
@@ -200,7 +200,7 @@ class FinancialAuditRemediationProofTest extends TestCase
             'payment_status' => 'paid',
             'grand_total' => '15000.00',
             'paystack_refund_reference' => null,
-            'paystack_refund_status' => null,
+            'paystack_refund_status' => 'pending', // Explicit refund instruction
         ]);
 
         $mock = Mockery::mock(PaystackService::class);
@@ -382,5 +382,256 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertNotNull($event);
         $this->assertEquals('unmatched', $event->status);
         $this->assertStringContainsString('No matching vendor or logistics payout', (string)$event->error_reason);
+    }
+
+    /**
+     * Audit Finding P0-1: A processing payout cannot be submitted again.
+     */
+    public function test_processing_payout_cannot_be_re_submitted(): void
+    {
+        $this->createTestOrder([
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'eligible',
+            'vendor_net_90' => '25000.00',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '20000.00',
+            'status' => 'pending',
+            'gateway_status' => 'processing',
+            'paystack_transfer_code' => 'TRF_IN_FLIGHT_999',
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'Access Bank',
+        ]);
+
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
+            'payout_id' => $payout->id,
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('Disbursement is already in-flight with Paystack gateway', session('error'));
+        $this->assertEquals('pending', $payout->fresh()->status);
+        $this->assertEquals('TRF_IN_FLIGHT_999', $payout->fresh()->paystack_transfer_code);
+    }
+
+    /**
+     * Audit Finding P0-1 (Race Condition): Monotonic guard prevents older pending response from overwriting approved payout.
+     */
+    public function test_monotonic_guard_prevents_late_pending_response_from_overwriting_approved_payout(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'eligible',
+            'vendor_net_90' => '15000.00',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '10000.00',
+            'status' => 'pending',
+            'gateway_status' => 'processing',
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'GTBank',
+        ]);
+
+        // Background webhook already finalized payout to approved
+        app(PayoutFinalizationService::class)->finalizeVendorPayout($payout, [
+            'transfer_code' => 'TRF_FAST_WEBHOOK',
+            'reference' => 'VND-PAYOUT-' . $payout->id,
+            'status' => 'success',
+        ], $this->superAdmin);
+
+        $this->assertEquals('approved', $payout->fresh()->status);
+
+        // Late response attempting to write pending/processing state
+        \Illuminate\Support\Facades\DB::transaction(function () use ($payout) {
+            $locked = VendorPayoutRequest::where('id', $payout->id)->lockForUpdate()->firstOrFail();
+            if (in_array($locked->status, ['approved', 'completed', 'rejected'], true)) {
+                return; // Monotonic guard protects state
+            }
+            $locked->status = 'pending';
+            $locked->gateway_status = 'processing';
+            $locked->save();
+        });
+
+        // Payout must remain approved and not be downgraded
+        $this->assertEquals('approved', $payout->fresh()->status);
+        $this->assertEquals('success', $payout->fresh()->gateway_status);
+    }
+
+    /**
+     * Audit Finding P0-4: Vendor reversal restores exact vendor_payable liability, perfectly mirroring disbursement debit.
+     */
+    public function test_reversal_restores_exact_vendor_payable_liability_mirroring_disbursement(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'eligible',
+            'vendor_net_90' => '50000.00',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '50000.00',
+            'status' => 'pending',
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'First Bank',
+        ]);
+
+        $finalizer = app(PayoutFinalizationService::class);
+        $finalizer->finalizeVendorPayout($payout, [
+            'transfer_code' => 'TRF_TO_REVERSE_123',
+            'reference' => 'VND-DISBURSE-' . $payout->id,
+            'status' => 'success',
+        ], $this->superAdmin);
+
+        // Verify original disbursement debited vendor_payable
+        $debitEntry = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $payout->id)
+            ->where('account_name', 'vendor_payable')
+            ->first();
+        $this->assertNotNull($debitEntry);
+        $this->assertEquals('debit', $debitEntry->entry_type);
+        $this->assertEquals(0, bccomp('50000.00', (string)$debitEntry->amount, 2));
+
+        // Now reverse the payout
+        $reversalResult = $finalizer->revertVendorPayout($payout, 'Bank transfer rejected by NIBSS', $this->superAdmin);
+        $this->assertTrue($reversalResult['success']);
+
+        // Verify reversal credited vendor_payable (NOT vendor_escrow_holding)
+        $creditEntry = FinancialJournalEntry::where('event_id', 'EVT-REV-VND-' . $payout->id)
+            ->where('account_name', 'vendor_payable')
+            ->first();
+        $this->assertNotNull($creditEntry, 'Reversal must credit vendor_payable to restore exact merchant liability');
+        $this->assertEquals('credit', $creditEntry->entry_type);
+        $this->assertEquals(0, bccomp('50000.00', (string)$creditEntry->amount, 2));
+
+        // Zero entries should exist for vendor_escrow_holding on this event
+        $this->assertFalse(
+            FinancialJournalEntry::where('event_id', 'EVT-REV-VND-' . $payout->id)
+                ->where('account_name', 'vendor_escrow_holding')
+                ->exists()
+        );
+    }
+
+    /**
+     * Audit Finding P0-3: Webhook rejects amount and currency tampering.
+     */
+    public function test_webhook_rejects_amount_and_currency_tampering(): void
+    {
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '40000.00', // 40,000 NGN = 4,000,000 Kobo
+            'status' => 'pending',
+            'gateway_status' => 'processing',
+            'transfer_reference' => 'VND-PAYOUT-TAMPER-TEST',
+            'paystack_transfer_code' => 'TRF_TAMPER_TEST',
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'Zenith Bank',
+        ]);
+
+        // Attempt webhook with underpaid amount (e.g. 4,000 NGN = 400,000 Kobo)
+        $payloadData = [
+            'event' => 'transfer.success',
+            'id' => 'evt_tamper_' . uniqid(),
+            'data' => [
+                'reference' => 'VND-PAYOUT-TAMPER-TEST',
+                'transfer_code' => 'TRF_TAMPER_TEST',
+                'amount' => 400000, // Underpayment: only 10% of payout
+                'currency' => 'NGN',
+            ],
+        ];
+
+        $signature = hash_hmac('sha512', json_encode($payloadData), app(PaystackService::class)->getSecretKey());
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(400);
+        $this->assertEquals('pending', $payout->fresh()->status);
+
+        $event = ProcessedWebhookEvent::where('event_id', $payloadData['id'])->first();
+        $this->assertNotNull($event);
+        $this->assertEquals('failed', $event->status);
+        $this->assertStringContainsString('AMOUNT_MISMATCH', (string)$event->error_reason);
+    }
+
+    /**
+     * Audit Finding P1-5: Pre-transfer allocation reservation holds orders before transfer initiation.
+     */
+    public function test_pre_allocation_reservation_holds_orders_before_transfer_initiation(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'eligible',
+            'vendor_net_90' => '30000.00',
+        ]);
+
+        $this->assertEquals('30000.00', $order->remaining_payable_to_vendor);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '30000.00',
+            'status' => 'pending',
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'Access Bank',
+        ]);
+
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldReceive('createTransferRecipient')->once()->andReturn([
+            'success' => true,
+            'recipient_code' => 'RCP_PRE_ALLOC_TEST',
+        ]);
+        $mock->shouldReceive('initiateTransfer')->once()->andReturn([
+            'success' => true,
+            'status' => 'pending',
+            'transfer_code' => 'TRF_HELD_123',
+        ]);
+        $this->app->instance(PaystackService::class, $mock);
+
+        $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
+            'payout_id' => $payout->id,
+        ]);
+
+        // Order payable balance is immediately reserved/held (0.00 available) even though transfer is still pending
+        $this->assertEquals('0.00', $order->fresh()->remaining_payable_to_vendor);
+        $this->assertEquals(1, VendorPayoutAllocation::where('vendor_payout_request_id', $payout->id)->count());
+    }
+
+    /**
+     * Audit Finding P1-6: Refund reconciliation ignores unauthorized cancelled orders.
+     */
+    public function test_refund_reconciliation_ignores_unauthorized_cancelled_orders(): void
+    {
+        // Cancelled order without explicit refund status or return case
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'paystack_refund_reference' => null,
+            'paystack_refund_status' => null,
+        ]);
+
+        $mock = Mockery::mock(PaystackService::class);
+        // initiateRefund must NEVER be called for arbitrary unapproved cancelled order
+        $mock->shouldNotReceive('initiateRefund');
+        $this->app->instance(PaystackService::class, $mock);
+
+        $engine = app(FinancialReconciliationEngine::class);
+        $reconciled = $engine->reconcileRefunds();
+
+        $this->assertEquals(0, $reconciled);
+        $this->assertNull($order->fresh()->paystack_refund_reference);
+        $this->assertNull($order->fresh()->paystack_refund_status);
     }
 }

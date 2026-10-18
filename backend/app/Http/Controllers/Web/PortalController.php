@@ -1806,7 +1806,12 @@ class PortalController extends Controller
             }
 
             if ($payout->processing_token === 'HOLD_TIMEOUT_RECONCILIATION' || str_contains((string)$payout->admin_notes, 'GATEWAY_TIMEOUT')) {
-                return ['valid' => false, 'message' => "Payout request #{$payout->id} is locked in GATEWAY_TIMEOUT hold state. An automated transfer was already dispatched to Paystack and may have completed. You must perform Gateway Reconciliation before any retry."];
+                return ['valid' => false, 'message' => "Payout request #{$payout->id} is locked in GATEWAY TIMEOUT hold state. An automated transfer was already dispatched to Paystack and may have completed. You must perform Gateway Reconciliation before any retry."];
+            }
+
+            if ($payout->gateway_status === 'processing' || !empty($payout->paystack_transfer_code)) {
+                $codeMsg = !empty($payout->paystack_transfer_code) ? " (Transfer code: {$payout->paystack_transfer_code})" : "";
+                return ['valid' => false, 'message' => "Disbursement is already in-flight with Paystack gateway{$codeMsg}. Re-submission is prohibited."];
             }
 
             $company = $payout->company;
@@ -1948,26 +1953,33 @@ class PortalController extends Controller
             return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " to " . ($payout->company?->company_name ?? 'Fleet') . " via Paystack!");
         } else {
             // Transfer queued at gateway / pending bank execution (e.g. 'received', 'pending', 'processing', 'otp')
-            $payout->status = 'pending';
-            $payout->gateway_status = 'processing';
-            $payout->processing_token = null;
-            $payout->processing_started_at = null;
-            $payout->paystack_transfer_code = $transferCode;
-            $payout->transfer_reference = $preValidation['disburse_ref'];
-            $payout->settlement_proof_path = $proofPath;
-            $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . "Transfer queued at Paystack ({$transferCode}). Gateway status: {$transferStatus}. Awaiting bank delivery confirmation.";
-            $payout->save();
+            // Monotonic transactional state guard: Never overwrite payout if already approved/completed/rejected
+            DB::transaction(function () use ($payoutId, $transferCode, $preValidation, $transferStatus, $proofPath, $admin, $request) {
+                $payout = LogisticsPayoutRequest::where('id', $payoutId)->lockForUpdate()->firstOrFail();
+                if (in_array($payout->status, ['approved', 'completed', 'rejected'], true)) {
+                    return;
+                }
+                $payout->status = 'pending';
+                $payout->gateway_status = 'processing';
+                $payout->processing_token = null;
+                $payout->processing_started_at = null;
+                $payout->paystack_transfer_code = $transferCode;
+                $payout->transfer_reference = $preValidation['disburse_ref'];
+                $payout->settlement_proof_path = $proofPath;
+                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . "Transfer queued at Paystack ({$transferCode}). Gateway status: {$transferStatus}. Awaiting bank delivery confirmation.";
+                $payout->save();
 
-            \App\Models\AdminAuditLog::create([
-                'user_id' => $admin->id,
-                'action' => 'logistics_payout_processing',
-                'target_type' => LogisticsPayoutRequest::class,
-                'target_id' => $payout->id,
-                'old_values' => ['status' => 'pending', 'amount' => $payout->amount],
-                'new_values' => ['status' => 'pending', 'gateway_status' => 'processing', 'amount' => $payout->amount],
-                'ip_address' => $request->ip() ?? '127.0.0.1',
-                'user_agent' => $request->userAgent(),
-            ]);
+                \App\Models\AdminAuditLog::create([
+                    'user_id' => $admin->id,
+                    'action' => 'logistics_payout_processing',
+                    'target_type' => LogisticsPayoutRequest::class,
+                    'target_id' => $payout->id,
+                    'old_values' => ['status' => 'pending', 'amount' => $payout->amount],
+                    'new_values' => ['status' => 'pending', 'gateway_status' => 'processing', 'amount' => $payout->amount],
+                    'ip_address' => $request->ip() ?? '127.0.0.1',
+                    'user_agent' => $request->userAgent(),
+                ]);
+            });
 
             return back()->with('status', "Transfer of ₦" . number_format((float)$payout->amount, 2) . " queued at Paystack. Marked as processing awaiting bank delivery confirmation.");
         }
@@ -2079,6 +2091,11 @@ class PortalController extends Controller
                 return ['valid' => false, 'message' => "Payout request #{$payout->id} is locked in GATEWAY TIMEOUT state. An automated transfer was already dispatched to Paystack and may have completed. You must perform Gateway Reconciliation before any retry."];
             }
 
+            if ($payout->gateway_status === 'processing' || !empty($payout->paystack_transfer_code)) {
+                $codeMsg = !empty($payout->paystack_transfer_code) ? " (Transfer code: {$payout->paystack_transfer_code})" : "";
+                return ['valid' => false, 'message' => "Disbursement is already in-flight with Paystack gateway{$codeMsg}. Re-submission is prohibited."];
+            }
+
             $vendor = $payout->vendor;
             if (!$vendor || $vendor->trashed() || $vendor->marketplace_status !== 'active') {
                 return ['valid' => false, 'message' => 'Disbursement blocked: Merchant store is inactive, suspended, or archived.'];
@@ -2101,34 +2118,51 @@ class PortalController extends Controller
                 return ['valid' => false, 'message' => 'Disbursement blocked: Merchant has no verified delivered sales records.'];
             }
 
-            // Allocation Conservation Pre-check (Audit Finding P0):
-            // Ensure sum of remaining payable amounts across eligible delivered orders covers payout amount
-            $eligibleOrders = Order::where('vendor_id', $vendor->id)
-                ->where('vendor_settlement_status', 'eligible')
-                ->where('payment_status', 'paid')
-                ->where('order_status', 'delivered')
-                ->whereDoesntHave('returnCases', function ($q) {
-                    $q->whereNotIn('status', ['resolved', 'rejected']);
-                })
-                ->whereDoesntHave('dispute', function ($q) {
-                    $q->whereIn('status', ['filed', 'under_review']);
-                })
-                ->lockForUpdate()
-                ->get();
-
-            $totalEligibleToSettle = '0.00';
-            foreach ($eligibleOrders as $elOrder) {
-                $totalEligibleToSettle = bcadd($totalEligibleToSettle, (string)$elOrder->remaining_payable_to_vendor, 2);
-            }
-
+            // Allocation Conservation Pre-check & Pre-Allocation Hold (Audit Findings P0 & P1):
             $existingAllocSum = (string)$payout->allocations()->where('status', 'allocated')->sum('allocated_amount');
             $remainingNeeded = bcsub((string)$payout->amount, $existingAllocSum, 2);
 
-            if (bccomp($totalEligibleToSettle, $remainingNeeded, 2) < 0) {
-                return [
-                    'valid' => false,
-                    'message' => "Disbursement blocked: Eligible unallocated orders (₦{$totalEligibleToSettle}) cannot cover requested payout amount of ₦" . number_format((float)$payout->amount, 2) . ". Active disputes or pending returns may have reduced withdrawable earnings.",
-                ];
+            if (bccomp($remainingNeeded, '0.00', 2) > 0) {
+                $eligibleOrders = Order::where('vendor_id', $vendor->id)
+                    ->where('vendor_settlement_status', 'eligible')
+                    ->where('payment_status', 'paid')
+                    ->where('order_status', 'delivered')
+                    ->whereDoesntHave('returnCases', function ($q) {
+                        $q->whereNotIn('status', ['resolved', 'rejected']);
+                    })
+                    ->whereDoesntHave('dispute', function ($q) {
+                        $q->whereIn('status', ['filed', 'under_review']);
+                    })
+                    ->lockForUpdate()
+                    ->get();
+
+                $totalEligibleToSettle = '0.00';
+                foreach ($eligibleOrders as $elOrder) {
+                    $totalEligibleToSettle = bcadd($totalEligibleToSettle, (string)$elOrder->remaining_payable_to_vendor, 2);
+                }
+
+                if (bccomp($totalEligibleToSettle, $remainingNeeded, 2) < 0) {
+                    return [
+                        'valid' => false,
+                        'message' => "Disbursement blocked: Eligible unallocated orders (₦{$totalEligibleToSettle}) cannot cover requested payout amount of ₦" . number_format((float)$payout->amount, 2) . ". Active disputes or pending returns may have reduced withdrawable earnings.",
+                    ];
+                }
+
+                // Authoritatively reserve allocations against exact orders before transfer initiation
+                $rem = $remainingNeeded;
+                foreach ($eligibleOrders as $elOrder) {
+                    if (bccomp($rem, '0.00', 2) <= 0) break;
+                    $avail = $elOrder->remaining_payable_to_vendor;
+                    if (bccomp($avail, '0.00', 2) <= 0) continue;
+                    $allocAmount = (bccomp($rem, $avail, 2) >= 0) ? $avail : $rem;
+                    \App\Models\VendorPayoutAllocation::create([
+                        'vendor_payout_request_id' => $payout->id,
+                        'order_id' => $elOrder->id,
+                        'allocated_amount' => $allocAmount,
+                        'status' => 'allocated',
+                    ]);
+                    $rem = bcsub($rem, $allocAmount, 2);
+                }
             }
 
             // Executive Authorization Guard: Transfers > N10,000,000 require SuperAdmin
@@ -2196,6 +2230,10 @@ class PortalController extends Controller
                     'processing_started_at' => null,
                     'admin_notes' => 'Recipient resolution failed: ' . ($recipientRes['message'] ?? 'NIBSS resolution failed'),
                 ]);
+                \App\Models\VendorPayoutAllocation::where('vendor_payout_request_id', $payoutId)->where('status', 'allocated')->update([
+                    'status' => 'reversed',
+                    'reversed_at' => Carbon::now(),
+                ]);
             });
             return back()->with('error', 'Paystack Transfer Recipient Error: ' . ($recipientRes['message'] ?? 'Unable to resolve merchant bank account on NIBSS.'));
         }
@@ -2221,6 +2259,12 @@ class PortalController extends Controller
                         ? 'GATEWAY_TIMEOUT: Transfer outcome uncertain. Locked in HOLD_TIMEOUT_RECONCILIATION awaiting gateway verification: ' . ($transferRes['message'] ?? '')
                         : 'Transfer initiation failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request'),
                 ]);
+                if (!$isNetworkError) {
+                    \App\Models\VendorPayoutAllocation::where('vendor_payout_request_id', $payoutId)->where('status', 'allocated')->update([
+                        'status' => 'reversed',
+                        'reversed_at' => Carbon::now(),
+                    ]);
+                }
             });
             $msg = $isNetworkError
                 ? 'Gateway connection timeout. Payout locked in HOLD_TIMEOUT_RECONCILIATION state. Use Reconcile with Paystack before retry.'
@@ -2246,15 +2290,22 @@ class PortalController extends Controller
             return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " merchandise earnings to {$preValidation['business_name']}!");
         } else {
             // Transfer queued at gateway / pending bank execution (e.g. 'received', 'pending', 'processing', 'otp')
-            $payout->status = 'pending';
-            $payout->gateway_status = 'processing';
-            $payout->processing_token = null;
-            $payout->processing_started_at = null;
-            $payout->paystack_transfer_code = $transferCode;
-            $payout->transfer_reference = $preValidation['disburse_ref'];
-            $payout->settlement_proof_path = $proofPath;
-            $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . "Transfer queued at Paystack ({$transferCode}). Gateway status: {$transferStatus}. Awaiting bank delivery confirmation.";
-            $payout->save();
+            // Monotonic transactional state guard: Never overwrite payout if already approved/completed/rejected
+            DB::transaction(function () use ($payoutId, $transferCode, $preValidation, $transferStatus, $proofPath) {
+                $payout = \App\Models\VendorPayoutRequest::where('id', $payoutId)->lockForUpdate()->firstOrFail();
+                if (in_array($payout->status, ['approved', 'completed', 'rejected'], true)) {
+                    return;
+                }
+                $payout->status = 'pending';
+                $payout->gateway_status = 'processing';
+                $payout->processing_token = null;
+                $payout->processing_started_at = null;
+                $payout->paystack_transfer_code = $transferCode;
+                $payout->transfer_reference = $preValidation['disburse_ref'];
+                $payout->settlement_proof_path = $proofPath;
+                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . "Transfer queued at Paystack ({$transferCode}). Gateway status: {$transferStatus}. Awaiting bank delivery confirmation.";
+                $payout->save();
+            });
 
             return back()->with('status', "Transfer of ₦" . number_format((float)$payout->amount, 2) . " queued at Paystack. Marked as processing awaiting bank delivery confirmation.");
         }

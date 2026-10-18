@@ -89,6 +89,127 @@ class PaystackPaymentController extends Controller
     }
 
     /**
+     * Authoritatively resolve and validate payout identity, amounts, and currency for webhook reconciliation.
+     * Prevents dual matches, cross-matched references, and under/over-disbursement attacks (Audit Finding P0).
+     */
+    private function resolveAndValidatePayout(array $tData, \App\Models\ProcessedWebhookEvent $processedEvent): ?array
+    {
+        $tRef = trim((string)($tData['reference'] ?? ''));
+        $tCode = trim((string)($tData['transfer_code'] ?? ''));
+
+        if (empty($tRef) && empty($tCode)) {
+            return null;
+        }
+
+        $isVendorPrefix = str_starts_with($tRef, 'VND-') || str_contains($tRef, 'VND-PAYOUT');
+        $isLogisticsPrefix = str_starts_with($tRef, 'FLEET-') || str_contains($tRef, 'FLEET-PAYOUT');
+
+        $vendorPayout = null;
+        $logisticsPayout = null;
+
+        if ($isVendorPrefix) {
+            $vendorPayout = \App\Models\VendorPayoutRequest::where(function ($q) use ($tRef, $tCode) {
+                if (!empty($tRef)) {
+                    $q->where('transfer_reference', $tRef)->orWhere('settlement_proof_path', 'paystack_transfer_ref:' . $tRef);
+                }
+                if (!empty($tCode)) {
+                    $q->orWhere('paystack_transfer_code', $tCode)->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
+                }
+            })->first();
+        } elseif ($isLogisticsPrefix) {
+            $logisticsPayout = \App\Models\LogisticsPayoutRequest::where(function ($q) use ($tRef, $tCode) {
+                if (!empty($tRef)) {
+                    $q->where('transfer_reference', $tRef)->orWhere('settlement_proof_path', 'paystack_transfer_ref:' . $tRef);
+                }
+                if (!empty($tCode)) {
+                    $q->orWhere('paystack_transfer_code', $tCode)->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
+                }
+            })->first();
+        } else {
+            // Search both, but strictly forbid ambiguous dual matches
+            $vendorPayout = \App\Models\VendorPayoutRequest::where(function ($q) use ($tRef, $tCode) {
+                if (!empty($tRef)) {
+                    $q->where('transfer_reference', $tRef)->orWhere('settlement_proof_path', 'paystack_transfer_ref:' . $tRef);
+                }
+                if (!empty($tCode)) {
+                    $q->orWhere('paystack_transfer_code', $tCode)->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
+                }
+            })->first();
+
+            $logisticsPayout = \App\Models\LogisticsPayoutRequest::where(function ($q) use ($tRef, $tCode) {
+                if (!empty($tRef)) {
+                    $q->where('transfer_reference', $tRef)->orWhere('settlement_proof_path', 'paystack_transfer_ref:' . $tRef);
+                }
+                if (!empty($tCode)) {
+                    $q->orWhere('paystack_transfer_code', $tCode)->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
+                }
+            })->first();
+
+            if ($vendorPayout && $logisticsPayout) {
+                Log::critical("Ambiguous transfer webhook rejected: reference '{$tRef}' or code '{$tCode}' matches both VendorPayoutRequest #{$vendorPayout->id} and LogisticsPayoutRequest #{$logisticsPayout->id}.");
+                $processedEvent->update([
+                    'status' => 'failed',
+                    'error_reason' => "AMBIGUOUS_DUAL_MATCH: Matched both vendor #{$vendorPayout->id} and logistics #{$logisticsPayout->id}.",
+                    'processed_at' => Carbon::now(),
+                ]);
+                return ['error' => 'Ambiguous webhook identity matching both vendor and logistics payouts'];
+            }
+        }
+
+        $targetType = $vendorPayout ? 'vendor' : ($logisticsPayout ? 'logistics' : null);
+        $payout = $vendorPayout ?? $logisticsPayout;
+
+        if (!$payout) {
+            return null;
+        }
+
+        // Identifier Cross-Validation Guard: If payout already has both reference and code, ensure webhook does not conflict
+        if (!empty($payout->transfer_reference) && !empty($tRef) && $payout->transfer_reference !== $tRef && $payout->settlement_proof_path !== 'paystack_transfer_ref:' . $tRef) {
+            Log::critical("Paystack Webhook Reference Conflict! Payout #{$payout->id} ref '{$payout->transfer_reference}' conflicts with webhook ref '{$tRef}'.");
+            $processedEvent->update([
+                'status' => 'failed',
+                'error_reason' => "REFERENCE_CONFLICT: Payout #{$payout->id} expected ref '{$payout->transfer_reference}', got '{$tRef}'.",
+                'processed_at' => Carbon::now(),
+            ]);
+            return ['error' => 'Conflicting transfer reference'];
+        }
+
+        // Amount Invariant Check (Audit Finding P0): Match integer kobo
+        if (isset($tData['amount'])) {
+            $webhookKobo = (int)$tData['amount'];
+            $expectedKobo = (int)bcmul((string)$payout->amount, '100', 0);
+            if ($webhookKobo !== $expectedKobo) {
+                Log::critical("Paystack Webhook Amount Mismatch! Payout #{$payout->id} expected {$expectedKobo} kobo, received {$webhookKobo} kobo.");
+                $processedEvent->update([
+                    'status' => 'failed',
+                    'error_reason' => "AMOUNT_MISMATCH: Payout #{$payout->id} expected {$expectedKobo} kobo, received {$webhookKobo} kobo.",
+                    'processed_at' => Carbon::now(),
+                ]);
+                return ['error' => 'Payout amount mismatch'];
+            }
+        }
+
+        // Currency Invariant Check
+        if (isset($tData['currency'])) {
+            $currency = strtoupper(trim((string)$tData['currency']));
+            if ($currency !== 'NGN') {
+                Log::critical("Paystack Webhook Currency Mismatch! Expected NGN, received {$currency}.", [$currency]);
+                $processedEvent->update([
+                    'status' => 'failed',
+                    'error_reason' => "CURRENCY_MISMATCH: Expected NGN, received {$currency}.",
+                    'processed_at' => Carbon::now(),
+                ]);
+                return ['error' => 'Payout currency mismatch'];
+            }
+        }
+
+        return [
+            'type' => $targetType,
+            'payout' => $payout,
+        ];
+    }
+
+    /**
      * Paystack Asynchronous Webhook with Strict HMAC-SHA512 Cryptographic Signature Verification.
      */
     public function handleWebhook(Request $request): JsonResponse
@@ -192,64 +313,13 @@ class PaystackPaymentController extends Controller
             $tCode = (string)($tData['transfer_code'] ?? '');
             Log::info("Paystack Webhook: Automated transfer success for reference: {$tRef}, code: {$tCode}");
 
-            // 1. Reconcile Logistics Payout via strict exact match (Audit Finding E)
-            $logisticsPayout = null;
-            if (!empty($tRef) || !empty($tCode)) {
-                $logisticsPayout = \App\Models\LogisticsPayoutRequest::where(function ($q) use ($tRef, $tCode) {
-                    $hasCondition = false;
-                    if (!empty($tRef)) {
-                        $q->where('transfer_reference', $tRef)
-                          ->orWhere('settlement_proof_path', 'paystack_transfer_ref:' . $tRef);
-                        $hasCondition = true;
-                    }
-                    if (!empty($tCode)) {
-                        if ($hasCondition) {
-                            $q->orWhere('paystack_transfer_code', $tCode)
-                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
-                        } else {
-                            $q->where('paystack_transfer_code', $tCode)
-                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
-                        }
-                    }
-                })->first();
+            $resolved = $this->resolveAndValidatePayout($tData, $processedEvent);
+
+            if (isset($resolved['error'])) {
+                return response()->json(['status' => false, 'message' => $resolved['error']], 400);
             }
 
-            // 2. Reconcile Vendor Payout via strict exact match (Audit Finding E & G)
-            $vendorPayout = null;
-            if (!empty($tRef) || !empty($tCode)) {
-                $vendorPayout = \App\Models\VendorPayoutRequest::where(function ($q) use ($tRef, $tCode) {
-                    $hasCondition = false;
-                    if (!empty($tRef)) {
-                        $q->where('transfer_reference', $tRef)
-                          ->orWhere('settlement_proof_path', 'paystack_transfer_ref:' . $tRef);
-                        $hasCondition = true;
-                    }
-                    if (!empty($tCode)) {
-                        if ($hasCondition) {
-                            $q->orWhere('paystack_transfer_code', $tCode)
-                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
-                        } else {
-                            $q->where('paystack_transfer_code', $tCode)
-                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
-                        }
-                    }
-                })->first();
-            }
-
-            // Delegate 100% of payout finalization to idempotent PayoutFinalizationService
-            $matched = false;
-            if ($vendorPayout) {
-                $this->finalizationService->finalizeVendorPayout($vendorPayout, $tData);
-                $matched = true;
-            }
-
-            if ($logisticsPayout) {
-                $this->finalizationService->finalizeLogisticsPayout($logisticsPayout, $tData);
-                $matched = true;
-            }
-
-            if (!$matched) {
-                // Audit Finding 43 (P1): Webhook event marked complete without matching a payout
+            if (!$resolved) {
                 $processedEvent->update([
                     'status' => 'unmatched',
                     'error_reason' => "No matching vendor or logistics payout request found for reference '{$tRef}' or transfer_code '{$tCode}'",
@@ -258,6 +328,13 @@ class PaystackPaymentController extends Controller
                 Log::warning("Paystack Webhook: Unmatched transfer.success event #{$processedEvent->id} for ref '{$tRef}', code '{$tCode}'");
 
                 return response()->json(['status' => false, 'message' => 'Unmatched transfer.success event recorded for treasury audit.'], 200);
+            }
+
+            // Strictly finalize exactly ONE unambiguous payout entity
+            if ($resolved['type'] === 'vendor') {
+                $this->finalizationService->finalizeVendorPayout($resolved['payout'], $tData);
+            } elseif ($resolved['type'] === 'logistics') {
+                $this->finalizationService->finalizeLogisticsPayout($resolved['payout'], $tData);
             }
 
             $processedEvent->update([
@@ -275,70 +352,13 @@ class PaystackPaymentController extends Controller
             $reason = (string)($tData['reason'] ?? 'Bank reversal / recipient rejected');
             Log::warning("Paystack Webhook: Transfer {$event['event']} for ref '{$tRef}', code '{$tCode}'", $tData);
 
-            $matched = false;
+            $resolved = $this->resolveAndValidatePayout($tData, $processedEvent);
 
-            // A. Handle Logistics Fleet Payout Reversal via strict exact match
-            $logisticsPayout = null;
-            if (!empty($tRef) || !empty($tCode)) {
-                $logisticsPayout = \App\Models\LogisticsPayoutRequest::where(function ($q) use ($tRef, $tCode) {
-                    $hasCondition = false;
-                    if (!empty($tRef)) {
-                        $q->where('transfer_reference', $tRef)
-                          ->orWhere('settlement_proof_path', 'paystack_transfer_ref:' . $tRef);
-                        $hasCondition = true;
-                    }
-                    if (!empty($tCode)) {
-                        if ($hasCondition) {
-                            $q->orWhere('paystack_transfer_code', $tCode)
-                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
-                        } else {
-                            $q->where('paystack_transfer_code', $tCode)
-                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
-                        }
-                    }
-                })->first();
+            if (isset($resolved['error'])) {
+                return response()->json(['status' => false, 'message' => $resolved['error']], 400);
             }
 
-            if ($logisticsPayout) {
-                $this->finalizationService->revertLogisticsPayout(
-                    $logisticsPayout,
-                    "Paystack transfer {$event['event']}: {$reason}"
-                );
-                $matched = true;
-            }
-
-            // B. Handle Merchant Vendor Payout Reversal via strict exact match
-            $vendorPayout = null;
-            if (!empty($tRef) || !empty($tCode)) {
-                $vendorPayout = \App\Models\VendorPayoutRequest::where(function ($q) use ($tRef, $tCode) {
-                    $hasCondition = false;
-                    if (!empty($tRef)) {
-                        $q->where('transfer_reference', $tRef)
-                          ->orWhere('settlement_proof_path', 'paystack_transfer_ref:' . $tRef);
-                        $hasCondition = true;
-                    }
-                    if (!empty($tCode)) {
-                        if ($hasCondition) {
-                            $q->orWhere('paystack_transfer_code', $tCode)
-                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
-                        } else {
-                            $q->where('paystack_transfer_code', $tCode)
-                              ->orWhere('settlement_proof_path', 'paystack_transfer:' . $tCode);
-                        }
-                    }
-                })->first();
-            }
-
-            if ($vendorPayout) {
-                $this->finalizationService->revertVendorPayout(
-                    $vendorPayout,
-                    "Paystack transfer {$event['event']}: {$reason}"
-                );
-                $matched = true;
-            }
-
-            if (!$matched) {
-                // Audit Finding 43 (P1): Webhook event marked complete without matching a payout
+            if (!$resolved) {
                 $processedEvent->update([
                     'status' => 'unmatched',
                     'error_reason' => "No matching vendor or logistics payout request found for reference '{$tRef}' or transfer_code '{$tCode}'",
@@ -349,12 +369,25 @@ class PaystackPaymentController extends Controller
                 return response()->json(['status' => false, 'message' => "Unmatched {$event['event']} event recorded for treasury audit."], 200);
             }
 
+            // Strictly revert exactly ONE unambiguous payout entity
+            if ($resolved['type'] === 'logistics') {
+                $this->finalizationService->revertLogisticsPayout(
+                    $resolved['payout'],
+                    "Paystack transfer {$event['event']}: {$reason}"
+                );
+            } elseif ($resolved['type'] === 'vendor') {
+                $this->finalizationService->revertVendorPayout(
+                    $resolved['payout'],
+                    "Paystack transfer {$event['event']}: {$reason}"
+                );
+            }
+
             $processedEvent->update([
                 'status' => 'completed',
                 'processed_at' => Carbon::now(),
             ]);
 
-            return response()->json(['status' => true, 'message' => "Transfer {$event['event']} processed and refunded."], 200);
+            return response()->json(['status' => true, 'message' => "Transfer {$event['event']} processed and reversed successfully."], 200);
         }
 
         // Only process charge.success events
