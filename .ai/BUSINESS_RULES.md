@@ -67,7 +67,7 @@
 - The vendor prepares the goods and assigns its rider.
 - Delivery progression records vendor readiness, rider assignment, pickup/custody, delivery attempt(s), and final handover as separate states.
 - Delivery confirmation is protected by the approved customer verification mechanism (OTP/pass as configured) and required proof evidence.
-- A rider's delivery confirmation records operational completion only. It does not itself approve a refund, alter the price, settle a vendor, release money, or create a rider payable.
+- A rider's delivery confirmation is an operational event. It does not grant the rider financial permissions or let the rider directly edit a ledger, approve a refund, alter prices, or request payouts. An independent, authorized financial service may consume a verified delivery event as an input to the published vendor-settlement policy; that financial action must be separately validated, idempotent, and auditable.
 
 ### In-shop pickup
 - In-shop pickup remains fully supported as a first-class fulfilment type.
@@ -86,7 +86,7 @@
 4. The chosen fulfilment type, destination, quoted fee, and relevant fee-rule version are snapshotted to the vendor child order at checkout. Later vendor settings changes do not rewrite existing orders.
 5. Each child vendor order calculates its own products, discounts, delivery fee, commission, cashback eligibility, and vendor allocation. The parent checkout must not collapse multiple vendors' delivery fees into an untraceable shared amount.
 6. The delivery fee is a vendor-order charge, not a logistics-company fare. No rider share/payable is created by the platform. The vendor is responsible for rider compensation outside the platform.
-7. The existing documented marketplace commission policy remains separate from rider compensation: 10% commission on the eligible vendor-order payment, including delivery, and 5% cashback on eligible product value only (excluding delivery), subject to published refund/allocation rules. Any future change to this commercial policy must be an explicit business decision and updated consistently across all documents and code.
+7. The existing merchandise allocation is 90% vendor, 5% customer cashback, and 5% platform share on eligible merchandise value. The delivery-fee allocation is 90% vendor and 10% platform share. Cashback applies to eligible product value only and never to delivery fees. For example, with ₦90,000 eligible products and ₦10,000 delivery, the merchandise allocation is ₦81,000 vendor / ₦4,500 cashback / ₦4,500 platform, and the delivery allocation is ₦9,000 vendor / ₦1,000 platform. The owning vendor separately pays its rider outside the platform. Refunds must reverse the correct merchandise split and/or delivery-fee split according to the actual approved refundable components. Any future change must be an explicit business decision updated consistently across documents and code.
 
 ## 7. Customer privacy and rider data minimisation
 
@@ -137,7 +137,7 @@ If COD is enabled by the business, the workflow must define a vendor-owned colle
 - Rider assignment, availability, location, pickup, delivery, failed attempts, and proof are operational records.
 - Riders are not financial beneficiaries in the marketplace ledger.
 - Do not create rider payout requests, rider wallets, rider earnings, logistics-company payable entries, or delivery-fee split journals for new vendor-managed deliveries.
-- Do not change vendor settlement or refund status solely because a rider changed an operational status.
+- Rider endpoints must not directly mutate financial ledgers, approve refunds, or issue credits. The authorized financial engine may use a verified operational event as an input only where the published settlement/refund policy explicitly requires it.
 - Existing vendor settlement, platform commission, cashback, payment verification, refund, and payout controls remain in their established financial services.
 - If historical orders contain logistics-company financial entries, preserve and reconcile them under legacy rules. Do not reclassify historical amounts as vendor income or delete journal entries.
 - All new financial movements must remain idempotent, balanced, authorized, and reconcilable.
