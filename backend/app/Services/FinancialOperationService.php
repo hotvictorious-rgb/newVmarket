@@ -217,7 +217,7 @@ class FinancialOperationService
         );
 
         // 3. Record outcome in separate quick transaction
-        return DB::transaction(function () use ($operation, $attempt, $gatewayResult) {
+        $dispatchResult = DB::transaction(function () use ($operation, $attempt, $gatewayResult) {
             $lockedOp = FinancialOperation::where('id', $operation->id)->lockForUpdate()->firstOrFail();
             $lockedAttempt = GatewayAttempt::where('id', $attempt->id)->lockForUpdate()->firstOrFail();
             // Re-read the status independently after the gateway call. This is an
@@ -256,10 +256,12 @@ class FinancialOperationService
                 // Update Order refund reference for trace
                 $orderId = $lockedOp->metadata['order_id'] ?? null;
                 if ($orderId) {
-                    Order::where('id', $orderId)->update([
-                        'paystack_refund_reference' => $gwRef,
-                        'paystack_refund_status' => 'pending', // Remains pending until confirmed!
-                    ]);
+                    Order::where('id', $orderId)
+                        ->where('paystack_refund_status', '!=', 'completed')
+                        ->update([
+                            'paystack_refund_reference' => $gwRef,
+                            'paystack_refund_status' => 'pending', // Remains pending until confirmed!
+                        ]);
                 }
 
                 // If gateway already confirmed it synchronously in test mode or instant settlement:
@@ -328,6 +330,20 @@ class FinancialOperationService
                 'message' => 'Gateway request timed out or experienced connection dip. Kept in initiated state awaiting verification.',
             ];
         });
+
+        // Final fence outside the response-write transaction: if a webhook confirmed
+        // the operation while the HTTP response was in flight, report that durable
+        // state rather than the stale response handler's provisional result.
+        $latestStatus = FinancialOperation::whereKey($operation->id)->value('status');
+        if (in_array($latestStatus, ['confirmed', 'failed', 'reversed'], true)) {
+            return [
+                'success' => $latestStatus === 'confirmed',
+                'status' => $latestStatus,
+                'message' => "Refund operation is already terminal ({$latestStatus}); preserving the recorded result.",
+            ];
+        }
+
+        return $dispatchResult;
     }
 
     /**
