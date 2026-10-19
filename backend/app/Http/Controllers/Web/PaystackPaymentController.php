@@ -697,6 +697,34 @@ class PaystackPaymentController extends Controller
             }
 
             $finOp = $matches->first();
+            $expectedPaymentReference = (string) (($finOp->metadata ?? [])['payment_reference'] ?? '');
+            $reportedPaymentReference = (string) (
+                $rData['transaction_reference']
+                ?? (is_array($rData['transaction'] ?? null)
+                    ? ($rData['transaction']['reference'] ?? '')
+                    : (is_string($rData['transaction'] ?? null) ? $rData['transaction'] : ''))
+            );
+            if (
+                $expectedPaymentReference !== ''
+                && $reportedPaymentReference !== ''
+                && !hash_equals($expectedPaymentReference, $reportedPaymentReference)
+            ) {
+                $this->updateProcessedEvent($processedEvent, [
+                    'status' => 'unmatched',
+                    'error_reason' => 'REFUND_TRANSACTION_REFERENCE_MISMATCH: Failed refund event references a different original payment.',
+                    'processed_at' => Carbon::now(),
+                ]);
+                Log::critical('Paystack refund.failed transaction reference mismatch; financial operation was not changed.', [
+                    'event_id' => $processedEvent->event_id,
+                    'operation_id' => $finOp->id,
+                    'expected_payment_reference' => $expectedPaymentReference,
+                    'received_transaction_reference' => $reportedPaymentReference,
+                ]);
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Refund failure received but original payment reference conflicts; flagged for review.',
+                ], 200);
+            }
             \Illuminate\Support\Facades\DB::transaction(function () use ($finOp, $rData) {
                 $lockedOp = \App\Models\FinancialOperation::where('id', $finOp->id)->lockForUpdate()->firstOrFail();
                 if ($lockedOp->status === 'confirmed') {
