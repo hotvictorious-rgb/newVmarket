@@ -245,7 +245,6 @@ class FinancialReconciliationEngine
     public function reconcileRefunds(): int
     {
         $reconciled = 0;
-        // Require explicit authorization: pending refund status or authorized return case instruction (Audit Findings P0 & P1)
         $pendingRefundOrders = Order::where(function ($q) {
             $q->whereIn('paystack_refund_status', ['pending', 'authorized'])
               ->orWhereHas('returnCases', function ($sub) {
@@ -254,21 +253,29 @@ class FinancialReconciliationEngine
         })->whereNotNull('payment_reference')->get();
 
         foreach ($pendingRefundOrders as $candidateOrder) {
-            // Durable Claim: Atomically acquire processing lock under transaction to prevent double worker execution
-            $claimedOrder = \Illuminate\Support\Facades\DB::transaction(function () use ($candidateOrder) {
+            $claimToken = Str::random(48);
+            $claimedOrder = \\Illuminate\\Support\\Facades\\DB::transaction(function () use ($candidateOrder, $claimToken) {
                 $ord = Order::where('id', $candidateOrder->id)->lockForUpdate()->first();
-                if (!$ord) return null;
-
-                if (in_array($ord->paystack_refund_status, ['completed', 'failed'], true)) {
+                if (!$ord || in_array($ord->paystack_refund_status, ['completed', 'failed'], true)) {
                     return null;
                 }
 
-                if ($ord->paystack_refund_status === 'processing' && $ord->updated_at && $ord->updated_at->gt(Carbon::now()->subMinutes(5))) {
-                    return null; // actively claimed by another worker
+                $cutoff = Carbon::now()->subMinutes(5);
+                if ($ord->refund_reconciliation_token && $ord->refund_reconciliation_claimed_at
+                    && $ord->refund_reconciliation_claimed_at->gt($cutoff)) {
+                    return null;
+                }
+                // Compatibility guard for rows left in processing by the older timestamp-only worker.
+                if (!$ord->refund_reconciliation_token && $ord->paystack_refund_status === 'processing'
+                    && $ord->updated_at && $ord->updated_at->gt($cutoff)) {
+                    return null;
                 }
 
                 $ord->paystack_refund_status = 'processing';
+                $ord->refund_reconciliation_token = $claimToken;
+                $ord->refund_reconciliation_claimed_at = Carbon::now();
                 $ord->save();
+
                 return $ord;
             });
 
@@ -276,14 +283,26 @@ class FinancialReconciliationEngine
                 continue;
             }
 
-            $finOpService = app(\App\Services\FinancialOperationService::class);
+            // Only the current lease owner may release/reset the reconciliation state.
+            $releaseClaim = function (?string $status = null) use ($claimedOrder, $claimToken): bool {
+                $updates = [
+                    'refund_reconciliation_token' => null,
+                    'refund_reconciliation_claimed_at' => null,
+                ];
+                if ($status !== null) {
+                    $updates['paystack_refund_status'] = $status;
+                }
+                return Order::where('id', $claimedOrder->id)
+                    ->where('refund_reconciliation_token', $claimToken)
+                    ->update($updates) > 0;
+            };
+
+            $finOpService = app(\\App\\Services\\FinancialOperationService::class);
 
             if (empty($claimedOrder->paystack_refund_reference)) {
-                // 1. Authoritative partial vs full refund amount determination (Audit Finding P0 resolution)
                 $returnCase = $claimedOrder->returnCases()
                     ->whereIn('status', ['refund_pending', 'refund_approved'])
                     ->first();
-
                 $refundAmount = $returnCase ? $returnCase->total_refundable_amount : (string)$claimedOrder->grand_total;
 
                 try {
@@ -293,63 +312,52 @@ class FinancialReconciliationEngine
                         "Automated reconciliation refund for authorized Order #{$claimedOrder->order_number}",
                         $returnCase
                     );
-
                     $dispatchRes = $finOpService->dispatchRefund($op);
 
-                    if (!empty($dispatchRes['success'])) {
-                        if (($dispatchRes['status'] ?? '') === 'confirmed') {
-                            $reconciled++;
-                        }
-                    } else {
-                        $claimedOrder->update(['paystack_refund_status' => 'pending']);
+                    if (!empty($dispatchRes['success']) && ($dispatchRes['status'] ?? '') === 'confirmed') {
+                        $reconciled++;
                     }
-                } catch (\Throwable $e) {
+                    $releaseClaim();
+                } catch (\\Throwable $e) {
                     Log::error("Reconciler refund initiation failed for order #{$claimedOrder->id}: " . $e->getMessage());
-                    $claimedOrder->update(['paystack_refund_status' => 'pending']);
+                    $releaseClaim('pending');
                 }
             } else {
-                // 2. Authoritatively verify existing refund status with Paystack Gateway
                 $verifyRes = $this->paystackService->verifyRefund($claimedOrder->paystack_refund_reference);
 
                 if (!empty($verifyRes['success'])) {
                     $gwStatus = strtolower($verifyRes['status'] ?? 'pending');
                     if (in_array($gwStatus, ['processed', 'success', 'completed'], true)) {
-                        // Check if a FinancialOperation exists for trace and double-entry ledger finalization
-                        $existingOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+                        $existingOp = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
                             ->whereJsonContains('metadata->order_id', $claimedOrder->id)
                             ->where('status', '!=', 'confirmed')
                             ->first();
 
                         if ($existingOp) {
-                            $finOpService->finalizeRefundConfirmation($existingOp, $verifyRes);
+                            $finalized = $finOpService->finalizeRefundConfirmation($existingOp, $verifyRes, $claimToken);
+                            if (!empty($finalized['protected'])) {
+                                Log::warning('Refund reconciliation lease lost before finalization; stale worker left refund unchanged.', [
+                                    'order_id' => $claimedOrder->id,
+                                ]);
+                                continue;
+                            }
                             $reconciled++;
                         } else {
-                            // Gateway confirmation alone is not enough to finalize the
-                            // marketplace's books: without the operation we cannot safely
-                            // commit reservations or write balanced journal entries.
-                            // Leave the refund unresolved for manual reconciliation.
-                            $claimedOrder->update([
-                                'paystack_refund_status' => 'pending',
-                            ]);
+                            $releaseClaim('pending');
                             Log::warning('Verified Paystack refund has no matching FinancialOperation; left pending for manual reconciliation.', [
                                 'order_id' => $claimedOrder->id,
                                 'refund_reference' => $claimedOrder->paystack_refund_reference,
                             ]);
                         }
                     } elseif (in_array($gwStatus, ['failed', 'reversed'], true)) {
-                        $claimedOrder->update([
-                            'paystack_refund_status' => 'failed',
-                        ]);
-                        Log::error("Paystack refund #{$claimedOrder->paystack_refund_reference} for order #{$claimedOrder->id} was marked failed by gateway.");
+                        if ($releaseClaim('failed')) {
+                            Log::error("Paystack refund #{$claimedOrder->paystack_refund_reference} for order #{$claimedOrder->id} was marked failed by gateway.");
+                        }
                     } else {
-                        $claimedOrder->update([
-                            'paystack_refund_status' => 'pending',
-                        ]);
+                        $releaseClaim('pending');
                     }
                 } else {
-                    $claimedOrder->update([
-                        'paystack_refund_status' => 'pending',
-                    ]);
+                    $releaseClaim('pending');
                 }
             }
         }
