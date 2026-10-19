@@ -64,6 +64,7 @@ class FinancialOperationService
                     && (int) $existingOp->owner_id === $expectedOwnerId
                     && (int) ($existingMetadata['order_id'] ?? 0) === (int) $lockedOrder->id
                     && (int) ($existingMetadata['return_case_id'] ?? 0) === (int) ($returnCase?->id ?? 0);
+                    && (string) ($existingMetadata['reason'] ?? '') === $reason;
 
                 if (!$sameInstruction) {
                     throw new \DomainException(
