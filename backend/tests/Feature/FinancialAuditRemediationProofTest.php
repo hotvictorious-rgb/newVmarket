@@ -1968,4 +1968,77 @@ class FinancialAuditRemediationProofTest extends TestCase
             ->where('status', 'committed')->count());
     }
 
+
+
+    public function test_refund_finalizer_rejects_conflicting_financial_evidence_before_reservation_or_journal_mutation(): void
+    {
+        $cases = [
+            ['suffix' => 'amount', 'evidence' => ['status' => 'processed', 'amount' => 49999, 'currency' => 'NGN'], 'code' => 'REFUND_AMOUNT_MISMATCH'],
+            ['suffix' => 'currency', 'evidence' => ['status' => 'processed', 'amount' => 50000, 'currency' => 'USD'], 'code' => 'REFUND_CURRENCY_MISMATCH'],
+        ];
+
+        foreach ($cases as $case) {
+            $order = $this->createTestOrder([
+                'order_status' => 'cancelled',
+                'payment_status' => 'paid',
+                'grand_total' => '22000.00',
+                'payment_reference' => 'REF-CENTRAL-FINALIZER-' . strtoupper($case['suffix']) . '-' . uniqid(),
+                'paystack_refund_status' => 'pending',
+            ]);
+            $operation = app(FinancialOperationService::class)->createRefundOperation(
+                $order,
+                '500.00',
+                'central finalizer financial evidence mismatch',
+                null,
+                'IDEMPOTENCY-CENTRAL-FINALIZER-' . uniqid()
+            );
+            $operation->update(['status' => 'initiated']);
+
+            $result = app(FinancialOperationService::class)->finalizeRefundConfirmation($operation, $case['evidence']);
+
+            $this->assertFalse($result['success'], $case['suffix']);
+            $this->assertSame($case['code'], $result['code'], $case['suffix']);
+            $this->assertSame('initiated', $operation->fresh()->status, $case['suffix']);
+            $this->assertSame('pending', $order->fresh()->paystack_refund_status, $case['suffix']);
+            $this->assertSame(1, FinancialReservation::where('financial_operation_id', $operation->id)
+                ->where('status', 'active')->count(), $case['suffix']);
+            $this->assertSame(0, FinancialReservation::where('financial_operation_id', $operation->id)
+                ->where('status', 'committed')->count(), $case['suffix']);
+            $this->assertSame(0, FinancialJournalEntry::where('financial_operation_id', $operation->id)->count(), $case['suffix']);
+        }
+    }
+
+    public function test_repeated_refund_finalization_does_not_duplicate_journal_entries_or_reservation_commits(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-DUPLICATE-FINALIZATION-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+        ]);
+        $operation = app(FinancialOperationService::class)->createRefundOperation(
+            $order,
+            '500.00',
+            'duplicate finalization idempotency proof',
+            null,
+            'IDEMPOTENCY-DUPLICATE-FINALIZATION-' . uniqid()
+        );
+        $operation->update(['status' => 'initiated']);
+        $evidence = ['status' => 'processed', 'refund_reference' => 'rf-duplicate-finalization'];
+
+        $first = app(FinancialOperationService::class)->finalizeRefundConfirmation($operation, $evidence);
+        $this->assertTrue($first['success']);
+        $journalCountAfterFirst = FinancialJournalEntry::where('financial_operation_id', $operation->id)->count();
+        $this->assertGreaterThan(0, $journalCountAfterFirst);
+
+        $second = app(FinancialOperationService::class)->finalizeRefundConfirmation($operation->fresh(), $evidence);
+        $this->assertTrue($second['success']);
+        $this->assertSame($journalCountAfterFirst, FinancialJournalEntry::where('financial_operation_id', $operation->id)->count());
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $operation->id)
+            ->where('status', 'committed')->count());
+        $this->assertSame(0, FinancialReservation::where('financial_operation_id', $operation->id)
+            ->where('status', 'active')->count());
+    }
+
 }
