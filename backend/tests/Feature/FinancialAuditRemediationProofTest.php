@@ -1542,7 +1542,7 @@ class FinancialAuditRemediationProofTest extends TestCase
             'attempts' => 3,
         ]);
 
-        \\Illuminate\\Support\\Facades\\DB::table('processed_webhook_events')
+        \Illuminate\Support\Facades\DB::table('processed_webhook_events')
             ->whereIn('id', [$retryable->id, $exhausted->id])
             ->update(['updated_at' => $oldTime]);
 
