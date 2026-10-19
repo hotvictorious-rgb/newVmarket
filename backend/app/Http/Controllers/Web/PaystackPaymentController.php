@@ -391,12 +391,27 @@ class PaystackPaymentController extends Controller
                 return response()->json(['status' => false, 'message' => 'Unmatched transfer.success event recorded for treasury audit.'], 200);
             }
 
-            // Strictly finalize exactly ONE unambiguous payout entity with explicit verified event status
+            // Strictly finalize exactly ONE unambiguous payout entity with explicit verified event status.
+            // Finalization rechecks the terminal state under a row lock to prevent delayed success
+            // events from reopening payouts that were already reversed.
             $tDataVerified = array_merge(['status' => 'success'], $tData);
             if ($resolved['type'] === 'vendor') {
-                $this->finalizationService->finalizeVendorPayout($resolved['payout'], $tDataVerified);
+                $finalizationResult = $this->finalizationService->finalizeVendorPayout($resolved['payout'], $tDataVerified);
             } elseif ($resolved['type'] === 'logistics') {
-                $this->finalizationService->finalizeLogisticsPayout($resolved['payout'], $tDataVerified);
+                $finalizationResult = $this->finalizationService->finalizeLogisticsPayout($resolved['payout'], $tDataVerified);
+            }
+
+            if (!empty($finalizationResult['protected'])) {
+                $this->updateProcessedEvent($processedEvent, [
+                    'status' => 'unmatched',
+                    'error_reason' => 'TERMINAL_PAYOUT_PROTECTED: Delayed success event cannot reopen a payout already marked failed/reversed.',
+                    'processed_at' => Carbon::now(),
+                ]);
+
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Delayed success event recorded for audit; terminal failed payout was not reopened.',
+                ], 200);
             }
 
             $this->updateProcessedEvent($processedEvent, [
