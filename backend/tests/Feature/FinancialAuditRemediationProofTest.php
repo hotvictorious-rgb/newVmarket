@@ -1635,4 +1635,74 @@ class FinancialAuditRemediationProofTest extends TestCase
     }
 
 
+
+    public function test_reconciliation_matches_each_partial_refund_to_its_own_operation_and_reservation(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-MULTI-PARTIAL-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+            'paystack_refund_reference' => 'rf-partial-second',
+        ]);
+
+        $service = app(FinancialOperationService::class);
+        $first = $service->createRefundOperation(
+            $order, '500.00', 'first partial refund', null, 'IDEMPOTENCY-PARTIAL-FIRST-' . uniqid()
+        );
+        $second = $service->createRefundOperation(
+            $order, '700.00', 'second partial refund', null, 'IDEMPOTENCY-PARTIAL-SECOND-' . uniqid()
+        );
+        $first->update(['status' => 'initiated']);
+        $second->update(['status' => 'initiated']);
+
+        foreach ([
+            [$first, 'rf-partial-first', 'ATT-PARTIAL-FIRST'],
+            [$second, 'rf-partial-second', 'ATT-PARTIAL-SECOND'],
+        ] as [$operation, $gatewayReference, $attemptReference]) {
+            GatewayAttempt::create([
+                'financial_operation_id' => $operation->id,
+                'gateway_provider' => 'paystack',
+                'endpoint' => '/refund',
+                'attempt_reference' => $attemptReference,
+                'gateway_reference' => $gatewayReference,
+                'request_payload' => [
+                    'transaction' => $order->payment_reference,
+                    'amount_kobo' => $operation->amount_kobo,
+                    'amount_naira' => $operation->amount_naira,
+                ],
+                'outcome' => 'success',
+                'attempted_at' => Carbon::now(),
+            ]);
+        }
+
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldReceive('verifyRefund')->once()->with('rf-partial-second')->andReturn([
+            'success' => true,
+            'refund_reference' => 'rf-partial-second',
+            'status' => 'processed',
+        ]);
+        $mock->shouldReceive('verifyRefund')->once()->with('rf-partial-first')->andReturn([
+            'success' => true,
+            'refund_reference' => 'rf-partial-first',
+            'status' => 'processed',
+        ]);
+        $this->app->instance(PaystackService::class, $mock);
+
+        $engine = app(FinancialReconciliationEngine::class);
+        $this->assertSame(1, $engine->reconcileRefunds());
+        $this->assertSame('initiated', $first->fresh()->status, 'The first refund must not be finalized with the second refund reference.');
+        $this->assertSame('confirmed', $second->fresh()->status);
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $first->id)->where('status', 'active')->count());
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $second->id)->where('status', 'committed')->count());
+
+        // The order-level summary is completed after one refund, but the remaining
+        // operation must still be discoverable and reconciled by its own reference.
+        $this->assertSame('completed', $order->fresh()->paystack_refund_status);
+        $this->assertSame(1, $engine->reconcileRefunds());
+        $this->assertSame('confirmed', $first->fresh()->status);
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $first->id)->where('status', 'committed')->count());
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $second->id)->where('status', 'committed')->count());
+    }
 }
