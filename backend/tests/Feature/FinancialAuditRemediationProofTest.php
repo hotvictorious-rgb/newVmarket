@@ -1422,4 +1422,49 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertNull($order->fresh()->paystack_refund_reference);
         $this->assertNull($order->fresh()->paystack_refund_status);
     }
+
+    /**
+     * Terminal rejected payouts must not be selected again just because a stale
+     * reconciliation hold token remains on the row.
+     */
+    public function test_payout_reconciliation_skips_terminal_rejected_payouts_with_stale_hold_tokens(): void
+    {
+        VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '40000.00',
+            'status' => 'rejected',
+            'gateway_status' => 'failed',
+            'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
+            'processing_started_at' => Carbon::now()->subMinutes(20),
+            'transfer_reference' => 'VND-TERMINAL-STALE-HOLD',
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'Zenith Bank',
+        ]);
+
+        LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '12000.00',
+            'status' => 'rejected',
+            'gateway_status' => 'failed',
+            'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
+            'processing_started_at' => Carbon::now()->subMinutes(20),
+            'transfer_reference' => 'FLEET-TERMINAL-STALE-HOLD',
+            'account_number' => '0123456789',
+            'account_name' => 'Swift Courier Ltd',
+            'bank_name' => 'GTBank',
+        ]);
+
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldNotReceive('verifyTransfer');
+        $this->app->instance(PaystackService::class, $mock);
+
+        $result = app(FinancialReconciliationEngine::class)->reconcilePayouts();
+
+        $this->assertEquals(0, $result['vendor_reconciled']);
+        $this->assertEquals(0, $result['logistics_reconciled']);
+        $this->assertEquals('rejected', VendorPayoutRequest::where('transfer_reference', 'VND-TERMINAL-STALE-HOLD')->firstOrFail()->status);
+        $this->assertEquals('rejected', LogisticsPayoutRequest::where('transfer_reference', 'FLEET-TERMINAL-STALE-HOLD')->firstOrFail()->status);
+    }
+
 }
