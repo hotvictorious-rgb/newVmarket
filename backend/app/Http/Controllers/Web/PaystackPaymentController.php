@@ -311,6 +311,23 @@ class PaystackPaymentController extends Controller
                 ->first();
 
             if ($existingEvent) {
+                // An event ID is an immutable inbox identity. Never let a different,
+                // correctly signed payload reuse it, regardless of current status.
+                // Older rows may lack payload_hash, so derive it from the stored body.
+                $storedHash = $existingEvent->payload_hash;
+                if (empty($storedHash) && is_string($existingEvent->payload)) {
+                    $storedHash = hash('sha256', $existingEvent->payload);
+                }
+                if (!is_string($storedHash) || !hash_equals($storedHash, $eventHash)) {
+                    Log::critical('Paystack webhook event ID reused with a different payload.', [
+                        'event_id' => $eventId,
+                        'stored_hash' => $storedHash,
+                        'incoming_hash' => $eventHash,
+                        'stored_status' => $existingEvent->status,
+                    ]);
+                    return ['action' => 'conflict', 'message' => 'Event ID already exists with a different payload.'];
+                }
+
                 if ($existingEvent->status === 'completed') {
                     return ['action' => 'completed', 'message' => 'Event already processed.'];
                 }
@@ -323,6 +340,7 @@ class PaystackPaymentController extends Controller
                     $existingEvent->increment('attempts');
                     $existingEvent->status = 'processing';
                     $existingEvent->payload = $payload;
+                    $existingEvent->payload_hash = $eventHash;
                     $existingEvent->updated_at = \Carbon\Carbon::now();
                     $existingEvent->save();
                     return ['action' => 'process', 'event' => $existingEvent];
@@ -363,6 +381,9 @@ class PaystackPaymentController extends Controller
         }
         if ($claimResult['action'] === 'throttled') {
             return response()->json(['status' => false, 'message' => $claimResult['message']], 429);
+        }
+        if ($claimResult['action'] === 'conflict') {
+            return response()->json(['status' => false, 'message' => $claimResult['message']], 409);
         }
 
         $processedEvent = $claimResult['event'];
