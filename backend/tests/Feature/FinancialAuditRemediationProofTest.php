@@ -1859,6 +1859,7 @@ class FinancialAuditRemediationProofTest extends TestCase
     {
         $cases = [
             ['suffix' => 'amount', 'amount' => 49999, 'currency' => 'NGN', 'reason' => 'REFUND_AMOUNT_MISMATCH'],
+            ['suffix' => 'fractional_amount', 'amount' => 50000.5, 'currency' => 'NGN', 'reason' => 'REFUND_AMOUNT_MISMATCH'],
             ['suffix' => 'currency', 'amount' => 50000, 'currency' => 'USD', 'reason' => 'REFUND_CURRENCY_MISMATCH'],
         ];
 
