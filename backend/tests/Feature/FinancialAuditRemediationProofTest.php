@@ -766,6 +766,93 @@ class FinancialAuditRemediationProofTest extends TestCase
     /**
      * Audit Finding P1-6: Refund reconciliation ignores unauthorized cancelled orders.
      */
+    public function test_refund_processed_webhook_requires_exact_amount_and_currency_before_finalization(): void
+    {
+        $cases = [
+            [
+                'id' => 'evt-refund-amount-mismatch',
+                'refund_reference' => 'rf-amount-mismatch',
+                'amount' => 49999,
+                'currency' => 'NGN',
+                'reason' => 'REFUND_AMOUNT_MISMATCH',
+            ],
+            [
+                'id' => 'evt-refund-currency-mismatch',
+                'refund_reference' => 'rf-currency-mismatch',
+                'amount' => 50000,
+                'currency' => 'USD',
+                'reason' => 'REFUND_CURRENCY_MISMATCH',
+            ],
+            [
+                'id' => 'evt-refund-missing-amount',
+                'refund_reference' => 'rf-missing-amount',
+                'currency' => 'NGN',
+                'reason' => 'REFUND_MISSING_AMOUNT',
+            ],
+            [
+                'id' => 'evt-refund-missing-currency',
+                'refund_reference' => 'rf-missing-currency',
+                'amount' => 50000,
+                'reason' => 'REFUND_CURRENCY_MISMATCH',
+            ],
+        ];
+
+        foreach ($cases as $case) {
+            $order = $this->createTestOrder([
+                'order_status' => 'cancelled',
+                'payment_status' => 'paid',
+                'grand_total' => '22000.00',
+                'payment_reference' => 'REF-'.strtoupper(str_replace('-', '', $case['id'])),
+                'paystack_refund_status' => 'pending',
+            ]);
+
+            $operation = app(FinancialOperationService::class)->createRefundOperation(
+                $order,
+                '500.00',
+                'webhook amount/currency validation proof',
+                null,
+                'IDEMPOTENCY-'.$case['id']
+            );
+            $metadata = $operation->metadata ?? [];
+            $metadata['refund_reference'] = $case['refund_reference'];
+            $operation->update(['metadata' => $metadata]);
+
+            $refundData = [
+                'refund_reference' => $case['refund_reference'],
+                'transaction_reference' => $order->payment_reference,
+                'status' => 'processed',
+            ];
+            foreach (['amount', 'currency'] as $field) {
+                if (array_key_exists($field, $case)) {
+                    $refundData[$field] = $case[$field];
+                }
+            }
+
+            $payloadData = [
+                'id' => $case['id'],
+                'event' => 'refund.processed',
+                'data' => $refundData,
+            ];
+            $payload = json_encode($payloadData, JSON_THROW_ON_ERROR);
+            $signature = hash_hmac('sha512', $payload, app(PaystackService::class)->getSecretKey());
+
+            $response = $this->call('POST', route('payment.paystack.webhook'), [], [], [], [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_PAYSTACK_SIGNATURE' => $signature,
+            ], $payload);
+
+            $response->assertStatus(400);
+            $event = ProcessedWebhookEvent::where('event_id', $case['id'])->first();
+            $this->assertNotNull($event);
+            $this->assertEquals('failed', $event->status);
+            $this->assertStringContainsString($case['reason'], (string) $event->error_reason);
+            $this->assertNotEquals('confirmed', $operation->fresh()->status);
+            $this->assertEquals(1, \App\Models\FinancialReservation::where('financial_operation_id', $operation->id)
+                ->where('status', 'active')->count());
+            $this->assertEquals('pending', $order->fresh()->paystack_refund_status);
+        }
+    }
+
     /**
      * A refund.processed webhook must not mark an order refunded when there is no
      * matching FinancialOperation to reconcile the reservation and ledger.
