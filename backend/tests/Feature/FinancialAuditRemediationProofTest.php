@@ -975,6 +975,54 @@ class FinancialAuditRemediationProofTest extends TestCase
         }
     }
 
+    /**
+     * A delayed transfer.success event must not reopen a payout already reversed as failed.
+     */
+    public function test_delayed_transfer_success_does_not_reopen_terminal_failed_vendor_payout(): void
+    {
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '40000.00',
+            'status' => 'rejected',
+            'gateway_status' => 'failed',
+            'transfer_reference' => 'VND-TERMINAL-FAIL-SUCCESS',
+            'paystack_transfer_code' => 'TRF_TERMINAL_FAIL_SUCCESS',
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'Zenith Bank',
+        ]);
+
+        $payloadData = [
+            'event' => 'transfer.success',
+            'id' => 'evt-success-after-terminal-failure',
+            'data' => [
+                'reference' => 'VND-TERMINAL-FAIL-SUCCESS',
+                'transfer_code' => 'TRF_TERMINAL_FAIL_SUCCESS',
+                'amount' => 4000000,
+                'currency' => 'NGN',
+            ],
+        ];
+        $signature = hash_hmac(
+            'sha512',
+            json_encode($payloadData),
+            app(PaystackService::class)->getSecretKey()
+        );
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertOk();
+        $this->assertEquals('rejected', $payout->fresh()->status);
+        $this->assertEquals('failed', $payout->fresh()->gateway_status);
+        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $payout->id)->exists());
+
+        $event = ProcessedWebhookEvent::where('event_id', $payloadData['id'])->first();
+        $this->assertNotNull($event);
+        $this->assertEquals('unmatched', $event->status);
+        $this->assertStringContainsString('TERMINAL_PAYOUT_PROTECTED', (string) $event->error_reason);
+    }
+
     public function test_late_transfer_failed_webhook_does_not_reverse_successful_payout(): void
     {
         $payout = VendorPayoutRequest::create([
