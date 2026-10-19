@@ -9,6 +9,7 @@ class FinancialJournalEntry extends Model
 {
     protected $fillable = [
         'order_id',
+        'financial_operation_id',
         'transaction_reference',
         'event_id',
         'beneficiary_type',
@@ -27,6 +28,11 @@ class FinancialJournalEntry extends Model
     public function order()
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function financialOperation()
+    {
+        return $this->belongsTo(FinancialOperation::class, 'financial_operation_id');
     }
 
     public function beneficiary()

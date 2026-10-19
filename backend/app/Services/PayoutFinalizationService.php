@@ -31,12 +31,6 @@ class PayoutFinalizationService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            // Terminal Gate: Require verified gateway confirmation
-            $gwStatus = strtolower($gatewayData['status'] ?? 'success');
-            if (!in_array($gwStatus, ['success', 'processed', 'completed'], true)) {
-                throw new \InvalidArgumentException("Payout finalization requires verified gateway success. Received gateway status: '{$gwStatus}'");
-            }
-
             $existingAllocationsSum = (string)$lockedPayout->allocations()->where('status', 'allocated')->sum('allocated_amount');
             $hasJournalEntry = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $lockedPayout->id)->exists();
 
@@ -62,6 +56,12 @@ class PayoutFinalizationService
                     'payout' => $lockedPayout,
                     'message' => 'Payout already allocated and finalized.',
                 ];
+            }
+
+            // Terminal Gate: Require verified gateway confirmation for new finalization
+            $gwStatus = strtolower((string)($gatewayData['status'] ?? ''));
+            if (!in_array($gwStatus, ['success', 'processed', 'completed'], true)) {
+                throw new \InvalidArgumentException("Payout finalization requires verified gateway success. Received gateway status: '{$gwStatus}'");
             }
 
             // 2. State Transition & Evidence Tracking
@@ -260,12 +260,6 @@ class PayoutFinalizationService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            // Terminal Gate: Require verified gateway confirmation
-            $gwStatus = strtolower($gatewayData['status'] ?? 'success');
-            if (!in_array($gwStatus, ['success', 'processed', 'completed'], true)) {
-                throw new \InvalidArgumentException("Logistics payout finalization requires verified gateway success. Received status: '{$gwStatus}'");
-            }
-
             // 1. Idempotency Guard
             if ($lockedPayout->status === 'approved' && $lockedPayout->gateway_status === 'success' && $lockedPayout->disbursed_at !== null) {
                 return [
@@ -274,6 +268,12 @@ class PayoutFinalizationService
                     'payout' => $lockedPayout,
                     'message' => 'Logistics payout already finalized.',
                 ];
+            }
+
+            // Terminal Gate: Require verified gateway confirmation for new finalization
+            $gwStatus = strtolower((string)($gatewayData['status'] ?? ''));
+            if (!in_array($gwStatus, ['success', 'processed', 'completed'], true)) {
+                throw new \InvalidArgumentException("Logistics payout finalization requires verified gateway success. Received status: '{$gwStatus}'");
             }
 
             // 2. State Transition

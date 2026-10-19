@@ -358,7 +358,6 @@ class PaystackService
 
             $response = Http::withToken($this->getSecretKey())
                 ->timeout(15)
-                ->retry(2, 200)
                 ->post("{$this->baseUrl}/refund", $payload);
 
             if ($response->successful() && $response->json('status') === true) {
@@ -373,16 +372,23 @@ class PaystackService
             }
 
             Log::error("Paystack refund failed: " . $response->body());
+            $statusCode = $response->status();
+            $isDefinitive = ($statusCode >= 400 && $statusCode < 500);
+
             return [
                 'success' => false,
-                'code' => 'GATEWAY_ERROR',
+                'code' => $isDefinitive ? 'DEFINITIVE_REJECTION' : 'GATEWAY_ERROR',
+                'is_definitive' => $isDefinitive,
+                'status_code' => $statusCode,
                 'message' => $response->json('message') ?? 'Paystack could not initiate refund.',
+                'raw_body' => $response->body(),
             ];
         } catch (\Throwable $e) {
             Log::error("Paystack refund exception: " . $e->getMessage());
             return [
                 'success' => false,
-                'code' => 'EXCEPTION',
+                'code' => 'UNCERTAIN_TIMEOUT',
+                'is_definitive' => false,
                 'message' => 'Paystack refund error: ' . $e->getMessage(),
             ];
         }
@@ -620,10 +626,16 @@ class PaystackService
                 ]);
 
             if (!$response->successful() || $response->json('status') !== true) {
+                $statusCode = $response->status();
+                $isDefinitive = ($statusCode >= 400 && $statusCode < 500);
+
                 return [
                     'success' => false,
-                    'code' => 'TRANSFER_FAILED',
+                    'code' => $isDefinitive ? 'DEFINITIVE_REJECTION' : 'TRANSFER_FAILED',
+                    'is_definitive' => $isDefinitive,
+                    'status_code' => $statusCode,
                     'message' => $response->json('message') ?? 'Paystack could not process transfer.',
+                    'raw_body' => $response->body(),
                 ];
             }
 
@@ -639,7 +651,8 @@ class PaystackService
             Log::error('Paystack initiateTransfer exception: ' . $e->getMessage());
             return [
                 'success' => false,
-                'code' => 'NETWORK_EXCEPTION',
+                'code' => 'UNCERTAIN_TIMEOUT',
+                'is_definitive' => false,
                 'message' => 'Paystack transfer request failed due to connection error: ' . $e->getMessage(),
             ];
         }

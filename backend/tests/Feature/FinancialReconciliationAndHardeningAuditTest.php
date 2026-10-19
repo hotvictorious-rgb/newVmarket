@@ -507,6 +507,22 @@ class FinancialReconciliationAndHardeningAuditTest extends TestCase
         $payout = LogisticsPayoutRequest::where('logistics_company_id', $this->company->id)->first();
         $this->assertNotNull($payout);
 
+        $mockPaystack = \Mockery::mock(\App\Services\PaystackService::class);
+        $mockPaystack->shouldReceive('createTransferRecipient')
+            ->andReturn([
+                'success' => true,
+                'recipient_code' => 'RCP_MOCK_LOGISTICS_123',
+                'message' => 'Recipient verified on NIBSS',
+            ]);
+        $mockPaystack->shouldReceive('initiateTransfer')
+            ->andReturn([
+                'success' => true,
+                'status' => 'success',
+                'transfer_code' => 'TRF_MOCK_LOGISTICS_123',
+                'message' => 'Transfer queued for execution',
+            ]);
+        $this->app->instance(\App\Services\PaystackService::class, $mockPaystack);
+
         $adminResponse = $this->actingAs($this->superAdmin)->post(route('admin.disburse.logistics_payout'), [
             'payout_id' => $payout->id,
             'notes' => 'Corporate NUBAN settlement verified.',

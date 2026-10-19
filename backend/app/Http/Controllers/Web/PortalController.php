@@ -1907,7 +1907,7 @@ class PortalController extends Controller
         );
 
         if (!$transferRes['success']) {
-            $isNetworkError = ($transferRes['code'] ?? '') === 'NETWORK_EXCEPTION';
+            $isNetworkError = in_array($transferRes['code'] ?? '', ['NETWORK_EXCEPTION', 'UNCERTAIN_TIMEOUT'], true);
             DB::transaction(function () use ($payoutId, $transferRes, $isNetworkError) {
                 LogisticsPayoutRequest::where('id', $payoutId)->update([
                     'processing_token' => $isNetworkError ? 'HOLD_TIMEOUT_RECONCILIATION' : null,
@@ -2249,7 +2249,7 @@ class PortalController extends Controller
         );
 
         if (!$transferRes['success']) {
-            $isNetworkError = ($transferRes['code'] ?? '') === 'NETWORK_EXCEPTION';
+            $isNetworkError = in_array($transferRes['code'] ?? '', ['NETWORK_EXCEPTION', 'UNCERTAIN_TIMEOUT'], true);
             DB::transaction(function () use ($payoutId, $transferRes, $isNetworkError) {
                 \App\Models\VendorPayoutRequest::where('id', $payoutId)->update([
                     'processing_token' => $isNetworkError ? 'HOLD_TIMEOUT_RECONCILIATION' : null,
@@ -5167,6 +5167,7 @@ class PortalController extends Controller
             app(\App\Services\PayoutFinalizationService::class)->finalizeVendorPayout($payout, [
                 'transfer_code' => $verify['transfer_code'] ?? $payout->paystack_transfer_code,
                 'reference' => $ref,
+                'status' => 'success',
             ], $admin);
             return back()->with('status', "Gateway reconciliation complete: Payout #{$payout->id} bank transfer confirmed and accounting finalized.");
         }
@@ -5214,6 +5215,7 @@ class PortalController extends Controller
             app(\App\Services\PayoutFinalizationService::class)->finalizeLogisticsPayout($payout, [
                 'transfer_code' => $verify['transfer_code'] ?? $payout->paystack_transfer_code,
                 'reference' => $ref,
+                'status' => 'success',
             ], $admin);
             return back()->with('status', "Gateway reconciliation complete: Payout #{$payout->id} bank transfer confirmed and accounting finalized.");
         }

@@ -92,6 +92,23 @@ class PaystackPaymentController extends Controller
      * Authoritatively resolve and validate payout identity, amounts, and currency for webhook reconciliation.
      * Prevents dual matches, cross-matched references, and under/over-disbursement attacks (Audit Finding P0).
      */
+    /**
+     * Stale Worker Fencing Guard (Finding P1):
+     * Atomically update ProcessedWebhookEvent ONLY IF the attempts counter matches the claimed generation.
+     */
+    private function updateProcessedEvent(\App\Models\ProcessedWebhookEvent $event, array $attributes): bool
+    {
+        $updated = \App\Models\ProcessedWebhookEvent::where('id', $event->id)
+            ->where('attempts', $event->attempts)
+            ->update($attributes);
+
+        if (!$updated) {
+            Log::warning("Fencing Guard: Stale worker for webhook event #{\->id} fenced out (attempts bumped by newer worker).");
+        }
+
+        return (bool)$updated;
+    }
+
     private function resolveAndValidatePayout(array $tData, \App\Models\ProcessedWebhookEvent $processedEvent): ?array
     {
         $tRef = trim((string)($tData['reference'] ?? ''));
@@ -147,7 +164,7 @@ class PaystackPaymentController extends Controller
 
             if ($vendorPayout && $logisticsPayout) {
                 Log::critical("Ambiguous transfer webhook rejected: reference '{$tRef}' or code '{$tCode}' matches both VendorPayoutRequest #{$vendorPayout->id} and LogisticsPayoutRequest #{$logisticsPayout->id}.");
-                $processedEvent->update([
+                $this->updateProcessedEvent($processedEvent, [
                     'status' => 'failed',
                     'error_reason' => "AMBIGUOUS_DUAL_MATCH: Matched both vendor #{$vendorPayout->id} and logistics #{$logisticsPayout->id}.",
                     'processed_at' => Carbon::now(),
@@ -166,7 +183,7 @@ class PaystackPaymentController extends Controller
         // Identifier Cross-Validation Guard: If payout already has both reference and code, ensure webhook does not conflict
         if (!empty($payout->transfer_reference) && !empty($tRef) && $payout->transfer_reference !== $tRef && $payout->settlement_proof_path !== 'paystack_transfer_ref:' . $tRef) {
             Log::critical("Paystack Webhook Reference Conflict! Payout #{$payout->id} ref '{$payout->transfer_reference}' conflicts with webhook ref '{$tRef}'.");
-            $processedEvent->update([
+            $this->updateProcessedEvent($processedEvent, [
                 'status' => 'failed',
                 'error_reason' => "REFERENCE_CONFLICT: Payout #{$payout->id} expected ref '{$payout->transfer_reference}', got '{$tRef}'.",
                 'processed_at' => Carbon::now(),
@@ -174,27 +191,46 @@ class PaystackPaymentController extends Controller
             return ['error' => 'Conflicting transfer reference'];
         }
 
-        // Amount Invariant Check (Audit Finding P0): Match integer kobo
+        // Transfer Code Cross-Validation Guard (Finding P1)
+        if (!empty($payout->paystack_transfer_code) && !empty($tCode) && $payout->paystack_transfer_code !== $tCode) {
+            Log::critical("Paystack Webhook Transfer Code Conflict! Payout #{$payout->id} code '{$payout->paystack_transfer_code}' conflicts with webhook code '{$tCode}'.");
+            $this->updateProcessedEvent($processedEvent, [
+                'status' => 'failed',
+                'error_reason' => "TRANSFER_CODE_CONFLICT: Payout #{$payout->id} expected code '{$payout->paystack_transfer_code}', got '{$tCode}'.",
+                'processed_at' => Carbon::now(),
+            ]);
+            return ['error' => 'Conflicting transfer code'];
+        }
+
+        // Amount Invariant Check (Finding P0 & P1): Exact integer kobo verification
         if (isset($tData['amount'])) {
             $webhookKobo = (int)$tData['amount'];
             $expectedKobo = (int)bcmul((string)$payout->amount, '100', 0);
             if ($webhookKobo !== $expectedKobo) {
                 Log::critical("Paystack Webhook Amount Mismatch! Payout #{$payout->id} expected {$expectedKobo} kobo, received {$webhookKobo} kobo.");
-                $processedEvent->update([
+                $this->updateProcessedEvent($processedEvent, [
                     'status' => 'failed',
                     'error_reason' => "AMOUNT_MISMATCH: Payout #{$payout->id} expected {$expectedKobo} kobo, received {$webhookKobo} kobo.",
                     'processed_at' => Carbon::now(),
                 ]);
                 return ['error' => 'Payout amount mismatch'];
             }
+        } elseif (isset($event['event']) && $event['event'] === 'transfer.success') {
+            Log::critical("Paystack Webhook Missing Amount! Payout #{$payout->id} webhook payload omitted amount.");
+            $this->updateProcessedEvent($processedEvent, [
+                'status' => 'failed',
+                'error_reason' => "MISSING_AMOUNT: Webhook transfer payload omitted mandatory amount.",
+                'processed_at' => Carbon::now(),
+            ]);
+            return ['error' => 'Missing transfer amount'];
         }
 
-        // Currency Invariant Check
+        // Currency Invariant Check (Verify whenever provided)
         if (isset($tData['currency'])) {
             $currency = strtoupper(trim((string)$tData['currency']));
             if ($currency !== 'NGN') {
                 Log::critical("Paystack Webhook Currency Mismatch! Expected NGN, received {$currency}.", [$currency]);
-                $processedEvent->update([
+                $this->updateProcessedEvent($processedEvent, [
                     'status' => 'failed',
                     'error_reason' => "CURRENCY_MISMATCH: Expected NGN, received {$currency}.",
                     'processed_at' => Carbon::now(),
@@ -320,7 +356,7 @@ class PaystackPaymentController extends Controller
             }
 
             if (!$resolved) {
-                $processedEvent->update([
+                $this->updateProcessedEvent($processedEvent, [
                     'status' => 'unmatched',
                     'error_reason' => "No matching vendor or logistics payout request found for reference '{$tRef}' or transfer_code '{$tCode}'",
                     'processed_at' => Carbon::now(),
@@ -330,14 +366,15 @@ class PaystackPaymentController extends Controller
                 return response()->json(['status' => false, 'message' => 'Unmatched transfer.success event recorded for treasury audit.'], 200);
             }
 
-            // Strictly finalize exactly ONE unambiguous payout entity
+            // Strictly finalize exactly ONE unambiguous payout entity with explicit verified event status
+            $tDataVerified = array_merge(['status' => 'success'], $tData);
             if ($resolved['type'] === 'vendor') {
-                $this->finalizationService->finalizeVendorPayout($resolved['payout'], $tData);
+                $this->finalizationService->finalizeVendorPayout($resolved['payout'], $tDataVerified);
             } elseif ($resolved['type'] === 'logistics') {
-                $this->finalizationService->finalizeLogisticsPayout($resolved['payout'], $tData);
+                $this->finalizationService->finalizeLogisticsPayout($resolved['payout'], $tDataVerified);
             }
 
-            $processedEvent->update([
+            $this->updateProcessedEvent($processedEvent, [
                 'status' => 'completed',
                 'processed_at' => Carbon::now(),
             ]);
@@ -359,7 +396,7 @@ class PaystackPaymentController extends Controller
             }
 
             if (!$resolved) {
-                $processedEvent->update([
+                $this->updateProcessedEvent($processedEvent, [
                     'status' => 'unmatched',
                     'error_reason' => "No matching vendor or logistics payout request found for reference '{$tRef}' or transfer_code '{$tCode}'",
                     'processed_at' => Carbon::now(),
@@ -382,12 +419,73 @@ class PaystackPaymentController extends Controller
                 );
             }
 
-            $processedEvent->update([
+            $this->updateProcessedEvent($processedEvent, [
                 'status' => 'completed',
                 'processed_at' => Carbon::now(),
             ]);
 
             return response()->json(['status' => true, 'message' => "Transfer {$event['event']} processed and reversed successfully."], 200);
+        }
+
+        // Handle Paystack Refund Webhooks (Automated Customer Refund Reconciliation)
+        if ($event['event'] === 'refund.processed') {
+            $rData = $event['data'] ?? [];
+            $rRef = (string)($rData['reference'] ?? ($rData['id'] ?? ''));
+            $transRef = (string)($rData['transaction_reference'] ?? '');
+            Log::info("Paystack Webhook: Automated refund.processed for ref: {$rRef}, trans: {$transRef}");
+
+            $finOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+                ->where(function ($q) use ($rRef, $transRef) {
+                    if (!empty($rRef)) {
+                        $q->where('operation_reference', $rRef)
+                          ->orWhereJsonContains('metadata->refund_reference', $rRef)
+                          ->orWhereHas('gatewayAttempts', function ($sub) use ($rRef) {
+                              $sub->where('gateway_reference', $rRef);
+                          });
+                    }
+                    if (!empty($transRef)) {
+                        $q->orWhereJsonContains('metadata->payment_reference', $transRef);
+                    }
+                })
+                ->where('status', '!=', 'confirmed')
+                ->first();
+
+            if ($finOp) {
+                app(\App\Services\FinancialOperationService::class)->finalizeRefundConfirmation($finOp, $rData);
+            } else {
+                if (!empty($transRef)) {
+                    Order::where('payment_reference', $transRef)->update([
+                        'paystack_refund_reference' => $rRef,
+                        'paystack_refund_status' => 'completed',
+                    ]);
+                }
+            }
+
+            $this->updateProcessedEvent($processedEvent, [
+                'status' => 'completed',
+                'processed_at' => Carbon::now(),
+            ]);
+
+            return response()->json(['status' => true, 'message' => 'Refund processed webhook recorded and reconciled.'], 200);
+        }
+
+        if ($event['event'] === 'refund.failed') {
+            $rData = $event['data'] ?? [];
+            $transRef = (string)($rData['transaction_reference'] ?? '');
+            Log::warning("Paystack Webhook: Automated refund.failed for trans: {$transRef}");
+
+            if (!empty($transRef)) {
+                Order::where('payment_reference', $transRef)->update([
+                    'paystack_refund_status' => 'failed',
+                ]);
+            }
+
+            $this->updateProcessedEvent($processedEvent, [
+                'status' => 'completed',
+                'processed_at' => Carbon::now(),
+            ]);
+
+            return response()->json(['status' => true, 'message' => 'Refund failed webhook recorded.'], 200);
         }
 
         // Only process charge.success events
@@ -411,7 +509,7 @@ class PaystackPaymentController extends Controller
         $order = Order::where('payment_reference', $reference)->first();
 
         if (!$order) {
-            $processedEvent->update([
+            $this->updateProcessedEvent($processedEvent, [
                 'status' => 'failed',
                 'error_reason' => "Order not found for reference '{$reference}'.",
             ]);
@@ -431,7 +529,7 @@ class PaystackPaymentController extends Controller
         );
 
         if (!$settlement['success']) {
-            $processedEvent->update([
+            $this->updateProcessedEvent($processedEvent, [
                 'status' => 'failed',
                 'error_reason' => $settlement['message'] ?? 'Settlement failed',
             ]);
@@ -442,7 +540,7 @@ class PaystackPaymentController extends Controller
             ], 422);
         }
 
-        $processedEvent->update([
+        $this->updateProcessedEvent($processedEvent, [
             'status' => 'completed',
             'processed_at' => Carbon::now(),
         ]);

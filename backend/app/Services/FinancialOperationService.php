@@ -1,0 +1,483 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\FinancialOperation;
+use App\Models\GatewayAttempt;
+use App\Models\FinancialReservation;
+use App\Models\FinancialJournalEntry;
+use App\Models\Order;
+use App\Models\ReturnCase;
+use App\Models\VendorPayoutRequest;
+use App\Models\VendorProfile;
+use App\Models\CustomerWalletCredit;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+
+class FinancialOperationService
+{
+    protected PaystackService $paystackService;
+
+    public function __construct(PaystackService $paystackService)
+    {
+        $this->paystackService = $paystackService;
+    }
+
+    /**
+     * Atomically create an approved Customer Refund Operation with strict reservation bounds.
+     * Invariant: Sum(confirmed refunds) + Sum(active reservations) + requested <= original refundable payment
+     */
+    public function createRefundOperation(
+        Order $order,
+        string $amountNaira,
+        string $reason,
+        ?ReturnCase $returnCase = null,
+        ?string $idempotencyKey = null
+    ): FinancialOperation {
+        $amountNormalized = bcadd((string)$amountNaira, '0', 2);
+        if (bccomp($amountNormalized, '0.00', 2) <= 0) {
+            throw new \InvalidArgumentException("Refund amount must be strictly greater than 0. Received: '{$amountNaira}'");
+        }
+
+        $amountKobo = (int) bcmul($amountNormalized, '100', 0);
+        $key = $idempotencyKey ?: ('REFUND-' . $order->id . '-' . ($returnCase ? $returnCase->id : 'FULL') . '-' . md5($reason . $amountNormalized));
+
+        return DB::transaction(function () use ($order, $amountNormalized, $amountKobo, $reason, $returnCase, $key) {
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->firstOrFail();
+
+            // Total refundable original payment (excluding unpaid or uncaptured)
+            $totalOriginalPaymentNaira = bcadd((string)$lockedOrder->grand_total, '0', 2);
+            $totalOriginalPaymentKobo = (int) bcmul($totalOriginalPaymentNaira, '100', 0);
+
+            // Calculate currently confirmed refunds + active refund reservations for this order
+            $existingReservationsKobo = (int) FinancialReservation::where('source_type', Order::class)
+                ->where('source_id', $lockedOrder->id)
+                ->where('purpose', 'customer_refund_hold')
+                ->whereIn('status', ['active', 'committed'])
+                ->sum('reserved_amount_kobo');
+
+            if ($existingReservationsKobo + $amountKobo > $totalOriginalPaymentKobo) {
+                $maxAllowableKobo = max(0, $totalOriginalPaymentKobo - $existingReservationsKobo);
+                $maxAllowableNaira = bcdiv((string)$maxAllowableKobo, '100', 2);
+                throw new \DomainException(
+                    "Refund invariant violation: Requested ₦{$amountNormalized} exceeds remaining refundable balance of ₦{$maxAllowableNaira} on Order #{$lockedOrder->order_number}."
+                );
+            }
+
+            // Check if exact idempotency key exists
+            $existingOp = FinancialOperation::where('idempotency_key', $key)->first();
+            if ($existingOp) {
+                return $existingOp;
+            }
+
+            $opRef = 'OP-RFD-' . $lockedOrder->id . '-' . strtoupper(Str::random(10));
+
+            $operation = FinancialOperation::create([
+                'operation_reference' => $opRef,
+                'idempotency_key' => $key,
+                'operation_type' => 'customer_refund',
+                'owner_type' => $returnCase ? ReturnCase::class : Order::class,
+                'owner_id' => $returnCase ? $returnCase->id : $lockedOrder->id,
+                'amount_kobo' => $amountKobo,
+                'currency' => 'NGN',
+                'status' => 'holding_reservation',
+                'gateway_provider' => 'paystack',
+                'metadata' => [
+                    'order_id' => $lockedOrder->id,
+                    'order_number' => $lockedOrder->order_number,
+                    'payment_reference' => $lockedOrder->payment_reference,
+                    'return_case_id' => $returnCase?->id,
+                    'return_case_number' => $returnCase?->case_number,
+                    'reason' => $reason,
+                ],
+            ]);
+
+            // Reserve funds immediately to block concurrent double-refund attempts
+            FinancialReservation::create([
+                'financial_operation_id' => $operation->id,
+                'source_type' => Order::class,
+                'source_id' => $lockedOrder->id,
+                'reserved_amount_kobo' => $amountKobo,
+                'purpose' => 'customer_refund_hold',
+                'status' => 'active',
+            ]);
+
+            return $operation;
+        });
+    }
+
+    /**
+     * Dispatch refund to payment gateway (Paystack).
+     * Rule: DB transaction is NEVER held open while awaiting Paystack HTTP response.
+     */
+    public function dispatchRefund(FinancialOperation $operation): array
+    {
+        // 1. Prepare attempt inside quick atomic transaction
+        $attemptData = DB::transaction(function () use ($operation) {
+            $lockedOp = FinancialOperation::where('id', $operation->id)->lockForUpdate()->firstOrFail();
+            if ($lockedOp->isTerminal()) {
+                return ['terminal' => true, 'operation' => $lockedOp];
+            }
+
+            $attemptRef = 'ATT-RFD-' . $lockedOp->id . '-' . date('YmdHis') . '-' . Str::random(6);
+            $meta = $lockedOp->metadata ?? [];
+            $transRef = $meta['payment_reference'] ?? null;
+
+            if (empty($transRef)) {
+                $orderId = $meta['order_id'] ?? null;
+                $ord = $orderId ? Order::find($orderId) : null;
+                $transRef = $ord?->payment_reference;
+            }
+
+            if (empty($transRef)) {
+                throw new \DomainException("Cannot dispatch refund: Missing original payment_reference for Operation #{$lockedOp->id}");
+            }
+
+            $attempt = GatewayAttempt::create([
+                'financial_operation_id' => $lockedOp->id,
+                'gateway_provider' => 'paystack',
+                'endpoint' => '/refund',
+                'attempt_reference' => $attemptRef,
+                'request_payload' => [
+                    'transaction' => $transRef,
+                    'amount_kobo' => $lockedOp->amount_kobo,
+                    'amount_naira' => $lockedOp->amount_naira,
+                    'note' => $meta['reason'] ?? "Refund for Operation #{$lockedOp->operation_reference}",
+                ],
+                'outcome' => 'pending',
+                'attempted_at' => Carbon::now(),
+            ]);
+
+            $lockedOp->update([
+                'status' => 'initiated',
+            ]);
+
+            return [
+                'terminal' => false,
+                'attempt' => $attempt,
+                'trans_ref' => $transRef,
+                'amount_naira' => $lockedOp->amount_naira,
+                'note' => $meta['reason'] ?? "Refund for Operation #{$lockedOp->operation_reference}",
+            ];
+        });
+
+        if ($attemptData['terminal']) {
+            return [
+                'success' => $attemptData['operation']->status === 'confirmed',
+                'status' => $attemptData['operation']->status,
+                'message' => "Operation is already in terminal state: {$attemptData['operation']->status}",
+            ];
+        }
+
+        /** @var GatewayAttempt $attempt */
+        $attempt = $attemptData['attempt'];
+
+        // 2. Call Paystack Gateway OUTSIDE DB Transaction
+        $gatewayResult = $this->paystackService->initiateRefund(
+            $attemptData['trans_ref'],
+            $attemptData['amount_naira'],
+            $attemptData['note']
+        );
+
+        // 3. Record outcome in separate quick transaction
+        return DB::transaction(function () use ($operation, $attempt, $gatewayResult) {
+            $lockedOp = FinancialOperation::where('id', $operation->id)->lockForUpdate()->firstOrFail();
+            $lockedAttempt = GatewayAttempt::where('id', $attempt->id)->lockForUpdate()->firstOrFail();
+
+            if (!empty($gatewayResult['success'])) {
+                // Gateway ACCEPTED the refund request (starts in pending/processing)
+                $gwRef = $gatewayResult['refund_reference'] ?? ($gatewayResult['data']['reference'] ?? null);
+                $gwStatus = strtolower($gatewayResult['status'] ?? 'pending');
+
+                $lockedAttempt->update([
+                    'gateway_reference' => $gwRef,
+                    'response_payload' => $gatewayResult,
+                    'outcome' => 'success',
+                ]);
+
+                // Update Order refund reference for trace
+                $orderId = $lockedOp->metadata['order_id'] ?? null;
+                if ($orderId) {
+                    Order::where('id', $orderId)->update([
+                        'paystack_refund_reference' => $gwRef,
+                        'paystack_refund_status' => 'pending', // Remains pending until confirmed!
+                    ]);
+                }
+
+                // If gateway already confirmed it synchronously in test mode or instant settlement:
+                if (in_array($gwStatus, ['processed', 'success', 'completed'], true)) {
+                    $this->finalizeRefundConfirmation($lockedOp, $gatewayResult);
+                    return [
+                        'success' => true,
+                        'status' => 'confirmed',
+                        'refund_reference' => $gwRef,
+                        'message' => 'Refund confirmed and settled successfully.',
+                    ];
+                }
+
+                return [
+                    'success' => true,
+                    'status' => 'initiated',
+                    'refund_reference' => $gwRef,
+                    'message' => 'Refund request accepted by gateway. Awaiting settlement confirmation.',
+                ];
+            }
+
+            // Definite rejection vs uncertain outcome
+            $isDefinitive = !empty($gatewayResult['is_definitive']) || ($gatewayResult['code'] ?? '') === 'DEFINITIVE_REJECTION';
+
+            $lockedAttempt->update([
+                'outcome' => $isDefinitive ? 'failed' : 'uncertain_timeout',
+                'error_message' => $gatewayResult['message'] ?? 'Gateway rejected or timed out.',
+                'response_payload' => $gatewayResult,
+            ]);
+
+            if ($isDefinitive) {
+                // Gateway definitively rejected the request (e.g. card invalid, duplicate, limit exceeded)
+                $lockedOp->update([
+                    'status' => 'failed',
+                    'failed_at' => Carbon::now(),
+                ]);
+
+                // Release active reservations
+                FinancialReservation::where('financial_operation_id', $lockedOp->id)
+                    ->where('status', 'active')
+                    ->update([
+                        'status' => 'released',
+                        'released_at' => Carbon::now(),
+                    ]);
+
+                // Revert return case claim token if applicable
+                if ($lockedOp->owner_type === ReturnCase::class && $lockedOp->owner_id) {
+                    ReturnCase::where('id', $lockedOp->owner_id)->update([
+                        'refund_claim_token' => null,
+                        'refund_claimed_at' => null,
+                    ]);
+                }
+
+                return [
+                    'success' => false,
+                    'status' => 'failed',
+                    'message' => 'Refund rejected by gateway: ' . ($gatewayResult['message'] ?? 'Unknown error'),
+                ];
+            }
+
+            // Uncertain timeout: Keep reservation active, keep status initiated
+            return [
+                'success' => false,
+                'status' => 'initiated',
+                'code' => 'UNCERTAIN_TIMEOUT',
+                'message' => 'Gateway request timed out or experienced connection dip. Kept in initiated state awaiting verification.',
+            ];
+        });
+    }
+
+    /**
+     * Confirm verified refund execution (called from Webhook or Scheduled Reconciler with terminal evidence).
+     * Enforces double-entry ledger symmetry and updates return cases/orders.
+     */
+    public function finalizeRefundConfirmation(FinancialOperation $operation, array $gatewayEvidence): array
+    {
+        return DB::transaction(function () use ($operation, $gatewayEvidence) {
+            $lockedOp = FinancialOperation::where('id', $operation->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedOp->status === 'confirmed') {
+                return [
+                    'success' => true,
+                    'message' => 'Operation is already confirmed.',
+                    'operation' => $lockedOp,
+                ];
+            }
+
+            // Verify gateway evidence has terminal status
+            $gwStatus = strtolower($gatewayEvidence['status'] ?? $gatewayEvidence['data']['status'] ?? '');
+            if (!in_array($gwStatus, ['processed', 'success', 'completed'], true)) {
+                throw new \InvalidArgumentException("Cannot confirm refund without verified terminal gateway status. Received: '{$gwStatus}'");
+            }
+
+            // Commit reservation
+            FinancialReservation::where('financial_operation_id', $lockedOp->id)
+                ->where('status', 'active')
+                ->update([
+                    'status' => 'committed',
+                    'committed_at' => Carbon::now(),
+                ]);
+
+            $lockedOp->update([
+                'status' => 'confirmed',
+                'confirmed_at' => Carbon::now(),
+            ]);
+
+            $orderId = $lockedOp->metadata['order_id'] ?? null;
+            $order = $orderId ? Order::where('id', $orderId)->lockForUpdate()->first() : null;
+            $returnCaseId = $lockedOp->metadata['return_case_id'] ?? null;
+            $returnCase = $returnCaseId ? ReturnCase::where('id', $returnCaseId)->lockForUpdate()->first() : null;
+
+            $disburseRef = 'REFUND-CONF-' . $lockedOp->operation_reference;
+            $gwRef = $gatewayEvidence['refund_reference'] ?? ($gatewayEvidence['data']['reference'] ?? ($gatewayEvidence['data']['id'] ?? $disburseRef));
+
+            // Write Balanced Double-Entry Journal Entries
+            // Debit: Escrow Holding / Vendor Payable / Platform Margin
+            // Credit: Cash in Escrow (Customer Outflow)
+            $refundAmountNaira = $lockedOp->amount_naira;
+
+            // Reversal of instant wallet credit if return case had wallet credit
+            if ($returnCase) {
+                $walletCredit = CustomerWalletCredit::where('return_case_id', $returnCase->id)
+                    ->where('status', 'available')
+                    ->first();
+                if ($walletCredit) {
+                    $walletCredit->update([
+                        'status' => 'reversed_for_cash_refund',
+                        'notes' => ($walletCredit->notes ? $walletCredit->notes . ' | ' : '') . 'Reversed upon verified gateway cash refund disbursement.',
+                    ]);
+                }
+
+                $merchandiseRefund = $returnCase->total_refundable_amount;
+                $deliveryFeeRefund = $returnCase->refund_delivery_fee && $order ? (string)$order->delivery_fee : '0.00';
+
+                // 90/5/5 Reversal Splits
+                $vendorNetDebit = bcmul($merchandiseRefund, '0.9000', 2);
+                $customerCashbackDebit = bcmul($merchandiseRefund, '0.0500', 2);
+                $platformMarginDebit = bcmul($merchandiseRefund, '0.0500', 2);
+
+                $calcSum = bcadd(bcadd($vendorNetDebit, $customerCashbackDebit, 2), $platformMarginDebit, 2);
+                if (bccomp($calcSum, $merchandiseRefund, 2) !== 0) {
+                    $diff = bcsub($merchandiseRefund, $calcSum, 2);
+                    $vendorNetDebit = bcadd($vendorNetDebit, $diff, 2);
+                }
+
+                // Debit Vendor Payable
+                FinancialJournalEntry::create([
+                    'order_id' => $order?->id,
+                    'financial_operation_id' => $lockedOp->id,
+                    'transaction_reference' => $disburseRef,
+                    'event_id' => 'EVT-RFD-' . $lockedOp->id . '-VND',
+                    'beneficiary_type' => VendorProfile::class,
+                    'beneficiary_id' => $order?->vendor_id,
+                    'account_name' => 'vendor_payable',
+                    'entry_type' => 'debit',
+                    'amount' => $vendorNetDebit,
+                    'currency' => 'NGN',
+                    'description' => "Merchant payable reversed for approved return item: Case #{$returnCase->case_number}",
+                ]);
+
+                // Debit Cashback Liability
+                FinancialJournalEntry::create([
+                    'order_id' => $order?->id,
+                    'financial_operation_id' => $lockedOp->id,
+                    'transaction_reference' => $disburseRef,
+                    'event_id' => 'EVT-RFD-' . $lockedOp->id . '-CBK',
+                    'beneficiary_type' => null,
+                    'beneficiary_id' => null,
+                    'account_name' => 'cashback_liability',
+                    'entry_type' => 'debit',
+                    'amount' => $customerCashbackDebit,
+                    'currency' => 'NGN',
+                    'description' => "Customer 5% cashback liability clawed back for returned item: Case #{$returnCase->case_number}",
+                ]);
+
+                // Debit Platform Margin
+                FinancialJournalEntry::create([
+                    'order_id' => $order?->id,
+                    'financial_operation_id' => $lockedOp->id,
+                    'transaction_reference' => $disburseRef,
+                    'event_id' => 'EVT-RFD-' . $lockedOp->id . '-REV',
+                    'beneficiary_type' => null,
+                    'beneficiary_id' => null,
+                    'account_name' => 'platform_revenue',
+                    'entry_type' => 'debit',
+                    'amount' => $platformMarginDebit,
+                    'currency' => 'NGN',
+                    'description' => "Platform 5% margin reversed for return Case #{$returnCase->case_number}",
+                ]);
+
+                // Credit Cash Escrow Outflow
+                FinancialJournalEntry::create([
+                    'order_id' => $order?->id,
+                    'financial_operation_id' => $lockedOp->id,
+                    'transaction_reference' => $disburseRef,
+                    'event_id' => 'EVT-RFD-' . $lockedOp->id . '-OUT',
+                    'beneficiary_type' => null,
+                    'beneficiary_id' => null,
+                    'account_name' => 'cash_in_escrow',
+                    'entry_type' => 'credit',
+                    'amount' => $refundAmountNaira,
+                    'currency' => 'NGN',
+                    'description' => "Cash refund disbursed to customer for Return Case #{$returnCase->case_number} via Paystack ({$gwRef})",
+                ]);
+
+                $returnCase->update([
+                    'status' => 'refunded',
+                    'refunded_amount' => $refundAmountNaira,
+                    'paystack_refund_id' => $gwRef,
+                    'refunded_at' => Carbon::now(),
+                ]);
+            } else {
+                // Order cancellation / out of stock full refund
+                FinancialJournalEntry::create([
+                    'order_id' => $order?->id,
+                    'financial_operation_id' => $lockedOp->id,
+                    'transaction_reference' => $disburseRef,
+                    'event_id' => 'EVT-RFD-' . $lockedOp->id . '-ESC',
+                    'beneficiary_type' => null,
+                    'beneficiary_id' => null,
+                    'account_name' => 'cash_in_escrow',
+                    'entry_type' => 'credit',
+                    'amount' => $refundAmountNaira,
+                    'currency' => 'NGN',
+                    'description' => "Customer refund settled for cancelled Order #{$order?->order_number} via Paystack ({$gwRef})",
+                ]);
+            }
+
+            if ($order) {
+                $order->update([
+                    'paystack_refund_reference' => $gwRef,
+                    'paystack_refund_status' => 'completed',
+                ]);
+            }
+
+            return [
+                'success' => true,
+                'status' => 'confirmed',
+                'message' => "Refund confirmed and settled successfully.",
+            ];
+        });
+    }
+
+    /**
+     * Acquire a lease token on a financial operation for distributed worker safety.
+     * Guarantees fencing against stale workers.
+     */
+    public function acquireLease(FinancialOperation $operation, int $durationSeconds = 300): ?string
+    {
+        $token = 'LEASE-' . Str::random(24);
+        $updated = FinancialOperation::where('id', $operation->id)
+            ->where(function ($q) {
+                $q->whereNull('lease_token')
+                  ->orWhereNull('lease_expires_at')
+                  ->orWhere('lease_expires_at', '<', Carbon::now());
+            })
+            ->update([
+                'lease_token' => $token,
+                'lease_expires_at' => Carbon::now()->addSeconds($durationSeconds),
+            ]);
+
+        return $updated > 0 ? $token : null;
+    }
+
+    /**
+     * Release lease token upon clean worker completion.
+     */
+    public function releaseLease(FinancialOperation $operation, string $token): bool
+    {
+        return FinancialOperation::where('id', $operation->id)
+            ->where('lease_token', $token)
+            ->update([
+                'lease_token' => null,
+                'lease_expires_at' => null,
+            ]) > 0;
+    }
+}

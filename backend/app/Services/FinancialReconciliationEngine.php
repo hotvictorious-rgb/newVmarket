@@ -69,6 +69,13 @@ class FinancialReconciliationEngine
             $ref = $payout->transfer_reference ?? ('VND-DISBURSE-' . $payout->id);
             $verify = $this->paystackService->verifyTransfer($ref);
 
+            // Fencing Guard (Finding P1): Verify this worker still holds the valid lease
+            $stillOwned = VendorPayoutRequest::where('id', $payout->id)->where('processing_token', $claimToken)->exists();
+            if (!$stillOwned) {
+                Log::warning("Fencing guard: Stale worker for payout #{$payout->id} skipped (claim lease expired/overwritten).");
+                continue;
+            }
+
             if ($verify['success'] && ($verify['status'] ?? '') === 'success') {
                 $this->finalizationService->finalizeVendorPayout($payout, [
                     'transfer_code' => $verify['transfer_code'] ?? $payout->paystack_transfer_code,
@@ -84,10 +91,12 @@ class FinancialReconciliationEngine
                 $results['vendor_reconciled']++;
             } else {
                 // Transfer outcome still pending at bank or unreachable: maintain timeout hold
-                VendorPayoutRequest::where('id', $payout->id)->update([
-                    'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
-                    'processing_started_at' => Carbon::now(),
-                ]);
+                VendorPayoutRequest::where('id', $payout->id)
+                    ->where('processing_token', $claimToken)
+                    ->update([
+                        'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
+                        'processing_started_at' => Carbon::now(),
+                    ]);
             }
         }
 
@@ -116,6 +125,13 @@ class FinancialReconciliationEngine
             $ref = $payout->transfer_reference ?? ('FLEET-DISBURSE-' . $payout->id);
             $verify = $this->paystackService->verifyTransfer($ref);
 
+            // Fencing Guard (Finding P1): Verify this worker still holds the valid lease
+            $stillOwned = LogisticsPayoutRequest::where('id', $payout->id)->where('processing_token', $claimToken)->exists();
+            if (!$stillOwned) {
+                Log::warning("Fencing guard: Stale worker for logistics payout #{$payout->id} skipped (claim lease expired/overwritten).");
+                continue;
+            }
+
             if ($verify['success'] && ($verify['status'] ?? '') === 'success') {
                 $this->finalizationService->finalizeLogisticsPayout($payout, [
                     'transfer_code' => $verify['transfer_code'] ?? $payout->paystack_transfer_code,
@@ -130,10 +146,12 @@ class FinancialReconciliationEngine
                 );
                 $results['logistics_reconciled']++;
             } else {
-                LogisticsPayoutRequest::where('id', $payout->id)->update([
-                    'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
-                    'processing_started_at' => Carbon::now(),
-                ]);
+                LogisticsPayoutRequest::where('id', $payout->id)
+                    ->where('processing_token', $claimToken)
+                    ->update([
+                        'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
+                        'processing_started_at' => Carbon::now(),
+                    ]);
             }
         }
 
@@ -213,31 +231,36 @@ class FinancialReconciliationEngine
                 continue;
             }
 
+            $finOpService = app(\App\Services\FinancialOperationService::class);
+
             if (empty($claimedOrder->paystack_refund_reference)) {
-                // 1. Authoritative refund initiation with durable state recording
-                $refundRes = $this->paystackService->initiateRefund(
-                    $claimedOrder->payment_reference,
-                    (string)$claimedOrder->grand_total,
-                    "Automated reconciliation refund for authorized Order #{$claimedOrder->order_number}"
-                );
+                // 1. Authoritative partial vs full refund amount determination (Audit Finding P0 resolution)
+                $returnCase = $claimedOrder->returnCases()
+                    ->whereIn('status', ['refund_pending', 'refund_approved'])
+                    ->first();
 
-                if (!empty($refundRes['success']) && !empty($refundRes['refund_reference'])) {
-                    $gwStatus = strtolower($refundRes['status'] ?? 'pending');
-                    $isCompleted = in_array($gwStatus, ['processed', 'success', 'completed'], true);
+                $refundAmount = $returnCase ? $returnCase->total_refundable_amount : (string)$claimedOrder->grand_total;
 
-                    $claimedOrder->update([
-                        'paystack_refund_reference' => $refundRes['refund_reference'],
-                        'paystack_refund_status' => $isCompleted ? 'completed' : 'pending',
-                    ]);
+                try {
+                    $op = $finOpService->createRefundOperation(
+                        $claimedOrder,
+                        $refundAmount,
+                        "Automated reconciliation refund for authorized Order #{$claimedOrder->order_number}",
+                        $returnCase
+                    );
 
-                    if ($isCompleted) {
-                        $reconciled++;
+                    $dispatchRes = $finOpService->dispatchRefund($op);
+
+                    if (!empty($dispatchRes['success'])) {
+                        if (($dispatchRes['status'] ?? '') === 'confirmed') {
+                            $reconciled++;
+                        }
+                    } else {
+                        $claimedOrder->update(['paystack_refund_status' => 'pending']);
                     }
-                } else {
-                    $claimedOrder->update([
-                        'paystack_refund_status' => 'pending',
-                    ]);
-                    Log::error("Paystack refund initiation failed for order #{$claimedOrder->id}: " . ($refundRes['message'] ?? 'Gateway rejected refund.'));
+                } catch (\Throwable $e) {
+                    Log::error("Reconciler refund initiation failed for order #{$claimedOrder->id}: " . $e->getMessage());
+                    $claimedOrder->update(['paystack_refund_status' => 'pending']);
                 }
             } else {
                 // 2. Authoritatively verify existing refund status with Paystack Gateway
@@ -246,9 +269,26 @@ class FinancialReconciliationEngine
                 if (!empty($verifyRes['success'])) {
                     $gwStatus = strtolower($verifyRes['status'] ?? 'pending');
                     if (in_array($gwStatus, ['processed', 'success', 'completed'], true)) {
-                        $claimedOrder->update([
-                            'paystack_refund_status' => 'completed',
-                        ]);
+                        // Check if a FinancialOperation exists for trace and double-entry ledger finalization
+                        $existingOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+                            ->whereJsonContains('metadata->order_id', $claimedOrder->id)
+                            ->where('status', '!=', 'confirmed')
+                            ->first();
+
+                        if ($existingOp) {
+                            $finOpService->finalizeRefundConfirmation($existingOp, $verifyRes);
+                        } else {
+                            $claimedOrder->update([
+                                'paystack_refund_status' => 'completed',
+                            ]);
+                            // Also transition any pending return case
+                            $claimedOrder->returnCases()
+                                ->whereIn('status', ['refund_pending', 'refund_approved'])
+                                ->update([
+                                    'status' => 'refunded',
+                                    'refunded_at' => Carbon::now(),
+                                ]);
+                        }
                         $reconciled++;
                     } elseif (in_array($gwStatus, ['failed', 'reversed'], true)) {
                         $claimedOrder->update([

@@ -463,6 +463,7 @@ class ReturnAndRefundService
 
             return [
                 'valid' => true,
+                'order_id' => $order->id,
                 'order_payment_reference' => $order->payment_reference,
                 'case_number' => $lockedCase->case_number,
                 'existing_paystack_refund_id' => $lockedCase->paystack_refund_id,
@@ -479,31 +480,70 @@ class ReturnAndRefundService
         $totalCashRefund = $preValidation['total_cash_refund'];
         $paystackRefundId = $preValidation['existing_paystack_refund_id'];
 
-        // 2. Out-of-DB-Transaction Paystack Gateway Execution (Guards against local DB rollback ghost refund)
-        if (empty($paystackRefundId) && !empty($preValidation['order_payment_reference'])) {
-            $refundRes = $this->paystackService->initiateRefund(
-                $preValidation['order_payment_reference'],
-                $totalCashRefund,
-                "Manual refund for Return Case #{$preValidation['case_number']}"
-            );
+        // 2. Out-of-DB-Transaction Paystack Gateway Execution via Authoritative FinancialOperationService
+        if (empty($bankReference) && empty($paystackRefundId) && !empty($preValidation['order_payment_reference'])) {
+            $finOpService = app(\App\Services\FinancialOperationService::class);
+            $order = Order::findOrFail($preValidation['order_id']);
+            $case = ReturnCase::findOrFail($caseId);
 
-            if (empty($refundRes['success'])) {
-                // Clear the concurrency claim token on gateway rejection so it can be retried
+            try {
+                $op = $finOpService->createRefundOperation(
+                    $order,
+                    $totalCashRefund,
+                    "Manual refund for Return Case #{$preValidation['case_number']}",
+                    $case
+                );
+
+                $dispatchRes = $finOpService->dispatchRefund($op);
+
+                if (!$dispatchRes['success'] && ($dispatchRes['status'] ?? '') === 'failed') {
+                    // Gateway definitively rejected
+                    ReturnCase::where('id', $caseId)->update([
+                        'refund_claim_token' => null,
+                        'refund_claimed_at' => null,
+                    ]);
+                    return [
+                        'success' => false,
+                        'message' => 'Paystack gateway refund failed: ' . ($dispatchRes['message'] ?? 'Payment provider rejected.'),
+                    ];
+                }
+
+                $paystackRefundId = $dispatchRes['refund_reference'] ?? null;
+                ReturnCase::where('id', $caseId)->update(['paystack_refund_id' => $paystackRefundId]);
+
+                if (($dispatchRes['status'] ?? '') === 'confirmed') {
+                    // Instantly confirmed
+                    return [
+                        'success' => true,
+                        'message' => "Refund of ₦" . number_format((float)$totalCashRefund, 2) . " disbursed and settled successfully for Case #{$case->case_number}.",
+                        'case' => $case->fresh(),
+                        'total_refunded' => $totalCashRefund,
+                    ];
+                }
+
+                // Initiated / Pending asynchronous bank confirmation
                 ReturnCase::where('id', $caseId)->update([
                     'refund_claim_token' => null,
                     'refund_claimed_at' => null,
                 ]);
 
                 return [
+                    'success' => true,
+                    'status' => 'initiated',
+                    'message' => "Refund of ₦" . number_format((float)$totalCashRefund, 2) . " queued with Paystack ({$paystackRefundId}). Awaiting gateway settlement confirmation.",
+                    'case' => $case->fresh(),
+                    'total_refunded' => $totalCashRefund,
+                ];
+            } catch (\Throwable $e) {
+                ReturnCase::where('id', $caseId)->update([
+                    'refund_claim_token' => null,
+                    'refund_claimed_at' => null,
+                ]);
+                return [
                     'success' => false,
-                    'message' => 'Paystack gateway refund failed: ' . ($refundRes['message'] ?? 'Payment provider rejected or timed out.') . '. Return case remains in refund_pending status.',
+                    'message' => 'Refund operation error: ' . $e->getMessage(),
                 ];
             }
-
-            $paystackRefundId = $refundRes['refund_reference'] ?? ($refundRes['data']['reference'] ?? null);
-
-            // Persist gateway refund ID immediately so subsequent retries never duplicate payment
-            ReturnCase::where('id', $caseId)->update(['paystack_refund_id' => $paystackRefundId]);
         }
 
         // 3. Atomic Financial Journal Entries & State Settlement

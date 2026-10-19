@@ -603,29 +603,24 @@ class OrderSettlementService
             ];
         });
 
-        // Out-of-DB-Transaction Paystack Refund Execution (Guards against DB rollback ghost refund)
+        // Out-of-DB-Transaction Paystack Refund Execution via Authoritative FinancialOperationService
         if (!empty($result['trigger_gateway_refund'])) {
-            $refundRes = $this->paystackService->initiateRefund(
-                $result['refund_reference'],
-                $result['refund_amount'],
-                "Automated refund for out-of-stock/cancelled Order #{$result['refund_order_number']}"
-            );
+            $orderToRefund = Order::find($result['refund_order_id']);
+            if ($orderToRefund) {
+                try {
+                    $finOpService = app(\App\Services\FinancialOperationService::class);
+                    $op = $finOpService->createRefundOperation(
+                        $orderToRefund,
+                        $result['refund_amount'],
+                        "Automated refund for out-of-stock/cancelled Order #{$result['refund_order_number']}"
+                    );
+                    $dispatchRes = $finOpService->dispatchRefund($op);
 
-            if (!empty($refundRes['success']) && !empty($refundRes['refund_reference'])) {
-                Order::where('id', $result['refund_order_id'])->update([
-                    'paystack_refund_reference' => $refundRes['refund_reference'],
-                    'paystack_refund_status' => 'completed',
-                ]);
-                if (isset($result['order'])) {
-                    $result['order']->paystack_refund_reference = $refundRes['refund_reference'];
-                    $result['order']->paystack_refund_status = 'completed';
-                }
-            } else {
-                Order::where('id', $result['refund_order_id'])->update([
-                    'paystack_refund_status' => 'pending',
-                ]);
-                if (isset($result['order'])) {
-                    $result['order']->paystack_refund_status = 'pending';
+                    if (isset($result['order'])) {
+                        $result['order']->refresh();
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::error("OrderSettlementService refund operation error: " . $e->getMessage());
                 }
             }
         }
