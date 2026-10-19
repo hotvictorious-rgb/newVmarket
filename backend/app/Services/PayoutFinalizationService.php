@@ -405,11 +405,11 @@ class PayoutFinalizationService
             $discrepancy = bcsub($formattedPayoutAmount, $allocatedSum, 2);
 
             if (bccomp($discrepancy, '0.00', 2) > 0) {
-                // Symmetrical reversal of treasury suspense debit
+                // Symmetrical reversal of treasury suspense debit; group it with the cash/payable reversal so this journal event balances.
                 FinancialJournalEntry::create([
                     'order_id' => null,
                     'transaction_reference' => $revRef,
-                    'event_id' => 'EVT-REV-VND-SUSPENSE-' . $lockedPayout->id,
+                    'event_id' => 'EVT-REV-VND-' . $lockedPayout->id,
                     'beneficiary_type' => VendorProfile::class,
                     'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
                     'account_name' => 'treasury_reconciliation_suspense',
