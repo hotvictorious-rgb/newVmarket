@@ -417,7 +417,7 @@ Rather than immediately making every product available nationwide, the platform 
 
 This geographic discipline is intended to avoid promising deliveries that the platform cannot consistently fulfill.
 
-As VICTORIOUS MARKET matures, the system may support more merchants, branches, product categories, logistics providers, and customers.
+As VICTORIOUS MARKET matures, the system may support more merchants, branches, product categories, vendor-managed delivery teams, and customers.
 
 Expansion should follow demonstrated operational capacity, not merely the availability of technical features.
 
@@ -465,7 +465,7 @@ Before broad public launch, the most important milestones are financial correctn
 
 VICTORIOUS MARKET aims to become more than a website where people buy products.
 
-The long-term ambition is to create a dependable digital commerce infrastructure connecting verified merchants, customers, logistics providers, and controlled financial operations.
+The long-term ambition is to create a dependable digital commerce infrastructure connecting verified merchants, customers, vendor-managed delivery teams, and controlled financial operations.
 
 Customers should be able to shop with confidence.
 
