@@ -2269,4 +2269,69 @@ class FinancialAuditRemediationProofTest extends TestCase
             ->where('status', 'committed')->count());
     }
 
+
+    public function test_refund_idempotency_key_reuse_with_different_amount_is_rejected(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-IDEMPOTENCY-AMOUNT-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        $service = app(FinancialOperationService::class);
+        $key = 'IDEMPOTENCY-REFUND-EXACT-INSTRUCTION-' . uniqid();
+        $original = $service->createRefundOperation($order, '500.00', 'original instruction', null, $key);
+
+        // An exact retry is safe and returns the original operation.
+        $retry = $service->createRefundOperation($order, '500.00', 'original instruction', null, $key);
+        $this->assertSame($original->id, $retry->id);
+
+        try {
+            $service->createRefundOperation($order, '600.00', 'changed amount', null, $key);
+            $this->fail('Expected conflicting idempotency-key reuse to be rejected.');
+        } catch (\\DomainException $exception) {
+            $this->assertStringContainsString('different refund instruction', $exception->getMessage());
+        }
+
+        $this->assertSame(1, FinancialOperation::where('idempotency_key', $key)->count());
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $original->id)
+            ->where('status', 'active')->count());
+    }
+
+    public function test_refund_idempotency_key_cannot_be_reused_for_another_order(): void
+    {
+        $firstOrder = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-IDEMPOTENCY-ORDER-A-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+        ]);
+        $secondOrder = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-IDEMPOTENCY-ORDER-B-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        $service = app(FinancialOperationService::class);
+        $key = 'IDEMPOTENCY-REFUND-CROSS-ORDER-' . uniqid();
+        $original = $service->createRefundOperation($firstOrder, '500.00', 'first order refund', null, $key);
+
+        try {
+            $service->createRefundOperation($secondOrder, '500.00', 'second order refund', null, $key);
+            $this->fail('Expected cross-order idempotency-key reuse to be rejected.');
+        } catch (\\DomainException $exception) {
+            $this->assertStringContainsString('different refund instruction', $exception->getMessage());
+        }
+
+        $this->assertSame(1, FinancialOperation::where('idempotency_key', $key)->count());
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $original->id)->count());
+        $this->assertSame(0, FinancialReservation::where('source_id', $secondOrder->id)
+            ->where('purpose', 'customer_refund_hold')->count());
+    }
+
 }
