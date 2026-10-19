@@ -1908,4 +1908,64 @@ class FinancialAuditRemediationProofTest extends TestCase
         }
     }
 
+
+
+    public function test_refund_reconciliation_does_not_finalize_gateway_amount_or_currency_mismatch(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-RECON-FINANCIAL-EVIDENCE-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+            'paystack_refund_reference' => 'rf-recon-financial-evidence',
+        ]);
+
+        $operation = app(FinancialOperationService::class)->createRefundOperation(
+            $order,
+            '500.00',
+            'gateway verification financial evidence mismatch',
+            null,
+            'IDEMPOTENCY-RECON-FINANCIAL-EVIDENCE-' . uniqid()
+        );
+        $operation->update(['status' => 'initiated']);
+        GatewayAttempt::create([
+            'financial_operation_id' => $operation->id,
+            'gateway_provider' => 'paystack',
+            'endpoint' => '/refund',
+            'attempt_reference' => 'ATT-RECON-FINANCIAL-EVIDENCE',
+            'gateway_reference' => 'rf-recon-financial-evidence',
+            'request_payload' => [
+                'transaction' => $order->payment_reference,
+                'amount_kobo' => $operation->amount_kobo,
+                'amount_naira' => $operation->amount_naira,
+            ],
+            'outcome' => 'success',
+            'attempted_at' => Carbon::now(),
+        ]);
+
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldReceive('verifyRefund')->once()->with('rf-recon-financial-evidence')->andReturn([
+            'success' => true,
+            'refund_reference' => 'rf-recon-financial-evidence',
+            'status' => 'processed',
+            'data' => [
+                'reference' => 'rf-recon-financial-evidence',
+                'amount' => 49999,
+                'currency' => 'USD',
+            ],
+        ]);
+        $this->app->instance(PaystackService::class, $mock);
+
+        $engine = app(FinancialReconciliationEngine::class);
+        $this->assertSame(0, $engine->reconcileRefunds());
+        $this->assertSame('initiated', $operation->fresh()->status);
+        $this->assertSame('pending', $order->fresh()->paystack_refund_status);
+        $this->assertNull($order->fresh()->refund_reconciliation_token);
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $operation->id)
+            ->where('status', 'active')->count());
+        $this->assertSame(0, FinancialReservation::where('financial_operation_id', $operation->id)
+            ->where('status', 'committed')->count());
+    }
+
 }
