@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Country;
 use App\Models\FinancialJournalEntry;
+use App\Models\FinancialOperation;
+use App\Models\GatewayAttempt;
 use App\Models\Lga;
 use App\Models\LogisticsCompanyProfile;
 use App\Models\LogisticsPayoutRequest;
@@ -15,6 +17,7 @@ use App\Models\User;
 use App\Models\VendorPayoutAllocation;
 use App\Models\VendorPayoutRequest;
 use App\Models\VendorProfile;
+use App\Services\FinancialOperationService;
 use App\Services\FinancialReconciliationEngine;
 use App\Services\PayoutFinalizationService;
 use App\Services\PaystackService;
@@ -667,6 +670,53 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertNotNull($event);
         $this->assertEquals('unmatched', $event->status);
         $this->assertStringContainsString('LATE_TRANSFER_FAILED_AFTER_SUCCESS', (string) $event->error_reason);
+    }
+
+    public function test_initiated_refund_is_not_dispatched_twice_after_uncertain_attempt(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-REFUND-RETRY-GUARD',
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldNotReceive('initiateRefund');
+        $this->app->instance(PaystackService::class, $mock);
+
+        $service = app(FinancialOperationService::class);
+        $operation = $service->createRefundOperation(
+            $order,
+            '500.00',
+            'retry protection proof',
+            null,
+            'IDEMPOTENCY-REFUND-RETRY-GUARD'
+        );
+
+        $operation->update(['status' => 'initiated']);
+        GatewayAttempt::create([
+            'financial_operation_id' => $operation->id,
+            'gateway_provider' => 'paystack',
+            'endpoint' => '/refund',
+            'attempt_reference' => 'ATT-RFD-RETRY-GUARD',
+            'request_payload' => [
+                'transaction' => $order->payment_reference,
+                'amount_kobo' => 50000,
+                'amount_naira' => '500.00',
+            ],
+            'outcome' => 'uncertain_timeout',
+            'attempted_at' => Carbon::now(),
+        ]);
+
+        $result = $service->dispatchRefund($operation);
+
+        $this->assertFalse($result['success']);
+        $this->assertEquals('initiated', $result['status']);
+        $this->assertStringContainsString('duplicate dispatch suppressed', $result['message']);
+        $this->assertEquals(1, GatewayAttempt::where('financial_operation_id', $operation->id)->count());
+        $this->assertEquals('initiated', $operation->fresh()->status);
     }
 
     /**
