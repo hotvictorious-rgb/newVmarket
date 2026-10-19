@@ -132,6 +132,55 @@ This gives you a clear model:
 
 **My verdict:** this makes VMARKET's model more compelling. You're not just earning commission; you're reinvesting part of it into customer retention. The key is to make the cashback rules financially sustainable, transparent and difficult to abuse.
 
+## 30-Minute Stock-Hold and Late-Payment Reconciliation Policy
+
+For VICTORIOUS MARKET, if a customer pays after the 30-minute stock hold expires, the system should verify the payment first, check the stock again, and then either confirm the order or initiate a controlled refund. It should never assume that payment automatically means stock is still available.
+
+The important distinction is that 30 minutes is the stock-hold duration, not a deadline that makes a customer's money disappear.
+
+### How it should work
+
+1. **The 30-minute hold expires**  
+   The system marks the hold as expired or awaiting reconciliation. If Paystack confirms that payment failed or was abandoned, the system releases the reserved quantity so another customer can buy it.
+
+2. **The customer actually pays late, but stock is still available**  
+   The backend verifies the payment directly with Paystack, checks the amount and reference, and atomically rechecks stock. If the requested quantity is available, it deducts the stock once and confirms the order.
+
+3. **The customer pays late, but the stock has sold out**  
+   The system records the verified payment but does not confirm the order for fulfilment. It creates a refund case and initiates the appropriate refund process. The order remains in a clear state such as paid_stock_unavailable until the case is resolved.
+
+4. **Payment status is uncertain when the hold expires**  
+   Do not immediately release stock solely because the timer elapsed. Check Paystack's authoritative status. If the outcome remains uncertain, keep the order in reconciliation and prevent duplicate deductions, duplicate orders, or duplicate refunds.
+
+### Example
+
+A vendor has 5 phones in stock. A customer tries to buy 2.
+
+| Event | Available stock | Held stock |
+| :--- | :--- | :--- |
+| **Before checkout** | 5 | 0 |
+| **Customer clicks Pay** | 5 | 2 |
+| **Hold expires; payment is confirmed failed** | 5 | 0 |
+| **Another customer buys 4** | 1 | 0 |
+| **First customer pays late** | 1 | 0 |
+
+In the final step, the first customer's payment cannot be used to fulfil an order for 2 phones because only 1 remains. VMARKET should initiate a controlled refund rather than oversell or silently substitute another product.
+
+### My recommendation for VMARKET
+
+Implement these rules:
+
+- The hold expires after 30 minutes, but payment verification and refund handling continue beyond that deadline.
+- A late payment can still be fulfilled if sufficient stock remains and the backend can safely allocate it.
+- Never oversell: use a database transaction and row-level locking or an equivalent atomic inventory mechanism.
+- Never refund based only on the browser's message. Verify the payment with Paystack first.
+- Never release stock just because the timer expired while payment status is still pending or unknown.
+- Never refund twice: every payment and refund operation needs idempotency protection.
+
+One more important detail: if Paystack returns a successful payment after the customer has already been told the hold expired, the backend must still process that verified result safely. The customer-facing message should explain whether the order was confirmed or whether a refund is being handled.
+
+This gives VMARKET a fair policy: customers are protected when payment arrives late, vendors are protected from overselling, and the platform has a controlled path for every outcome.
+
 ## Required workflow
 
 ### Phase 1: Audit before coding
