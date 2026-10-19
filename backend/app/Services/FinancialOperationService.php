@@ -379,7 +379,7 @@ class FinancialOperationService
             // Verify gateway evidence has terminal status
             $gwStatus = strtolower($gatewayEvidence['status'] ?? $gatewayEvidence['data']['status'] ?? '');
             if (!in_array($gwStatus, ['processed', 'success', 'completed'], true)) {
-                throw new \\InvalidArgumentException("Cannot confirm refund without verified terminal gateway status. Received: '{$gwStatus}'");
+                throw new \InvalidArgumentException("Cannot confirm refund without verified terminal gateway status. Received: '{$gwStatus}'");
             }
 
             // Central financial-evidence fence: every caller (webhook, reconciler,
