@@ -222,7 +222,7 @@ VICTORIOUS MARKET does not operate a central logistics company, fleet, dispatch 
 - A vendor can assign only a rider linked to that same vendor. Riders cannot browse unassigned orders, assign themselves, or access another vendor's orders.
 - Reassignment is allowed only within the vendor's ownership and custody rules. Once a rider has taken physical custody of a parcel, ordinary reassignment is blocked until an audited return/custody-transfer process is completed.
 - Platform administrators may enforce account safety, suspend accounts, review disputes, and inspect audit records. They do not run dispatch, choose riders, manage rider routes, or pay riders.
-- Riders are operational-only. Any compensation is arranged and paid directly by the vendor outside Victorious MARKET. Rider delivery confirmation cannot approve a refund, change prices, settle a vendor, release funds, or create a rider payable.
+- Riders are operational-only. Any compensation is arranged and paid directly by the vendor outside Victorious MARKET. Rider delivery confirmation is an operational event, not a financial permission. It cannot let the rider edit ledgers, approve refunds, change prices, or request payouts. An independent authorized financial service may use a verified delivery event under the published vendor-settlement policy.
 
 ### Delivery workflow and proof
 The vendor prepares the order and assigns a linked rider. The workflow records readiness, assignment, pickup/custody, each delivery attempt, and final handover as separate events. Customer handover must use the configured verification pass/OTP and required proof evidence. Evidence records who acted, when, which order was involved, and the proof reference.
