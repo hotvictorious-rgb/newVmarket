@@ -236,9 +236,10 @@ The rider may see only the customer's name, delivery address, and a protected **
 In-shop pickup remains fully supported as a separate fulfilment type:
 - The customer collects the order at the owning vendor's physical shop.
 - Delivery fee is always zero, enforced server-side.
-- The customer uses a pickup pass in the format **RES-XXXXXX**, verified by the vendor at the counter.
+- The customer uses the canonical pickup pass in the format **RES-XXXXXX**, verified by the owning vendor at the counter.
+- A separate six-digit order pickup verification field must not silently replace or override the RES pass. Preserve historical values; if the six-digit field has another approved purpose, document and isolate that purpose rather than treating it as an alternate customer counter credential.
 - No rider assignment, delivery fee, rider compensation, or logistics payout is created.
-- Pickup status remains separate from doorstep delivery status and must not require a doorstep rider or doorstep-only verification flow.
+- Pickup status remains separate from doorstep delivery status and must not require a doorstep rider or doorstep-only verification flow. Rider parcel custody from vendor to rider is a different operational handshake.
 
 ### Delivery areas and fees
 Vendors configure the destinations they serve and the corresponding delivery fees. An explicit LGA fee takes precedence over a state-level fallback. An unsupported destination is unavailable. The selected fulfilment type, destination, and agreed fee are snapshotted to the vendor child order at checkout. Each vendor's delivery charge is recorded independently; no platform logistics-provider share or rider payable is generated. The existing platform commission rule remains distinct from rider compensation.
