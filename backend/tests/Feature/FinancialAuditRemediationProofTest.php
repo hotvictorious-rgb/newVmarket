@@ -1706,4 +1706,44 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertSame(1, FinancialReservation::where('financial_operation_id', $second->id)->where('status', 'committed')->count());
     }
 
+
+    public function test_late_refund_success_cannot_resurrect_failed_operation_after_reservation_release(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-LATE-SUCCESS-AFTER-FAIL-' . uniqid(),
+            'paystack_refund_status' => 'failed',
+        ]);
+
+        $service = app(FinancialOperationService::class);
+        $operation = $service->createRefundOperation(
+            $order,
+            '500.00',
+            'late success after failed refund',
+            null,
+            'IDEMPOTENCY-LATE-SUCCESS-AFTER-FAIL-' . uniqid()
+        );
+
+        $operation->update(['status' => 'failed', 'failed_at' => Carbon::now()]);
+        FinancialReservation::where('financial_operation_id', $operation->id)
+            ->where('status', 'active')
+            ->update(['status' => 'released', 'released_at' => Carbon::now()]);
+
+        $result = $service->finalizeRefundConfirmation($operation, [
+            'status' => 'processed',
+            'refund_reference' => 'rf-late-success-after-fail',
+        ]);
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected']);
+        $this->assertSame('failed', $operation->fresh()->status);
+        $this->assertSame('failed', $order->fresh()->paystack_refund_status);
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $operation->id)
+            ->where('status', 'released')->count());
+        $this->assertSame(0, FinancialReservation::where('financial_operation_id', $operation->id)
+            ->where('status', 'committed')->count());
+        $this->assertSame(0, FinancialJournalEntry::where('financial_operation_id', $operation->id)->count());
+    }
 }
