@@ -1797,4 +1797,53 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertSame(1, FinancialReservation::where('financial_operation_id', $pendingOperation->id)
             ->where('status', 'active')->count());
     }
+
+    public function test_refund_failed_webhook_with_conflicting_original_payment_reference_does_not_fail_operation(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-EXPECTED-ORIGINAL-PAYMENT-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        $operation = app(FinancialOperationService::class)->createRefundOperation(
+            $order,
+            '500.00',
+            'failed webhook identity mismatch',
+            null,
+            'IDEMPOTENCY-FAILED-WEBHOOK-IDENTITY-' . uniqid()
+        );
+        $metadata = $operation->metadata ?? [];
+        $metadata['refund_reference'] = 'rf-failed-identity-mismatch';
+        $metadata['payment_reference'] = $order->payment_reference;
+        $operation->update(['status' => 'initiated', 'metadata' => $metadata]);
+
+        $payloadData = [
+            'id' => 'evt-failed-identity-mismatch-' . uniqid(),
+            'event' => 'refund.failed',
+            'data' => [
+                'refund_reference' => 'rf-failed-identity-mismatch',
+                'transaction_reference' => 'SOME-OTHER-PAYMENT-REFERENCE',
+                'status' => 'failed',
+            ],
+        ];
+        $payload = json_encode($payloadData);
+        $signature = hash_hmac('sha512', $payload, app(PaystackService::class)->getSecretKey());
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('initiated', $operation->fresh()->status);
+        $this->assertSame('pending', $order->fresh()->paystack_refund_status);
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $operation->id)
+            ->where('status', 'active')->count());
+        $event = ProcessedWebhookEvent::where('event_id', $payloadData['id'])->first();
+        $this->assertNotNull($event);
+        $this->assertSame('unmatched', $event->status);
+        $this->assertStringContainsString('TRANSACTION_REFERENCE_MISMATCH', $event->error_reason);
+    }
 }
