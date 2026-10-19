@@ -725,6 +725,48 @@ class PaystackPaymentController extends Controller
                     'message' => 'Refund failure received but original payment reference conflicts; flagged for review.',
                 ], 200);
             }
+            // Failed-refund payloads may omit amount/currency. If Paystack supplies
+            // either field, treat it as evidence and reject conflicting or malformed values.
+            // Do not release a reservation on a failure event that describes a different refund.
+            if (array_key_exists('amount', $rData)) {
+                if (!is_numeric($rData['amount']) || (int) $rData['amount'] !== (int) $finOp->amount_kobo) {
+                    $this->updateProcessedEvent($processedEvent, [
+                        'status' => 'unmatched',
+                        'error_reason' => 'REFUND_AMOUNT_MISMATCH: Failed refund event amount is invalid or differs from the financial operation.',
+                        'processed_at' => Carbon::now(),
+                    ]);
+                    Log::critical('Paystack refund.failed amount mismatch; financial operation and reservation were not changed.', [
+                        'event_id' => $processedEvent->event_id,
+                        'operation_id' => $finOp->id,
+                        'expected_amount_kobo' => $finOp->amount_kobo,
+                        'received_amount_kobo' => $rData['amount'],
+                    ]);
+                    return response()->json([
+                        'status' => true,
+                        'message' => 'Refund failure amount conflicts with the financial operation; flagged for review.',
+                    ], 200);
+                }
+            }
+
+            if (array_key_exists('currency', $rData)
+                && strtoupper(trim((string) $rData['currency'])) !== strtoupper((string) $finOp->currency)) {
+                $this->updateProcessedEvent($processedEvent, [
+                    'status' => 'unmatched',
+                    'error_reason' => 'REFUND_CURRENCY_MISMATCH: Failed refund event currency differs from the financial operation.',
+                    'processed_at' => Carbon::now(),
+                ]);
+                Log::critical('Paystack refund.failed currency mismatch; financial operation and reservation were not changed.', [
+                    'event_id' => $processedEvent->event_id,
+                    'operation_id' => $finOp->id,
+                    'expected_currency' => $finOp->currency,
+                    'received_currency' => $rData['currency'],
+                ]);
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Refund failure currency conflicts with the financial operation; flagged for review.',
+                ], 200);
+            }
+
             \Illuminate\Support\Facades\DB::transaction(function () use ($finOp, $rData) {
                 $lockedOp = \App\Models\FinancialOperation::where('id', $finOp->id)->lockForUpdate()->firstOrFail();
                 if ($lockedOp->status === 'confirmed') {
