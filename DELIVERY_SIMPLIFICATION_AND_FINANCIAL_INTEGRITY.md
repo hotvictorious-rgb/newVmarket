@@ -147,147 +147,35 @@ One more important detail: if Paystack returns a successful payment after the cu
 
 This gives VMARKET a fair policy: customers are protected when payment arrives late, vendors are protected from overselling, and the platform has a controlled path for every outcome.
 
-## Three-Quantity Inventory Architecture (Physical, Held, Allocated, and Available)
+## V1 Inventory Policy: Simple Vendor Toggle, Honest Stock Guarantees
 
-VMARKET can automatically mark a product **Out of Stock** the moment all its physical units have been allocated to paid orders or temporarily held for customers making payment.
+The V1 vendor interface uses a simple **In Stock / Out of Stock** toggle. Vendors are not required to maintain a numeric shelf count merely to use the marketplace. However, the system must not claim that it knows the exact number of physical units when the vendor has not supplied an authoritative quantity.
 
-### The Invariant and Calculation
+### Inventory rules
 
-Allocated quantity can be greater than available quantity. It must not exceed the physical stock remaining after active holds are accounted for.
+1. **Binary listing mode:** The vendor's status is the source of truth for whether the listing is offered for sale. The backend must lock the product/listing during checkout, reject an out-of-stock listing, and prevent conflicting concurrent changes to the same listing. The platform cannot guarantee that the physical item remains available if the vendor sells it offline and fails to update the toggle.
+2. **Quantity-tracked mode, when available:** If the product has an authoritative physical count, the backend maintains physical, allocated, and held quantities. Available quantity is physical minus allocated minus active holds, clamped at zero. The invariant is allocated + held less than or equal to physical. The vendor UI may remain simple even if the backend maintains a verified quantity.
+3. **No invented quantities:** Do not infer a physical stock count from an In Stock toggle. Do not show customers a numeric quantity unless it comes from authoritative inventory.
+4. **30-minute payment hold:** A checkout hold is a temporary reservation for the capacity the backend can actually enforce. The hold expires after 30 minutes, but payment verification continues beyond that deadline. Do not release a reservation while payment is pending or uncertain until the authoritative gateway outcome is reconciled.
+5. **Verified successful payment:** Convert the relevant active reservation into the order's allocation atomically. If the listing uses quantity-tracked inventory, decrement/allocate exactly once under database locks. If the vendor's offline sale made the item unavailable and the vendor's binary status was stale, do not silently cancel or pretend the item was delivered; move the paid order into an explicit paid-stock-unavailable review/refund workflow.
+6. **Failed payment:** Release the reservation only after the gateway result is authoritatively failed/abandoned or reconciliation establishes that no payment succeeded. Repeated callbacks must not release or allocate stock twice.
+7. **Concurrency:** Use database transactions, row locks, unique/idempotency constraints, and explicit reservation state. These controls prevent conflicting updates for tracked inventory. They do not reveal unreported offline sales or magically create a physical stock count.
+8. **Vendor POS sync:** Integrated point-of-sale synchronisation remains a future phase. Until then, the vendor must promptly toggle a listing Out of Stock after selling the last unit offline.
 
-For example, a vendor has 10 phones, 8 are allocated to paid orders, and 2 are temporarily held:
+### Example when the vendor tracks quantities
 
-| Quantity Type | Amount | Description |
-| :--- | :--- | :--- |
-| **Physical Quantity** | **10** | Total units physically present on shelf or in warehouse |
-| **Allocated Quantity** | **8** | Units sold and committed to confirmed, paid orders |
-| **Held Quantity** | **2** | Units temporarily locked in active 30-minute checkout holds |
-| **Available Quantity** | **0** | **Out of Stock** (buying disabled for new shoppers) |
+A vendor has 10 units, 8 allocated to paid orders, and 2 held for checkout. Available quantity is zero. When a hold expires after a confirmed failed payment, the 2 held units return to availability. When payment succeeds, the hold becomes allocation once. Dispatch must not double-decrement stock if allocation already removed it from available inventory.
 
-The authoritative mathematical calculation is:
-\text{Available} = \max\left(0, \text{Physical} - \text{Allocated} - \text{Held}\right)
+### Binary-mode trade-off
 
-### Automatic Storefront Rule
-- **$\text{Available} = 0$** $\rightarrow$ **Out of Stock**: Buying is disabled immediately. The product remains visible on the storefront with purchasing disabled, rather than disappearing entirely from the marketplace.
-- **$\text{Available} = 1$** $\rightarrow$ Customer can purchase at most 1 unit.
-- **$\text{Available} = N$** $\rightarrow$ Customer can purchase at most $ units.
-
-The system changes availability immediately within the database transaction that allocates or holds the final unit. The storefront updates the displayed status through a refreshed API response or real-time event.
-
-> **Crucial Rule:** Final checkout validation must always execute on the server under row-level database locking (lockForUpdate()). Merely disabling the frontend "Buy" button is never enough.
-
-### Lifecycle of the Three Quantities
-
-When a vendor has 10 items and 7 are allocated:
-1. **Available = 3.**
-2. A customer begins checkout and starts payment for 3 units:
-   - **Held** becomes 3.
-   - **Available** becomes 0 immediately.
-   - Product automatically shows **Out of Stock** on the storefront.
-   - Other shoppers cannot create a new payment hold.
-3. **If payment fails or the 30-minute hold expires**:
-   - The 3 held units are released back.
-   - **Held** returns to 0.
-   - **Available** becomes 3 again.
-4. **If payment succeeds**:
-   - The 3 held units convert into **Allocated**.
-   - **Allocated** becomes 7 + 3 = 10.
-   - **Held** returns to 0.
-   - **Available** remains 0.
-5. **When the vendor dispatches the items / marks fulfilled**:
-   - Both **Physical** quantity and **Allocated** quantity decrease by 3 (from 10 to 7).
-   - **Available** remains 0 (not negative).
-
-### Critical Discrepancy Rule
-\text{Allocated} + \text{Held} \le \text{Physical}
-
-If a merchant physical stock count reports fewer physical units than are already committed, the system must immediately flag an inventory discrepancy, block new sales, and alert the merchant for reconciliation—**never silently erase existing customer allocations or oversell**.
-
-
-## Vendor Simplicity vs. Backend Integrity: The V1 Binary Stock Architecture ('In Stock' vs. 'Out of Stock')
-
-For VICTORIOUS MARKET V1, simplifying the vendor interface to a clear binary choice—**"In Stock"** and **"Out of Stock"**—is the recommended operating model. Vendors operating physical retail shops in Akwa Ibom shouldn't have to manage complicated inventory numbers, track physical shelf counts manually, or face steep onboarding friction if the priority is making the marketplace easy to adopt and operate.
-
-However, there is one critical architectural distinction: **you can simplify what vendors see without removing the inventory safeguards the system needs internally.**
-
-```
-+-------------------------------------------------------------+
-|                     VENDOR INTERFACE (V1)                   |
-|        Simple Binary Toggle: [ In Stock ] / [ Out of Stock ]|
-+-------------------------------------------------------------+
-                               |
-                               v
-+-------------------------------------------------------------+
-|                  CUSTOMER STOREFRONT VIEW                   |
-|       "Available to Order" (In Stock)  |  "Out of Stock"    |
-+-------------------------------------------------------------+
-                               |
-                               v
-+-------------------------------------------------------------+
-|                   BACKEND FINANCIAL CORE                     |
-|  - Row-Level Locking (lockForUpdate)                        |
-|  - 30-Minute Order Payment Safety Window (Order::expires_at)|
-|  - Confirmed Order Allocations (order_status = 'confirmed') |
-|  - Guaranteed Concurrency Protection & Zero Ghost Orders    |
-|  - Controlled Refund Pipeline for Offline Depletions        |
-+-------------------------------------------------------------+
-```
-
-### What Happens Behind the Scenes
-
-1. **Vendor marks In Stock (`is_in_stock = true`)**:
-   The product becomes available for purchase across the storefront, subject to the system's order and availability checks. The vendor remains responsible for keeping this status truthful.
-2. **Customer begins checkout / starts payment**:
-   VMARKET creates a pending order with a 30-minute payment safety reservation window (`Order::expires_at = now()->addMinutes(30)`), without decrementing numeric stock quantities.
-3. **Payment succeeds**:
-   The pending reservation converts into a confirmed order (`order_status = 'confirmed'`, `vendor_settlement_status = 'held'`).
-4. **Vendor sells the last item in their physical shop**:
-   The vendor switches the toggle to **Out of Stock** (`is_in_stock = false`). VMARKET immediately rejects all new checkout attempts on the server.
-5. **Payment fails or the 30-minute hold expires**:
-   The order expires and transitions to `cancelled`, freeing up any pending in-store pickup reservations automatically.
-
-### The Real-World Trade-Offs
-
-With only a binary status, VMARKET does not inherently know whether a vendor has 1 physical phone or 100 phones on their shelf.
-
-- **Concurrent Checkout Rush**: If a vendor has only 1 phone left and two customers attempt to buy it simultaneously, a simple status flag alone cannot prevent both orders without atomic backend holds. The backend must enforce server-side row locking (`lockForUpdate()`) and hold reservations to prevent race conditions.
-- **Offline Physical Shop Sales**: If a vendor sells the last item over the counter in their brick-and-mortar shop but forgets to switch the toggle to "Out of Stock" in the VMARKET app, an online customer might place an order for an item that is physically gone.
-
-### The VMARKET V1 Policy Matrix
-
-| Feature | V1 Decision | Architectural Rationale |
-| :--- | :--- | :--- |
-| **Vendor Interface** | **In Stock / Out of Stock** | Zero cognitive burden; one-tap toggle removes operational friction for local shop owners. |
-| **Storefront Presentation** | **In Stock / Out of Stock** | Clean customer messaging: "Available to Order" vs. "Out of Stock" (product remains visible). |
-| **Internal Stock Quantities** | **Retained as Safeguards** | Order-level reservation timestamps and atomic row-level locks protect payment safety without requiring vendors to maintain numeric shelf counts. |
-| **30-Minute Payment Holds** | **Mandatory** | Guarantees that a customer initiating Paystack payment has their unit secured. |
-| **Duplicate-Payment Protection**| **Mandatory** | Gateway attempt fencing and idempotent ledger recording prevent double charges. |
-| **Overselling Prevention** | **Mandatory** | Server-side transaction locks ensure no two shoppers can claim the same held unit. |
-| **Vendor POS Sync** | **Future Phase** | Integrated when vendor point-of-sale hardware/scanners are introduced in V2. |
-
-### The Core Purchasing Validation Rule
-
-The core purchasing validation on the server executes inside an atomic database transaction:
-
-```php
-// Server-side atomic validation guard
-$product = Product::where('id', $validated['product_id'])
-    ->lockForUpdate()
-    ->firstOrFail();
-
-if (!$product->is_in_stock || !$product->is_available_for_sale) {
-    throw ValidationException::withMessages([
-        'product' => 'This product is currently out of stock.',
-    ]);
-}
-```
+A binary toggle is deliberately easy for vendors, but it cannot tell the system whether a vendor has one unit or many. If a vendor sells the last unit offline and forgets to update the toggle, a verified late payment may arrive after the item is gone. The system must protect the customer through a documented refund/review process, and the vendor must correct the listing status. Do not describe binary-only inventory as a guaranteed numerical stock system.
 
 ### The Customer Protection Policy (Offline Sold-Out Safeguard)
 
 If a vendor sells an item offline and forgets to update their VMARKET status, a customer who pays online must be protected 100%:
 1. **Never erase or alter paid records silently**: An existing paid order cannot be cancelled without an auditable ledger trail.
 2. **Controlled Refund Execution**: The order transitions to `paid_stock_unavailable` with `vendor_settlement_status = 'refund_pending'`.
-3. **Zero Customer Loss**: The full payment (merchandise + delivery fee) is either refunded to the customer's original payment channel or credited 100% to their customer wallet according to customer preference, with full double-entry ledger journal entries.
+3. **Customer funds remain protected**: The verified captured amount is resolved through the authorized refund workflow, normally to the original payment channel. A wallet remedy is permitted only where the customer explicitly chooses it and the approved wallet-credit workflow records balanced ledger entries. Stock-unavailable handlers must not create spendable wallet credit directly.
 
 ## Required workflow
 
