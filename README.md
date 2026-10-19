@@ -1,27 +1,28 @@
 # Victorious MARKET (newVmarket)
 
-> **Sovereign Omnichannel Retail & Directional Logistics Operating System**  
+> **Multi-vendor commerce platform with vendor-managed delivery**  
 > **Brand Promise:** Your Trusted Online Market for Quality Products  
 > **Operating Philosophy:** Trust First. Quality Always. Accountability at Every Stage  
-> **Brand Identity:** Royal Purple (`#5E17EB`) & Rich Gold (`#FFD700`) | **Core Asset:** `vm_icon.jpg`  
-> **Test Suite:** **458 Tests / 2,860 Assertions (100% Green, 0 Failures)**
+> **Fulfilment rule:** Each vendor manages its own riders and delivery; customers may choose zero-fee in-shop pickup.  
+> **Verification:** Run current CI and the full backend suite before release; historical test counts are not a current release guarantee.
 
 ---
 
 ## Executive Summary
 
-**Victorious MARKET** is a zero-trust, multi-tenant digital commerce and directional logistics operating system built on Laravel. Engineered specifically for African retail environments—starting across Akwa Ibom State and expanding across Nigeria—the platform bridges digital escrow payments with verifiable physical custody.
+**Victorious MARKET** is a multi-vendor commerce platform built on Laravel. It governs vendor onboarding, catalog quality, checkout, payment verification, customer protection, refunds, vendor settlements, and auditability. It does **not** operate a central logistics company, fleet, dispatch hub, route-dispatch service, or rider-payout programme for new orders.
 
-Traditional e-commerce platforms in emerging markets suffer from systemic vulnerabilities: phantom wallet liabilities, vendor payout theft, courier wage disputes, doorstep fraud, inventory overselling during checkout rushes, and non-reconciled gateway callbacks. Victorious MARKET eliminates these failure modes mathematically and structurally through:
+The current operating model is vendor-managed fulfilment: each vendor registers/manages its own riders and manually assigns its own child vendor orders. Riders are operational-only and are compensated directly by their vendor outside platform financial systems. Customers can instead choose **in-shop pickup**, which costs exactly zero delivery fee and uses a `RES-XXXXXX` pickup pass verified at the vendor's shop. Legacy logistics records remain historical/audit data and must not receive new fulfilment assignments.
 
-1. **Two-Tier Closed Financial Escrow:** Consumer micro-wallets are retired in favor of server-to-server verified Paystack escrow held in immutable double-entry ledgers (`cash_in_escrow`, `vendor_payable`, `platform_revenue`).
-2. **10% Platform Commission & 5% Cashback Reinvestment:** A sustainable commercial engine where VMARKET charges a flat 10% commission on the full order payment (merchandise + delivery), reinvesting half (5% of eligible merchandise value) directly into customer loyalty cashback.
-3. **Symmetric & Proportionate Commission Reversal:** When an eligible item or order refund is approved, the 10% platform commission attributable to that refunded portion is reversed proportionately in the double-entry ledger. Victorious MARKET never retains commission on customer refunds.
-4. **Two-Status Inventory Model (In Stock / Out of Stock) & Payment Safety Reservations:** Product availability is governed by a vendor-controlled binary toggle (**"In Stock"** vs **"Out of Stock"**), avoiding fragile quantity-counting friction for local merchants. Checkout and in-shop inspection hold temporary payment reservations (30-minute and 24-hour limits) without decrementing inventory counts.
-5. **Conflict & Late Payment Reconciliation:** If a merchant runs out of stock offline or two shoppers attempt concurrent purchase of the last item, the vendor switches the status to Out of Stock. Any late-confirming payment for an out-of-stock item transitions safely to `paid_stock_unavailable` with a 100% full refund or spendable wallet credit guarantee—ensuring zero overselling, zero merchant forced-fulfillment, and zero customer loss.
-6. **7-Day Marketplace Freshness Invariant:** To prevent ghost listings, merchants must re-verify catalog inventory every 7 days (`freshness_confirmed_at`). Listings unconfirmed past 7 days are automatically pruned from public browsing, search, and checkout.
-7. **Triangular Physical-Custody Handshakes:** Real-world custody transitions require single-use 6-digit OTP codes, GPS arrival verification, and photographic proof across branch pickup, courier transit, doorstep delivery, and defective returns.
-8. **Decoupled Fulfillment Architecture:** Complete support for **Vendor-Managed Delivery Couriers**, **Customer In-Shop Pickup**, and **Third-Party Logistics Fleets**, eliminating hard platform fleet dependencies while keeping riders 100% free of in-app financial liability.
+Core controls include:
+
+1. **Verified payments and double-entry accounting:** Paystack outcomes are verified server-side and reconciled with internal financial operations and journals.
+2. **Separate financial allocation bases:** Eligible merchandise uses a 90% vendor / 5% customer cashback / 5% platform allocation. The delivery fee uses a separate 90% vendor / 10% platform allocation. Cashback excludes delivery fees; rider compensation is never a platform payable.
+3. **Idempotent refunds and settlement:** Refunds, reversals, cashback, and vendor settlements must be authorized, bounded by actual captured payment and prior operations, and reconciled against gateway outcomes.
+4. **Inventory and late-payment safety:** A late payment after stock becomes unavailable is verified and routed through a controlled order-review/refund workflow. No handler may promise an immediate spendable wallet credit without the approved financial workflow.
+5. **7-Day Marketplace Freshness Invariant:** Vendors reconfirm catalog availability every 7 days where this feature is enabled.
+6. **Audited custody events:** Delivery attempts, handover proof, return-to-vendor, and pickup confirmation are recorded as operational evidence. A rider-triggered event must not itself grant financial permissions or automatically create spendable customer credit.
+7. **Vendor-managed fulfilment:** No new order may be routed to a logistics-company fleet. Vendor riders see only assigned vendor orders and minimal delivery information.
 
 ---
 
@@ -111,67 +112,34 @@ Victorious MARKET enforces security and accounting invariants at the database tr
 
 ---
 
-## 2. Institutional Financial Core & Commission Model
+## 2. Financial Controls and Commercial Allocation
 
-Victorious MARKET enforces a closed, double-entry financial architecture managed by [`FinancialOperationService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/FinancialOperationService.php) and [`OrderSettlementService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/OrderSettlementService.php).
+Victorious MARKET uses verified payment-provider outcomes, internal financial operations, and double-entry journals. Internal ledger labels alone do not constitute a legally regulated escrow service.
 
-### Commercial Revenue & Commission Structure
+### Adopted allocation rules
 
+```text
+Eligible merchandise value (100%)
+  ├── 90% -> vendor merchandise allocation
+  ├──  5% -> customer cashback allocation (eligible merchandise only)
+  └──  5% -> platform merchandise share
+
+Vendor-configured doorstep delivery fee (100%)
+  ├── 90% -> owning vendor delivery allocation
+  └── 10% -> platform delivery-fee share
+
+Rider compensation -> paid directly by the owning vendor outside Victorious MARKET
 ```
-                  CUSTOMER GROSS PAYMENT (Paystack Escrow Vault)
-                 Grand Total = Merchandise Subtotal + Delivery Fee
-                                         │
-        ┌────────────────────────────────┴────────────────────────────────┐
-        ▼                                                                 ▼
- MERCHANDISE SUBTOTAL (100%)                                       DELIVERY FEE (100%)
-  ├── 90% ➔ Vendor Net Payable (Post-24h window)                    ├── 90% ➔ Fulfiller Net Allocation
-  └── 10% ➔ Platform Gross Merchandise Commission                   │         (Vendor OR Fleet Corporate Wallet)
-            ├── 5% ➔ Customer Loyalty Cashback                      └── 10% ➔ Platform Delivery Cut
-            │        (Spendable on future eligible orders)                    (Infrastructure & SMS routing)
-            └── 5% ➔ Platform Retained Operating Margin
-```
 
-#### Detailed Split Breakdown
-
-$$\text{Grand Total} = \text{Merchandise Subtotal} + \text{Delivery Fee}$$
-
-- **Vendor Merchandise Allocation (90%):** Held in double-entry escrow (`vendor_payable`) until the 24-hour post-delivery inspection window lapses with zero active disputes. Disbursed directly to the merchant's verified commercial bank account (NUBAN) via Super Admin sign-off.
-- **Platform Gross Commission (10% of Full Payment):**
-  - **10% of Merchandise Subtotal:**
-    - **5% Customer Cashback Reward:** Credited to the customer's cashback ledger in a `pending_maturation` state. It matures and becomes spendable strictly after the 24-hour return window closes. It is funded directly out of the platform's commission—**never charged to the merchant**.
-    - **5% Platform Retained Operating Margin:** Retained by Victorious MARKET to fund server infrastructure, SMS/OTP gateways, and operational oversight.
-  - **10% of Delivery Fee:** Retained as a delivery infrastructure cut to maintain routing nodes, LGA corridor matrices, and waybill dispatch.
-- **Fulfillment Net Delivery Fee (90%):**
-  - For **Vendor-Managed Delivery**, the 90% delivery fee is credited directly to the merchant's `vendor_payable` ledger upon confirmed doorstep handover.
-  - For **Third-Party Logistics Fleet Delivery**, the 90% delivery fee is credited to the fleet's corporate wallet (`LogisticsCompanyProfile::wallet_balance`).
-
-#### Mathematical Split Example
-
-If a customer orders ₦90,000 worth of merchandise with a ₦10,000 delivery fee (Total = ₦100,000):
-
-| Component | Basis | Share | Amount |
-|---|---|---|---|
-| **Customer Gross Payment** | Total Order Amount | 100% | **₦100,000.00** |
-| **Vendor Net Merchandise** | Merchandise (₦90,000) | 90% | **₦81,000.00** |
-| **Vendor / Fleet Delivery Net** | Delivery Fee (₦10,000) | 90% | **₦9,000.00** |
-| **Customer Cashback Reward** | Merchandise Only (₦90,000) | 5% | **₦4,500.00** |
-| **Platform Retained Merchandise Margin** | Merchandise (₦90,000) | 5% | **₦4,500.00** |
-| **Platform Retained Delivery Fee Cut** | Delivery Fee (₦10,000) | 10% | **₦1,000.00** |
-| **Total Platform Commission Retained** | Margin (₦4,500) + Cut (₦1,000) | — | **₦5,500.00** |
-
-*Verification Check:* $\text{₦81,000} + \text{₦9,000} + \text{₦4,500} + \text{₦4,500} + \text{₦1,000} = \text{₦100,000.00}$ ($\Delta = \text{₦0.00}$, exact BCMath parity).
+- Merchandise and delivery are separate allocation bases; do not calculate a flat commission on the full cart total.
+- Cashback excludes delivery fees and remains subject to the approved maturation, refund, and reversal rules.
+- A delivery fee is not a rider payout or logistics-company fare. The platform creates no rider payable, rider wallet, rider earnings balance, or rider payout request for new vendor-managed delivery.
+- Refunds must reverse only the applicable approved components from the actual order allocations, taking account of discounts, previous refunds, cashback, and vendor amounts already settled.
+- A refund request or rider handover does not mean the gateway refund is complete. Reconcile authoritative Paystack outcomes before reporting completion.
 
 ---
 
-### Platform Commission & Refund Reversal Rule
-
-When an item or order refund is approved, the platform commission attributable to the refunded eligible merchandise is reversed proportionately. **Victorious MARKET does not retain commission on customer refunds.**
-
-```
-                           REFUND ARBITRATION PIPELINE
-                                         │
-        ┌────────────────────────────────┼────────────────────────────────┐
-        ▼                                ▼                        ## 3. The Two-Status Inventory Architecture & Payment Safety Reservations
+## 3. The Two-Status Inventory Architecture & Payment Safety Reservations
 
 Victorious MARKET is engineered to support physical retail merchants operating across Nigerian commercial centers. For these local shop owners, maintaining complex numeric stock counts, physical shelf audits, or warehouse balance ledgers introduces steep onboarding friction and frequent discrepancies with over-the-counter walk-in customers.
 
@@ -232,7 +200,7 @@ Because Victorious MARKET deliberately chooses simplicity over quantity tracking
 4. **If Stock Was Depleted / Vendor Marked `Out of Stock`:**
    - **Never Oversell or Force Ghost Fulfillment:** The system never forces a merchant to fulfill an item that does not exist, and never silently ignores customer funds.
    - **Order Transitions to `paid_stock_unavailable`:** The order is safely quarantined with `vendor_settlement_status = 'refund_pending'`.
-   - **100% Customer Protection:** The customer's payment (merchandise + delivery) is immediately queued for a full gateway refund or 100% spendable customer wallet credit (`CustomerWalletCredit`), fully balanced in the double-entry journal (`customer_refund_liability`).
+   - **100% Customer Protection:** The verified payment enters an explicit paid-stock-unavailable review/refund workflow. Do not promise or issue an immediate spendable wallet credit automatically. Any refund or optional wallet remedy must follow the authorized financial-operation process, with exact amounts, idempotency, and reconciliation.
 
 ---
 
@@ -253,96 +221,53 @@ $$\text{Product is Fresh} \iff (\text{listing\_confirmed\_at} \ne \text{null}) \
 
 ---
 
-## 5. Decoupled Fulfillment: Vendor Riders, Counter Pickup & Fleet Corridors
+## 5. Vendor-Managed Delivery and In-Shop Pickup
 
-Victorious MARKET decouples fulfillment into three distinct, accountable options without imposing mandatory third-party logistics dependencies.
+The authoritative requirements are in [`.ai/BUSINESS_RULES.md`](.ai/BUSINESS_RULES.md). There are two supported fulfilment choices for new orders: vendor-managed doorstep delivery and customer in-shop pickup. **Third-party logistics fleets are not an active fulfilment option for new orders.**
 
-```
-                                  CUSTOMER CHECKOUT
-                                         │
-        ┌────────────────────────────────┼────────────────────────────────┐
-        ▼                                ▼                                ▼
-  1. IN-SHOP PICKUP              2. VENDOR-MANAGED RIDER          3. LOGISTICS FLEET CORRIDOR
-  • Zero Delivery Fee            • In-House Shop Courier          • Regional Carrier Fleet
-  • Reservation Pass             • Positive LGA Delivery Fee      • Directional Lane Pricing
-  • In-Person Inspection         • Handshake OTP + Proof Photo    • Directional Handover + Proof Photo
-  • Counter Handover Sign-off    • 90% Delivery Fee to Vendor     • 90% Delivery Fee to Fleet Wallet
-```
+### 1. Vendor-managed doorstep delivery
+- The vendor adds/manages its riders and manually assigns its own child vendor orders to them.
+- Every active rider must belong to exactly one active vendor. A rider cannot be shared across vendors, linked to a fleet for new work, or access unassigned/other-vendor orders.
+- Vendors configure the destination areas and delivery fees they serve. A valid explicit LGA fee takes precedence over a state-level fallback. Unsupported destinations fail closed.
+- The selected fulfilment type, destination, and agreed delivery fee are snapshotted on each child vendor order.
+- Reassignment is allowed before custody. After pickup/custody, use an audited return or custody-transfer process.
+- The vendor pays the rider directly outside Victorious MARKET. No rider wallet, earnings, payable, or payout is created by the platform.
 
-### 1. In-Shop Customer Counter Pickup
-- Customers pick up items directly from the merchant's physical plaza branch.
-- Generates a cryptographically unique reservation pass (`RES-XXXXXXXX`).
-- **Physical Inspection Sign-Off:** The customer physically inspects the item at the counter. The branch counter staff validates the reservation pass on the `/counter` terminal before handing over goods.
-- Delivery fee is guaranteed **₦0.00**.
+### 2. Customer in-shop pickup
+- Customer collects the order at the owning vendor's physical shop/counter.
+- Delivery fee is exactly **₦0.00**, enforced by the backend regardless of client input.
+- Pickup uses the **RES-XXXXXX** pass, verified by the vendor at the counter.
+- Pickup has a distinct status flow. It does not require a rider assignment or create delivery compensation/payout.
 
-### 2. Vendor-Managed Delivery Couriers
-- Merchants register and manage their own in-house dispatch riders directly from the Vendor Dashboard (`RiderProfile::vendor_id`).
-- Merchants define custom delivery pricing per Nigerian State and specific Local Government Area (LGA). Explicit LGA pricing overrides state-level defaults.
-- All delivery fees must be positive ($Fee > 0$); zero or negative delivery pricing is rejected.
-- When an order is completed, **90% of the delivery fee** is credited directly to the merchant's `vendor_payable` balance, and 10% is retained by the platform.
-- **Rider Ownership Isolation:** A vendor-managed rider can only be assigned to orders belonging to their parent merchant. Cross-merchant assignments are blocked with HTTP 403.
+### 3. Delivery privacy and operational evidence
+- Rider access is limited to assigned orders belonging to the rider's vendor.
+- The rider may see the customer's name, delivery address, necessary delivery instructions, and a protected **Call Customer** action. Do not expose the raw customer phone number in JSON, page markup, logs, or exports.
+- Riders must not see payment status, amount paid/due, delivery-fee financial fields, refunds, customer wallet/card/bank data, cashback, commission, vendor settlement, or payout information.
+- Delivery OTP/pass secrets must not be included in list/history responses or logs. A verified handover is operational evidence; it does not itself approve a refund or create a spendable wallet credit.
+- Failed attempts must record reason, time, actor, proof, and custody state. At the configured threshold, the parcel returns to its owning vendor. Refunds or customer remedies go through a separate authorized financial workflow.
 
-### 3. Regional Fleet Corridors & Hub-and-Spoke Infrastructure
-- For merchants without their own dispatch personnel, the system routes fulfillment through accredited corporate logistics fleets (`LogisticsCompanyProfile`).
-- **Directional Asymmetry:** Pricing accounts for real-world road and transit conditions (e.g., `Uyo ➔ Oron` can be priced differently from `Oron ➔ Uyo`).
-- **Collection Points Network:** Regional depot locations (`LogisticsCollectionPoint`) enable secure parcel transit, waybill routing, and customer pickup for long-distance deliveries.
-- **90% of the delivery fee** is credited to the corporate logistics wallet upon doorstep verification.
+### Legacy fleet records
+Historical logistics-company profiles, routes, collection points, fleet assignments, payout requests, and financial entries remain preserved for authorized audit/reconciliation. They must not receive new assignments or new financial activity under vendor-managed fulfilment. Do not delete historical records as part of this transition.
 
 ---
 
-## 6. Triangular Custody Handshakes & Doorstep Returns
+## 6. Custody Evidence, Handover, and Returns
 
-To eliminate fraud, fake delivery claims, and disputed returns, Victorious MARKET uses three distinct cryptographic and photographic handshakes.
+Custody workflows must distinguish operational evidence from financial decisions.
 
-```
-                   HANDSHAKE 1: IN-STORE / COUNTER HANDOVER
-    ┌──────────────────┐                               ┌──────────────────┐
-    │  Branch Counter  │ ─── 6-Digit Secret Pickup ───▶│  Delivery Rider  │
-    │  (Physical Plaza)│ ◀─── Physical Custody Accepted ─── │  (Courier Unit)  │
-    └──────────────────┘                               └──────────────────┘
-                                                                │
-                                                                ▼ (In-Transit GPS)
-                   HANDSHAKE 2: DOORSTEP CUSTOMER HANDOVER
-    ┌──────────────────┐                               ┌──────────────────┐
-    │  Delivery Rider  │ ─── Deliver Parcel ──────────▶│ Customer Shopper │
-    │  (Arrived GPS)   │ ◀─── 6-Digit Private OTP ─────│ (Private Screen) │
-    └──────────────────┘                               └──────────────────┘
-             │
-             ├──▶ Full Acceptance:
-             │    OTP validated + Doorstep photo recorded ➔ Order 'delivered'
-             │    Escrow locked for 24h return window
-             │
-             └──▶ Partial Acceptance / Rejection (Handshake 3):
-                  Item manifest breakdown + Item defect photos
-                  Courier enters rejection details into terminal
-                  Instant customer wallet credit issued for rejected items
-                  Return parcel routed back to merchant counter
-```
-
-### Handshake 1: In-Shop Counter Handover
-- The courier presents their secret 6-digit `pickup_otp` to the merchant's branch counter staff.
-- Counter staff verifies the code and captures an optional handover photo before custody transfers.
-- **Anti-Brute Force Lockout:** 5 consecutive invalid code attempts lock verification and trigger an admin security alert.
-
-### Handshake 2: Doorstep Customer Handshake
-- The customer receives a private, single-use 6-digit delivery OTP visible only on their authenticated portal and sent via SMS.
-- The courier signals doorstep arrival, inputs the customer's OTP, and uploads a mandatory delivery confirmation photograph.
-- Successful verification transitions the order authoritatively to `delivered`, starts the 24-hour return timer, and releases the delivery fee to the fulfillment provider.
-
-### Handshake 3: Doorstep Partial Acceptance & Defective Returns
-- **Item-Level Manifest Selection:** If an order contains multiple items, the customer can accept conforming items and reject defective ones at the doorstep.
-- **Compulsory Defect Photography:** Rejections require photographic evidence of the defect, misrepresentation, or damage, uploaded directly via [`DoorstepHandshakeService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/DoorstepHandshakeService.php).
-- **Instant Customer Wallet Credit:** For verified rejections, the refundable amount is credited instantly to the customer's wallet (`CustomerWalletCredit`), allowing immediate re-orders without waiting days for gateway transfers.
-- **Custody Decoupled from Fault Arbitration:** Handover of the physical return parcel back to the merchant is verified via return OTP, while financial liability is arbitrated separately by [`RefundPolicyService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/RefundPolicyService.php) based on fault classification:
-  - *Customer Change of Mind:* Merchandise refunded; delivery fee retained by courier.
-  - *Vendor Fault:* Merchandise + delivery fee refunded; vendor charged for delivery liability.
-  - *Transit Damage:* Merchandise + delivery fee refunded; logistics fleet charged for loss liability.
+- For doorstep delivery, the customer uses the configured private, single-use verification code/pass and the rider submits required delivery proof. Secrets are entered only into the action that validates them and must not be returned in rider order lists or history.
+- A rider can record which items were accepted or rejected and submit the required evidence. The rider action records the operational event only; it must not directly approve a refund, create a spendable wallet credit, post refund journals, or settle a delivery fee.
+- Return-parcel custody is recorded separately from deciding fault or approving a financial remedy. The owning vendor confirms receipt through the approved return process.
+- Return/refund review considers the affected child order/items, actual payment, discounts, applicable merchandise and delivery-fee allocation, cashback, previous refunds, and vendor settlement already made.
+- Customer wallet credit is not an automatic consequence of a rider's handover or failed-delivery event. Any wallet remedy must be explicitly authorized, idempotent, recorded through the financial engine, and reconciled.
+- Delivery fee refundability is reason-specific and subject to the published customer policy and applicable law. Do not assume that every failure retains or refunds the fee.
+- A failed delivery is not a successful delivery and does not itself trigger a refund, payout, or release of vendor funds.
 
 ---
 
-## 7. The 7 Hardened Multi-Tenant Actor Roles
+## 7. Actor Roles and Access Boundaries
 
-Victorious MARKET enforces absolute privilege separation with dedicated login endpoints, scoped middleware, and zero role leakage:
+Victorious MARKET separates platform administrators, vendors, vendor-linked riders, counter staff, and customers. Legacy logistics-company accounts may remain in historical data but are not an active fulfilment role for new orders:
 
 | # | Role | Login Portal | Dedicated Web Dashboard | Mobile Terminal API | Primary Responsibilities & Invariants |
 |---|---|---|---|---|---|
@@ -350,8 +275,8 @@ Victorious MARKET enforces absolute privilege separation with dedicated login en
 | **2** | **Admin Staff** | `/admin-staff/login` | `/admin-staff` | N/A | Catalog moderation, 7-day freshness oversight, customer support. Zero access to banking details, wallet debits, or payout triggers. |
 | **3** | **Vendor Merchant** | `/vendor/login` | `/vendor` | `/api/v1/vendor/*` | Store management, binary stock toggle, 7-day freshness reconfirmation, vendor rider assignment, bank account settings (48h cooldown). |
 | **4** | **Branch Counter Staff** | `/counter/login` | `/counter` | N/A | Bound strictly to a single `shop_id`. In-store inspection, reservation pass (`RES-XXXXXX`) sign-off, courier pickup OTP verification. |
-| **5** | **Logistics Fleet Desk** | `/logistics/login` | `/logistics` | N/A | Fleet management, corporate rider onboarding, vehicle compliance, collection points, corporate wallet withdrawal requests (48h cooldown). |
-| **6** | **Delivery Rider** | `/rider/login` | `/rider` | `/api/v1/rider/*` | Shift toggle (On/Off Duty), counter pickup verification, doorstep OTP handshakes, return parcel custody. **Zero financial liability.** |
+| **5** | **Legacy logistics records (restricted historical access only)** | No new fulfilment portal | Restricted audit/reconciliation views only | N/A | Historical records only; no new dispatch, assignments, rider management, or payouts. |
+| **6** | **Vendor-Linked Delivery Rider** | `/rider/login` | `/rider` | `/api/v1/rider/*` | Operational tasks for assigned orders belonging only to the owning vendor; minimal customer data; no financial access. |
 | **7** | **Customer Shopper** | `/login` | `/customer` | `/api/v1/customer/*` | Multi-vendor checkout, 30-min payment holds, secret delivery OTP cards, reservation passes, 5% cashback rewards, doorstep returns. |
 
 ---
@@ -419,10 +344,10 @@ The relational schema guarantees referential integrity, decimal precision, and a
 
 ### Core Entities & Ledger Tables
 
-- **`financial_journal_entries`:** Immutable double-entry general ledger tracking debits and credits across `cash_in_escrow`, `vendor_payable`, `platform_revenue`, `customer_wallet_credit`, and `logistics_payable`.
+- **`financial_journal_entries`:** Immutable double-entry ledger for current platform/vendor/customer financial movements. Historical `logistics_payable` entries may remain for audit but must not be created for new vendor-managed deliveries.
 - **`financial_operations` & `financial_reservations`:** Fenced state machine governing payout requests, pre-allocation locks, and webhook finalizations.
 - **`customer_cashback_ledgers`:** Governs customer 5% cashback rewards with explicit `matures_at` timestamps bound to the 24-hour return window.
-- **`customer_wallet_credits`:** Spendable credits issued from verified doorstep returns, redeemable 100% across future checkouts.
+- **`customer_wallet_credits`:** Credits issued only through the authorized, auditable financial workflow. Rider-triggered handover or failed delivery must not automatically create spendable credit.
 - **`vendor_recovery_ledgers`:** Tracks merchant refund liabilities when returns are approved after funds have been disbursed.
 - **`admin_audit_logs`:** High-security audit log capturing all sensitive administrative and financial actions (`user_id`, `ip_address`, `user_agent`, `old_values`, `new_values`).
 
@@ -440,10 +365,10 @@ Victorious MARKET provides clean, versioned JSON REST APIs for native mobile and
 - `POST /api/v1/customer/orders/{orderNumber}/returns`: Submit item-level return requests with photos within the 24h window.
 
 ### B. Courier Terminal API (`/api/v1/rider/*`)
-- `POST /api/v1/auth/login`: Guarded courier login requiring active merchant or logistics fleet affiliation.
+- `POST /api/v1/auth/login`: Rider access must require an active rider profile linked to exactly one active vendor for new fulfilment; fleet-only/ambiguous legacy profiles are ineligible.
 - `GET /api/v1/rider/dashboard`: Operational telemetry (`active_assignments_count`, `completed_trips_count`, `shift_status`). **Zero balance leakage.**
 - `POST /api/v1/rider/toggle-duty`: Toggle operational availability (`ON DUTY` / `OFF DUTY`).
-- `GET /api/v1/rider/orders/active`: Manifest of active runs with pickup plaza and customer delivery addresses.
+- `GET /api/v1/rider/orders/active`: Only assigned orders for the rider's vendor, with minimum operational data; no raw customer phone or financial fields. Customer contact is via protected Call Customer action.
 - `POST /api/v1/rider/orders/mark-arrived`: Signals courier arrival at customer doorstep with GPS timestamp.
 - `POST /api/v1/rider/orders/verify-pickup-otp`: In-shop counter handover validation with optional photo proof.
 - `POST /api/v1/rider/orders/verify-delivery-otp`: Doorstep OTP handshake verification with compulsory delivery photo.
@@ -563,7 +488,7 @@ php artisan serve --port=8080
 Storefront URL: `http://127.0.0.1:8080`
 
 ### Default Personas & Portals (Local Testing)
-All default seed accounts share the default password: `Password123!`
+Local seed accounts are for development only. Never deploy default credentials to production. Any legacy fleet seed persona is historical/test-only and must not be enabled for new fulfilment.
 
 | Role | Email | Login URL |
 |---|---|---|
@@ -571,7 +496,7 @@ All default seed accounts share the default password: `Password123!`
 | **Admin Staff** | `staff@victoriousmarket.com.ng` | `/admin-staff/login` |
 | **Vendor Merchant** | `merchant@freshmart.ng` | `/vendor/login` |
 | **Branch Counter Staff** | `counter@freshmart.ng` | `/counter/login` |
-| **Logistics Fleet Desk** | `fleet@speedy.ng` | `/logistics/login` |
+| **Legacy fleet persona (test/history only)** | `fleet@speedy.ng` | No new fulfilment access |
 | **Delivery Rider** | `rider@speedy.ng` | `/rider/login` |
 | **Customer Shopper** | `customer@shopper.ng` | `/login` |
 
