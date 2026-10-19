@@ -624,6 +624,51 @@ class FinancialAuditRemediationProofTest extends TestCase
         }
     }
 
+    public function test_late_transfer_failed_webhook_does_not_reverse_successful_payout(): void
+    {
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '40000.00',
+            'status' => 'approved',
+            'gateway_status' => 'success',
+            'transfer_reference' => 'VND-PAYOUT-LATE-FAIL',
+            'paystack_transfer_code' => 'TRF_LATE_FAIL',
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'Zenith Bank',
+        ]);
+
+        $payloadData = [
+            'event' => 'transfer.failed',
+            'id' => 'evt-late-transfer-failed-after-success',
+            'data' => [
+                'reference' => 'VND-PAYOUT-LATE-FAIL',
+                'transfer_code' => 'TRF_LATE_FAIL',
+                'amount' => 4000000,
+                'currency' => 'NGN',
+                'reason' => 'Delayed failure notification',
+            ],
+        ];
+        $signature = hash_hmac(
+            'sha512',
+            json_encode($payloadData),
+            app(PaystackService::class)->getSecretKey()
+        );
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertOk();
+        $this->assertEquals('approved', $payout->fresh()->status);
+        $this->assertEquals('success', $payout->fresh()->gateway_status);
+
+        $event = ProcessedWebhookEvent::where('event_id', $payloadData['id'])->first();
+        $this->assertNotNull($event);
+        $this->assertEquals('unmatched', $event->status);
+        $this->assertStringContainsString('LATE_TRANSFER_FAILED_AFTER_SUCCESS', (string) $event->error_reason);
+    }
+
     /**
      * Audit Finding P1-5: Pre-transfer allocation reservation holds orders before transfer initiation.
      */
