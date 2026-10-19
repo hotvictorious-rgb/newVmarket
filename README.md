@@ -353,7 +353,9 @@ cd backend
 php artisan test
 ```
 
-### Complete Test Results: 458 Tests / 2,860 Assertions (100% Green, 0 Failures)
+### Historical Test Snapshot — Not a Current Release Claim
+
+The following test counts were recorded in an earlier repository snapshot (458 tests / 2,860 assertions). They are retained as historical context only. Confirm the latest CI run and execute the full backend suite on the release candidate before claiming that the current branch passes.
 
 ```
    PASS  Tests\Feature\AdminTransferHardeningAndWalletIntegrityTest (6 tests, 38 assertions)
