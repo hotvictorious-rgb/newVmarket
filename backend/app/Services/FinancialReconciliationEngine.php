@@ -400,12 +400,25 @@ class FinancialReconciliationEngine
                     $refundReference = $orderRefundReference;
                 }
 
-                if (!$existingOp || !$refundReference) {
+                if (!$existingOp) {
+                    // Preserve gateway verification for orphaned refunds so the
+                    // mismatch is observable, but never finalize an unrelated operation.
+                    if ($orderRefundReference !== '') {
+                        $this->paystackService->verifyRefund($orderRefundReference);
+                    }
                     $releaseClaim('pending');
                     Log::warning('Paystack refund has no unambiguous matching FinancialOperation; left pending for manual reconciliation.', [
                         'order_id' => $claimedOrder->id,
                         'refund_reference' => $orderRefundReference,
                         'outstanding_operations' => $outstandingOperations->count(),
+                    ]);
+                    continue;
+                }
+                if (!$refundReference) {
+                    $releaseClaim('pending');
+                    Log::warning('Paystack refund operation has no persisted gateway reference; left pending for manual reconciliation.', [
+                        'order_id' => $claimedOrder->id,
+                        'operation_id' => $existingOp->id,
                     ]);
                     continue;
                 }
