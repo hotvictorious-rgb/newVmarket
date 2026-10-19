@@ -524,6 +524,55 @@ class FinancialAuditRemediationProofTest extends TestCase
     }
 
     /**
+     * Ledger invariant: a payout with an allocation discrepancy still balances
+     * within the payout journal event by debiting the discrepancy to treasury suspense.
+     */
+    public function test_vendor_payout_journal_event_balances_when_discrepancy_is_booked_to_suspense(): void
+    {
+        $this->createTestOrder([
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'eligible',
+            'vendor_net_90' => '50000.00',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '60000.00',
+            'status' => 'pending',
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'First Bank',
+        ]);
+
+        $result = app(PayoutFinalizationService::class)->finalizeVendorPayout($payout, [
+            'transfer_code' => 'TRF_SUSPENSE_BALANCE_TEST',
+            'reference' => 'VND-DISBURSE-SUSPENSE-' . $payout->id,
+            'status' => 'success',
+        ], $this->superAdmin);
+
+        $this->assertTrue($result['success']);
+        $eventId = 'EVT-VND-PAYOUT-' . $payout->id;
+        $entries = FinancialJournalEntry::where('event_id', $eventId)->get();
+        $this->assertCount(3, $entries);
+        $this->assertTrue($entries->contains(fn ($entry) => $entry->account_name === 'treasury_reconciliation_suspense' && $entry->entry_type === 'debit' && bccomp((string)$entry->amount, '10000.00', 2) === 0));
+
+        $debits = '0.00';
+        $credits = '0.00';
+        foreach ($entries as $entry) {
+            if ($entry->entry_type === 'debit') {
+                $debits = bcadd($debits, (string)$entry->amount, 2);
+            } elseif ($entry->entry_type === 'credit') {
+                $credits = bcadd($credits, (string)$entry->amount, 2);
+            }
+        }
+
+        $this->assertSame(0, bccomp($debits, $credits, 2), 'Payout event must have equal total debits and credits.');
+        $this->assertSame('60000.00', $credits);
+        $this->assertSame('60000.00', $debits);
+    }
+
+    /**
      * Audit Finding P0-3: Webhook rejects amount and currency tampering.
      */
     public function test_webhook_rejects_amount_and_currency_tampering(): void
