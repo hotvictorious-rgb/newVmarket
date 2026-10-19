@@ -2028,8 +2028,33 @@ class FinancialAuditRemediationProofTest extends TestCase
 
         $first = app(FinancialOperationService::class)->finalizeRefundConfirmation($operation, $evidence);
         $this->assertTrue($first['success']);
-        $journalCountAfterFirst = FinancialJournalEntry::where('financial_operation_id', $operation->id)->count();
+        $journalEntries = FinancialJournalEntry::where('financial_operation_id', $operation->id)->get();
+        $journalCountAfterFirst = $journalEntries->count();
         $this->assertGreaterThan(0, $journalCountAfterFirst);
+        $this->assertSame($journalCountAfterFirst, $journalEntries->pluck('idempotency_key')->filter()->unique()->count());
+
+        // The database must reject a duplicate refund journal line even if an
+        // unexpected caller bypasses the service-level terminal-state guard.
+        $firstEntry = $journalEntries->first();
+        try {
+            FinancialJournalEntry::create([
+                'order_id' => $firstEntry->order_id,
+                'financial_operation_id' => $firstEntry->financial_operation_id,
+                'transaction_reference' => $firstEntry->transaction_reference,
+                'event_id' => $firstEntry->event_id,
+                'idempotency_key' => $firstEntry->idempotency_key,
+                'beneficiary_type' => $firstEntry->beneficiary_type,
+                'beneficiary_id' => $firstEntry->beneficiary_id,
+                'account_name' => $firstEntry->account_name,
+                'entry_type' => $firstEntry->entry_type,
+                'amount' => $firstEntry->amount,
+                'currency' => $firstEntry->currency,
+                'description' => $firstEntry->description,
+            ]);
+            $this->fail('Duplicate financial journal idempotency key should be rejected by the database.');
+        } catch (\\Illuminate\\Database\\QueryException $e) {
+            $this->assertSame($journalCountAfterFirst, FinancialJournalEntry::where('financial_operation_id', $operation->id)->count());
+        }
 
         $second = app(FinancialOperationService::class)->finalizeRefundConfirmation($operation->fresh(), $evidence);
         $this->assertTrue($second['success']);
