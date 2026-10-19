@@ -2105,10 +2105,10 @@ class FinancialAuditRemediationProofTest extends TestCase
     {
         $payload = json_encode([
             'id' => 'evt-retry-unmatched-' . uniqid(),
-            'event' => 'transfer.reversed',
+            'event' => 'refund.processed',
             'data' => [
-                'reference' => 'VND-PAYOUT-MANUAL-RETRY',
-                'transfer_code' => 'TRF-MANUAL-RETRY',
+                'refund_reference' => 'RF-MANUAL-RETRY',
+                'transaction_reference' => 'PAYMENT-MANUAL-RETRY',
             ],
         ], JSON_UNESCAPED_SLASHES);
         $decoded = json_decode($payload, true);
@@ -2117,7 +2117,7 @@ class FinancialAuditRemediationProofTest extends TestCase
 
         ProcessedWebhookEvent::create([
             'event_id' => $eventId,
-            'event_type' => 'transfer.reversed',
+            'event_type' => 'refund.processed',
             'payload_hash' => $hash,
             'payload' => $payload,
             'status' => 'unmatched',
@@ -2142,8 +2142,9 @@ class FinancialAuditRemediationProofTest extends TestCase
 
         $response->assertOk();
         $event = ProcessedWebhookEvent::where('event_id', $eventId)->firstOrFail();
-        $this->assertSame('completed', $event->status);
+        $this->assertSame('unmatched', $event->status);
         $this->assertSame(2, $event->attempts);
+        $this->assertStringContainsString('REFUND_OPERATION_NOT_FOUND', $event->error_reason);
         $this->assertSame($hash, $event->payload_hash);
         $this->assertSame($payload, $event->payload);
         $this->assertNull($event->error_reason);
@@ -2153,15 +2154,15 @@ class FinancialAuditRemediationProofTest extends TestCase
     {
         $originalPayload = json_encode([
             'id' => 'evt-no-conflicting-retry-' . uniqid(),
-            'event' => 'transfer.reversed',
-            'data' => ['reference' => 'ORIGINAL-TRANSFER'],
+            'event' => 'refund.processed',
+            'data' => ['refund_reference' => 'ORIGINAL-REFUND', 'transaction_reference' => 'ORIGINAL-PAYMENT'],
         ], JSON_UNESCAPED_SLASHES);
         $eventId = json_decode($originalPayload, true)['id'];
         $hash = hash('sha256', $originalPayload);
 
         ProcessedWebhookEvent::create([
             'event_id' => $eventId,
-            'event_type' => 'transfer.reversed',
+            'event_type' => 'refund.processed',
             'payload_hash' => $hash,
             'payload' => $originalPayload,
             'status' => 'unmatched',
@@ -2171,12 +2172,10 @@ class FinancialAuditRemediationProofTest extends TestCase
 
         $conflictingPayload = json_encode([
             'id' => $eventId,
-            'event' => 'transfer.success',
+            'event' => 'refund.processed',
             'data' => [
-                'reference' => 'DIFFERENT-TRANSFER',
-                'transfer_code' => 'TRF-DIFFERENT',
-                'amount' => 100000,
-                'currency' => 'NGN',
+                'refund_reference' => 'DIFFERENT-REFUND',
+                'transaction_reference' => 'DIFFERENT-PAYMENT',
             ],
         ], JSON_UNESCAPED_SLASHES);
         $signature = hash_hmac('sha512', $conflictingPayload, app(PaystackService::class)->getSecretKey());
