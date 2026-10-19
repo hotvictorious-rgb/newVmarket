@@ -446,7 +446,7 @@ class FinancialReconciliationEngine
                 } else {
                     $releaseClaim('pending');
                 }
-            } }
+            }
         }
 
         return $reconciled;
