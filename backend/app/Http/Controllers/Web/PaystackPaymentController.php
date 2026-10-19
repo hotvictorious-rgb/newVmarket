@@ -501,21 +501,80 @@ class PaystackPaymentController extends Controller
 
         if ($event['event'] === 'refund.failed') {
             $rData = $event['data'] ?? [];
+            $rRef = (string)($rData['refund_reference'] ?? ($rData['reference'] ?? ($rData['id'] ?? '')));
             $transRef = (string)($rData['transaction_reference'] ?? '');
-            Log::warning("Paystack Webhook: Automated refund.failed for trans: {$transRef}");
 
-            if (!empty($transRef)) {
-                Order::where('payment_reference', $transRef)->update([
-                    'paystack_refund_status' => 'failed',
+            // Match the specific refund operation by gateway refund reference. A payment
+            // reference alone can identify multiple partial refunds, so it is not safe
+            // evidence for failing or releasing any one financial operation.
+            $finOpQuery = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+                ->where(function ($q) use ($rRef) {
+                    if ($rRef !== '') {
+                        $q->where('operation_reference', $rRef)
+                          ->orWhereJsonContains('metadata->refund_reference', $rRef)
+                          ->orWhereHas('gatewayAttempts', function ($sub) use ($rRef) {
+                              $sub->where('gateway_reference', $rRef);
+                          });
+                    } else {
+                        $q->whereRaw('1 = 0');
+                    }
+                });
+
+            $matches = $finOpQuery->get();
+            if ($matches->count() !== 1) {
+                $this->updateProcessedEvent($processedEvent, [
+                    'status' => 'unmatched',
+                    'error_reason' => 'REFUND_OPERATION_NOT_UNAMBIGUOUS: Failed refund event could not be tied to exactly one financial operation.',
+                    'processed_at' => Carbon::now(),
                 ]);
+                Log::warning('Paystack refund.failed event could not be tied to exactly one financial operation.', [
+                    'event_id' => $processedEvent->event_id,
+                    'refund_reference' => $rRef,
+                    'transaction_reference' => $transRef,
+                    'matches' => $matches->count(),
+                ]);
+
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Refund failure received but not reconciled; flagged for review.',
+                ], 200);
             }
+
+            $finOp = $matches->first();
+            \Illuminate\Support\Facades\DB::transaction(function () use ($finOp, $rData) {
+                $lockedOp = \App\Models\FinancialOperation::where('id', $finOp->id)->lockForUpdate()->firstOrFail();
+                if ($lockedOp->status === 'confirmed') {
+                    // A late failure notification must never downgrade a confirmed refund.
+                    return;
+                }
+                if ($lockedOp->status !== 'failed' && $lockedOp->status !== 'reversed') {
+                    $lockedOp->update([
+                        'status' => 'failed',
+                        'failed_at' => Carbon::now(),
+                    ]);
+                    \App\Models\FinancialReservation::where('financial_operation_id', $lockedOp->id)
+                        ->where('status', 'active')
+                        ->update([
+                            'status' => 'released',
+                            'released_at' => Carbon::now(),
+                        ]);
+                    $lockedOp->gatewayAttempts()->where('gateway_reference', $rData['refund_reference'] ?? ($rData['reference'] ?? ($rData['id'] ?? '')))
+                        ->update(['outcome' => 'failed', 'response_payload' => $rData]);
+                }
+
+                $orderId = $lockedOp->metadata['order_id'] ?? null;
+                if ($orderId) {
+                    Order::where('id', $orderId)->where('paystack_refund_status', '!=', 'completed')
+                        ->update(['paystack_refund_status' => 'failed']);
+                }
+            });
 
             $this->updateProcessedEvent($processedEvent, [
                 'status' => 'completed',
                 'processed_at' => Carbon::now(),
             ]);
 
-            return response()->json(['status' => true, 'message' => 'Refund failed webhook recorded.'], 200);
+            return response()->json(['status' => true, 'message' => 'Refund failure reconciled against its financial operation.'], 200);
         }
 
         // Only process charge.success events
