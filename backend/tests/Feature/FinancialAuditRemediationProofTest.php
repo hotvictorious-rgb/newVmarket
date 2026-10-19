@@ -2295,6 +2295,14 @@ class FinancialAuditRemediationProofTest extends TestCase
             $this->assertStringContainsString('different refund instruction', $exception->getMessage());
         }
 
+
+        try {
+            $service->createRefundOperation($order, '500.00', 'different reason', null, $key);
+            $this->fail('Expected conflicting idempotency-key reason reuse to be rejected.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('different refund instruction', $exception->getMessage());
+        }
+
         $this->assertSame(1, FinancialOperation::where('idempotency_key', $key)->count());
         $this->assertSame(1, FinancialReservation::where('financial_operation_id', $original->id)
             ->where('status', 'active')->count());
@@ -2332,6 +2340,52 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertSame(1, FinancialReservation::where('financial_operation_id', $original->id)->count());
         $this->assertSame(0, FinancialReservation::where('source_id', $secondOrder->id)
             ->where('purpose', 'customer_refund_hold')->count());
+    }
+
+
+    public function test_confirmed_refunds_and_active_reservations_share_one_cumulative_ceiling(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '1000.00',
+            'payment_reference' => 'REF-CUMULATIVE-CEILING-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        $service = app(FinancialOperationService::class);
+        $confirmedCandidate = $service->createRefundOperation(
+            $order, '700.00', 'first partial refund', null, 'IDEMPOTENCY-CEILING-FIRST-' . uniqid()
+        );
+        $activeCandidate = $service->createRefundOperation(
+            $order, '300.00', 'second partial refund', null, 'IDEMPOTENCY-CEILING-SECOND-' . uniqid()
+        );
+
+        $confirmedCandidate->update(['status' => 'initiated']);
+        $result = $service->finalizeRefundConfirmation($confirmedCandidate, [
+            'status' => 'processed',
+            'refund_reference' => 'rf-ceiling-first',
+        ]);
+        $this->assertTrue($result['success']);
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $confirmedCandidate->id)
+            ->where('status', 'committed')->count());
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $activeCandidate->id)
+            ->where('status', 'active')->count());
+
+        try {
+            $service->createRefundOperation(
+                $order, '0.01', 'over ceiling attempt', null, 'IDEMPOTENCY-CEILING-OVER-' . uniqid()
+            );
+            $this->fail('Expected cumulative confirmed and active refund reservations to enforce the original payment ceiling.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('invariant violation', $exception->getMessage());
+        }
+
+        $this->assertSame(2, FinancialReservation::where('source_type', Order::class)
+            ->where('source_id', $order->id)
+            ->where('purpose', 'customer_refund_hold')
+            ->whereIn('status', ['active', 'committed'])
+            ->count());
     }
 
 }
