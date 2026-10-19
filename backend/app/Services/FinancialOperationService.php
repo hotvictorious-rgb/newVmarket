@@ -36,7 +36,16 @@ class FinancialOperationService
         ?ReturnCase $returnCase = null,
         ?string $idempotencyKey = null
     ): FinancialOperation {
-        $amountNormalized = bcadd((string)$amountNaira, '0', 2);
+        // Money entering this service must already be expressed in whole cents.
+        // BCMath's requested scale silently truncates excess fractional digits,
+        // which could otherwise turn a request for 10.999 into a refund of 10.99.
+        if (!preg_match('/^\\d+(?:\\.\\d{1,2})?$/', trim((string) $amountNaira))) {
+            throw new \\InvalidArgumentException(
+                "Refund amount must be a positive decimal with no more than two fractional digits."
+            );
+        }
+
+        $amountNormalized = bcadd(trim((string) $amountNaira), '0', 2);
         if (bccomp($amountNormalized, '0.00', 2) <= 0) {
             throw new \InvalidArgumentException("Refund amount must be strictly greater than 0. Received: '{$amountNaira}'");
         }
