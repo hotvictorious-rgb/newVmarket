@@ -1570,7 +1570,7 @@ class FinancialAuditRemediationProofTest extends TestCase
 
         $mock = Mockery::mock(PaystackService::class);
         $mock->shouldReceive('verifyRefund')->once()->with('rf-lease-race-01')->andReturnUsing(function () use ($order) {
-            \\Illuminate\\Support\\Facades\\DB::table('orders')->where('id', $order->id)->update([
+            \Illuminate\Support\Facades\DB::table('orders')->where('id', $order->id)->update([
                 'refund_reconciliation_token' => 'NEW-LEASE-OWNER',
                 'refund_reconciliation_claimed_at' => Carbon::now(),
                 'paystack_refund_status' => 'processing',
