@@ -66,7 +66,7 @@ class FinancialOperationService
                     && (int) ($existingMetadata['return_case_id'] ?? 0) === (int) ($returnCase?->id ?? 0);
 
                 if (!$sameInstruction) {
-                    throw new \\DomainException(
+                    throw new \DomainException(
                         'Idempotency key has already been used for a different refund instruction.'
                     );
                 }
