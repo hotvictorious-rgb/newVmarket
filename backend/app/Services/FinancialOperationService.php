@@ -75,6 +75,21 @@ class FinancialOperationService
                 return $existingOp;
             }
 
+            // Refunds are sent through Paystack, so the order must have a confirmed
+            // captured payment and its original gateway reference. A positive order
+            // total alone is not evidence that cash was received.
+            if ($lockedOrder->payment_status !== 'paid') {
+                throw new \DomainException(
+                    'Cannot create a gateway refund for an order whose payment is not confirmed as paid.'
+                );
+            }
+
+            if (trim((string) $lockedOrder->payment_reference) === '') {
+                throw new \DomainException(
+                    'Cannot create a gateway refund without the original payment reference.'
+                );
+            }
+
             // 2. Reservation Ceiling Check: Total refundable original payment (excluding unpaid or uncaptured)
             $totalOriginalPaymentNaira = bcadd((string)$lockedOrder->grand_total, '0', 2);
             $totalOriginalPaymentKobo = (int) bcmul($totalOriginalPaymentNaira, '100', 0);
