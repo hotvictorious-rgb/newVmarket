@@ -313,9 +313,9 @@ class FinancialOperationService
      * Confirm verified refund execution (called from Webhook or Scheduled Reconciler with terminal evidence).
      * Enforces double-entry ledger symmetry and updates return cases/orders.
      */
-    public function finalizeRefundConfirmation(FinancialOperation $operation, array $gatewayEvidence): array
+    public function finalizeRefundConfirmation(FinancialOperation $operation, array $gatewayEvidence, ?string $expectedRefundClaimToken = null): array
     {
-        return DB::transaction(function () use ($operation, $gatewayEvidence) {
+        return DB::transaction(function () use ($operation, $gatewayEvidence, $expectedRefundClaimToken) {
             $lockedOp = FinancialOperation::where('id', $operation->id)->lockForUpdate()->firstOrFail();
 
             if ($lockedOp->status === 'confirmed') {
@@ -332,7 +332,23 @@ class FinancialOperationService
                 throw new \InvalidArgumentException("Cannot confirm refund without verified terminal gateway status. Received: '{$gwStatus}'");
             }
 
-            // Commit reservation
+            $orderId = $lockedOp->metadata['order_id'] ?? null;
+            $order = $orderId ? Order::where('id', $orderId)->lockForUpdate()->first() : null;
+
+            // A scheduled reconciler may only finalize while it still owns the exact
+            // order claim. Webhook-driven finalization omits this optional worker token.
+            if ($expectedRefundClaimToken !== null
+                && (!$order || $order->refund_reconciliation_token !== $expectedRefundClaimToken)) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'operation' => $lockedOp,
+                    'message' => 'Refund reconciliation lease was lost before finalization.',
+                ];
+            }
+
+            // Commit reservation only after the claim fence has been checked under lock.
             FinancialReservation::where('financial_operation_id', $lockedOp->id)
                 ->where('status', 'active')
                 ->update([
@@ -345,8 +361,12 @@ class FinancialOperationService
                 'confirmed_at' => Carbon::now(),
             ]);
 
-            $orderId = $lockedOp->metadata['order_id'] ?? null;
-            $order = $orderId ? Order::where('id', $orderId)->lockForUpdate()->first() : null;
+            if ($order && $expectedRefundClaimToken !== null) {
+                $order->refund_reconciliation_token = null;
+                $order->refund_reconciliation_claimed_at = null;
+                $order->save();
+            }
+
             $returnCaseId = $lockedOp->metadata['return_case_id'] ?? null;
             $returnCase = $returnCaseId ? ReturnCase::where('id', $returnCaseId)->lockForUpdate()->first() : null;
 
