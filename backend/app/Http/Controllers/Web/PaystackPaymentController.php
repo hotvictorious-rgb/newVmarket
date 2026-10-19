@@ -499,6 +499,33 @@ class PaystackPaymentController extends Controller
 
             if ($finOp) {
                 // A signed webhook proves origin, not that this refund matches our ledger.
+                // Bind the refund to the original payment when Paystack supplies its reference.
+                $originalPaymentReference = (string) (($finOp->metadata ?? [])['payment_reference'] ?? '');
+                $gatewayTransactionReference = (string) (
+                    $rData['transaction_reference']
+                    ?? (is_array($rData['transaction'] ?? null)
+                        ? ($rData['transaction']['reference'] ?? '')
+                        : (is_string($rData['transaction'] ?? null) ? $rData['transaction'] : ''))
+                );
+                if (
+                    $originalPaymentReference !== ''
+                    && $gatewayTransactionReference !== ''
+                    && !hash_equals($originalPaymentReference, $gatewayTransactionReference)
+                ) {
+                    $this->updateProcessedEvent($processedEvent, [
+                        'status' => 'failed',
+                        'error_reason' => 'REFUND_TRANSACTION_REFERENCE_MISMATCH: Refund references a different original payment.',
+                        'processed_at' => Carbon::now(),
+                    ]);
+                    Log::critical('Paystack refund webhook transaction reference mismatch; financial operation was not finalized.', [
+                        'event_id' => $processedEvent->event_id,
+                        'operation_id' => $finOp->id,
+                        'expected_payment_reference' => $originalPaymentReference,
+                        'received_transaction_reference' => $gatewayTransactionReference,
+                    ]);
+                    return response()->json(['status' => false, 'message' => 'Refund does not match the original payment reference.'], 400);
+                }
+
                 // Require explicit amount/currency and compare against the reserved operation
                 // before any reservation, order, return-case, or journal state can be finalized.
                 if (!array_key_exists('amount', $rData) || !is_numeric($rData['amount'])) {
