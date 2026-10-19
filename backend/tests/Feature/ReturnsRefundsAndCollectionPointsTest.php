@@ -508,9 +508,9 @@ class ReturnsRefundsAndCollectionPointsTest extends TestCase
         $cashback = $fixture['cashback'];
 
         // Manual bank-reference settlement must never also call Paystack.
-        $paystack = \\Mockery::mock(\\App\\Services\\PaystackService::class);
+        $paystack = \Mockery::mock(\App\Services\PaystackService::class);
         $paystack->shouldNotReceive('initiateRefund');
-        $this->app->instance(\\App\\Services\\PaystackService::class, $paystack);
+        $this->app->instance(\App\Services\PaystackService::class, $paystack);
 
         $service = app(ReturnAndRefundService::class);
 
