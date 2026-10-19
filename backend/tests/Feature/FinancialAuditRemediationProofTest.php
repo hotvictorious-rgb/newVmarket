@@ -2518,4 +2518,30 @@ class FinancialAuditRemediationProofTest extends TestCase
     }
 
 
+
+    public function test_refund_amount_rejects_precision_beyond_kobo_instead_of_silently_truncating(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '1000.00',
+            'payment_reference' => 'REF-EXCESS-REFUND-PRECISION-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        try {
+            app(FinancialOperationService::class)->createRefundOperation(
+                $order, '10.999', 'excess precision refund', null, 'IDEMPOTENCY-EXCESS-PRECISION-' . uniqid()
+            );
+            $this->fail('Refund amounts with more than two fractional digits must be rejected, not truncated.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('no more than two fractional digits', $exception->getMessage());
+        }
+
+        $this->assertSame(0, FinancialOperation::where('metadata->order_id', $order->id)->count());
+        $this->assertSame(0, FinancialReservation::where('source_type', Order::class)
+            ->where('source_id', $order->id)
+            ->where('purpose', 'customer_refund_hold')->count());
+    }
+
 }
