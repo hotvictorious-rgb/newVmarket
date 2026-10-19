@@ -1557,4 +1557,34 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertStringContainsString('MAX_ATTEMPTS_EXCEEDED', (string) $exhausted->fresh()->error_reason);
     }
 
+    public function test_refund_reconciliation_keeps_claim_when_another_worker_reclaims_order(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '15000.00',
+            'payment_reference' => 'pay-original-lease-race',
+            'paystack_refund_reference' => 'rf-lease-race-01',
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldReceive('verifyRefund')->once()->with('rf-lease-race-01')->andReturnUsing(function () use ($order) {
+            \\Illuminate\\Support\\Facades\\DB::table('orders')->where('id', $order->id)->update([
+                'refund_reconciliation_token' => 'NEW-LEASE-OWNER',
+                'refund_reconciliation_claimed_at' => Carbon::now(),
+                'paystack_refund_status' => 'processing',
+            ]);
+            return ['success' => true, 'refund_reference' => 'rf-lease-race-01', 'status' => 'failed'];
+        });
+        $this->app->instance(PaystackService::class, $mock);
+
+        $result = app(FinancialReconciliationEngine::class)->reconcileRefunds();
+
+        $this->assertEquals(0, $result);
+        $order->refresh();
+        $this->assertEquals('processing', $order->paystack_refund_status);
+        $this->assertEquals('NEW-LEASE-OWNER', $order->refund_reconciliation_token);
+    }
+
 }
