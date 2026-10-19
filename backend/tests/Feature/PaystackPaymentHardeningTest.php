@@ -450,6 +450,17 @@ class PaystackPaymentHardeningTest extends TestCase
             'currency' => ['status' => 'success', 'currency' => 'USD', 'amount' => 1500000],
             'reference' => ['status' => 'success', 'currency' => 'NGN', 'amount' => 1500000, 'reference' => 'VM-FORGED-REFERENCE'],
         ];
+        $responsePayload = [];
+
+        Http::fake([
+            'https://api.paystack.co/transaction/verify/*' => function ($request) use (&$responsePayload) {
+                return Http::response([
+                    'status' => true,
+                    'message' => 'Verification response',
+                    'data' => $responsePayload,
+                ], 200);
+            },
+        ]);
 
         foreach ($cases as $field => $gatewayData) {
             $order = $this->createTestOrder([
@@ -457,7 +468,7 @@ class PaystackPaymentHardeningTest extends TestCase
                 'payment_reference' => 'VM-VERIFY-' . strtoupper($field) . '-' . uniqid(),
             ]);
 
-            $payload = [
+            $responsePayload = array_merge([
                 'id' => 554433,
                 'status' => $gatewayData['status'],
                 'currency' => $gatewayData['currency'],
@@ -465,15 +476,7 @@ class PaystackPaymentHardeningTest extends TestCase
                 'reference' => $gatewayData['reference'] ?? $order->payment_reference,
                 'channel' => 'card',
                 'customer' => ['email' => $this->customer->email],
-            ];
-
-            Http::fake([
-                'https://api.paystack.co/transaction/verify/*' => Http::response([
-                    'status' => true,
-                    'message' => 'Verification response',
-                    'data' => $payload,
-                ], 200),
-            ]);
+            ], []);
 
             $result = app(PaystackService::class)->verifyTransaction($order->payment_reference, $order);
 
@@ -486,8 +489,9 @@ class PaystackPaymentHardeningTest extends TestCase
 
             $this->assertFalse($result['success'], "Tampered {$field} must not verify.");
             $this->assertSame($expectedCode, $result['code'], "Tampered {$field} should fail with its specific validation code.");
-            Http::assertSent(fn ($request) => str_contains($request->url(), '/transaction/verify/'));
         }
+
+        Http::assertSentCount(4);
     }
 
     /**
