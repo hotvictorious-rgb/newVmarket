@@ -277,19 +277,20 @@ class FinancialReconciliationEngine
 
                         if ($existingOp) {
                             $finOpService->finalizeRefundConfirmation($existingOp, $verifyRes);
+                            $reconciled++;
                         } else {
+                            // Gateway confirmation alone is not enough to finalize the
+                            // marketplace's books: without the operation we cannot safely
+                            // commit reservations or write balanced journal entries.
+                            // Leave the refund unresolved for manual reconciliation.
                             $claimedOrder->update([
-                                'paystack_refund_status' => 'completed',
+                                'paystack_refund_status' => 'pending',
                             ]);
-                            // Also transition any pending return case
-                            $claimedOrder->returnCases()
-                                ->whereIn('status', ['refund_pending', 'refund_approved'])
-                                ->update([
-                                    'status' => 'refunded',
-                                    'refunded_at' => Carbon::now(),
-                                ]);
+                            Log::warning('Verified Paystack refund has no matching FinancialOperation; left pending for manual reconciliation.', [
+                                'order_id' => $claimedOrder->id,
+                                'refund_reference' => $claimedOrder->paystack_refund_reference,
+                            ]);
                         }
-                        $reconciled++;
                     } elseif (in_array($gwStatus, ['failed', 'reversed'], true)) {
                         $claimedOrder->update([
                             'paystack_refund_status' => 'failed',
