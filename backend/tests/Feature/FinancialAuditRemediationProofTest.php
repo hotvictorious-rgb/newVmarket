@@ -1588,40 +1588,50 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertEquals('NEW-LEASE-OWNER', $order->refund_reconciliation_token);
     }
 
-    public function test_refund_finalization_is_idempotent_across_webhook_and_reconciliation_entry_points(): void
+    public function test_webhook_confirmation_revokes_stale_reconciler_claim_before_gateway_failure_can_reset_order(): void
     {
         $order = $this->createTestOrder([
             'order_status' => 'cancelled',
             'payment_status' => 'paid',
             'grand_total' => '22000.00',
-            'payment_reference' => 'REF-DUPLICATE-REFUND-FINALIZATION',
+            'payment_reference' => 'REF-REFUND-WEBHOOK-RECONCILER-RACE',
             'paystack_refund_status' => 'pending',
-            'paystack_refund_reference' => 'rf-duplicate-finalization',
+            'paystack_refund_reference' => 'rf-webhook-reconciler-race',
         ]);
 
         $operation = app(FinancialOperationService::class)->createRefundOperation(
-            $order, '500.00', 'duplicate finalization regression', null,
-            'IDEMPOTENCY-DUPLICATE-REFUND-FINALIZATION'
+            $order, '500.00', 'webhook versus reconciliation race', null,
+            'IDEMPOTENCY-WEBHOOK-RECONCILER-RACE'
         );
-        $token = 'REFUND-RECONCILIATION-CLAIM-TEST';
-        $order->update([
-            'refund_reconciliation_token' => $token,
-            'refund_reconciliation_claimed_at' => Carbon::now(),
-            'paystack_refund_status' => 'processing',
-        ]);
-        $evidence = ['status' => 'processed', 'refund_reference' => 'rf-duplicate-finalization'];
-        $service = app(FinancialOperationService::class);
 
-        $first = $service->finalizeRefundConfirmation($operation, $evidence);
-        $this->assertTrue($first['success']);
-        $journalCount = FinancialJournalEntry::where('financial_operation_id', $operation->id)->count();
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldReceive('verifyRefund')->once()->with('rf-webhook-reconciler-race')
+            ->andReturnUsing(function () use ($order, $operation) {
+                // The scheduled worker has claimed the order by the time it verifies.
+                $freshOrder = $order->fresh();
+                $this->assertNotEmpty($freshOrder->refund_reconciliation_token);
 
-        $second = $service->finalizeRefundConfirmation($operation, $evidence, $token);
-        $this->assertTrue($second['success']);
+                // A successful webhook wins the race and revokes that worker's claim.
+                $result = app(FinancialOperationService::class)->finalizeRefundConfirmation(
+                    $operation,
+                    ['status' => 'processed', 'refund_reference' => 'rf-webhook-reconciler-race']
+                );
+                $this->assertTrue($result['success']);
+
+                // Simulate a stale/contradictory gateway result arriving back to the worker.
+                return ['success' => true, 'refund_reference' => 'rf-webhook-reconciler-race', 'status' => 'failed'];
+            });
+        $this->app->instance(PaystackService::class, $mock);
+
+        $result = app(FinancialReconciliationEngine::class)->reconcileRefunds();
+
+        $this->assertSame(0, $result);
         $this->assertSame('confirmed', $operation->fresh()->status);
-        $this->assertSame($journalCount, FinancialJournalEntry::where('financial_operation_id', $operation->id)->count());
-        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $operation->id)->where('status', 'committed')->count());
         $this->assertSame('completed', $order->fresh()->paystack_refund_status);
+        $this->assertNull($order->fresh()->refund_reconciliation_token);
+        $this->assertNull($order->fresh()->refund_reconciliation_claimed_at);
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $operation->id)
+            ->where('status', 'committed')->count());
     }
 
 
