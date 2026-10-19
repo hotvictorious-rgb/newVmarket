@@ -1,6 +1,8 @@
 # VICTORIOUS MARKET — Authoritative Business Rules
 
-**Status:** Business-rule baseline for vendor-managed fulfilment  
+**Status:** Authoritative business-rule baseline for vendor-managed fulfilment
+**Last reviewed:** 19 October 2026
+**Review note:** The rules are approved requirements; Section 14 lists implementation gaps found in the audit branch, not completed fixes.  
 **Scope:** Delivery, vendor-linked riders, in-shop pickup, customer privacy, failed delivery, delivery fees, COD boundaries, and legacy logistics.  
 **Authority:** These rules supersede older descriptions of platform-managed logistics, logistics-company dispatch, rider earnings, and rider payouts. Historical records must be preserved.
 
