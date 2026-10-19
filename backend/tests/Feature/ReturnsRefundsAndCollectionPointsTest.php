@@ -620,7 +620,7 @@ class ReturnsRefundsAndCollectionPointsTest extends TestCase
             'refunded_amount' => '0.00',
         ]);
 
-        $paystack = \\Mockery::mock(\\App\\Services\\PaystackService::class);
+        $paystack = \Mockery::mock(\App\Services\PaystackService::class);
         $paystack->shouldReceive('initiateRefund')
             ->once()
             ->withAnyArgs()
@@ -630,7 +630,7 @@ class ReturnsRefundsAndCollectionPointsTest extends TestCase
                 'refund_reference' => 'rf_pending_retry_test',
                 'data' => ['status' => 'pending', 'reference' => 'rf_pending_retry_test'],
             ]);
-        $this->app->instance(\\App\\Services\\PaystackService::class, $paystack);
+        $this->app->instance(\App\Services\PaystackService::class, $paystack);
 
         $service = app(ReturnAndRefundService::class);
         $first = $service->adminDisburseRefund($this->superAdmin, $case);
@@ -644,9 +644,9 @@ class ReturnsRefundsAndCollectionPointsTest extends TestCase
         $second = $service->adminDisburseRefund($this->superAdmin, $case->fresh());
         $this->assertTrue($second['success']);
         $this->assertSame('initiated', $second['status']);
-        $this->assertSame(0, \\App\\Models\\FinancialJournalEntry::where('order_id', $order->id)->count());
+        $this->assertSame(0, \App\Models\FinancialJournalEntry::where('order_id', $order->id)->count());
         $this->assertSame('refund_pending', $case->fresh()->status);
-        $this->assertSame('initiated', \\App\\Models\\FinancialOperation::where('metadata->return_case_id', $case->id)->value('status'));
+        $this->assertSame('initiated', \App\Models\FinancialOperation::where('metadata->return_case_id', $case->id)->value('status'));
     }
 
     /**
