@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Country;
 use App\Models\FinancialJournalEntry;
 use App\Models\FinancialOperation;
+use App\Models\FinancialReservation;
 use App\Models\GatewayAttempt;
 use App\Models\Lga;
 use App\Models\LogisticsCompanyProfile;
@@ -1586,5 +1587,42 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertEquals('processing', $order->paystack_refund_status);
         $this->assertEquals('NEW-LEASE-OWNER', $order->refund_reconciliation_token);
     }
+
+    public function test_refund_finalization_is_idempotent_across_webhook_and_reconciliation_entry_points(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-DUPLICATE-REFUND-FINALIZATION',
+            'paystack_refund_status' => 'pending',
+            'paystack_refund_reference' => 'rf-duplicate-finalization',
+        ]);
+
+        $operation = app(FinancialOperationService::class)->createRefundOperation(
+            $order, '500.00', 'duplicate finalization regression', null,
+            'IDEMPOTENCY-DUPLICATE-REFUND-FINALIZATION'
+        );
+        $token = 'REFUND-RECONCILIATION-CLAIM-TEST';
+        $order->update([
+            'refund_reconciliation_token' => $token,
+            'refund_reconciliation_claimed_at' => Carbon::now(),
+            'paystack_refund_status' => 'processing',
+        ]);
+        $evidence = ['status' => 'processed', 'refund_reference' => 'rf-duplicate-finalization'];
+        $service = app(FinancialOperationService::class);
+
+        $first = $service->finalizeRefundConfirmation($operation, $evidence);
+        $this->assertTrue($first['success']);
+        $journalCount = FinancialJournalEntry::where('financial_operation_id', $operation->id)->count();
+
+        $second = $service->finalizeRefundConfirmation($operation, $evidence, $token);
+        $this->assertTrue($second['success']);
+        $this->assertSame('confirmed', $operation->fresh()->status);
+        $this->assertSame($journalCount, FinancialJournalEntry::where('financial_operation_id', $operation->id)->count());
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $operation->id)->where('status', 'committed')->count());
+        $this->assertSame('completed', $order->fresh()->paystack_refund_status);
+    }
+
 
 }
