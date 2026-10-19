@@ -346,10 +346,11 @@ class PaystackPaymentController extends Controller
                     return ['action' => 'process', 'event' => $existingEvent];
                 }
                 if ($existingEvent->status === 'failed') {
-                    // Previous attempt failed, atomically retry attempt
+                    // Previous attempt failed, atomically retry the identical payload.
                     $existingEvent->increment('attempts');
                     $existingEvent->status = 'processing';
                     $existingEvent->payload = $payload;
+                    $existingEvent->payload_hash = $eventHash;
                     $existingEvent->updated_at = \Carbon\Carbon::now();
                     $existingEvent->save();
                     return ['action' => 'process', 'event' => $existingEvent];
