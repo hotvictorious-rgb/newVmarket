@@ -630,7 +630,7 @@ class FinancialAuditRemediationProofTest extends TestCase
             'id' => 'evt-unmatched-refund-01',
             'event' => 'refund.processed',
             'data' => [
-                'reference' => 'rf-unmatched-01',
+                'refund_reference' => 'rf-unmatched-01',
                 'transaction_reference' => $order->payment_reference,
                 'status' => 'processed',
             ],
