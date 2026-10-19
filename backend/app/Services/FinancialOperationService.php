@@ -112,6 +112,25 @@ class FinancialOperationService
                 })
                 ->sum('reserved_amount_kobo');
 
+            // Legacy or repaired confirmed refund operations may predate reservation
+            // rows. Count those only when no matching active/committed reservation
+            // already accounts for the same operation, preventing both undercounting
+            // and double-counting the refundable ceiling.
+            $confirmedRefundsWithoutReservationKobo = (int) FinancialOperation::query()
+                ->where('operation_type', 'customer_refund')
+                ->where('status', 'confirmed')
+                ->where('currency', 'NGN')
+                ->where('metadata->order_id', $lockedOrder->id)
+                ->whereDoesntHave('reservations', function ($q) use ($lockedOrder) {
+                    $q->where('purpose', 'customer_refund_hold')
+                        ->whereIn('status', ['active', 'committed'])
+                        ->where('source_type', Order::class)
+                        ->where('source_id', $lockedOrder->id);
+                })
+                ->sum('amount_kobo');
+
+            $existingReservationsKobo += $confirmedRefundsWithoutReservationKobo;
+
             if ($existingReservationsKobo + $amountKobo > $totalOriginalPaymentKobo) {
                 $maxAllowableKobo = max(0, $totalOriginalPaymentKobo - $existingReservationsKobo);
                 $maxAllowableNaira = bcdiv((string)$maxAllowableKobo, '100', 2);
