@@ -22,81 +22,51 @@ The detailed and controlling rules are in [.ai/BUSINESS_RULES.md](.ai/BUSINESS_R
 - In-shop pickup remains supported as a zero-delivery-fee option and uses the pickup pass RES-XXXXXX at the vendor's physical shop.
 - VMARKET retains payment verification, vendor verification, safety oversight, dispute review, authorized refund controls, ledger integrity, vendor settlement controls, and audit logs; it does not run delivery operations.
 - Preserve customer addresses, destination validation, fulfilment events, evidence, and historical logistics records. Retire legacy logistics paths from new fulfilment only after their dependencies are mapped.
-- Rider/delivery confirmation is operational evidence only; it cannot approve a refund, change prices, settle a vendor, or release funds.
+- Rider/delivery confirmation is an operational event and grants no financial permissions to the rider. An independent authorized financial service may consume a verified event under the published settlement policy; the rider cannot directly edit ledgers, approve refunds, change prices, or request payouts.
 - Rider interfaces may expose the customer's name, delivery address, and a protected Call Customer action only. No raw phone number, payment state, amount due, delivery fee, card details, commission, cashback, or payout data.
 
-## Platform Commission and Refund Accounting Rule
+## Merchandise and Delivery Fee Allocation / Refund Accounting
 
-VICTORIOUS MARKET earns 10% of the full eligible vendor-order payment, including the vendor's delivery fee. If an eligible refund is approved, the 10% commission attributable to the refunded amount is also reversed.
+The marketplace uses separate allocation bases for merchandise and delivery. Do not combine them into one blanket commission percentage.
 
-VMARKET should not retain commission on money that has been refunded to the customer.
+### Merchandise allocation
+For eligible merchandise value, the current allocation is:
+- 90% vendor allocation
+- 5% customer cashback
+- 5% platform merchandise share
 
-### 1. How the 10% commission works
+### Delivery-fee allocation
+For the vendor-configured delivery fee, the current allocation is:
+- 90% vendor allocation
+- 10% platform delivery-fee share
 
-Example: a customer buys products worth ₦50,000, and the vendor charges ₦5,000 for delivery.
-
-| Breakdown | Amount |
-| :--- | :--- |
-| Products | ₦50,000 |
-| Delivery fee | ₦5,000 |
-| Customer payment | ₦55,000 |
-| VMARKET commission (10%) | ₦5,500 |
-| Vendor allocation before other adjustments | ₦49,500 |
-
-The ₦5,500 is gross platform commission, not net profit. Payment-processing fees, applicable taxes, cashback, and other legitimate adjustments must be accounted for separately.
-
-### 2. What happens when a refund is approved?
-
-Suppose the customer returns an item worth ₦20,000 from that order, and the approved refund covers that item only. Assuming the delivery fee is not refunded:
-
-- **Original product subtotal:** ₦50,000
-- **Product value refunded:** ₦20,000
-- **Commission reversed (10% × ₦20,000):** ₦2,000
-- **Original commission:** ₦5,500
-- **Remaining commission:** ₦3,500
-
-The delivery fee remains subject to the refund decision and published policy. If the delivery fee is also refunded, the commission attributable to that refunded delivery fee must be reversed too.
-
-### 3. The rules the financial engine must enforce
-
-1. **Calculate commission per vendor order.** A multi-vendor checkout must not use one shared commission calculation that obscures each vendor's allocation.
-2. **Reverse commission proportionately.** Refunds must use the actual approved refundable allocation, not automatically reverse 10% of the entire cart.
-3. **Never reverse the same commission twice.** Every refund and commission adjustment needs a unique idempotency key.
-4. **Keep an immutable ledger.** Record the original commission and a separate reversal entry; never rewrite the original transaction.
-5. **Handle vendor payouts correctly.** If the vendor has already received the money, the system must record and manage the resulting recovery or liability rather than pretending the funds are still available.
-6. **Separate refund approval from refund completion.** An approved refund is not proof that Paystack has returned the money to the customer.
-7. **Reconcile all amounts.** Product discounts, delivery refunds, cashback, payment-processing fees and previous partial refunds must be accounted for without double-counting.
-
-One important distinction: reversing VMARKET's commission does not automatically mean the customer receives that exact amount as an additional refund. The customer receives the approved refund amount; the commission reversal adjusts how that refund is allocated between VMARKET and the vendor.
-
-### 4. The policy adopted
-
-> **Platform Commission and Refund Rule:** Victorious MARKET charges a 10% commission on the full eligible vendor-order amount, including the vendor's delivery fee. When a refund is approved, the platform commission attributable to the refunded eligible amount is reversed proportionately. The refund amount, commission reversal, vendor allocation, delivery-fee treatment and any other adjustments must be recorded separately in the financial ledger. All calculations must be server-side, auditable, idempotent and reconciled against the payment provider.
-
-Before implementing it, ensure the return policy clearly defines when delivery fees are refundable, especially for defective, incorrect or misrepresented products. The policy should not override applicable consumer-protection requirements.
-
-## Customer Cashback and Loyalty Model (5% of Eligible Product Value)
-
-The current policy is:
-- Platform commission is 10% of the eligible vendor-order payment, including the vendor's delivery fee.
-- Customer cashback is 5% of eligible product value only, excluding delivery fees.
-- Cashback is a use of platform commission, not a separate rider/logistics payment and not an automatic 5% of delivery charges.
-- Vendor payable, commission, cashback, discounts, taxes, gateway fees, refunds, and reversals must be calculated and journaled separately per vendor child order.
+The vendor separately pays its rider outside Victorious MARKET. No part of the delivery-fee allocation is a rider payout, and no rider payable is created by the platform.
 
 ### Example
 
-For a vendor order with ₦90,000 of eligible products and ₦10,000 delivery:
+For a vendor order with ₦90,000 eligible merchandise and ₦10,000 delivery:
 
-| Component | Basis | Amount |
+| Component | Calculation | Amount |
 | :--- | :--- | ---: |
-| Eligible product value | Product subtotal | ₦90,000 |
-| Delivery fee | Vendor-configured fee | ₦10,000 |
-| Customer payment | Product + delivery | ₦100,000 |
-| Platform commission | 10% of eligible vendor-order payment | ₦10,000 |
-| Customer cashback | 5% of eligible products only | ₦4,500 |
-| Platform commission remaining after cashback | Before expenses/other adjustments | ₦5,500 |
+| Vendor merchandise allocation | 90% × ₦90,000 | ₦81,000 |
+| Customer cashback | 5% × ₦90,000 | ₦4,500 |
+| Platform merchandise share | 5% × ₦90,000 | ₦4,500 |
+| Vendor delivery-fee allocation | 90% × ₦10,000 | ₦9,000 |
+| Platform delivery-fee share | 10% × ₦10,000 | ₦1,000 |
+| Customer payment | Merchandise + delivery | ₦100,000 |
 
-The vendor allocation must be calculated from the immutable order-level allocation rules; do not assume a fixed 90/5/5 split when delivery, discounts, refunds, or other adjustments change the bases. Cashback eligibility and reversals must be recorded in the existing financial engine. A refunded eligible product reverses the cashback attributable to that product according to the published policy. Cashback is never credited merely because delivery failed or a complaint was opened.
+These are gross allocation examples before discounts, gateway fees, taxes, approved adjustments, or special product rules. Apply the actual stored order allocations and do not infer a flat 10% platform commission on the entire order.
+
+### Refund rules
+
+1. Calculate each allocation per vendor child order, not as one shared cart-level split.
+2. A merchandise refund reverses the applicable vendor merchandise allocation, platform merchandise share, and cashback associated with the refunded eligible product amount.
+3. A delivery-fee refund reverses the corresponding vendor delivery allocation and platform delivery-fee share. Delivery fee refundability depends on the published reason-specific customer policy and applicable law.
+4. Never reverse the same commission, cashback, vendor payable, or refund twice. Use unique idempotency keys and immutable reversal journal entries.
+5. If vendor proceeds have already been paid, record the recovery/liability through the authorized financial engine rather than pretending the funds remain available.
+6. Approval is not completion: reconcile the actual Paystack result before showing a refund as completed.
+7. The amount refunded to the customer is the approved refund amount; internal allocation reversals are not additional customer refunds.
+8. All amounts must be calculated server-side, auditable, idempotent, and reconciled against the payment provider.
 
 ## 30-Minute Stock-Hold and Late-Payment Reconciliation Policy
 
