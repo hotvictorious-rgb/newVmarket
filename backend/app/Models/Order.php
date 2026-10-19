@@ -70,6 +70,8 @@ class Order extends Model
         'expires_at',
         'paystack_refund_reference',
         'paystack_refund_status',
+        'refund_reconciliation_token',
+        'refund_reconciliation_claimed_at',
     ];
 
     /**
