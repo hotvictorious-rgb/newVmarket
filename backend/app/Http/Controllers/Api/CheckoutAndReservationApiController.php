@@ -335,6 +335,12 @@ class CheckoutAndReservationApiController extends Controller
 
         $estimatedTotal = BcMathService::mul($product->unit_price, (string)$quantity);
 
+        // Atomically hold stock for the in-store inspection reservation (Three-Quantity Architecture)
+        $product->increment('held_quantity', $quantity);
+        $product->inventory_quantity = $product->available_quantity;
+        $product->is_in_stock = ($product->available_quantity > 0);
+        $product->save();
+
         $reservation = PickupReservation::create([
             'reservation_code' => PickupReservation::generateCode(),
             'customer_id' => $user->id,
@@ -623,9 +629,10 @@ class CheckoutAndReservationApiController extends Controller
                 ]);
             }
 
-            // Deduct inventory & create order item
-            $product->decrement('inventory_quantity', $reservation->quantity);
-            $product->is_in_stock = ($product->inventory_quantity > 0);
+            // Secure 30-minute stock hold and create order item (Three-Quantity Architecture)
+            // Note: If the reservation already holds stock, we maintain the hold under the order
+            $product->inventory_quantity = $product->available_quantity;
+            $product->is_in_stock = ($product->available_quantity > 0);
             $product->save();
 
             OrderItem::create([
@@ -637,8 +644,8 @@ class CheckoutAndReservationApiController extends Controller
                 'line_total' => $reservation->estimated_total,
             ]);
 
-            // Mark reservation as payment completed and bind order
-            $reservation->status = 'payment_completed';
+            // Keep reservation in pending_payment until Paystack authoritatively confirms payment
+            $reservation->status = 'pending_payment';
             $reservation->order_id = $order->id;
             $reservation->save();
 
@@ -686,6 +693,18 @@ class CheckoutAndReservationApiController extends Controller
 
         $reservation->status = 'cancelled';
         $reservation->save();
+
+        // Release held stock back to available quantity
+        if ($reservation->product_id) {
+            $prod = Product::find($reservation->product_id);
+            if ($prod && (int)$prod->held_quantity > 0) {
+                $held = min((int)$prod->held_quantity, (int)$reservation->quantity);
+                $prod->held_quantity = max(0, (int)$prod->held_quantity - $held);
+                $prod->inventory_quantity = $prod->available_quantity;
+                $prod->is_in_stock = ($prod->available_quantity > 0);
+                $prod->save();
+            }
+        }
 
         return response()->json([
             'status' => true,

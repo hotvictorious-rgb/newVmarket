@@ -202,6 +202,9 @@ class OrderSettlementService
                         }
                     }
                 }
+
+                // Transition any associated pickup reservation to payment_completed upon confirmed gateway settlement
+                \App\Models\PickupReservation::where('order_id', $lockedOrder->id)->update(['status' => 'payment_completed']);
             }
             $lockedOrder->save();
 

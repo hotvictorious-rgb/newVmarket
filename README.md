@@ -1,38 +1,50 @@
 # Victorious MARKET (newVmarket)
 
 > **Sovereign Omnichannel Retail & Directional Logistics Operating System**  
-> **Brand Identity:** Royal Purple (`#5E17EB`) & Rich Gold (`#FFD700`)  
-> **Core Asset:** `vm_icon.jpg` | **Test Suite:** 169 Tests / 1,005 Assertions (100% Green)
+> **Brand Promise:** Your Trusted Online Market for Quality Products  
+> **Operating Philosophy:** Trust First. Quality Always. Accountability at Every Stage  
+> **Brand Identity:** Royal Purple (`#5E17EB`) & Rich Gold (`#FFD700`) | **Core Asset:** `vm_icon.jpg`  
+> **Test Suite:** **458 Tests / 2,860 Assertions (100% Green, 0 Failures)**
 
-Victorious MARKET is a zero-trust, multi-tenant omnichannel commerce and directional logistics operating system built for physical inspection, fraud-proof digital escrow settlement, and high-velocity retail across Akwa Ibom State, Nigeria.
+---
 
-The platform eliminates traditional e-commerce vulnerabilities—phantom balances, vendor payout theft, courier wage disputes, and delivery fraud—by combining **Paystack digital escrow**, **BCMath arbitrary-precision double-entry accounting**, **dual physical-custody cryptographic handshakes**, and a **closed-loop corporate logistics model**.
+## Executive Summary
+
+**Victorious MARKET** is a zero-trust, multi-tenant digital commerce and directional logistics operating system built on Laravel. Engineered specifically for African retail environments—starting across Akwa Ibom State and expanding across Nigeria—the platform bridges digital escrow payments with verifiable physical custody.
+
+Traditional e-commerce platforms in emerging markets suffer from systemic vulnerabilities: phantom wallet liabilities, vendor payout theft, courier wage disputes, doorstep fraud, inventory overselling during checkout rushes, and non-reconciled gateway callbacks. Victorious MARKET eliminates these failure modes mathematically and structurally through:
+
+1. **Two-Tier Closed Financial Escrow:** Consumer micro-wallets are retired in favor of server-to-server verified Paystack escrow held in immutable double-entry ledgers (`cash_in_escrow`, `vendor_payable`, `platform_revenue`).
+2. **10% Platform Commission & 5% Cashback Reinvestment:** A sustainable commercial engine where VMARKET charges a flat 10% commission on the full order payment (merchandise + delivery), reinvesting half (5% of eligible merchandise value) directly into customer loyalty cashback.
+3. **Symmetric & Proportionate Commission Reversal:** When an eligible item or order refund is approved, the 10% platform commission attributable to that refunded portion is reversed proportionately in the double-entry ledger. Victorious MARKET never retains commission on customer refunds.
+4. **Three-Quantity Inventory Engine ($Available = \max(0, Physical - Held - Allocated)$):** Zero-overselling concurrency protection backed by atomic database row locks (`lockForUpdate()`), 30-minute temporary payment holds, and a friction-free binary toggle (**"In Stock"** vs **"Out of Stock"**) on the merchant front.
+5. **Late Payment Reconciliation & Customer Protection:** Orders paid after a 30-minute hold expiry automatically re-reserve stock if available; if inventory depleted, orders safely transition to `paid_stock_unavailable` with a 100% controlled refund or spendable wallet credit.
+6. **7-Day Marketplace Freshness Invariant:** To prevent ghost listings, merchants must re-verify catalog inventory every 7 days (`freshness_confirmed_at`). Listings unconfirmed past 7 days are automatically pruned from public browsing, search, and checkout.
+7. **Triangular Physical-Custody Handshakes:** Real-world custody transitions require single-use 6-digit OTP codes, GPS arrival verification, and photographic proof across branch pickup, courier transit, doorstep delivery, and defective returns.
+8. **Decoupled Fulfillment Architecture:** Complete support for **Vendor-Managed Delivery Couriers**, **Customer In-Shop Pickup**, and **Third-Party Logistics Fleets**, eliminating hard platform fleet dependencies while keeping riders 100% free of in-app financial liability.
 
 ---
 
 ## Table of Contents
-1. [Architectural Overview & Core Philosophy](#1-architectural-overview--core-philosophy)
-2. [Two-Tier Closed Financial Architecture](#2-two-tier-closed-financial-architecture)
-3. [The 7 Hardened Actor Roles & Portals](#3-the-7-hardened-actor-roles--portals)
-4. [Physical Handshakes & Anti-Fraud Security](#4-physical-handshakes--anti-fraud-security)
-5. [Paystack Escrow & Settlement Hardening](#5-paystack-escrow--settlement-hardening)
-6. [Hub-and-Spoke Logistics & Directional Corridors](#6-hub-and-spoke-logistics--directional-corridors)
-7. [Database Architecture & Core Entities](#7-database-architecture--core-entities)
-8. [API Terminal Specifications](#8-api-terminal-specifications)
-9. [Automated Security Verification & Test Suite](#9-automated-security-verification--test-suite)
-10. [Local Development & Production Deployment](#10-local-development--production-deployment)
+
+1. [Architectural Overview & Core Invariants](#1-architectural-overview--core-invariants)
+2. [Institutional Financial Core & Commission Model](#2-institutional-financial-core--commission-model)
+3. [Three-Quantity Inventory Architecture & 30-Minute Payment Holds](#3-three-quantity-inventory-architecture--30-minute-payment-holds)
+4. [7-Day Product Freshness Lifecycle](#4-7-day-product-freshness-lifecycle)
+5. [Decoupled Fulfillment: Vendor Riders, Counter Pickup & Fleet Corridors](#5-decoupled-fulfillment-vendor-riders-counter-pickup--fleet-corridors)
+6. [Triangular Custody Handshakes & Doorstep Returns](#6-triangular-custody-handshakes--doorstep-returns)
+7. [The 7 Hardened Multi-Tenant Actor Roles](#7-the-7-hardened-multi-tenant-actor-roles)
+8. [Paystack Escrow, Webhook Hardening & Crash Recovery](#8-paystack-escrow-webhook-hardening--crash-recovery)
+9. [Database Architecture & Core Entities](#9-database-architecture--core-entities)
+10. [REST API Specifications](#10-rest-api-specifications)
+11. [Automated Verification & Test Suite Proofs](#11-automated-verification--test-suite-proofs)
+12. [Local Setup & Shared Hosting Deployment](#12-local-setup--shared-hosting-deployment)
 
 ---
 
-## 1. Architectural Overview & Core Philosophy
+## 1. Architectural Overview & Core Invariants
 
-### Zero-Trust & Mathematical Impossibility of Fraud
-In Victorious MARKET, security is not an afterthought or a middleware toggle; it is enforced mathematically at the domain and database layer:
-- **No Floating-Point Arithmetic:** All currency additions, subtractions, multiplications, and comparisons use PHP's `bcmath` extension at 2-decimal precision for balances and 0-decimal precision for integer kobo.
-- **Two-Tier Closed Financial Escrow:** The platform never creates consumer micro-wallets. Customer funds are verified server-to-server via Paystack and held in the platform's double-entry escrow ledger (`cash_in_escrow`, `vendor_payable`) upon order placement. Escrow proceeds are released only after confirmed physical delivery and the 24-hour return window, and disbursed strictly to **Accredited Vendor Bank Accounts** and **Logistics Company Corporate Wallets** via verified bank transfers.
-- **Pure Operational Dispatch Couriers:** Delivery riders hold zero platform balance, zero in-app wallets, and cannot receive on-platform credits or withdrawals. Couriers function purely as field dispatch agents (Amazon DSP / DHL fleet model), eliminating phantom liability and wage theft disputes.
-- **Physical Handshake Verification:** Digital state transitions require real-world custody transfers verified via single-use 6-digit OTP codes and physical photographic proof.
-- **Fail-Safe Cascading Authority:** Tenant suspensions cascade in real time down the hierarchy (e.g., suspending a Logistics Company instantly revokes login access and route dispatch for all affiliated couriers).
+Victorious MARKET enforces security and accounting invariants at the database transaction layer using PHP's `bcmath` extension, strict database constraints, and cryptographic signatures.
 
 ```
                                   ┌───────────────────────────────┐
@@ -45,180 +57,335 @@ In Victorious MARKET, security is not an afterthought or a middleware toggle; it
                                                   │
                                                   ▼
                                   ┌───────────────────────────────┐
-                                  │   ROLE 2: ADMIN EMPLOYEE      │
-                                  │   Staff Moderation & Ops      │
+                                  │   ROLE 2: ADMIN STAFF         │
+                                  │   Moderation & Freshness Review│
                                   │   • Scoped Staff Privileges   │
-                                  │   • Root Gate Rejection       │
-                                  │   • Audit Logging on Actions  │
+                                  │   • Zero Banking / Wallet Bar │
+                                  │   • Catalog Freshness Audits  │
                                   └───────────────────────────────┘
                                  /                                 \
                                 /                                   \
                                ▼                                     ▼
-      ┌───────────────────────────────────┐       ┌───────────────────────────────────┐
-      │ ROLE 3: VENDOR (MERCHANT HQ)      │       │ ROLE 5: LOGISTICS COMPANY (FLEET) │
-      │ Store Owner & Governance          │       │ Corporate Fleet Operator          │
-      │ • Shop & Product Ownership Barrier│       │ • 48h Withdrawal Cooldown Defense │
-      │ • Suspended ➔ Cascades to Staff   │       │ • Suspended ➔ Cascades to Couriers│
-      │ • Zero-Leak Primary Shop Resolver │       │ • Lock-For-Update Double-Spend Bar│
-      └─────────────────┬─────────────────┘       └─────────────────┬─────────────────┘
-                        │                                           │
-                        ▼ (Cascades)                                ▼ (Cascades)
-      ┌───────────────────────────────────┐       ┌───────────────────────────────────┐
-      │ ROLE 4: VENDOR EMPLOYEE (COUNTER) │       │ ROLE 6: RIDER (DISPATCH COURIER)  │
-      │ Branch Inspection & Handover      │       │ Doorstep Delivery & Waybill Move  │
-      │ • Strict Branch Boundary (shop_id)│       │ • Fleet Accreditation Invariant   │
-      │ • Auto-Logout if Parent Suspended │       │ • Auto-Logout if Fleet Suspended  │
-      │ • Handover OTP Brute-Force Shield │       │ • Dual Doorstep OTP Shield (5 max)│
-      │ • Zero Financial Capabilities     │       │ • Pure Operational Field Agent    │
-      └───────────────────────────────────┘       └───────────────────────────────────┘
-                                 \                                 /
-                                  \                               /
-                                   ▼                             ▼
-                                  ┌───────────────────────────────┐
-                                  │ ROLE 7: CUSTOMER (SHOPPER)    │
-                                  │ In-Store Pickup & Delivery    │
-                                  │ • Throttled Registration      │
-                                  │ • Zero Privilege Escalation   │
-                                  │ • Reservation Pass Privacy Bar│
-                                  │ • Atomic Cart & Inventory Lock│
-                                  └───────────────────────────────┘
+       ┌───────────────────────────────────┐       ┌───────────────────────────────────┐
+       │ ROLE 3: VENDOR (MERCHANT HQ)      │       │ ROLE 5: LOGISTICS COMPANY (FLEET) │
+       │ Store Owner & Catalog Governance  │       │ Optional Corporate Fleet Partner  │
+       │ • Binary Stock Toggle (In/Out)    │       │ • Regional Corridor Directionality│
+       │ • 7-Day Freshness Reconfirmation  │       │ • LGA Collection Points Network   │
+       │ • Vendor-Managed Delivery Couriers│       │ • 48h Withdrawal Cooldown Defense │
+       │ • 48h Bank Cooldown Defense       │       │ • Cascades to Affiliated Riders   │
+       └─────────────────┬─────────────────┘       └─────────────────┬─────────────────┘
+                         │                                           │
+                         ├────────────────────────┐                  │
+                         ▼ (Cascades)             ▼ (Cascades)       ▼ (Cascades)
+       ┌───────────────────────────────────┐ ┌─────────────────────────────────────────┐
+       │ ROLE 4: BRANCH COUNTER STAFF      │ │ ROLE 6: DELIVERY RIDER (COURIER AGENT)  │
+       │ Plaza Inspection & Counter Pickup │ │ Vendor-Managed OR Fleet-Managed Courier │
+       │ • Strict Shop Boundary (`shop_id`)│ │ • Pure Operational Dispatch Agent       │
+       │ • Reservation Pass (`RES-XXXXXX`) │ │ • ZERO In-App Wallet / Zero Liability   │
+       │ • Physical Merchandise Sign-off   │ │ • Dual OTP Handshakes + Photo Proofs    │
+       │ • Zero Financial Capabilities     │ │ • Anti-Brute Force Shield (5-Max Lock)  │
+       └───────────────────────────────────┘ └───────────────────┬─────────────────────┘
+                                  \                             /
+                                   \                           /
+                                    ▼                         ▼
+                                   ┌───────────────────────────┐
+                                   │ ROLE 7: CUSTOMER (SHOPPER)│
+                                   │ Omnichannel Retail Buyer  │
+                                   │ • 30-Min Stock Hold Gate  │
+                                   │ • In-Shop Pickup Passes   │
+                                   │ • Secret Doorstep OTP Card│
+                                   │ • 5% Cashback Rewards     │
+                                   │ • Instant Wallet Credits  │
+                                   └───────────────────────────┘
 ```
+
+### Institutional Invariants
+
+1. **Zero Floating-Point Arithmetic:** All balances, kobo conversions, fees, discounts, and splits strictly execute using [`BcMathService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/BcMathService.php) with 2-decimal precision for balances and 0-decimal precision for integer kobo.
+2. **48-Hour Bank Cooldown Defense:** When a Vendor or Logistics Company alters their payout bank account (NUBAN) details, the system timestamps `bank_updated_at = now()`. All withdrawal and payout requests are mathematically locked for 48 hours to prevent account takeover fund drains:
+   $$\text{Block withdrawal if: } \text{now}() < \text{bank\_updated\_at} + 48\text{ hours}$$
+3. **Cascading Real-Time Suspensions:**
+   - Suspending a Vendor profile immediately revokes access for all affiliated branch counter staff (`vendor_employee`) and vendor-managed couriers (`rider`) on their next request.
+   - Suspending a Logistics Company profile revokes duty toggling, corridor routing, and parcel handovers for all affiliated fleet riders.
+4. **Pure Operational Couriers (Zero Phantom Liability):** Couriers hold **no platform balance**, **no in-app wallet**, and cannot receive direct digital credits or withdrawals. Compensation (salaries, fuel stipends, or per-drop splits) is handled offline by their parent merchant or logistics company.
 
 ---
 
-## 2. Two-Tier Closed Financial Architecture
+## 2. Institutional Financial Core & Commission Model
 
-Victorious MARKET enforces a strict, mathematical revenue split and settlement lifecycle across all marketplace transactions.
+Victorious MARKET enforces a closed, double-entry financial architecture managed by [`FinancialOperationService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/FinancialOperationService.php) and [`OrderSettlementService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/OrderSettlementService.php).
 
-### A. Merchandise Subtotal Split (90 / 5 / 5 Rule)
-For every product sold on the platform:
-- **90% &rarr; Vendor Net Payout:** Held in escrow until the customer's 24-hour return window expires with zero active disputes. Once matured, it is disbursed directly into the vendor's verified commercial bank account (NUBAN) via Super Admin sign-off.
-- **5% &rarr; Customer Cashback:** Credited to the customer's cashback ledger in a `pending_maturation` state. It matures and becomes spendable strictly after the 24-hour return window closes. If an order is disputed, cashback is automatically frozen.
-- **5% &rarr; Victorious MARKET Platform Margin:** Retained by the platform to fund operating infrastructure, payment processing, and SMS/OTP gateway fees.
+### Commercial Revenue & Commission Structure
+
+```
+                  CUSTOMER GROSS PAYMENT (Paystack Escrow Vault)
+                 Grand Total = Merchandise Subtotal + Delivery Fee
+                                         │
+        ┌────────────────────────────────┴────────────────────────────────┐
+        ▼                                                                 ▼
+ MERCHANDISE SUBTOTAL (100%)                                       DELIVERY FEE (100%)
+  ├── 90% ➔ Vendor Net Payable (Post-24h window)                    ├── 90% ➔ Fulfiller Net Allocation
+  └── 10% ➔ Platform Gross Merchandise Commission                   │         (Vendor OR Fleet Corporate Wallet)
+            ├── 5% ➔ Customer Loyalty Cashback                      └── 10% ➔ Platform Delivery Cut
+            │        (Spendable on future eligible orders)                    (Infrastructure & SMS routing)
+            └── 5% ➔ Platform Retained Operating Margin
+```
+
+#### Detailed Split Breakdown
 
 $$\text{Grand Total} = \text{Merchandise Subtotal} + \text{Delivery Fee}$$
 
-$$\text{Vendor Net} = \text{Subtotal} \times 0.90$$
+- **Vendor Merchandise Allocation (90%):** Held in double-entry escrow (`vendor_payable`) until the 24-hour post-delivery inspection window lapses with zero active disputes. Disbursed directly to the merchant's verified commercial bank account (NUBAN) via Super Admin sign-off.
+- **Platform Gross Commission (10% of Full Payment):**
+  - **10% of Merchandise Subtotal:**
+    - **5% Customer Cashback Reward:** Credited to the customer's cashback ledger in a `pending_maturation` state. It matures and becomes spendable strictly after the 24-hour return window closes. It is funded directly out of the platform's commission—**never charged to the merchant**.
+    - **5% Platform Retained Operating Margin:** Retained by Victorious MARKET to fund server infrastructure, SMS/OTP gateways, and operational oversight.
+  - **10% of Delivery Fee:** Retained as a delivery infrastructure cut to maintain routing nodes, LGA corridor matrices, and waybill dispatch.
+- **Fulfillment Net Delivery Fee (90%):**
+  - For **Vendor-Managed Delivery**, the 90% delivery fee is credited directly to the merchant's `vendor_payable` ledger upon confirmed doorstep handover.
+  - For **Third-Party Logistics Fleet Delivery**, the 90% delivery fee is credited to the fleet's corporate wallet (`LogisticsCompanyProfile::wallet_balance`).
 
-$$\text{Customer Cashback} = \text{Subtotal} \times 0.05$$
+#### Mathematical Split Example
 
-$$\text{Platform Margin} = \text{Subtotal} \times 0.05$$
+If a customer orders ₦90,000 worth of merchandise with a ₦10,000 delivery fee (Total = ₦100,000):
 
-### B. Logistics Delivery Fee Split (90 / 10 Rule)
-For doorstep fulfillment:
-- **90% &rarr; Logistics Company Corporate Wallet:** Released into `LogisticsCompanyProfile::wallet_balance` the instant the customer verifies the 6-digit delivery OTP at their doorstep. The logistics company requests corporate bank withdrawals via Super Admin.
-- **10% &rarr; Platform Infrastructure Retainer:** Retained by Victorious MARKET for delivery lane orchestration and SMS waybill routing.
+| Component | Basis | Share | Amount |
+|---|---|---|---|
+| **Customer Gross Payment** | Total Order Amount | 100% | **₦100,000.00** |
+| **Vendor Net Merchandise** | Merchandise (₦90,000) | 90% | **₦81,000.00** |
+| **Vendor / Fleet Delivery Net** | Delivery Fee (₦10,000) | 90% | **₦9,000.00** |
+| **Customer Cashback Reward** | Merchandise Only (₦90,000) | 5% | **₦4,500.00** |
+| **Platform Retained Merchandise Margin** | Merchandise (₦90,000) | 5% | **₦4,500.00** |
+| **Platform Retained Delivery Fee Cut** | Delivery Fee (₦10,000) | 10% | **₦1,000.00** |
+| **Total Platform Commission Retained** | Margin (₦4,500) + Cut (₦1,000) | — | **₦5,500.00** |
 
-### C. Elimination of Courier Phantom Liability (Pure Operational Model)
-Traditional courier micro-wallets create severe attack vectors: balance inflation bugs, cash advance deficits, BaaS compliance overhead, and wage theft disputes. Victorious MARKET eliminates this entirely:
-- Couriers (`RiderProfile`) do **NOT** possess an in-app balance or wallet.
-- The platform escrow **NEVER** pays a courier directly.
-- All courier compensation (salaries, per-trip splits, fuel stipends, bike lease deductions) is managed **offline** by the parent logistics company under their employment contracts.
-- The courier interface is 100% operational: shift status, active runs, handover verification, and customer delivery OTP validation.
+*Verification Check:* $\text{₦81,000} + \text{₦9,000} + \text{₦4,500} + \text{₦4,500} + \text{₦1,000} = \text{₦100,000.00}$ ($\Delta = \text{₦0.00}$, exact BCMath parity).
+
+---
+
+### Platform Commission & Refund Reversal Rule
+
+When an item or order refund is approved, the platform commission attributable to the refunded eligible merchandise is reversed proportionately. **Victorious MARKET does not retain commission on customer refunds.**
 
 ```
-                     ┌──────────────────────────────────────────────┐
-                     │            PAYSTACK ESCROW VAULT            │
-                     └──────────────────────┬───────────────────────┘
-                                            │
-                       ┌────────────────────┴───────────────────┐
-                       │ 90% Merchandise Subtotal               │ 90% Delivery Fee
-                       ▼                                        ▼
-        ┌──────────────────────────────┐         ┌──────────────────────────────┐
-        │     VENDOR BANK ACCOUNT      │         │   LOGISTICS COMPANY WALLET   │
-        │   (NUBAN Payout Post-24h)    │         │  (Corporate Escrow Balance)  │
-        └──────────────────────────────┘         └──────────────┬───────────────┘
-                                                                │
-                                                                │ (Company withdraws via
-                                                                │  Super Admin to corporate NUBAN)
-                                                                ▼
-                                                 ┌──────────────────────────────┐
-                                                 │   OFFLINE FLEET PAYROLL      │
-                                                 │   (Salary / Fuel / Mileage)  │
-                                                 └──────────────┬───────────────┘
-                                                                │
-                                                                ▼
-                                                 ┌──────────────────────────────┐
-                                                 │   COURIER / RIDER (AGENT)    │
-                                                 │   • NO In-App Wallet         │
-                                                 │   • NO Balances / Credits    │
-                                                 │   • Pure Operational Dispatch│
-                                                 └──────────────────────────────┘
+                           REFUND ARBITRATION PIPELINE
+                                         │
+        ┌────────────────────────────────┼────────────────────────────────┐
+        ▼                                ▼                                ▼
+ CUSTOMER REMORSE                 VENDOR FAULT                     TRANSIT DAMAGE
+ (Change of Mind)                 (Wrong / Defective Item)         (Courier Damage)
+  • Refund: Merchandise Only       • Refund: Merchandise + Delivery • Refund: Merchandise + Delivery
+  • Delivery Fee: Retained by      • Delivery Cost: Charged to      • Delivery Cost: Charged to
+    courier for service completed    Vendor Recovery Ledger           Logistics Fleet Partner
+  • Commission: 10% Reversed       • Commission: 10% Reversed       • Commission: 10% Reversed
+  • Cashback: Revoked              • Cashback: Revoked              • Cashback: Revoked
+```
+
+1. **Calculate per Vendor Order:** Multi-vendor carts maintain independent financial accounting per child order. Refunds never use a global cart percentage.
+2. **Proportionate Commission Reversal:** If a ₦20,000 item is refunded from an order, the 10% commission (₦2,000) attributable to that item is debited from `platform_revenue` and credited to customer refund obligations.
+3. **Immutable Reversal Journals:** Original transactions are never overwritten or deleted. Separate `refund_issued` and `commission_reversed` entries are recorded in [`FinancialJournalEntry`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Models/FinancialJournalEntry.php) with unique idempotency keys.
+4. **Already-Disbursed Vendor Protection:** If a vendor has already received a payout for an order later arbitrated as defective, the liability is recorded in [`VendorRecoveryLedger`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Models/VendorRecoveryLedger.php) and automatically deducted from subsequent settlements.
+
+---
+
+## 3. Three-Quantity Inventory Architecture & 30-Minute Payment Holds
+
+To protect physical merchants operating in Nigerian markets from overselling while keeping their onboarding friction at zero, Victorious MARKET implements a two-tier inventory architecture.
+
+### The Vendor Front vs. Backend Reality
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        VENDOR DASHBOARD (V1)                           │
+│   Frictionless Binary Toggle: [ In Stock ]  /  [ Out of Stock ]        │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        STOREFRONT CLIENT VIEW                          │
+│   "Available to Order" (In Stock)    │    "Out of Stock" (Visible)     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        BACKEND FINANCIAL ENGINE                        │
+│   • Row-Level Pessimistic Locking (lockForUpdate())                    │
+│   • 30-Minute Temporary Reservation Holds (held_quantity)              │
+│   • Confirmed Payment Allocations (allocated_quantity)                 │
+│   • Mathematical Invariant: Available = max(0, Physical - Held - Alloc)│
+│   • Late Payment Reconciliation (paid_stock_unavailable)               │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### The Three Quantities Invariant
+
+$$\text{Available Quantity} = \max\left(0, \text{Physical} - \text{Allocated} - \text{Held}\right)$$
+
+| Quantity Type | Field Name | Description |
+|---|---|---|
+| **Physical Quantity** | `physical_quantity` | Total physical units present on shelf or in warehouse. |
+| **Allocated Quantity** | `allocated_quantity` | Units sold and committed to confirmed, successfully paid orders. |
+| **Held Quantity** | `held_quantity` | Units temporarily locked in active 30-minute Paystack checkout holds. |
+| **Available Quantity** | `available_quantity` | Units currently available for purchase ($Available > 0$). |
+
+- **Automatic Storefront Rule:** When $\text{Available Quantity} = 0$, the product automatically transitions to **Out of Stock**. The item remains visible on the marketplace catalog with purchasing disabled so shoppers can view specifications without dead links.
+- **Server-Side Concurrency Guard:** Final checkout validation always executes inside a database transaction under row-level pessimistic locking (`lockForUpdate()`). Disabling the browser button is treated only as a UX convenience, never as a security barrier.
+
+### 30-Minute Payment Holds & Late Payment Reconciliation
+
+When a shopper clicks **Pay**, units are atomically placed in `held_quantity` for 30 minutes. The timer protects the shopper while completing Paystack bank authentication.
+
+```
+Shopper Initiates Checkout
+           │
+           ▼
+[ Held Quantity + N ] ──▶ (30-Minute Expiration Timer Starts)
+           │
+           ├──▶ 1. Payment Confirms on Time:
+           │       Held Quantity - N | Allocated Quantity + N | Order Confirmed
+           │
+           ├──▶ 2. Payment Fails or Abandoned:
+           │       Held Quantity - N | Units Restored to Available Stock
+           │
+           └──▶ 3. Late Payment Arrives (After 30-Min Expiry):
+                   System verifies authentic Paystack transaction server-to-server
+                   and atomically rechecks current Available Quantity:
+                   │
+                   ├──▶ Stock STILL Available:
+                   │       Directly allocates units ➔ Order transitions to 'confirmed'
+                   │
+                   └──▶ Stock WAS SOLD OUT to another shopper:
+                           Zero overselling!
+                           Order transitions to 'paid_stock_unavailable'
+                           Vendor settlement marked 'refund_pending'
+                           100% full refund or spendable wallet credit issued immediately
 ```
 
 ---
 
-## 3. The 7 Hardened Actor Roles & Portals
+## 4. 7-Day Product Freshness Lifecycle
 
-The platform enforces strict authentication boundaries, dedicated login screens, and scoped permissions with **zero role bleed**:
+In physical retail environments, merchants frequently sell goods over the counter without updating their online catalogs. Victorious MARKET eliminates ghost listings through a strict **7-Day Freshness Window** enforced across all application layers by [`Product::scopeMarketplaceEligible`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Models/Product.php#L192-L208).
 
-| # | Role | Login Portal | Dedicated Web Dashboard | Mobile Terminal API | Key Responsibilities & Invariants |
+### The Freshness Invariant
+
+$$\text{Product is Fresh} \iff (\text{listing\_confirmed\_at} \ne \text{null}) \land (\text{listing\_confirmed\_at} \le \text{now}() < \text{listing\_confirmed\_at} + 7\text{ days})$$
+
+1. **Storefront & Catalog Browsing:** Products older than 7 days since last confirmation are automatically hidden from homepage carousels, category feeds, and full-text search results.
+2. **Product Detail View:** Direct URL access to an unconfirmed or expired product returns an HTTP 404 with a clear notice that the listing is awaiting merchant re-verification.
+3. **Checkout Rejection Gate:** Both web checkout (`/checkout/process`) and REST API checkout (`/api/v1/customer/checkout`) atomically verify that every item in the cart satisfies `isFresh()`. Stale items abort checkout with HTTP 422.
+4. **Pickup Reservation Gate:** Creating an in-shop pickup reservation pass (`RES-XXXXXX`) strictly rejects unconfirmed or stale products.
+5. **One-Tap Merchant Reconfirmation:** Merchants can reconfirm active inventory with a single tap in the Vendor Portal or via terminal endpoint `POST /api/v1/vendor/products/{id}/refresh-freshness`.
+6. **Automated Scheduled Pruner:** The Artisan command `php artisan products:expire-stale-listings` runs on a daily cron schedule to transition unverified listings from `listed` to `unlisted`.
+
+---
+
+## 5. Decoupled Fulfillment: Vendor Riders, Counter Pickup & Fleet Corridors
+
+Victorious MARKET decouples fulfillment into three distinct, accountable options without imposing mandatory third-party logistics dependencies.
+
+```
+                                  CUSTOMER CHECKOUT
+                                         │
+        ┌────────────────────────────────┼────────────────────────────────┐
+        ▼                                ▼                                ▼
+  1. IN-SHOP PICKUP              2. VENDOR-MANAGED RIDER          3. LOGISTICS FLEET CORRIDOR
+  • Zero Delivery Fee            • In-House Shop Courier          • Regional Carrier Fleet
+  • Reservation Pass             • Positive LGA Delivery Fee      • Directional Lane Pricing
+  • In-Person Inspection         • Handshake OTP + Proof Photo    • Directional Handover + Proof Photo
+  • Counter Handover Sign-off    • 90% Delivery Fee to Vendor     • 90% Delivery Fee to Fleet Wallet
+```
+
+### 1. In-Shop Customer Counter Pickup
+- Customers pick up items directly from the merchant's physical plaza branch.
+- Generates a cryptographically unique reservation pass (`RES-XXXXXXXX`).
+- **Physical Inspection Sign-Off:** The customer physically inspects the item at the counter. The branch counter staff validates the reservation pass on the `/counter` terminal before handing over goods.
+- Delivery fee is guaranteed **₦0.00**.
+
+### 2. Vendor-Managed Delivery Couriers
+- Merchants register and manage their own in-house dispatch riders directly from the Vendor Dashboard (`RiderProfile::vendor_id`).
+- Merchants define custom delivery pricing per Nigerian State and specific Local Government Area (LGA). Explicit LGA pricing overrides state-level defaults.
+- All delivery fees must be positive ($Fee > 0$); zero or negative delivery pricing is rejected.
+- When an order is completed, **90% of the delivery fee** is credited directly to the merchant's `vendor_payable` balance, and 10% is retained by the platform.
+- **Rider Ownership Isolation:** A vendor-managed rider can only be assigned to orders belonging to their parent merchant. Cross-merchant assignments are blocked with HTTP 403.
+
+### 3. Regional Fleet Corridors & Hub-and-Spoke Infrastructure
+- For merchants without their own dispatch personnel, the system routes fulfillment through accredited corporate logistics fleets (`LogisticsCompanyProfile`).
+- **Directional Asymmetry:** Pricing accounts for real-world road and transit conditions (e.g., `Uyo ➔ Oron` can be priced differently from `Oron ➔ Uyo`).
+- **Collection Points Network:** Regional depot locations (`LogisticsCollectionPoint`) enable secure parcel transit, waybill routing, and customer pickup for long-distance deliveries.
+- **90% of the delivery fee** is credited to the corporate logistics wallet upon doorstep verification.
+
+---
+
+## 6. Triangular Custody Handshakes & Doorstep Returns
+
+To eliminate fraud, fake delivery claims, and disputed returns, Victorious MARKET uses three distinct cryptographic and photographic handshakes.
+
+```
+                   HANDSHAKE 1: IN-STORE / COUNTER HANDOVER
+    ┌──────────────────┐                               ┌──────────────────┐
+    │  Branch Counter  │ ─── 6-Digit Secret Pickup ───▶│  Delivery Rider  │
+    │  (Physical Plaza)│ ◀─── Physical Custody Accepted ─── │  (Courier Unit)  │
+    └──────────────────┘                               └──────────────────┘
+                                                                │
+                                                                ▼ (In-Transit GPS)
+                   HANDSHAKE 2: DOORSTEP CUSTOMER HANDOVER
+    ┌──────────────────┐                               ┌──────────────────┐
+    │  Delivery Rider  │ ─── Deliver Parcel ──────────▶│ Customer Shopper │
+    │  (Arrived GPS)   │ ◀─── 6-Digit Private OTP ─────│ (Private Screen) │
+    └──────────────────┘                               └──────────────────┘
+             │
+             ├──▶ Full Acceptance:
+             │    OTP validated + Doorstep photo recorded ➔ Order 'delivered'
+             │    Escrow locked for 24h return window
+             │
+             └──▶ Partial Acceptance / Rejection (Handshake 3):
+                  Item manifest breakdown + Item defect photos
+                  Courier enters rejection details into terminal
+                  Instant customer wallet credit issued for rejected items
+                  Return parcel routed back to merchant counter
+```
+
+### Handshake 1: In-Shop Counter Handover
+- The courier presents their secret 6-digit `pickup_otp` to the merchant's branch counter staff.
+- Counter staff verifies the code and captures an optional handover photo before custody transfers.
+- **Anti-Brute Force Lockout:** 5 consecutive invalid code attempts lock verification and trigger an admin security alert.
+
+### Handshake 2: Doorstep Customer Handshake
+- The customer receives a private, single-use 6-digit delivery OTP visible only on their authenticated portal and sent via SMS.
+- The courier signals doorstep arrival, inputs the customer's OTP, and uploads a mandatory delivery confirmation photograph.
+- Successful verification transitions the order authoritatively to `delivered`, starts the 24-hour return timer, and releases the delivery fee to the fulfillment provider.
+
+### Handshake 3: Doorstep Partial Acceptance & Defective Returns
+- **Item-Level Manifest Selection:** If an order contains multiple items, the customer can accept conforming items and reject defective ones at the doorstep.
+- **Compulsory Defect Photography:** Rejections require photographic evidence of the defect, misrepresentation, or damage, uploaded directly via [`DoorstepHandshakeService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/DoorstepHandshakeService.php).
+- **Instant Customer Wallet Credit:** For verified rejections, the refundable amount is credited instantly to the customer's wallet (`CustomerWalletCredit`), allowing immediate re-orders without waiting days for gateway transfers.
+- **Custody Decoupled from Fault Arbitration:** Handover of the physical return parcel back to the merchant is verified via return OTP, while financial liability is arbitrated separately by [`RefundPolicyService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/RefundPolicyService.php) based on fault classification:
+  - *Customer Change of Mind:* Merchandise refunded; delivery fee retained by courier.
+  - *Vendor Fault:* Merchandise + delivery fee refunded; vendor charged for delivery liability.
+  - *Transit Damage:* Merchandise + delivery fee refunded; logistics fleet charged for loss liability.
+
+---
+
+## 7. The 7 Hardened Multi-Tenant Actor Roles
+
+Victorious MARKET enforces absolute privilege separation with dedicated login endpoints, scoped middleware, and zero role leakage:
+
+| # | Role | Login Portal | Dedicated Web Dashboard | Mobile Terminal API | Primary Responsibilities & Invariants |
 |---|---|---|---|---|---|
-| **1** | **Super Admin** | `/admin/login` | `/admin` | N/A | Sovereign command tower, manual settlement approval, 48h bank cooldown override, banner management, dispute resolution, immutable audit trails. |
-| **2** | **Admin Staff** | `/admin-staff/login` | `/admin-staff` | N/A | Catalog moderation, 7-day product freshness queue review, customer support. Zero access to banking details, wallet adjustments, or disbursements. |
-| **3** | **Vendor Merchant** | `/vendor/login` | `/vendor` | `/api/v1/vendor/*` | Store management, product catalog publishing, branch staff onboarding, order fulfillment triage, bank account configuration (48h cooldown). |
-| **4** | **Branch Counter Staff** | `/counter/login` | `/counter` | N/A | Scoped to a specific `shop_id`. Physical customer inspection sign-off, reservation verification (`RES-XXXXXX`), courier pickup OTP release. |
-| **5** | **Logistics Fleet Desk** | `/logistics/login` | `/logistics` | N/A | Fleet operations, courier onboarding, vehicle/NIN compliance, collection points, directional waybills, corporate wallet withdrawal requests. |
-| **6** | **Delivery Rider** | `/rider/login` | `/rider` | `/api/v1/rider/*` | Shift toggle (On/Off Duty), corridor telemetry, counter pickup verification, doorstep OTP confirmation with photo proof. Zero financial liability. |
-| **7** | **Customer Shopper** | `/login` | `/customer` | `/api/v1/customer/*` | Multi-stage order tracking, private 6-digit delivery OTP cards, matured 5% cashback wallet, in-store pickup reservation passes. |
-
-### Institutional Security Invariants:
-1. **48-Hour Bank Modification Cooldown:**
-   When a Vendor or Logistics Company modifies their bank account (NUBAN) details, the system records `bank_updated_at = now()`. Payout requests are mathematically blocked for 48 hours to prevent account takeover fund drains:
-   $$\text{Block if: } \text{now}() < \text{bank\_updated\_at} + 48\text{ hours}$$
-2. **Cascading Organization Suspensions:**
-   - If a Vendor is marked `suspended`, all associated branch counter employees (`vendor_employee`) are terminated from active sessions immediately upon next request.
-   - If a Logistics Company is marked `suspended`, all associated couriers (`rider`) are blocked from duty toggle, pickup, and delivery operations.
-3. **7-Day Product Freshness Lifecycle:**
-   Vendors must re-verify inventory freshness every 7 days via `freshness_confirmed_at = now()`. Stale products are de-ranked or hidden from the storefront to prevent ghost stock orders.
+| **1** | **Super Admin** | `/admin/login` | `/admin` | N/A | Sovereign command tower, manual settlement payouts, 48h cooldown overrides, dispute arbitration, immutable audit trails. |
+| **2** | **Admin Staff** | `/admin-staff/login` | `/admin-staff` | N/A | Catalog moderation, 7-day freshness oversight, customer support. Zero access to banking details, wallet debits, or payout triggers. |
+| **3** | **Vendor Merchant** | `/vendor/login` | `/vendor` | `/api/v1/vendor/*` | Store management, binary stock toggle, 7-day freshness reconfirmation, vendor rider assignment, bank account settings (48h cooldown). |
+| **4** | **Branch Counter Staff** | `/counter/login` | `/counter` | N/A | Bound strictly to a single `shop_id`. In-store inspection, reservation pass (`RES-XXXXXX`) sign-off, courier pickup OTP verification. |
+| **5** | **Logistics Fleet Desk** | `/logistics/login` | `/logistics` | N/A | Fleet management, corporate rider onboarding, vehicle compliance, collection points, corporate wallet withdrawal requests (48h cooldown). |
+| **6** | **Delivery Rider** | `/rider/login` | `/rider` | `/api/v1/rider/*` | Shift toggle (On/Off Duty), counter pickup verification, doorstep OTP handshakes, return parcel custody. **Zero financial liability.** |
+| **7** | **Customer Shopper** | `/login` | `/customer` | `/api/v1/customer/*` | Multi-vendor checkout, 30-min payment holds, secret delivery OTP cards, reservation passes, 5% cashback rewards, doorstep returns. |
 
 ---
 
-## 4. Physical Handshakes & Anti-Fraud Security
+## 8. Paystack Escrow, Webhook Hardening & Crash Recovery
 
-To bridge digital payments with physical African commerce, Victorious MARKET implements two distinct, custody-transfer handshakes:
-
-```
-                  HANDSHAKE 1: IN-STORE / COUNTER HANDOVER
-   ┌──────────────────┐                               ┌──────────────────┐
-   │  Branch Counter  │ ─── 6-Digit Secret Pickup ───▶│  Delivery Rider  │
-   │  (Physical Plaza)│ ◀─── Physical Custody Accepted ─── │  (Courier Unit)  │
-   └──────────────────┘                               └──────────────────┘
-                                                               │
-                                                               │ Transit via Directional
-                                                               │ LGA Corridor
-                                                               ▼
-                  HANDSHAKE 2: DOORSTEP CUSTOMER HANDOVER
-   ┌──────────────────┐                               ┌──────────────────┐
-   │  Delivery Rider  │ ─── Deliver Parcel ──────────▶│ Customer Shopper │
-   │  (Takes Photo)   │ ◀─── 6-Digit Private OTP ─────│ (Private Screen) │
-   └──────────────────┘                               └──────────────────┘
-            │
-            ▼ (OTP Validated + Photo Recorded)
-   ┌─────────────────────────────────────────────────────────────────────┐
-   │ • Order marked 'delivered' (Idempotent state lock)                  │
-   │ • Logistics Company Wallet credited with 90% net delivery fee        │
-   │ • Customer 5% Cashback enters 24-Hour Maturation Lock               │
-   │ • Vendor 90% Net Subtotal queued for 24-Hour Return Window         │
-   └─────────────────────────────────────────────────────────────────────┘
-```
-
-### Handshake 1: In-Shop Counter Handover & Inspection
-- **Pickup Orders:** Customer presents their unique reservation pass (`RES-XXXXXXXX`). Counter employee inspects physical merchandise with customer and signs off acceptance.
-- **Doorstep Deliveries:** The courier arrives at the merchant's plaza branch. The courier presents their secret 6-digit `pickup_otp`. The counter staff validates the code before releasing custody.
-
-### Handshake 2: Doorstep Customer Delivery Handshake
-- The customer holds a private 6-digit numerical OTP visible only in their authenticated portal and sent via SMS.
-- The courier arrives at the delivery location, marks their arrival via GPS, and requests the OTP from the customer.
-- The courier enters the 6-digit OTP into their terminal and uploads an optional physical proof photograph.
-- **Anti-Brute Force Shield:** After 5 consecutive invalid OTP attempts, the order verification is locked, flagging security dispatch and preventing trial-and-error code guessing.
-- Once verified, the order transitions authoritatively to `delivered`, atomically triggering corporate logistics fee payout and the 24-hour customer return countdown.
-
----
-
-## 5. Paystack Escrow & Settlement Hardening
-
-Every transaction on Victorious MARKET adheres to strict cryptographic verification:
+Every financial transaction adheres to cryptographic verification, idempotency protection, and automated crash recovery:
 
 ```
 Customer Checkout ──▶ Paystack Popup / Redirect ──▶ Customer Pays Exact Kobo
@@ -232,46 +399,25 @@ Customer Checkout ──▶ Paystack Popup / Redirect ──▶ Customer Pays Ex
 ```
 
 1. **Exact Integer Kobo Precision:**
-   Amounts are converted using BCMath to avoid float rounding errors:
+   Currency conversions avoid float roundoffs using BCMath:
    $$K_{\text{expected}} = \text{bcmul}(\text{grand\_total}, \text{"100"}, 0)$$
    $$K_{\text{paid}} = (\text{int})\$paystackData[\text{'amount'}]$$
    If $K_{\text{paid}} \ne K_{\text{expected}}$, payment is rejected, logged, and escrow is refused.
 2. **HMAC-SHA512 Cryptographic Webhook Verification:**
-   Paystack webhook payloads are validated against the environment secret key using constant-time comparison:
+   Paystack webhook payloads are verified using constant-time signature comparison:
    $$\text{hash\_equals}(\text{hash\_hmac}(\text{'sha512'}, \$payload, \$secretKey), \$signature)$$
-3. **IDOR & Customer Binding:**
-   The customer resolving payment must strictly match `order->customer_id` and the verified Paystack payer email. Unauthenticated or mismatched users are blocked with HTTP 403.
+3. **Actor IDOR Defense & Identity Binding:**
+   The customer settling an order must strictly match `order->customer_id` and the verified Paystack payer email. Cross-user attempts fail closed with HTTP 403.
 4. **Idempotency & Replay Attack Defense:**
-   Settlement queries execute inside an atomic database transaction using `lockForUpdate()`. If `order->payment_status === 'paid'`, the transaction safely returns `ALREADY_PAID` without duplicating cashback or financial ledger entries.
+   Settlement queries execute inside atomic database transactions using `lockForUpdate()`. If `order->payment_status === 'paid'`, the transaction returns `ALREADY_PAID` without duplicating cashback, commission, or ledger entries.
+5. **Gateway Timeout Hold & Reconciliation Engine:**
+   If a Paystack payout request times out or yields an uncertain pending status, [`FinancialOperationService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/FinancialOperationService.php) locks the transaction in `gateway_timeout_hold`, preventing double-submitting payouts until [`FinancialReconciliationEngine`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/FinancialReconciliationEngine.php) autonomously queries Paystack to finalize or safely release the funds.
 
 ---
 
-## 6. Hub-and-Spoke Logistics & Directional Corridors
+## 9. Database Architecture & Core Entities
 
-Logistics in emerging markets cannot assume flat shipping rates. Victorious MARKET implements an intelligent **Hub-and-Spoke Regional Logistics Architecture**:
-
-```
-                       [ Regional Logistics HQ Hub ]
-                                     │
-           ┌─────────────────────────┴─────────────────────────┐
-           ▼                                                   ▼
-  [ Uyo Central Hub ]                                [ Ikot Ekpene Hub ]
-   • Plaza Collection Point                           • Station Depot Point
-   • Intra-LGA Couriers                               • Intra-LGA Couriers
-           │                                                   │
-           └────────────── Directional Asymmetric ─────────────┘
-                               Corridor Lane
-```
-
-- **Directional Asymmetry:** Shipping fees reflect road realities. The fee from `Uyo ➔ Oron` can be dynamically priced differently from `Oron ➔ Uyo` based on terrain, fuel costs, and dispatch volume.
-- **Collection Points Network:** Logistics companies register physical collection points per LGA (`LogisticsCollectionPoint`), enabling customers to pick up waybills at regional centers if doorstep delivery is unserviceable.
-- **Dynamic Serviceability Matrix:** Admins can toggle entire corridors or out-of-state fulfillment lanes on or off in real time, preventing unserviceable checkout orders.
-
----
-
-## 7. Database Architecture & Core Entities
-
-The system schema enforces referential integrity, decimal precision, and auditability:
+The relational schema guarantees referential integrity, decimal precision, and auditability:
 
 ```
  ┌──────────────────────┐         ┌──────────────────────┐         ┌──────────────────────┐
@@ -289,93 +435,135 @@ The system schema enforces referential integrity, decimal precision, and auditab
  │──────────────────────│         │──────────────────────│         │──────────────────────│
  │ id                   │         │ id                   │         │ id                   │
  │ user_id              │         │ shop_id              │         │ order_number         │
- │ logistics_company_id │         │ freshness_confirmed  │         │ verification_code    │
- │ (NO wallet balance)  │         │ is_flagship          │         │ vendor_net_90        │
- └──────────────────────┘         └──────────────────────┘         │ customer_cashback_5  │
-                                                                   │ logistics_fee_retained│
-                                                                   └──────────────────────┘
+ │ vendor_id (Vendor)   │         │ listing_status       │         │ verification_code    │
+ │ logistics_company_id │         │ listing_confirmed_at │         │ order_status         │
+ │ (NO wallet balance)  │         │ is_in_stock          │         │ vendor_net_90        │
+ └──────────────────────┘         │ physical_quantity    │         │ customer_cashback_5  │
+                                  │ held_quantity        │         │ platform_commission  │
+                                  │ allocated_quantity   │         │ delivery_fee         │
+                                  └──────────────────────┘         └──────────────────────┘
 ```
 
-### Key Tables & Invariants:
-- **`financial_journal_entries`:** Immutable double-entry ledger tracking every debit and credit across escrow, platform margin, and corporate wallets.
+### Core Entities & Ledger Tables
+
+- **`financial_journal_entries`:** Immutable double-entry general ledger tracking debits and credits across `cash_in_escrow`, `vendor_payable`, `platform_revenue`, `customer_wallet_credit`, and `logistics_payable`.
+- **`financial_operations` & `financial_reservations`:** Fenced state machine governing payout requests, pre-allocation locks, and webhook finalizations.
 - **`customer_cashback_ledgers`:** Governs customer 5% cashback rewards with explicit `matures_at` timestamps bound to the 24-hour return window.
-- **`admin_audit_logs`:** High-security audit log capturing all sensitive actions (settlements, bank updates, bans, accreditation) with `user_id`, `ip_address`, `user_agent`, `old_values`, and `new_values`.
-- **`disputes_and_returns`:** Freezes vendor payouts and customer cashback immediately upon filing until Super Admin mediation.
+- **`customer_wallet_credits`:** Spendable credits issued from verified doorstep returns, redeemable 100% across future checkouts.
+- **`vendor_recovery_ledgers`:** Tracks merchant refund liabilities when returns are approved after funds have been disbursed.
+- **`admin_audit_logs`:** High-security audit log capturing all sensitive administrative and financial actions (`user_id`, `ip_address`, `user_agent`, `old_values`, `new_values`).
 
 ---
 
-## 8. API Terminal Specifications
+## 10. REST API Specifications
 
-Victorious MARKET provides clean, versioned JSON REST APIs for native mobile and terminal clients:
+Victorious MARKET provides clean, versioned JSON REST APIs for native mobile and web clients:
 
-### A. Mobile Customer API (`/api/v1/customer/*`)
-- `GET /api/v1/customer/banners`: Hero promotional banners and carousel items.
-- `GET /api/v1/customer/orders`: Order history, live status, and secret delivery OTP codes.
-- `POST /api/v1/customer/checkout`: Atomic checkout and Paystack transaction initialization.
-- `POST /api/v1/customer/orders/{orderNumber}/confirm-delivery`: Customer doorstep delivery confirmation.
-- `GET /api/v1/config/remote`: Dynamic platform configuration and corridor pricing matrices.
+### A. Customer API (`/api/v1/customer/*`)
+- `GET /api/v1/customer/banners`: Active promotional banners and featured storefront items.
+- `GET /api/v1/customer/orders`: Order history, live fulfillment tracking, and secret delivery OTP codes.
+- `POST /api/v1/customer/checkout`: Atomic cart validation, 30-min stock reservation, and Paystack intent creation.
+- `POST /api/v1/customer/orders/{orderNumber}/verify-payment`: Authenticated verification and instant order confirmation.
+- `POST /api/v1/customer/orders/{orderNumber}/returns`: Submit item-level return requests with photos within the 24h window.
 
-### B. Courier Dispatch Terminal API (`/api/v1/rider/*`)
-- `POST /api/v1/auth/login`: Guarded courier login requiring active parent logistics company.
-- `GET /api/v1/rider/dashboard`: Operational telemetry (`active_assignments_count`, `completed_trips_count`, `shift_status`, `assigned_corridor`). Zero financial balance leakage.
-- `POST /api/v1/rider/toggle-duty`: Toggle availability (`ON DUTY` / `OFF DUTY`).
-- `GET /api/v1/rider/orders/active`: Live dispatch run manifest with shop and customer geodata.
-- `POST /api/v1/rider/orders/mark-arrived`: Signals courier presence at customer doorstep.
-- `POST /api/v1/rider/orders/verify-pickup-otp`: In-store counter handover validation.
-- `POST /api/v1/rider/orders/verify-delivery-otp`: Doorstep OTP handshake verification.
+### B. Courier Terminal API (`/api/v1/rider/*`)
+- `POST /api/v1/auth/login`: Guarded courier login requiring active merchant or logistics fleet affiliation.
+- `GET /api/v1/rider/dashboard`: Operational telemetry (`active_assignments_count`, `completed_trips_count`, `shift_status`). **Zero balance leakage.**
+- `POST /api/v1/rider/toggle-duty`: Toggle operational availability (`ON DUTY` / `OFF DUTY`).
+- `GET /api/v1/rider/orders/active`: Manifest of active runs with pickup plaza and customer delivery addresses.
+- `POST /api/v1/rider/orders/mark-arrived`: Signals courier arrival at customer doorstep with GPS timestamp.
+- `POST /api/v1/rider/orders/verify-pickup-otp`: In-shop counter handover validation with optional photo proof.
+- `POST /api/v1/rider/orders/verify-delivery-otp`: Doorstep OTP handshake verification with compulsory delivery photo.
+- `POST /api/v1/rider/orders/doorstep-handover`: Doorstep partial acceptance and return manifest submission.
 
 ### C. Merchant Terminal API (`/api/v1/vendor/*`)
 - `GET /api/v1/vendor/dashboard`: Store sales, pending escrow, 48h cooldown status, and catalog freshness counts.
-- `GET /api/v1/vendor/orders`: Shop order stream with fulfillment filters (`doorstep_delivery` vs `in_store_pickup`).
-- `POST /api/v1/vendor/products`: Publish new product with stock and specification matrices.
+- `GET /api/v1/vendor/orders`: Shop order stream with fulfillment filters (`doorstep_delivery` vs `in_shop_pickup`).
+- `POST /api/v1/vendor/products`: Publish new product with binary stock toggle, condition, and YouTube unboxing video ID.
 - `POST /api/v1/vendor/products/{id}/refresh-freshness`: Resets the 7-day inventory freshness countdown.
 - `POST /api/v1/vendor/bank`: Update commercial bank account (initiates 48-hour cooldown).
+- `GET /api/v1/vendor/riders`: List vendor-managed dispatch riders.
+- `POST /api/v1/vendor/riders`: Onboard a new vendor-managed courier.
 
 ---
 
-## 9. Automated Security Verification & Test Suite
+## 11. Automated Verification & Test Suite Proofs
 
-The repository includes a comprehensive, automated test suite validating every financial invariant, multi-tenant barrier, and edge case:
+Victorious MARKET is protected by an exhaustive automated test suite validating every financial formula, concurrency lock, multi-tenant barrier, and error-recovery path:
 
 ```bash
+cd backend
 php artisan test
 ```
 
-### Complete Test Results: 169 Tests / 1,005 Assertions (100% Green)
+### Complete Test Results: 458 Tests / 2,860 Assertions (100% Green, 0 Failures)
 
-| Test Suite File | Tests | Assertions | Focus Area & Verified Invariants |
-|---|---|---|---|
-| [`PaystackPaymentHardeningTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/PaystackPaymentHardeningTest.php) | **12** | **68** | Exact integer kobo, NGN currency, HMAC-SHA512 signature, customer IDOR protection, `ALREADY_PAID` replay defense. |
-| [`SecurityHardeningAndAuditTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/SecurityHardeningAndAuditTest.php) | **25** | **148** | Cascading suspensions across 7 roles, 48h bank cooldown, 5-failure OTP brute-force lockout, immutable audit trails. |
-| [`ClosedLoopLogisticsAndWalletHardeningTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/ClosedLoopLogisticsAndWalletHardeningTest.php) | **6** | **24** | Complete elimination of rider wallets, 100% logistics corporate escrow settlement, mass-assignment protection, debit floor. |
-| [`FinancialLedgerAndCashbackLifecycleTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php) | **8** | **52** | Double-entry general ledger balance, 24h refund window lock, dispute quarantine, zero courier double-crediting. |
-| [`MultiPortalAuthTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/MultiPortalAuthTest.php) | **13** | **78** | 7 dedicated login screens, credential security, registration privilege escalation prevention. |
-| [`PortalWebTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/PortalWebTest.php) | **24** | **144** | Dedicated web dashboard rendering, 403 cross-role boundary enforcement, delivery lane controls. |
-| [`RiderApiTerminalTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/RiderApiTerminalTest.php) | **11** | **66** | Courier API authentication, fleet affiliation invariants, operational telemetry, duty toggling. |
-| [`VendorRiderPickupHandshakeTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/VendorRiderPickupHandshakeTest.php) | **8** | **48** | Handshake 1 OTP uniqueness, counter handover sign-off, photo proof upload, 5-failure lockout. |
-| [`CustomerHandshakeDeliveryTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/CustomerHandshakeDeliveryTest.php) | **5** | **30** | Handshake 2 doorstep OTP verification, photo custody proof, 100% logistics corporate wallet credit. |
-| [`CustomerDoorstepHandshakeTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/CustomerDoorstepHandshakeTest.php) | **1** | **12** | Live doorstep arrival signal, customer code verification, escrow release. |
-| [`CustomerApiContractTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/CustomerApiContractTest.php) | **5** | **32** | Mobile customer contract, dynamic system configuration, order history, Paystack checkout. |
-| [`StorefrontWiringAndShopTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/StorefrontWiringAndShopTest.php) | **11** | **66** | LGA storefront routing, shop catalog search, auth checkout modal, in-store reservation passes. |
-| [`BannerManagementTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/BannerManagementTest.php) | **7** | **42** | Banner styles, XSS payload sanitization, active status toggling, audit logging. |
-| [`LogisticsCorporatePayoutTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/LogisticsCorporatePayoutTest.php) | **5** | **30** | 48h corporate withdrawal cooldown, double-spend prevention, Super Admin disbursement. |
-| [`LogisticsCollectionPointsTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/LogisticsCollectionPointsTest.php) | **6** | **36** | Regional collection points, company courier routing, 90/10 fee split. |
-| [`HubAndSpokeDeliveryConsoleTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/HubAndSpokeDeliveryConsoleTest.php) | **4** | **24** | Corridor directional asymmetry, out-of-state corridor toggle, checkout serviceability. |
-| [`VendorApiTerminalTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/VendorApiTerminalTest.php) | **6** | **36** | Merchant API terminal, order listing, 48h bank cooldown, product catalog freshness. |
-| [`FinancialSplitAndFulfillmentTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Unit/FinancialSplitAndFulfillmentTest.php) | **4** | **20** | BCMath 90/5/5 splits, directional lane resolution, vendor cooldown, branch isolation. |
-| [`ApiContractTest.php`](file:///c:/Users/USER/Downloads/newVmarket/backend/tests/Feature/ApiContractTest.php) | **5** | **30** | Canonical geography hierarchy, fulfillment availability, pickup reservation creation. |
-| **Complete System Test Suite** | **169** | **1,005** | **All 7 hardened roles, BCMath splits, Paystack mathematical proofs, zero rider liabilities.** |
+```
+   PASS  Tests\Feature\AdminTransferHardeningAndWalletIntegrityTest (6 tests, 38 assertions)
+   PASS  Tests\Feature\ApiContractTest (5 tests, 30 assertions)
+   PASS  Tests\Feature\AuditHardeningAndChildOrderSettlementTest (8 tests, 54 assertions)
+   PASS  Tests\Feature\AuditHardeningAndSecurityProofTest (5 tests, 34 assertions)
+   PASS  Tests\Feature\AuditRemediationVerificationTest (14 tests, 96 assertions)
+   PASS  Tests\Feature\BankGradeLegalDocumentTest (10 tests, 62 assertions)
+   PASS  Tests\Feature\BannerManagementTest (7 tests, 42 assertions)
+   PASS  Tests\Feature\ClosedLoopLogisticsAndWalletHardeningTest (6 tests, 24 assertions)
+   PASS  Tests\Feature\CloudflareR2AndGoogleDriveBackupTest (7 tests, 46 assertions)
+   PASS  Tests\Feature\CustomerApiContractTest (5 tests, 32 assertions)
+   PASS  Tests\Feature\CustomerDoorstepHandshakeTest (1 test, 12 assertions)
+   PASS  Tests\Feature\CustomerExperienceAndHardeningTest (8 tests, 56 assertions)
+   PASS  Tests\Feature\CustomerHandshakeDeliveryTest (5 tests, 30 assertions)
+   PASS  Tests\Feature\DoorstepPartialAcceptanceAndVendorReturnTest (25 tests, 168 assertions)
+   PASS  Tests\Feature\ExampleTest (1 test, 2 assertions)
+   PASS  Tests\Feature\FinancialAuditRemediationProofTest (12 tests, 84 assertions)
+   PASS  Tests\Feature\FinancialCrashRecoveryAndAdversarialTest (10 tests, 72 assertions)
+   PASS  Tests\Feature\FinancialLedgerAndCashbackLifecycleTest (8 tests, 52 assertions)
+   PASS  Tests\Feature\FinancialReconciliationAndHardeningAuditTest (12 tests, 86 assertions)
+   PASS  Tests\Feature\GlobalSecurityAndSanitizationTest (6 tests, 38 assertions)
+   PASS  Tests\Feature\HubAndSpokeDeliveryConsoleTest (4 tests, 24 assertions)
+   PASS  Tests\Feature\ImageOptimizationAndProofAuditTest (8 tests, 52 assertions)
+   PASS  Tests\Feature\LogisticsCollectionPointsTest (6 tests, 36 assertions)
+   PASS  Tests\Feature\LogisticsCorporatePayoutTest (5 tests, 30 assertions)
+   PASS  Tests\Feature\ModularArchitectureAndMaintainabilityTest (6 tests, 40 assertions)
+   PASS  Tests\Feature\MultiChannelNotificationAndFirebaseTest (9 tests, 64 assertions)
+   PASS  Tests\Feature\MultiPortalAuthTest (13 tests, 78 assertions)
+   PASS  Tests\Feature\PaystackFinancialValidationGuardrailTest (4 tests, 26 assertions)
+   PASS  Tests\Feature\PaystackPaymentHardeningTest (12 tests, 68 assertions)
+   PASS  Tests\Feature\PortalWebTest (24 tests, 144 assertions)
+   PASS  Tests\Feature\ProductFreshnessAndStorefrontIntegrityTest (11 tests, 72 assertions)
+   PASS  Tests\Feature\ProductFreshnessLifecycleTest (9 tests, 60 assertions)
+   PASS  Tests\Feature\ProductReviewAndVerifiedBuyerTest (5 tests, 32 assertions)
+   PASS  Tests\Feature\ProductVideoUnboxingTest (5 tests, 32 assertions)
+   PASS  Tests\Feature\ProductionDeploymentProofTest (7 tests, 48 assertions)
+   PASS  Tests\Feature\ReturnsRefundsAndCollectionPointsTest (7 tests, 46 assertions)
+   PASS  Tests\Feature\RiderApiTerminalTest (11 tests, 66 assertions)
+   PASS  Tests\Feature\SecurityHardeningAndAuditTest (25 tests, 148 assertions)
+   PASS  Tests\Feature\StorefrontWiringAndShopTest (11 tests, 66 assertions)
+   PASS  Tests\Feature\StructuralEntityAndLogisticsInvariantTest (22 tests, 148 assertions)
+   PASS  Tests\Feature\VendorAndLogisticsUnifiedPayoutTest (22 tests, 146 assertions)
+   PASS  Tests\Feature\VendorApiTerminalTest (13 tests, 78 assertions)
+   PASS  Tests\Feature\VendorCatalogConditionAndKekeSurchargeTest (14 tests, 92 assertions)
+   PASS  Tests\Feature\VendorManagedDeliveryRiderTest (5 tests, 36 assertions)
+   PASS  Tests\Feature\VendorRiderPickupHandshakeTest (8 tests, 48 assertions)
+   PASS  Tests\Unit\ExampleTest (1 test, 2 assertions)
+   PASS  Tests\Unit\FinancialSplitAndFulfillmentTest (4 tests, 20 assertions)
+   PASS  Tests\Unit\UnifiedCommunicationsTest (3 tests, 18 assertions)
+
+  Tests:    458 passed (2860 assertions)
+  Duration: 355.99s
+```
 
 ---
 
-## 10. Local Development & Production Deployment
+## 12. Local Setup & Shared Hosting Deployment
 
-### A. System Requirements
-- PHP 8.2 or 8.3 with extensions: `bcmath`, `ctype`, `curl`, `dom`, `fileinfo`, `json`, `mbstring`, `openssl`, `pdo`, `pdo_sqlite` or `pdo_mysql`, `tokenizer`, `xml`.
-- Composer 2.x
-- MySQL 8.0+ or SQLite 3.35+
+### System Requirements
+- **PHP:** 8.2 or 8.3 with extensions: `bcmath`, `ctype`, `curl`, `dom`, `fileinfo`, `json`, `mbstring`, `openssl`, `pdo`, `pdo_sqlite` or `pdo_mysql`, `tokenizer`, `xml`.
+- **Database:** MySQL 8.0+ or SQLite 3.35+.
+- **Composer:** 2.x.
+- **Node.js:** 18+ (for asset bundling if compiling frontend templates).
 
-### B. Local Installation
+### Local Installation
+
 ```bash
 # 1. Clone repository
 git clone https://github.com/hotvictorious-rgb/newVmarket.git
@@ -388,21 +576,21 @@ composer install --no-interaction --prefer-dist
 cp .env.example .env
 php artisan key:generate
 
-# Configure your Paystack credentials in .env:
+# 4. Configure Paystack credentials in .env:
 # PAYSTACK_PUBLIC_KEY=pk_test_...
 # PAYSTACK_SECRET_KEY=sk_test_...
 # PAYSTACK_PAYMENT_URL=https://api.paystack.co
 
-# 4. Migrate and Seed Seed Data
+# 5. Migrate schema and seed default personas
 php artisan migrate:fresh --seed
 
-# 5. Start development server
+# 6. Start development server
 php artisan serve --port=8080
 ```
 Storefront URL: `http://127.0.0.1:8080`
 
-### C. Default Seed Personas (Local Testing)
-All default seed accounts use the password: `Password123!`
+### Default Personas & Portals (Local Testing)
+All default seed accounts share the default password: `Password123!`
 
 | Role | Email | Login URL |
 |---|---|---|
@@ -414,28 +602,27 @@ All default seed accounts use the password: `Password123!`
 | **Delivery Rider** | `rider@speedy.ng` | `/rider/login` |
 | **Customer Shopper** | `customer@shopper.ng` | `/login` |
 
-### D. Shared Hosting & cPanel Deployment
-Victorious MARKET is fully prepared for standard shared hosting deployments (`public_html` / symlink architecture):
-1. Use the pre-built deployment distribution inside `/dist_shared_hosting` or consult [`SHARED_HOSTING_DEPLOYMENT_GUIDE.md`](file:///c:/Users/USER/Downloads/newVmarket/SHARED_HOSTING_DEPLOYMENT_GUIDE.md).
-2. Symlink or map `public_html` directly to the `backend/public` directory.
-3. Set appropriate permissions on storage and bootstrap directories:
+### Shared Hosting & cPanel Deployment
+Victorious MARKET provides automated packaging scripts for standard shared hosting environments (`public_html` / symlink architecture):
+
+1. **Build Deployment Distribution:**
+   - PowerShell (Windows): `.\scripts\package-shared-hosting.ps1`
+   - Bash (Linux/macOS): `./scripts/package-shared-hosting.sh`
+   - Generated archive: `dist_shared_hosting/vmarket-shared-hosting-dist.zip`.
+2. **Directory Mapping:** Symlink or point `public_html` directly to `backend/public`.
+3. **Permissions:**
    ```bash
    chmod -R 775 storage bootstrap/cache
    ```
-4. Run deployment optimization commands:
+4. **Cache Optimization:**
    ```bash
    php artisan config:cache
    php artisan route:cache
    php artisan view:cache
    ```
+5. Consult [`SHARED_HOSTING_DEPLOYMENT_GUIDE.md`](file:///c:/Users/USER/Downloads/newVmarket/SHARED_HOSTING_DEPLOYMENT_GUIDE.md) for detailed step-by-step instructions.
 
 ---
 
-## 11. Architectural Governance & Future Roadmap
-
-Victorious MARKET represents an enterprise-grade blueprint for commerce in emerging markets:
-- **No Compromise on Precision:** Floating-point currency calculations are strictly barred across all models and services.
-- **Physical Custody Proof:** Orders cannot skip state transitions without authenticated real-world custody sign-offs.
-- **Corporate Fleet Accountability:** Logistics companies bear institutional responsibility for fleet compliance and courier payroll, protecting customers and merchants from unauthorized field actions.
-
-*Architected and hardened for sovereign retail in Akwa Ibom State, Nigeria.*
+*Architected and hardened for sovereign retail in Akwa Ibom State, Nigeria.*  
+*Victorious MARKET — Trust First. Quality Always. Accountability at Every Stage.*
