@@ -647,6 +647,14 @@ class ReturnsRefundsAndCollectionPointsTest extends TestCase
         $this->assertSame(0, \App\Models\FinancialJournalEntry::where('order_id', $order->id)->count());
         $this->assertSame('refund_pending', $case->fresh()->status);
         $this->assertSame('initiated', \App\Models\FinancialOperation::where('metadata->return_case_id', $case->id)->value('status'));
+
+        // A wallet credit is also a refund disbursement; it must not bypass the
+        // existing Paystack reference and create a second customer payout.
+        $walletRetry = $service->adminDisburseRefund($this->superAdmin, $case->fresh(), 'wallet');
+        $this->assertFalse($walletRetry['success']);
+        $this->assertSame('reconciliation_required', $walletRetry['status']);
+        $this->assertSame(0, \App\Models\CustomerWalletCredit::where('return_case_id', $case->id)->count());
+        $this->assertSame(0, \App\Models\FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
     /**
