@@ -200,7 +200,7 @@ The initial source inspection found direct mismatches with the adopted rules. Th
 5. **Pickup needs explicit enforcement.** The repository has a migration to separate pickup and doorstep statuses, but tests must prove that in_shop_pickup always costs zero, uses RES-XXXXXX, is confirmed at the vendor counter, and never requires a rider or creates a delivery payout.
 6. **Assignment lifecycle needs a custody fence.** Assign/reassign endpoints and services must enforce vendor ownership, active rider status, order state, and an atomic custody transition. Reassignment after pickup must require a recorded return/custody-transfer workflow.
 7. **COD must not bypass privacy.** Rider projections cannot expose payment status or amount due. Keep rider-assigned COD disabled until a vendor-owned collection/reconciliation flow is explicitly defined and passes privacy and financial-control tests.
-8. **Commission/cashback documentation had inconsistent bases.** The rules now specify 10% commission on eligible vendor-order payment including delivery, and 5% cashback on eligible product value excluding delivery. Remove fixed 90/5/5 assumptions wherever they conflict with these bases and calculate each child order independently.
+8. **Commission/cashback documentation had inconsistent bases.** The adopted allocation is 90/5/5 on eligible merchandise (vendor/cashback/platform) and 90/10 on the delivery fee (vendor/platform). Cashback excludes delivery. Reconcile each child order using these separate bases and reverse each component according to the approved refund.
 
 
 ### Phase 5: Returns and refunds
