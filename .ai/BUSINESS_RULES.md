@@ -4,6 +4,29 @@
 **Scope:** Delivery, vendor-linked riders, in-shop pickup, customer privacy, failed delivery, delivery fees, COD boundaries, and legacy logistics.  
 **Authority:** These rules supersede older descriptions of platform-managed logistics, logistics-company dispatch, rider earnings, and rider payouts. Historical records must be preserved.
 
+## Decision record from the vendor-delivery Q&A
+
+The selected answers are recorded here so implementation teams do not revert to the older fleet model:
+
+| Q | Topic / selected answer | Adopted rule |
+|---:|---|---|
+| 1 | Logistics company role — A | No platform-managed logistics company, central fleet, hub, or dispatch operation for new orders. |
+| 2 | Rider/vendor relationship — A | Each active rider belongs to one owning vendor. |
+| 3 | Rider registration — A | The vendor adds/manages its riders through vendor-authenticated workflows. |
+| 4 | Rider approval — A | Rider onboarding is vendor-led; account safety controls remain available to the platform. Do not add a central dispatch approval step unless a separately approved safety requirement calls for it. |
+| 5 | Order assignment — B | The vendor manually assigns each of its orders to one of its linked riders. |
+| 6 | Reassignment — A | Vendor-managed reassignment is allowed before custody; after pickup, use an audited custody-transfer/return flow. |
+| 7 | Multi-vendor checkout — A | Keep one parent checkout with separate child vendor orders, fulfilment choices, fees, and rider assignments. |
+| 8 | Delivery fees/zones — A | Each vendor configures supported delivery areas and destination fees; unsupported destinations fail closed. |
+| 9 | Delivery-fee split — B | Delivery fee allocation is 90% to the vendor and 10% platform delivery-fee share; it does not create a rider payable. |
+| 10 | Vendor-to-rider compensation — A | The vendor compensates its rider directly outside platform financial systems. |
+| 11 | Cash on delivery — A | Rider stays operational-only and cannot see amount due/payment status. Do not enable rider-assigned COD until a vendor-owned collection/reconciliation flow passes privacy and financial controls. |
+| 12 | Delivery proof — A | Use the approved customer handover pass/OTP and required proof evidence; do not expose secrets in list/history APIs. |
+| 13 | Failed delivery — B | Record attempts and proof, apply the configured threshold, return the parcel to its owning vendor, and review any financial remedy separately. |
+| 14 | Admin boundaries — A | Platform admin handles oversight/security/disputes, not dispatch or rider pay. |
+| 15 | Legacy logistics records — A | Preserve history for audit; disable legacy fleet paths for new assignments after safe dependency mapping. |
+
+
 ## 1. Non-negotiable operating model
 
 1. VICTORIOUS MARKET is a marketplace and financial-control platform. It does **not** operate a central logistics fleet, logistics company, dispatch hub, rider payroll, route-dispatch service, or rider-payout programme.
