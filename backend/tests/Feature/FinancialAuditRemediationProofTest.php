@@ -396,7 +396,7 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertTrue($finalized['success']);
         $this->assertEquals(2, FinancialJournalEntry::where('event_id', 'EVT-FLEET-PAYOUT-' . $payout->id)->count());
 
-        $reverted = $finalizer->revertLogisticsPayout($payout, 'Gateway confirmed transfer reversal');
+        $reverted = $finalizer->revertLogisticsPayout($payout, 'Gateway confirmed transfer reversal', null, true);
         $this->assertTrue($reverted['success']);
         $this->assertEquals('50000.00', number_format((float)$this->company->fresh()->wallet_balance, 2, '.', ''));
 
@@ -415,6 +415,41 @@ class FinancialAuditRemediationProofTest extends TestCase
         $requestReversal = FinancialJournalEntry::where('event_id', 'EVT-REV-FLEET-REQUEST-' . $payout->id)->get();
         $this->assertTrue($requestReversal->contains(fn ($entry) => $entry->account_name === 'logistics_payout_payable' && $entry->entry_type === 'debit'));
         $this->assertTrue($requestReversal->contains(fn ($entry) => $entry->account_name === 'logistics_company_wallet' && $entry->entry_type === 'credit'));
+    }
+
+    /**
+     * The service-level row-lock guard closes the race where a stale failure
+     * result reaches reversal after another worker finalized the payout.
+     */
+    public function test_stale_logistics_failure_cannot_reverse_payout_after_success_was_finalized(): void
+    {
+        $payout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '12000.00',
+            'status' => 'approved',
+            'gateway_status' => 'success',
+            'disbursed_at' => Carbon::now(),
+            'transfer_reference' => 'FLEET-STALE-FAIL-' . uniqid(),
+            'bank_name' => $this->company->bank_name,
+            'bank_code' => $this->company->bank_code,
+            'account_number' => $this->company->account_number,
+            'account_name' => $this->company->account_name,
+        ]);
+
+        $initialBalance = number_format((float) $this->company->fresh()->wallet_balance, 2, '.', '');
+        $result = app(PayoutFinalizationService::class)->revertLogisticsPayout(
+            $payout,
+            'Stale reconciler observed failure before success finalization'
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected']);
+        $this->assertTrue($result['idempotent']);
+        $this->assertEquals('approved', $payout->fresh()->status);
+        $this->assertEquals('success', $payout->fresh()->gateway_status);
+        $this->assertEquals($initialBalance, number_format((float) $this->company->fresh()->wallet_balance, 2, '.', ''));
+        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-REV-FLEET-' . $payout->id)->exists());
+        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-REV-FLEET-REQUEST-' . $payout->id)->exists());
     }
 
     /**
