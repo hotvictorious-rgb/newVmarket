@@ -50,6 +50,27 @@ class FinancialOperationService
             // 1. Idempotency Guard: Check if exact idempotency key exists first so retries do not fail against their own reservation
             $existingOp = FinancialOperation::where('idempotency_key', $key)->first();
             if ($existingOp) {
+                // An idempotency key identifies one exact financial instruction, not
+                // merely any prior refund. Reject reuse across orders, amounts, or
+                // return cases instead of silently returning another customer's op.
+                $existingMetadata = $existingOp->metadata ?? [];
+                $expectedOwnerType = $returnCase ? ReturnCase::class : Order::class;
+                $expectedOwnerId = $returnCase ? (int) $returnCase->id : (int) $lockedOrder->id;
+                $sameInstruction =
+                    $existingOp->operation_type === 'customer_refund'
+                    && strtoupper((string) $existingOp->currency) === 'NGN'
+                    && (int) $existingOp->amount_kobo === $amountKobo
+                    && $existingOp->owner_type === $expectedOwnerType
+                    && (int) $existingOp->owner_id === $expectedOwnerId
+                    && (int) ($existingMetadata['order_id'] ?? 0) === (int) $lockedOrder->id
+                    && (int) ($existingMetadata['return_case_id'] ?? 0) === (int) ($returnCase?->id ?? 0);
+
+                if (!$sameInstruction) {
+                    throw new \\DomainException(
+                        'Idempotency key has already been used for a different refund instruction.'
+                    );
+                }
+
                 return $existingOp;
             }
 
