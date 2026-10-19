@@ -181,6 +181,62 @@ One more important detail: if Paystack returns a successful payment after the cu
 
 This gives VMARKET a fair policy: customers are protected when payment arrives late, vendors are protected from overselling, and the platform has a controlled path for every outcome.
 
+## Three-Quantity Inventory Architecture (Physical, Held, Allocated, and Available)
+
+VMARKET can automatically mark a product **Out of Stock** the moment all its physical units have been allocated to paid orders or temporarily held for customers making payment.
+
+### The Invariant and Calculation
+
+Allocated quantity can be greater than available quantity. It must not exceed the physical stock remaining after active holds are accounted for.
+
+For example, a vendor has 10 phones, 8 are allocated to paid orders, and 2 are temporarily held:
+
+| Quantity Type | Amount | Description |
+| :--- | :--- | :--- |
+| **Physical Quantity** | **10** | Total units physically present on shelf or in warehouse |
+| **Allocated Quantity** | **8** | Units sold and committed to confirmed, paid orders |
+| **Held Quantity** | **2** | Units temporarily locked in active 30-minute checkout holds |
+| **Available Quantity** | **0** | **Out of Stock** (buying disabled for new shoppers) |
+
+The authoritative mathematical calculation is:
+\text{Available} = \max\left(0, \text{Physical} - \text{Allocated} - \text{Held}\right)
+
+### Automatic Storefront Rule
+- **$\text{Available} = 0$** $\rightarrow$ **Out of Stock**: Buying is disabled immediately. The product remains visible on the storefront with purchasing disabled, rather than disappearing entirely from the marketplace.
+- **$\text{Available} = 1$** $\rightarrow$ Customer can purchase at most 1 unit.
+- **$\text{Available} = N$** $\rightarrow$ Customer can purchase at most $ units.
+
+The system changes availability immediately within the database transaction that allocates or holds the final unit. The storefront updates the displayed status through a refreshed API response or real-time event.
+
+> **Crucial Rule:** Final checkout validation must always execute on the server under row-level database locking (lockForUpdate()). Merely disabling the frontend "Buy" button is never enough.
+
+### Lifecycle of the Three Quantities
+
+When a vendor has 10 items and 7 are allocated:
+1. **Available = 3.**
+2. A customer begins checkout and starts payment for 3 units:
+   - **Held** becomes 3.
+   - **Available** becomes 0 immediately.
+   - Product automatically shows **Out of Stock** on the storefront.
+   - Other shoppers cannot create a new payment hold.
+3. **If payment fails or the 30-minute hold expires**:
+   - The 3 held units are released back.
+   - **Held** returns to 0.
+   - **Available** becomes 3 again.
+4. **If payment succeeds**:
+   - The 3 held units convert into **Allocated**.
+   - **Allocated** becomes 7 + 3 = 10.
+   - **Held** returns to 0.
+   - **Available** remains 0.
+5. **When the vendor dispatches the items / marks fulfilled**:
+   - Both **Physical** quantity and **Allocated** quantity decrease by 3 (from 10 to 7).
+   - **Available** remains 0 (not negative).
+
+### Critical Discrepancy Rule
+\text{Allocated} + \text{Held} \le \text{Physical}
+
+If a merchant physical stock count reports fewer physical units than are already committed, the system must immediately flag an inventory discrepancy, block new sales, and alert the merchant for reconciliation—**never silently erase existing customer allocations or oversell**.
+
 ## Required workflow
 
 ### Phase 1: Audit before coding
