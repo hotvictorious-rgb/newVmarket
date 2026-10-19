@@ -1734,6 +1734,7 @@ class FinancialAuditRemediationProofTest extends TestCase
                 ['status' => 'processed', 'refund_reference' => 'rf-late-response']
             );
             $this->assertTrue($result['success']);
+            $this->assertSame('confirmed', $operation->fresh()->status, 'Webhook finalization must persist before the gateway response returns.');
 
             // The original HTTP response arrives later and says only "pending".
             return [
