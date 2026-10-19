@@ -431,6 +431,26 @@ class PaystackPaymentController extends Controller
                 return response()->json(['status' => false, 'message' => "Unmatched {$event['event']} event recorded for treasury audit."], 200);
             }
 
+            // A late transfer.failed notification must never undo a payout already confirmed successful.
+            // A genuine transfer.reversed event remains eligible for the reversal path below.
+            $resolvedPayout = $resolved['payout'];
+            if (
+                $event['event'] === 'transfer.failed'
+                && strtolower((string)($resolvedPayout->gateway_status ?? '')) === 'success'
+                && strtolower((string)($resolvedPayout->status ?? '')) === 'approved'
+            ) {
+                $this->updateProcessedEvent($processedEvent, [
+                    'status' => 'unmatched',
+                    'error_reason' => "LATE_TRANSFER_FAILED_AFTER_SUCCESS: Payout #{$resolvedPayout->id} is already confirmed successful; no reversal applied.",
+                    'processed_at' => Carbon::now(),
+                ]);
+                Log::critical("Ignored late Paystack transfer.failed event for already successful payout #{$resolvedPayout->id}.");
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Late failure event recorded for audit; successful payout was not reversed.',
+                ], 200);
+            }
+
             // Strictly revert exactly ONE unambiguous payout entity
             if ($resolved['type'] === 'logistics') {
                 $this->finalizationService->revertLogisticsPayout(
