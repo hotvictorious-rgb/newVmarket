@@ -673,7 +673,7 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertEquals(0, bccomp('50000.00', (string)$debitEntry->amount, 2));
 
         // Now reverse the payout
-        $reversalResult = $finalizer->revertVendorPayout($payout, 'Bank transfer rejected by NIBSS', $this->superAdmin);
+        $reversalResult = $finalizer->revertVendorPayout($payout, 'Gateway confirmed transfer reversal', $this->superAdmin, true);
         $this->assertTrue($reversalResult['success']);
 
         // Verify reversal credited vendor_payable (NOT vendor_escrow_holding)
@@ -768,7 +768,7 @@ class FinancialAuditRemediationProofTest extends TestCase
             'status' => 'success',
         ], $this->superAdmin);
 
-        $result = $finalizer->revertVendorPayout($payout, 'Gateway transfer reversed', $this->superAdmin);
+        $result = $finalizer->revertVendorPayout($payout, 'Gateway transfer reversed', $this->superAdmin, true);
         $this->assertTrue($result['success']);
 
         $eventId = 'EVT-REV-VND-' . $payout->id;
