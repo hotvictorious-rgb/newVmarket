@@ -517,6 +517,13 @@ class ReturnAndRefundService
         // manual journal posting while the gateway operation is still pending.
         // Only verified terminal confirmation may post the refund ledger entries.
         if (empty($bankReference) && !empty($paystackRefundId)) {
+            // Pre-validation acquired a fresh claim token. Release it before
+            // returning so a safe pending retry cannot block future reconciliation.
+            ReturnCase::where('id', $caseId)->where('refund_claim_token', $claimToken)->update([
+                'refund_claim_token' => null,
+                'refund_claimed_at' => null,
+            ]);
+
             return [
                 'success' => true,
                 'status' => 'initiated',
