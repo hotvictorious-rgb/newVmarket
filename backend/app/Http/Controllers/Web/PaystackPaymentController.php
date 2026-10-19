@@ -498,6 +498,53 @@ class PaystackPaymentController extends Controller
                 ->first();
 
             if ($finOp) {
+                // A signed webhook proves origin, not that this refund matches our ledger.
+                // Require explicit amount/currency and compare against the reserved operation
+                // before any reservation, order, return-case, or journal state can be finalized.
+                if (!array_key_exists('amount', $rData) || !is_numeric($rData['amount'])) {
+                    $this->updateProcessedEvent($processedEvent, [
+                        'status' => 'failed',
+                        'error_reason' => 'REFUND_MISSING_AMOUNT: Refund webhook omitted a numeric amount in kobo.',
+                        'processed_at' => Carbon::now(),
+                    ]);
+                    Log::critical('Paystack refund webhook missing amount; financial operation was not finalized.', [
+                        'event_id' => $processedEvent->event_id,
+                        'operation_id' => $finOp->id,
+                    ]);
+                    return response()->json(['status' => false, 'message' => 'Refund amount is required for reconciliation.'], 400);
+                }
+
+                $webhookAmountKobo = (int) $rData['amount'];
+                if ($webhookAmountKobo !== (int) $finOp->amount_kobo) {
+                    $this->updateProcessedEvent($processedEvent, [
+                        'status' => 'failed',
+                        'error_reason' => "REFUND_AMOUNT_MISMATCH: Operation #{$finOp->id} expects {$finOp->amount_kobo} kobo; webhook supplied {$webhookAmountKobo} kobo.",
+                        'processed_at' => Carbon::now(),
+                    ]);
+                    Log::critical('Paystack refund webhook amount mismatch; financial operation was not finalized.', [
+                        'event_id' => $processedEvent->event_id,
+                        'operation_id' => $finOp->id,
+                        'expected_amount_kobo' => $finOp->amount_kobo,
+                        'received_amount_kobo' => $webhookAmountKobo,
+                    ]);
+                    return response()->json(['status' => false, 'message' => 'Refund amount does not match the reserved operation.'], 400);
+                }
+
+                if (strtoupper(trim((string) ($rData['currency'] ?? ''))) !== strtoupper((string) $finOp->currency)) {
+                    $this->updateProcessedEvent($processedEvent, [
+                        'status' => 'failed',
+                        'error_reason' => 'REFUND_CURRENCY_MISMATCH: Refund webhook currency is missing or does not match the financial operation.',
+                        'processed_at' => Carbon::now(),
+                    ]);
+                    Log::critical('Paystack refund webhook currency mismatch; financial operation was not finalized.', [
+                        'event_id' => $processedEvent->event_id,
+                        'operation_id' => $finOp->id,
+                        'expected_currency' => $finOp->currency,
+                        'received_currency' => $rData['currency'] ?? null,
+                    ]);
+                    return response()->json(['status' => false, 'message' => 'Refund currency does not match the reserved operation.'], 400);
+                }
+
                 app(\App\Services\FinancialOperationService::class)->finalizeRefundConfirmation($finOp, $rData);
             } else {
                 // Do not mark an order refunded merely because a signed webhook names its
