@@ -199,26 +199,39 @@ class FinancialReconciliationEngine
      */
     public function reconcileStaleWebhooks(): int
     {
+        $staleCutoff = Carbon::now()->subMinutes(5);
         $staleEvents = ProcessedWebhookEvent::where('status', 'processing')
-            ->where('updated_at', '<', Carbon::now()->subMinutes(5))
+            ->where('updated_at', '<', $staleCutoff)
             ->get();
 
         $replayed = 0;
         foreach ($staleEvents as $event) {
+            // Compare-and-set the exact stale generation. A webhook delivery may
+            // reclaim this event after the scan, so never overwrite a newer claim.
+            $claim = ProcessedWebhookEvent::where('id', $event->id)
+                ->where('status', 'processing')
+                ->where('attempts', $event->attempts)
+                ->where('updated_at', '<', $staleCutoff);
+
             if ($event->attempts >= 3) {
-                $event->update([
+                $updated = $claim->update([
                     'status' => 'failed',
                     'error_reason' => 'MAX_ATTEMPTS_EXCEEDED: Event failed after 3 worker attempts. Flagged for manual audit.',
                 ]);
+                if ($updated) {
+                    continue;
+                }
                 continue;
             }
 
-            $event->update([
+            $updated = $claim->update([
                 'status' => 'failed',
                 'attempts' => $event->attempts + 1,
                 'error_reason' => 'TIMEOUT_STALE_WORKER: Reset for retry.',
             ]);
-            $replayed++;
+            if ($updated) {
+                $replayed++;
+            }
         }
 
         return $replayed;
