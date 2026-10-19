@@ -439,6 +439,30 @@ class FinancialReconciliationEngine
                             continue;
                         }
 
+                        // A verified status/reference is not enough if the gateway also
+                        // supplies conflicting financial details. Validate all amount/currency
+                        // evidence before committing the reservation or journal.
+                        $gatewayRefundData = is_array($verifyRes['data'] ?? null) ? $verifyRes['data'] : [];
+                        $verifiedAmount = $verifyRes['amount'] ?? ($gatewayRefundData['amount'] ?? null);
+                        $verifiedCurrency = $verifyRes['currency'] ?? ($gatewayRefundData['currency'] ?? null);
+                        $amountMismatch = $verifiedAmount !== null
+                            && (!is_numeric($verifiedAmount) || (int) $verifiedAmount !== (int) $existingOp->amount_kobo);
+                        $currencyMismatch = $verifiedCurrency !== null
+                            && strtoupper(trim((string) $verifiedCurrency)) !== strtoupper((string) $existingOp->currency);
+                        if ($amountMismatch || $currencyMismatch) {
+                            $releaseClaim('pending');
+                            Log::critical('Paystack refund verification financial details conflict with the operation; left pending for manual reconciliation.', [
+                                'order_id' => $claimedOrder->id,
+                                'operation_id' => $existingOp->id,
+                                'refund_reference' => $refundReference,
+                                'expected_amount_kobo' => $existingOp->amount_kobo,
+                                'verified_amount_kobo' => $verifiedAmount,
+                                'expected_currency' => $existingOp->currency,
+                                'verified_currency' => $verifiedCurrency,
+                            ]);
+                            continue;
+                        }
+
                         $finalized = $finOpService->finalizeRefundConfirmation($existingOp, $verifyRes, $claimToken);
                         if (!empty($finalized['protected'])) {
                             Log::warning('Refund reconciliation lease lost before finalization; stale worker left refund unchanged.', [
