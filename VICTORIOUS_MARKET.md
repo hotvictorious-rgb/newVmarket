@@ -165,16 +165,16 @@ The platform's internal escrow-style accounting must be supported by real paymen
 
 ### Merchandise, delivery, commission, and cashback rules
 
-Each child vendor order is accounted for independently. The current documented commercial policy is:
+Each child vendor order is accounted for independently. The current documented allocation is:
 
-- Platform commission: 10% of the eligible vendor-order payment, including the vendor-configured delivery fee.
-- Customer cashback: 5% of eligible product value only, excluding delivery fees.
-- Vendor allocation: calculated from the actual order-level financial allocation, after the applicable commission, cashback, discounts, refunds, fees, and adjustments. Do not assume a fixed 90/5/5 split when the calculation bases differ.
-- Rider compensation: arranged and paid directly by the owning vendor outside Victorious MARKET. The platform does not create rider earnings, rider wallets, rider payables, or rider payouts.
+- **Eligible merchandise:** 90% vendor allocation, 5% customer cashback, and 5% platform merchandise share.
+- **Vendor-configured delivery fee:** 90% vendor allocation and 10% platform delivery-fee share.
+- **Cashback:** 5% of eligible product value only; delivery fees are excluded.
+- **Rider compensation:** arranged and paid directly by the owning vendor outside Victorious MARKET. The platform does not create rider earnings, rider wallets, rider payables, or rider payouts.
 
-For example, if eligible products total ₦90,000 and delivery is ₦10,000, the customer payment is ₦100,000, the 10% platform commission is ₦10,000, and the 5% product-only cashback is ₦4,500. The remaining commission before expenses/other adjustments is ₦5,500. Vendor allocation must still follow the authoritative order ledger; this example is not a universal fixed split.
+For example, if eligible products total ₦90,000 and delivery is ₦10,000, the customer payment is ₦100,000. The merchandise allocation is ₦81,000 to the vendor, ₦4,500 cashback, and ₦4,500 platform merchandise share. The delivery allocation is ₦9,000 to the vendor and ₦1,000 platform delivery-fee share. This is before gateway fees, taxes, discounts, refunds, and other approved adjustments.
 
-The cashback mechanism is intended to reward customers and encourage repeat purchases, subject to eligibility, redemption, expiry, and refund-reversal rules. Refunds and cashback reversals must be idempotent and reconciled to the actual payment.
+Refunds must reverse the correct allocation components for the actual refundable merchandise and/or delivery fee. Refund approval, gateway execution, ledger posting, cashback reversal, and reconciliation are distinct auditable steps. This is not a universal fixed split if a product or transaction has a separately approved policy.
 
 ### Financial correctness
 
