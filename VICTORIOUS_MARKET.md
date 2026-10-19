@@ -163,34 +163,18 @@ This approach aims to reduce the risk of merchants receiving payment for product
 
 The platform's internal escrow-style accounting must be supported by real payment-provider balances and appropriate financial arrangements. Internal ledger labels alone do not constitute a legally regulated escrow service.
 
-### Merchandise revenue structure
+### Merchandise, delivery, commission, and cashback rules
 
-The currently intended merchandise allocation is:
+Each child vendor order is accounted for independently. The current documented commercial policy is:
 
-| Allocation | Percentage |
-|---|---:|
-| Merchant earnings | 90% |
-| Customer cashback or loyalty allocation | 5% |
-| Platform revenue | 5% |
-| **Total** | **100%** |
+- Platform commission: 10% of the eligible vendor-order payment, including the vendor-configured delivery fee.
+- Customer cashback: 5% of eligible product value only, excluding delivery fees.
+- Vendor allocation: calculated from the actual order-level financial allocation, after the applicable commission, cashback, discounts, refunds, fees, and adjustments. Do not assume a fixed 90/5/5 split when the calculation bases differ.
+- Rider compensation: arranged and paid directly by the owning vendor outside Victorious MARKET. The platform does not create rider earnings, rider wallets, rider payables, or rider payouts.
 
-For example, on an eligible ₦20,000 merchandise transaction:
+For example, if eligible products total ₦90,000 and delivery is ₦10,000, the customer payment is ₦100,000, the 10% platform commission is ₦10,000, and the 5% product-only cashback is ₦4,500. The remaining commission before expenses/other adjustments is ₦5,500. Vendor allocation must still follow the authoritative order ledger; this example is not a universal fixed split.
 
-| Beneficiary | Amount |
-|---|---:|
-| Merchant | ₦18,000 |
-| Customer cashback allocation | ₦1,000 |
-| VICTORIOUS MARKET | ₦1,000 |
-
-This is an illustrative allocation before any separately applicable fees, refunds, taxes, adjustments, or exceptional circumstances.
-
-The cashback mechanism is intended to reward customers and encourage repeat purchases, subject to clearly defined eligibility and redemption rules.
-
-### Logistics revenue structure
-
-The intended logistics allocation is separate from merchandise revenue.
-
-Under the current model, 90% of eligible logistics charges are allocated to the logistics provider and 10% to the platform, subject to the final commercial agreement and cost structure.
+The cashback mechanism is intended to reward customers and encourage repeat purchases, subject to eligibility, redemption, expiry, and refund-reversal rules. Refunds and cashback reversals must be idempotent and reconciled to the actual payment.
 
 ### Financial correctness
 
@@ -228,43 +212,42 @@ The long-term vision is a unified environment in which online sales, branch stoc
 
 ---
 
-## 8. Delivery and Logistics Management
+## 8. Vendor-Managed Delivery and In-Shop Pickup
 
-VICTORIOUS MARKET is being developed with controlled fulfillment rather than leaving each merchant to negotiate independent delivery arrangements with customers.
+VICTORIOUS MARKET does not operate a central logistics company, fleet, dispatch hub, route-dispatch service, rider payroll, or rider-payout programme. Each vendor manages delivery for its own orders and adds/links its own riders.
 
-The platform will coordinate approved logistics companies, delivery personnel, collection points, routes, and handover processes.
+### Vendor and rider relationship
+- Every active rider must belong to exactly one vendor. The rider is that vendor's delivery person, not a shared platform courier.
+- Vendors register/manage their own riders and manually assign their own child vendor orders to them.
+- A vendor can assign only a rider linked to that same vendor. Riders cannot browse unassigned orders, assign themselves, or access another vendor's orders.
+- Reassignment is allowed only within the vendor's ownership and custody rules. Once a rider has taken physical custody of a parcel, ordinary reassignment is blocked until an audited return/custody-transfer process is completed.
+- Platform administrators may enforce account safety, suspend accounts, review disputes, and inspect audit records. They do not run dispatch, choose riders, manage rider routes, or pay riders.
+- Riders are operational-only. Any compensation is arranged and paid directly by the vendor outside Victorious MARKET. Rider delivery confirmation cannot approve a refund, change prices, settle a vendor, release funds, or create a rider payable.
 
-### Delivery workflow
+### Delivery workflow and proof
+The vendor prepares the order and assigns a linked rider. The workflow records readiness, assignment, pickup/custody, each delivery attempt, and final handover as separate events. Customer handover must use the configured verification pass/OTP and required proof evidence. Evidence records who acted, when, which order was involved, and the proof reference.
 
-After payment confirmation, an order proceeds through merchant preparation and the appropriate fulfillment process.
+A delivery confirmation is operational evidence only. It does not automatically prove product quality, approve a refund, issue wallet credit, or move money.
 
-For a delivery order, the merchant prepares the goods for handover to an authorized rider or logistics representative.
+### Customer privacy for riders
+The rider may see the customer's name, delivery address and necessary delivery instructions, plus a **Call Customer** action. The rider must not receive the raw customer phone number in API responses or page markup; use a privacy-preserving call flow. Riders must never see payment status, total paid, amount due, delivery-fee financial fields, refunds, wallet balance, card/bank details, payment references, platform commission, cashback, vendor settlement, or rider payout information. OTPs and reusable pickup/delivery secrets must not appear in order lists or history responses.
 
-The handover may require a one-time code, product evidence, identity verification, and an auditable event record.
+### In-shop pickup
+In-shop pickup remains fully supported as a separate fulfilment type:
+- The customer collects the order at the owning vendor's physical shop.
+- Delivery fee is always zero, enforced server-side.
+- The customer uses a pickup pass in the format **RES-XXXXXX**, verified by the vendor at the counter.
+- No rider assignment, delivery fee, rider compensation, or logistics payout is created.
+- Pickup status remains separate from doorstep delivery status and must not require a doorstep rider or doorstep-only verification flow.
 
-The logistics provider then transports the order through the approved delivery arrangement.
+### Delivery areas and fees
+Vendors configure the destinations they serve and the corresponding delivery fees. An explicit LGA fee takes precedence over a state-level fallback. An unsupported destination is unavailable. The selected fulfilment type, destination, and agreed fee are snapshotted to the vendor child order at checkout. Each vendor's delivery charge is recorded independently; no platform logistics-provider share or rider payable is generated. The existing platform commission rule remains distinct from rider compensation.
 
-At the customer's destination, the system records the final handover and the customer's acceptance or eligible rejection of products.
+### Failed delivery
+A failed attempt is recorded with its reason, timestamp, actor, and required proof. The system applies the configured attempt limit and, when reached, returns the parcel to its owning vendor with a recorded custody/return confirmation. Failed delivery does not automatically create a spendable customer wallet credit, mark a refund complete, credit a logistics company, create rider earnings, or release vendor funds. Any redelivery, cancellation, customer refund, or vendor recovery is handled through the authorized policy, dispute, and financial-operation workflows.
 
-### Proof of handover
-
-The platform is introducing photographic evidence and controlled OTP-based verification at important fulfillment stages.
-
-These mechanisms are intended to establish who transferred possession, when the transfer occurred, and what condition was documented.
-
-Evidence must be securely stored and protected against unauthorized modification.
-
-However, photographs and OTPs are supporting evidence, not automatic proof that a product is genuine or free from defects.
-
-### Delivery options
-
-The intended system supports geographically defined delivery coverage, delivery charges, collection points, and pickup options.
-
-Larger, fragile, or difficult-to-transport products may require special delivery handling and pricing.
-
-The long-term objective is a reliable, scalable logistics structure that can expand beyond the initial operating area without sacrificing accountability.
-
----
+### Legacy logistics records
+Historical logistics-company profiles, fleet links, routes, collection points, payout requests, and financial entries are preserved for audit and reconciliation. They are not eligible to receive new assignments under vendor-managed delivery. Retire old dependencies only after the related routes, APIs, jobs, reports, tests, and historical orders have been mapped. Do not delete historical financial records as part of this change.
 
 ## 9. Doorstep Acceptance and Partial Rejection
 
@@ -328,43 +311,25 @@ The objective is not to automatically favor the customer or the merchant.
 
 ---
 
-## 11. Merchant and Logistics Settlements
+## 11. Vendor Settlements and Financial Controls
 
-Merchants and logistics partners must be paid accurately and predictably.
+Vendor settlements remain subject to payment verification, order fulfilment, customer-protection conditions, authorized release controls, and reconciliation. Paystack transfer states must distinguish requested, authorized, processing, confirmed successful, failed, and reversed. Failed transfers must restore the correct obligations without reopening settled orders or creating duplicate balances.
 
-VICTORIOUS MARKET is developing controlled withdrawal and payout workflows using Paystack bank-transfer capabilities.
+Riders are not settlement beneficiaries. Victorious MARKET does not operate rider earnings, rider wallets, rider payout requests, logistics-company payouts for new vendor-managed orders, or rider financial dashboards. Vendors handle rider compensation directly outside the platform. A rider's operational status must never directly release vendor funds or create a financial journal entry.
 
-Before funds are released, the platform should verify the recipient's eligibility, available balance, bank details, outstanding obligations, and applicable settlement conditions.
+Historical logistics payouts must remain available to authorized reviewers for audit and reconciliation. They must not be converted into new vendor or rider payouts without verified financial reconciliation and explicit approval.
 
-A bank transfer should pass through clearly defined states, such as requested, authorized, processing, confirmed successful, failed, or reversed.
-
-The system must distinguish a transfer being initiated from a transfer actually being completed.
-
-Failed transfers must restore the appropriate financial obligations without incorrectly reopening previously settled orders or creating duplicate balances.
-
-The platform also intends to track merchant recovery obligations where a legitimate refund or adjustment occurs after a merchant has already been paid.
-
-This is essential to protecting both customer funds and the platform's financial integrity.
+The platform also tracks merchant recovery obligations where a legitimate refund or adjustment occurs after a merchant has already been paid. Refund approval, payment-provider execution, ledger posting, and reconciliation remain distinct auditable steps.
 
 ---
 
 ## 12. Administration and Governance
 
-The VICTORIOUS MARKET administrative environment is intended to function as the central business-control system.
+The VICTORIOUS MARKET administrative environment handles vendor verification, product governance, order monitoring, security and safety oversight, financial reconciliation, customer disputes, authorized refunds, and operational reporting.
 
-Its responsibilities include merchant verification, product governance, order monitoring, logistics oversight, financial reconciliation, customer disputes, refunds, and operational reporting.
+Delivery operation belongs to each vendor. The platform does not run dispatch or manage a shared fleet. Vendors manage their riders and assignments; platform administrators may enforce account safety, suspend a vendor or rider, review incidents, and inspect audit trails, but must not act as a dispatcher or rider payroll manager.
 
-Different users should receive only the permissions necessary for their responsibilities.
-
-The system is being designed around defined roles for administrators, merchants, branch personnel, logistics companies, riders, and customers.
-
-Sensitive activities should be protected through authorization checks and audit trails.
-
-For example, ordinary staff should not be able to modify financial records or release large merchant payouts simply because they can access an administrative dashboard.
-
-Administrative power should be constrained, traceable, and subject to appropriate oversight.
-
----
+Role-based permissions must separate customers, vendors, vendor-linked riders, and platform administrators. Rider permissions are limited to assigned vendor orders and the minimum operational information required for delivery. Riders cannot access customer financial information, commissions, vendor settlement details, wallet credits, payout routes, or ledger data. Sensitive administrative actions must be authorized and auditable.
 
 ## 13. Security, Privacy, and Evidence Protection
 
