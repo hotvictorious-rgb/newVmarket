@@ -2041,4 +2041,62 @@ class FinancialAuditRemediationProofTest extends TestCase
             ->where('status', 'active')->count());
     }
 
+
+
+    public function test_webhook_event_id_cannot_be_reused_with_a_different_signed_payload(): void
+    {
+        $originalPayload = json_encode([
+            'id' => 'evt-immutable-payload-' . uniqid(),
+            'event' => 'charge.success',
+            'data' => ['reference' => 'ORIGINAL-REFERENCE'],
+        ], JSON_UNESCAPED_SLASHES);
+
+        $eventId = json_decode($originalPayload, true)['id'];
+        $storedHash = hash('sha256', $originalPayload);
+
+        ProcessedWebhookEvent::create([
+            'event_id' => $eventId,
+            'event_type' => 'charge.success',
+            'payload_hash' => $storedHash,
+            'payload' => $originalPayload,
+            'status' => 'completed',
+            'attempts' => 1,
+            'processed_at' => Carbon::now(),
+        ]);
+
+        $conflictingPayload = [
+            'id' => $eventId,
+            'event' => 'transfer.success',
+            'data' => [
+                'reference' => 'VND-PAYOUT-CONFLICTING-REFERENCE',
+                'transfer_code' => 'TRF-CONFLICTING-CODE',
+                'amount' => 500000,
+                'currency' => 'NGN',
+                'status' => 'success',
+            ],
+        ];
+        $rawConflictingPayload = json_encode($conflictingPayload, JSON_UNESCAPED_SLASHES);
+        $signature = hash_hmac('sha512', $rawConflictingPayload, app(PaystackService::class)->getSecretKey());
+
+        $response = $this->call(
+            'POST',
+            route('payment.paystack.webhook'),
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_PAYSTACK_SIGNATURE' => $signature,
+            ],
+            $rawConflictingPayload
+        );
+
+        $response->assertStatus(409);
+        $event = ProcessedWebhookEvent::where('event_id', $eventId)->firstOrFail();
+        $this->assertSame('completed', $event->status);
+        $this->assertSame(1, $event->attempts);
+        $this->assertSame($storedHash, $event->payload_hash);
+        $this->assertSame($originalPayload, $event->payload);
+    }
+
 }
