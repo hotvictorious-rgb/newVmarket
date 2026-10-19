@@ -2099,4 +2099,107 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertSame($originalPayload, $event->payload);
     }
 
+
+
+    public function test_unmatched_webhook_can_be_retried_only_with_same_payload_and_preserves_attempt_history(): void
+    {
+        $payload = json_encode([
+            'id' => 'evt-retry-unmatched-' . uniqid(),
+            'event' => 'transfer.reversed',
+            'data' => [
+                'reference' => 'VND-PAYOUT-MANUAL-RETRY',
+                'transfer_code' => 'TRF-MANUAL-RETRY',
+            ],
+        ], JSON_UNESCAPED_SLASHES);
+        $decoded = json_decode($payload, true);
+        $eventId = $decoded['id'];
+        $hash = hash('sha256', $payload);
+
+        ProcessedWebhookEvent::create([
+            'event_id' => $eventId,
+            'event_type' => 'transfer.reversed',
+            'payload_hash' => $hash,
+            'payload' => $payload,
+            'status' => 'unmatched',
+            'error_reason' => 'Awaiting manual reconciliation',
+            'attempts' => 1,
+            'processed_at' => Carbon::now(),
+        ]);
+
+        $signature = hash_hmac('sha512', $payload, app(PaystackService::class)->getSecretKey());
+        $response = $this->call(
+            'POST',
+            route('payment.paystack.webhook'),
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_PAYSTACK_SIGNATURE' => $signature,
+            ],
+            $payload
+        );
+
+        $response->assertOk();
+        $event = ProcessedWebhookEvent::where('event_id', $eventId)->firstOrFail();
+        $this->assertSame('completed', $event->status);
+        $this->assertSame(2, $event->attempts);
+        $this->assertSame($hash, $event->payload_hash);
+        $this->assertSame($payload, $event->payload);
+        $this->assertNull($event->error_reason);
+    }
+
+    public function test_unmatched_webhook_with_conflicting_payload_is_not_retried(): void
+    {
+        $originalPayload = json_encode([
+            'id' => 'evt-no-conflicting-retry-' . uniqid(),
+            'event' => 'transfer.reversed',
+            'data' => ['reference' => 'ORIGINAL-TRANSFER'],
+        ], JSON_UNESCAPED_SLASHES);
+        $eventId = json_decode($originalPayload, true)['id'];
+        $hash = hash('sha256', $originalPayload);
+
+        ProcessedWebhookEvent::create([
+            'event_id' => $eventId,
+            'event_type' => 'transfer.reversed',
+            'payload_hash' => $hash,
+            'payload' => $originalPayload,
+            'status' => 'unmatched',
+            'error_reason' => 'Awaiting manual reconciliation',
+            'attempts' => 3,
+        ]);
+
+        $conflictingPayload = json_encode([
+            'id' => $eventId,
+            'event' => 'transfer.success',
+            'data' => [
+                'reference' => 'DIFFERENT-TRANSFER',
+                'transfer_code' => 'TRF-DIFFERENT',
+                'amount' => 100000,
+                'currency' => 'NGN',
+            ],
+        ], JSON_UNESCAPED_SLASHES);
+        $signature = hash_hmac('sha512', $conflictingPayload, app(PaystackService::class)->getSecretKey());
+
+        $response = $this->call(
+            'POST',
+            route('payment.paystack.webhook'),
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_PAYSTACK_SIGNATURE' => $signature,
+            ],
+            $conflictingPayload
+        );
+
+        $response->assertStatus(409);
+        $event = ProcessedWebhookEvent::where('event_id', $eventId)->firstOrFail();
+        $this->assertSame('unmatched', $event->status);
+        $this->assertSame(3, $event->attempts);
+        $this->assertSame($hash, $event->payload_hash);
+        $this->assertSame($originalPayload, $event->payload);
+    }
+
 }
