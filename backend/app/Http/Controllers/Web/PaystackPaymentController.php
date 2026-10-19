@@ -611,13 +611,15 @@ class PaystackPaymentController extends Controller
 
                 // Require explicit amount/currency and compare against the reserved operation
                 // before any reservation, order, return-case, or journal state can be finalized.
-                if (!array_key_exists('amount', $rData) || !is_numeric($rData['amount'])) {
+                $webhookAmountIsWholeKobo = is_int($rData['amount'] ?? null)
+                    || (is_string($rData['amount'] ?? null) && preg_match('/^\\d+$/D', $rData['amount']) === 1);
+                if (!array_key_exists('amount', $rData) || !$webhookAmountIsWholeKobo) {
                     $this->updateProcessedEvent($processedEvent, [
                         'status' => 'failed',
-                        'error_reason' => 'REFUND_MISSING_AMOUNT: Refund webhook omitted a numeric amount in kobo.',
+                        'error_reason' => 'REFUND_MISSING_OR_INVALID_AMOUNT: Refund webhook must supply an integer amount in kobo.',
                         'processed_at' => Carbon::now(),
                     ]);
-                    Log::critical('Paystack refund webhook missing amount; financial operation was not finalized.', [
+                    Log::critical('Paystack refund webhook missing or malformed amount; financial operation was not finalized.', [
                         'event_id' => $processedEvent->event_id,
                         'operation_id' => $finOp->id,
                     ]);
@@ -778,7 +780,9 @@ class PaystackPaymentController extends Controller
             // either field, treat it as evidence and reject conflicting or malformed values.
             // Do not release a reservation on a failure event that describes a different refund.
             if (array_key_exists('amount', $rData)) {
-                if (!is_numeric($rData['amount']) || (int) $rData['amount'] !== (int) $finOp->amount_kobo) {
+                $failedWebhookAmountIsWholeKobo = is_int($rData['amount'])
+                    || (is_string($rData['amount']) && preg_match('/^\\d+$/D', $rData['amount']) === 1);
+                if (!$failedWebhookAmountIsWholeKobo || (int) $rData['amount'] !== (int) $finOp->amount_kobo) {
                     $this->updateProcessedEvent($processedEvent, [
                         'status' => 'unmatched',
                         'error_reason' => 'REFUND_AMOUNT_MISMATCH: Failed refund event amount is invalid or differs from the financial operation.',
