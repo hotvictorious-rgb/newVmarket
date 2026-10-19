@@ -1,0 +1,46 @@
+name: Paystack refund safety tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/app/Http/Controllers/Web/PaystackPaymentController.php"
+      - "backend/app/Services/FinancialReconciliationEngine.php"
+      - "backend/tests/Feature/FinancialAuditRemediationProofTest.php"
+      - "backend/**"
+      - ".github/workflows/paystack-refund-safety.yml"
+  push:
+    branches: [audit/paystack-refund-webhook-safety]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refund-safety:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: bcmath, curl, dom, fileinfo, mbstring, pdo_sqlite, sqlite3, xml
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: PHP syntax check for changed files
+        run: |
+          php -l app/Http/Controllers/Web/PaystackPaymentController.php
+          php -l app/Services/FinancialReconciliationEngine.php
+          php -l tests/Feature/FinancialAuditRemediationProofTest.php
+
+      - name: Run financial audit proof tests
+        run: php artisan test --filter=FinancialAuditRemediationProofTest
