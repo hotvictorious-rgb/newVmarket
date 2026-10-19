@@ -524,6 +524,53 @@ class FinancialAuditRemediationProofTest extends TestCase
     }
 
     /**
+     * A failed queued vendor transfer must release reserved allocations without
+     * inventing a cash/payable reversal when no successful payout journal exists.
+     */
+    public function test_failed_pending_vendor_payout_releases_allocations_without_fabricating_reversal_journal(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'eligible',
+            'vendor_net_90' => '50000.00',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '50000.00',
+            'status' => 'pending',
+            'gateway_status' => 'processing',
+            'paystack_transfer_code' => 'TRF_PENDING_FAIL_NO_JOURNAL',
+            'transfer_reference' => 'VND-PENDING-FAIL-NO-JOURNAL',
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'First Bank',
+        ]);
+
+        $allocation = VendorPayoutAllocation::create([
+            'vendor_payout_request_id' => $payout->id,
+            'order_id' => $order->id,
+            'allocated_amount' => '50000.00',
+            'status' => 'allocated',
+        ]);
+
+        $result = app(PayoutFinalizationService::class)->revertVendorPayout(
+            $payout,
+            'Paystack transfer.failed before payout finalization',
+            $this->superAdmin
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('rejected', $payout->fresh()->status);
+        $this->assertEquals('reversed', $allocation->fresh()->status);
+        $this->assertEquals('eligible', $order->fresh()->vendor_settlement_status);
+        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $payout->id)->exists());
+        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-REV-VND-' . $payout->id)->exists());
+        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-REV-VND-SUSPENSE-' . $payout->id)->exists());
+    }
+
+    /**
      * Ledger invariant: reversing a payout with an allocation discrepancy balances
      * the reversal event by crediting the same suspense account used at disbursement.
      */
