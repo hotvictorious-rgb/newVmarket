@@ -13,7 +13,7 @@ The vision is to create an online marketplace where customers can confidently di
 
 Unlike an unrestricted online marketplace where buyers and sellers negotiate privately and arrange payments outside the platform, VICTORIOUS MARKET is being designed as a **managed, centrally governed marketplace**.
 
-The platform will coordinate the essential parts of each transaction, including merchant verification, product listings, pricing, checkout, payment verification, order fulfillment, delivery evidence, customer acceptance, returns, refunds, and merchant settlements.
+The platform governs merchant verification, product listings, pricing, checkout, payment verification, customer protection, audit evidence, returns, refunds, and vendor settlements. Each vendor manages fulfilment of its own orders and manually assigns its own eligible orders to riders linked to that vendor. Victorious MARKET does not operate a central logistics fleet, dispatch service, logistics-company fulfilment network, rider payroll, or rider-payout programme for new orders.
 
 The goal is not merely to connect buyers with sellers. It is to establish a trustworthy commerce environment where every participant has defined responsibilities and every transaction follows a documented process.
 
@@ -38,7 +38,7 @@ Common concerns include:
 
 Merchants also experience significant challenges, including fraudulent orders, customers refusing legitimate deliveries, delayed settlements, stock-management problems, and unreliable delivery arrangements.
 
-Logistics providers face their own difficulties, including unverified handovers, failed deliveries, disputes over responsibility, and uncertain payment reconciliation.
+Vendors face delivery challenges including unverified handovers, failed attempts, customer-contact difficulties, disputes over responsibility, and uncertainty about delivery evidence and customer remedies.
 
 VICTORIOUS MARKET aims to address these problems through one coordinated system rather than leaving customers, merchants, and delivery partners to manage transactions independently.
 
@@ -186,11 +186,9 @@ This is an illustrative allocation before any separately applicable fees, refund
 
 The cashback mechanism is intended to reward customers and encourage repeat purchases, subject to clearly defined eligibility and redemption rules.
 
-### Logistics revenue structure
+### Delivery-fee allocation under vendor-managed delivery
 
-The intended logistics allocation is separate from merchandise revenue.
-
-Under the current model, 90% of eligible logistics charges are allocated to the logistics provider and 10% to the platform, subject to the final commercial agreement and cost structure.
+A delivery fee belongs to the relevant vendor child order and is not a logistics-company fare or rider payable. For new vendor-managed orders, 90% of the delivery-fee allocation belongs to the vendor and 10% is the platform delivery-fee share. The vendor separately compensates its rider outside Victorious MARKET; the platform must not calculate, reserve, collect, disburse, or reconcile rider compensation. In-shop pickup (`in_shop_pickup`) always has a zero delivery fee and creates no rider assignment or delivery-fee allocation.
 
 ### Financial correctness
 
@@ -228,23 +226,33 @@ The long-term vision is a unified environment in which online sales, branch stoc
 
 ---
 
-## 8. Delivery and Logistics Management
+## 8. Vendor-Managed Delivery and In-Shop Pickup
 
-VICTORIOUS MARKET is being developed with controlled fulfillment rather than leaving each merchant to negotiate independent delivery arrangements with customers.
+VICTORIOUS MARKET does not operate a central logistics company, fleet, dispatch hub, route-dispatch service, or shared rider pool for new orders. Each vendor manages delivery for its own orders and adds/manages its own riders through authenticated vendor workflows. Every rider eligible for new work must be linked to exactly one active owning vendor; fleet-only or ambiguous legacy rider profiles cannot receive new assignments.
 
-The platform will coordinate approved logistics companies, delivery personnel, collection points, routes, and handover processes.
+### Vendor assignment and custody
 
-### Delivery workflow
+The vendor manually assigns each doorstep-delivery child order to one active rider linked to that same vendor. A rider can access only orders explicitly assigned to them and belonging to their owning vendor. Assignment and reassignment must be server-authorized, atomic, and audited. Reassignment is permitted before physical custody; after custody begins, use an audited return-to-vendor or custody-transfer flow. Multi-vendor checkout retains one parent checkout with separate vendor child orders, each with its own fulfilment type, delivery fee, and at most one active rider assignment.
 
-After payment confirmation, an order proceeds through merchant preparation and the appropriate fulfillment process.
+### Operational handover
 
-For a delivery order, the merchant prepares the goods for handover to an authorized rider or logistics representative.
+The vendor prepares the goods and hands the parcel to its assigned rider. The system records readiness, assignment, custody, delivery attempts, final handover, and required proof as distinct operational events. A rider's delivery confirmation is evidence only: it does not by itself approve a refund, create spendable wallet credit, post a rider/logistics payable, or release vendor funds.
 
-The handover may require a one-time code, product evidence, identity verification, and an auditable event record.
+### Customer privacy for riders
 
-The logistics provider then transports the order through the approved delivery arrangement.
+The rider may see only the customer's name, delivery address, and a protected **Call Customer** action as customer information. The raw customer phone number must not appear in rider API payloads, page markup, logs, analytics, or exports. Riders must never see payment status, total paid, amount due, card/bank details, payment references, delivery-fee financial fields, refunds, wallet balance, cashback, platform commission, vendor settlement, or payout information. Verification secrets must not appear in rider lists or history responses.
 
-At the customer's destination, the system records the final handover and the customer's acceptance or eligible rejection of products.
+### In-shop pickup
+
+`in_shop_pickup` remains a first-class option. The customer collects the order at the owning vendor's physical shop/counter. Delivery fee is always zero, enforced server-side regardless of client input or delivery-zone settings. The customer uses a pickup pass in the format **RES-XXXXXX**, verified by the vendor at the counter. Pickup has separate status transitions; it requires no rider assignment and creates no delivery fee, rider compensation, or logistics payout.
+
+### Vendor-configured delivery areas and fees
+
+Each vendor configures the destinations it serves and the delivery fee for each supported destination. An explicit LGA fee takes precedence over a state-level fallback. Unsupported destinations fail closed. The fulfilment type, destination, agreed fee, and applicable fee-rule version are snapshotted to the vendor child order at checkout. For new vendor-managed orders, the delivery-fee allocation is 90% vendor and 10% platform; it creates no rider payable. Merchandise allocation remains a separate base: 90% vendor, 5% customer cashback, and 5% platform on eligible merchandise; cashback does not apply to delivery fees.
+
+### Failed delivery and COD
+
+A failed attempt records its reason, actor, timestamp, and required evidence. Once the configured threshold is reached, the parcel returns to its owning vendor and the vendor confirms receipt. A failed attempt must not automatically create a wallet credit/refund, rider or logistics payable, or release vendor funds; remedies follow the authorized review and financial-operation workflow. Rider-assigned cash-on-delivery remains disabled until a vendor-owned collection and reconciliation flow is explicitly approved and tested without exposing payment status or amount due to the rider.
 
 ### Proof of handover
 
@@ -328,9 +336,9 @@ The objective is not to automatically favor the customer or the merchant.
 
 ---
 
-## 11. Merchant and Logistics Settlements
+## 11. Vendor Settlements and Financial Controls
 
-Merchants and logistics partners must be paid accurately and predictably.
+Vendors must be paid accurately and predictably. Riders are not marketplace financial beneficiaries, and the platform does not maintain rider earnings, rider wallets, rider payout requests, or logistics-company payouts for new vendor-managed orders.
 
 VICTORIOUS MARKET is developing controlled withdrawal and payout workflows using Paystack bank-transfer capabilities.
 
@@ -350,13 +358,7 @@ This is essential to protecting both customer funds and the platform's financial
 
 ## 12. Administration and Governance
 
-The VICTORIOUS MARKET administrative environment is intended to function as the central business-control system.
-
-Its responsibilities include merchant verification, product governance, order monitoring, logistics oversight, financial reconciliation, customer disputes, refunds, and operational reporting.
-
-Different users should receive only the permissions necessary for their responsibilities.
-
-The system is being designed around defined roles for administrators, merchants, branch personnel, logistics companies, riders, and customers.
+The VICTORIOUS MARKET administrative environment is the central business-control system. Its responsibilities include vendor verification, product governance, order monitoring, security and safety oversight, financial reconciliation, customer disputes, authorized refunds, and operational reporting. It does not operate dispatch, select riders for vendors, manage routes/shifts, or pay riders. Role-based permissions separate administrators, vendors, vendor-linked riders, branch personnel, and customers. Legacy logistics-company roles and records may remain available only to authorized users for historical audit/reconciliation and must not receive new assignments or new-order financial activity.
 
 Sensitive activities should be protected through authorization checks and audit trails.
 
