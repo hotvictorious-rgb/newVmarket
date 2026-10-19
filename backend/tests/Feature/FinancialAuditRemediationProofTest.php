@@ -2052,7 +2052,7 @@ class FinancialAuditRemediationProofTest extends TestCase
                 'description' => $firstEntry->description,
             ]);
             $this->fail('Duplicate financial journal idempotency key should be rejected by the database.');
-        } catch (\\Illuminate\\Database\\QueryException $e) {
+        } catch (\Illuminate\Database\QueryException $e) {
             $this->assertSame($journalCountAfterFirst, FinancialJournalEntry::where('financial_operation_id', $operation->id)->count());
         }
 
