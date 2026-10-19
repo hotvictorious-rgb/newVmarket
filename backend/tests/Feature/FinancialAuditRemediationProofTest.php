@@ -2388,4 +2388,55 @@ class FinancialAuditRemediationProofTest extends TestCase
             ->count());
     }
 
+
+    public function test_refund_reservation_rejects_unpaid_order_without_creating_operation_or_hold(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'pending',
+            'grand_total' => '1000.00',
+            'payment_reference' => 'REF-UNPAID-ORDER-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        try {
+            app(FinancialOperationService::class)->createRefundOperation(
+                $order, '100.00', 'unpaid order refund', null, 'IDEMPOTENCY-UNPAID-' . uniqid()
+            );
+            $this->fail('Unpaid orders must not create Paystack refund operations.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('payment is not confirmed as paid', $exception->getMessage());
+        }
+
+        $this->assertSame(0, FinancialOperation::where('metadata->order_id', $order->id)->count());
+        $this->assertSame(0, FinancialReservation::where('source_type', Order::class)
+            ->where('source_id', $order->id)
+            ->where('purpose', 'customer_refund_hold')->count());
+    }
+
+    public function test_refund_reservation_rejects_paid_order_without_original_gateway_reference(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '1000.00',
+            'payment_reference' => null,
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        try {
+            app(FinancialOperationService::class)->createRefundOperation(
+                $order, '100.00', 'missing payment reference refund', null, 'IDEMPOTENCY-MISSING-REF-' . uniqid()
+            );
+            $this->fail('Gateway refunds must be bound to the original payment reference.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('without the original payment reference', $exception->getMessage());
+        }
+
+        $this->assertSame(0, FinancialOperation::where('metadata->order_id', $order->id)->count());
+        $this->assertSame(0, FinancialReservation::where('source_type', Order::class)
+            ->where('source_id', $order->id)
+            ->where('purpose', 'customer_refund_hold')->count());
+    }
+
 }
