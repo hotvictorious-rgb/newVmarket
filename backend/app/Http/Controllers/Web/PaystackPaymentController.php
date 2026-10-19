@@ -355,6 +355,19 @@ class PaystackPaymentController extends Controller
                     $existingEvent->save();
                     return ['action' => 'process', 'event' => $existingEvent];
                 }
+                if ($existingEvent->status === 'unmatched') {
+                    // An operator may have repaired the missing/ambiguous business record.
+                    // Reprocess only the exact original payload; preserve attempts and inbox identity.
+                    $existingEvent->increment('attempts');
+                    $existingEvent->status = 'processing';
+                    $existingEvent->error_reason = null;
+                    $existingEvent->processed_at = null;
+                    $existingEvent->payload = $payload;
+                    $existingEvent->payload_hash = $eventHash;
+                    $existingEvent->updated_at = \Carbon\Carbon::now();
+                    $existingEvent->save();
+                    return ['action' => 'process', 'event' => $existingEvent];
+                }
             }
 
             // First-time arrival: atomically insert with status = 'processing' and stored payload
@@ -370,8 +383,22 @@ class PaystackPaymentController extends Controller
                 return ['action' => 'process', 'event' => $newEvent];
             } catch (\Illuminate\Database\QueryException $e) {
                 $existing = \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->first();
-                if ($existing && in_array($existing->status, ['completed', 'unmatched'], true)) {
-                    return ['action' => 'completed', 'message' => 'Event already processed.'];
+                if ($existing) {
+                    $existingHash = $existing->payload_hash;
+                    if (empty($existingHash) && is_string($existing->payload)) {
+                        $existingHash = hash('sha256', $existing->payload);
+                    }
+                    if (!is_string($existingHash) || !hash_equals($existingHash, $eventHash)) {
+                        Log::critical('Paystack webhook event ID collision during inbox insert.', [
+                            'event_id' => $eventId,
+                            'stored_hash' => $existingHash,
+                            'incoming_hash' => $eventHash,
+                        ]);
+                        return ['action' => 'conflict', 'message' => 'Event ID already exists with a different payload.'];
+                    }
+                    if (in_array($existing->status, ['completed'], true)) {
+                        return ['action' => 'completed', 'message' => 'Event already processed.'];
+                    }
                 }
                 return ['action' => 'throttled', 'message' => 'Event is currently being processed.'];
             }
