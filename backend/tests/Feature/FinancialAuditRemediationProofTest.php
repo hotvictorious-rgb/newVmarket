@@ -2291,7 +2291,7 @@ class FinancialAuditRemediationProofTest extends TestCase
         try {
             $service->createRefundOperation($order, '600.00', 'changed amount', null, $key);
             $this->fail('Expected conflicting idempotency-key reuse to be rejected.');
-        } catch (\\DomainException $exception) {
+        } catch (\DomainException $exception) {
             $this->assertStringContainsString('different refund instruction', $exception->getMessage());
         }
 
@@ -2324,7 +2324,7 @@ class FinancialAuditRemediationProofTest extends TestCase
         try {
             $service->createRefundOperation($secondOrder, '500.00', 'second order refund', null, $key);
             $this->fail('Expected cross-order idempotency-key reuse to be rejected.');
-        } catch (\\DomainException $exception) {
+        } catch (\DomainException $exception) {
             $this->assertStringContainsString('different refund instruction', $exception->getMessage());
         }
 
