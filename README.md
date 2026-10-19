@@ -233,7 +233,7 @@ Victorious MARKET separates platform administrators, vendors, vendor-linked ride
 | **1** | **Super Admin** | `/admin/login` | `/admin` | N/A | Sovereign command tower, manual settlement payouts, 48h cooldown overrides, dispute arbitration, immutable audit trails. |
 | **2** | **Admin Staff** | `/admin-staff/login` | `/admin-staff` | N/A | Catalog moderation, 7-day freshness oversight, customer support. Zero access to banking details, wallet debits, or payout triggers. |
 | **3** | **Vendor Merchant** | `/vendor/login` | `/vendor` | `/api/v1/vendor/*` | Store management, binary stock toggle, 7-day freshness reconfirmation, vendor rider assignment, bank account settings (48h cooldown). |
-| **4** | **Branch Counter Staff** | `/counter/login` | `/counter` | N/A | Bound strictly to a single `shop_id`. In-store inspection, reservation pass (`RES-XXXXXX`) sign-off, courier pickup OTP verification. |
+| **4** | **Branch Counter Staff** | `/counter/login` | `/counter` | N/A | Bound strictly to a single `shop_id`. Verify the customer’s canonical `RES-XXXXXX` in-shop pickup pass. Rider parcel pickup/custody is a separate operational flow, not customer counter pickup. |
 | **5** | **Legacy logistics records (restricted historical access only)** | No new fulfilment portal | Restricted audit/reconciliation views only | N/A | Historical records only; no new dispatch, assignments, rider management, or payouts. |
 | **6** | **Vendor-Linked Delivery Rider** | `/rider/login` | `/rider` | `/api/v1/rider/*` | Operational tasks for assigned orders belonging only to the owning vendor; minimal customer data; no financial access. |
 | **7** | **Customer Shopper** | `/login` | `/customer` | `/api/v1/customer/*` | Multi-vendor checkout, 30-min payment holds, secret delivery OTP cards, reservation passes, 5% cashback rewards, doorstep returns. |
@@ -318,7 +318,7 @@ Victorious MARKET provides clean, versioned JSON REST APIs for native mobile and
 
 ### A. Customer API (`/api/v1/customer/*`)
 - `GET /api/v1/customer/banners`: Active promotional banners and featured storefront items.
-- `GET /api/v1/customer/orders`: Order history, live fulfillment tracking, and secret delivery OTP codes.
+- `GET /api/v1/customer/orders`: Customer-owned order history and live fulfilment tracking. Any customer handover pass/OTP is returned only to the authenticated owning customer when required by the flow; it must never be included in rider list/history responses or logs.
 - `POST /api/v1/customer/checkout`: Atomic cart validation, 30-min stock reservation, and Paystack intent creation.
 - `POST /api/v1/customer/orders/{orderNumber}/verify-payment`: Authenticated verification and instant order confirmation.
 - `POST /api/v1/customer/orders/{orderNumber}/returns`: Submit item-level return requests with photos within the 24h window.
