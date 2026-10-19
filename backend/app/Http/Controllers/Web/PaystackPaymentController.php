@@ -468,12 +468,26 @@ class PaystackPaymentController extends Controller
             if ($finOp) {
                 app(\App\Services\FinancialOperationService::class)->finalizeRefundConfirmation($finOp, $rData);
             } else {
-                if (!empty($transRef)) {
-                    Order::where('payment_reference', $transRef)->update([
-                        'paystack_refund_reference' => $rRef,
-                        'paystack_refund_status' => 'completed',
-                    ]);
-                }
+                // Do not mark an order refunded merely because a signed webhook names its
+                // payment reference. Without a matching FinancialOperation, we cannot
+                // safely reconcile the refund against its reservation and journal entries.
+                // Keep the event visible for reconciliation/manual review instead.
+                $this->updateProcessedEvent($processedEvent, [
+                    'status' => 'unmatched',
+                    'error_reason' => 'REFUND_OPERATION_NOT_FOUND: No matching customer refund operation for gateway event.',
+                    'processed_at' => Carbon::now(),
+                ]);
+
+                Log::warning('Paystack refund.processed event has no matching FinancialOperation.', [
+                    'event_id' => $processedEvent->event_id,
+                    'refund_reference' => $rRef,
+                    'transaction_reference' => $transRef,
+                ]);
+
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Refund event received but not reconciled; flagged for review.',
+                ], 200);
             }
 
             $this->updateProcessedEvent($processedEvent, [
