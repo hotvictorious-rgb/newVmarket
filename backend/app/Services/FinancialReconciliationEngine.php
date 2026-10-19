@@ -43,14 +43,19 @@ class FinancialReconciliationEngine
         ];
 
         // 1. Vendor Payouts with Atomic Scan Claim
-        $vendorPayouts = VendorPayoutRequest::where('processing_token', 'HOLD_TIMEOUT_RECONCILIATION')
-            ->orWhere('gateway_status', 'processing')
+        $vendorPayouts = VendorPayoutRequest::where(function ($q) {
+                $q->where('processing_token', 'HOLD_TIMEOUT_RECONCILIATION')
+                  ->orWhere('gateway_status', 'processing');
+            })
+            ->where('status', '!=', 'rejected')
             ->get();
 
         foreach ($vendorPayouts as $payout) {
             // Atomic lease claim to prevent overlapping concurrent cron scans
             $claimToken = 'RECON-VND-' . $payout->id . '-' . Str::random(12);
             $claimed = VendorPayoutRequest::where('id', $payout->id)
+                // Recheck state atomically: a record can become terminal after the scan query.
+                ->where('status', '!=', 'rejected')
                 ->where(function ($q) {
                     $q->whereNull('processing_token')
                       ->orWhere('processing_token', 'HOLD_TIMEOUT_RECONCILIATION')
@@ -101,13 +106,18 @@ class FinancialReconciliationEngine
         }
 
         // 2. Logistics Payouts with Atomic Scan Claim
-        $logisticsPayouts = LogisticsPayoutRequest::where('processing_token', 'HOLD_TIMEOUT_RECONCILIATION')
-            ->orWhere('gateway_status', 'processing')
+        $logisticsPayouts = LogisticsPayoutRequest::where(function ($q) {
+                $q->where('processing_token', 'HOLD_TIMEOUT_RECONCILIATION')
+                  ->orWhere('gateway_status', 'processing');
+            })
+            ->where('status', '!=', 'rejected')
             ->get();
 
         foreach ($logisticsPayouts as $payout) {
             $claimToken = 'RECON-FLEET-' . $payout->id . '-' . Str::random(12);
             $claimed = LogisticsPayoutRequest::where('id', $payout->id)
+                // Recheck state atomically: a record can become terminal after the scan query.
+                ->where('status', '!=', 'rejected')
                 ->where(function ($q) {
                     $q->whereNull('processing_token')
                       ->orWhere('processing_token', 'HOLD_TIMEOUT_RECONCILIATION')
