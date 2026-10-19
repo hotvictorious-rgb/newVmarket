@@ -138,7 +138,22 @@ class FinancialOperationService
         $attemptData = DB::transaction(function () use ($operation) {
             $lockedOp = FinancialOperation::where('id', $operation->id)->lockForUpdate()->firstOrFail();
             if ($lockedOp->isTerminal()) {
-                return ['terminal' => true, 'operation' => $lockedOp];
+                return [
+                    'terminal' => true,
+                    'operation' => $lockedOp,
+                    'message' => "Operation is already in terminal state: {$lockedOp->status}",
+                ];
+            }
+
+            // An initiated operation may have reached Paystack even if our HTTP call timed out
+            // or the worker crashed. Never submit another refund blindly; reconcile the existing
+            // attempt first to avoid issuing a duplicate customer refund.
+            if ($lockedOp->status === 'initiated') {
+                return [
+                    'terminal' => true,
+                    'operation' => $lockedOp,
+                    'message' => 'Refund dispatch already attempted; duplicate dispatch suppressed pending gateway reconciliation.',
+                ];
             }
 
             $attemptRef = 'ATT-RFD-' . $lockedOp->id . '-' . date('YmdHis') . '-' . Str::random(6);
@@ -187,7 +202,7 @@ class FinancialOperationService
             return [
                 'success' => $attemptData['operation']->status === 'confirmed',
                 'status' => $attemptData['operation']->status,
-                'message' => "Operation is already in terminal state: {$attemptData['operation']->status}",
+                'message' => $attemptData['message'] ?? "Operation is already in terminal state: {$attemptData['operation']->status}",
             ];
         }
 
