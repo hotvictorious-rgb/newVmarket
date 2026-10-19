@@ -564,6 +564,66 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertStringContainsString('AMOUNT_MISMATCH', (string)$event->error_reason);
     }
 
+    public function test_successful_transfer_webhook_requires_amount_and_currency(): void
+    {
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '40000.00',
+            'status' => 'pending',
+            'gateway_status' => 'processing',
+            'transfer_reference' => 'VND-PAYOUT-MISSING-FIELDS',
+            'paystack_transfer_code' => 'TRF_MISSING_FIELDS',
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'Zenith Bank',
+        ]);
+
+        $cases = [
+            [
+                'id' => 'evt-missing-transfer-amount',
+                'data' => [
+                    'reference' => 'VND-PAYOUT-MISSING-FIELDS',
+                    'transfer_code' => 'TRF_MISSING_FIELDS',
+                    'currency' => 'NGN',
+                ],
+                'reason' => 'MISSING_AMOUNT',
+            ],
+            [
+                'id' => 'evt-missing-transfer-currency',
+                'data' => [
+                    'reference' => 'VND-PAYOUT-MISSING-FIELDS',
+                    'transfer_code' => 'TRF_MISSING_FIELDS',
+                    'amount' => 4000000,
+                ],
+                'reason' => 'MISSING_CURRENCY',
+            ],
+        ];
+
+        foreach ($cases as $case) {
+            $payloadData = [
+                'event' => 'transfer.success',
+                'id' => $case['id'],
+                'data' => $case['data'],
+            ];
+            $signature = hash_hmac(
+                'sha512',
+                json_encode($payloadData),
+                app(PaystackService::class)->getSecretKey()
+            );
+
+            $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+                'x-paystack-signature' => $signature,
+            ]);
+
+            $response->assertStatus(400);
+            $event = ProcessedWebhookEvent::where('event_id', $case['id'])->first();
+            $this->assertNotNull($event);
+            $this->assertEquals('failed', $event->status);
+            $this->assertStringContainsString($case['reason'], (string) $event->error_reason);
+            $this->assertEquals('pending', $payout->fresh()->status);
+        }
+    }
+
     /**
      * Audit Finding P1-5: Pre-transfer allocation reservation holds orders before transfer initiation.
      */
