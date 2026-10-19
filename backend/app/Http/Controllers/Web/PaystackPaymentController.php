@@ -720,8 +720,28 @@ class PaystackPaymentController extends Controller
 
                 $orderId = $lockedOp->metadata['order_id'] ?? null;
                 if ($orderId) {
-                    Order::where('id', $orderId)->where('paystack_refund_status', '!=', 'completed')
-                        ->update(['paystack_refund_status' => 'failed']);
+                    // The order-level status is a summary, not the state of this one
+                    // refund. Preserve outstanding partial refunds and any earlier
+                    // confirmed partial refund when one operation fails.
+                    $hasOutstandingRefund = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+                        ->whereJsonContains('metadata->order_id', $orderId)
+                        ->whereNotIn('status', ['confirmed', 'failed', 'reversed'])
+                        ->exists();
+                    $hasConfirmedRefund = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+                        ->whereJsonContains('metadata->order_id', $orderId)
+                        ->where('status', 'confirmed')
+                        ->exists();
+                    $hasPendingReturnCase = \\App\\Models\\ReturnCase::where('order_id', $orderId)
+                        ->whereIn('status', ['refund_pending', 'refund_approved'])
+                        ->exists();
+
+                    $summaryStatus = ($hasOutstandingRefund || $hasPendingReturnCase)
+                        ? 'pending'
+                        : ($hasConfirmedRefund ? 'completed' : 'failed');
+
+                    Order::where('id', $orderId)->update([
+                        'paystack_refund_status' => $summaryStatus,
+                    ]);
                 }
             });
 
