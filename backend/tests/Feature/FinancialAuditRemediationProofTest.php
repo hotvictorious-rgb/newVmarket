@@ -651,6 +651,71 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertEquals('unmatched', $event->status);
     }
 
+    /**
+     * A refund.failed webhook without an exact operation match must not change order state.
+     */
+    public function test_unmatched_refund_failed_webhook_does_not_fail_order_refund(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-UNMATCHED-FAILED-01',
+            'paystack_refund_reference' => null,
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        $payloadData = [
+            'id' => 'evt-unmatched-failed-01',
+            'event' => 'refund.failed',
+            'data' => [
+                'refund_reference' => 'rf-not-linked-01',
+                'transaction_reference' => $order->payment_reference,
+                'status' => 'failed',
+            ],
+        ];
+        $payload = json_encode($payloadData);
+        $signature = hash_hmac('sha512', $payload, app(PaystackService::class)->getSecretKey());
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertOk();
+        $this->assertEquals('pending', $order->fresh()->paystack_refund_status);
+        $event = ProcessedWebhookEvent::where('event_id', 'evt-unmatched-failed-01')->first();
+        $this->assertNotNull($event);
+        $this->assertEquals('unmatched', $event->status);
+    }
+
+    /**
+     * A gateway-confirmed refund without a financial operation must not bypass the ledger.
+     */
+    public function test_refund_reconciliation_does_not_complete_refund_without_financial_operation(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-VERIFIED-NO-OP-01',
+            'paystack_refund_reference' => 'rf-verified-no-op-01',
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldReceive('verifyRefund')->once()->with('rf-verified-no-op-01')->andReturn([
+            'success' => true,
+            'refund_reference' => 'rf-verified-no-op-01',
+            'status' => 'processed',
+        ]);
+        $this->app->instance(PaystackService::class, $mock);
+
+        $reconciled = app(FinancialReconciliationEngine::class)->reconcileRefunds();
+
+        $this->assertEquals(0, $reconciled);
+        $this->assertEquals('pending', $order->fresh()->paystack_refund_status);
+    }
+
     public function test_refund_reconciliation_ignores_unauthorized_cancelled_orders(): void
     {
         // Cancelled order without explicit refund status or return case
