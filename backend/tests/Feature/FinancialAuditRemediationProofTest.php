@@ -453,6 +453,37 @@ class FinancialAuditRemediationProofTest extends TestCase
     }
 
     /**
+     * The service-level row-lock guard also protects vendor payouts from a
+     * stale failed-transfer reconciliation racing with successful finalization.
+     */
+    public function test_stale_vendor_failure_cannot_reverse_payout_after_success_was_finalized(): void
+    {
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '12000.00',
+            'status' => 'approved',
+            'gateway_status' => 'success',
+            'disbursed_at' => Carbon::now(),
+            'transfer_reference' => 'VND-STALE-FAIL-' . uniqid(),
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'Zenith Bank',
+        ]);
+
+        $result = app(PayoutFinalizationService::class)->revertVendorPayout(
+            $payout,
+            'Stale reconciler observed failure before success finalization'
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected']);
+        $this->assertTrue($result['idempotent']);
+        $this->assertEquals('approved', $payout->fresh()->status);
+        $this->assertEquals('success', $payout->fresh()->gateway_status);
+        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-REV-VND-' . $payout->id)->exists());
+    }
+
+    /**
      * Audit Finding 4 (P0): Webhook transfer.failed delegates cleanly to centralized finalization service.
      */
     public function test_webhook_transfer_failed_delegates_to_central_service_and_reverses_safely(): void
