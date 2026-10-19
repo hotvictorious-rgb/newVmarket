@@ -573,9 +573,22 @@ class FinancialOperationService
             }
 
             if ($order) {
+                // The order-level flag summarizes all partial refunds, not just this
+                // operation. One successful partial refund must not hide another
+                // outstanding refund or an approved return awaiting refund.
+                $hasOutstandingRefund = FinancialOperation::where('operation_type', 'customer_refund')
+                    ->whereJsonContains('metadata->order_id', $order->id)
+                    ->whereNotIn('status', ['confirmed', 'failed', 'reversed'])
+                    ->exists();
+                $hasPendingReturnCase = ReturnCase::where('order_id', $order->id)
+                    ->whereIn('status', ['refund_pending', 'refund_approved'])
+                    ->exists();
+
                 $order->update([
                     'paystack_refund_reference' => $gwRef,
-                    'paystack_refund_status' => 'completed',
+                    'paystack_refund_status' => ($hasOutstandingRefund || $hasPendingReturnCase)
+                        ? 'pending'
+                        : 'completed',
                 ]);
             }
 
