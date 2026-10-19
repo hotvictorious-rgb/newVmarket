@@ -611,6 +611,46 @@ class FinancialAuditRemediationProofTest extends TestCase
     /**
      * Audit Finding P1-6: Refund reconciliation ignores unauthorized cancelled orders.
      */
+    /**
+     * A refund.processed webhook must not mark an order refunded when there is no
+     * matching FinancialOperation to reconcile the reservation and ledger.
+     */
+    public function test_unmatched_refund_processed_webhook_does_not_mark_order_completed(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-UNMATCHED-REFUND-01',
+            'paystack_refund_reference' => null,
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        $payloadData = [
+            'id' => 'evt-unmatched-refund-01',
+            'event' => 'refund.processed',
+            'data' => [
+                'reference' => 'rf-unmatched-01',
+                'transaction_reference' => $order->payment_reference,
+                'status' => 'processed',
+            ],
+        ];
+        $payload = json_encode($payloadData);
+        $signature = hash_hmac('sha512', $payload, app(PaystackService::class)->getSecretKey());
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertOk();
+        $this->assertEquals('pending', $order->fresh()->paystack_refund_status);
+        $this->assertNull($order->fresh()->paystack_refund_reference);
+
+        $event = ProcessedWebhookEvent::where('event_id', 'evt-unmatched-refund-01')->first();
+        $this->assertNotNull($event);
+        $this->assertEquals('unmatched', $event->status);
+    }
+
     public function test_refund_reconciliation_ignores_unauthorized_cancelled_orders(): void
     {
         // Cancelled order without explicit refund status or return case
