@@ -437,11 +437,67 @@ class PaystackPaymentHardeningTest extends TestCase
     }
 
     /**
+     * Regression proof: gateway response validation is exercised over the HTTP client,
+     * rather than short-circuited by the test-only simulated-success path.
+     */
+    public function test_gateway_verification_rejects_tampered_status_amount_currency_and_reference(): void
+    {
+        Config::set('services.paystack.simulate_in_tests', false);
+
+        $cases = [
+            'status' => ['status' => 'pending', 'currency' => 'NGN', 'amount' => 1500000],
+            'amount' => ['status' => 'success', 'currency' => 'NGN', 'amount' => 1499999],
+            'currency' => ['status' => 'success', 'currency' => 'USD', 'amount' => 1500000],
+            'reference' => ['status' => 'success', 'currency' => 'NGN', 'amount' => 1500000, 'reference' => 'VM-FORGED-REFERENCE'],
+        ];
+
+        foreach ($cases as $field => $gatewayData) {
+            $order = $this->createTestOrder([
+                'grand_total' => '15000.00',
+                'payment_reference' => 'VM-VERIFY-' . strtoupper($field) . '-' . uniqid(),
+            ]);
+
+            $payload = [
+                'id' => 554433,
+                'status' => $gatewayData['status'],
+                'currency' => $gatewayData['currency'],
+                'amount' => $gatewayData['amount'],
+                'reference' => $gatewayData['reference'] ?? $order->payment_reference,
+                'channel' => 'card',
+                'customer' => ['email' => $this->customer->email],
+            ];
+
+            Http::fake([
+                'https://api.paystack.co/transaction/verify/*' => Http::response([
+                    'status' => true,
+                    'message' => 'Verification response',
+                    'data' => $payload,
+                ], 200),
+            ]);
+
+            $result = app(PaystackService::class)->verifyTransaction($order->payment_reference, $order);
+
+            $expectedCode = match ($field) {
+                'status' => 'STATUS_NOT_SUCCESS',
+                'amount' => 'AMOUNT_MISMATCH',
+                'currency' => 'CURRENCY_MISMATCH',
+                'reference' => 'REFERENCE_MISMATCH',
+            };
+
+            $this->assertFalse($result['success'], "Tampered {$field} must not verify.");
+            $this->assertSame($expectedCode, $result['code'], "Tampered {$field} should fail with its specific validation code.");
+            Http::assertSent(fn ($request) => str_contains($request->url(), '/transaction/verify/'));
+        }
+    }
+
+    /**
      * PROOF 11: Mobile / SPA Authenticated Payment Verification Endpoint
      * Verifies server-to-server with Paystack and settles order atomically.
      */
     public function test_authenticated_api_verify_payment_endpoint_authoritatively_settles_order(): void
     {
+        // Force the server-to-server verification path; do not accept the test-only simulated success.
+        Config::set('services.paystack.simulate_in_tests', false);
         $order = $this->createTestOrder(['grand_total' => '15000.00']);
 
         // Mock Paystack server-to-server verify response
