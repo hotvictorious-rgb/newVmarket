@@ -512,6 +512,20 @@ class ReturnAndRefundService
             ];
         }
 
+        // A previously accepted Paystack refund is not proof of settlement. In
+        // particular, retries after the claim is cleared must not fall through to
+        // manual journal posting while the gateway operation is still pending.
+        // Only verified terminal confirmation may post the refund ledger entries.
+        if (empty($bankReference) && !empty($paystackRefundId)) {
+            return [
+                'success' => true,
+                'status' => 'initiated',
+                'message' => 'A Paystack refund is already recorded for this return case. It remains pending reconciliation; no settlement journal entries were posted.',
+                'case' => ReturnCase::find($caseId),
+                'total_refunded' => $totalCashRefund,
+            ];
+        }
+
         // 2. Only dispatch to Paystack when no manual bank reference was supplied.
         if (empty($bankReference) && empty($paystackRefundId) && !empty($preValidation['order_payment_reference'])) {
             $finOpService = new \App\Services\FinancialOperationService($this->paystackService);
