@@ -98,9 +98,11 @@ The selected answers are recorded here so implementation teams do not revert to 
 - In-shop pickup remains fully supported as a first-class fulfilment type.
 - The customer collects the order at the owning vendor's physical shop/counter.
 - Delivery fee is exactly zero. Checkout and backend enforce zero regardless of client-supplied amount or vendor delivery-zone setting.
-- The customer receives a pickup pass in the format RES-XXXXXX. Store only a secure representation where feasible; do not expose the pass in rider lists, logs, or unrelated API responses.
-- The vendor verifies the pickup pass and records handover. A delivery rider is not required and no delivery assignment, delivery fee, rider compensation, or logistics payout is created.
-- Pickup status and doorstep delivery status remain distinct. Pickup must not be forced through out-for-delivery or doorstep-only OTP/proof requirements.
+- The customer-facing counter pickup credential is the `RES-XXXXXX` pickup pass. It is the canonical credential for customer in-shop pickup and must be verified by the owning vendor at the counter.
+- A separately generated six-digit `pickup_verification_code` must not silently replace, override, or be confused with the `RES-XXXXXX` customer pickup pass. Until a separate purpose is explicitly approved and documented, it must not be treated as an alternate customer counter-pickup credential. Preserve historical records and migrate additively; do not invalidate existing reservations without a safe customer-support path.
+- Store only a secure representation where feasible; do not expose the pickup pass in rider lists, rider history, logs, analytics, or unrelated API responses. Return it only to the authorized customer or verify it through the owning vendor's authorized counter flow.
+- The vendor verifies the pickup pass and records handover. A delivery rider is not required and no rider assignment, doorstep-delivery status, delivery fee, rider compensation, or logistics payout is created.
+- Pickup status and doorstep delivery status remain distinct. Customer counter pickup is not the same event as a rider collecting a parcel from the vendor. Pickup must not be forced through out-for-delivery or doorstep-only rider OTP/proof requirements.
 - Order/payment expiry must not silently invalidate a paid order or create a financial refund. Expiry, stock release, payment verification, and refund are separate auditable operations.
 
 ## 6. Vendor-defined delivery areas and fees
