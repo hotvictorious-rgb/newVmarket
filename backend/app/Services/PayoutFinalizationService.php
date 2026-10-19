@@ -351,9 +351,9 @@ class PayoutFinalizationService
     /**
      * Authoritative safe reversal of a failed/reversed Vendor Payout.
      */
-    public function revertVendorPayout(VendorPayoutRequest $payout, string $reason, ?User $admin = null): array
+    public function revertVendorPayout(VendorPayoutRequest $payout, string $reason, ?User $admin = null, bool $allowSuccessfulReversal = false): array
     {
-        $result = DB::transaction(function () use ($payout, $reason, $admin) {
+        $result = DB::transaction(function () use ($payout, $reason, $admin, $allowSuccessfulReversal) {
             $lockedPayout = VendorPayoutRequest::with(['allocations.order', 'vendor'])
                 ->where('id', $payout->id)
                 ->lockForUpdate()
@@ -366,6 +366,22 @@ class PayoutFinalizationService
                     'idempotent' => true,
                     'payout' => $lockedPayout,
                     'message' => 'Vendor payout already marked failed/reverted.',
+                ];
+            }
+
+            // A stale failure/reconciliation result must not undo a confirmed payout.
+            // Only an explicit transfer.reversed event may reverse a successful transfer.
+            if (
+                !$allowSuccessfulReversal
+                && strtolower((string) $lockedPayout->gateway_status) === 'success'
+                && strtolower((string) $lockedPayout->status) === 'approved'
+            ) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'payout' => $lockedPayout,
+                    'message' => 'Confirmed successful vendor payout protected from stale failure signal.',
                 ];
             }
 
@@ -488,9 +504,9 @@ class PayoutFinalizationService
     /**
      * Authoritative safe reversal of a failed/reversed Logistics Payout.
      */
-    public function revertLogisticsPayout(LogisticsPayoutRequest $payout, string $reason, ?User $admin = null): array
+    public function revertLogisticsPayout(LogisticsPayoutRequest $payout, string $reason, ?User $admin = null, bool $allowSuccessfulReversal = false): array
     {
-        $result = DB::transaction(function () use ($payout, $reason, $admin) {
+        $result = DB::transaction(function () use ($payout, $reason, $admin, $allowSuccessfulReversal) {
             $lockedPayout = LogisticsPayoutRequest::with('company')
                 ->where('id', $payout->id)
                 ->lockForUpdate()
@@ -503,6 +519,22 @@ class PayoutFinalizationService
                     'idempotent' => true,
                     'payout' => $lockedPayout,
                     'message' => 'Logistics payout already marked failed/reverted.',
+                ];
+            }
+
+            // A stale failure/reconciliation result must not undo a confirmed payout.
+            // Only an explicit transfer.reversed event may reverse a successful transfer.
+            if (
+                !$allowSuccessfulReversal
+                && strtolower((string) $lockedPayout->gateway_status) === 'success'
+                && strtolower((string) $lockedPayout->status) === 'approved'
+            ) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'payout' => $lockedPayout,
+                    'message' => 'Confirmed successful logistics payout protected from stale failure signal.',
                 ];
             }
 
