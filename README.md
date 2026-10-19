@@ -29,7 +29,7 @@ Core controls include:
 ## Table of Contents
 
 1. [Architectural Overview & Core Invariants](#1-architectural-overview--core-invariants)
-2. [Institutional Financial Core & Commission Model](#2-institutional-financial-core--commission-model)
+2. [Financial Controls and Commercial Allocation](#2-financial-controls-and-commercial-allocation)
 3. [The Two-Status Inventory Architecture & Payment Safety Reservations](#3-the-two-status-inventory-architecture--payment-safety-reservations)
 4. [7-Day Product Freshness Lifecycle](#4-7-day-product-freshness-lifecycle)
 5. [Vendor-Managed Delivery and In-Shop Pickup](#5-vendor-managed-delivery-and-in-shop-pickup)
@@ -141,7 +141,7 @@ The marketplace does **not** rely on tracking numeric quantities (e.g. how many 
 Payment safety, reservation records, expiry times, idempotency, and payment verification are essential, but they do **not** require tracking or decrementing inventory quantities:
 
 - **Checkout Purchase Reservation (30 Minutes):** When a shopper clicks **Pay**, the platform creates an authenticated order record with an expiration timer (`expires_at = now() + 30 minutes`). This reserves the customer's right to complete payment for that transaction without decrementing a merchant stock count.
-- **In-Shop Inspection Reservation (24 Hours):** When a customer creates a pickup reservation (`RES-XXXXXXXX`), the reservation holds the customer's intent to inspect and purchase at the branch counter for 24 hours. The customer pays after inspecting the physical goods.
+- **In-Shop Inspection Reservation (24 Hours):** When a customer creates a pickup reservation (`RES-XXXXXX`), the reservation holds the customer's intent to inspect and purchase at the branch counter for 24 hours. The customer pays after inspecting the physical goods.
 - **Automatic Expiration:** If payment is abandoned or fails before the timer elapses, the reservation expires automatically without requiring manual ledger rollback.
 
 ### 3. Handling Concurrent Checkouts & Offline Depletion
