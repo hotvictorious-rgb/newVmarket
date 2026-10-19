@@ -115,6 +115,49 @@ class FinancialOperationService
                 );
             }
 
+            // A return case has its own approved refund ceiling in addition to the
+            // order-wide ceiling. Locking the case above serializes refund creation
+            // for that case, while counting both active holds and committed refunds.
+            if ($returnCase) {
+                $caseCeilingNaira = bcadd((string) ($returnCase->total_refundable_amount ?? '0.00'), '0', 2);
+                $caseCeilingKobo = (int) bcmul($caseCeilingNaira, '100', 0);
+
+                $caseReservationsKobo = (int) FinancialReservation::query()
+                    ->where('source_type', Order::class)
+                    ->where('source_id', $lockedOrder->id)
+                    ->where('purpose', 'customer_refund_hold')
+                    ->whereIn('status', ['active', 'committed'])
+                    ->whereHas('operation', function ($q) use ($returnCase) {
+                        $q->where('operation_type', 'customer_refund')
+                            ->where('metadata->return_case_id', $returnCase->id);
+                    })
+                    ->sum('reserved_amount_kobo');
+
+                $caseConfirmedWithoutReservationKobo = (int) FinancialOperation::query()
+                    ->where('operation_type', 'customer_refund')
+                    ->where('status', 'confirmed')
+                    ->where('currency', 'NGN')
+                    ->where('metadata->order_id', $lockedOrder->id)
+                    ->where('metadata->return_case_id', $returnCase->id)
+                    ->whereDoesntHave('reservations', function ($q) use ($lockedOrder) {
+                        $q->where('purpose', 'customer_refund_hold')
+                            ->whereIn('status', ['active', 'committed'])
+                            ->where('source_type', Order::class)
+                            ->where('source_id', $lockedOrder->id);
+                    })
+                    ->sum('amount_kobo');
+
+                $caseRefundedOrReservedKobo = $caseReservationsKobo + $caseConfirmedWithoutReservationKobo;
+
+                if ($caseCeilingKobo <= 0 || $caseRefundedOrReservedKobo + $amountKobo > $caseCeilingKobo) {
+                    $caseRemainingKobo = max(0, $caseCeilingKobo - $caseRefundedOrReservedKobo);
+                    $caseRemainingNaira = bcdiv((string) $caseRemainingKobo, '100', 2);
+                    throw new \\DomainException(
+                        "Refund invariant violation: requested amount exceeds the approved refundable balance of ₦{$caseRemainingNaira} for Return Case #{$returnCase->case_number}."
+                    );
+                }
+            }
+
             // 2. Reservation Ceiling Check: Total refundable original payment (excluding unpaid or uncaptured)
             $totalOriginalPaymentNaira = bcadd((string)$lockedOrder->grand_total, '0', 2);
             $totalOriginalPaymentKobo = (int) bcmul($totalOriginalPaymentNaira, '100', 0);
