@@ -1175,6 +1175,13 @@ class FinancialAuditRemediationProofTest extends TestCase
                 'reason' => 'REFUND_AMOUNT_MISMATCH',
             ],
             [
+                'id' => 'evt-refund-fractional-kobo',
+                'refund_reference' => 'rf-fractional-kobo',
+                'amount' => 50000.5,
+                'currency' => 'NGN',
+                'reason' => 'REFUND_MISSING_AMOUNT',
+            ],
+            [
                 'id' => 'evt-refund-currency-mismatch',
                 'refund_reference' => 'rf-currency-mismatch',
                 'amount' => 50000,
@@ -1974,6 +1981,7 @@ class FinancialAuditRemediationProofTest extends TestCase
     {
         $cases = [
             ['suffix' => 'amount', 'evidence' => ['status' => 'processed', 'amount' => 49999, 'currency' => 'NGN'], 'code' => 'REFUND_AMOUNT_MISMATCH'],
+            ['suffix' => 'fractional_amount', 'evidence' => ['status' => 'processed', 'amount' => 50000.5, 'currency' => 'NGN'], 'code' => 'REFUND_AMOUNT_MISMATCH'],
             ['suffix' => 'currency', 'evidence' => ['status' => 'processed', 'amount' => 50000, 'currency' => 'USD'], 'code' => 'REFUND_CURRENCY_MISMATCH'],
         ];
 
