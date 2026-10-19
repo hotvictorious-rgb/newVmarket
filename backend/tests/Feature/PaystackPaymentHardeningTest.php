@@ -108,10 +108,12 @@ class PaystackPaymentHardeningTest extends TestCase
         $response = $this->actingAs($this->customer)->post(route('checkout.process'), [
             'product_id' => $this->product->id,
             'quantity' => 1,
-            'fulfillment_type' => 'in_shop_pickup',
+            'fulfillment_type' => 'doorstep_delivery',
             'customer_name' => $this->customer->name,
             'customer_phone' => '08012345678',
             'shop_id' => $this->shop->id,
+            'destination_lga_id' => $this->shop->lga_id,
+            'delivery_address' => '12 Ikot Ekpene Road, Uyo',
         ]);
 
         $response->assertRedirect();

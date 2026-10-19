@@ -215,14 +215,29 @@
                 <div style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 14px; padding: 22px; margin-bottom: 24px; box-shadow: var(--vm-shadow-xs);">
                     <div style="font-weight: 800; font-size: 15px; color: #0F172A; margin-bottom: 6px; display: flex; align-items: center; gap: 10px;">
                         <span style="background: #5E17EB; color: #FFF; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;">3</span>
-                        <span>Select Paystack Payment Channel</span>
+                        <span id="vmStep3Title">Select Paystack Payment Channel</span>
                     </div>
-                    <p style="font-size: 12px; color: #64748B; margin: 0 0 16px 34px;">
-                        All payments are processed exclusively and securely through <strong>Paystack</strong> (Nigeria’s leading PCI-DSS Level 1 certified gateway).
+                    <p id="vmStep3Subtitle" style="font-size: 12px; color: #64748B; margin: 0 0 16px 34px;">
+                        All delivery payments are processed exclusively and securely through <strong>Paystack</strong> (Nigeria’s leading PCI-DSS Level 1 certified gateway).
                     </p>
 
-                    <!-- Payment Options Grid -->
-                    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;">
+                    <!-- In-Shop Pickup Inspection Notice (Shown only when In-Shop Pickup is selected) -->
+                    <div id="vmPickupPaymentNotice" style="display: none; background: #EEF2FF; border: 1.5px solid #C7D2FE; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                        <div style="display: flex; gap: 12px; align-items: flex-start;">
+                            <div style="color: #4F46E5; flex-shrink: 0; margin-top: 2px;">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                            <div>
+                                <strong style="font-size: 14px; color: #1E1B4B; display: block; margin-bottom: 4px;">₦0.00 Online Payment Upfront — Inspect First at Merchant Counter</strong>
+                                <p style="font-size: 12px; color: #3730A3; margin: 0; line-height: 1.5;">
+                                    When picking up in person, you do not pay online upfront. Visit <strong>{{ $product->shop->name ?? 'the shop' }}</strong>, physically inspect and verify your items at the counter, and pay directly after you are 100% satisfied.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Options Grid (for Doorstep Delivery) -->
+                    <div id="vmPaymentGatewayOptions" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;">
                         
                         <!-- Option A: Cards (Visa, Mastercard, Verve via Paystack) -->
                         <label class="vm-pay-option active" style="display: flex; align-items: center; justify-content: space-between; border: 1.5px solid #5E17EB; background: #F5F3FF; border-radius: 10px; padding: 12px 16px; cursor: pointer;">
@@ -390,6 +405,10 @@ function vmSelectFulfillment(type) {
     const deliveryFeeEl = document.getElementById('vmSummaryDeliveryFee');
     const grandTotalEl = document.getElementById('vmSummaryGrandTotal');
     const payBtn = document.getElementById('vmPayNowBtn');
+    const gatewayOptions = document.getElementById('vmPaymentGatewayOptions');
+    const pickupNotice = document.getElementById('vmPickupPaymentNotice');
+    const step3Title = document.getElementById('vmStep3Title');
+    const step3Subtitle = document.getElementById('vmStep3Subtitle');
 
     if (type === 'pickup') {
         if (radioPickup) radioPickup.checked = true;
@@ -402,11 +421,14 @@ function vmSelectFulfillment(type) {
             cardDelivery.style.background = radioDelivery && radioDelivery.disabled ? '#F8FAFC' : '#FFFFFF';
         }
         if (pickupFields) pickupFields.style.display = 'block';
+        if (gatewayOptions) gatewayOptions.style.display = 'none';
+        if (pickupNotice) pickupNotice.style.display = 'block';
+        if (step3Title) step3Title.textContent = 'In-Store Inspection & Counter Payment';
+        if (step3Subtitle) step3Subtitle.textContent = 'No online payment required today. Inspect your items and pay at the counter.';
 
         if (deliveryFeeEl) deliveryFeeEl.textContent = '₦0.00 (Free Pickup)';
-        const newTotal = subtotal;
-        if (grandTotalEl) grandTotalEl.textContent = '₦' + newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 });
-        if (payBtn) payBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <span>Pay ₦${newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })} via Paystack &amp; Secure Order</span> <span style="font-size: 18px;">&rarr;</span>`;
+        if (grandTotalEl) grandTotalEl.textContent = '₦0.00 (Pay at Shop Counter)';
+        if (payBtn) payBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg> <span>Reserve for Free — Inspect &amp; Pay at Shop Counter</span> <span style="font-size: 18px;">&rarr;</span>`;
     } else {
         if (radioDelivery && radioDelivery.disabled) return;
         if (radioDelivery) radioDelivery.checked = true;
@@ -419,11 +441,15 @@ function vmSelectFulfillment(type) {
             cardPickup.style.background = '#FFFFFF';
         }
         if (pickupFields) pickupFields.style.display = 'none';
+        if (gatewayOptions) gatewayOptions.style.display = 'flex';
+        if (pickupNotice) pickupNotice.style.display = 'none';
+        if (step3Title) step3Title.textContent = 'Select Paystack Payment Channel';
+        if (step3Subtitle) step3Subtitle.textContent = 'All delivery payments are processed exclusively and securely through Paystack.';
 
         if (deliveryFeeEl) deliveryFeeEl.textContent = '₦' + currentDeliveryFee.toLocaleString('en-NG', { minimumFractionDigits: 2 });
         const newTotal = subtotal + currentDeliveryFee;
         if (grandTotalEl) grandTotalEl.textContent = '₦' + newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 });
-        if (payBtn) payBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <span>Pay ₦${newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })} via Paystack &amp; Secure Order</span> <span style="font-size: 18px;">&rarr;</span>`;
+        if (payBtn) payBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <span>Pay ₦${newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })} via Paystack (Prepaid Escrow)</span> <span style="font-size: 18px;">&rarr;</span>`;
     }
 }
 

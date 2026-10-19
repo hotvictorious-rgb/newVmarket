@@ -76,6 +76,21 @@ class PaystackPaymentController extends Controller
         }
 
         if (($settlement['status'] ?? '') === 'REFUND_PENDING' || $order->fresh()->vendor_settlement_status === 'refund_pending') {
+            if (!empty($settlement['trigger_gateway_refund'])) {
+                try {
+                    $finOpService = app(\App\Services\FinancialOperationService::class);
+                    $op = $finOpService->createRefundOperation(
+                        $order,
+                        $settlement['refund_amount'] ?? (string)$order->grand_total,
+                        "Automated refund for late payment on depleted inventory for Order #{$order->order_number}",
+                        null
+                    );
+                    $finOpService->dispatchRefund($op);
+                } catch (\Throwable $e) {
+                    Log::error("Failed to automatically dispatch refund in callback for Order #{$order->id}: " . $e->getMessage());
+                }
+            }
+
             return redirect()->route('order.status', $redirectParams)
                 ->with('warning', 'Order was cancelled due to inventory depletion before payment was verified. A full refund of ₦' . number_format((float)$order->grand_total, 2) . ' has been initiated to your bank account.');
         }
@@ -538,6 +553,23 @@ class PaystackPaymentController extends Controller
                 'status' => false,
                 'message' => $settlement['message'],
             ], 422);
+        }
+
+        // Automated controlled refund dispatch if inventory was depleted (Late Payment Reconciliation Policy)
+        if (!empty($settlement['trigger_gateway_refund'])) {
+            try {
+                $finOpService = app(\App\Services\FinancialOperationService::class);
+                $op = $finOpService->createRefundOperation(
+                    $order,
+                    $settlement['refund_amount'] ?? (string)$order->grand_total,
+                    "Automated refund for late payment on depleted inventory for Order #{$order->order_number}",
+                    null
+                );
+                $finOpService->dispatchRefund($op);
+                Log::info("Automated refund successfully dispatched via FinancialOperationService for Order #{$order->id}.");
+            } catch (\Throwable $e) {
+                Log::error("Failed to automatically dispatch refund for out-of-stock Order #{$order->id}: " . $e->getMessage());
+            }
         }
 
         $this->updateProcessedEvent($processedEvent, [

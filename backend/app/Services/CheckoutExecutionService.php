@@ -93,12 +93,26 @@ class CheckoutExecutionService
 
         // Guard 4: Explicit Designated Courier / Rider Invariant
         if (!empty($validated['rider_id'])) {
-            $rider = RiderProfile::withTrashed()->with(['user', 'logisticsCompany.user'])->find($validated['rider_id']);
+            $rider = RiderProfile::withTrashed()->with(['user', 'vendor.user', 'logisticsCompany.user'])->find($validated['rider_id']);
             if (!$rider || $rider->trashed() || !$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
                 return [
                     'success' => false,
                     'status_code' => 422,
                     'message' => 'The designated delivery rider is currently inactive or suspended.',
+                ];
+            }
+            if ($rider->vendor_id && (int)$rider->vendor_id !== (int)$shop->vendor_id) {
+                return [
+                    'success' => false,
+                    'status_code' => 422,
+                    'message' => 'The designated delivery rider does not belong to the merchant for this order.',
+                ];
+            }
+            if ($rider->vendor && ($rider->vendor->trashed() || $rider->vendor->marketplace_status !== 'active' || ($rider->vendor->user && $rider->vendor->user->status !== 'active'))) {
+                return [
+                    'success' => false,
+                    'status_code' => 422,
+                    'message' => 'The merchant organization for this delivery rider is currently deactivated or suspended.',
                 ];
             }
             if ($rider->logisticsCompany && ($rider->logisticsCompany->trashed() || $rider->logisticsCompany->status !== 'active' || ($rider->logisticsCompany->user && $rider->logisticsCompany->user->status !== 'active'))) {
@@ -295,17 +309,25 @@ class CheckoutExecutionService
             }
 
             if (!$rider && $validated['fulfillment_type'] === 'doorstep_delivery') {
-                $riderQuery = RiderProfile::where('is_active', true)
+                // First priority: Assign active delivery person belonging to this merchant
+                $rider = RiderProfile::where('vendor_id', $shop->vendor_id)
+                    ->where('is_active', true)
                     ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                    ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'));
+                    ->first();
 
-                if ($logisticsCompanyId) {
-                    $riderQuery->where('logistics_company_id', $logisticsCompanyId);
-                }
+                if (!$rider) {
+                    $riderQuery = RiderProfile::where('is_active', true)
+                        ->whereHas('user', fn($q) => $q->where('status', 'active'))
+                        ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'));
 
-                $rider = (clone $riderQuery)->where('is_online', true)->first() ?? $riderQuery->first();
-                if ($rider && $rider->logistics_company_id && !$logisticsCompanyId) {
-                    $logisticsCompanyId = $rider->logistics_company_id;
+                    if ($logisticsCompanyId) {
+                        $riderQuery->where('logistics_company_id', $logisticsCompanyId);
+                    }
+
+                    $rider = (clone $riderQuery)->where('is_online', true)->first() ?? $riderQuery->first();
+                    if ($rider && $rider->logistics_company_id && !$logisticsCompanyId) {
+                        $logisticsCompanyId = $rider->logistics_company_id;
+                    }
                 }
             }
 

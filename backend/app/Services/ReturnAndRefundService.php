@@ -739,23 +739,40 @@ class ReturnAndRefundService
                     ->update(['status' => 'forfeited']);
             }
 
-            // If delivery fee was refunded, reverse logistics payable and platform delivery cut
+            // If delivery fee was refunded, reverse delivery fee allocation and platform delivery cut
             if (bccomp($deliveryFeeRefund, '0.00', 2) > 0) {
-                $fleetDebit = bcmul($deliveryFeeRefund, '0.9000', 2);
+                $deliveryFeeCut = bcmul($deliveryFeeRefund, '0.9000', 2);
                 $platDeliveryDebit = bcmul($deliveryFeeRefund, '0.1000', 2);
 
-                FinancialJournalEntry::create([
-                    'order_id' => $order->id,
-                    'transaction_reference' => $refToStore,
-                    'event_id' => 'EVT-REFUND-FLEET-' . $disburseRef,
-                    'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
-                    'beneficiary_id' => $order->logistics_company_id,
-                    'account_name' => 'logistics_payable',
-                    'entry_type' => 'debit',
-                    'amount' => $fleetDebit,
-                    'currency' => 'NGN',
-                    'description' => "Logistics fee reversed for Return #{$lockedCase->case_number}",
-                ]);
+                if ($order->logistics_company_id && empty($order->rider?->vendor_id)) {
+                    // 3rd-party logistics fleet
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $refToStore,
+                        'event_id' => 'EVT-REFUND-FLEET-' . $disburseRef,
+                        'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                        'beneficiary_id' => $order->logistics_company_id,
+                        'account_name' => 'logistics_payable',
+                        'entry_type' => 'debit',
+                        'amount' => $deliveryFeeCut,
+                        'currency' => 'NGN',
+                        'description' => "Logistics fee reversed for Return #{$lockedCase->case_number}",
+                    ]);
+                } else {
+                    // Vendor-managed delivery: debit merchant vendor_payable
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $refToStore,
+                        'event_id' => 'EVT-REFUND-VND-DELIVERY-' . $disburseRef,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $order->vendor_id,
+                        'account_name' => 'vendor_payable',
+                        'entry_type' => 'debit',
+                        'amount' => $deliveryFeeCut,
+                        'currency' => 'NGN',
+                        'description' => "Merchant delivery fee allocation reversed for Return #{$lockedCase->case_number}",
+                    ]);
+                }
 
                 FinancialJournalEntry::create([
                     'order_id' => $order->id,

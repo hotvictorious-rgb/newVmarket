@@ -163,8 +163,8 @@ class OrderSettlementService
                         'user_agent' => request()->userAgent(),
                     ]);
                 } else {
-                    // Stock is depleted. Order remains cancelled; funds held as customer refund liability.
-                    $lockedOrder->order_status = 'cancelled';
+                    // Stock is depleted. Order marked as paid_stock_unavailable; funds held as customer refund liability.
+                    $lockedOrder->order_status = 'paid_stock_unavailable';
                     $lockedOrder->vendor_settlement_status = 'refund_pending';
 
                     AdminAuditLog::create([
@@ -174,7 +174,7 @@ class OrderSettlementService
                         'target_id' => $lockedOrder->id,
                         'old_values' => ['order_status' => 'cancelled', 'payment_status' => 'pending'],
                         'new_values' => [
-                            'order_status' => 'cancelled',
+                            'order_status' => 'paid_stock_unavailable',
                             'payment_status' => 'paid',
                             'vendor_settlement_status' => 'refund_pending',
                             'reason' => 'Inventory depleted following cancellation; payment queued for customer refund.',

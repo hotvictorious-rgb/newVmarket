@@ -3763,9 +3763,9 @@ class PortalController extends Controller
                 'rider_id' => $rider ? $rider->id : null,
                 'logistics_company_id' => $logisticsCompanyId,
                 'fulfillment_type' => $validated['fulfillment_type'],
-                'order_status' => 'pending',
+                'order_status' => ($validated['fulfillment_type'] === 'in_shop_pickup' ? 'ready_for_pickup' : 'pending'),
                 'payment_status' => 'pending',
-                'payment_method' => 'paystack_direct',
+                'payment_method' => ($validated['fulfillment_type'] === 'in_shop_pickup' ? 'in_shop_counter' : 'paystack_direct'),
                 'payment_reference' => $paymentRef,
                 'guest_access_token' => $guestAccessToken,
                 'origin_lga_id' => $shop->lga_id,
@@ -3810,7 +3810,17 @@ class PortalController extends Controller
             return $order;
         }
 
-        // Initialize Paystack Checkout Gateway OUTSIDE the DB transaction
+        // For In-Shop Pickup: Customer pays AFTER physical inspection at the vendor shop counter (₦0.00 online upfront)
+        if ($validated['fulfillment_type'] === 'in_shop_pickup') {
+            $shopName = $order->shop->name ?? 'the shop';
+            $shopAddress = $order->shop->address ?? 'the branch counter';
+            return redirect()->route('order.status', [
+                'order_number' => $order->order_number,
+                'token' => $order->guest_access_token,
+            ])->with('success', "Your order has been reserved for in-store pickup! Visit {$shopName} at {$shopAddress} to inspect your items. You will pay at the shop counter after inspecting.");
+        }
+
+        // For Doorstep Delivery: Payment first online via Paystack escrow
         $paystackService = app(\App\Services\PaystackService::class);
         $callbackUrl = route('payment.paystack.callback');
         $paystackInit = $paystackService->initializeTransaction($order, $callbackUrl, Auth::user()->email);

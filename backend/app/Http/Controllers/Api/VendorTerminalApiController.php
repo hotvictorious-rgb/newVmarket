@@ -21,6 +21,8 @@ use App\Services\BcMathService;
 use App\Models\VendorRecoveryLedger;
 use App\Models\VendorPayoutRequest;
 use App\Models\FinancialJournalEntry;
+use App\Models\RiderProfile;
+use App\Models\User;
 
 class VendorTerminalApiController extends Controller
 {
@@ -1059,5 +1061,184 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             'message' => $result['message'],
             'data' => $result['success'] ? $result['case'] : null,
         ], $result['success'] ? 200 : 422);
+    }
+
+    /**
+     * GET /api/v1/vendor/riders
+     * List all delivery personnel belonging to this merchant.
+     */
+    public function riders(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveVendorContext($request);
+        $vendor = $ctx['vendor'];
+
+        $riders = RiderProfile::where('vendor_id', $vendor->id)
+            ->with(['user', 'shop'])
+            ->latest()
+            ->get()
+            ->map(function ($r) {
+                return [
+                    'id' => $r->id,
+                    'user_id' => $r->user_id,
+                    'name' => $r->user->name ?? null,
+                    'phone' => $r->user->phone ?? null,
+                    'email' => $r->user->email ?? null,
+                    'vehicle_type' => $r->vehicle_type,
+                    'license_plate' => $r->license_plate,
+                    'nin_number' => $r->nin_number,
+                    'is_active' => (bool)$r->is_active,
+                    'is_online' => (bool)$r->is_online,
+                    'shop' => $r->shop ? ['id' => $r->shop->id, 'name' => $r->shop->name] : null,
+                    'created_at' => $r->created_at?->toIso8601String(),
+                ];
+            });
+
+        return response()->json([
+            'status' => true,
+            'data' => $riders,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/vendor/riders
+     * Add and onboard a new delivery rider belonging to this merchant.
+     */
+    public function storeRider(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveVendorContext($request);
+        $vendor = $ctx['vendor'];
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'phone' => 'required|string|max:30|unique:users,phone',
+            'email' => 'nullable|email|max:255|unique:users,email',
+            'password' => 'required|string|min:8',
+            'vehicle_type' => 'nullable|in:motorcycle,bicycle,keke,van,transit_waybill',
+            'license_plate' => 'nullable|string|max:50',
+            'nin_number' => 'nullable|string|max:50',
+            'shop_id' => 'nullable|integer|exists:shops,id',
+        ]);
+
+        return DB::transaction(function () use ($vendor, $validated) {
+            $email = $validated['email'] ?? ('rider.' . preg_replace('/[^0-9]/', '', $validated['phone']) . '@vmarket.internal');
+            if (User::where('email', $email)->exists()) {
+                $email = 'rider.' . uniqid() . '@vmarket.internal';
+            }
+
+            $user = User::create([
+                'name' => $validated['name'],
+                'phone' => $validated['phone'],
+                'email' => $email,
+                'password' => bcrypt($validated['password']),
+                'user_type' => 'rider',
+                'status' => 'active',
+            ]);
+
+            $shopId = $validated['shop_id'] ?? null;
+            if ($shopId) {
+                $shop = Shop::where('id', $shopId)->where('vendor_id', $vendor->id)->first();
+                if (!$shop) {
+                    $shopId = null;
+                }
+            }
+
+            $rider = RiderProfile::create([
+                'user_id' => $user->id,
+                'vendor_id' => $vendor->id,
+                'shop_id' => $shopId,
+                'assigned_lga_id' => $shopId ? Shop::find($shopId)?->lga_id : null,
+                'vehicle_type' => $validated['vehicle_type'] ?? 'motorcycle',
+                'license_plate' => $validated['license_plate'] ?? null,
+                'nin_number' => $validated['nin_number'] ?? null,
+                'is_active' => true,
+                'is_online' => true,
+            ]);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Delivery rider successfully added to your merchant fleet.',
+                'data' => [
+                    'id' => $rider->id,
+                    'user_id' => $user->id,
+                    'name' => $user->name,
+                    'phone' => $user->phone,
+                    'email' => $user->email,
+                    'vehicle_type' => $rider->vehicle_type,
+                    'is_active' => $rider->is_active,
+                ],
+            ], 201);
+        });
+    }
+
+    /**
+     * PATCH /api/v1/vendor/riders/{id}/status
+     * Activate or deactivate a delivery rider belonging to this merchant.
+     */
+    public function updateRiderStatus(Request $request, int $id): JsonResponse
+    {
+        $ctx = $this->resolveVendorContext($request);
+        $vendor = $ctx['vendor'];
+
+        $validated = $request->validate([
+            'is_active' => 'required|boolean',
+        ]);
+
+        $rider = RiderProfile::where('id', $id)->where('vendor_id', $vendor->id)->firstOrFail();
+        $rider->is_active = $validated['is_active'];
+        $rider->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Delivery rider status updated.',
+            'data' => [
+                'id' => $rider->id,
+                'is_active' => (bool)$rider->is_active,
+            ],
+        ]);
+    }
+
+    /**
+     * POST /api/v1/vendor/orders/{id}/assign-rider
+     * Assign a delivery rider belonging to this merchant to an order.
+     */
+    public function assignRiderToOrder(Request $request, int $id): JsonResponse
+    {
+        $ctx = $this->resolveVendorContext($request);
+        $vendor = $ctx['vendor'];
+
+        $validated = $request->validate([
+            'rider_id' => 'required|integer|exists:rider_profiles,id',
+        ]);
+
+        $order = Order::where('id', $id)->where('vendor_id', $vendor->id)->firstOrFail();
+        $rider = RiderProfile::where('id', $validated['rider_id'])->where('vendor_id', $vendor->id)->first();
+
+        if (!$rider) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: This delivery rider does not belong to your merchant account.',
+            ], 403);
+        }
+
+        if (!$rider->is_active) {
+            return response()->json([
+                'status' => false,
+                'message' => 'This delivery rider is currently inactive.',
+            ], 422);
+        }
+
+        $order->rider_id = $rider->id;
+        $order->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => "Order #{$order->order_number} assigned to delivery person {$rider->user->name}.",
+            'data' => [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'rider_id' => $rider->id,
+                'rider_name' => $rider->user->name,
+            ],
+        ]);
     }
 }

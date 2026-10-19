@@ -53,9 +53,19 @@ class DoorstepHandshakeService
             $haltReason = null;
             if (!$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
                 $haltReason = 'Unauthorized: Dispatch courier profile is suspended or inactive. Delivery halted.';
-            } elseif (!$rider->logistics_company_id || ($rider->logisticsCompany && $rider->logisticsCompany->status !== 'active')) {
-                $haltReason = 'Unauthorized: Parent logistics fleet account is inactive or suspended. Delivery halted.';
-            } elseif ($lockedOrder->rider_id && (int)$lockedOrder->rider_id !== (int)$rider->id) {
+            } elseif ($rider->vendor_id) {
+                if ((int)$rider->vendor_id !== (int)$lockedOrder->vendor_id) {
+                    $haltReason = 'Unauthorized: Dispatch rider does not belong to the merchant for this order.';
+                } elseif (!$rider->vendor || $rider->vendor->marketplace_status !== 'active' || ($rider->vendor->user && $rider->vendor->user->status !== 'active')) {
+                    $haltReason = 'Merchant marketplace account is suspended. Delivery settlement halted.';
+                }
+            } elseif ($rider->logistics_company_id) {
+                if ($rider->logisticsCompany && $rider->logisticsCompany->status !== 'active') {
+                    $haltReason = 'Unauthorized: Parent logistics fleet account is inactive or suspended. Delivery halted.';
+                }
+            }
+
+            if (!$haltReason && $lockedOrder->rider_id && (int)$lockedOrder->rider_id !== (int)$rider->id) {
                 $haltReason = 'Unauthorized: This order is assigned to another delivery courier.';
             }
 
@@ -397,23 +407,39 @@ class DoorstepHandshakeService
                 ]);
             }
 
-            // B. Delivery Fee Payout (Always Credited to Logistics Partner)
+            // B. Delivery Fee Payout (Credited to Vendor for vendor-managed delivery, or Fleet for legacy)
             if (BcMathService::comp($deliveryFee, '0.00') > 0) {
-                // Credit Logistics Partner 90%
-                FinancialJournalEntry::create([
-                    'order_id' => $lockedOrder->id,
-                    'transaction_reference' => $lockedOrder->payment_reference ?? $lockedOrder->order_number,
-                    'event_id' => $eventRef . '-FLEET',
-                    'beneficiary_type' => LogisticsCompanyProfile::class,
-                    'beneficiary_id' => $lockedOrder->logistics_company_id,
-                    'account_name' => 'logistics_payable',
-                    'entry_type' => 'credit',
-                    'amount' => $fleetDeliveryCut,
-                    'currency' => 'NGN',
-                    'description' => "Logistics fleet 90% delivery fee for Order #{$lockedOrder->order_number}",
-                ]);
+                if ($lockedOrder->logistics_company_id && empty($rider->vendor_id)) {
+                    // Legacy 3rd party logistics fleet
+                    FinancialJournalEntry::create([
+                        'order_id' => $lockedOrder->id,
+                        'transaction_reference' => $lockedOrder->payment_reference ?? $lockedOrder->order_number,
+                        'event_id' => $eventRef . '-FLEET',
+                        'beneficiary_type' => LogisticsCompanyProfile::class,
+                        'beneficiary_id' => $lockedOrder->logistics_company_id,
+                        'account_name' => 'logistics_payable',
+                        'entry_type' => 'credit',
+                        'amount' => $fleetDeliveryCut,
+                        'currency' => 'NGN',
+                        'description' => "Logistics fleet 90% delivery fee for Order #{$lockedOrder->order_number}",
+                    ]);
+                } else {
+                    // Vendor-managed delivery: Merchant receives 90% delivery allocation
+                    FinancialJournalEntry::create([
+                        'order_id' => $lockedOrder->id,
+                        'transaction_reference' => $lockedOrder->payment_reference ?? $lockedOrder->order_number,
+                        'event_id' => $eventRef . '-VEND-DELIVERY',
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $lockedOrder->vendor_id,
+                        'account_name' => 'vendor_payable',
+                        'entry_type' => 'credit',
+                        'amount' => $fleetDeliveryCut,
+                        'currency' => 'NGN',
+                        'description' => "Merchant 90% delivery fee for Order #{$lockedOrder->order_number}",
+                    ]);
+                }
 
-                // Credit Platform 10% Delivery Cut
+                // Credit Platform 10% Delivery Commission
                 FinancialJournalEntry::create([
                     'order_id' => $lockedOrder->id,
                     'transaction_reference' => $lockedOrder->payment_reference ?? $lockedOrder->order_number,

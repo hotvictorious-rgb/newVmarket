@@ -109,11 +109,23 @@ class CheckoutAndReservationApiController extends Controller
 
         // Guard 4: Explicit Designated Courier / Rider Invariant
         if (!empty($validated['rider_id'])) {
-            $rider = \App\Models\RiderProfile::withTrashed()->with(['user', 'logisticsCompany.user'])->find($validated['rider_id']);
+            $rider = \App\Models\RiderProfile::withTrashed()->with(['user', 'vendor.user', 'logisticsCompany.user'])->find($validated['rider_id']);
             if (!$rider || $rider->trashed() || !$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
                 return response()->json([
                     'status' => false,
                     'message' => 'The designated delivery rider is currently inactive or suspended.',
+                ], 422);
+            }
+            if ($rider->vendor_id && (int)$rider->vendor_id !== (int)$shop->vendor_id) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'The designated delivery rider does not belong to the merchant for this order.',
+                ], 422);
+            }
+            if ($rider->vendor && ($rider->vendor->trashed() || $rider->vendor->marketplace_status !== 'active' || ($rider->vendor->user && $rider->vendor->user->status !== 'active'))) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'The merchant organization for this delivery rider is currently deactivated or suspended.',
                 ], 422);
             }
             if ($rider->logisticsCompany && ($rider->logisticsCompany->trashed() || $rider->logisticsCompany->status !== 'active' || ($rider->logisticsCompany->user && $rider->logisticsCompany->user->status !== 'active'))) {

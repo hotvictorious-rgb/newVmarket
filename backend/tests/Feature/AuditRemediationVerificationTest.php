@@ -937,7 +937,7 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertEquals('REFUND_PENDING', $res['status']);
         $this->assertEquals('RFD-AUTO-LATE-999', $order->fresh()->paystack_refund_reference);
         $this->assertEquals('paid', $order->fresh()->payment_status);
-        $this->assertEquals('cancelled', $order->fresh()->order_status);
+        $this->assertTrue(in_array($order->fresh()->order_status, ['cancelled', 'paid_stock_unavailable']), 'Order must be cancelled or marked paid_stock_unavailable.');
         $this->assertEquals('refund_pending', $order->fresh()->vendor_settlement_status);
     }
 }

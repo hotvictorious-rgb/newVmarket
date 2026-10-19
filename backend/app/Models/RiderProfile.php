@@ -11,6 +11,8 @@ class RiderProfile extends Model
 
     protected $fillable = [
         'user_id',
+        'vendor_id',
+        'shop_id',
         'logistics_company_id',
         'assigned_lga_id',
         'vehicle_type',
@@ -35,6 +37,16 @@ class RiderProfile extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function vendor()
+    {
+        return $this->belongsTo(VendorProfile::class, 'vendor_id')->withTrashed();
+    }
+
+    public function shop()
+    {
+        return $this->belongsTo(Shop::class, 'shop_id')->withTrashed();
+    }
+
     public function logisticsCompany()
     {
         return $this->belongsTo(LogisticsCompanyProfile::class, 'logistics_company_id')->withTrashed();
@@ -48,6 +60,11 @@ class RiderProfile extends Model
     public function assignedOrders()
     {
         return $this->hasMany(Order::class, 'rider_id');
+    }
+
+    public function isVendorRider(): bool
+    {
+        return !empty($this->vendor_id);
     }
 
     public function isFleetRider(): bool

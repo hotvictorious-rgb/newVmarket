@@ -29,8 +29,8 @@ class RiderTerminalApiController extends Controller
      * STRICT ZERO-TRUST GUARD & ROLE INVARIANT:
      * 1. Only users with user_type === 'rider' can access this terminal.
      *    Logistics companies, vendors, and customers are strictly prohibited.
-     * 2. All riders MUST belong to an active, verified Logistics Company.
-     *    Independent unassigned dispatch is mathematically impossible.
+     * 2. All delivery persons/riders MUST belong to an active Vendor (merchant)
+     *    or an authorized logistics fleet. Unaffiliated dispatch is prohibited.
      */
     protected function guardRiderWithLogistics(Request $request): ?JsonResponse
     {
@@ -57,13 +57,6 @@ class RiderTerminalApiController extends Controller
             ], 404);
         }
 
-        if (!$rider->logistics_company_id || !$rider->logisticsCompany) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Unauthorized: Rider is not affiliated with any registered logistics company. All riders must belong to an active logistics company.',
-            ], 403);
-        }
-
         if (!$rider->is_active) {
             return response()->json([
                 'status' => false,
@@ -71,11 +64,27 @@ class RiderTerminalApiController extends Controller
             ], 403);
         }
 
-        if ($rider->logisticsCompany->status !== 'active') {
+        if (!$rider->vendor_id && !$rider->logistics_company_id) {
             return response()->json([
                 'status' => false,
-                'message' => 'Unauthorized: Parent logistics company fleet is currently inactive or suspended.',
+                'message' => 'Unauthorized: Rider is not affiliated with any registered logistics company. All riders must belong to an active logistics company.',
             ], 403);
+        }
+
+        if ($rider->vendor_id) {
+            if (!$rider->vendor || $rider->vendor->marketplace_status !== 'active' || ($rider->vendor->user && $rider->vendor->user->status !== 'active')) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized: Parent merchant account is inactive or suspended.',
+                ], 403);
+            }
+        } elseif ($rider->logistics_company_id) {
+            if (!$rider->logisticsCompany || $rider->logisticsCompany->status !== 'active' || ($rider->logisticsCompany->user && $rider->logisticsCompany->user->status !== 'active')) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized: Parent logistics company fleet is currently inactive or suspended.',
+                ], 403);
+            }
         }
 
         return null;
@@ -89,7 +98,7 @@ class RiderTerminalApiController extends Controller
 
         $user = $request->user();
         $rider = $user->riderProfile;
-        $fleetName = $rider->logisticsCompany->company_name;
+        $fleetName = $rider->vendor?->business_name ?? $rider->logisticsCompany?->company_name ?? 'Vendor Delivery Dispatch';
 
         $activeOrders = Order::where('rider_id', $rider->id)
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])

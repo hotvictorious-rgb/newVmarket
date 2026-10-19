@@ -57,6 +57,11 @@ class VendorProfile extends Model
         return $this->hasMany(VendorEmployeeProfile::class, 'vendor_id');
     }
 
+    public function riders()
+    {
+        return $this->hasMany(RiderProfile::class, 'vendor_id');
+    }
+
     public function products()
     {
         return $this->hasMany(Product::class, 'vendor_id');

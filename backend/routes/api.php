@@ -178,6 +178,12 @@ Route::prefix('v1')->group(function () {
             Route::get('payouts', [VendorTerminalApiController::class, 'payouts']);
             Route::post('payouts', [VendorTerminalApiController::class, 'requestPayout']);
             Route::post('bank/update', [VendorTerminalApiController::class, 'updateBank']);
+
+            // Vendor-Managed Delivery Personnel & Riders
+            Route::get('riders', [VendorTerminalApiController::class, 'riders']);
+            Route::post('riders', [VendorTerminalApiController::class, 'storeRider']);
+            Route::patch('riders/{id}/status', [VendorTerminalApiController::class, 'updateRiderStatus']);
+            Route::post('orders/{id}/assign-rider', [VendorTerminalApiController::class, 'assignRiderToOrder']);
         });
     });
 });
