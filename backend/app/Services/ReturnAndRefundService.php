@@ -495,8 +495,25 @@ class ReturnAndRefundService
         $totalCashRefund = $preValidation['total_cash_refund'];
         $paystackRefundId = $preValidation['existing_paystack_refund_id'];
 
-        // 2. Out-of-DB-Transaction Paystack Gateway Execution via Authoritative FinancialOperationService
-        if ($bankReference !== 'wallet' && empty($paystackRefundId) && !empty($preValidation['order_payment_reference'])) {
+        // A supplied bank reference means the administrator is recording an already
+        // executed manual bank transfer. Do not also initiate a Paystack refund.
+        // If a Paystack refund was already created for this case, do not let a manual
+        // reference bypass its pending state and settle a second refund.
+        if (!empty($bankReference) && $bankReference !== 'wallet' && !empty($paystackRefundId)) {
+            ReturnCase::where('id', $caseId)->update([
+                'refund_claim_token' => null,
+                'refund_claimed_at' => null,
+            ]);
+
+            return [
+                'success' => false,
+                'status' => 'reconciliation_required',
+                'message' => 'A Paystack refund is already recorded for this return case. Reconcile its gateway status before recording a manual bank refund.',
+            ];
+        }
+
+        // 2. Only dispatch to Paystack when no manual bank reference was supplied.
+        if (empty($bankReference) && empty($paystackRefundId) && !empty($preValidation['order_payment_reference'])) {
             $finOpService = new \App\Services\FinancialOperationService($this->paystackService);
             $order = Order::findOrFail($preValidation['order_id']);
             $case = ReturnCase::findOrFail($caseId);
