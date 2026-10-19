@@ -12,6 +12,7 @@ class FinancialJournalEntry extends Model
         'financial_operation_id',
         'transaction_reference',
         'event_id',
+        'idempotency_key',
         'beneficiary_type',
         'beneficiary_id',
         'account_name',
