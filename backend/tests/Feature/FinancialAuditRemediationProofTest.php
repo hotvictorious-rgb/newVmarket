@@ -2147,7 +2147,6 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertStringContainsString('REFUND_OPERATION_NOT_FOUND', $event->error_reason);
         $this->assertSame($hash, $event->payload_hash);
         $this->assertSame($payload, $event->payload);
-        $this->assertNull($event->error_reason);
     }
 
     public function test_unmatched_webhook_with_conflicting_payload_is_not_retried(): void
