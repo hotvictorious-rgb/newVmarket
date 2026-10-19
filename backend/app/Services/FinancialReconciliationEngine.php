@@ -245,19 +245,44 @@ class FinancialReconciliationEngine
     public function reconcileRefunds(): int
     {
         $reconciled = 0;
-        $pendingRefundOrders = Order::where(function ($q) {
+        // Include orders with outstanding refund operations even if a previous
+        // partial refund set the order-level status to completed. Each operation
+        // retains its own gateway reference and reservation.
+        $pendingOperationOrderIds = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+            ->whereNotIn('status', ['confirmed', 'failed', 'reversed'])
+            ->get()
+            ->map(fn ($operation) => $operation->metadata['order_id'] ?? null)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $pendingRefundOrders = Order::where(function ($q) use ($pendingOperationOrderIds) {
             $q->whereIn('paystack_refund_status', ['pending', 'authorized', 'processing'])
               ->orWhereHas('returnCases', function ($sub) {
                   $sub->whereIn('status', ['refund_pending', 'refund_approved']);
-              });
+              })
+              ->orWhereIn('id', $pendingOperationOrderIds);
         })->whereNotNull('payment_reference')->get();
 
         foreach ($pendingRefundOrders as $candidateOrder) {
             $claimToken = Str::random(48);
             $claimedOrder = \Illuminate\Support\Facades\DB::transaction(function () use ($candidateOrder, $claimToken) {
                 $ord = Order::where('id', $candidateOrder->id)->lockForUpdate()->first();
-                if (!$ord || in_array($ord->paystack_refund_status, ['completed', 'failed'], true)) {
+                if (!$ord || $ord->paystack_refund_status === 'failed') {
                     return null;
+                }
+                if ($ord->paystack_refund_status === 'completed') {
+                    $hasOutstandingOperation = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+                        ->whereJsonContains('metadata->order_id', $ord->id)
+                        ->whereNotIn('status', ['confirmed', 'failed', 'reversed'])
+                        ->exists();
+                    $hasPendingReturnCase = $ord->returnCases()
+                        ->whereIn('status', ['refund_pending', 'refund_approved'])
+                        ->exists();
+                    if (!$hasOutstandingOperation && !$hasPendingReturnCase) {
+                        return null;
+                    }
                 }
 
                 $cutoff = Carbon::now()->subMinutes(5);
@@ -323,35 +348,97 @@ class FinancialReconciliationEngine
                     $releaseClaim('pending');
                 }
             } else {
-                $verifyRes = $this->paystackService->verifyRefund($claimedOrder->paystack_refund_reference);
+                $orderRefundReference = (string) $claimedOrder->paystack_refund_reference;
+                $outstandingOperations = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+                    ->whereJsonContains('metadata->order_id', $claimedOrder->id)
+                    ->whereNotIn('status', ['confirmed', 'failed', 'reversed'])
+                    ->with('gatewayAttempts')
+                    ->orderBy('id')
+                    ->get();
 
+                // Prefer the order's current reference only when it belongs to an
+                // outstanding operation. Otherwise recover a pending operation's
+                // own reference from its attempt; never apply one refund's evidence
+                // to a different operation.
+                $existingOp = null;
+                $refundReference = null;
+                foreach ($outstandingOperations as $candidateOperation) {
+                    $candidateReferences = $candidateOperation->gatewayAttempts
+                        ->pluck('gateway_reference')
+                        ->filter()
+                        ->map(fn ($value) => (string) $value)
+                        ->all();
+                    $metadataReference = $candidateOperation->metadata['refund_reference'] ?? null;
+                    if ($metadataReference) {
+                        $candidateReferences[] = (string) $metadataReference;
+                    }
+                    if (in_array($orderRefundReference, $candidateReferences, true)) {
+                        $existingOp = $candidateOperation;
+                        $refundReference = $orderRefundReference;
+                        break;
+                    }
+                }
+                if (!$existingOp) {
+                    foreach ($outstandingOperations as $candidateOperation) {
+                        $attemptReference = $candidateOperation->gatewayAttempts
+                            ->pluck('gateway_reference')->filter()->last();
+                        $metadataReference = $candidateOperation->metadata['refund_reference'] ?? null;
+                        $candidateReference = $attemptReference ?: $metadataReference;
+                        if ($candidateReference) {
+                            $existingOp = $candidateOperation;
+                            $refundReference = (string) $candidateReference;
+                            break;
+                        }
+                    }
+                }
+
+                // Keep compatibility with a single legacy operation that predates
+                // persisted gateway references. Multiple operations are ambiguous
+                // without an operation-specific gateway reference.
+                if (!$existingOp && $outstandingOperations->count() === 1) {
+                    $existingOp = $outstandingOperations->first();
+                    $refundReference = $orderRefundReference;
+                }
+
+                if (!$existingOp || !$refundReference) {
+                    $releaseClaim('pending');
+                    Log::warning('Paystack refund has no unambiguous matching FinancialOperation; left pending for manual reconciliation.', [
+                        'order_id' => $claimedOrder->id,
+                        'refund_reference' => $orderRefundReference,
+                        'outstanding_operations' => $outstandingOperations->count(),
+                    ]);
+                    continue;
+                }
+
+                $verifyRes = $this->paystackService->verifyRefund($refundReference);
                 if (!empty($verifyRes['success'])) {
                     $gwStatus = strtolower($verifyRes['status'] ?? 'pending');
                     if (in_array($gwStatus, ['processed', 'success', 'completed'], true)) {
-                        $existingOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
-                            ->whereJsonContains('metadata->order_id', $claimedOrder->id)
-                            ->where('status', '!=', 'confirmed')
-                            ->first();
-
-                        if ($existingOp) {
-                            $finalized = $finOpService->finalizeRefundConfirmation($existingOp, $verifyRes, $claimToken);
-                            if (!empty($finalized['protected'])) {
-                                Log::warning('Refund reconciliation lease lost before finalization; stale worker left refund unchanged.', [
-                                    'order_id' => $claimedOrder->id,
-                                ]);
-                                continue;
-                            }
-                            $reconciled++;
-                        } else {
+                        $evidenceReference = $verifyRes['refund_reference']
+                            ?? ($verifyRes['data']['reference'] ?? null);
+                        if ($evidenceReference !== null && (string) $evidenceReference !== $refundReference) {
                             $releaseClaim('pending');
-                            Log::warning('Verified Paystack refund has no matching FinancialOperation; left pending for manual reconciliation.', [
+                            Log::warning('Paystack refund verification returned a conflicting reference; left pending for manual reconciliation.', [
                                 'order_id' => $claimedOrder->id,
-                                'refund_reference' => $claimedOrder->paystack_refund_reference,
+                                'requested_reference' => $refundReference,
+                                'verified_reference' => (string) $evidenceReference,
                             ]);
+                            continue;
                         }
+
+                        $finalized = $finOpService->finalizeRefundConfirmation($existingOp, $verifyRes, $claimToken);
+                        if (!empty($finalized['protected'])) {
+                            Log::warning('Refund reconciliation lease lost before finalization; stale worker left refund unchanged.', [
+                                'order_id' => $claimedOrder->id,
+                                'operation_id' => $existingOp->id,
+                            ]);
+                            continue;
+                        }
+                        $reconciled++;
                     } elseif (in_array($gwStatus, ['failed', 'reversed'], true)) {
-                        if ($releaseClaim('failed')) {
-                            Log::error("Paystack refund #{$claimedOrder->paystack_refund_reference} for order #{$claimedOrder->id} was marked failed by gateway.");
+                        // Do not mark the entire order failed for a failed partial refund.
+                        if ($releaseClaim('pending')) {
+                            Log::error("Paystack refund #{$refundReference} for order #{$claimedOrder->id} failed at gateway; operation requires review.");
                         }
                     } else {
                         $releaseClaim('pending');
@@ -359,7 +446,7 @@ class FinancialReconciliationEngine
                 } else {
                     $releaseClaim('pending');
                 }
-            }
+            } }
         }
 
         return $reconciled;
