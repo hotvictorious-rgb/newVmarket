@@ -248,7 +248,7 @@ class FinancialReconciliationEngine
         // Include orders with outstanding refund operations even if a previous
         // partial refund set the order-level status to completed. Each operation
         // retains its own gateway reference and reservation.
-        $pendingOperationOrderIds = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+        $pendingOperationOrderIds = \App\Models\\FinancialOperation::where('operation_type', 'customer_refund')
             ->whereNotIn('status', ['confirmed', 'failed', 'reversed'])
             ->get()
             ->map(fn ($operation) => $operation->metadata['order_id'] ?? null)
@@ -273,7 +273,7 @@ class FinancialReconciliationEngine
                     return null;
                 }
                 if ($ord->paystack_refund_status === 'completed') {
-                    $hasOutstandingOperation = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+                    $hasOutstandingOperation = \App\Models\\FinancialOperation::where('operation_type', 'customer_refund')
                         ->whereJsonContains('metadata->order_id', $ord->id)
                         ->whereNotIn('status', ['confirmed', 'failed', 'reversed'])
                         ->exists();
@@ -349,7 +349,7 @@ class FinancialReconciliationEngine
                 }
             } else {
                 $orderRefundReference = (string) $claimedOrder->paystack_refund_reference;
-                $outstandingOperations = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+                $outstandingOperations = \App\Models\\FinancialOperation::where('operation_type', 'customer_refund')
                     ->whereJsonContains('metadata->order_id', $claimedOrder->id)
                     ->whereNotIn('status', ['confirmed', 'failed', 'reversed'])
                     ->with('gatewayAttempts')
