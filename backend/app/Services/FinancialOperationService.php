@@ -366,6 +366,16 @@ class FinancialOperationService
                 ];
             }
 
+            if (in_array($lockedOp->status, ['failed', 'reversed'], true)) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'operation' => $lockedOp,
+                    'message' => "Refund operation is already terminal ({$lockedOp->status}); late success requires manual reconciliation.",
+                ];
+            }
+
             // Verify gateway evidence has terminal status
             $gwStatus = strtolower($gatewayEvidence['status'] ?? $gatewayEvidence['data']['status'] ?? '');
             if (!in_array($gwStatus, ['processed', 'success', 'completed'], true)) {
