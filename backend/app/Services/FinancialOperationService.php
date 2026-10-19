@@ -55,7 +55,7 @@ class FinancialOperationService
                     ->first();
 
                 if (!$lockedReturnCase || (int) $lockedReturnCase->order_id !== (int) $lockedOrder->id) {
-                    throw new \\DomainException(
+                    throw new \DomainException(
                         'Cannot create refund: return case does not belong to the specified order.'
                     );
                 }
