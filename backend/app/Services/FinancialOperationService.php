@@ -361,7 +361,10 @@ class FinancialOperationService
                 'confirmed_at' => Carbon::now(),
             ]);
 
-            if ($order && $expectedRefundClaimToken !== null) {
+            if ($order) {
+                // Terminal webhook confirmation revokes any stale reconciler lease too.
+                // For scheduled workers, the ownership check above ensures only the
+                // current lease holder can finalize and clear its claim.
                 $order->refund_reconciliation_token = null;
                 $order->refund_reconciliation_claimed_at = null;
                 $order->save();
