@@ -47,6 +47,22 @@ class FinancialOperationService
         return DB::transaction(function () use ($order, $amountNormalized, $amountKobo, $reason, $returnCase, $key) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->firstOrFail();
 
+            // A caller must not attach a return case from another order to this
+            // refund operation. Lock it in the same order used by finalization.
+            if ($returnCase) {
+                $lockedReturnCase = ReturnCase::whereKey($returnCase->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$lockedReturnCase || (int) $lockedReturnCase->order_id !== (int) $lockedOrder->id) {
+                    throw new \\DomainException(
+                        'Cannot create refund: return case does not belong to the specified order.'
+                    );
+                }
+
+                $returnCase = $lockedReturnCase;
+            }
+
             // 1. Idempotency Guard: Check if exact idempotency key exists first so retries do not fail against their own reservation
             $existingOp = FinancialOperation::where('idempotency_key', $key)->first();
             if ($existingOp) {
