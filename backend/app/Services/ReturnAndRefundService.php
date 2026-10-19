@@ -499,7 +499,7 @@ class ReturnAndRefundService
         // executed manual bank transfer. Do not also initiate a Paystack refund.
         // If a Paystack refund was already created for this case, do not let a manual
         // reference bypass its pending state and settle a second refund.
-        if (!empty($bankReference) && $bankReference !== 'wallet' && !empty($paystackRefundId)) {
+        if (!empty($bankReference) && !empty($paystackRefundId)) {
             ReturnCase::where('id', $caseId)->update([
                 'refund_claim_token' => null,
                 'refund_claimed_at' => null,
@@ -508,7 +508,7 @@ class ReturnAndRefundService
             return [
                 'success' => false,
                 'status' => 'reconciliation_required',
-                'message' => 'A Paystack refund is already recorded for this return case. Reconcile its gateway status before recording a manual bank refund.',
+                'message' => 'A Paystack refund is already recorded for this return case. Reconcile its gateway status before recording a separate bank or wallet refund.',
             ];
         }
 
