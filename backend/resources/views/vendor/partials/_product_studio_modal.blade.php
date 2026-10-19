@@ -222,13 +222,17 @@
                                 </div>
                             </div>
 
-                            <!-- Stock Quantity & Warranty Window -->
+                            <!-- Availability Status & Warranty Window -->
                             <div class="fb-grid-2">
                                 <div class="fb-field-group">
-                                    <label class="fb-field-label" for="inInventory">
-                                        Stock Quantity <span class="fb-req">*</span>
+                                    <label class="fb-field-label" for="inStockStatus">
+                                        Availability Status <span class="fb-req">*</span>
                                     </label>
-                                    <input type="number" name="inventory_quantity" id="inInventory" required min="0" max="1000000" class="fb-input" value="1" oninput="syncLivePreview();">
+                                    <select name="is_in_stock" id="inStockStatus" class="fb-select" onchange="syncLivePreview();">
+                                        <option value="1" selected>🟢 In Stock (Available to Order)</option>
+                                        <option value="0">🔴 Out of Stock (Unavailable)</option>
+                                    </select>
+                                    <input type="hidden" name="inventory_quantity" id="inInventory" value="10">
                                 </div>
 
                                 <div class="fb-field-group">

@@ -159,10 +159,18 @@
                                         <span style="font-size: 12px; color: var(--adm-text-muted); text-decoration: line-through;">₦{{ number_format((float)$product->slash_price, 2) }}</span>
                                     @endif
                                 </div>
-                                <div style="font-size: 11.5px; color: var(--adm-text-muted); margin-top: 2px;">
-                                    Stock: <strong>{{ $product->inventory_quantity }}</strong> units
+                                <div style="margin-top: 4px;">
+                                    @if($product->is_in_stock)
+                                        <span class="dash-badge dash-badge-success" style="display:inline-flex; align-items:center; gap:4px; font-weight:700; padding:2px 7px; font-size:11px;">
+                                            🟢 In Stock
+                                        </span>
+                                    @else
+                                        <span class="dash-badge" style="background:#FEE2E2; color:#DC2626; border:1px solid #FCA5A5; display:inline-flex; align-items:center; gap:4px; font-weight:700; padding:2px 7px; font-size:11px;">
+                                            🔴 Out of Stock
+                                        </span>
+                                    @endif
                                     @if($product->shop)
-                                        ({{ $product->shop->name }})
+                                        <span style="font-size: 11px; color: var(--adm-text-muted);">({{ $product->shop->name }})</span>
                                     @endif
                                 </div>
                             </td>
@@ -174,12 +182,26 @@
                                 @endif
                             </td>
                             <td>
-                                <form method="POST" action="{{ route('vendor.products.refresh', $product->id) }}" style="display:inline;">
-                                    @csrf
-                                    <button type="submit" class="btn-dash btn-dash-outline" style="padding: 4px 10px; font-size: 11.5px;">
-                                        🔄 Re-verify Freshness
-                                    </button>
-                                </form>
+                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                    <form method="POST" action="{{ route('vendor.products.toggle-stock', $product->id) }}" style="display:inline;">
+                                        @csrf
+                                        @if($product->is_in_stock)
+                                            <button type="submit" class="btn-dash btn-dash-outline" style="padding: 4px 8px; font-size: 11px; color: #DC2626; border-color: #FCA5A5;" title="Click to mark product unavailable for purchase">
+                                                🔴 Mark Out of Stock
+                                            </button>
+                                        @else
+                                            <button type="submit" class="btn-dash btn-dash-outline" style="padding: 4px 8px; font-size: 11px; color: #059669; border-color: #A7F3D0;" title="Click to confirm product is available for purchase">
+                                                🟢 Mark In Stock
+                                            </button>
+                                        @endif
+                                    </form>
+                                    <form method="POST" action="{{ route('vendor.products.refresh', $product->id) }}" style="display:inline;">
+                                        @csrf
+                                        <button type="submit" class="btn-dash btn-dash-outline" style="padding: 4px 8px; font-size: 11px;" title="Reset 7-day freshness clock">
+                                            🔄 Refresh
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     @empty

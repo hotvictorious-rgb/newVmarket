@@ -405,8 +405,11 @@
             const selectedShopText = shopSelect.options[shopSelect.selectedIndex]?.text || 'Plaza Outlet';
             prevLocation.textContent = `Listed just now in ${selectedShopText}`;
 
-            // Inventory
-            prevStock.textContent = inventoryInput.value || '1';
+            // Inventory / Availability
+            const stockSelect = document.getElementById('inStockStatus');
+            if (prevStock) {
+                prevStock.textContent = stockSelect && stockSelect.value === '0' ? 'Out of Stock' : 'In Stock';
+            }
 
             // Condition
             const conditionVal = document.querySelector('input[name="condition"]:checked')?.value || 'brand_new';

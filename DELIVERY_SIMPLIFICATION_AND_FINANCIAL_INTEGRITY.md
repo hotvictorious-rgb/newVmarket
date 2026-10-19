@@ -260,9 +260,9 @@ However, there is one critical architectural distinction: **you can simplify wha
 +-------------------------------------------------------------+
 |                   BACKEND FINANCIAL CORE                     |
 |  - Row-Level Locking (lockForUpdate)                        |
-|  - 30-Minute Temporary Reservation Holds (held_quantity)    |
-|  - Confirmed Payment Allocations (allocated_quantity)       |
-|  - Guaranteed Zero-Overselling Concurrency Protection       |
+|  - 30-Minute Order Payment Safety Window (Order::expires_at)|
+|  - Confirmed Order Allocations (order_status = 'confirmed') |
+|  - Guaranteed Concurrency Protection & Zero Ghost Orders    |
 |  - Controlled Refund Pipeline for Offline Depletions        |
 +-------------------------------------------------------------+
 ```

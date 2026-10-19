@@ -3190,7 +3190,7 @@ class PortalController extends Controller
             'description' => $cleanDesc,
             'unit_price' => number_format((float)$validated['unit_price'], 2, '.', ''),
             'slash_price' => !empty($validated['slash_price']) ? number_format((float)$validated['slash_price'], 2, '.', '') : null,
-            'is_in_stock' => $validated['inventory_quantity'] > 0,
+            'is_in_stock' => $request->has('is_in_stock') ? (bool)$request->input('is_in_stock') : ($validated['inventory_quantity'] > 0),
             'inventory_quantity' => $validated['inventory_quantity'],
             'listing_status' => 'listed',
             'listing_confirmed_at' => Carbon::now(),
@@ -3226,7 +3226,8 @@ class PortalController extends Controller
             'condition' => 'nullable|string|in:brand_new,uk_used',
             'unit_price' => 'required|numeric|min:0.01|max:100000000',
             'slash_price' => 'nullable|numeric|gt:unit_price|max:100000000',
-            'inventory_quantity' => 'required|integer|min:0|max:1000000',
+            'inventory_quantity' => 'nullable|integer|min:0|max:1000000',
+            'is_in_stock' => 'nullable|boolean',
             'package_tier' => 'nullable|string|in:bike,keke,standard,bulky',
             'warranty_type' => 'nullable|string|in:in_store_testing,7_days_replacement,brand_warranty,as_is',
             'description' => 'nullable|string|max:5000',
@@ -3263,8 +3264,14 @@ class PortalController extends Controller
         }
         $product->unit_price = number_format((float)$validated['unit_price'], 2, '.', '');
         $product->slash_price = !empty($validated['slash_price']) ? number_format((float)$validated['slash_price'], 2, '.', '') : null;
-        $product->inventory_quantity = $validated['inventory_quantity'];
-        $product->is_in_stock = $validated['inventory_quantity'] > 0;
+        if (isset($validated['inventory_quantity'])) {
+            $product->inventory_quantity = $validated['inventory_quantity'];
+        }
+        if ($request->has('is_in_stock')) {
+            $product->is_in_stock = (bool)$request->input('is_in_stock');
+        } elseif (isset($validated['inventory_quantity'])) {
+            $product->is_in_stock = $validated['inventory_quantity'] > 0;
+        }
         
         $resolvedTier = in_array(strtolower($validated['package_tier'] ?? $product->package_tier ?? 'bike'), ['keke', 'bulky'], true) ? 'keke' : 'bike';
         $product->package_tier = $resolvedTier;
@@ -3327,6 +3334,17 @@ class PortalController extends Controller
         $product->save();
 
         return redirect()->to(route('vendor.dashboard') . '#products-catalog')->with('status', "Freshness clock extended by 7 days for '{$product->name}'!");
+    }
+
+    public function vendorToggleProductStock(Request $request, int $id)
+    {
+        $vendor = $this->resolveVendorProfile();
+        $product = Product::where('vendor_id', $vendor->id)->findOrFail($id);
+        $product->is_in_stock = !$product->is_in_stock;
+        $product->save();
+
+        $statusText = $product->is_in_stock ? 'In Stock' : 'Out of Stock';
+        return redirect()->to(route('vendor.dashboard') . '#products-catalog')->with('status', "'{$product->name}' is now marked {$statusText}!");
     }
 
     public function vendorStoreShop(Request $request)

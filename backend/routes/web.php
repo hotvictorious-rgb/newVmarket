@@ -215,6 +215,7 @@ Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
     Route::post('/products', [PortalController::class, 'vendorStoreProduct'])->name('vendor.products.store');
     Route::post('/products/{id}/update', [PortalController::class, 'vendorUpdateProduct'])->name('vendor.products.update');
     Route::post('/products/{id}/refresh', [PortalController::class, 'vendorRefreshProductFreshness'])->name('vendor.products.refresh');
+    Route::post('/products/{id}/toggle-stock', [PortalController::class, 'vendorToggleProductStock'])->name('vendor.products.toggle-stock');
     Route::post('/shops', [PortalController::class, 'vendorStoreShop'])->name('vendor.shops.store');
     Route::post('/shops/{id}/update', [PortalController::class, 'vendorUpdateShop'])->name('vendor.shops.update');
     Route::delete('/shops/{id}', [PortalController::class, 'vendorDeleteShop'])->name('vendor.shops.delete');

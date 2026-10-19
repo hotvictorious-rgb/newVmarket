@@ -117,7 +117,12 @@
                         @endif
                     </div>
                     <div>
-                        @if(in_array($product->package_tier, ['keke', 'bulky'], true))
+                        @if(!$product->is_in_stock)
+                            <span style="color: #DC2626; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
+                                <span style="width: 5px; height: 5px; border-radius: 50%; background: #EF4444;"></span>
+                                <span>Out of Stock</span>
+                            </span>
+                        @elseif(in_array($product->package_tier, ['keke', 'bulky'], true))
                             <span style="font-size: 9.5px; font-weight: 700; background: #FFFBEB; color: #B45309; border: 1px solid #FDE68A; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px;">
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
                                 <span>Keke Cargo</span>
@@ -136,18 +141,26 @@
         <!-- Add to Cart & Details Action (Responsive 2-Col Grid) -->
         <div style="padding: 0 14px 14px;">
             <div class="vm-card-action-grid">
-                <button type="button" class="vm-btn-add-cart" 
-                        data-id="{{ $product->id }}" 
-                        data-name="{{ $product->name }}" 
-                        data-price="{{ $product->unit_price }}" 
-                        data-image="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}"
-                        data-shop="{{ $product->shop->name ?? 'Verified Merchant' }}" 
-                        data-lga="{{ $product->shop->lga->name ?? 'Uyo' }}" 
-                        data-slug="{{ $product->slug }}"
-                        style="background: #F5F3FF; border: 1.5px solid rgba(94, 23, 235, 0.25); color: #5E17EB; font-weight: 700; font-size: 12px; padding: 8px 6px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.15s ease;">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-                    <span>+ Cart</span>
-                </button>
+                @if($product->is_in_stock)
+                    <button type="button" class="vm-btn-add-cart" 
+                            data-id="{{ $product->id }}" 
+                            data-name="{{ $product->name }}" 
+                            data-price="{{ $product->unit_price }}" 
+                            data-image="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}"
+                            data-shop="{{ $product->shop->name ?? 'Verified Merchant' }}" 
+                            data-lga="{{ $product->shop->lga->name ?? 'Uyo' }}" 
+                            data-slug="{{ $product->slug }}"
+                            style="background: #F5F3FF; border: 1.5px solid rgba(94, 23, 235, 0.25); color: #5E17EB; font-weight: 700; font-size: 12px; padding: 8px 6px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.15s ease;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+                        <span>+ Cart</span>
+                    </button>
+                @else
+                    <button type="button" disabled
+                            style="background: #F1F5F9; border: 1.5px solid #E2E8F0; color: #94A3B8; font-weight: 700; font-size: 12px; padding: 8px 6px; border-radius: 8px; cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 5px; opacity: 0.7;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        <span>Out of Stock</span>
+                    </button>
+                @endif
                 <a href="{{ route('product.detail', $product->slug) }}" style="background: #0F172A; border: none; color: #FFFFFF; font-weight: 700; font-size: 12px; padding: 8px 6px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; text-decoration: none; transition: all 0.15s ease;">
                     <span>Details</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>

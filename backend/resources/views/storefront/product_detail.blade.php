@@ -151,23 +151,30 @@
                 </div>
             </div>
 
+            @php
+                $isProductInStock = (bool)$product->is_in_stock && $product->is_available_for_sale;
+            @endphp
+
             <!-- Stock Status & Quantity Stepper -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 12px 16px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="width: 8px; height: 8px; border-radius: 50%; background: #10B981; display: inline-block;"></span>
-                    <strong style="color: #0F172A; font-size: 13.5px;">In Stock</strong>
-                    <span style="font-size: 12px; color: #64748B;">(Verified at {{ $product->shop->name }})</span>
+                    @if($isProductInStock)
+                        <span style="width: 8px; height: 8px; border-radius: 50%; background: #10B981; display: inline-block;"></span>
+                        <strong style="color: #0F172A; font-size: 13.5px;">In Stock</strong>
+                        <span style="font-size: 12px; color: #64748B;">(Verified at {{ $product->shop->name }})</span>
+                    @else
+                        <span style="width: 8px; height: 8px; border-radius: 50%; background: #EF4444; display: inline-block;"></span>
+                        <strong style="color: #DC2626; font-size: 13.5px;">Out of Stock</strong>
+                        <span style="font-size: 12px; color: #64748B;">(Currently unavailable)</span>
+                    @endif
                 </div>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 12.5px; font-weight: 600; color: #475569;">Quantity:</span>
                     <div style="display: inline-flex; align-items: center; border: 1.5px solid #CBD5E1; border-radius: 8px; background: #FFFFFF; overflow: hidden;">
                         <button type="button" onclick="const i = document.getElementById('vmProductQtyInput'); if (parseInt(i.value) > 1) i.value = parseInt(i.value) - 1;" style="width: 32px; height: 32px; border: none; background: #F1F5F9; font-weight: 800; cursor: pointer; color: #334155;">-</button>
-                        <input type="number" id="vmProductQtyInput" value="1" min="1" max="{{ max(1, $product->inventory_quantity ?? 1) }}" style="width: 40px; height: 32px; border: none; text-align: center; font-size: 13.5px; font-weight: 800; color: #0F172A; outline: none;">
+                        <input type="number" id="vmProductQtyInput" value="1" min="1" max="99" style="width: 40px; height: 32px; border: none; text-align: center; font-size: 13.5px; font-weight: 800; color: #0F172A; outline: none;">
                         <button type="button" onclick="const i = document.getElementById('vmProductQtyInput'); const m = parseInt(i.getAttribute('max')) || 99; if (parseInt(i.value) < m) i.value = parseInt(i.value) + 1;" style="width: 32px; height: 32px; border: none; background: #F1F5F9; font-weight: 800; cursor: pointer; color: #334155;">+</button>
                     </div>
-                    @if(($product->inventory_quantity ?? 0) <= 5 && ($product->inventory_quantity ?? 0) > 0)
-                        <span style="font-size: 11px; color: #DC2626; font-weight: 700; margin-left: 4px;">Only {{ $product->inventory_quantity }} left!</span>
-                    @endif
                 </div>
             </div>
 
@@ -221,46 +228,60 @@
 
             <!-- THE 3 PRIMARY CALL TO ACTION BUTTONS -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
-                <!-- Action 1: Add to Cart (Purple) -->
-                <button type="button" class="vm-btn-add-cart" 
-                        data-id="{{ $product->id }}" 
-                        data-name="{{ $product->name }}" 
-                        data-price="{{ $product->unit_price }}" 
-                        data-image="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}"
-                        data-shop="{{ $product->shop->name ?? 'Verified Merchant' }}" 
-                        data-lga="{{ $product->shop->lga->name ?? 'Uyo' }}" 
-                        data-slug="{{ $product->slug }}"
-                        style="background: #5E17EB; color: #FFFFFF; border: none; font-weight: 800; font-size: 14px; padding: 14px 18px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(94, 23, 235, 0.35); transition: transform 0.15s ease;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-                    <span>Add to Cart</span>
-                </button>
+                @if($isProductInStock)
+                    <!-- Action 1: Add to Cart (Purple) -->
+                    <button type="button" class="vm-btn-add-cart" 
+                            data-id="{{ $product->id }}" 
+                            data-name="{{ $product->name }}" 
+                            data-price="{{ $product->unit_price }}" 
+                            data-image="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}"
+                            data-shop="{{ $product->shop->name ?? 'Verified Merchant' }}" 
+                            data-lga="{{ $product->shop->lga->name ?? 'Uyo' }}" 
+                            data-slug="{{ $product->slug }}"
+                            style="background: #5E17EB; color: #FFFFFF; border: none; font-weight: 800; font-size: 14px; padding: 14px 18px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(94, 23, 235, 0.35); transition: transform 0.15s ease;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+                        <span>Add to Cart</span>
+                    </button>
 
-                <!-- Action 2: Buy Now (Gold with Customer Account Interception) -->
-                <a href="{{ route('checkout', ['product_id' => $product->id, 'quantity' => 1]) }}" 
-                   id="vmProductBuyNowBtn"
-                   onclick="
-                       const q = document.getElementById('vmProductQtyInput') ? document.getElementById('vmProductQtyInput').value : 1;
-                       const targetUrl = '{{ route('checkout') }}?product_id={{ $product->id }}&quantity=' + q;
-                       if (!window.vmIsCustomerAuth) {
-                           event.preventDefault();
-                           if (window.vmOpenAuthModal) {
-                               window.vmOpenAuthModal({
-                                   action: 'checkout',
-                                   redirectUrl: targetUrl,
-                                   title: 'Sign In to Buy Now',
-                                   message: 'Only registered customers can complete checkout, receive 5% cashback, and track delivery with OTP.'
-                               });
-                           } else {
-                               window.location.href = '/login?return_to=' + encodeURIComponent(targetUrl);
+                    <!-- Action 2: Buy Now (Gold with Customer Account Interception) -->
+                    <a href="{{ route('checkout', ['product_id' => $product->id, 'quantity' => 1]) }}" 
+                       id="vmProductBuyNowBtn"
+                       onclick="
+                           const q = document.getElementById('vmProductQtyInput') ? document.getElementById('vmProductQtyInput').value : 1;
+                           const targetUrl = '{{ route('checkout') }}?product_id={{ $product->id }}&quantity=' + q;
+                           if (!window.vmIsCustomerAuth) {
+                               event.preventDefault();
+                               if (window.vmOpenAuthModal) {
+                                   window.vmOpenAuthModal({
+                                       action: 'checkout',
+                                       redirectUrl: targetUrl,
+                                       title: 'Sign In to Buy Now',
+                                       message: 'Only registered customers can complete checkout, receive 5% cashback, and track delivery with OTP.'
+                                   });
+                               } else {
+                                   window.location.href = '/login?return_to=' + encodeURIComponent(targetUrl);
+                               }
+                               return false;
                            }
-                           return false;
-                       }
-                       this.href = targetUrl;
-                   " 
-                   style="background: linear-gradient(135deg, #FFD700 0%, #F59E0B 100%); color: #0F172A; text-decoration: none; font-weight: 800; font-size: 14px; padding: 14px 18px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(255, 215, 0, 0.35); text-align: center; transition: transform 0.15s ease;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span>Buy Now &amp; Escrow Secure</span>
-                </a>
+                           this.href = targetUrl;
+                       " 
+                       style="background: linear-gradient(135deg, #FFD700 0%, #F59E0B 100%); color: #0F172A; text-decoration: none; font-weight: 800; font-size: 14px; padding: 14px 18px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(255, 215, 0, 0.35); text-align: center; transition: transform 0.15s ease;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <span>Buy Now &amp; Escrow Secure</span>
+                    </a>
+                @else
+                    <!-- Out of Stock Disabled State -->
+                    <button type="button" disabled
+                            style="background: #94A3B8; color: #FFFFFF; border: none; font-weight: 800; font-size: 14px; padding: 14px 18px; border-radius: 10px; cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 8px; opacity: 0.7;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        <span>Out of Stock</span>
+                    </button>
+                    <button type="button" disabled
+                            style="background: #E2E8F0; color: #64748B; border: none; font-weight: 800; font-size: 14px; padding: 14px 18px; border-radius: 10px; cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 8px; opacity: 0.7;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <span>Currently Unavailable</span>
+                    </button>
+                @endif
             </div>
 
             <!-- Action 3: Inspect First, Pay Later (Pickup Reservation with Auth Shield) -->
@@ -285,10 +306,17 @@
                 <input type="hidden" name="shop_id" value="{{ $product->shop_id }}">
                 <input type="hidden" name="customer_name" value="{{ Auth::user()->name ?? '' }}">
                 <input type="hidden" name="customer_phone" value="{{ Auth::user()->phone ?? '' }}">
-                <button type="submit" style="width: 100%; background: #F8FAFC; color: #0F172A; border: 1.5px solid #CBD5E1; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.15s ease;">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                    <span>Reserve for Free In-Shop Inspection (&#8358;0.00 Upfront)</span>
-                </button>
+                @if($isProductInStock)
+                    <button type="submit" style="width: 100%; background: #F8FAFC; color: #0F172A; border: 1.5px solid #CBD5E1; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.15s ease;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                        <span>Reserve for Free In-Shop Inspection (&#8358;0.00 Upfront)</span>
+                    </button>
+                @else
+                    <button type="button" disabled style="width: 100%; background: #F1F5F9; color: #94A3B8; border: 1.5px solid #E2E8F0; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 10px; cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        <span>Unavailable for Reservation (Out of Stock)</span>
+                    </button>
+                @endif
             </form>
 
             <!-- Description -->
