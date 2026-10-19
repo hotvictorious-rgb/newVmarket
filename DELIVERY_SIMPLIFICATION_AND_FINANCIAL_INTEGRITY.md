@@ -71,6 +71,41 @@ One important distinction: reversing VMARKET's commission does not automatically
 
 Before implementing it, ensure the return policy clearly defines when delivery fees are refundable, especially for defective, incorrect or misrepresented products. The policy should not override applicable consumer-protection requirements.
 
+## Customer Cashback and Loyalty Model (5% Commission Reinvestment)
+
+VMARKET takes 10% commission and uses 5% of that commission to reward customers with cashback. That means you're using half of your commission to encourage customer loyalty while retaining the other half before expenses.
+
+### How your 10% model works
+
+Let's use a customer order of ₦100,000, including the vendor's delivery fee:
+
+| Component | Basis | Amount |
+| :--- | :--- | :--- |
+| **Total eligible customer payment** | Original payment | **₦100,000** |
+| **Vendor allocation** | Before other adjustments | **₦90,000** |
+| **Customer cashback** | 5% of the original payment | **₦5,000** |
+| **VMARKET's remaining commission** | Before operating expenses | **₦5,000** |
+
+One important distinction: in this example, the customer receives cashback worth 5% of the order payment, which consumes half of VMARKET's 10% commission. It is not 5% of the commission itself.
+
+### Why this could be powerful for VMARKET
+
+- **Customer loyalty:** customers have an additional reason to return and shop again.
+- **Repeat purchases:** cashback can encourage customers to consolidate more of their shopping on VMARKET.
+- **Competitive differentiation:** the marketplace offers a tangible reward, not just product listings.
+- **A controlled incentive:** if cashback is funded from your commission, the reward has a defined source rather than being an unexplained additional cost.
+
+### Four rules I would establish
+
+1. **Earn cashback only on eligible, successfully paid orders.** Do not reward failed, duplicated or unverified transactions.
+2. **Define when cashback becomes usable.** For example, after the order reaches the required completion state, subject to your published policy.
+3. **Reverse the relevant cashback when an order is refunded.** For partial refunds, calculate the adjustment against the eligible refunded amount.
+4. **Keep cashback separate from vendor money and commission accounting.** Track cashback earned, pending, available, redeemed and reversed so that the same funds cannot be counted twice.
+
+There is also an important business decision: will the 5% cashback apply to the full payment, including delivery, or only to the eligible product amount? I would generally favour 5% on eligible product value, excluding delivery fees, because it avoids rewarding delivery charges and makes the programme easier to control.
+
+**My verdict:** this makes VMARKET's model more compelling. You're not just earning commission; you're reinvesting part of it into customer retention. The key is to make the cashback rules financially sustainable, transparent and difficult to abuse.
+
 ## Required workflow
 
 ### Phase 1: Audit before coding
