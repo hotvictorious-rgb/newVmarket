@@ -1846,4 +1846,66 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertSame('unmatched', $event->status);
         $this->assertStringContainsString('TRANSACTION_REFERENCE_MISMATCH', $event->error_reason);
     }
+
+
+    public function test_refund_failed_webhook_with_conflicting_amount_or_currency_does_not_release_reservation(): void
+    {
+        $cases = [
+            ['suffix' => 'amount', 'amount' => 49999, 'currency' => 'NGN', 'reason' => 'REFUND_AMOUNT_MISMATCH'],
+            ['suffix' => 'currency', 'amount' => 50000, 'currency' => 'USD', 'reason' => 'REFUND_CURRENCY_MISMATCH'],
+        ];
+
+        foreach ($cases as $case) {
+            $order = $this->createTestOrder([
+                'order_status' => 'cancelled',
+                'payment_status' => 'paid',
+                'grand_total' => '22000.00',
+                'payment_reference' => 'REF-FAILED-FINANCIAL-EVIDENCE-' . strtoupper($case['suffix']) . '-' . uniqid(),
+                'paystack_refund_status' => 'pending',
+            ]);
+
+            $refundReference = 'rf-failed-financial-evidence-' . $case['suffix'] . '-' . uniqid();
+            $operation = app(FinancialOperationService::class)->createRefundOperation(
+                $order,
+                '500.00',
+                'failed webhook financial evidence mismatch',
+                null,
+                'IDEMPOTENCY-FAILED-FINANCIAL-EVIDENCE-' . uniqid()
+            );
+            $metadata = $operation->metadata ?? [];
+            $metadata['refund_reference'] = $refundReference;
+            $metadata['payment_reference'] = $order->payment_reference;
+            $operation->update(['status' => 'initiated', 'metadata' => $metadata]);
+
+            $payloadData = [
+                'id' => 'evt-failed-financial-evidence-' . $case['suffix'] . '-' . uniqid(),
+                'event' => 'refund.failed',
+                'data' => [
+                    'refund_reference' => $refundReference,
+                    'transaction_reference' => $order->payment_reference,
+                    'amount' => $case['amount'],
+                    'currency' => $case['currency'],
+                    'status' => 'failed',
+                ],
+            ];
+            $payload = json_encode($payloadData);
+            $signature = hash_hmac('sha512', $payload, app(PaystackService::class)->getSecretKey());
+
+            $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+                'x-paystack-signature' => $signature,
+            ]);
+
+            $response->assertOk();
+            $this->assertSame('initiated', $operation->fresh()->status, $case['suffix']);
+            $this->assertSame('pending', $order->fresh()->paystack_refund_status, $case['suffix']);
+            $this->assertSame(1, FinancialReservation::where('financial_operation_id', $operation->id)
+                ->where('status', 'active')->count(), $case['suffix']);
+
+            $event = ProcessedWebhookEvent::where('event_id', $payloadData['id'])->first();
+            $this->assertNotNull($event, $case['suffix']);
+            $this->assertSame('unmatched', $event->status, $case['suffix']);
+            $this->assertStringContainsString($case['reason'], $event->error_reason, $case['suffix']);
+        }
+    }
+
 }
