@@ -2200,4 +2200,49 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertSame($originalPayload, $event->payload);
     }
 
+
+
+    public function test_confirming_one_partial_refund_does_not_mark_order_completed_while_another_is_outstanding(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-PARTIAL-SUMMARY-CONCURRENT-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        $service = app(FinancialOperationService::class);
+        $first = $service->createRefundOperation(
+            $order, '500.00', 'first partial refund', null, 'IDEMPOTENCY-PARTIAL-SUMMARY-FIRST-' . uniqid()
+        );
+        $second = $service->createRefundOperation(
+            $order, '700.00', 'second partial refund', null, 'IDEMPOTENCY-PARTIAL-SUMMARY-SECOND-' . uniqid()
+        );
+        $first->update(['status' => 'initiated']);
+        $second->update(['status' => 'initiated']);
+
+        $firstResult = $service->finalizeRefundConfirmation($first, [
+            'status' => 'processed',
+            'refund_reference' => 'rf-partial-summary-first',
+        ]);
+        $this->assertTrue($firstResult['success']);
+        $this->assertSame('confirmed', $first->fresh()->status);
+        $this->assertSame('initiated', $second->fresh()->status);
+        $this->assertSame('pending', $order->fresh()->paystack_refund_status);
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $first->id)
+            ->where('status', 'committed')->count());
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $second->id)
+            ->where('status', 'active')->count());
+
+        $secondResult = $service->finalizeRefundConfirmation($second, [
+            'status' => 'processed',
+            'refund_reference' => 'rf-partial-summary-second',
+        ]);
+        $this->assertTrue($secondResult['success']);
+        $this->assertSame('completed', $order->fresh()->paystack_refund_status);
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $second->id)
+            ->where('status', 'committed')->count());
+    }
+
 }
