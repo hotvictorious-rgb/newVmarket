@@ -220,6 +220,16 @@ class FinancialOperationService
         return DB::transaction(function () use ($operation, $attempt, $gatewayResult) {
             $lockedOp = FinancialOperation::where('id', $operation->id)->lockForUpdate()->firstOrFail();
             $lockedAttempt = GatewayAttempt::where('id', $attempt->id)->lockForUpdate()->firstOrFail();
+            // Re-read the status independently after the gateway call. This is an
+            // explicit compare point for the webhook/HTTP-response race.
+            $currentOperationStatus = FinancialOperation::whereKey($operation->id)->value('status');
+            if (in_array($currentOperationStatus, ['confirmed', 'failed', 'reversed'], true)) {
+                return [
+                    'success' => $currentOperationStatus === 'confirmed',
+                    'status' => $currentOperationStatus,
+                    'message' => "Refund operation reached terminal state '{$currentOperationStatus}' while the gateway request was in flight; preserving the terminal result.",
+                ];
+            }
 
             // A webhook may win the race while the gateway HTTP request is in flight.
             // Re-check terminal state under the operation lock before writing the late
