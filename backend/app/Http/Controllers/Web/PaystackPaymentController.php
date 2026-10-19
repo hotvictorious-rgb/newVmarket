@@ -723,15 +723,15 @@ class PaystackPaymentController extends Controller
                     // The order-level status is a summary, not the state of this one
                     // refund. Preserve outstanding partial refunds and any earlier
                     // confirmed partial refund when one operation fails.
-                    $hasOutstandingRefund = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+                    $hasOutstandingRefund = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
                         ->whereJsonContains('metadata->order_id', $orderId)
                         ->whereNotIn('status', ['confirmed', 'failed', 'reversed'])
                         ->exists();
-                    $hasConfirmedRefund = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+                    $hasConfirmedRefund = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
                         ->whereJsonContains('metadata->order_id', $orderId)
                         ->where('status', 'confirmed')
                         ->exists();
-                    $hasPendingReturnCase = \\App\\Models\\ReturnCase::where('order_id', $orderId)
+                    $hasPendingReturnCase = \App\Models\ReturnCase::where('order_id', $orderId)
                         ->whereIn('status', ['refund_pending', 'refund_approved'])
                         ->exists();
 
