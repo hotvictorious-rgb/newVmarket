@@ -270,7 +270,8 @@ class FinancialAuditRemediationProofTest extends TestCase
 
         // Balance restored once: 50,000 + 20,000 = 70,000
         $this->assertEquals('70000.00', number_format((float)$this->company->fresh()->wallet_balance, 2, '.', ''));
-        $this->assertEquals(2, FinancialJournalEntry::where('event_id', 'EVT-REV-FLEET-' . $payout->id)->count()); // 1 debit, 1 credit
+        $this->assertEquals(2, FinancialJournalEntry::where('event_id', 'EVT-REV-FLEET-REQUEST-' . $payout->id)->count()); // reverse request liability and restore wallet
+        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-REV-FLEET-' . $payout->id)->exists(), 'No disbursement journal exists to reverse.');
 
         // Second reversal call (e.g. from scheduled reconciler race)
         $secondRes = $finalizationService->revertLogisticsPayout($payout, 'Reconciler found failure');
@@ -280,7 +281,66 @@ class FinancialAuditRemediationProofTest extends TestCase
         // Balance must STILL be 70,000 (never double credited!)
         $this->assertEquals('70000.00', number_format((float)$this->company->fresh()->wallet_balance, 2, '.', ''));
         // Ledger entry count must STILL be 2 (never duplicated!)
-        $this->assertEquals(2, FinancialJournalEntry::where('event_id', 'EVT-REV-FLEET-' . $payout->id)->count());
+        $this->assertEquals(2, FinancialJournalEntry::where('event_id', 'EVT-REV-FLEET-REQUEST-' . $payout->id)->count());
+        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-REV-FLEET-' . $payout->id)->exists());
+    }
+
+    /**
+     * An unfinalized logistics transfer failure reverses the request journal,
+     * restoring wallet funds without fabricating a cash disbursement reversal.
+     */
+    public function test_unfinalized_logistics_failure_reverses_request_journal_not_cash_disbursement(): void
+    {
+        $payout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '12000.00',
+            'status' => 'pending',
+            'gateway_status' => 'processing',
+            'bank_name' => $this->company->bank_name,
+            'bank_code' => $this->company->bank_code,
+            'account_number' => $this->company->account_number,
+            'account_name' => $this->company->account_name,
+        ]);
+
+        $this->company->debitWallet('12000.00');
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'FLEET-REQ-TEST-' . $payout->id,
+            'event_id' => 'EVT-FLEET-REQ-' . $payout->id,
+            'beneficiary_type' => LogisticsCompanyProfile::class,
+            'beneficiary_id' => $this->company->id,
+            'account_name' => 'logistics_company_wallet',
+            'entry_type' => 'debit',
+            'amount' => '12000.00',
+            'currency' => 'NGN',
+            'description' => 'Test withdrawal request wallet debit',
+        ]);
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'FLEET-REQ-TEST-' . $payout->id,
+            'event_id' => 'EVT-FLEET-REQ-' . $payout->id,
+            'beneficiary_type' => LogisticsCompanyProfile::class,
+            'beneficiary_id' => $this->company->id,
+            'account_name' => 'logistics_payout_payable',
+            'entry_type' => 'credit',
+            'amount' => '12000.00',
+            'currency' => 'NGN',
+            'description' => 'Test withdrawal request liability credit',
+        ]);
+
+        $result = app(PayoutFinalizationService::class)->revertLogisticsPayout(
+            $payout,
+            'Transfer failed before finalization'
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('50000.00', number_format((float)$this->company->fresh()->wallet_balance, 2, '.', ''));
+        $entries = FinancialJournalEntry::where('event_id', 'EVT-REV-FLEET-REQUEST-' . $payout->id)->get();
+        $this->assertCount(2, $entries);
+        $this->assertTrue($entries->contains(fn ($entry) => $entry->account_name === 'logistics_payout_payable' && $entry->entry_type === 'debit'));
+        $this->assertTrue($entries->contains(fn ($entry) => $entry->account_name === 'logistics_company_wallet' && $entry->entry_type === 'credit'));
+        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-REV-FLEET-' . $payout->id)->exists());
+        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-FLEET-PAYOUT-' . $payout->id)->exists());
     }
 
     /**
