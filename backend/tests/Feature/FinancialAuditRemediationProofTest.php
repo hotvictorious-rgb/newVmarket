@@ -1697,9 +1697,8 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertSame(1, FinancialReservation::where('financial_operation_id', $first->id)->where('status', 'active')->count());
         $this->assertSame(1, FinancialReservation::where('financial_operation_id', $second->id)->where('status', 'committed')->count());
 
-        // The order-level summary is completed after one refund, but the remaining
-        // operation must still be discoverable and reconciled by its own reference.
-        $this->assertSame('completed', $order->fresh()->paystack_refund_status);
+        // The order-level summary stays pending while the other partial refund is outstanding.
+        $this->assertSame('pending', $order->fresh()->paystack_refund_status);
         $this->assertSame(1, $engine->reconcileRefunds());
         $this->assertSame('confirmed', $first->fresh()->status);
         $this->assertSame(1, FinancialReservation::where('financial_operation_id', $first->id)->where('status', 'committed')->count());
