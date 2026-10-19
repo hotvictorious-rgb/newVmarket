@@ -7,6 +7,7 @@ on:
       - "backend/app/Http/Controllers/Web/PaystackPaymentController.php"
       - "backend/app/Services/FinancialReconciliationEngine.php"
       - "backend/tests/Feature/FinancialAuditRemediationProofTest.php"
+      - "backend/tests/Feature/PaystackPaymentHardeningTest.php"
       - "backend/**"
       - ".github/workflows/paystack-refund-safety.yml"
   push:
@@ -45,7 +46,9 @@ jobs:
         run: |
           php -l app/Http/Controllers/Web/PaystackPaymentController.php
           php -l app/Services/FinancialReconciliationEngine.php
+          php -l app/Services/PaystackService.php
           php -l tests/Feature/FinancialAuditRemediationProofTest.php
+          php -l tests/Feature/PaystackPaymentHardeningTest.php
 
-      - name: Run financial audit proof tests
-        run: php artisan test --filter=FinancialAuditRemediationProofTest --display-warnings
+      - name: Run financial audit and payment hardening proof tests
+        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php --display-warnings
