@@ -257,7 +257,10 @@ class FinancialOperationService
                 $orderId = $lockedOp->metadata['order_id'] ?? null;
                 if ($orderId) {
                     Order::where('id', $orderId)
-                        ->where('paystack_refund_status', '!=', 'completed')
+                        ->where(function ($query) {
+                            $query->whereNull('paystack_refund_status')
+                                ->orWhere('paystack_refund_status', '!=', 'completed');
+                        })
                         ->update([
                             'paystack_refund_reference' => $gwRef,
                             'paystack_refund_status' => 'pending', // Remains pending until confirmed!
