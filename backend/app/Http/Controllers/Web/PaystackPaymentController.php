@@ -451,16 +451,17 @@ class PaystackPaymentController extends Controller
             Log::info("Paystack Webhook: Automated refund.processed for ref: {$rRef}, trans: {$transRef}");
 
             $finOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
-                ->where(function ($q) use ($rRef, $transRef) {
+                ->where(function ($q) use ($rRef) {
                     if (!empty($rRef)) {
                         $q->where('operation_reference', $rRef)
                           ->orWhereJsonContains('metadata->refund_reference', $rRef)
                           ->orWhereHas('gatewayAttempts', function ($sub) use ($rRef) {
                               $sub->where('gateway_reference', $rRef);
                           });
-                    }
-                    if (!empty($transRef)) {
-                        $q->orWhereJsonContains('metadata->payment_reference', $transRef);
+                    } else {
+                        // A transaction reference may have several partial refunds; it
+                        // is not a unique refund-operation identifier.
+                        $q->whereRaw('1 = 0');
                     }
                 })
                 ->where('status', '!=', 'confirmed')
