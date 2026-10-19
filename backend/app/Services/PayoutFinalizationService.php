@@ -552,6 +552,35 @@ class PayoutFinalizationService
                     'currency' => 'NGN',
                     'description' => "Escrow cash restored after Paystack transfer reversal: " . ($company?->company_name ?? 'Logistics'),
                 ]);
+
+                // The original request journal debited the company's wallet and
+                // credited payout payable. Restore that request-side liability too,
+                // so the wallet subledger and payable balance are not left stranded.
+                FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $revRef,
+                    'event_id' => 'EVT-REV-FLEET-REQUEST-' . $lockedPayout->id,
+                    'beneficiary_type' => LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $beneficiaryId,
+                    'account_name' => 'logistics_payout_payable',
+                    'entry_type' => 'debit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Unwound corporate withdrawal request after transfer reversal: " . ($company?->company_name ?? 'Logistics'),
+                ]);
+
+                FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $revRef,
+                    'event_id' => 'EVT-REV-FLEET-REQUEST-' . $lockedPayout->id,
+                    'beneficiary_type' => LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $beneficiaryId,
+                    'account_name' => 'logistics_company_wallet',
+                    'entry_type' => 'credit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Corporate wallet ledger restored after transfer reversal: " . ($company?->company_name ?? 'Logistics'),
+                ]);
             } else {
                 // Transfer failed before finalization: reverse the withdrawal request journal,
                 // not a disbursement that never posted.
