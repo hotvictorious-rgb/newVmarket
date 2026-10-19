@@ -784,6 +784,14 @@ class FinancialAuditRemediationProofTest extends TestCase
                 'reason' => 'REFUND_CURRENCY_MISMATCH',
             ],
             [
+                'id' => 'evt-refund-transaction-reference-mismatch',
+                'refund_reference' => 'rf-transaction-reference-mismatch',
+                'amount' => 50000,
+                'currency' => 'NGN',
+                'transaction_reference' => 'DIFFERENT-ORIGINAL-PAYMENT',
+                'reason' => 'REFUND_TRANSACTION_REFERENCE_MISMATCH',
+            ],
+            [
                 'id' => 'evt-refund-missing-amount',
                 'refund_reference' => 'rf-missing-amount',
                 'currency' => 'NGN',
@@ -819,7 +827,7 @@ class FinancialAuditRemediationProofTest extends TestCase
 
             $refundData = [
                 'refund_reference' => $case['refund_reference'],
-                'transaction_reference' => $order->payment_reference,
+                'transaction_reference' => $case['transaction_reference'] ?? $order->payment_reference,
                 'status' => 'processed',
             ];
             foreach (['amount', 'currency'] as $field) {
