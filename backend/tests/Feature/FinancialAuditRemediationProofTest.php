@@ -2439,4 +2439,39 @@ class FinancialAuditRemediationProofTest extends TestCase
             ->where('purpose', 'customer_refund_hold')->count());
     }
 
+
+    public function test_legacy_confirmed_refund_without_reservation_still_reduces_refundable_ceiling(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '1000.00',
+            'payment_reference' => 'REF-LEGACY-CONFIRMED-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        $service = app(FinancialOperationService::class);
+        $legacyRefund = $service->createRefundOperation(
+            $order, '700.00', 'legacy confirmed refund', null, 'IDEMPOTENCY-LEGACY-CONFIRMED-' . uniqid()
+        );
+        $legacyRefund->update(['status' => 'confirmed']);
+        $legacyRefund->reservations()->delete();
+
+        try {
+            $service->createRefundOperation(
+                $order, '301.00', 'over-refund after legacy confirmed refund', null,
+                'IDEMPOTENCY-LEGACY-OVER-' . uniqid()
+            );
+            $this->fail('A confirmed refund without a reservation must still count against the original payment ceiling.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('invariant violation', $exception->getMessage());
+        }
+
+        $this->assertSame(1, FinancialOperation::where('id', $legacyRefund->id)->count());
+        $this->assertSame(0, FinancialReservation::where('source_type', Order::class)
+            ->where('source_id', $order->id)
+            ->where('purpose', 'customer_refund_hold')
+            ->where('status', 'active')->count());
+    }
+
 }
