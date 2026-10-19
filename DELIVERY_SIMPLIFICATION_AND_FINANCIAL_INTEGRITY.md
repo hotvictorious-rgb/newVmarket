@@ -8,18 +8,22 @@ Modify the existing VICTORIOUS MARKET application to support vendor-managed deli
 
 Do not rebuild the application from scratch. Do not implement only frontend changes. Do not delete old logistics code until its dependencies, data, API consumers, jobs, and tests have been mapped.
 
+## Authoritative business-rule source
+
+The detailed and controlling rules are in [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md). If an older section of this implementation plan conflicts with that file, the vendor-managed rules take precedence. This document must not reintroduce platform-managed logistics, fleet allocation, rider earnings, or rider payouts.
+
 ## Operating model
 
-- Vendors configure their own delivery destinations and positive delivery fees.
-- Vendors arrange and manage their own delivery personnel or couriers.
-- Customers can choose customer pickup where the vendor supports it.
-- Vendors may configure delivery prices for individual LGAs and state-level destinations within Nigeria.
-- Explicit LGA pricing overrides state-level pricing. No valid destination rule means delivery is unavailable.
-- Each vendor's products, fulfilment, delivery fee, and financial outcome are tracked independently within a coherent customer checkout.
-- VMARKET retains payment verification, vendor verification, fulfilment oversight, dispute review, refund authorization, ledger integrity, payout controls, and audit logs.
-- Retire mandatory platform-managed fleet, logistics-company, hub, dispatch, and rider-payout dependencies where no longer needed.
-- Preserve delivery addresses, destination validation, fulfilment events, evidence, and dispute workflows.
-- Do not let rider/delivery confirmation approve a refund, change prices, or release funds.
+- Each vendor manages its own delivery and registers/links its own riders.
+- Every active rider must belong to exactly one vendor; the vendor manually assigns its own child vendor orders to its own riders.
+- Riders are operational-only. The platform does not manage rider dispatch, pay riders, or maintain rider wallets/earnings/payouts.
+- Vendors configure their own supported delivery destinations and fees. Explicit LGA pricing overrides a state-level fallback; unsupported destinations fail closed.
+- Each vendor's products, fulfilment choice, delivery fee, commission, cashback eligibility, and financial outcome are tracked independently within the parent checkout / child vendor-order structure.
+- In-shop pickup remains supported as a zero-delivery-fee option and uses the pickup pass RES-XXXXXX at the vendor's physical shop.
+- VMARKET retains payment verification, vendor verification, safety oversight, dispute review, authorized refund controls, ledger integrity, vendor settlement controls, and audit logs; it does not run delivery operations.
+- Preserve customer addresses, destination validation, fulfilment events, evidence, and historical logistics records. Retire legacy logistics paths from new fulfilment only after their dependencies are mapped.
+- Rider/delivery confirmation is operational evidence only; it cannot approve a refund, change prices, settle a vendor, or release funds.
+- Rider interfaces may expose the customer's name, delivery address, and a protected Call Customer action only. No raw phone number, payment state, amount due, delivery fee, card details, commission, cashback, or payout data.
 
 ## Platform Commission and Refund Accounting Rule
 
@@ -71,66 +75,28 @@ One important distinction: reversing VMARKET's commission does not automatically
 
 Before implementing it, ensure the return policy clearly defines when delivery fees are refundable, especially for defective, incorrect or misrepresented products. The policy should not override applicable consumer-protection requirements.
 
-## Customer Cashback and Loyalty Model (5% Commission Reinvestment)
+## Customer Cashback and Loyalty Model (5% of Eligible Product Value)
 
-VMARKET takes 10% commission and uses 5% of that commission to reward customers with cashback. That means you're using half of your commission to encourage customer loyalty while retaining the other half before expenses.
+The current policy is:
+- Platform commission is 10% of the eligible vendor-order payment, including the vendor's delivery fee.
+- Customer cashback is 5% of eligible product value only, excluding delivery fees.
+- Cashback is a use of platform commission, not a separate rider/logistics payment and not an automatic 5% of delivery charges.
+- Vendor payable, commission, cashback, discounts, taxes, gateway fees, refunds, and reversals must be calculated and journaled separately per vendor child order.
 
-### How your 10% model works
+### Example
 
-Let's use a customer order of ₦100,000, including the vendor's delivery fee:
+For a vendor order with ₦90,000 of eligible products and ₦10,000 delivery:
 
 | Component | Basis | Amount |
-| :--- | :--- | :--- |
-| **Total eligible customer payment** | Original payment | **₦100,000** |
-| **Vendor allocation** | Before other adjustments | **₦90,000** |
-| **Customer cashback** | 5% of the original payment | **₦5,000** |
-| **VMARKET's remaining commission** | Before operating expenses | **₦5,000** |
+| :--- | :--- | ---: |
+| Eligible product value | Product subtotal | ₦90,000 |
+| Delivery fee | Vendor-configured fee | ₦10,000 |
+| Customer payment | Product + delivery | ₦100,000 |
+| Platform commission | 10% of eligible vendor-order payment | ₦10,000 |
+| Customer cashback | 5% of eligible products only | ₦4,500 |
+| Platform commission remaining after cashback | Before expenses/other adjustments | ₦5,500 |
 
-One important distinction: in this example, the customer receives cashback worth 5% of the order payment, which consumes half of VMARKET's 10% commission. It is not 5% of the commission itself.
-
-### Why this could be powerful for VMARKET
-
-- **Customer loyalty:** customers have an additional reason to return and shop again.
-- **Repeat purchases:** cashback can encourage customers to consolidate more of their shopping on VMARKET.
-- **Competitive differentiation:** the marketplace offers a tangible reward, not just product listings.
-- **A controlled incentive:** if cashback is funded from your commission, the reward has a defined source rather than being an unexplained additional cost.
-
-### Four rules I would establish
-
-1. **Earn cashback only on eligible, successfully paid orders.** Do not reward failed, duplicated or unverified transactions.
-2. **Define when cashback becomes usable.** For example, after the order reaches the required completion state, subject to your published policy.
-3. **Reverse the relevant cashback when an order is refunded.** For partial refunds, calculate the adjustment against the eligible refunded amount.
-4. **Keep cashback separate from vendor money and commission accounting.** Track cashback earned, pending, available, redeemed and reversed so that the same funds cannot be counted twice.
-
-There is also an important business decision: will the 5% cashback apply to the full payment, including delivery, or only to the eligible product amount? I would generally favour 5% on eligible product value, excluding delivery fees, because it avoids rewarding delivery charges and makes the programme easier to control.
-
-### Definitive Policy: 5% Cashback on Eligible Products Only (Excluding Delivery Fees)
-
-My recommendation is no — calculate the 5% cashback on eligible product value only, excluding delivery fees.
-
-Your 10% commission can still apply to the full payment, including delivery, as you decided.
-
-For example, if a customer pays ₦100,000:
-
-| Breakdown | Amount |
-| :--- | :--- |
-| Products | ₦90,000 |
-| Delivery | ₦10,000 |
-| VMARKET commission (10% of full payment) | ₦10,000 |
-| Customer cashback (5% of products only) | ₦4,500 |
-| VMARKET retains before expenses | ₦5,500 |
-
-This gives you a clear model:
-
-- **10% commission:** products + delivery.
-- **5% cashback:** eligible products only.
-- **Remaining commission:** cashback deducted from your commission, before expenses and other adjustments.
-
-**Why I prefer this approach:** delivery is a fulfilment cost, not the product value you want customers to buy more of. Excluding it also helps protect your margins.
-
-**One more important rule:** if a customer receives a refund for a product, the cashback associated with that refunded product should be reversed according to your published policy.
-
-**My verdict:** this makes VMARKET's model more compelling. You're not just earning commission; you're reinvesting part of it into customer retention. The key is to make the cashback rules financially sustainable, transparent and difficult to abuse.
+The vendor allocation must be calculated from the immutable order-level allocation rules; do not assume a fixed 90/5/5 split when delivery, discounts, refunds, or other adjustments change the bases. Cashback eligibility and reversals must be recorded in the existing financial engine. A refunded eligible product reverses the cashback attributable to that product according to the published policy. Cashback is never credited merely because delivery failed or a complaint was opened.
 
 ## 30-Minute Stock-Hold and Late-Payment Reconciliation Policy
 
@@ -339,7 +305,7 @@ If a vendor sells an item offline and forgets to update their VMARKET status, a 
 1. Use canonical Nigerian state/LGA records and server-side destination validation.
 2. Allow vendors to enable only the destinations they serve.
 3. Support LGA-specific pricing and state-level fallback pricing.
-4. Require every enabled delivery destination to have a valid fee greater than zero.
+4. Require every enabled doorstep-delivery destination to have a valid vendor-configured fee greater than zero. The in_shop_pickup fulfilment type is the explicit exception and must always have a zero delivery fee.
 5. Do not permit missing, zero, negative, malformed, or client-controlled fees.
 6. Customer pickup must be modelled separately.
 7. Snapshot the selected destination, fulfilment method, and agreed fee at checkout. Subsequent settings changes must not alter existing orders.
@@ -363,8 +329,21 @@ If a vendor sells an item offline and forgets to update their VMARKET status, a 
 3. Keep dispatch separate from delivery confirmation.
 4. Record timestamps, actor identity, relevant evidence, and transition history.
 5. Remove obsolete platform dispatch dependencies from critical paths.
-6. Decide whether the rider app should become an optional authorised confirmation tool or be retired. Do not leave mandatory RiderProfile or LogisticsCompany dependencies in checkout and order completion.
+6. Keep the rider app as an operational tool for vendor-linked riders, but remove platform-managed dispatch, fleet affiliation for new orders, and every rider financial/payout workflow. Enforce that each active rider belongs to one vendor and only receives that vendor's manually assigned orders. Preserve legacy logistics dependencies for historical records until dependency mapping supports safe retirement.
 7. Preserve existing order data and avoid destructive migrations.
+## Current-code findings that must be addressed
+
+The initial source inspection found direct mismatches with the adopted rules. These are findings from code review, not claims that fixes have already been implemented:
+
+1. **Rider ownership is not exclusive yet.** RiderProfile supports both vendor_id and logistics_company_id, and RiderTerminalApiController permits either vendor-linked or fleet-linked riders. New assignment guards must require one active vendor owner and reject fleet-only riders for new work.
+2. **Rider API exposes prohibited data.** formatOrderForRider currently includes payment_status and delivery_fee and returns the customer's raw phone field. The customer relation is loaded with phone. Replace this with a privacy-minimal projection and protected Call Customer action; audit all list, history, detail, export, log, and error payloads.
+3. **Failed-delivery handler performs financial actions.** RiderTerminalApiController::recordDeliveryAttemptFailed currently creates an immediately available CustomerWalletCredit after the attempt threshold and writes a logistics-company payable journal entry for a retained delivery fee. Both conflict with operational-only riders and no automatic refund/credit/payout. Route remedies through the authorized return/refund and financial-operation services after review.
+4. **Legacy financial and fleet concepts remain active.** RiderTerminalApiController imports/uses LogisticsCompanyProfile, CustomerWalletCredit, FinancialJournalEntry, and OrderSettlementService; rider views include earnings/wallet/payout surfaces; logistics-company models, payout requests, and routes remain. Disable these for new vendor-managed delivery, preserve authorized read-only history, and map every route/job/API consumer before removing anything.
+5. **Pickup needs explicit enforcement.** The repository has a migration to separate pickup and doorstep statuses, but tests must prove that in_shop_pickup always costs zero, uses RES-XXXXXX, is confirmed at the vendor counter, and never requires a rider or creates a delivery payout.
+6. **Assignment lifecycle needs a custody fence.** Assign/reassign endpoints and services must enforce vendor ownership, active rider status, order state, and an atomic custody transition. Reassignment after pickup must require a recorded return/custody-transfer workflow.
+7. **COD must not bypass privacy.** Rider projections cannot expose payment status or amount due. Keep rider-assigned COD disabled until a vendor-owned collection/reconciliation flow is explicitly defined and passes privacy and financial-control tests.
+8. **Commission/cashback documentation had inconsistent bases.** The rules now specify 10% commission on eligible vendor-order payment including delivery, and 5% cashback on eligible product value excluding delivery. Remove fixed 90/5/5 assumptions wherever they conflict with these bases and calculate each child order independently.
+
 
 ### Phase 5: Returns and refunds
 
