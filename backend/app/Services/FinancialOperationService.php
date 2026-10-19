@@ -40,7 +40,7 @@ class FinancialOperationService
         // BCMath's requested scale silently truncates excess fractional digits,
         // which could otherwise turn a request for 10.999 into a refund of 10.99.
         if (!preg_match('/^\\d+(?:\\.\\d{1,2})?$/', trim((string) $amountNaira))) {
-            throw new \\InvalidArgumentException(
+            throw new \InvalidArgumentException(
                 "Refund amount must be a positive decimal with no more than two fractional digits."
             );
         }
