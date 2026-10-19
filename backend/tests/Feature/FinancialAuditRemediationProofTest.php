@@ -344,6 +344,80 @@ class FinancialAuditRemediationProofTest extends TestCase
     }
 
     /**
+     * A reversed, previously finalized logistics transfer reverses both the
+     * disbursement journal and the original wallet withdrawal-request journal.
+     */
+    public function test_finalized_logistics_reversal_restores_wallet_and_balances_both_reversal_events(): void
+    {
+        $payout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '12000.00',
+            'status' => 'pending',
+            'gateway_status' => 'processing',
+            'transfer_reference' => 'FLEET-REQ-REVERSAL-' . uniqid(),
+            'bank_name' => $this->company->bank_name,
+            'bank_code' => $this->company->bank_code,
+            'account_number' => $this->company->account_number,
+            'account_name' => $this->company->account_name,
+        ]);
+
+        $this->company->debitWallet('12000.00');
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'FLEET-REQ-TEST-' . $payout->id,
+            'event_id' => 'EVT-FLEET-REQ-' . $payout->id,
+            'beneficiary_type' => LogisticsCompanyProfile::class,
+            'beneficiary_id' => $this->company->id,
+            'account_name' => 'logistics_company_wallet',
+            'entry_type' => 'debit',
+            'amount' => '12000.00',
+            'currency' => 'NGN',
+            'description' => 'Test withdrawal request wallet debit',
+        ]);
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'FLEET-REQ-TEST-' . $payout->id,
+            'event_id' => 'EVT-FLEET-REQ-' . $payout->id,
+            'beneficiary_type' => LogisticsCompanyProfile::class,
+            'beneficiary_id' => $this->company->id,
+            'account_name' => 'logistics_payout_payable',
+            'entry_type' => 'credit',
+            'amount' => '12000.00',
+            'currency' => 'NGN',
+            'description' => 'Test withdrawal request liability credit',
+        ]);
+
+        $finalizer = app(PayoutFinalizationService::class);
+        $finalized = $finalizer->finalizeLogisticsPayout($payout, [
+            'status' => 'success',
+            'reference' => $payout->transfer_reference,
+            'transfer_code' => 'TRF_FLEET_REVERSAL_' . $payout->id,
+        ]);
+        $this->assertTrue($finalized['success']);
+        $this->assertEquals(2, FinancialJournalEntry::where('event_id', 'EVT-FLEET-PAYOUT-' . $payout->id)->count());
+
+        $reverted = $finalizer->revertLogisticsPayout($payout, 'Gateway confirmed transfer reversal');
+        $this->assertTrue($reverted['success']);
+        $this->assertEquals('50000.00', number_format((float)$this->company->fresh()->wallet_balance, 2, '.', ''));
+
+        foreach ([
+            'EVT-REV-FLEET-' . $payout->id,
+            'EVT-REV-FLEET-REQUEST-' . $payout->id,
+        ] as $eventId) {
+            $entries = FinancialJournalEntry::where('event_id', $eventId)->get();
+            $this->assertCount(2, $entries, $eventId . ' should contain a balanced debit/credit pair');
+            $debits = (float) $entries->where('entry_type', 'debit')->sum('amount');
+            $credits = (float) $entries->where('entry_type', 'credit')->sum('amount');
+            $this->assertEqualsWithDelta(12000.00, $debits, 0.001, $eventId . ' debits');
+            $this->assertEqualsWithDelta(12000.00, $credits, 0.001, $eventId . ' credits');
+        }
+
+        $requestReversal = FinancialJournalEntry::where('event_id', 'EVT-REV-FLEET-REQUEST-' . $payout->id)->get();
+        $this->assertTrue($requestReversal->contains(fn ($entry) => $entry->account_name === 'logistics_payout_payable' && $entry->entry_type === 'debit'));
+        $this->assertTrue($requestReversal->contains(fn ($entry) => $entry->account_name === 'logistics_company_wallet' && $entry->entry_type === 'credit'));
+    }
+
+    /**
      * Audit Finding 4 (P0): Webhook transfer.failed delegates cleanly to centralized finalization service.
      */
     public function test_webhook_transfer_failed_delegates_to_central_service_and_reverses_safely(): void
