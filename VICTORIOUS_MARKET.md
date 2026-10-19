@@ -230,7 +230,7 @@ The vendor prepares the order and assigns a linked rider. The workflow records r
 A delivery confirmation is operational evidence only. It does not automatically prove product quality, approve a refund, issue wallet credit, or move money.
 
 ### Customer privacy for riders
-The rider may see the customer's name, delivery address and necessary delivery instructions, plus a **Call Customer** action. The rider must not receive the raw customer phone number in API responses or page markup; use a privacy-preserving call flow. Riders must never see payment status, total paid, amount due, delivery-fee financial fields, refunds, wallet balance, card/bank details, payment references, platform commission, cashback, vendor settlement, or rider payout information. OTPs and reusable pickup/delivery secrets must not appear in order lists or history responses.
+The rider may see only the customer's name, delivery address, and a protected **Call Customer** action. The rider must not receive the raw customer phone number in API responses or page markup; use a privacy-preserving call flow. Riders must never see payment status, total paid, amount due, delivery-fee financial fields, refunds, wallet balance, card/bank details, payment references, platform commission, cashback, vendor settlement, or rider payout information. OTPs and reusable pickup/delivery secrets must not appear in order lists or history responses.
 
 ### In-shop pickup
 In-shop pickup remains fully supported as a separate fulfilment type:
