@@ -471,8 +471,11 @@ class FinancialOperationService
             $evidenceAmount = $gatewayEvidence['amount'] ?? ($evidenceData['amount'] ?? null);
             $evidenceCurrency = $gatewayEvidence['currency'] ?? ($evidenceData['currency'] ?? null);
 
+            $evidenceAmountIsWholeKobo = is_int($evidenceAmount)
+                || (is_string($evidenceAmount) && preg_match('/^\\d+$/D', $evidenceAmount) === 1);
+
             if ($evidenceAmount !== null
-                && (!is_numeric($evidenceAmount) || (int) $evidenceAmount !== (int) $lockedOp->amount_kobo)) {
+                && (!$evidenceAmountIsWholeKobo || (int) $evidenceAmount !== (int) $lockedOp->amount_kobo)) {
                 return [
                     'success' => false,
                     'protected' => true,
