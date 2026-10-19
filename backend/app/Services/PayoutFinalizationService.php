@@ -521,33 +521,66 @@ class PayoutFinalizationService
             $lockedPayout->save();
 
             $formattedPayoutAmount = bcadd((string)$lockedPayout->amount, '0', 2);
+            $hasOriginalPayoutJournal = FinancialJournalEntry::where('event_id', 'EVT-FLEET-PAYOUT-' . $lockedPayout->id)->exists();
             $revRef = 'REV-FLEET-' . $lockedPayout->id . '-' . date('YmdHis');
+            $beneficiaryId = $company ? $company->id : $lockedPayout->logistics_company_id;
 
-            FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $revRef,
-                'event_id' => 'EVT-REV-FLEET-' . $lockedPayout->id,
-                'beneficiary_type' => LogisticsCompanyProfile::class,
-                'beneficiary_id' => $company ? $company->id : $lockedPayout->logistics_company_id,
-                'account_name' => 'logistics_payout_payable',
-                'entry_type' => 'credit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Corporate payout liability restored after Paystack transfer failure: " . ($company?->company_name ?? 'Logistics'),
-            ]);
+            if ($hasOriginalPayoutJournal) {
+                // Reverse the confirmed disbursement event only when it actually exists.
+                FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $revRef,
+                    'event_id' => 'EVT-REV-FLEET-' . $lockedPayout->id,
+                    'beneficiary_type' => LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $beneficiaryId,
+                    'account_name' => 'logistics_payout_payable',
+                    'entry_type' => 'credit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Corporate payout liability restored after Paystack transfer reversal: " . ($company?->company_name ?? 'Logistics'),
+                ]);
 
-            FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $revRef,
-                'event_id' => 'EVT-REV-FLEET-' . $lockedPayout->id,
-                'beneficiary_type' => LogisticsCompanyProfile::class,
-                'beneficiary_id' => $company ? $company->id : $lockedPayout->logistics_company_id,
-                'account_name' => 'cash_in_escrow',
-                'entry_type' => 'debit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Escrow cash restored after Paystack transfer failure: " . ($company?->company_name ?? 'Logistics'),
-            ]);
+                FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $revRef,
+                    'event_id' => 'EVT-REV-FLEET-' . $lockedPayout->id,
+                    'beneficiary_type' => LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $beneficiaryId,
+                    'account_name' => 'cash_in_escrow',
+                    'entry_type' => 'debit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Escrow cash restored after Paystack transfer reversal: " . ($company?->company_name ?? 'Logistics'),
+                ]);
+            } else {
+                // Transfer failed before finalization: reverse the withdrawal request journal,
+                // not a disbursement that never posted.
+                FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $revRef,
+                    'event_id' => 'EVT-REV-FLEET-REQUEST-' . $lockedPayout->id,
+                    'beneficiary_type' => LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $beneficiaryId,
+                    'account_name' => 'logistics_payout_payable',
+                    'entry_type' => 'debit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Unpaid corporate withdrawal liability released after failed transfer: " . ($company?->company_name ?? 'Logistics'),
+                ]);
+
+                FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $revRef,
+                    'event_id' => 'EVT-REV-FLEET-REQUEST-' . $lockedPayout->id,
+                    'beneficiary_type' => LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $beneficiaryId,
+                    'account_name' => 'logistics_company_wallet',
+                    'entry_type' => 'credit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Corporate wallet restored after failed, unfinalized Paystack transfer: " . ($company?->company_name ?? 'Logistics'),
+                ]);
+            }
 
             return ['success' => true, 'idempotent' => false, 'payout' => $lockedPayout];
         });
