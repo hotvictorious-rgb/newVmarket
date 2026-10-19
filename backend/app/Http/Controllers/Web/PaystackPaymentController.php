@@ -451,17 +451,36 @@ class PaystackPaymentController extends Controller
                 ], 200);
             }
 
-            // Strictly revert exactly ONE unambiguous payout entity
+            // Only a genuine transfer.reversed event may undo a confirmed success.
+            // The service rechecks state under a row lock to close the webhook/reconciler race.
+            $allowSuccessfulReversal = $event['event'] === 'transfer.reversed';
             if ($resolved['type'] === 'logistics') {
-                $this->finalizationService->revertLogisticsPayout(
+                $reversalResult = $this->finalizationService->revertLogisticsPayout(
                     $resolved['payout'],
-                    "Paystack transfer {$event['event']}: {$reason}"
+                    "Paystack transfer {$event['event']}: {$reason}",
+                    null,
+                    $allowSuccessfulReversal
                 );
             } elseif ($resolved['type'] === 'vendor') {
-                $this->finalizationService->revertVendorPayout(
+                $reversalResult = $this->finalizationService->revertVendorPayout(
                     $resolved['payout'],
-                    "Paystack transfer {$event['event']}: {$reason}"
+                    "Paystack transfer {$event['event']}: {$reason}",
+                    null,
+                    $allowSuccessfulReversal
                 );
+            }
+
+            if (!empty($reversalResult['protected'])) {
+                $this->updateProcessedEvent($processedEvent, [
+                    'status' => 'unmatched',
+                    'error_reason' => 'PAYOUT_SUCCESS_PROTECTED: A confirmed successful payout was not reversed by a failure signal.',
+                    'processed_at' => Carbon::now(),
+                ]);
+
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Failure signal recorded for audit; confirmed successful payout was protected.',
+                ], 200);
             }
 
             $this->updateProcessedEvent($processedEvent, [
