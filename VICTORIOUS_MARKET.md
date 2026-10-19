@@ -13,7 +13,7 @@ The vision is to create an online marketplace where customers can confidently di
 
 Unlike an unrestricted online marketplace where buyers and sellers negotiate privately and arrange payments outside the platform, VICTORIOUS MARKET is being designed as a **managed, centrally governed marketplace**.
 
-The platform will coordinate the essential parts of each transaction, including merchant verification, product listings, pricing, checkout, payment verification, order fulfillment, delivery evidence, customer acceptance, returns, refunds, and merchant settlements.
+The platform governs marketplace access, product listings, checkout, payment verification, customer protection, audit evidence, refunds, and vendor settlements. Each vendor is responsible for preparing and delivering its own orders through riders linked to that vendor; the platform does not operate a central delivery fleet or dispatch service.
 
 The goal is not merely to connect buyers with sellers. It is to establish a trustworthy commerce environment where every participant has defined responsibilities and every transaction follows a documented process.
 
@@ -38,9 +38,9 @@ Common concerns include:
 
 Merchants also experience significant challenges, including fraudulent orders, customers refusing legitimate deliveries, delayed settlements, stock-management problems, and unreliable delivery arrangements.
 
-Logistics providers face their own difficulties, including unverified handovers, failed deliveries, disputes over responsibility, and uncertain payment reconciliation.
+Vendors and their riders face practical delivery challenges, including handover evidence, failed attempts, customer communication, and clear responsibility for returned parcels.
 
-VICTORIOUS MARKET aims to address these problems through one coordinated system rather than leaving customers, merchants, and delivery partners to manage transactions independently.
+VICTORIOUS MARKET aims to address these problems through controlled marketplace and financial workflows while leaving each vendor responsible for its own rider assignments and delivery operations.
 
 Its central proposition is simple:
 
@@ -376,11 +376,11 @@ The goal is to reward genuine participation without allowing the loyalty program
 
 The initial operating focus is intended to be Uyo, Akwa Ibom State, with expansion into additional supported locations as the operational model becomes reliable.
 
-Rather than immediately making every product available nationwide, the platform can expand through verified merchants, controlled service areas, approved logistics coverage, and reliable collection points.
+Rather than immediately making every product available nationwide, the platform can expand through verified merchants, vendor-defined delivery areas, vendor-linked riders, and reliable in-shop pickup arrangements.
 
 This geographic discipline is intended to avoid promising deliveries that the platform cannot consistently fulfill.
 
-As VICTORIOUS MARKET matures, the system may support more merchants, branches, product categories, logistics providers, and customers.
+As VICTORIOUS MARKET matures, the system may support more merchants, branches, product categories, vendor-managed rider teams, and customers.
 
 Expansion should follow demonstrated operational capacity, not merely the availability of technical features.
 
@@ -414,13 +414,13 @@ A trustworthy marketplace is not one that claims never to fail. It is one that h
 
 VICTORIOUS MARKET is actively developing the technical foundations required to support this model.
 
-Its current engineering direction includes managed merchant onboarding, structured catalogs, checkout and inventory controls, Paystack integration, internal financial accounting, controlled delivery handovers, return workflows, automated payouts, evidence storage, and disaster-recovery capabilities.
+Its current engineering direction includes managed merchant onboarding, structured catalogs, checkout and inventory controls, Paystack integration, internal financial accounting, vendor-managed delivery handovers, return workflows, controlled vendor settlements, evidence storage, and disaster-recovery capabilities.
 
 These features are at different stages of implementation and verification.
 
 The platform is not yet being represented as independently security-certified or operationally proven at scale.
 
-Before broad public launch, the most important milestones are financial correctness testing, security validation, complete customer-journey testing, operational readiness, merchant onboarding, logistics reliability, and real-world pilot transactions.
+Before broad public launch, the most important milestones are financial correctness testing, security validation, complete customer-journey testing, operational readiness, merchant onboarding, vendor-rider delivery reliability, and real-world pilot transactions.
 
 ---
 
@@ -428,13 +428,13 @@ Before broad public launch, the most important milestones are financial correctn
 
 VICTORIOUS MARKET aims to become more than a website where people buy products.
 
-The long-term ambition is to create a dependable digital commerce infrastructure connecting verified merchants, customers, logistics providers, and controlled financial operations.
+The long-term ambition is to create a dependable digital commerce infrastructure connecting verified merchants, customers, vendor-managed delivery teams, and controlled financial operations.
 
 Customers should be able to shop with confidence.
 
 Merchants should be able to reach more customers and manage their businesses more efficiently.
 
-Logistics partners should operate through structured and accountable processes.
+Vendor-managed delivery teams should operate through structured and accountable processes.
 
 And the platform should maintain reliable records of the transactions it facilitates.
 
