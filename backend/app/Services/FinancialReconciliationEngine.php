@@ -82,17 +82,28 @@ class FinancialReconciliationEngine
             }
 
             if ($verify['success'] && ($verify['status'] ?? '') === 'success') {
-                $this->finalizationService->finalizeVendorPayout($payout, [
+                $finalized = $this->finalizationService->finalizeVendorPayout($payout, [
                     'transfer_code' => $verify['transfer_code'] ?? $payout->paystack_transfer_code,
                     'reference' => $ref,
                     'status' => 'success',
-                ]);
+                ], null, $claimToken);
+                if (!empty($finalized['protected'])) {
+                    Log::warning("Fencing guard: Vendor payout #{$payout->id} lost its lease before finalization.");
+                    continue;
+                }
                 $results['vendor_reconciled']++;
             } elseif ($verify['success'] && in_array($verify['status'] ?? '', ['failed', 'reversed'], true)) {
-                $this->finalizationService->revertVendorPayout(
+                $reverted = $this->finalizationService->revertVendorPayout(
                     $payout,
-                    'Auto-Reconciled by Engine: Verified Failed at Paystack'
+                    'Auto-Reconciled by Engine: Verified Failed at Paystack',
+                    null,
+                    false,
+                    $claimToken
                 );
+                if (!empty($reverted['protected'])) {
+                    Log::warning("Fencing guard: Vendor payout #{$payout->id} lost its lease before reversal.");
+                    continue;
+                }
                 $results['vendor_reconciled']++;
             } else {
                 // Transfer outcome still pending at bank or unreachable: maintain timeout hold
@@ -143,17 +154,28 @@ class FinancialReconciliationEngine
             }
 
             if ($verify['success'] && ($verify['status'] ?? '') === 'success') {
-                $this->finalizationService->finalizeLogisticsPayout($payout, [
+                $finalized = $this->finalizationService->finalizeLogisticsPayout($payout, [
                     'transfer_code' => $verify['transfer_code'] ?? $payout->paystack_transfer_code,
                     'reference' => $ref,
                     'status' => 'success',
-                ]);
+                ], null, $claimToken);
+                if (!empty($finalized['protected'])) {
+                    Log::warning("Fencing guard: Logistics payout #{$payout->id} lost its lease before finalization.");
+                    continue;
+                }
                 $results['logistics_reconciled']++;
             } elseif ($verify['success'] && in_array($verify['status'] ?? '', ['failed', 'reversed'], true)) {
-                $this->finalizationService->revertLogisticsPayout(
+                $reverted = $this->finalizationService->revertLogisticsPayout(
                     $payout,
-                    'Auto-Reconciled by Engine: Verified Failed at Paystack'
+                    'Auto-Reconciled by Engine: Verified Failed at Paystack',
+                    null,
+                    false,
+                    $claimToken
                 );
+                if (!empty($reverted['protected'])) {
+                    Log::warning("Fencing guard: Logistics payout #{$payout->id} lost its lease before reversal.");
+                    continue;
+                }
                 $results['logistics_reconciled']++;
             } else {
                 LogisticsPayoutRequest::where('id', $payout->id)
