@@ -246,7 +246,7 @@ class FinancialReconciliationEngine
     {
         $reconciled = 0;
         $pendingRefundOrders = Order::where(function ($q) {
-            $q->whereIn('paystack_refund_status', ['pending', 'authorized'])
+            $q->whereIn('paystack_refund_status', ['pending', 'authorized', 'processing'])
               ->orWhereHas('returnCases', function ($sub) {
                   $sub->whereIn('status', ['refund_pending', 'refund_approved']);
               });
