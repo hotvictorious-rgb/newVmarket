@@ -597,6 +597,59 @@ class ReturnsRefundsAndCollectionPointsTest extends TestCase
     }
 
     /**
+     * A previously accepted but unconfirmed Paystack refund must not be settled
+     * by a later admin retry merely because the claim token has been cleared.
+     */
+    public function test_retry_of_pending_paystack_refund_does_not_post_settlement_journals(): void
+    {
+        $fixture = $this->createDeliveredOrder(Carbon::now()->subHours(4), 1);
+        $order = $fixture['order'];
+        $order->update(['payment_reference' => 'PAYSTACK-PENDING-REFUND-' . uniqid()]);
+
+        $case = ReturnCase::create([
+            'case_number' => 'RET-PENDING-' . strtoupper(uniqid()),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $order->vendor_id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'refund_delivery_fee' => false,
+            'delivery_fee_refunded' => '0.00',
+            'refunded_amount' => '0.00',
+        ]);
+
+        $paystack = \\Mockery::mock(\\App\\Services\\PaystackService::class);
+        $paystack->shouldReceive('initiateRefund')
+            ->once()
+            ->withAnyArgs()
+            ->andReturn([
+                'success' => true,
+                'status' => 'pending',
+                'refund_reference' => 'rf_pending_retry_test',
+                'data' => ['status' => 'pending', 'reference' => 'rf_pending_retry_test'],
+            ]);
+        $this->app->instance(\\App\\Services\\PaystackService::class, $paystack);
+
+        $service = app(ReturnAndRefundService::class);
+        $first = $service->adminDisburseRefund($this->superAdmin, $case);
+        $this->assertTrue($first['success']);
+        $this->assertSame('initiated', $first['status']);
+        $this->assertSame('rf_pending_retry_test', $case->fresh()->paystack_refund_id);
+        $this->assertSame('refund_pending', $case->fresh()->status);
+
+        // A retry must remain pending and must not duplicate or prematurely post
+        // the refund journal while the gateway has not confirmed settlement.
+        $second = $service->adminDisburseRefund($this->superAdmin, $case->fresh());
+        $this->assertTrue($second['success']);
+        $this->assertSame('initiated', $second['status']);
+        $this->assertSame(0, \\App\\Models\\FinancialJournalEntry::where('order_id', $order->id)->count());
+        $this->assertSame('refund_pending', $case->fresh()->status);
+        $this->assertSame('initiated', \\App\\Models\\FinancialOperation::where('metadata->return_case_id', $case->id)->value('status'));
+    }
+
+    /**
      * 7. Multi-vendor cart: Returns on Vendor A do not affect Vendor B
      */
     public function test_multi_vendor_child_order_returns_are_strictly_isolated()
