@@ -31,6 +31,18 @@ class PayoutFinalizationService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            // A terminal failed/rejected payout must not be reopened by a delayed success
+            // webhook after its wallet/allocation/journal reversal has already been applied.
+            if ($lockedPayout->status === 'rejected' && $lockedPayout->gateway_status === 'failed') {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'payout' => $lockedPayout,
+                    'message' => 'Rejected vendor payout remains terminal; delayed success requires manual reconciliation.',
+                ];
+            }
+
             $existingAllocationsSum = (string)$lockedPayout->allocations()->where('status', 'allocated')->sum('allocated_amount');
             $hasJournalEntry = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $lockedPayout->id)->exists();
 
@@ -261,6 +273,18 @@ class PayoutFinalizationService
                 ->where('id', $payout->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            // A terminal failed/rejected payout must not be reopened by a delayed success
+            // webhook after its wallet/journal reversal has already been applied.
+            if ($lockedPayout->status === 'rejected' && $lockedPayout->gateway_status === 'failed') {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'payout' => $lockedPayout,
+                    'message' => 'Rejected logistics payout remains terminal; delayed success requires manual reconciliation.',
+                ];
+            }
 
             // 1. Idempotency Guard
             if ($lockedPayout->status === 'approved' && $lockedPayout->gateway_status === 'success' && $lockedPayout->disbursed_at !== null) {
