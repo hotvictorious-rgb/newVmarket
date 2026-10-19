@@ -606,7 +606,24 @@ class PaystackPaymentController extends Controller
                     return response()->json(['status' => false, 'message' => 'Refund currency does not match the reserved operation.'], 400);
                 }
 
-                app(\App\Services\FinancialOperationService::class)->finalizeRefundConfirmation($finOp, $rData);
+                $finalization = app(\App\Services\FinancialOperationService::class)
+                    ->finalizeRefundConfirmation($finOp, $rData);
+                if (!empty($finalization['protected'])) {
+                    $this->updateProcessedEvent($processedEvent, [
+                        'status' => 'unmatched',
+                        'error_reason' => 'REFUND_TERMINAL_STATE_CONFLICT: Late success cannot reopen a failed/reversed refund operation; manual reconciliation required.',
+                        'processed_at' => Carbon::now(),
+                    ]);
+                    Log::critical('Paystack refund success conflicts with a terminal failed/reversed financial operation.', [
+                        'event_id' => $processedEvent->event_id,
+                        'operation_id' => $finOp->id,
+                        'operation_status' => $finalization['operation']->status ?? $finOp->status,
+                    ]);
+                    return response()->json([
+                        'status' => true,
+                        'message' => 'Refund event received but conflicts with a terminal operation; flagged for manual reconciliation.',
+                    ], 200);
+                }
             } else {
                 // Do not mark an order refunded merely because a signed webhook names its
                 // payment reference. Without a matching FinancialOperation, we cannot
