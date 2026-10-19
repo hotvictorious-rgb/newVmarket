@@ -224,6 +224,7 @@ Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
 Route::get('/shop/{slug}', [PortalController::class, 'showShopStorefront'])->name('shop.storefront');
 Route::get('/product/{slug}', [PortalController::class, 'showProductDetail'])->name('product.detail');
 Route::get('/checkout', [PortalController::class, 'showCheckout'])->name('checkout');
+Route::post('/checkout', [PortalController::class, 'processCheckout']);
 Route::post('/checkout/process', [PortalController::class, 'processCheckout'])->name('checkout.process');
 Route::get('/payment/paystack/callback', [PaystackPaymentController::class, 'handleCallback'])->name('payment.paystack.callback');
 Route::post('/payment/paystack/webhook', [PaystackPaymentController::class, 'handleWebhook'])->name('payment.paystack.webhook');

@@ -102,6 +102,7 @@ Route::prefix('v1')->group(function () {
             Route::post('{code}/cancel', [CheckoutAndReservationApiController::class, 'cancelPickupReservation']);
         });
         Route::post('pickup-reservations/create', [CheckoutAndReservationApiController::class, 'createPickupReservation']);
+        Route::post('customer/reservations/pickup', [CheckoutAndReservationApiController::class, 'createPickupReservation']);
 
         // Customer Orders, Handover & 24h Post-Delivery Disputes
                 // Customer Verified Product Reviews (Only Delivered, Non-Returned Purchases)
@@ -172,6 +173,8 @@ Route::prefix('v1')->group(function () {
             Route::post('products', [VendorTerminalApiController::class, 'storeProduct']);
             Route::post('products/{id}', [VendorTerminalApiController::class, 'updateProduct']);
             Route::post('products/{id}/freshness', [VendorTerminalApiController::class, 'refreshFreshness']);
+            Route::post('products/{id}/reconfirm', [VendorTerminalApiController::class, 'refreshFreshness']);
+            Route::post('terminal/products/{id}/reconfirm', [VendorTerminalApiController::class, 'refreshFreshness']);
             Route::post('products/{id}/toggle-stock', [VendorTerminalApiController::class, 'toggleStock']);
 
             // Financial Ledger, Payouts & 48h Cooldown

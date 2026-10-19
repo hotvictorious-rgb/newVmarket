@@ -24,6 +24,9 @@ class Product extends Model
         'unit_price',
         'is_in_stock',
         'inventory_quantity',
+        'physical_quantity',
+        'allocated_quantity',
+        'held_quantity',
         'listing_status',
         'listing_confirmed_at',
         'is_vmarket_flagship',
@@ -41,6 +44,9 @@ class Product extends Model
         'slash_price' => 'decimal:2',
         'rating' => 'decimal:2',
         'reviews_count' => 'integer',
+        'physical_quantity' => 'integer',
+        'allocated_quantity' => 'integer',
+        'held_quantity' => 'integer',
         'is_in_stock' => 'boolean',
         'is_vmarket_flagship' => 'boolean',
         'is_approved' => 'boolean',
@@ -56,7 +62,48 @@ class Product extends Model
         'package_tier_label',
         'warranty_label',
         'discount_percent',
+        'available_quantity',
+        'is_available_for_sale',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function ($product) {
+            if ((!isset($product->attributes['physical_quantity']) || $product->attributes['physical_quantity'] === null || (int)$product->attributes['physical_quantity'] === 0) && !empty($product->attributes['inventory_quantity'])) {
+                $product->attributes['physical_quantity'] = (int) $product->attributes['inventory_quantity'];
+            }
+        });
+    }
+
+    /**
+     * Authoritative Available Sellable Quantity:
+     * Available = max(0, Physical - Allocated - Held)
+     */
+    public function getAvailableQuantityAttribute(): int
+    {
+        if (isset($this->attributes['inventory_quantity']) && (int)$this->attributes['inventory_quantity'] === 0) {
+            return 0;
+        }
+
+        $physical = (int) ($this->physical_quantity > 0 ? $this->physical_quantity : ($this->inventory_quantity ?? 0));
+        $allocated = (int) ($this->allocated_quantity ?? 0);
+        $held = (int) ($this->held_quantity ?? 0);
+        $available = max(0, $physical - $allocated - $held);
+
+        if (isset($this->attributes['inventory_quantity'])) {
+            return min($available, (int)$this->attributes['inventory_quantity']);
+        }
+        return $available;
+    }
+
+    /**
+     * Storefront availability gate:
+     * Product is in stock and has at least 1 sellable unit.
+     */
+    public function getIsAvailableForSaleAttribute(): bool
+    {
+        return (bool)$this->is_in_stock && $this->available_quantity > 0 && $this->isFresh();
+    }
 
     public function vendor()
     {
@@ -124,6 +171,7 @@ class Product extends Model
     /**
      * 7-Day Marketplace Freshness Invariant:
      * Product listings require explicit merchant confirmation every 7 days.
+     * Fresh = (t_confirmed is not null) AND (t_confirmed <= t_now < t_confirmed + 7 days)
      */
     public function isFresh(): bool
     {
@@ -131,7 +179,10 @@ class Product extends Model
             return false;
         }
 
-        return Carbon::now()->diffInDays($this->listing_confirmed_at) <= 7;
+        $now = Carbon::now();
+        $confirmedAt = Carbon::parse($this->listing_confirmed_at);
+
+        return $confirmedAt->lte($now) && $now->lt($confirmedAt->copy()->addDays(7));
     }
 
     /**
@@ -140,10 +191,14 @@ class Product extends Model
      */
     public function scopeMarketplaceEligible(Builder $query): Builder
     {
+        $now = Carbon::now();
+        $sevenDaysAgo = $now->copy()->subDays(7);
+
         return $query->where('is_approved', true)
             ->where('listing_status', 'listed')
             ->whereNotNull('listing_confirmed_at')
-            ->where('listing_confirmed_at', '>=', Carbon::now()->subDays(7))
+            ->where('listing_confirmed_at', '>', $sevenDaysAgo)
+            ->where('listing_confirmed_at', '<=', $now)
             ->whereHas('vendor', function ($q) {
                 $q->where('marketplace_status', 'active')
                     ->whereHas('user', function ($uq) {

@@ -13,7 +13,7 @@
     </div>
 
     <!-- Main Title & Trust Assurance -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
         <h1 style="font-size: 24px; font-weight: 800; color: #0F172A; margin: 0; display: flex; align-items: center; gap: 10px; letter-spacing: -0.3px;">
             <span style="color: var(--vm-primary); display: inline-flex; align-items: center;">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -25,6 +25,43 @@
             <span>Zero-Risk Escrow Protection</span>
         </div>
     </div>
+
+    @php
+        $availableQty = $product->available_quantity;
+        $isOutOfStock = (!$product->is_in_stock || !$product->is_available_for_sale || $availableQty <= 0 || $availableQty < $quantity);
+    @endphp
+
+    @if($isOutOfStock)
+        <!-- Out of Stock Guard Banner -->
+        <div style="background: #FEF2F2; border: 1.5px solid #F87171; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; display: flex; align-items: flex-start; gap: 14px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.08);">
+            <div style="color: #DC2626; flex-shrink: 0; margin-top: 2px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div>
+                <strong style="font-size: 15px; color: #991B1B; display: block; margin-bottom: 4px;">Item Currently Out of Stock</strong>
+                <p style="font-size: 13px; color: #B91C1C; margin: 0; line-height: 1.5;">
+                    All units of <strong>{{ $product->name }}</strong> have been allocated to confirmed orders, marked out of stock by the vendor, or temporarily reserved in active 30-minute checkout holds. Purchasing is temporarily disabled until stock is replenished.
+                </p>
+            </div>
+        </div>
+    @else
+        <!-- 30-Minute Stock Hold & Escrow Guarantee Banner -->
+        <div style="background: #F0FDF4; border: 1.5px solid #86EFAC; border-radius: 12px; padding: 14px 18px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="color: #16A34A; flex-shrink: 0;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div style="font-size: 12.5px; color: #166534; line-height: 1.4;">
+                    <strong>30-Minute Guaranteed Inventory Hold:</strong> Submitting your order reserves your units for 30 minutes while you complete Paystack payment.
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="background: #DCFCE7; color: #15803D; font-size: 11.5px; font-weight: 800; padding: 3px 10px; border-radius: 999px;">
+                    In Stock &bull; Available to Order
+                </span>
+            </div>
+        </div>
+    @endif
 
     <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; align-items: start;">
         
@@ -76,7 +113,7 @@
                     <!-- Landmark Assistance Field -->
                     <div>
                         <label style="display: block; font-size: 12px; font-weight: 600; color: #64748B; margin-bottom: 5px;">
-                            Nearest Landmark / Bus Stop <span style="color: #94A3B8;">(Helps dispatch riders locate you swiftly)</span>
+                            Nearest Landmark / Bus Stop <span style="color: #94A3B8;">(Helps dispatch couriers locate you swiftly)</span>
                         </label>
                         <input type="text" name="landmark" placeholder="e.g. Opposite Ibom Plaza / Near Champion Breweries" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-size: 13px; outline: none; box-sizing: border-box;">
                     </div>
@@ -87,6 +124,7 @@
                 <!-- ========================================== -->
                 @php
                     $isDeliveryAvailable = $deliveryCheck['is_available'] ?? true;
+                    $isCrossLga = ($product->shop->lga_id !== $destLga->id);
                 @endphp
 
                 @if($errors->has('fulfillment_type'))
@@ -133,13 +171,13 @@
                         <label id="vmCardPickup" style="border: {{ $isDeliveryAvailable ? '1.5px solid #CBD5E1' : '2px solid #5E17EB' }}; background: {{ $isDeliveryAvailable ? '#FFFFFF' : '#F5F3FF' }}; border-radius: 12px; padding: 16px; cursor: pointer; display: block; transition: all 0.2s ease;">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
                                 <input type="radio" name="fulfillment_type" id="vmRadioPickup" value="in_shop_pickup" {{ $isDeliveryAvailable ? '' : 'checked' }} onchange="vmSelectFulfillment('pickup')" style="accent-color: #5E17EB; width: 18px; height: 18px;">
-                                <span style="background: #ECFDF5; color: #059669; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;">FREE</span>
+                                <span style="background: #ECFDF5; color: #059669; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;">FREE (&#8358;0.00)</span>
                             </div>
                             <strong style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #0F172A; margin-bottom: 3px;">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                                <span>In-Store Pickup</span>
+                                <span>In-Shop Counter Pickup</span>
                             </strong>
-                            <span style="font-size: 12px; color: #64748B; line-height: 1.4; display: block;">Collect &amp; inspect physically from verified shop counter at {{ $product->shop->name }}</span>
+                            <span style="font-size: 12px; color: #64748B; line-height: 1.4; display: block;">Collect &amp; inspect physically at {{ $product->shop->name }} counter. Pay &#8358;0 online upfront; hand over OTP only upon approval.</span>
                         </label>
 
                         <!-- Doorstep Delivery Card -->
@@ -150,51 +188,42 @@
                                     {{ $isDeliveryAvailable ? '&#8358;' . number_format((float)$deliveryFee, 0) : 'UNAVAILABLE' }}
                                 </span>
                             </div>
-                            @php
-                                $isCrossLga = ($product->shop->lga_id !== $destLga->id);
-                            @endphp
                             <strong id="vmDeliveryTitle" style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: {{ $isDeliveryAvailable ? '#5E17EB' : '#64748B' }}; margin-bottom: 3px;">
-                                @if($isCrossLga)
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                                    <span>LGA Collection Point</span>
-                                @else
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                                    <span>Municipal Doorstep Delivery</span>
-                                @endif
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                                <span>Vendor Direct Doorstep Delivery</span>
                             </strong>
                             <span id="vmDeliveryDesc" style="font-size: 12px; color: #64748B; line-height: 1.4; display: block;">
                                 @if(!$isDeliveryAvailable)
-                                    Delivery route currently suspended. In-Store Pickup active.
-                                @elseif($isCrossLga)
-                                    Transit fleet delivers to company Collection Point in {{ $destLga->name }}. Collect using your secret 6-digit PIN.
+                                    Delivery route currently suspended for this destination. In-Shop Pickup active.
                                 @else
-                                    Delivered directly to your door with Handshake OTP verification.
+                                    Delivered directly to your door with courier Handshake OTP security.
                                 @endif
                             </span>
                         </label>
                     </div>
 
-                    <!-- Collection Point Selector (Inter-LGA / Inter-State) -->
+                    <!-- Optional Accredited Delivery Station / Collection Hub (Inter-LGA / Line-Haul) -->
                     <div id="vmCollectionPointFields" style="display: {{ ($isDeliveryAvailable && $isCrossLga && isset($collectionPoints) && count($collectionPoints) > 0) ? 'block' : 'none' }}; background: #EEF2FF; border: 1.5px solid #6366F1; border-radius: 12px; padding: 16px; margin-top: 10px; margin-bottom: 12px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                             <label style="display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 800; color: #1E1B4B;">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                                <span>Choose Accredited Collection Point in {{ $destLga->name }} *</span>
+                                <span>Accredited Delivery Hub in {{ $destLga->name }} (Optional)</span>
                             </label>
-                            <span class="dash-badge dash-badge-purple" style="font-size: 10px; font-weight: 700;">
-                                Single-Company Transit
+                            <span style="font-size: 10px; font-weight: 700; background: #E0E7FF; color: #4338CA; padding: 2px 8px; border-radius: 6px;">
+                                Station Hub Available
                             </span>
                         </div>
                         <select name="collection_point_id" id="vmCollectionPointSelect" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #818CF8; background: #FFF; font-size: 13.5px; color: #0F172A; font-weight: 600; outline: none;">
+                            <option value="">Direct Doorstep Handover to Street Address (Default)</option>
                             @foreach($collectionPoints ?? [] as $cp)
                                 <option value="{{ $cp->id }}">
-                                    {{ $cp->name }} &mdash; {{ $cp->address }} ({{ $cp->logisticsCompany->company_name ?? 'Logistics Partner' }})
+                                    {{ $cp->name }} &mdash; {{ $cp->address }} (Station)
                                 </option>
                             @endforeach
                         </select>
                         <div style="font-size: 11.5px; color: #4338CA; margin-top: 8px; line-height: 1.4; display: flex; align-items: flex-start; gap: 6px;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink: 0; margin-top: 1px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                            <span><strong>Collection Point Protocol:</strong> Your courier picks up directly from the merchant's physical shop. Line-haul transit brings the package to this designated station in {{ $destLga->name }}, where you inspect and collect using your secret 6-digit delivery PIN.</span>
+                            <span><strong>Delivery Hub Option:</strong> Direct doorstep delivery will bring the package straight to your address. Alternatively, select a station hub above if you prefer to collect it in person with your secret 6-digit OTP.</span>
                         </div>
                     </div>
 
@@ -228,7 +257,7 @@
                                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             </div>
                             <div>
-                                <strong style="font-size: 14px; color: #1E1B4B; display: block; margin-bottom: 4px;">₦0.00 Online Payment Upfront — Inspect First at Merchant Counter</strong>
+                                <strong style="font-size: 14px; color: #1E1B4B; display: block; margin-bottom: 4px;">&#8358;0.00 Online Payment Upfront &mdash; Inspect First at Merchant Counter</strong>
                                 <p style="font-size: 12px; color: #3730A3; margin: 0; line-height: 1.5;">
                                     When picking up in person, you do not pay online upfront. Visit <strong>{{ $product->shop->name ?? 'the shop' }}</strong>, physically inspect and verify your items at the counter, and pay directly after you are 100% satisfied.
                                 </p>
@@ -313,15 +342,23 @@
                 </div>
 
                 <!-- SUBMIT BUTTON -->
-                <button type="submit" id="vmPayNowBtn" style="width: 100%; background: linear-gradient(135deg, #FFD700 0%, #F59E0B 100%); color: #0F172A; border: none; font-weight: 900; font-size: 16px; padding: 16px 20px; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 16px rgba(255, 215, 0, 0.4); display: flex; align-items: center; justify-content: center; gap: 10px; transition: transform 0.15s ease;">
+                <button type="submit" id="vmPayNowBtn" {{ $isOutOfStock ? 'disabled' : '' }} style="width: 100%; background: {{ $isOutOfStock ? '#E2E8F0' : 'linear-gradient(135deg, #FFD700 0%, #F59E0B 100%)' }}; color: {{ $isOutOfStock ? '#94A3B8' : '#0F172A' }}; border: none; font-weight: 900; font-size: 16px; padding: 16px 20px; border-radius: 12px; cursor: {{ $isOutOfStock ? 'not-allowed' : 'pointer' }}; box-shadow: {{ $isOutOfStock ? 'none' : '0 4px 16px rgba(255, 215, 0, 0.4)' }}; display: flex; align-items: center; justify-content: center; gap: 10px; transition: transform 0.15s ease;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span>Pay &#8358;{{ number_format((float)$totalPayable, 2) }} via Paystack &amp; Secure Order</span>
-                    <span style="font-size: 18px;">&rarr;</span>
+                    <span>
+                        @if($isOutOfStock)
+                            Out of Stock &mdash; Cannot Proceed to Payment
+                        @else
+                            Pay &#8358;{{ number_format((float)$totalPayable, 2) }} via Paystack &amp; Secure Order
+                        @endif
+                    </span>
+                    @if(!$isOutOfStock)
+                        <span style="font-size: 18px;">&rarr;</span>
+                    @endif
                 </button>
 
                 <div style="text-align: center; margin-top: 12px; font-size: 11.5px; color: #64748B; display: flex; align-items: center; justify-content: center; gap: 6px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span>100% Processed by Paystack • PCI-DSS Level 1 Certified • Zero Card Details Stored on Server</span>
+                    <span>100% Processed by Paystack &bull; PCI-DSS Level 1 Certified &bull; Zero Card Details Stored on Server</span>
                 </div>
             </form>
         </div>
@@ -344,9 +381,18 @@
                         <strong style="font-size: 14px; color: #0F172A; display: block; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                             {{ $product->name }}
                         </strong>
-                        <div style="font-size: 12px; color: #64748B; margin-top: 2px; display: flex; align-items: center; gap: 4px;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                            <span>{{ $product->shop->name ?? 'Verified Merchant' }}</span> &bull; <span>Qty: {{ $quantity }}</span>
+                        <div style="font-size: 12px; color: #64748B; margin-top: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                            <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                                <span>{{ $product->shop->name ?? 'Verified Merchant' }}</span>
+                            </span>
+                            &bull; <span>Qty: {{ $quantity }}</span>
+                            &bull;
+                            @if($isOutOfStock)
+                                <span style="color: #DC2626; font-weight: 700; background: #FEE2E2; padding: 1px 6px; border-radius: 4px; font-size: 11px;">Out of Stock</span>
+                            @else
+                                <span style="color: #059669; font-weight: 700; background: #DCFCE7; padding: 1px 6px; border-radius: 4px; font-size: 11px;">In Stock &bull; Available to Order</span>
+                            @endif
                         </div>
                         <strong style="font-size: 13.5px; color: #5E17EB; display: block; margin-top: 4px;">
                             &#8358;{{ number_format((float)$product->unit_price, 2) }}
@@ -365,13 +411,22 @@
                     <span>Delivery Fee:</span>
                     <strong style="color: #0F172A;" id="vmSummaryDeliveryFee">&#8358;{{ number_format((float)$deliveryFee, 2) }}</strong>
                 </div>
-                <div style="display: flex; justify-content: space-between; color: #059669; font-weight: 700; background: #ECFDF5; padding: 6px 10px; border-radius: 6px; align-items: center;">
-                    <span style="display: flex; align-items: center; gap: 5px;">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
-                        <span>5% Cashback Reward:</span>
+
+                @php
+                    $cashbackReward = (float)$merchandiseSubtotal * 0.05;
+                @endphp
+                <!-- 5% Loyalty Cashback Reward -->
+                <div style="display: flex; justify-content: space-between; color: #047857; font-weight: 700; background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%); border: 1px solid #A7F3D0; padding: 10px 12px; border-radius: 8px; align-items: center;">
+                    <span style="display: flex; align-items: center; gap: 6px;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+                        <span>5% Customer Cashback:</span>
                     </span>
-                    <span>+&#8358;{{ number_format((float)$merchandiseSubtotal * 0.05, 2) }}</span>
+                    <span style="font-size: 14px; font-weight: 800;">+&#8358;{{ number_format($cashbackReward, 2) }}</span>
                 </div>
+                <div style="font-size: 11px; color: #059669; margin-top: -4px; padding-left: 2px;">
+                    &#10003; 5% calculated on eligible merchandise (excl. delivery) &bull; Rewarded to customer wallet on delivery OTP confirmation
+                </div>
+
                 <div style="border-top: 2px dashed #E2E8F0; padding-top: 14px; margin-top: 4px; display: flex; justify-content: space-between; font-size: 18px; font-weight: 900; color: #5E17EB;">
                     <span>Total Amount:</span>
                     <span id="vmSummaryGrandTotal">&#8358;{{ number_format((float)$totalPayable, 2) }}</span>
@@ -395,6 +450,7 @@ const activeLanesMap = @json($activeLanesMap ?? []);
 const shopOriginLgaId = {{ $product->shop->lga_id ?? 69 }};
 const subtotal = {{ (float)$merchandiseSubtotal }};
 let currentDeliveryFee = {{ (float)$deliveryFee }};
+const isItemOutOfStock = {{ $isOutOfStock ? 'true' : 'false' }};
 
 function vmSelectFulfillment(type) {
     const cardPickup = document.getElementById('vmCardPickup');
@@ -402,6 +458,7 @@ function vmSelectFulfillment(type) {
     const radioPickup = document.getElementById('vmRadioPickup');
     const radioDelivery = document.getElementById('vmRadioDelivery');
     const pickupFields = document.getElementById('vmPickupFields');
+    const cpFields = document.getElementById('vmCollectionPointFields');
     const deliveryFeeEl = document.getElementById('vmSummaryDeliveryFee');
     const grandTotalEl = document.getElementById('vmSummaryGrandTotal');
     const payBtn = document.getElementById('vmPayNowBtn');
@@ -421,14 +478,25 @@ function vmSelectFulfillment(type) {
             cardDelivery.style.background = radioDelivery && radioDelivery.disabled ? '#F8FAFC' : '#FFFFFF';
         }
         if (pickupFields) pickupFields.style.display = 'block';
+        if (cpFields) cpFields.style.display = 'none';
         if (gatewayOptions) gatewayOptions.style.display = 'none';
         if (pickupNotice) pickupNotice.style.display = 'block';
         if (step3Title) step3Title.textContent = 'In-Store Inspection & Counter Payment';
-        if (step3Subtitle) step3Subtitle.textContent = 'No online payment required today. Inspect your items and pay at the counter.';
+        if (step3Subtitle) step3Subtitle.textContent = 'No online payment required today. Inspect your items and pay at the shop counter.';
 
         if (deliveryFeeEl) deliveryFeeEl.textContent = '₦0.00 (Free Pickup)';
         if (grandTotalEl) grandTotalEl.textContent = '₦0.00 (Pay at Shop Counter)';
-        if (payBtn) payBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg> <span>Reserve for Free — Inspect &amp; Pay at Shop Counter</span> <span style="font-size: 18px;">&rarr;</span>`;
+        if (payBtn) {
+            if (isItemOutOfStock) {
+                payBtn.disabled = true;
+                payBtn.style.cursor = 'not-allowed';
+                payBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> <span>Out of Stock &mdash; Cannot Proceed</span>`;
+            } else {
+                payBtn.disabled = false;
+                payBtn.style.cursor = 'pointer';
+                payBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg> <span>Reserve for Free &mdash; Inspect &amp; Pay at Shop Counter</span> <span style="font-size: 18px;">&rarr;</span>`;
+            }
+        }
     } else {
         if (radioDelivery && radioDelivery.disabled) return;
         if (radioDelivery) radioDelivery.checked = true;
@@ -441,6 +509,11 @@ function vmSelectFulfillment(type) {
             cardPickup.style.background = '#FFFFFF';
         }
         if (pickupFields) pickupFields.style.display = 'none';
+        if (cpFields) {
+            const destLgaEl = document.getElementById('vmDestLgaSelect');
+            const destLgaVal = destLgaEl ? parseInt(destLgaEl.value) : 0;
+            cpFields.style.display = (destLgaVal !== shopOriginLgaId) ? 'block' : 'none';
+        }
         if (gatewayOptions) gatewayOptions.style.display = 'flex';
         if (pickupNotice) pickupNotice.style.display = 'none';
         if (step3Title) step3Title.textContent = 'Select Paystack Payment Channel';
@@ -449,7 +522,17 @@ function vmSelectFulfillment(type) {
         if (deliveryFeeEl) deliveryFeeEl.textContent = '₦' + currentDeliveryFee.toLocaleString('en-NG', { minimumFractionDigits: 2 });
         const newTotal = subtotal + currentDeliveryFee;
         if (grandTotalEl) grandTotalEl.textContent = '₦' + newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 });
-        if (payBtn) payBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <span>Pay ₦${newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })} via Paystack (Prepaid Escrow)</span> <span style="font-size: 18px;">&rarr;</span>`;
+        if (payBtn) {
+            if (isItemOutOfStock) {
+                payBtn.disabled = true;
+                payBtn.style.cursor = 'not-allowed';
+                payBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> <span>Out of Stock &mdash; Cannot Proceed</span>`;
+            } else {
+                payBtn.disabled = false;
+                payBtn.style.cursor = 'pointer';
+                payBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <span>Pay ₦${newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })} via Paystack &amp; Secure Order</span> <span style="font-size: 18px;">&rarr;</span>`;
+            }
+        }
     }
 }
 
@@ -467,6 +550,7 @@ function vmHandleDestLgaChange(destLgaId) {
     const deliveryDesc = document.getElementById('vmDeliveryDesc');
     const suspendedAlert = document.getElementById('vmSuspendedAlert');
     const statusBadge = document.getElementById('vmCorridorStatusBadge');
+    const cpFields = document.getElementById('vmCollectionPointFields');
 
     let isServiced = true;
     let fee = 1000.0;
@@ -512,6 +596,7 @@ function vmHandleDestLgaChange(destLgaId) {
         }
         if (deliveryTitle) deliveryTitle.style.color = '#64748B';
         if (deliveryDesc) deliveryDesc.textContent = 'Doorstep route currently suspended. In-Store Pickup active.';
+        if (cpFields) cpFields.style.display = 'none';
 
         // Seamless auto-switch to guaranteed free in-shop pickup
         currentDeliveryFee = 0.0;
@@ -539,6 +624,8 @@ function vmHandleDestLgaChange(destLgaId) {
         const radioPickup = document.getElementById('vmRadioPickup');
         if (!radioPickup || !radioPickup.checked) {
             vmSelectFulfillment('delivery');
+        } else {
+            if (cpFields) cpFields.style.display = 'none';
         }
     }
 }

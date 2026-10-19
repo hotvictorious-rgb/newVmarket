@@ -128,9 +128,30 @@ class Order extends Model
         return !is_null($this->rider_arrived_at);
     }
 
+    public function isDelivery(): bool
+    {
+        return $this->fulfillment_type === 'doorstep_delivery';
+    }
+
+    public function isPickup(): bool
+    {
+        return in_array($this->fulfillment_type, ['in_shop_pickup', 'in_store_pickup'], true);
+    }
+
+    public function isFulfilled(): bool
+    {
+        if ($this->isDelivery()) {
+            return $this->order_status === 'delivered';
+        }
+        return in_array($this->order_status, ['picked_up', 'delivered'], true);
+    }
+
     public function isCustomerHandshakePending(): bool
     {
-        return $this->order_status === 'out_for_delivery' && $this->hasRiderArrived() && !$this->delivery_confirmed_by_customer;
+        return $this->isDelivery()
+            && $this->order_status === 'out_for_delivery'
+            && $this->hasRiderArrived()
+            && !$this->delivery_confirmed_by_customer;
     }
 
     public function isVendorHandoverReady(): bool
@@ -140,8 +161,27 @@ class Order extends Model
 
     public function isRiderPickupPending(): bool
     {
-        return in_array($this->order_status, ['confirmed', 'processing', 'ready_for_pickup'])
+        return $this->isDelivery()
+            && in_array($this->order_status, ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'], true)
             && !$this->pickup_confirmed_by_rider;
+    }
+
+    public function scopeDelivery($query)
+    {
+        return $query->where('fulfillment_type', 'doorstep_delivery');
+    }
+
+    public function scopePickup($query)
+    {
+        return $query->whereIn('fulfillment_type', ['in_shop_pickup', 'in_store_pickup']);
+    }
+
+    public function scopeFulfilled($query)
+    {
+        return $query->where(function ($q) {
+            $q->where(fn ($sub) => $sub->where('fulfillment_type', 'doorstep_delivery')->where('order_status', 'delivered'))
+              ->orWhere(fn ($sub) => $sub->whereIn('fulfillment_type', ['in_shop_pickup', 'in_store_pickup'])->whereIn('order_status', ['picked_up', 'delivered']));
+        });
     }
 
     /**
@@ -152,7 +192,7 @@ class Order extends Model
         do {
             $otp = (string) random_int(100000, 999999);
             $collision = self::where('verification_code', $otp)
-                ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
+                ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup', 'out_for_delivery'])
                 ->exists();
         } while ($collision);
 
@@ -167,7 +207,7 @@ class Order extends Model
         do {
             $otp = (string) random_int(100000, 999999);
             $collision = self::where('pickup_verification_code', $otp)
-                ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
+                ->whereIn('order_status', ['pending', 'confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup', 'ready_for_counter_pickup', 'out_for_delivery'])
                 ->exists();
         } while ($collision);
 

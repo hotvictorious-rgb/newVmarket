@@ -129,7 +129,18 @@ class CheckoutExecutionService
             $itemsToCreate = [];
 
             foreach ($validated['items'] as $item) {
-                $product = Product::marketplaceEligible()->lockForUpdate()->findOrFail($item['product_id']);
+                $product = Product::marketplaceEligible()->lockForUpdate()->find($item['product_id']);
+
+                if (!$product) {
+                    $rawProduct = Product::find($item['product_id']);
+                    return [
+                        'error' => true,
+                        'status_code' => $rawProduct ? 422 : 404,
+                        'message' => $rawProduct
+                            ? "Product '{$rawProduct->name}' has expired or is not currently eligible for purchase. The vendor must re-confirm product freshness."
+                            : "Product ID {$item['product_id']} not found.",
+                    ];
+                }
 
                 if ((int)$product->shop_id !== (int)$shop->id) {
                     return [
@@ -145,10 +156,10 @@ class CheckoutExecutionService
                     ];
                 }
 
-                if ($product->inventory_quantity < $item['quantity']) {
+                if ($product->available_quantity < $item['quantity']) {
                     return [
                         'error' => true,
-                        'message' => "Insufficient stock for {$product->name}. Only {$product->inventory_quantity} available.",
+                        'message' => "Insufficient stock for {$product->name}. Only {$product->available_quantity} available.",
                     ];
                 }
 
@@ -403,10 +414,11 @@ class CheckoutExecutionService
                 ]);
             }
 
-            // Deduct inventory and insert items
+            // Hold inventory for 30 minutes and insert items
             foreach ($itemsToCreate as $itemData) {
-                $itemData['product']->decrement('inventory_quantity', $itemData['quantity']);
-                $itemData['product']->is_in_stock = ($itemData['product']->inventory_quantity > 0);
+                $itemData['product']->increment('held_quantity', $itemData['quantity']);
+                $itemData['product']->inventory_quantity = $itemData['product']->available_quantity;
+                $itemData['product']->is_in_stock = ($itemData['product']->available_quantity > 0);
                 $itemData['product']->save();
 
                 OrderItem::create([
@@ -548,7 +560,8 @@ class CheckoutExecutionService
         if (!empty($result['error'])) {
             return [
                 'success' => false,
-                'status_code' => 422,
+                'error' => true,
+                'status_code' => $result['status_code'] ?? 422,
                 'message' => $result['message'],
             ];
         }

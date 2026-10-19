@@ -735,6 +735,8 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
         $product = Product::where('vendor_id', $vendor->id)->findOrFail($id);
 
         $product->listing_confirmed_at = Carbon::now();
+        $product->listing_status = 'listed';
+        $product->is_in_stock = true;
         $product->save();
 
         return response()->json([

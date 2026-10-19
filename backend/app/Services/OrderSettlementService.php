@@ -130,7 +130,7 @@ class OrderSettlementService
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
                         $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
-                        if (!$product || $product->inventory_quantity < $item->quantity) {
+                        if (!$product || $product->available_quantity < $item->quantity) {
                             $canReinstate = false;
                             break;
                         }
@@ -138,13 +138,14 @@ class OrderSettlementService
                 }
 
                 if ($canReinstate) {
-                    // Re-reserve stock and reinstate order to confirmed
+                    // Re-reserve stock and reinstate order to confirmed (transitioning directly to allocated stock)
                     foreach ($lockedOrder->items as $item) {
                         if ($item->product_id) {
                             $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
                             if ($product) {
-                                $product->decrement('inventory_quantity', $item->quantity);
-                                $product->is_in_stock = ($product->inventory_quantity > 0);
+                                $product->allocated_quantity = (int)$product->allocated_quantity + (int)$item->quantity;
+                                $product->inventory_quantity = $product->available_quantity;
+                                $product->is_in_stock = ($product->available_quantity > 0);
                                 $product->save();
                             }
                         }
@@ -186,6 +187,21 @@ class OrderSettlementService
             } elseif ($lockedOrder->order_status === 'pending') {
                 $lockedOrder->order_status = 'confirmed';
                 $lockedOrder->vendor_settlement_status = 'held';
+
+                // Transition held stock to allocated stock upon confirmed payment
+                foreach ($lockedOrder->items as $item) {
+                    if ($item->product_id) {
+                        $prod = Product::where('id', $item->product_id)->lockForUpdate()->first();
+                        if ($prod) {
+                            $held = min((int)$prod->held_quantity, (int)$item->quantity);
+                            $prod->held_quantity = max(0, (int)$prod->held_quantity - $held);
+                            $prod->allocated_quantity = (int)$prod->allocated_quantity + (int)$item->quantity;
+                            $prod->inventory_quantity = $prod->available_quantity;
+                            $prod->is_in_stock = ($prod->available_quantity > 0);
+                            $prod->save();
+                        }
+                    }
+                }
             }
             $lockedOrder->save();
 
@@ -659,7 +675,14 @@ class OrderSettlementService
                 }
             }
 
-            if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_pickup'])) {
+            if ($lockedOrder->fulfillment_type !== 'doorstep_delivery') {
+                return [
+                    'success' => false,
+                    'message' => 'Courier handover staging is only for doorstep delivery orders. In-shop pickup orders are staged for customer counter collection.',
+                ];
+            }
+
+            if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'])) {
                 return [
                     'success' => false,
                     'message' => "Order cannot be staged for handover in status {$lockedOrder->order_status}.",
@@ -700,7 +723,11 @@ class OrderSettlementService
         return DB::transaction(function () use ($order, $otp, $rider, $proofImagePath, $pickupNotes) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
-            if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_pickup'])) {
+            if ($lockedOrder->fulfillment_type !== 'doorstep_delivery') {
+                return ['success' => false, 'message' => 'Rider courier pickup is only applicable to doorstep delivery orders. In-shop pickup orders are collected directly at the shop counter.'];
+            }
+
+            if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'])) {
                 return ['success' => false, 'message' => "Order cannot be picked up in status {$lockedOrder->order_status}."];
             }
 
@@ -805,6 +832,10 @@ class OrderSettlementService
         return DB::transaction(function () use ($order, $rider) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
+            if ($lockedOrder->fulfillment_type !== 'doorstep_delivery') {
+                return ['success' => false, 'message' => 'Rider doorstep arrival is only applicable to doorstep delivery orders.'];
+            }
+
             if ($lockedOrder->order_status !== 'out_for_delivery') {
                 return [
                     'success' => false,
@@ -850,6 +881,10 @@ class OrderSettlementService
     ): array {
         return DB::transaction(function () use ($order, $otp, $rider, $proofImagePath, $customerNotes) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+
+            if ($lockedOrder->fulfillment_type !== 'doorstep_delivery') {
+                return ['success' => false, 'message' => 'Customer doorstep verification is only for doorstep delivery orders.'];
+            }
 
             if ($lockedOrder->order_status !== 'out_for_delivery') {
                 return ['success' => false, 'message' => 'Order is not currently out for delivery.'];
@@ -1181,7 +1216,7 @@ class OrderSettlementService
 
             $now = Carbon::now();
             $refundHours = max(1, (int) SystemSetting::get('refund_window_hours', 24));
-            $lockedOrder->order_status = 'delivered';
+            $lockedOrder->order_status = 'picked_up';
             $lockedOrder->received_at = $now;
             $lockedOrder->refund_window_expires_at = $now->copy()->addHours($refundHours);
             $lockedOrder->vendor_settlement_status = 'held';
@@ -1217,7 +1252,7 @@ class OrderSettlementService
      */
     public function evaluateMaturation(Order $order): void
     {
-        if ($order->order_status !== 'delivered' || !$order->isReturnWindowExpired()) {
+        if (!$order->isFulfilled() || !$order->isReturnWindowExpired()) {
             return;
         }
 
@@ -1389,7 +1424,16 @@ class OrderSettlementService
                     if ($item->product_id) {
                         $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
                         if ($product) {
-                            $product->increment('inventory_quantity', $item->quantity);
+                            if ((int)$product->held_quantity > 0) {
+                                $held = min((int)$product->held_quantity, (int)$item->quantity);
+                                $product->held_quantity = max(0, (int)$product->held_quantity - $held);
+                                $product->inventory_quantity = $product->available_quantity;
+                            } else {
+                                $product->inventory_quantity = (int)$product->inventory_quantity + (int)$item->quantity;
+                                if ((int)$product->physical_quantity > 0) {
+                                    $product->physical_quantity = max((int)$product->physical_quantity, (int)$product->inventory_quantity);
+                                }
+                            }
                             $product->is_in_stock = ($product->inventory_quantity > 0);
                             $product->save();
                         }

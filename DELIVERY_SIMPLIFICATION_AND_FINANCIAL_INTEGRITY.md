@@ -237,6 +237,92 @@ When a vendor has 10 items and 7 are allocated:
 
 If a merchant physical stock count reports fewer physical units than are already committed, the system must immediately flag an inventory discrepancy, block new sales, and alert the merchant for reconciliation—**never silently erase existing customer allocations or oversell**.
 
+
+## Vendor Simplicity vs. Backend Integrity: The V1 Binary Stock Architecture ('In Stock' vs. 'Out of Stock')
+
+For VICTORIOUS MARKET V1, simplifying the vendor interface to a clear binary choice—**"In Stock"** and **"Out of Stock"**—is the recommended operating model. Vendors operating physical retail shops in Akwa Ibom shouldn't have to manage complicated inventory numbers, track physical shelf counts manually, or face steep onboarding friction if the priority is making the marketplace easy to adopt and operate.
+
+However, there is one critical architectural distinction: **you can simplify what vendors see without removing the inventory safeguards the system needs internally.**
+
+```
++-------------------------------------------------------------+
+|                     VENDOR INTERFACE (V1)                   |
+|        Simple Binary Toggle: [ In Stock ] / [ Out of Stock ]|
++-------------------------------------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|                  CUSTOMER STOREFRONT VIEW                   |
+|       "Available to Order" (In Stock)  |  "Out of Stock"    |
++-------------------------------------------------------------+
+                               |
+                               v
++-------------------------------------------------------------+
+|                   BACKEND FINANCIAL CORE                     |
+|  - Row-Level Locking (lockForUpdate)                        |
+|  - 30-Minute Temporary Reservation Holds (held_quantity)    |
+|  - Confirmed Payment Allocations (allocated_quantity)       |
+|  - Guaranteed Zero-Overselling Concurrency Protection       |
+|  - Controlled Refund Pipeline for Offline Depletions        |
++-------------------------------------------------------------+
+```
+
+### What Happens Behind the Scenes
+
+1. **Vendor marks In Stock (`is_in_stock = true`)**:
+   The product becomes available for purchase across the storefront, subject to the system's order and availability checks. The vendor remains responsible for keeping this status truthful.
+2. **Customer begins checkout / starts payment**:
+   VMARKET temporarily reserves that product for 30 minutes (`held_quantity` incremented under `lockForUpdate()`) so concurrent shoppers cannot claim the same unit.
+3. **Payment succeeds**:
+   The reservation converts into a confirmed allocation (`allocated_quantity` incremented, `held_quantity` released).
+4. **Vendor sells the last item in their physical shop**:
+   The vendor switches the toggle to **Out of Stock** (`is_in_stock = false`). VMARKET immediately rejects all new checkout attempts on the server.
+5. **Payment fails or the 30-minute hold expires**:
+   The temporary reservation hold is automatically released back (`held_quantity` decremented), provided the product is still available and the vendor has not marked it Out of Stock.
+
+### The Real-World Trade-Offs
+
+With only a binary status, VMARKET does not inherently know whether a vendor has 1 physical phone or 100 phones on their shelf.
+
+- **Concurrent Checkout Rush**: If a vendor has only 1 phone left and two customers attempt to buy it simultaneously, a simple status flag alone cannot prevent both orders without atomic backend holds. The backend must enforce server-side row locking (`lockForUpdate()`) and hold reservations to prevent race conditions.
+- **Offline Physical Shop Sales**: If a vendor sells the last item over the counter in their brick-and-mortar shop but forgets to switch the toggle to "Out of Stock" in the VMARKET app, an online customer might place an order for an item that is physically gone.
+
+### The VMARKET V1 Policy Matrix
+
+| Feature | V1 Decision | Architectural Rationale |
+| :--- | :--- | :--- |
+| **Vendor Interface** | **In Stock / Out of Stock** | Zero cognitive burden; one-tap toggle removes operational friction for local shop owners. |
+| **Storefront Presentation** | **In Stock / Out of Stock** | Clean customer messaging: "Available to Order" vs. "Out of Stock" (product remains visible). |
+| **Internal Stock Quantities** | **Retained as Safeguards** | The Three-Quantity engine (`Physical`, `Allocated`, `Held`) operates under the hood to prevent race conditions. |
+| **30-Minute Payment Holds** | **Mandatory** | Guarantees that a customer initiating Paystack payment has their unit secured. |
+| **Duplicate-Payment Protection**| **Mandatory** | Gateway attempt fencing and idempotent ledger recording prevent double charges. |
+| **Overselling Prevention** | **Mandatory** | Server-side transaction locks ensure no two shoppers can claim the same held unit. |
+| **Vendor POS Sync** | **Future Phase** | Integrated when vendor point-of-sale hardware/scanners are introduced in V2. |
+
+### The Core Purchasing Validation Rule
+
+The core purchasing validation on the server executes inside an atomic database transaction:
+
+```php
+// Server-side atomic validation guard
+$product = Product::where('id', $validated['product_id'])
+    ->lockForUpdate()
+    ->firstOrFail();
+
+if (!$product->is_in_stock || !$product->is_available_for_sale) {
+    throw ValidationException::withMessages([
+        'product' => 'This product is currently out of stock.',
+    ]);
+}
+```
+
+### The Customer Protection Policy (Offline Sold-Out Safeguard)
+
+If a vendor sells an item offline and forgets to update their VMARKET status, a customer who pays online must be protected 100%:
+1. **Never erase or alter paid records silently**: An existing paid order cannot be cancelled without an auditable ledger trail.
+2. **Controlled Refund Execution**: The order transitions to `paid_stock_unavailable` with `vendor_settlement_status = 'refund_pending'`.
+3. **Zero Customer Loss**: The full payment (merchandise + delivery fee) is either refunded to the customer's original payment channel or credited 100% to their customer wallet according to customer preference, with full double-entry ledger journal entries.
+
 ## Required workflow
 
 ### Phase 1: Audit before coding

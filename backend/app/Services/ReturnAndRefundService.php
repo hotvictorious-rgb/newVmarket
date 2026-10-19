@@ -733,10 +733,26 @@ class ReturnAndRefundService
                     'description' => "Customer 5% cashback reward liability reversed for Return #{$lockedCase->case_number}",
                 ]);
 
-                // Forfeit pending maturation cashback reward in customer ledger
-                CustomerCashbackLedger::where('order_id', $order->id)
+                // Forfeit proportional pending maturation cashback reward in customer ledger
+                $pendingCashbacks = CustomerCashbackLedger::where('order_id', $order->id)
                     ->where('status', 'pending_maturation')
-                    ->update(['status' => 'forfeited']);
+                    ->lockForUpdate()
+                    ->get();
+
+                $remainingToForfeit = $customerCashbackDebit;
+                foreach ($pendingCashbacks as $cb) {
+                    if (bccomp($remainingToForfeit, '0.00', 2) <= 0) {
+                        break;
+                    }
+                    if (bccomp($cb->amount, $remainingToForfeit, 2) <= 0) {
+                        $remainingToForfeit = bcsub($remainingToForfeit, $cb->amount, 2);
+                        $cb->update(['status' => 'forfeited']);
+                    } else {
+                        $retainedAmount = bcsub($cb->amount, $remainingToForfeit, 2);
+                        $cb->update(['amount' => $retainedAmount]);
+                        $remainingToForfeit = '0.00';
+                    }
+                }
             }
 
             // If delivery fee was refunded, reverse delivery fee allocation and platform delivery cut

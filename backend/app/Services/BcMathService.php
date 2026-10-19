@@ -80,6 +80,10 @@ class BcMathService
         // Platform Total Retained = Merchandise 5% + Delivery Fee 10%
         $platformTotalRetained = self::add($platformRetained, $platformDeliveryCut);
 
+        $platformCommission10 = self::add($totalCommission, $platformDeliveryCut);
+        $vendorDeliveryNet90 = $logisticsNet;
+        $vendorTotalNet90 = self::add($vendorNet, $vendorDeliveryNet90);
+
         return [
             'merchandise_subtotal' => $merchandiseSubtotal,
             'vendor_net_90' => $vendorNet,
@@ -88,8 +92,11 @@ class BcMathService
             'platform_vendor_commission_5' => $platformRetained,
             'delivery_fee_segregated' => $deliveryFee,
             'logistics_net_90' => $logisticsNet,
+            'vendor_delivery_net_90' => $vendorDeliveryNet90,
+            'vendor_total_net_90' => $vendorTotalNet90,
             'platform_delivery_cut_10' => $platformDeliveryCut,
             'platform_delivery_commission_10' => $platformDeliveryCut,
+            'platform_commission_10' => $platformCommission10,
             'platform_total_retained' => $platformTotalRetained,
             'grand_total' => self::add($merchandiseSubtotal, $deliveryFee),
         ];

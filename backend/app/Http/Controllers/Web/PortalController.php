@@ -3483,7 +3483,8 @@ class PortalController extends Controller
 
     public function showProductDetail(Request $request, string $slug)
     {
-        $product = Product::where('slug', $slug)
+        $product = Product::marketplaceEligible()
+            ->where('slug', $slug)
             ->with(['shop.lga', 'vendor', 'category'])
             ->firstOrFail();
 
@@ -3516,13 +3517,13 @@ class PortalController extends Controller
 
         $product = null;
         if ($productId) {
-            $product = Product::with(['shop.lga', 'vendor'])->find($productId);
+            $product = Product::marketplaceEligible()->with(['shop.lga', 'vendor'])->find($productId);
+            if (!$product) {
+                return redirect()->route('storefront')->with('error', 'This product listing has expired or is no longer available. Please select an active item.');
+            }
         }
         if (!$product) {
             $product = Product::marketplaceEligible()->with(['shop.lga', 'vendor'])->first();
-        }
-        if (!$product) {
-            $product = Product::with(['shop.lga', 'vendor'])->first();
         }
 
         if (!$product) {
@@ -3601,16 +3602,36 @@ class PortalController extends Controller
         ]);
 
         $order = DB::transaction(function () use ($validated, $request) {
-            // Atomic Stock Locking Guard (Prevents overselling / race conditions)
-            $product = Product::with(['shop', 'vendor'])
+            // Atomic Stock Locking & Eligibility Guard (Enforces 7-day freshness & marketplace rules under lock)
+            $product = Product::marketplaceEligible()
+                ->with(['shop', 'vendor'])
                 ->where('id', $validated['product_id'])
                 ->lockForUpdate()
-                ->firstOrFail();
+                ->first();
+
+            if (!$product) {
+                return back()->withErrors([
+                    'product_id' => 'This product listing has expired or is no longer eligible for checkout.'
+                ])->withInput();
+            }
+
+            // 7-Day Freshness & Marketplace Eligibility Guard
+            if (!$product->isFresh() || !$product->is_approved || $product->listing_status !== 'listed') {
+                return back()->withErrors([
+                    'product_id' => "This product listing has expired or is no longer eligible for checkout. The merchant must confirm product freshness before it can be purchased."
+                ])->withInput();
+            }
+
+            if ($product->shop && (!$product->shop->is_active || $product->shop->trashed())) {
+                return back()->withErrors([
+                    'product_id' => 'The shop branch offering this item is currently closed or inactive.'
+                ])->withInput();
+            }
 
             $quantity = (int)$validated['quantity'];
-            if ($product->inventory_quantity < $quantity) {
+            if ($product->available_quantity < $quantity) {
                 return back()->withErrors([
-                    'quantity' => "Insufficient stock. Only {$product->inventory_quantity} units available for '{$product->name}'."
+                    'quantity' => "Insufficient stock. Only {$product->available_quantity} units available for '{$product->name}'."
                 ])->withInput();
             }
 
@@ -3795,9 +3816,10 @@ class PortalController extends Controller
                 'line_total' => $merchandiseSubtotal,
             ]);
 
-            // Decrement stock atomically
-            $product->decrement('inventory_quantity', $quantity);
-            $product->is_in_stock = ($product->inventory_quantity > 0);
+            // Atomically hold stock for 30 minutes
+            $product->increment('held_quantity', $quantity);
+            $product->inventory_quantity = $product->available_quantity;
+            $product->is_in_stock = ($product->available_quantity > 0);
             $product->save();
 
             // Store guest token in session for seamless tracking access
@@ -3848,7 +3870,12 @@ class PortalController extends Controller
             'customer_phone' => 'nullable|string|max:30',
         ]);
 
-        $product = Product::with('vendor')->findOrFail($validated['product_id']);
+        $product = Product::marketplaceEligible()->with('vendor')->where('id', $validated['product_id'])->first();
+        if (!$product) {
+            return back()->withErrors([
+                'product_id' => 'This product listing has expired or is no longer eligible for in-shop reservation.'
+            ])->withInput();
+        }
 
         if ($product->vendor && $product->vendor->marketplace_status !== 'active') {
             return back()->withErrors(['product_id' => 'Merchant is not currently active on the marketplace.']);

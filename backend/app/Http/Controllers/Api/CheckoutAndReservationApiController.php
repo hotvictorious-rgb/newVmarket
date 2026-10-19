@@ -309,7 +309,13 @@ class CheckoutAndReservationApiController extends Controller
             return response()->json(['status' => false, 'message' => 'The merchant user account is inactive.'], 422);
         }
 
-        $product = Product::marketplaceEligible()->findOrFail($validated['product_id']);
+        $product = Product::marketplaceEligible()->find($validated['product_id']);
+        if (!$product) {
+            return response()->json([
+                'status' => false,
+                'message' => 'This product listing has expired or is not eligible for pickup reservation. The vendor must re-confirm product freshness.',
+            ], 422);
+        }
 
         if ((int)$product->shop_id !== (int)$shop->id) {
             return response()->json(['status' => false, 'message' => 'Product does not belong to the selected pickup shop branch.'], 422);
@@ -496,11 +502,18 @@ class CheckoutAndReservationApiController extends Controller
             }
 
             $product = Product::marketplaceEligible()->lockForUpdate()->find($reservation->product_id);
-            if (!$product || $product->inventory_quantity < $reservation->quantity) {
+            if (!$product) {
                 return [
                     'error' => true,
                     'code' => 422,
-                    'message' => "Insufficient stock remaining for {$product?->name}.",
+                    'message' => 'Product has expired or is no longer eligible for checkout. The vendor must re-confirm product freshness.',
+                ];
+            }
+            if ($product->available_quantity < $reservation->quantity) {
+                return [
+                    'error' => true,
+                    'code' => 422,
+                    'message' => "Insufficient stock remaining for {$product->name}.",
                 ];
             }
 

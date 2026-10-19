@@ -41,6 +41,13 @@ class DoorstepHandshakeService
                 return ['success' => false, 'message' => 'Order not found under lock.'];
             }
 
+            if ($lockedOrder->fulfillment_type !== 'doorstep_delivery') {
+                return [
+                    'success' => false,
+                    'message' => 'Doorstep delivery handover is only available for doorstep deliveries. In-shop pickup orders are fulfilled at the merchant counter.',
+                ];
+            }
+
             // Guard against invalid or cancelled order states under lock
             if (in_array($lockedOrder->order_status, ['cancelled', 'pending_payment', 'refunded'])) {
                 return [

@@ -293,9 +293,12 @@ class ImageOptimizationService
         $totalOriginal = 0;
         $totalOptimized = 0;
 
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($directoryPath, \RecursiveDirectoryIterator::SKIP_DOTS)
-        );
+        try {
+            $dirIterator = new \RecursiveDirectoryIterator($directoryPath, \RecursiveDirectoryIterator::SKIP_DOTS);
+            $iterator = new \RecursiveIteratorIterator($dirIterator);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
 
         foreach ($iterator as $item) {
             if (!$item->isFile()) {
@@ -414,6 +417,10 @@ class ImageOptimizationService
      */
     protected function saveResourceToDisk($resource, string $destinationPath, string $format, int $quality): bool
     {
+        $dir = dirname($destinationPath);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0777, true);
+        }
         return match (strtolower($format)) {
             'webp' => function_exists('imagewebp') ? imagewebp($resource, $destinationPath, $quality) : imagejpeg($resource, $destinationPath, $quality),
             'png' => imagepng($resource, $destinationPath, (int) round(9 - ($quality * 9 / 100))),

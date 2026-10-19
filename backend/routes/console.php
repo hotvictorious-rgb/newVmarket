@@ -15,3 +15,6 @@ Schedule::command('backup:google-drive')->dailyAt('02:00');
 
 // Automated Gateway Reconciliation for Timeouts and In-Flight Transfers
 Schedule::command('finance:reconcile')->everyFifteenMinutes();
+
+// Automated 7-Day Product Freshness Lifecycle Expiration (Hourly)
+Schedule::command('products:expire-stale-listings')->hourly();
