@@ -152,7 +152,7 @@ class FinancialOperationService
                 if ($caseCeilingKobo <= 0 || $caseRefundedOrReservedKobo + $amountKobo > $caseCeilingKobo) {
                     $caseRemainingKobo = max(0, $caseCeilingKobo - $caseRefundedOrReservedKobo);
                     $caseRemainingNaira = bcdiv((string) $caseRemainingKobo, '100', 2);
-                    throw new \\DomainException(
+                    throw new \DomainException(
                         "Refund invariant violation: requested amount exceeds the approved refundable balance of ₦{$caseRemainingNaira} for Return Case #{$returnCase->case_number}."
                     );
                 }
