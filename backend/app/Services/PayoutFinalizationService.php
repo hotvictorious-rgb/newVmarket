@@ -175,7 +175,9 @@ class PayoutFinalizationService
                     FinancialJournalEntry::create([
                         'order_id' => null,
                         'transaction_reference' => $transferRef,
-                        'event_id' => 'EVT-VND-SUSPENSE-' . $lockedPayout->id,
+                        // Keep both sides of this disbursement under one journal event so
+                        // the event itself remains balanced; account_name identifies suspense.
+                        'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
                         'beneficiary_type' => VendorProfile::class,
                         'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
                         'account_name' => 'treasury_reconciliation_suspense',
