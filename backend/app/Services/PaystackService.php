@@ -155,8 +155,9 @@ class PaystackService
         $grandTotalNormalized = bcadd((string)$order->grand_total, '0', 2);
         $expectedAmountInKobo = (int) bcmul($grandTotalNormalized, '100', 0);
 
-        // Safe deterministic mock in testing environment
-        if (app()->environment('testing')) {
+        // Simulation is opt-in for tests that do not exercise the gateway HTTP path.
+        // Security regression tests can disable it to exercise real response validation via Http::fake().
+        if (app()->environment('testing') && config('services.paystack.simulate_in_tests', true)) {
             return [
                 'success' => true,
                 'is_simulated' => true,
