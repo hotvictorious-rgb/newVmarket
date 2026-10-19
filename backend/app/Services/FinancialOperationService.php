@@ -221,6 +221,17 @@ class FinancialOperationService
             $lockedOp = FinancialOperation::where('id', $operation->id)->lockForUpdate()->firstOrFail();
             $lockedAttempt = GatewayAttempt::where('id', $attempt->id)->lockForUpdate()->firstOrFail();
 
+            // A webhook may win the race while the gateway HTTP request is in flight.
+            // Re-check terminal state under the operation lock before writing the late
+            // HTTP response, otherwise a pending response can downgrade a completed refund.
+            if ($lockedOp->isTerminal()) {
+                return [
+                    'success' => $lockedOp->status === 'confirmed',
+                    'status' => $lockedOp->status,
+                    'message' => "Refund operation reached terminal state '{$lockedOp->status}' while the gateway request was in flight; preserving the terminal result.",
+                ];
+            }
+
             if (!empty($gatewayResult['success'])) {
                 // Gateway ACCEPTED the refund request (starts in pending/processing)
                 $gwRef = $gatewayResult['refund_reference'] ?? ($gatewayResult['data']['reference'] ?? null);
