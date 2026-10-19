@@ -1746,4 +1746,55 @@ class FinancialAuditRemediationProofTest extends TestCase
             ->where('status', 'committed')->count());
         $this->assertSame(0, FinancialJournalEntry::where('financial_operation_id', $operation->id)->count());
     }
+
+    public function test_failed_partial_refund_keeps_order_pending_while_another_refund_is_outstanding(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-PARTIAL-FAIL-SUMMARY-' . uniqid(),
+            'paystack_refund_status' => 'processing',
+        ]);
+
+        $service = app(FinancialOperationService::class);
+        $failedOperation = $service->createRefundOperation(
+            $order, '500.00', 'first partial refund fails', null, 'IDEMPOTENCY-PARTIAL-FAIL-' . uniqid()
+        );
+        $pendingOperation = $service->createRefundOperation(
+            $order, '700.00', 'second partial refund remains pending', null, 'IDEMPOTENCY-PARTIAL-PENDING-' . uniqid()
+        );
+
+        $failedMetadata = $failedOperation->metadata ?? [];
+        $failedMetadata['refund_reference'] = 'rf-partial-failed-summary';
+        $failedOperation->update(['status' => 'initiated', 'metadata' => $failedMetadata]);
+        $pendingMetadata = $pendingOperation->metadata ?? [];
+        $pendingMetadata['refund_reference'] = 'rf-partial-still-pending';
+        $pendingOperation->update(['status' => 'initiated', 'metadata' => $pendingMetadata]);
+
+        $payloadData = [
+            'id' => 'evt-partial-failed-summary-' . uniqid(),
+            'event' => 'refund.failed',
+            'data' => [
+                'refund_reference' => 'rf-partial-failed-summary',
+                'transaction_reference' => $order->payment_reference,
+                'status' => 'failed',
+            ],
+        ];
+        $payload = json_encode($payloadData);
+        $signature = hash_hmac('sha512', $payload, app(PaystackService::class)->getSecretKey());
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertOk();
+        $this->assertSame('failed', $failedOperation->fresh()->status);
+        $this->assertSame('initiated', $pendingOperation->fresh()->status);
+        $this->assertSame('pending', $order->fresh()->paystack_refund_status);
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $failedOperation->id)
+            ->where('status', 'released')->count());
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $pendingOperation->id)
+            ->where('status', 'active')->count());
+    }
 }
