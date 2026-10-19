@@ -399,12 +399,13 @@ class CustomerExperienceAndHardeningTest extends TestCase
         $this->assertNotNull($payRes->json('data.pickup_otp'));
         $this->assertNotNull($payRes->json('data.order_number'));
 
-        // Stock correctly decremented by 2
-        $this->assertEquals($initialStock - 2, $this->product->fresh()->inventory_quantity);
+        // Binary Stock Model Invariant: Stock quantity is NOT decremented at payment initiation
+        $this->assertTrue($this->product->fresh()->is_in_stock);
 
-        // Reservation marked payment_completed
+        // Reservation marked payment_completed and order bound
         $reservation = PickupReservation::where('reservation_code', $code)->first();
         $this->assertEquals('payment_completed', $reservation->status);
+        $this->assertNotNull($reservation->order_id);
     }
 
     public function test_post_delivery_24h_dispute_initiation_and_escrow_freeze(): void

@@ -66,43 +66,32 @@ class Product extends Model
         'is_available_for_sale',
     ];
 
-    protected static function booted(): void
-    {
-        static::saving(function ($product) {
-            if ((!isset($product->attributes['physical_quantity']) || $product->attributes['physical_quantity'] === null || (int)$product->attributes['physical_quantity'] === 0) && !empty($product->attributes['inventory_quantity'])) {
-                $product->attributes['physical_quantity'] = (int) $product->attributes['inventory_quantity'];
-            }
-        });
-    }
 
-    /**
-     * Authoritative Available Sellable Quantity:
-     * Available = max(0, Physical - Allocated - Held)
-     */
-    public function getAvailableQuantityAttribute(): int
-    {
-        if (isset($this->attributes['inventory_quantity']) && (int)$this->attributes['inventory_quantity'] === 0) {
-            return 0;
-        }
-
-        $physical = (int) ($this->physical_quantity > 0 ? $this->physical_quantity : ($this->inventory_quantity ?? 0));
-        $allocated = (int) ($this->allocated_quantity ?? 0);
-        $held = (int) ($this->held_quantity ?? 0);
-        $available = max(0, $physical - $allocated - $held);
-
-        if (isset($this->attributes['inventory_quantity'])) {
-            return min($available, (int)$this->attributes['inventory_quantity']);
-        }
-        return $available;
-    }
 
     /**
      * Storefront availability gate:
-     * Product is in stock and has at least 1 sellable unit.
+     * In the two-status model, product is available if marked In Stock and within the 7-day freshness window.
      */
     public function getIsAvailableForSaleAttribute(): bool
     {
-        return (bool)$this->is_in_stock && $this->available_quantity > 0 && $this->isFresh();
+        return (bool)$this->is_in_stock && $this->isFresh();
+    }
+
+    /**
+     * Availability indicator:
+     * Returns positive availability if in stock, 0 if out of stock.
+     */
+    public function getAvailableQuantityAttribute(): int
+    {
+        if (!(bool)$this->is_in_stock) {
+            return 0;
+        }
+
+        if (isset($this->attributes['inventory_quantity']) && (int)$this->attributes['inventory_quantity'] > 0) {
+            return (int)$this->attributes['inventory_quantity'];
+        }
+
+        return 999;
     }
 
     public function vendor()

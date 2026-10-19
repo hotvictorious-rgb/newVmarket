@@ -103,8 +103,6 @@ class PaystackPaymentHardeningTest extends TestCase
      */
     public function test_checkout_strictly_creates_order_in_pending_status_and_redirects_to_paystack(): void
     {
-        $initialStock = $this->product->inventory_quantity;
-
         $response = $this->actingAs($this->customer)->post(route('checkout.process'), [
             'product_id' => $this->product->id,
             'quantity' => 1,
@@ -123,7 +121,8 @@ class PaystackPaymentHardeningTest extends TestCase
         $this->assertEquals('pending', $order->payment_status, 'Order payment_status MUST be pending at checkout creation.');
         $this->assertEquals('pending', $order->order_status, 'Order order_status MUST be pending before gateway verification.');
         $this->assertNull($order->paid_at, 'paid_at must be null before Paystack verification.');
-        $this->assertEquals($initialStock - 1, $this->product->fresh()->inventory_quantity);
+        $this->assertTrue($this->product->fresh()->is_in_stock, 'Product remains In Stock in the two-status model.');
+        $this->assertNotNull($order->expires_at, 'Order must establish a 30-minute payment safety reservation window.');
 
         // Prove zero premature cashback allocation before payment
         $cashbackCount = CustomerCashbackLedger::where('order_id', $order->id)->count();

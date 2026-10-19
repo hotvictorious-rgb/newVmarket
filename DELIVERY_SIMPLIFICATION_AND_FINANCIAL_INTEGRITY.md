@@ -272,13 +272,13 @@ However, there is one critical architectural distinction: **you can simplify wha
 1. **Vendor marks In Stock (`is_in_stock = true`)**:
    The product becomes available for purchase across the storefront, subject to the system's order and availability checks. The vendor remains responsible for keeping this status truthful.
 2. **Customer begins checkout / starts payment**:
-   VMARKET temporarily reserves that product for 30 minutes (`held_quantity` incremented under `lockForUpdate()`) so concurrent shoppers cannot claim the same unit.
+   VMARKET creates a pending order with a 30-minute payment safety reservation window (`Order::expires_at = now()->addMinutes(30)`), without decrementing numeric stock quantities.
 3. **Payment succeeds**:
-   The reservation converts into a confirmed allocation (`allocated_quantity` incremented, `held_quantity` released).
+   The pending reservation converts into a confirmed order (`order_status = 'confirmed'`, `vendor_settlement_status = 'held'`).
 4. **Vendor sells the last item in their physical shop**:
    The vendor switches the toggle to **Out of Stock** (`is_in_stock = false`). VMARKET immediately rejects all new checkout attempts on the server.
 5. **Payment fails or the 30-minute hold expires**:
-   The temporary reservation hold is automatically released back (`held_quantity` decremented), provided the product is still available and the vendor has not marked it Out of Stock.
+   The order expires and transitions to `cancelled`, freeing up any pending in-store pickup reservations automatically.
 
 ### The Real-World Trade-Offs
 
@@ -293,7 +293,7 @@ With only a binary status, VMARKET does not inherently know whether a vendor has
 | :--- | :--- | :--- |
 | **Vendor Interface** | **In Stock / Out of Stock** | Zero cognitive burden; one-tap toggle removes operational friction for local shop owners. |
 | **Storefront Presentation** | **In Stock / Out of Stock** | Clean customer messaging: "Available to Order" vs. "Out of Stock" (product remains visible). |
-| **Internal Stock Quantities** | **Retained as Safeguards** | The Three-Quantity engine (`Physical`, `Allocated`, `Held`) operates under the hood to prevent race conditions. |
+| **Internal Stock Quantities** | **Retained as Safeguards** | Order-level reservation timestamps and atomic row-level locks protect payment safety without requiring vendors to maintain numeric shelf counts. |
 | **30-Minute Payment Holds** | **Mandatory** | Guarantees that a customer initiating Paystack payment has their unit secured. |
 | **Duplicate-Payment Protection**| **Mandatory** | Gateway attempt fencing and idempotent ledger recording prevent double charges. |
 | **Overselling Prevention** | **Mandatory** | Server-side transaction locks ensure no two shoppers can claim the same held unit. |

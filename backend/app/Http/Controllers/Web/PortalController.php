@@ -3629,9 +3629,15 @@ class PortalController extends Controller
             }
 
             $quantity = (int)$validated['quantity'];
-            if ($product->available_quantity < $quantity) {
+            if (!$product->is_in_stock || !$product->is_available_for_sale) {
                 return back()->withErrors([
-                    'quantity' => "Insufficient stock. Only {$product->available_quantity} units available for '{$product->name}'."
+                    'product_id' => "Product '{$product->name}' is currently out of stock."
+                ])->withInput();
+            }
+
+            if (isset($product->inventory_quantity) && (int)$product->inventory_quantity > 0 && (int)$product->inventory_quantity < $quantity) {
+                return back()->withErrors([
+                    'quantity' => "Insufficient stock. Only {$product->inventory_quantity} units available for '{$product->name}'."
                 ])->withInput();
             }
 
@@ -3815,12 +3821,6 @@ class PortalController extends Controller
                 'quantity' => $quantity,
                 'line_total' => $merchandiseSubtotal,
             ]);
-
-            // Atomically hold stock for 30 minutes
-            $product->increment('held_quantity', $quantity);
-            $product->inventory_quantity = $product->available_quantity;
-            $product->is_in_stock = ($product->available_quantity > 0);
-            $product->save();
 
             // Store guest token in session for seamless tracking access
             session(['order_guest_token_' . $orderNumber => $guestAccessToken]);

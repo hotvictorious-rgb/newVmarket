@@ -220,9 +220,9 @@ class ModularArchitectureAndMaintainabilityTest extends TestCase
         $this->assertEquals('500.00', $result['order']->delivery_fee);
         $this->assertEquals('30500.00', $result['order']->grand_total);
 
-        // Product inventory must be decremented
+        // Two-status inventory model: product remains In Stock without quantity-based decrements
         $this->product->refresh();
-        $this->assertEquals(18, $this->product->inventory_quantity);
+        $this->assertTrue((bool)$this->product->is_in_stock);
     }
 
     public function test_checkout_execution_service_rejects_inactive_vendor_gracefully(): void

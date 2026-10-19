@@ -130,7 +130,7 @@ class OrderSettlementService
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
                         $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
-                        if (!$product || $product->available_quantity < $item->quantity) {
+                        if (!$product || !$product->is_available_for_sale) {
                             $canReinstate = false;
                             break;
                         }
@@ -138,14 +138,13 @@ class OrderSettlementService
                 }
 
                 if ($canReinstate) {
-                    // Re-reserve stock and reinstate order to confirmed (transitioning directly to allocated stock)
+                    // Reinstate order to confirmed status
                     foreach ($lockedOrder->items as $item) {
                         if ($item->product_id) {
                             $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
-                            if ($product) {
-                                $product->allocated_quantity = (int)$product->allocated_quantity + (int)$item->quantity;
-                                $product->inventory_quantity = $product->available_quantity;
-                                $product->is_in_stock = ($product->available_quantity > 0);
+                            if ($product && isset($product->inventory_quantity) && (int)$product->inventory_quantity > 0) {
+                                $product->decrement('inventory_quantity', (int)$item->quantity);
+                                $product->is_in_stock = ((int)$product->inventory_quantity > 0);
                                 $product->save();
                             }
                         }
@@ -188,16 +187,13 @@ class OrderSettlementService
                 $lockedOrder->order_status = 'confirmed';
                 $lockedOrder->vendor_settlement_status = 'held';
 
-                // Transition held stock to allocated stock upon confirmed payment
+                // Deduct inventory quantity if tracked upon confirmed payment
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
                         $prod = Product::where('id', $item->product_id)->lockForUpdate()->first();
-                        if ($prod) {
-                            $held = min((int)$prod->held_quantity, (int)$item->quantity);
-                            $prod->held_quantity = max(0, (int)$prod->held_quantity - $held);
-                            $prod->allocated_quantity = (int)$prod->allocated_quantity + (int)$item->quantity;
-                            $prod->inventory_quantity = $prod->available_quantity;
-                            $prod->is_in_stock = ($prod->available_quantity > 0);
+                        if ($prod && isset($prod->inventory_quantity) && (int)$prod->inventory_quantity > 0) {
+                            $prod->decrement('inventory_quantity', (int)$item->quantity);
+                            $prod->is_in_stock = ((int)$prod->inventory_quantity > 0);
                             $prod->save();
                         }
                     }
@@ -1423,21 +1419,17 @@ class OrderSettlementService
                 $locked->order_status = 'cancelled';
                 $locked->save();
 
+                // Cancel any pending pickup reservation
+                \App\Models\PickupReservation::where('order_id', $locked->id)
+                    ->whereIn('status', ['reserved', 'pending_payment'])
+                    ->update(['status' => 'canceled']);
+
                 foreach ($locked->items as $item) {
                     if ($item->product_id) {
                         $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
-                        if ($product) {
-                            if ((int)$product->held_quantity > 0) {
-                                $held = min((int)$product->held_quantity, (int)$item->quantity);
-                                $product->held_quantity = max(0, (int)$product->held_quantity - $held);
-                                $product->inventory_quantity = $product->available_quantity;
-                            } else {
-                                $product->inventory_quantity = (int)$product->inventory_quantity + (int)$item->quantity;
-                                if ((int)$product->physical_quantity > 0) {
-                                    $product->physical_quantity = max((int)$product->physical_quantity, (int)$product->inventory_quantity);
-                                }
-                            }
-                            $product->is_in_stock = ($product->inventory_quantity > 0);
+                        if ($product && isset($product->inventory_quantity) && (int)$product->inventory_quantity >= 0) {
+                            $product->increment('inventory_quantity', (int)$item->quantity);
+                            $product->is_in_stock = true;
                             $product->save();
                         }
                     }

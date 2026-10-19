@@ -156,10 +156,17 @@ class CheckoutExecutionService
                     ];
                 }
 
-                if ($product->available_quantity < $item['quantity']) {
+                if (!$product->is_in_stock || !$product->isFresh()) {
                     return [
                         'error' => true,
-                        'message' => "Insufficient stock for {$product->name}. Only {$product->available_quantity} available.",
+                        'message' => "Product '{$product->name}' is currently out of stock.",
+                    ];
+                }
+
+                if (isset($product->inventory_quantity) && (int)$product->inventory_quantity > 0 && (int)$product->inventory_quantity < $item['quantity']) {
+                    return [
+                        'error' => true,
+                        'message' => "Insufficient stock for {$product->name}. Only {$product->inventory_quantity} available.",
                     ];
                 }
 
@@ -414,13 +421,8 @@ class CheckoutExecutionService
                 ]);
             }
 
-            // Hold inventory for 30 minutes and insert items
+            // Order creation binds the 30-minute payment safety reservation
             foreach ($itemsToCreate as $itemData) {
-                $itemData['product']->increment('held_quantity', $itemData['quantity']);
-                $itemData['product']->inventory_quantity = $itemData['product']->available_quantity;
-                $itemData['product']->is_in_stock = ($itemData['product']->available_quantity > 0);
-                $itemData['product']->save();
-
                 OrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $itemData['product']->id,

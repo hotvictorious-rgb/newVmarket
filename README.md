@@ -17,8 +17,8 @@ Traditional e-commerce platforms in emerging markets suffer from systemic vulner
 1. **Two-Tier Closed Financial Escrow:** Consumer micro-wallets are retired in favor of server-to-server verified Paystack escrow held in immutable double-entry ledgers (`cash_in_escrow`, `vendor_payable`, `platform_revenue`).
 2. **10% Platform Commission & 5% Cashback Reinvestment:** A sustainable commercial engine where VMARKET charges a flat 10% commission on the full order payment (merchandise + delivery), reinvesting half (5% of eligible merchandise value) directly into customer loyalty cashback.
 3. **Symmetric & Proportionate Commission Reversal:** When an eligible item or order refund is approved, the 10% platform commission attributable to that refunded portion is reversed proportionately in the double-entry ledger. Victorious MARKET never retains commission on customer refunds.
-4. **Three-Quantity Inventory Engine ($Available = \max(0, Physical - Held - Allocated)$):** Zero-overselling concurrency protection backed by atomic database row locks (`lockForUpdate()`), 30-minute temporary payment holds, and a friction-free binary toggle (**"In Stock"** vs **"Out of Stock"**) on the merchant front.
-5. **Late Payment Reconciliation & Customer Protection:** Orders paid after a 30-minute hold expiry automatically re-reserve stock if available; if inventory depleted, orders safely transition to `paid_stock_unavailable` with a 100% controlled refund or spendable wallet credit.
+4. **Two-Status Inventory Model (In Stock / Out of Stock) & Payment Safety Reservations:** Product availability is governed by a vendor-controlled binary toggle (**"In Stock"** vs **"Out of Stock"**), avoiding fragile quantity-counting friction for local merchants. Checkout and in-shop inspection hold temporary payment reservations (30-minute and 24-hour limits) without decrementing inventory counts.
+5. **Conflict & Late Payment Reconciliation:** If a merchant runs out of stock offline or two shoppers attempt concurrent purchase of the last item, the vendor switches the status to Out of Stock. Any late-confirming payment for an out-of-stock item transitions safely to `paid_stock_unavailable` with a 100% full refund or spendable wallet credit guarantee—ensuring zero overselling, zero merchant forced-fulfillment, and zero customer loss.
 6. **7-Day Marketplace Freshness Invariant:** To prevent ghost listings, merchants must re-verify catalog inventory every 7 days (`freshness_confirmed_at`). Listings unconfirmed past 7 days are automatically pruned from public browsing, search, and checkout.
 7. **Triangular Physical-Custody Handshakes:** Real-world custody transitions require single-use 6-digit OTP codes, GPS arrival verification, and photographic proof across branch pickup, courier transit, doorstep delivery, and defective returns.
 8. **Decoupled Fulfillment Architecture:** Complete support for **Vendor-Managed Delivery Couriers**, **Customer In-Shop Pickup**, and **Third-Party Logistics Fleets**, eliminating hard platform fleet dependencies while keeping riders 100% free of in-app financial liability.
@@ -29,7 +29,7 @@ Traditional e-commerce platforms in emerging markets suffer from systemic vulner
 
 1. [Architectural Overview & Core Invariants](#1-architectural-overview--core-invariants)
 2. [Institutional Financial Core & Commission Model](#2-institutional-financial-core--commission-model)
-3. [Three-Quantity Inventory Architecture & 30-Minute Payment Holds](#3-three-quantity-inventory-architecture--30-minute-payment-holds)
+3. [The Two-Status Inventory Architecture & Payment Safety Reservations](#3-the-two-status-inventory-architecture--payment-safety-reservations)
 4. [7-Day Product Freshness Lifecycle](#4-7-day-product-freshness-lifecycle)
 5. [Decoupled Fulfillment: Vendor Riders, Counter Pickup & Fleet Corridors](#5-decoupled-fulfillment-vendor-riders-counter-pickup--fleet-corridors)
 6. [Triangular Custody Handshakes & Doorstep Returns](#6-triangular-custody-handshakes--doorstep-returns)
@@ -171,95 +171,68 @@ When an item or order refund is approved, the platform commission attributable t
                            REFUND ARBITRATION PIPELINE
                                          │
         ┌────────────────────────────────┼────────────────────────────────┐
-        ▼                                ▼                                ▼
- CUSTOMER REMORSE                 VENDOR FAULT                     TRANSIT DAMAGE
- (Change of Mind)                 (Wrong / Defective Item)         (Courier Damage)
-  • Refund: Merchandise Only       • Refund: Merchandise + Delivery • Refund: Merchandise + Delivery
-  • Delivery Fee: Retained by      • Delivery Cost: Charged to      • Delivery Cost: Charged to
-    courier for service completed    Vendor Recovery Ledger           Logistics Fleet Partner
-  • Commission: 10% Reversed       • Commission: 10% Reversed       • Commission: 10% Reversed
-  • Cashback: Revoked              • Cashback: Revoked              • Cashback: Revoked
-```
+        ▼                                ▼                        ## 3. The Two-Status Inventory Architecture & Payment Safety Reservations
 
-1. **Calculate per Vendor Order:** Multi-vendor carts maintain independent financial accounting per child order. Refunds never use a global cart percentage.
-2. **Proportionate Commission Reversal:** If a ₦20,000 item is refunded from an order, the 10% commission (₦2,000) attributable to that item is debited from `platform_revenue` and credited to customer refund obligations.
-3. **Immutable Reversal Journals:** Original transactions are never overwritten or deleted. Separate `refund_issued` and `commission_reversed` entries are recorded in [`FinancialJournalEntry`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Models/FinancialJournalEntry.php) with unique idempotency keys.
-4. **Already-Disbursed Vendor Protection:** If a vendor has already received a payout for an order later arbitrated as defective, the liability is recorded in [`VendorRecoveryLedger`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Models/VendorRecoveryLedger.php) and automatically deducted from subsequent settlements.
+Victorious MARKET is engineered to support physical retail merchants operating across Nigerian commercial centers. For these local shop owners, maintaining complex numeric stock counts, physical shelf audits, or warehouse balance ledgers introduces steep onboarding friction and frequent discrepancies with over-the-counter walk-in customers.
 
----
+To resolve this, Victorious MARKET clearly separates **Product Availability** from **Payment Safety**.
 
-## 3. Three-Quantity Inventory Architecture & 30-Minute Payment Holds
+### 1. Product Availability: Pure Binary Vendor Governance
 
-To protect physical merchants operating in Nigerian markets from overselling while keeping their onboarding friction at zero, Victorious MARKET implements a two-tier inventory architecture.
+Product availability is governed by two simple states under direct merchant control:
 
-### The Vendor Front vs. Backend Reality
+- **In Stock (`is_in_stock = true`)**: The vendor confirms the product is physically available in their shop. Customers can purchase or reserve the item as long as all other eligibility checks (such as the 7-day freshness check and active merchant status) pass.
+- **Out of Stock (`is_in_stock = false`)**: The vendor marks the product unavailable. Purchasing is disabled immediately across the storefront. The product remains visible on the marketplace so shoppers can inspect details, but checkout is blocked.
+- **The Seven-Day Freshness Rule**: Products that exceed seven days without explicit merchant reconfirmation become inactive and are automatically hidden from storefront discovery and checkout.
+
+The marketplace does **not** rely on tracking numeric quantities (e.g. how many units a merchant has) to determine whether a product can be sold.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        VENDOR DASHBOARD (V1)                           │
-│   Frictionless Binary Toggle: [ In Stock ]  /  [ Out of Stock ]        │
+│                        VENDOR DASHBOARD                                │
+│        Simple Binary Toggle: [ In Stock ]  /  [ Out of Stock ]         │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        STOREFRONT CLIENT VIEW                          │
-│   "Available to Order" (In Stock)    │    "Out of Stock" (Visible)     │
+│        "In Stock" (Buy Enabled)     │    "Out of Stock" (Visible)      │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        BACKEND FINANCIAL ENGINE                        │
-│   • Row-Level Pessimistic Locking (lockForUpdate())                    │
-│   • 30-Minute Temporary Reservation Holds (held_quantity)              │
-│   • Confirmed Payment Allocations (allocated_quantity)                 │
-│   • Mathematical Invariant: Available = max(0, Physical - Held - Alloc)│
-│   • Late Payment Reconciliation (paid_stock_unavailable)               │
+│                       PAYMENT SAFETY & RESERVATIONS                    │
+│   • Order Reservation Record (30-Minute Checkout Timer)                │
+│   • In-Shop Inspection Pass (24-Hour Pickup Reservation RES-XXXXXX)    │
+│   • Idempotent Paystack Payment Verification                           │
+│   • Conflict & Depletion Reconciliation (paid_stock_unavailable)       │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-### The Three Quantities Invariant
+### 2. Payment Safety Without Quantity-Based Tracking
 
-$$\text{Available Quantity} = \max\left(0, \text{Physical} - \text{Allocated} - \text{Held}\right)$$
+Payment safety, reservation records, expiry times, idempotency, and payment verification are essential, but they do **not** require tracking or decrementing inventory quantities:
 
-| Quantity Type | Field Name | Description |
-|---|---|---|
-| **Physical Quantity** | `physical_quantity` | Total physical units present on shelf or in warehouse. |
-| **Allocated Quantity** | `allocated_quantity` | Units sold and committed to confirmed, successfully paid orders. |
-| **Held Quantity** | `held_quantity` | Units temporarily locked in active 30-minute Paystack checkout holds. |
-| **Available Quantity** | `available_quantity` | Units currently available for purchase ($Available > 0$). |
+- **Checkout Purchase Reservation (30 Minutes):** When a shopper clicks **Pay**, the platform creates an authenticated order record with an expiration timer (`expires_at = now() + 30 minutes`). This reserves the customer's right to complete payment for that transaction without decrementing a merchant stock count.
+- **In-Shop Inspection Reservation (24 Hours):** When a customer creates a pickup reservation (`RES-XXXXXXXX`), the reservation holds the customer's intent to inspect and purchase at the branch counter for 24 hours. The customer pays after inspecting the physical goods.
+- **Automatic Expiration:** If payment is abandoned or fails before the timer elapses, the reservation expires automatically without requiring manual ledger rollback.
 
-- **Automatic Storefront Rule:** When $\text{Available Quantity} = 0$, the product automatically transitions to **Out of Stock**. The item remains visible on the marketplace catalog with purchasing disabled so shoppers can view specifications without dead links.
-- **Server-Side Concurrency Guard:** Final checkout validation always executes inside a database transaction under row-level pessimistic locking (`lockForUpdate()`). Disabling the browser button is treated only as a UX convenience, never as a security barrier.
+### 3. Handling Concurrent Checkouts & Offline Depletion
 
-### 30-Minute Payment Holds & Late Payment Reconciliation
+A boolean stock status alone cannot prevent two shoppers from initiating checkout for the same single physical item, or prevent an order if a vendor sells the last unit over the counter to a walk-in buyer before updating their app.
 
-When a shopper clicks **Pay**, units are atomically placed in `held_quantity` for 30 minutes. The timer protects the shopper while completing Paystack bank authentication.
+Because Victorious MARKET deliberately chooses simplicity over quantity tracking, the platform handles these real-world conflicts through clear rules of responsibility and safe reconciliation:
 
-```
-Shopper Initiates Checkout
-           │
-           ▼
-[ Held Quantity + N ] ──▶ (30-Minute Expiration Timer Starts)
-           │
-           ├──▶ 1. Payment Confirms on Time:
-           │       Held Quantity - N | Allocated Quantity + N | Order Confirmed
-           │
-           ├──▶ 2. Payment Fails or Abandoned:
-           │       Held Quantity - N | Units Restored to Available Stock
-           │
-           └──▶ 3. Late Payment Arrives (After 30-Min Expiry):
-                   System verifies authentic Paystack transaction server-to-server
-                   and atomically rechecks current Available Quantity:
-                   │
-                   ├──▶ Stock STILL Available:
-                   │       Directly allocates units ➔ Order transitions to 'confirmed'
-                   │
-                   └──▶ Stock WAS SOLD OUT to another shopper:
-                           Zero overselling!
-                           Order transitions to 'paid_stock_unavailable'
-                           Vendor settlement marked 'refund_pending'
-                           100% full refund or spendable wallet credit issued immediately
-```
+1. **Vendor Responsibility for Status Truthfulness:** The merchant is responsible for keeping their availability toggle accurate. The moment an item is sold out in the physical shop, the vendor toggles the status to **Out of Stock**.
+2. **Atomic Verification on Payment Confirmation:** When Paystack notifies the platform of a successful payment:
+   - The backend validates the payment reference and exact integer kobo amount inside an atomic database transaction.
+   - The system re-checks the live product status (`$product->is_in_stock`).
+3. **If Stock is Still Available (`In Stock`):**
+   - The order confirms for fulfillment (`order_status = 'confirmed'`, `vendor_settlement_status = 'held'`).
+4. **If Stock Was Depleted / Vendor Marked `Out of Stock`:**
+   - **Never Oversell or Force Ghost Fulfillment:** The system never forces a merchant to fulfill an item that does not exist, and never silently ignores customer funds.
+   - **Order Transitions to `paid_stock_unavailable`:** The order is safely quarantined with `vendor_settlement_status = 'refund_pending'`.
+   - **100% Customer Protection:** The customer's payment (merchandise + delivery) is immediately queued for a full gateway refund or 100% spendable customer wallet credit (`CustomerWalletCredit`), fully balanced in the double-entry journal (`customer_refund_liability`).
 
 ---
 
@@ -438,9 +411,9 @@ The relational schema guarantees referential integrity, decimal precision, and a
  │ vendor_id (Vendor)   │         │ listing_status       │         │ verification_code    │
  │ logistics_company_id │         │ listing_confirmed_at │         │ order_status         │
  │ (NO wallet balance)  │         │ is_in_stock          │         │ vendor_net_90        │
- └──────────────────────┘         │ physical_quantity    │         │ customer_cashback_5  │
-                                  │ held_quantity        │         │ platform_commission  │
-                                  │ allocated_quantity   │         │ delivery_fee         │
+ └──────────────────────┘         │ unit_price           │         │ customer_cashback_5  │
+                                  │ slash_price          │         │ platform_commission  │
+                                  │ package_tier         │         │ delivery_fee         │
                                   └──────────────────────┘         └──────────────────────┘
 ```
 

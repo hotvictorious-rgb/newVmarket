@@ -28,7 +28,7 @@
 
     @php
         $availableQty = $product->available_quantity;
-        $isOutOfStock = (!$product->is_in_stock || !$product->is_available_for_sale || $availableQty <= 0 || $availableQty < $quantity);
+        $isOutOfStock = (!$product->is_in_stock || !$product->is_available_for_sale);
     @endphp
 
     @if($isOutOfStock)
