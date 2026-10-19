@@ -379,7 +379,39 @@ class FinancialOperationService
             // Verify gateway evidence has terminal status
             $gwStatus = strtolower($gatewayEvidence['status'] ?? $gatewayEvidence['data']['status'] ?? '');
             if (!in_array($gwStatus, ['processed', 'success', 'completed'], true)) {
-                throw new \InvalidArgumentException("Cannot confirm refund without verified terminal gateway status. Received: '{$gwStatus}'");
+                throw new \\InvalidArgumentException("Cannot confirm refund without verified terminal gateway status. Received: '{$gwStatus}'");
+            }
+
+            // Central financial-evidence fence: every caller (webhook, reconciler,
+            // or synchronous gateway response) must reject conflicting details before
+            // committing reservations or writing journal entries. Some gateway responses
+            // omit these fields, so validate them when present rather than inventing them.
+            $evidenceData = is_array($gatewayEvidence['data'] ?? null) ? $gatewayEvidence['data'] : [];
+            $evidenceAmount = $gatewayEvidence['amount'] ?? ($evidenceData['amount'] ?? null);
+            $evidenceCurrency = $gatewayEvidence['currency'] ?? ($evidenceData['currency'] ?? null);
+
+            if ($evidenceAmount !== null
+                && (!is_numeric($evidenceAmount) || (int) $evidenceAmount !== (int) $lockedOp->amount_kobo)) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'operation' => $lockedOp,
+                    'message' => 'Refund amount evidence conflicts with the financial operation; manual reconciliation required.',
+                    'code' => 'REFUND_AMOUNT_MISMATCH',
+                ];
+            }
+
+            if ($evidenceCurrency !== null
+                && strtoupper(trim((string) $evidenceCurrency)) !== strtoupper((string) $lockedOp->currency)) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'operation' => $lockedOp,
+                    'message' => 'Refund currency evidence conflicts with the financial operation; manual reconciliation required.',
+                    'code' => 'REFUND_CURRENCY_MISMATCH',
+                ];
             }
 
             $orderId = $lockedOp->metadata['order_id'] ?? null;
