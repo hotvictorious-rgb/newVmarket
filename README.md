@@ -63,7 +63,7 @@ Historical logistics-company/fleet records and routes may remain for audit and m
 2. **Vendor-only rider ownership:** every active rider eligible for new work must be linked to exactly one active vendor. Fleet-only or ambiguous legacy profiles cannot receive new assignments.
 3. **Vendor-defined delivery:** supported destinations and delivery fees are configured by the vendor and snapshotted to each child order at checkout.
 4. **Pickup separation:** `in_shop_pickup` always costs zero delivery fee, uses a `RES-XXXXXX` pass verified by the vendor, and does not require a rider.
-5. **Rider privacy:** rider responses may include the customer's name, delivery address, necessary instructions, and a protected Call Customer action. They must not expose the raw phone number, payment status, amount due, delivery-fee financial fields, card/bank details, cashback, commission, vendor settlement, or payout information.
+5. **Rider privacy:** rider responses may include only the customer's name, delivery address, and a protected Call Customer action. They must not expose the raw phone number, payment status, amount due, delivery-fee financial fields, card/bank details, cashback, commission, vendor settlement, or payout information.
 6. **Operational/financial separation:** delivery, failed attempts, proof, and custody return are operational events. They do not themselves approve refunds, create spendable wallet credit, post financial journals, or release vendor funds.
 7. **Legacy compatibility:** historical logistics data is preserved for authorized audit/reconciliation but cannot drive new assignments or new logistics payouts.
 
@@ -200,7 +200,7 @@ The authoritative requirements are in [`.ai/BUSINESS_RULES.md`](.ai/BUSINESS_RUL
 
 ### 3. Delivery privacy and operational evidence
 - Rider access is limited to assigned orders belonging to the rider's vendor.
-- The rider may see the customer's name, delivery address, necessary delivery instructions, and a protected **Call Customer** action. Do not expose the raw customer phone number in JSON, page markup, logs, or exports.
+- The rider may see only the customer's name, delivery address, and a protected **Call Customer** action. Do not expose the raw customer phone number in JSON, page markup, logs, or exports.
 - Riders must not see payment status, amount paid/due, delivery-fee financial fields, refunds, customer wallet/card/bank data, cashback, commission, vendor settlement, or payout information.
 - Delivery OTP/pass secrets must not be included in list/history responses or logs. A verified handover is operational evidence; it does not itself approve a refund or create a spendable wallet credit.
 - Failed attempts must record reason, time, actor, proof, and custody state. At the configured threshold, the parcel returns to its owning vendor. Refunds or customer remedies go through a separate authorized financial workflow.
