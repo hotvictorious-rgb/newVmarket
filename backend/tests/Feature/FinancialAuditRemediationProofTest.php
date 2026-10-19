@@ -688,6 +688,43 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertEquals('unmatched', $event->status);
     }
 
+    public function test_paystack_webhook_rejects_invalid_signature_without_processing_event(): void
+    {
+        $payload = json_encode([
+            'id' => 'evt-invalid-signature-proof',
+            'event' => 'charge.success',
+            'data' => ['reference' => 'forged-reference'],
+        ], JSON_THROW_ON_ERROR);
+
+        $response = $this->call('POST', route('payment.paystack.webhook'), [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_PAYSTACK_SIGNATURE' => 'invalid-signature',
+        ], $payload);
+
+        $response->assertStatus(401);
+        $this->assertDatabaseMissing('processed_webhook_events', [
+            'event_id' => 'evt-invalid-signature-proof',
+        ]);
+    }
+
+    public function test_paystack_webhook_rejects_missing_signature_without_processing_event(): void
+    {
+        $payload = json_encode([
+            'id' => 'evt-missing-signature-proof',
+            'event' => 'charge.success',
+            'data' => ['reference' => 'forged-reference'],
+        ], JSON_THROW_ON_ERROR);
+
+        $response = $this->call('POST', route('payment.paystack.webhook'), [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+        ], $payload);
+
+        $response->assertStatus(401);
+        $this->assertDatabaseMissing('processed_webhook_events', [
+            'event_id' => 'evt-missing-signature-proof',
+        ]);
+    }
+
     /**
      * A gateway-confirmed refund without a financial operation must not bypass the ledger.
      */
