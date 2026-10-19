@@ -445,7 +445,8 @@ class PaystackPaymentController extends Controller
         // Handle Paystack Refund Webhooks (Automated Customer Refund Reconciliation)
         if ($event['event'] === 'refund.processed') {
             $rData = $event['data'] ?? [];
-            $rRef = (string)($rData['reference'] ?? ($rData['id'] ?? ''));
+            // Paystack refund webhook payloads use refund_reference (not reference).
+            $rRef = (string)($rData['refund_reference'] ?? ($rData['reference'] ?? ($rData['id'] ?? '')));
             $transRef = (string)($rData['transaction_reference'] ?? '');
             Log::info("Paystack Webhook: Automated refund.processed for ref: {$rRef}, trans: {$transRef}");
 
