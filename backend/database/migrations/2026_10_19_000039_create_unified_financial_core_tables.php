@@ -83,7 +83,7 @@ return new class extends Migration
         if (!Schema::hasTable('financial_reservations')) {
             Schema::create('financial_reservations', function (Blueprint $table) {
                 $table->id();
-                $table->foreignId('financial_operation_id')->constrained('financial_operations')->cascadeOnDelete();
+                $table->foreignId('financial_operation_id')->nullable()->constrained('financial_operations')->nullOnDelete();
                 $table->string('source_type', 150);
                 $table->unsignedBigInteger('source_id');
                 $table->unsignedBigInteger('reserved_amount_kobo');

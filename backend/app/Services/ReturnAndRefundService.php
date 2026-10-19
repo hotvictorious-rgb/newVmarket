@@ -344,17 +344,32 @@ class ReturnAndRefundService
     /**
      * Super Admin Reviews and Approves Return for Refund.
      */
-    public function adminApproveReturn(User $adminUser, ReturnCase $case, ?string $adminNotes = null): array
-    {
+    public function adminApproveReturn(
+        User $adminUser,
+        ReturnCase $case,
+        ?string $adminNotes = null,
+        ?string $faultRuling = null
+    ): array {
         if (!$adminUser->isSuperAdmin() && $adminUser->user_type !== 'admin_employee') {
             return ['success' => false, 'message' => 'Unauthorized: Only administrative staff can review return cases.'];
         }
 
-        return DB::transaction(function () use ($adminUser, $case, $adminNotes) {
+        return DB::transaction(function () use ($adminUser, $case, $adminNotes, $faultRuling) {
             $lockedCase = ReturnCase::where('id', $case->id)->lockForUpdate()->first();
 
-            if (!in_array($lockedCase->status, ['requested', 'under_review', 'received_at_hub', 'inspected'])) {
+            if (!in_array($lockedCase->status, ['requested', 'under_review', 'received_at_hub', 'inspected', 'returned_to_vendor', 'resolved'])) {
                 return ['success' => false, 'message' => "Cannot approve return case in '{$lockedCase->status}' status."];
+            }
+
+            if ($faultRuling) {
+                $lockedCase->admin_ruling = $faultRuling;
+                if ($faultRuling === 'customer_remorse') {
+                    $lockedCase->cost_allocation = 'customer_100';
+                } elseif ($faultRuling === 'vendor_fault') {
+                    $lockedCase->cost_allocation = 'vendor_100';
+                } elseif ($faultRuling === 'logistics_fault') {
+                    $lockedCase->cost_allocation = 'logistics_fleet_100';
+                }
             }
 
             $lockedCase->status = 'refund_pending';
@@ -419,7 +434,7 @@ class ReturnAndRefundService
             $order = Order::where('id', $lockedCase->order_id)->lockForUpdate()->firstOrFail();
 
             // Strict Financial Approval State Machine: requires prior explicit approval
-            if (!in_array($lockedCase->status, ['refund_pending', 'approved_for_return'], true)) {
+            if (!in_array($lockedCase->status, ['refund_pending', 'approved_for_return', 'resolved'], true)) {
                 return [
                     'valid' => false,
                     'message' => "Cannot disburse refund for case in '{$lockedCase->status}' status. Requires prior Super Admin approval into 'refund_pending'.",
@@ -481,8 +496,8 @@ class ReturnAndRefundService
         $paystackRefundId = $preValidation['existing_paystack_refund_id'];
 
         // 2. Out-of-DB-Transaction Paystack Gateway Execution via Authoritative FinancialOperationService
-        if (empty($bankReference) && empty($paystackRefundId) && !empty($preValidation['order_payment_reference'])) {
-            $finOpService = app(\App\Services\FinancialOperationService::class);
+        if ($bankReference !== 'wallet' && empty($paystackRefundId) && !empty($preValidation['order_payment_reference'])) {
+            $finOpService = new \App\Services\FinancialOperationService($this->paystackService);
             $order = Order::findOrFail($preValidation['order_id']);
             $case = ReturnCase::findOrFail($caseId);
 
@@ -496,8 +511,8 @@ class ReturnAndRefundService
 
                 $dispatchRes = $finOpService->dispatchRefund($op);
 
-                if (!$dispatchRes['success'] && ($dispatchRes['status'] ?? '') === 'failed') {
-                    // Gateway definitively rejected
+                if (empty($dispatchRes['success'])) {
+                    // Gateway definitively rejected or failed
                     ReturnCase::where('id', $caseId)->update([
                         'refund_claim_token' => null,
                         'refund_claimed_at' => null,
@@ -511,29 +526,23 @@ class ReturnAndRefundService
                 $paystackRefundId = $dispatchRes['refund_reference'] ?? null;
                 ReturnCase::where('id', $caseId)->update(['paystack_refund_id' => $paystackRefundId]);
 
-                if (($dispatchRes['status'] ?? '') === 'confirmed') {
-                    // Instantly confirmed
+                if (($dispatchRes['status'] ?? '') === 'confirmed' || !empty($bankReference)) {
+                    // Instantly confirmed or manual bank reference supplied; proceed to journal entries & settlement
+                } else {
+                    // Initiated / Pending asynchronous bank confirmation
+                    ReturnCase::where('id', $caseId)->update([
+                        'refund_claim_token' => null,
+                        'refund_claimed_at' => null,
+                    ]);
+
                     return [
                         'success' => true,
-                        'message' => "Refund of ₦" . number_format((float)$totalCashRefund, 2) . " disbursed and settled successfully for Case #{$case->case_number}.",
+                        'status' => 'initiated',
+                        'message' => "Refund of ₦" . number_format((float)$totalCashRefund, 2) . " queued with Paystack ({$paystackRefundId}). Awaiting gateway settlement confirmation.",
                         'case' => $case->fresh(),
                         'total_refunded' => $totalCashRefund,
                     ];
                 }
-
-                // Initiated / Pending asynchronous bank confirmation
-                ReturnCase::where('id', $caseId)->update([
-                    'refund_claim_token' => null,
-                    'refund_claimed_at' => null,
-                ]);
-
-                return [
-                    'success' => true,
-                    'status' => 'initiated',
-                    'message' => "Refund of ₦" . number_format((float)$totalCashRefund, 2) . " queued with Paystack ({$paystackRefundId}). Awaiting gateway settlement confirmation.",
-                    'case' => $case->fresh(),
-                    'total_refunded' => $totalCashRefund,
-                ];
             } catch (\Throwable $e) {
                 ReturnCase::where('id', $caseId)->update([
                     'refund_claim_token' => null,
@@ -560,7 +569,7 @@ class ReturnAndRefundService
             $order = Order::where('id', $lockedCase->order_id)->lockForUpdate()->firstOrFail();
 
             $walletCredit = CustomerWalletCredit::where('return_case_id', $lockedCase->id)
-                ->where('status', 'available')
+                ->whereIn('status', ['available', 'pending_approval'])
                 ->first();
 
             $merchandiseRefund = $lockedCase->total_refundable_amount;
@@ -580,30 +589,79 @@ class ReturnAndRefundService
                 $vendorNetDebit = bcadd($vendorNetDebit, $diff, 2);
             }
 
-            // Reverse available instant wallet credit to prevent duplicate cash payout
-            if ($walletCredit && $walletCredit->status === 'available') {
-                $walletCredit->status = 'reversed_for_cash_refund';
-                $walletCredit->notes = ($walletCredit->notes ? $walletCredit->notes . ' | ' : '') . 'Reversed upon manual cash/bank refund disbursement.';
-                $walletCredit->save();
-            }
-
             $disburseRef = 'REFUND-' . $lockedCase->case_number . '-' . date('YmdHis');
             $refToStore = $bankReference ?: ($paystackRefundId ?: $disburseRef);
+            $isWalletDisbursement = ($bankReference === 'wallet');
 
-            // 1. Post Double-Entry Journal Entries
-            // Credit: Cash in Escrow (Exact Cash Outflow to Customer)
-            FinancialJournalEntry::create([
-                'order_id' => $order->id,
-                'transaction_reference' => $refToStore,
-                'event_id' => 'EVT-REFUND-PAY-' . $disburseRef,
-                'beneficiary_type' => User::class,
-                'beneficiary_id' => $order->customer_id,
-                'account_name' => 'cash_in_escrow',
-                'entry_type' => 'credit',
-                'amount' => $totalCashRefund,
-                'currency' => 'NGN',
-                'description' => "Manual refund disbursement to customer for Return Case #{$lockedCase->case_number}",
-            ]);
+            if ($isWalletDisbursement) {
+                if ($walletCredit) {
+                    $walletCredit->status = 'available';
+                    $walletCredit->notes = ($walletCredit->notes ? $walletCredit->notes . ' | ' : '') . 'Approved and activated by admin.';
+                    $walletCredit->save();
+                } else {
+                    CustomerWalletCredit::create([
+                        'customer_id' => $order->customer_id,
+                        'order_id' => $order->id,
+                        'return_case_id' => $lockedCase->id,
+                        'amount' => $totalCashRefund,
+                        'credit_type' => 'doorstep_refund_credit',
+                        'status' => 'available',
+                        'notes' => "Admin approved refund wallet credit for Return Case #{$lockedCase->case_number}",
+                    ]);
+                }
+
+                FinancialJournalEntry::create([
+                    'order_id' => $order->id,
+                    'transaction_reference' => $refToStore,
+                    'event_id' => 'EVT-REFUND-WALLET-' . $disburseRef,
+                    'beneficiary_type' => User::class,
+                    'beneficiary_id' => $order->customer_id,
+                    'account_name' => 'customer_wallet_liability',
+                    'entry_type' => 'credit',
+                    'amount' => $totalCashRefund,
+                    'currency' => 'NGN',
+                    'description' => "Wallet credit refund disbursement to customer for Return Case #{$lockedCase->case_number}",
+                ]);
+
+                if ($order->customer) {
+                    \App\Services\NotificationDispatchService::dispatchCustomerWalletCredited(
+                        $order->customer,
+                        $totalCashRefund,
+                        "Refund approved for Return #{$lockedCase->case_number}"
+                    );
+                }
+            } else {
+                // Reverse available or pending instant wallet credit to prevent duplicate cash payout
+                if ($walletCredit && in_array($walletCredit->status, ['available', 'pending_approval'])) {
+                    $walletCredit->status = 'reversed_for_cash_refund';
+                    $walletCredit->notes = ($walletCredit->notes ? $walletCredit->notes . ' | ' : '') . 'Reversed upon manual cash/bank refund disbursement.';
+                    $walletCredit->save();
+                }
+
+                // 1. Post Double-Entry Journal Entries
+                // Credit: Cash in Escrow (Exact Cash Outflow to Customer)
+                FinancialJournalEntry::create([
+                    'order_id' => $order->id,
+                    'transaction_reference' => $refToStore,
+                    'event_id' => 'EVT-REFUND-PAY-' . $disburseRef,
+                    'beneficiary_type' => User::class,
+                    'beneficiary_id' => $order->customer_id,
+                    'account_name' => 'cash_in_escrow',
+                    'entry_type' => 'credit',
+                    'amount' => $totalCashRefund,
+                    'currency' => 'NGN',
+                    'description' => "Manual refund disbursement to customer for Return Case #{$lockedCase->case_number}",
+                ]);
+            }
+
+            // Commit active financial reservation for this order
+            \App\Models\FinancialReservation::where('source_type', Order::class)
+                ->where('source_id', $order->id)
+                ->where('status', 'active')
+                ->update([
+                    'status' => 'committed',
+                    'committed_at' => Carbon::now(),
+                ]);
 
             // Debit: Vendor Payable (Reduce held merchant earnings)
             // If vendor payout is already settled, log into vendor recovery ledger

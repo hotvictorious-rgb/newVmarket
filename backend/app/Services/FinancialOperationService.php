@@ -47,15 +47,32 @@ class FinancialOperationService
         return DB::transaction(function () use ($order, $amountNormalized, $amountKobo, $reason, $returnCase, $key) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->firstOrFail();
 
-            // Total refundable original payment (excluding unpaid or uncaptured)
+            // 1. Idempotency Guard: Check if exact idempotency key exists first so retries do not fail against their own reservation
+            $existingOp = FinancialOperation::where('idempotency_key', $key)->first();
+            if ($existingOp) {
+                return $existingOp;
+            }
+
+            // 2. Reservation Ceiling Check: Total refundable original payment (excluding unpaid or uncaptured)
             $totalOriginalPaymentNaira = bcadd((string)$lockedOrder->grand_total, '0', 2);
             $totalOriginalPaymentKobo = (int) bcmul($totalOriginalPaymentNaira, '100', 0);
 
-            // Calculate currently confirmed refunds + active refund reservations for this order
+            // Check for existing unattached provisional hold on this order (e.g. from doorstep rejection)
+            $provisionalHold = FinancialReservation::where('source_type', Order::class)
+                ->where('source_id', $lockedOrder->id)
+                ->where('purpose', 'customer_refund_hold')
+                ->where('status', 'active')
+                ->whereNull('financial_operation_id')
+                ->first();
+
+            // Calculate currently confirmed refunds + active refund reservations for this order (excluding claimed provisional hold)
             $existingReservationsKobo = (int) FinancialReservation::where('source_type', Order::class)
                 ->where('source_id', $lockedOrder->id)
                 ->where('purpose', 'customer_refund_hold')
                 ->whereIn('status', ['active', 'committed'])
+                ->when($provisionalHold, function ($q) use ($provisionalHold) {
+                    $q->where('id', '!=', $provisionalHold->id);
+                })
                 ->sum('reserved_amount_kobo');
 
             if ($existingReservationsKobo + $amountKobo > $totalOriginalPaymentKobo) {
@@ -64,12 +81,6 @@ class FinancialOperationService
                 throw new \DomainException(
                     "Refund invariant violation: Requested ₦{$amountNormalized} exceeds remaining refundable balance of ₦{$maxAllowableNaira} on Order #{$lockedOrder->order_number}."
                 );
-            }
-
-            // Check if exact idempotency key exists
-            $existingOp = FinancialOperation::where('idempotency_key', $key)->first();
-            if ($existingOp) {
-                return $existingOp;
             }
 
             $opRef = 'OP-RFD-' . $lockedOrder->id . '-' . strtoupper(Str::random(10));
@@ -94,15 +105,24 @@ class FinancialOperationService
                 ],
             ]);
 
-            // Reserve funds immediately to block concurrent double-refund attempts
-            FinancialReservation::create([
-                'financial_operation_id' => $operation->id,
-                'source_type' => Order::class,
-                'source_id' => $lockedOrder->id,
-                'reserved_amount_kobo' => $amountKobo,
-                'purpose' => 'customer_refund_hold',
-                'status' => 'active',
-            ]);
+            // Link existing provisional hold or create new active reservation
+            if ($provisionalHold && $provisionalHold->reserved_amount_kobo == $amountKobo) {
+                $provisionalHold->update([
+                    'financial_operation_id' => $operation->id,
+                ]);
+            } else {
+                if ($provisionalHold) {
+                    $provisionalHold->update(['status' => 'released', 'released_at' => Carbon::now()]);
+                }
+                FinancialReservation::create([
+                    'financial_operation_id' => $operation->id,
+                    'source_type' => Order::class,
+                    'source_id' => $lockedOrder->id,
+                    'reserved_amount_kobo' => $amountKobo,
+                    'purpose' => 'customer_refund_hold',
+                    'status' => 'active',
+                ]);
+            }
 
             return $operation;
         });

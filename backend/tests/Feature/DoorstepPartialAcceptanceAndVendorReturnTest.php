@@ -325,12 +325,21 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $this->assertEquals('rejected_in_transit', $item2->item_delivery_status);
         $this->assertEquals('vendor_issue', $item2->rejection_category);
 
-        // Check Instant Customer Wallet Credit
+        // Check Provisional Customer Wallet Credit (Pending merchant custody receipt)
         $credit = CustomerWalletCredit::where('customer_id', $this->customer->id)->first();
         $this->assertNotNull($credit);
         $this->assertEquals(15000.00, (float)$credit->amount);
-        $this->assertEquals('available', $credit->status);
-        $this->assertEquals('15000.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
+        $this->assertEquals('pending_approval', $credit->status);
+        $this->assertEquals('0.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
+
+        // Check Financial Reservation placed on order ceiling
+        $reservation = \App\Models\FinancialReservation::where('source_type', Order::class)
+            ->where('source_id', $order->id)
+            ->where('purpose', 'customer_refund_hold')
+            ->first();
+        $this->assertNotNull($reservation);
+        $this->assertEquals(1500000, $reservation->reserved_amount_kobo);
+        $this->assertEquals('active', $reservation->status);
 
         // Check ReturnCase generated for vendor return
         $returnCase = ReturnCase::where('order_id', $order->id)->first();
@@ -506,6 +515,19 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
 
         $returnCase = ReturnCase::where('order_id', $order->id)->firstOrFail();
 
+        // Handshake 3: Rider returns item to vendor shop
+        Sanctum::actingAs($this->riderUser);
+        $this->postJson('/api/v1/rider/orders/verify-vendor-return-otp', [
+            'return_case_id' => $returnCase->id,
+            'otp' => $returnCase->vendor_return_otp,
+            'proof_photo' => UploadedFile::fake()->image('vendor_return.jpg'),
+        ])->assertStatus(200);
+
+        // Super Admin reviews and disburses refund to customer wallet
+        $returnService = app(\App\Services\ReturnAndRefundService::class);
+        $returnService->adminApproveReturn($this->adminUser, $returnCase->fresh());
+        $returnService->adminDisburseRefund($this->adminUser, $returnCase->fresh(), 'wallet');
+
         Sanctum::actingAs($this->customer);
 
         // 1. Check wallet API summary
@@ -547,10 +569,11 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $this->assertEquals('customer_change_of_mind', $returnCase->rejection_category);
         $this->assertEquals('customer_100', $returnCase->cost_allocation);
 
-        // Verify customer wallet credit: ₦15,000 rejected item minus 100% delivery fee (₦1,500) = ₦13,500.00
+        // Verify customer wallet credit: ₦15,000 rejected item (delivery fee paid at checkout retained by courier; NOT deducted twice)
         $credit = CustomerWalletCredit::where('customer_id', $this->customer->id)->first();
         $this->assertNotNull($credit);
-        $this->assertEquals(13500.00, (float)$credit->amount);
+        $this->assertEquals(15000.00, (float)$credit->amount);
+        $this->assertEquals('pending_approval', $credit->status);
     }
 
     /**

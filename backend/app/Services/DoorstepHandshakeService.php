@@ -6,6 +6,7 @@ use App\Models\AdminAuditLog;
 use App\Models\CustomerCashbackLedger;
 use App\Models\CustomerWalletCredit;
 use App\Models\FinancialJournalEntry;
+use App\Models\FinancialReservation;
 use App\Models\LogisticsCompanyProfile;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -38,6 +39,14 @@ class DoorstepHandshakeService
 
             if (!$lockedOrder) {
                 return ['success' => false, 'message' => 'Order not found under lock.'];
+            }
+
+            // Guard against invalid or cancelled order states under lock
+            if (in_array($lockedOrder->order_status, ['cancelled', 'pending_payment', 'refunded'])) {
+                return [
+                    'success' => false,
+                    'message' => "Order cannot undergo doorstep handover (current status: {$lockedOrder->order_status}).",
+                ];
             }
 
             // 1. Verify Rider Assignment & Active Courier Profile
@@ -141,6 +150,7 @@ class DoorstepHandshakeService
                     'message' => "Delivery manifest is incomplete: Order item(s) #" . implode(', #', $missingItemIds) . " are missing from the handover manifest.",
                 ];
             }
+            $refundPolicy = app(RefundPolicyService::class);
             $totalAcceptedMerchandise = '0.00';
             $totalRejectedMerchandise = '0.00';
             $hasRejectedItems = false;
@@ -185,8 +195,19 @@ class DoorstepHandshakeService
                 $acceptedSubtotal = bcmul((string)$orderItem->unit_price, (string)$acceptedQty, 2);
                 $rejectedSubtotal = bcmul((string)$orderItem->unit_price, (string)$rejectedQty, 2);
 
+                $alloc = $rejectedQty > 0
+                    ? $refundPolicy->calculateItemAllocation($lockedOrder, $orderItem, $rejectedQty)
+                    : [
+                        'unit_price' => (string)$orderItem->unit_price,
+                        'quantity' => 0,
+                        'line_total' => '0.00',
+                        'allocated_discount' => '0.00',
+                        'refundable_amount' => '0.00',
+                        'refundable_kobo' => 0,
+                    ];
+
                 $totalAcceptedMerchandise = bcadd($totalAcceptedMerchandise, $acceptedSubtotal, 2);
-                $totalRejectedMerchandise = bcadd($totalRejectedMerchandise, $rejectedSubtotal, 2);
+                $totalRejectedMerchandise = bcadd($totalRejectedMerchandise, $alloc['refundable_amount'], 2);
 
                 $validatedLines[] = [
                     'order_item' => $orderItem,
@@ -197,6 +218,8 @@ class DoorstepHandshakeService
                     'defect_photo_path' => $itemInput['defect_photo_path'] ?? null,
                     'accepted_subtotal' => $acceptedSubtotal,
                     'rejected_subtotal' => $rejectedSubtotal,
+                    'allocated_discount' => $alloc['allocated_discount'],
+                    'refundable_amount' => $alloc['refundable_amount'],
                 ];
             }
 
@@ -221,7 +244,7 @@ class DoorstepHandshakeService
             $fleetDeliveryCut = bcmul($deliveryFee, '0.9000', 2);
             $platDeliveryCut = bcmul($deliveryFee, '0.1000', 2);
 
-            // 6. Handle Rejection Flow (Spawn Return Case + Instant Customer Wallet Credit)
+            // 6. Handle Rejection Flow (Spawn Return Case + Provisional Customer Wallet Reservation)
             $returnCase = null;
             $customerRefundWalletAmount = '0.00';
 
@@ -251,7 +274,7 @@ class DoorstepHandshakeService
                     'refunded_amount' => '0.00',
                 ]);
 
-                // Attach Return Items
+                // Attach Return Items with authoritatively calculated refundable amounts
                 foreach ($validatedLines as $line) {
                     if ($line['rejected_qty'] > 0) {
                         ReturnItem::create([
@@ -261,24 +284,21 @@ class DoorstepHandshakeService
                             'quantity' => $line['rejected_qty'],
                             'unit_price' => $line['order_item']->unit_price,
                             'line_total' => $line['rejected_subtotal'],
-                            'allocated_discount' => '0.00',
-                            'refundable_amount' => $line['rejected_subtotal'],
+                            'allocated_discount' => $line['allocated_discount'],
+                            'refundable_amount' => $line['refundable_amount'],
                             'item_condition' => $line['category'] === 'vendor_issue' ? 'damaged_defective' : 'unopened_sealed',
                             'status' => 'requested',
                         ]);
                     }
                 }
 
-                // Calculate Customer Instant Wallet Credit
+                // Calculate Cost Allocation & Refund Liability
                 if ($predominantRejectionCategory === 'customer_change_of_mind') {
-                    // Customer changed mind on correctly delivered goods: Customer pays 100% of delivery fee
-                    $netCustomerCredit = BcMathService::comp($totalRejectedMerchandise, $deliveryFee) > 0
-                        ? BcMathService::sub($totalRejectedMerchandise, $deliveryFee)
-                        : '0.00';
-                    $customerRefundWalletAmount = $netCustomerCredit;
+                    // Customer change of mind: Delivery fee was rendered and paid upfront; customer receives product refund only (NOT deducted twice)
+                    $customerRefundWalletAmount = $totalRejectedMerchandise;
                     $returnCase->cost_allocation = 'customer_100';
                 } elseif ($predominantRejectionCategory === 'transit_damage') {
-                    // Transit damage: Vendor 90% payout protected; Courier company absorbs liability
+                    // Transit damage: Vendor 90% payout protected; Courier fleet absorbs liability
                     $customerRefundWalletAmount = $totalRejectedMerchandise;
                     $returnCase->cost_allocation = 'logistics_fleet_100';
                 } else {
@@ -288,31 +308,34 @@ class DoorstepHandshakeService
                 }
                 $returnCase->save();
 
-                // Credit Customer 100% Spendable Refund Wallet Immediately
+                // Create Provisional Customer Wallet Credit (Pending merchant custody & admin verification)
                 CustomerWalletCredit::create([
                     'customer_id' => $lockedOrder->customer_id,
                     'order_id' => $lockedOrder->id,
                     'return_case_id' => $returnCase->id,
                     'amount' => $customerRefundWalletAmount,
                     'credit_type' => 'doorstep_refund_credit',
-                    'status' => 'available',
-                    'notes' => "Instant refund wallet credit for doorstep rejection on Order #{$lockedOrder->order_number}",
+                    'status' => 'pending_approval',
+                    'notes' => "Provisional refund wallet credit for doorstep rejection on Order #{$lockedOrder->order_number} (Awaiting merchant custody receipt & verification)",
+                ]);
+
+                // Reserve funds on financial ledger to guarantee availability and prevent double refund
+                FinancialReservation::create([
+                    'financial_operation_id' => null,
+                    'source_type' => Order::class,
+                    'source_id' => $lockedOrder->id,
+                    'reserved_amount_kobo' => (int) bcmul($customerRefundWalletAmount, '100', 0),
+                    'purpose' => 'customer_refund_hold',
+                    'status' => 'active',
                 ]);
 
                 // Trigger sovereign multi-channel notifications
                 NotificationDispatchService::dispatchDoorstepReturnInitiated($returnCase);
                 NotificationDispatchService::dispatchVendorReturnOtpIssued($returnCase);
-                if (BcMathService::comp($customerRefundWalletAmount, '0.00') > 0 && $lockedOrder->customer) {
-                    NotificationDispatchService::dispatchCustomerWalletCredited(
-                        $lockedOrder->customer,
-                        $customerRefundWalletAmount,
-                        "Doorstep return refund on Order #{$lockedOrder->order_number}"
-                    );
-                }
             }
 
             // 7. Post Balanced Double-Entry Journal Entries
-            $eventRef = 'EVT-HANDOVER-' . $lockedOrder->order_number . '-' . time();
+            $eventRef = 'EVT-HANDOVER-' . $lockedOrder->order_number . '-' . $lockedOrder->id;
 
             // A. Accepted Merchandise 90/5/5 Split (Vendor Net, Customer Cashback, Platform Commission)
             if (BcMathService::comp($totalAcceptedMerchandise, '0.00') > 0) {
