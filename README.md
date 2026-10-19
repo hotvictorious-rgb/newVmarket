@@ -32,9 +32,9 @@ Core controls include:
 2. [Institutional Financial Core & Commission Model](#2-institutional-financial-core--commission-model)
 3. [The Two-Status Inventory Architecture & Payment Safety Reservations](#3-the-two-status-inventory-architecture--payment-safety-reservations)
 4. [7-Day Product Freshness Lifecycle](#4-7-day-product-freshness-lifecycle)
-5. [Decoupled Fulfillment: Vendor Riders, Counter Pickup & Fleet Corridors](#5-decoupled-fulfillment-vendor-riders-counter-pickup--fleet-corridors)
-6. [Triangular Custody Handshakes & Doorstep Returns](#6-triangular-custody-handshakes--doorstep-returns)
-7. [The 7 Hardened Multi-Tenant Actor Roles](#7-the-7-hardened-multi-tenant-actor-roles)
+5. [Vendor-Managed Delivery and In-Shop Pickup](#5-vendor-managed-delivery-and-in-shop-pickup)
+6. [Custody Evidence, Handover, and Returns](#6-custody-evidence-handover-and-returns)
+7. [Actor Roles and Access Boundaries](#7-actor-roles-and-access-boundaries)
 8. [Paystack Escrow, Webhook Hardening & Crash Recovery](#8-paystack-escrow-webhook-hardening--crash-recovery)
 9. [Database Architecture & Core Entities](#9-database-architecture--core-entities)
 10. [REST API Specifications](#10-rest-api-specifications)
@@ -45,70 +45,29 @@ Core controls include:
 
 ## 1. Architectural Overview & Core Invariants
 
-Victorious MARKET enforces security and accounting invariants at the database transaction layer using PHP's `bcmath` extension, strict database constraints, and cryptographic signatures.
+Victorious MARKET enforces security and accounting invariants at the database transaction layer using PHP's `bcmath` extension, database constraints, and cryptographic payment-provider verification.
 
-```
-                                  ┌───────────────────────────────┐
-                                  │   ROLE 1: SUPER ADMIN         │
-                                  │   Root Command Tower          │
-                                  │   • Manual Settlement Signoff │
-                                  │   • 48h Bank Cooldown Defense │
-                                  │   • Immutable Audit Logging   │
-                                  └───────────────┬───────────────┘
-                                                  │
-                                                  ▼
-                                  ┌───────────────────────────────┐
-                                  │   ROLE 2: ADMIN STAFF         │
-                                  │   Moderation & Freshness Review│
-                                  │   • Scoped Staff Privileges   │
-                                  │   • Zero Banking / Wallet Bar │
-                                  │   • Catalog Freshness Audits  │
-                                  └───────────────────────────────┘
-                                 /                                 \
-                                /                                   \
-                               ▼                                     ▼
-       ┌───────────────────────────────────┐       ┌───────────────────────────────────┐
-       │ ROLE 3: VENDOR (MERCHANT HQ)      │       │ ROLE 5: LOGISTICS COMPANY (FLEET) │
-       │ Store Owner & Catalog Governance  │       │ Optional Corporate Fleet Partner  │
-       │ • Binary Stock Toggle (In/Out)    │       │ • Regional Corridor Directionality│
-       │ • 7-Day Freshness Reconfirmation  │       │ • LGA Collection Points Network   │
-       │ • Vendor-Managed Delivery Couriers│       │ • 48h Withdrawal Cooldown Defense │
-       │ • 48h Bank Cooldown Defense       │       │ • Cascades to Affiliated Riders   │
-       └─────────────────┬─────────────────┘       └─────────────────┬─────────────────┘
-                         │                                           │
-                         ├────────────────────────┐                  │
-                         ▼ (Cascades)             ▼ (Cascades)       ▼ (Cascades)
-       ┌───────────────────────────────────┐ ┌─────────────────────────────────────────┐
-       │ ROLE 4: BRANCH COUNTER STAFF      │ │ ROLE 6: DELIVERY RIDER (COURIER AGENT)  │
-       │ Plaza Inspection & Counter Pickup │ │ Vendor-Managed OR Fleet-Managed Courier │
-       │ • Strict Shop Boundary (`shop_id`)│ │ • Pure Operational Dispatch Agent       │
-       │ • Reservation Pass (`RES-XXXXXX`) │ │ • ZERO In-App Wallet / Zero Liability   │
-       │ • Physical Merchandise Sign-off   │ │ • Dual OTP Handshakes + Photo Proofs    │
-       │ • Zero Financial Capabilities     │ │ • Anti-Brute Force Shield (5-Max Lock)  │
-       └───────────────────────────────────┘ └───────────────────┬─────────────────────┘
-                                  \                             /
-                                   \                           /
-                                    ▼                         ▼
-                                   ┌───────────────────────────┐
-                                   │ ROLE 7: CUSTOMER (SHOPPER)│
-                                   │ Omnichannel Retail Buyer  │
-                                   │ • 30-Min Stock Hold Gate  │
-                                   │ • In-Shop Pickup Passes   │
-                                   │ • Secret Doorstep OTP Card│
-                                   │ • 5% Cashback Rewards     │
-                                   │ • Instant Wallet Credits  │
-                                   └───────────────────────────┘
-```
+### Current actor model
 
-### Institutional Invariants
+- **Platform administrators:** vendor verification, catalog governance, security, dispute review, reconciliation, and authorized financial controls. They do not dispatch riders or manage rider compensation.
+- **Vendor:** manages its catalog, orders, delivery areas/fees, and riders. The vendor manually assigns only its own child orders to its own linked riders.
+- **Vendor-linked rider:** operational-only; acts only on assigned orders for the owning vendor. The rider receives no platform wallet, earnings balance, payout, commission, or financial data.
+- **Counter staff:** may perform authorized vendor-shop pickup verification within their shop boundary.
+- **Customer:** shops through a parent checkout with separate vendor child orders and chooses eligible doorstep delivery or zero-fee in-shop pickup.
 
-1. **Zero Floating-Point Arithmetic:** All balances, kobo conversions, fees, discounts, and splits strictly execute using [`BcMathService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/BcMathService.php) with 2-decimal precision for balances and 0-decimal precision for integer kobo.
-2. **48-Hour Bank Cooldown Defense:** When a Vendor or Logistics Company alters their payout bank account (NUBAN) details, the system timestamps `bank_updated_at = now()`. All withdrawal and payout requests are mathematically locked for 48 hours to prevent account takeover fund drains:
-   $$\text{Block withdrawal if: } \text{now}() < \text{bank\_updated\_at} + 48\text{ hours}$$
-3. **Cascading Real-Time Suspensions:**
-   - Suspending a Vendor profile immediately revokes access for all affiliated branch counter staff (`vendor_employee`) and vendor-managed couriers (`rider`) on their next request.
-   - Suspending a Logistics Company profile revokes duty toggling, corridor routing, and parcel handovers for all affiliated fleet riders.
-4. **Pure Operational Couriers (Zero Phantom Liability):** Couriers hold **no platform balance**, **no in-app wallet**, and cannot receive direct digital credits or withdrawals. Compensation (salaries, fuel stipends, or per-drop splits) is handled offline by their parent merchant or logistics company.
+Historical logistics-company/fleet records and routes may remain for audit and migration compatibility, but they are not an active delivery option for new orders.
+
+### Institutional invariants
+
+1. **Exact financial arithmetic:** money allocation, kobo conversion, fees, discounts, and splits use decimal-safe arithmetic.
+2. **Vendor-only rider ownership:** every active rider eligible for new work must be linked to exactly one active vendor. Fleet-only or ambiguous legacy profiles cannot receive new assignments.
+3. **Vendor-defined delivery:** supported destinations and delivery fees are configured by the vendor and snapshotted to each child order at checkout.
+4. **Pickup separation:** `in_shop_pickup` always costs zero delivery fee, uses a `RES-XXXXXX` pass verified by the vendor, and does not require a rider.
+5. **Rider privacy:** rider responses may include the customer's name, delivery address, necessary instructions, and a protected Call Customer action. They must not expose the raw phone number, payment status, amount due, delivery-fee financial fields, card/bank details, cashback, commission, vendor settlement, or payout information.
+6. **Operational/financial separation:** delivery, failed attempts, proof, and custody return are operational events. They do not themselves approve refunds, create spendable wallet credit, post financial journals, or release vendor funds.
+7. **Legacy compatibility:** historical logistics data is preserved for authorized audit/reconciliation but cannot drive new assignments or new logistics payouts.
+
+---
 
 ---
 
