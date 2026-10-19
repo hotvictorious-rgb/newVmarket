@@ -35,6 +35,9 @@ jobs:
           extensions: bcmath, curl, dom, fileinfo, mbstring, pdo_sqlite, sqlite3, xml
           coverage: none
 
+      - name: Prepare test environment
+        run: touch .env
+
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
