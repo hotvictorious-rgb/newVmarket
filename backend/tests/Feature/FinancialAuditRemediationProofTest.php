@@ -1520,4 +1520,41 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-FLEET-PAYOUT-' . $logisticsPayout->id)->exists());
     }
 
+
+    public function test_stale_webhook_recovery_uses_stale_generation_and_enforces_attempt_limit(): void
+    {
+        $oldTime = Carbon::now()->subMinutes(10);
+
+        $retryable = ProcessedWebhookEvent::create([
+            'event_id' => 'evt-stale-recovery-retryable',
+            'event_type' => 'transfer.success',
+            'payload_hash' => hash('sha256', 'retryable'),
+            'payload' => '{}',
+            'status' => 'processing',
+            'attempts' => 1,
+        ]);
+        $exhausted = ProcessedWebhookEvent::create([
+            'event_id' => 'evt-stale-recovery-exhausted',
+            'event_type' => 'transfer.success',
+            'payload_hash' => hash('sha256', 'exhausted'),
+            'payload' => '{}',
+            'status' => 'processing',
+            'attempts' => 3,
+        ]);
+
+        \\Illuminate\\Support\\Facades\\DB::table('processed_webhook_events')
+            ->whereIn('id', [$retryable->id, $exhausted->id])
+            ->update(['updated_at' => $oldTime]);
+
+        $recovered = app(FinancialReconciliationEngine::class)->reconcileStaleWebhooks();
+
+        $this->assertEquals(1, $recovered);
+        $this->assertEquals('failed', $retryable->fresh()->status);
+        $this->assertEquals(2, $retryable->fresh()->attempts);
+        $this->assertStringContainsString('TIMEOUT_STALE_WORKER', (string) $retryable->fresh()->error_reason);
+        $this->assertEquals('failed', $exhausted->fresh()->status);
+        $this->assertEquals(3, $exhausted->fresh()->attempts);
+        $this->assertStringContainsString('MAX_ATTEMPTS_EXCEEDED', (string) $exhausted->fresh()->error_reason);
+    }
+
 }
