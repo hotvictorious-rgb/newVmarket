@@ -124,7 +124,7 @@ class PaystackPaymentController extends Controller
         return (bool)$updated;
     }
 
-    private function resolveAndValidatePayout(array $tData, \App\Models\ProcessedWebhookEvent $processedEvent): ?array
+    private function resolveAndValidatePayout(array $tData, \App\Models\ProcessedWebhookEvent $processedEvent, bool $requireFinancialFields = false): ?array
     {
         $tRef = trim((string)($tData['reference'] ?? ''));
         $tCode = trim((string)($tData['transfer_code'] ?? ''));
@@ -230,7 +230,7 @@ class PaystackPaymentController extends Controller
                 ]);
                 return ['error' => 'Payout amount mismatch'];
             }
-        } elseif (isset($event['event']) && $event['event'] === 'transfer.success') {
+        } elseif ($requireFinancialFields) {
             Log::critical("Paystack Webhook Missing Amount! Payout #{$payout->id} webhook payload omitted amount.");
             $this->updateProcessedEvent($processedEvent, [
                 'status' => 'failed',
@@ -240,7 +240,17 @@ class PaystackPaymentController extends Controller
             return ['error' => 'Missing transfer amount'];
         }
 
-        // Currency Invariant Check (Verify whenever provided)
+        // Successful transfers must carry explicit amount and currency; never infer either.
+        if ($requireFinancialFields && empty($tData['currency'])) {
+            Log::critical("Paystack Webhook Missing Currency! Payout #{$payout->id} webhook payload omitted currency.");
+            $this->updateProcessedEvent($processedEvent, [
+                'status' => 'failed',
+                'error_reason' => "MISSING_CURRENCY: Webhook transfer payload omitted mandatory currency.",
+                'processed_at' => Carbon::now(),
+            ]);
+            return ['error' => 'Missing transfer currency'];
+        }
+
         if (isset($tData['currency'])) {
             $currency = strtoupper(trim((string)$tData['currency']));
             if ($currency !== 'NGN') {
@@ -364,7 +374,7 @@ class PaystackPaymentController extends Controller
             $tCode = (string)($tData['transfer_code'] ?? '');
             Log::info("Paystack Webhook: Automated transfer success for reference: {$tRef}, code: {$tCode}");
 
-            $resolved = $this->resolveAndValidatePayout($tData, $processedEvent);
+            $resolved = $this->resolveAndValidatePayout($tData, $processedEvent, true);
 
             if (isset($resolved['error'])) {
                 return response()->json(['status' => false, 'message' => $resolved['error']], 400);
