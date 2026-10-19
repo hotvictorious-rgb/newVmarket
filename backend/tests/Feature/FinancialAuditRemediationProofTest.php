@@ -2553,4 +2553,47 @@ class FinancialAuditRemediationProofTest extends TestCase
             ->where('purpose', 'customer_refund_hold')->count());
     }
 
+
+    public function test_cumulative_refunds_cannot_exceed_approved_return_case_amount(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '1000.00',
+            'payment_reference' => 'REF-CASE-CEILING-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+        ]);
+        $returnCase = ReturnCase::create([
+            'case_number' => 'RET-CASE-CEILING-' . strtoupper(uniqid()),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'other',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '250.00',
+        ]);
+
+        $service = app(FinancialOperationService::class);
+        $first = $service->createRefundOperation(
+            $order, '200.00', 'approved return case partial refund', $returnCase,
+            'IDEMPOTENCY-CASE-CEILING-FIRST-' . uniqid()
+        );
+        $this->assertSame(20000, (int) $first->amount_kobo);
+
+        try {
+            $service->createRefundOperation(
+                $order, '50.01', 'exceeds approved return case balance', $returnCase,
+                'IDEMPOTENCY-CASE-CEILING-OVER-' . uniqid()
+            );
+            $this->fail('Cumulative refunds must not exceed the approved return-case amount.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('approved refundable balance', $exception->getMessage());
+        }
+
+        $this->assertSame(1, FinancialOperation::where('metadata->return_case_id', $returnCase->id)->count());
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $first->id)
+            ->where('status', 'active')->count());
+    }
+
 }
