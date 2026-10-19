@@ -21,15 +21,22 @@ class PayoutFinalizationService
      * Guaranteed to produce identical, balanced accounting whether triggered
      * by Admin Disburse, Gateway Webhook (transfer.success), Manual Reconcile, or Scheduled Reconciler.
      */
-    public function finalizeVendorPayout(VendorPayoutRequest $payout, array $gatewayData = [], ?User $admin = null): array
+    public function finalizeVendorPayout(VendorPayoutRequest $payout, array $gatewayData = [], ?User $admin = null, ?string $expectedProcessingToken = null): array
     {
         $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
 
-        $result = DB::transaction(function () use ($payout, $gatewayData, $admin, $formattedPayoutAmount) {
+        $result = DB::transaction(function () use ($payout, $gatewayData, $admin, $formattedPayoutAmount, $expectedProcessingToken) {
             $lockedPayout = VendorPayoutRequest::with(['vendor', 'allocations'])
                 ->where('id', $payout->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            // Fence reconciliation inside the row-locked transaction to close the
+            // check-then-finalize race if another worker takes over an expired lease.
+            if ($expectedProcessingToken !== null && $lockedPayout->processing_token !== $expectedProcessingToken) {
+                return ['success' => false, 'protected' => true, 'idempotent' => true, 'payout' => $lockedPayout,
+                    'message' => 'Vendor payout reconciliation lease was lost before finalization.'];
+            }
 
             // A terminal failed/rejected payout must not be reopened by a delayed success
             // webhook after its wallet/allocation/journal reversal has already been applied.
@@ -266,13 +273,18 @@ class PayoutFinalizationService
     /**
      * Authoritative idempotent finalization of a Logistics Payout.
      */
-    public function finalizeLogisticsPayout(LogisticsPayoutRequest $payout, array $gatewayData = [], ?User $admin = null): array
+    public function finalizeLogisticsPayout(LogisticsPayoutRequest $payout, array $gatewayData = [], ?User $admin = null, ?string $expectedProcessingToken = null): array
     {
-        $result = DB::transaction(function () use ($payout, $gatewayData, $admin) {
+        $result = DB::transaction(function () use ($payout, $gatewayData, $admin, $expectedProcessingToken) {
             $lockedPayout = LogisticsPayoutRequest::with('company')
                 ->where('id', $payout->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($expectedProcessingToken !== null && $lockedPayout->processing_token !== $expectedProcessingToken) {
+                return ['success' => false, 'protected' => true, 'idempotent' => true, 'payout' => $lockedPayout,
+                    'message' => 'Logistics payout reconciliation lease was lost before finalization.'];
+            }
 
             // A terminal failed/rejected payout must not be reopened by a delayed success
             // webhook after its wallet/journal reversal has already been applied.
@@ -375,13 +387,18 @@ class PayoutFinalizationService
     /**
      * Authoritative safe reversal of a failed/reversed Vendor Payout.
      */
-    public function revertVendorPayout(VendorPayoutRequest $payout, string $reason, ?User $admin = null, bool $allowSuccessfulReversal = false): array
+    public function revertVendorPayout(VendorPayoutRequest $payout, string $reason, ?User $admin = null, bool $allowSuccessfulReversal = false, ?string $expectedProcessingToken = null): array
     {
-        $result = DB::transaction(function () use ($payout, $reason, $admin, $allowSuccessfulReversal) {
+        $result = DB::transaction(function () use ($payout, $reason, $admin, $allowSuccessfulReversal, $expectedProcessingToken) {
             $lockedPayout = VendorPayoutRequest::with(['allocations.order', 'vendor'])
                 ->where('id', $payout->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($expectedProcessingToken !== null && $lockedPayout->processing_token !== $expectedProcessingToken) {
+                return ['success' => false, 'protected' => true, 'idempotent' => true, 'payout' => $lockedPayout,
+                    'message' => 'Vendor payout reconciliation lease was lost before reversal.'];
+            }
 
             // Terminal Guard (P0): Idempotent if already rejected/failed
             if ($lockedPayout->status === 'rejected' && $lockedPayout->gateway_status === 'failed') {
@@ -528,13 +545,18 @@ class PayoutFinalizationService
     /**
      * Authoritative safe reversal of a failed/reversed Logistics Payout.
      */
-    public function revertLogisticsPayout(LogisticsPayoutRequest $payout, string $reason, ?User $admin = null, bool $allowSuccessfulReversal = false): array
+    public function revertLogisticsPayout(LogisticsPayoutRequest $payout, string $reason, ?User $admin = null, bool $allowSuccessfulReversal = false, ?string $expectedProcessingToken = null): array
     {
-        $result = DB::transaction(function () use ($payout, $reason, $admin, $allowSuccessfulReversal) {
+        $result = DB::transaction(function () use ($payout, $reason, $admin, $allowSuccessfulReversal, $expectedProcessingToken) {
             $lockedPayout = LogisticsPayoutRequest::with('company')
                 ->where('id', $payout->id)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($expectedProcessingToken !== null && $lockedPayout->processing_token !== $expectedProcessingToken) {
+                return ['success' => false, 'protected' => true, 'idempotent' => true, 'payout' => $lockedPayout,
+                    'message' => 'Logistics payout reconciliation lease was lost before reversal.'];
+            }
 
             // Terminal Guard (P0): Idempotent if already rejected/failed (prevents duplicate wallet balance credits)
             if ($lockedPayout->status === 'rejected' && $lockedPayout->gateway_status === 'failed') {
