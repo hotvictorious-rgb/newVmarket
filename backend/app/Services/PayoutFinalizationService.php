@@ -397,29 +397,49 @@ class PayoutFinalizationService
             $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . 'Transfer Reversal: ' . $reason;
             $lockedPayout->save();
 
-            $formattedPayoutAmount = bcadd((string)$lockedPayout->amount, '0', 2);
-            $revRef = 'REV-VND-' . $lockedPayout->id . '-' . date('YmdHis');
-            $vendor = $lockedPayout->vendor;
-
-            $allocatedSum = (string)$lockedPayout->allocations()->where('status', 'reversed')->sum('allocated_amount');
-            $discrepancy = bcsub($formattedPayoutAmount, $allocatedSum, 2);
-
-            if (bccomp($discrepancy, '0.00', 2) > 0) {
-                // Symmetrical reversal of treasury suspense debit; group it with the cash/payable reversal so this journal event balances.
-                FinancialJournalEntry::create([
-                    'order_id' => null,
-                    'transaction_reference' => $revRef,
-                    'event_id' => 'EVT-REV-VND-' . $lockedPayout->id,
-                    'beneficiary_type' => VendorProfile::class,
-                    'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
-                    'account_name' => 'treasury_reconciliation_suspense',
-                    'entry_type' => 'credit',
-                    'amount' => $discrepancy,
-                    'currency' => 'NGN',
-                    'description' => "Treasury suspense reversed after failed transfer on Payout #{$lockedPayout->id}",
-                ]);
-
-                if (bccomp($allocatedSum, '0.00', 2) > 0) {
+            // A queued/failed transfer may never have posted the disbursement journal.
+            // Only write a financial reversal when the original payout journal exists;
+            // otherwise release allocations/state without fabricating a cash movement.
+            $hasOriginalPayoutJournal = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $lockedPayout->id)->exists();
+            if ($hasOriginalPayoutJournal) {
+                $formattedPayoutAmount = bcadd((string)$lockedPayout->amount, '0', 2);
+                $revRef = 'REV-VND-' . $lockedPayout->id . '-' . date('YmdHis');
+                $vendor = $lockedPayout->vendor;
+    
+                $allocatedSum = (string)$lockedPayout->allocations()->where('status', 'reversed')->sum('allocated_amount');
+                $discrepancy = bcsub($formattedPayoutAmount, $allocatedSum, 2);
+    
+                if (bccomp($discrepancy, '0.00', 2) > 0) {
+                    // Symmetrical reversal of treasury suspense debit; group it with the cash/payable reversal so this journal event balances.
+                    FinancialJournalEntry::create([
+                        'order_id' => null,
+                        'transaction_reference' => $revRef,
+                        'event_id' => 'EVT-REV-VND-' . $lockedPayout->id,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                        'account_name' => 'treasury_reconciliation_suspense',
+                        'entry_type' => 'credit',
+                        'amount' => $discrepancy,
+                        'currency' => 'NGN',
+                        'description' => "Treasury suspense reversed after failed transfer on Payout #{$lockedPayout->id}",
+                    ]);
+    
+                    if (bccomp($allocatedSum, '0.00', 2) > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => null,
+                            'transaction_reference' => $revRef,
+                            'event_id' => 'EVT-REV-VND-' . $lockedPayout->id,
+                            'beneficiary_type' => VendorProfile::class,
+                            'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                            'account_name' => 'vendor_payable',
+                            'entry_type' => 'credit',
+                            'amount' => $allocatedSum,
+                            'currency' => 'NGN',
+                            'description' => "Merchant payable liability restored after Paystack transfer failure: " . ($vendor?->business_name ?? 'Merchant'),
+                        ]);
+                    }
+                } else {
+                    // Exact restoration of original vendor_payable liability debited during payout
                     FinancialJournalEntry::create([
                         'order_id' => null,
                         'transaction_reference' => $revRef,
@@ -428,39 +448,27 @@ class PayoutFinalizationService
                         'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
                         'account_name' => 'vendor_payable',
                         'entry_type' => 'credit',
-                        'amount' => $allocatedSum,
+                        'amount' => $formattedPayoutAmount,
                         'currency' => 'NGN',
                         'description' => "Merchant payable liability restored after Paystack transfer failure: " . ($vendor?->business_name ?? 'Merchant'),
                     ]);
                 }
-            } else {
-                // Exact restoration of original vendor_payable liability debited during payout
+    
                 FinancialJournalEntry::create([
                     'order_id' => null,
                     'transaction_reference' => $revRef,
                     'event_id' => 'EVT-REV-VND-' . $lockedPayout->id,
                     'beneficiary_type' => VendorProfile::class,
                     'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
-                    'account_name' => 'vendor_payable',
-                    'entry_type' => 'credit',
+                    'account_name' => 'cash_in_escrow',
+                    'entry_type' => 'debit',
                     'amount' => $formattedPayoutAmount,
                     'currency' => 'NGN',
-                    'description' => "Merchant payable liability restored after Paystack transfer failure: " . ($vendor?->business_name ?? 'Merchant'),
+                    'description' => "Escrow cash restored after Paystack transfer failure: " . ($vendor?->business_name ?? 'Merchant'),
                 ]);
+    
+    
             }
-
-            FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $revRef,
-                'event_id' => 'EVT-REV-VND-' . $lockedPayout->id,
-                'beneficiary_type' => VendorProfile::class,
-                'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
-                'account_name' => 'cash_in_escrow',
-                'entry_type' => 'debit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Escrow cash restored after Paystack transfer failure: " . ($vendor?->business_name ?? 'Merchant'),
-            ]);
 
             return ['success' => true, 'idempotent' => false, 'payout' => $lockedPayout];
         });
