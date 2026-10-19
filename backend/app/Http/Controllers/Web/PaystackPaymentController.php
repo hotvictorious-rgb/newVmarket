@@ -616,7 +616,7 @@ class PaystackPaymentController extends Controller
                 if (!array_key_exists('amount', $rData) || !$webhookAmountIsWholeKobo) {
                     $this->updateProcessedEvent($processedEvent, [
                         'status' => 'failed',
-                        'error_reason' => 'REFUND_MISSING_OR_INVALID_AMOUNT: Refund webhook must supply an integer amount in kobo.',
+                        'error_reason' => 'REFUND_MISSING_AMOUNT: Refund webhook must supply an integer amount in kobo.',
                         'processed_at' => Carbon::now(),
                     ]);
                     Log::critical('Paystack refund webhook missing or malformed amount; financial operation was not finalized.', [
