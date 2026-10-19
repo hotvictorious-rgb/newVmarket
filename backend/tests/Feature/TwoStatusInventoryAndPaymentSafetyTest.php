@@ -401,4 +401,86 @@ class TwoStatusInventoryAndPaymentSafetyTest extends TestCase
         $this->assertEquals('held', $freshOrder->vendor_settlement_status);
         $this->assertEquals('paid', $freshOrder->payment_status);
     }
+
+    /**
+     * Test 9: Vendor can toggle product stock between In Stock and Out of Stock via one-click toggle.
+     */
+    public function test_vendor_can_toggle_product_stock_between_in_stock_and_out_of_stock(): void
+    {
+        $this->assertTrue((bool)$this->product->is_in_stock);
+
+        // Vendor toggles to Out of Stock
+        $response = $this->actingAs($this->vendorUser)->post(
+            route('vendor.products.toggle-stock', $this->product->id)
+        );
+        $response->assertRedirect();
+        $this->assertFalse((bool)$this->product->fresh()->is_in_stock);
+        $this->assertFalse($this->product->fresh()->is_available_for_sale);
+
+        // Vendor toggles back to In Stock
+        $response = $this->actingAs($this->vendorUser)->post(
+            route('vendor.products.toggle-stock', $this->product->id)
+        );
+        $response->assertRedirect();
+        $this->assertTrue((bool)$this->product->fresh()->is_in_stock);
+        $this->assertTrue($this->product->fresh()->is_available_for_sale);
+    }
+
+    /**
+     * Test 10: Multi-tenant security barrier: unauthorized vendor cannot toggle another vendor's product.
+     */
+    public function test_unauthorized_vendor_cannot_toggle_another_vendors_product(): void
+    {
+        $otherVendorUser = User::factory()->create([
+            'user_type' => 'vendor',
+            'status' => 'active',
+            'email' => 'othervendor@example.com',
+        ]);
+        VendorProfile::create([
+            'user_id' => $otherVendorUser->id,
+            'business_name' => 'Other Vendor Plaza',
+            'business_type' => 'retail',
+            'marketplace_status' => 'active',
+        ]);
+
+        $response = $this->actingAs($otherVendorUser)->post(
+            route('vendor.products.toggle-stock', $this->product->id)
+        );
+        $response->assertStatus(404);
+        $this->assertTrue((bool)$this->product->fresh()->is_in_stock);
+    }
+
+    /**
+     * Test 11: Storefront product detail page displays Out of Stock badge and disabled buttons when unavailable.
+     */
+    public function test_storefront_product_detail_page_renders_out_of_stock_state_cleanly(): void
+    {
+        // First view when In Stock
+        $responseInStock = $this->get(route('product.detail', $this->product->slug));
+        $responseInStock->assertStatus(200);
+        $responseInStock->assertSee('In Stock');
+        $responseInStock->assertSee('Buy Now');
+
+        // Now vendor marks Out of Stock
+        $this->product->update(['is_in_stock' => false]);
+
+        $responseOutOfStock = $this->get(route('product.detail', $this->product->slug));
+        $responseOutOfStock->assertStatus(200);
+        $responseOutOfStock->assertSee('Out of Stock');
+        $responseOutOfStock->assertSee('Currently Unavailable');
+        $responseOutOfStock->assertSee('Unavailable for Reservation');
+    }
+
+    /**
+     * Test 12: Storefront catalog grid displays Out of Stock badge and disables +Cart action.
+     */
+    public function test_storefront_catalog_renders_out_of_stock_badge_and_disables_cart_action(): void
+    {
+        // Vendor marks product Out of Stock
+        $this->product->update(['is_in_stock' => false]);
+
+        $response = $this->get(route('storefront'));
+        $response->assertStatus(200);
+        $response->assertSee('Out of Stock');
+    }
 }
