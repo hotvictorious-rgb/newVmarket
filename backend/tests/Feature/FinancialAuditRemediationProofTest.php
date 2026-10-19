@@ -2475,4 +2475,47 @@ class FinancialAuditRemediationProofTest extends TestCase
             ->where('status', 'active')->count());
     }
 
+
+    public function test_refund_operation_rejects_return_case_from_another_order(): void
+    {
+        $firstOrder = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '1000.00',
+            'payment_reference' => 'REF-CASE-OWNER-A-' . uniqid(),
+        ]);
+        $secondOrder = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '1000.00',
+            'payment_reference' => 'REF-CASE-OWNER-B-' . uniqid(),
+        ]);
+        $returnCase = ReturnCase::create([
+            'case_number' => 'RET-' . strtoupper(uniqid()),
+            'customer_id' => $this->customer->id,
+            'order_id' => $firstOrder->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'other',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '250.00',
+        ]);
+
+        try {
+            app(FinancialOperationService::class)->createRefundOperation(
+                $secondOrder, '250.00', 'mismatched return case', $returnCase,
+                'IDEMPOTENCY-CASE-OWNER-' . uniqid()
+            );
+            $this->fail('A return case must not refund a different order.');
+        } catch (\DomainException $exception) {
+            $this->assertStringContainsString('return case does not belong to the specified order', $exception->getMessage());
+        }
+
+        $this->assertSame(0, FinancialOperation::where('metadata->order_id', $secondOrder->id)->count());
+        $this->assertSame(0, FinancialReservation::where('source_type', Order::class)
+            ->where('source_id', $secondOrder->id)
+            ->where('purpose', 'customer_refund_hold')->count());
+    }
+
+
 }
