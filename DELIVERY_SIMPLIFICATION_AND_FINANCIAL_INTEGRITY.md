@@ -104,6 +104,32 @@ One important distinction: in this example, the customer receives cashback worth
 
 There is also an important business decision: will the 5% cashback apply to the full payment, including delivery, or only to the eligible product amount? I would generally favour 5% on eligible product value, excluding delivery fees, because it avoids rewarding delivery charges and makes the programme easier to control.
 
+### Definitive Policy: 5% Cashback on Eligible Products Only (Excluding Delivery Fees)
+
+My recommendation is no — calculate the 5% cashback on eligible product value only, excluding delivery fees.
+
+Your 10% commission can still apply to the full payment, including delivery, as you decided.
+
+For example, if a customer pays ₦100,000:
+
+| Breakdown | Amount |
+| :--- | :--- |
+| Products | ₦90,000 |
+| Delivery | ₦10,000 |
+| VMARKET commission (10% of full payment) | ₦10,000 |
+| Customer cashback (5% of products only) | ₦4,500 |
+| VMARKET retains before expenses | ₦5,500 |
+
+This gives you a clear model:
+
+- **10% commission:** products + delivery.
+- **5% cashback:** eligible products only.
+- **Remaining commission:** cashback deducted from your commission, before expenses and other adjustments.
+
+**Why I prefer this approach:** delivery is a fulfilment cost, not the product value you want customers to buy more of. Excluding it also helps protect your margins.
+
+**One more important rule:** if a customer receives a refund for a product, the cashback associated with that refunded product should be reversed according to your published policy.
+
 **My verdict:** this makes VMARKET's model more compelling. You're not just earning commission; you're reinvesting part of it into customer retention. The key is to make the cashback rules financially sustainable, transparent and difficult to abuse.
 
 ## Required workflow
