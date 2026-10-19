@@ -117,8 +117,9 @@ The rider interface and rider API must reveal only information necessary for the
 
 ### Permitted customer-facing delivery information
 - Customer name.
-- Delivery address and only the location instructions necessary to reach that address.
-- A **Call Customer** action.
+- Delivery address.
+- A protected **Call Customer** action.
+- No other customer profile data. The rider must not receive additional customer instructions or contact fields unless the owner explicitly approves a future policy change.
 
 ### Prohibited rider access
 - Raw customer phone number in API payloads, page markup, logs, analytics, or exports. The Call Customer action should use a protected call flow or privacy-preserving relay; do not render the number merely to make the button work.
@@ -196,7 +197,7 @@ If COD is enabled by the business, the workflow must define a vendor-owned colle
 ### P0 — Privacy and financial-boundary violations
 
 1. **Rider API guard still accepts legacy fleet affiliation.** In `backend/app/Http/Controllers/Api/RiderTerminalApiController.php`, `guardRiderWithLogistics()` permits a rider with either `vendor_id` or `logistics_company_id`. New delivery work must require an active rider profile linked to exactly one active vendor; fleet-only riders must be denied for new assignments and actions. Preserve legacy links for history, but do not treat them as eligible ownership.
-2. **Rider order projection leaks restricted fields.** `formatOrderForRider()` in the same controller includes `payment_status`, `delivery_fee`, and the customer's raw phone number. The dashboard, active-order, history, and return payloads must be reviewed together. Remove these fields from rider responses, HTML, embedded page data, logs, analytics, exports, and error responses. Return only customer name, delivery address, necessary delivery instructions, and a protected **Call Customer** action, plus minimum operational parcel/order data.
+2. **Rider order projection leaks restricted fields.** `formatOrderForRider()` in the same controller includes `payment_status`, `delivery_fee`, and the customer's raw phone number. The dashboard, active-order, history, and return payloads must be reviewed together. Remove these fields from rider responses, HTML, embedded page data, logs, analytics, exports, and error responses. Return only customer name, delivery address, and a protected **Call Customer** action as customer information, plus minimum operational parcel/order data.
 3. **Customer phone privacy is not satisfied by hiding the number visually.** The controller eager-loads the customer's phone and returns it in JSON; the active-returns response also includes `customer_phone`. Implement a privacy-preserving call relay/action so the rider can initiate a call without the raw number being present in the rider response or page markup. Test the serialized response and rendered HTML, not just visual masking.
 4. **Failed-delivery endpoint performs prohibited financial actions.** `recordDeliveryAttemptFailed()` in `RiderTerminalApiController.php` creates a `CustomerWalletCredit` and writes a `logistics_payable` journal entry for the legacy fleet. A rider's failed-attempt action must record the attempt, reason, timestamp, evidence, and custody/return state only. It must not create a spendable wallet credit, refund, vendor-fund release, logistics payable, or rider compensation. Route customer remedies through the authorized review and financial-operation workflow.
 5. **Doorstep handover mixes operational evidence with financial posting.** `backend/app/Services/DoorstepHandshakeService.php` creates customer wallet-credit records/reservations and financial journal entries inside a rider-triggered handover, and contains a legacy fleet delivery-fee path. Split the process: the rider action records verified handover/accepted-rejected items and evidence; a separately authorized, idempotent financial service evaluates an approved remedy and posts balanced entries. Do not make a credit spendable merely because a rider submitted a handover.
