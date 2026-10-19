@@ -254,7 +254,7 @@ class FinancialReconciliationEngine
 
         foreach ($pendingRefundOrders as $candidateOrder) {
             $claimToken = Str::random(48);
-            $claimedOrder = \\Illuminate\\Support\\Facades\\DB::transaction(function () use ($candidateOrder, $claimToken) {
+            $claimedOrder = \Illuminate\Support\Facades\DB::transaction(function () use ($candidateOrder, $claimToken) {
                 $ord = Order::where('id', $candidateOrder->id)->lockForUpdate()->first();
                 if (!$ord || in_array($ord->paystack_refund_status, ['completed', 'failed'], true)) {
                     return null;
@@ -297,7 +297,7 @@ class FinancialReconciliationEngine
                     ->update($updates) > 0;
             };
 
-            $finOpService = app(\\App\\Services\\FinancialOperationService::class);
+            $finOpService = app(\App\Services\FinancialOperationService::class);
 
             if (empty($claimedOrder->paystack_refund_reference)) {
                 $returnCase = $claimedOrder->returnCases()
@@ -318,7 +318,7 @@ class FinancialReconciliationEngine
                         $reconciled++;
                     }
                     $releaseClaim();
-                } catch (\\Throwable $e) {
+                } catch (\Throwable $e) {
                     Log::error("Reconciler refund initiation failed for order #{$claimedOrder->id}: " . $e->getMessage());
                     $releaseClaim('pending');
                 }
@@ -328,7 +328,7 @@ class FinancialReconciliationEngine
                 if (!empty($verifyRes['success'])) {
                     $gwStatus = strtolower($verifyRes['status'] ?? 'pending');
                     if (in_array($gwStatus, ['processed', 'success', 'completed'], true)) {
-                        $existingOp = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+                        $existingOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
                             ->whereJsonContains('metadata->order_id', $claimedOrder->id)
                             ->where('status', '!=', 'confirmed')
                             ->first();
