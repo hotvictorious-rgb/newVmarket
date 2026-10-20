@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\AdminAuditLog;
 use App\Models\CustomerCashbackLedger;
-use App\Models\CustomerWalletCredit;
 use App\Models\FinancialJournalEntry;
 use App\Models\FinancialReservation;
 use App\Models\LogisticsCompanyProfile;
@@ -325,17 +324,10 @@ class DoorstepHandshakeService
                 }
                 $returnCase->save();
 
-                // Create Provisional Customer Wallet Credit (Pending merchant custody & admin verification)
-                CustomerWalletCredit::create([
-                    'customer_id' => $lockedOrder->customer_id,
-                    'order_id' => $lockedOrder->id,
-                    'return_case_id' => $returnCase->id,
-                    'amount' => $customerRefundWalletAmount,
-                    'credit_type' => 'doorstep_refund_credit',
-                    'status' => 'pending_approval',
-                    'notes' => "Provisional refund wallet credit for doorstep rejection on Order #{$lockedOrder->order_number} (Awaiting merchant custody receipt & verification)",
-                ]);
-
+                // No wallet credit is issued for a doorstep rejection. This rider event
+                // records the return request and reserves the rejected merchandise amount;
+                // an authorized reviewer must approve a refund through the original Paystack
+                // transaction after vendor custody and evidence checks.
                 // Reserve funds on financial ledger to guarantee availability and prevent double refund
                 FinancialReservation::create([
                     'financial_operation_id' => null,
@@ -518,7 +510,7 @@ class DoorstepHandshakeService
                     'accepted_merchandise' => $totalAcceptedMerchandise,
                     'rejected_merchandise' => $totalRejectedMerchandise,
                     'return_case_id' => $returnCase?->id,
-                    'wallet_credit_credited' => $customerRefundWalletAmount,
+                    'refund_requested_amount' => $customerRefundWalletAmount,
                 ],
                 'ip_address' => request()->ip() ?? '127.0.0.1',
                 'user_agent' => request()->userAgent(),
@@ -527,12 +519,12 @@ class DoorstepHandshakeService
             return [
                 'success' => true,
                 'message' => $hasRejectedItems
-                    ? "Delivery handover complete. ₦{$customerRefundWalletAmount} credited to customer wallet. Return OTP generated for vendor shop handover."
+                    ? "Delivery handover complete. Rejected items are pending vendor return and refund review; no wallet credit has been issued. Return OTP generated for vendor shop handover."
                     : "Order delivery successfully completed and verified.",
                 'accepted_amount' => $totalAcceptedMerchandise,
                 'rejected_amount' => $totalRejectedMerchandise,
                 'return_case' => $returnCase,
-                'wallet_credited' => $customerRefundWalletAmount,
+                'refund_requested_amount' => $customerRefundWalletAmount,
             ];
         });
     }
