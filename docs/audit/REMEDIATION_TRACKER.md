@@ -278,3 +278,8 @@ The shared OrderSettlementService accepted a valid customer OTP with no photo pa
 
 
 VM-AUD-057 verification update (20 October 2026): the full financial/payment hardening suite passed on implementation plus regression commit `7fbde23bde35ae405f51d5ada5f88fda5e55053b` ([CI run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39511157789)). The first CI attempt correctly exposed two existing direct-service tests that still called successful handover without evidence; both fixtures were updated to supply the proof path, and the subsequent full suite passed. A follow-up wording-only API response correction is in commit `6523ed4bc18863b6deb678d0958794295d8ba063`; its CI run is pending, so the latest branch head is not yet fully verified.
+
+
+### VM-AUD-058 — stale expiry candidate could cancel a renewed order (20 October 2026)
+
+`expireAbandonedPendingOrders()` selected expired orders before taking each row lock, then rechecked only payment and order status under lock. If expiry was extended after candidate selection while the order remained pending/unpaid, the stale scheduler snapshot could still cancel it and release stock/reservations. The locked recheck now also requires a non-null `expires_at` that is still expired at the time of transition. Added a race regression that extends expiry during candidate retrieval and asserts the order remains pending. Service commit: 46705b41ac3759d4a38c3899439a0a5aa99bf941; test commit: 8cacb2f9be13647e700bd2e697684dcba62eab93. Status: FIXED — CI verification pending.
