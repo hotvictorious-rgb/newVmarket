@@ -398,6 +398,8 @@ class VendorTerminalApiController extends Controller
         $validated = $request->validate([
             'order_id' => 'required|integer|exists:orders,id',
             'otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
+            'reservation_code' => 'required|string|max:50',
+            'proof_photo' => 'required|image|max:10240',
         ]);
 
         $user = $request->user();
@@ -407,7 +409,14 @@ class VendorTerminalApiController extends Controller
 
         $order = Order::findOrFail($validated['order_id']);
 
-        $result = $this->settlementService->verifyPickupHandoverOtp($order, $validated['otp'], $user);
+        $proof = app(ImageOptimizationService::class)->optimizeAndStoreProof($request->file('proof_photo'), 'customer_pickup_proofs');
+        $result = $this->settlementService->verifyPickupHandoverOtp(
+            $order,
+            $validated['otp'],
+            $user,
+            $validated['reservation_code'],
+            $proof['path']
+        );
 
         return response()->json([
             'status' => $result['success'],
