@@ -14,6 +14,8 @@ use App\Models\User;
 use App\Models\VendorProfile;
 use App\Services\PaystackService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -251,4 +253,48 @@ class PaystackFinancialValidationGuardrailTest extends TestCase
         $response->assertStatus(422);
         $response->assertJsonValidationErrors(['items.0.quantity']);
     }
+
+    public function test_paystack_initialization_connection_failure_is_not_retried_blindly(): void
+    {
+        config([
+            'services.paystack.secret_key' => 'sk_test_guardrail',
+            'services.paystack.simulate_in_tests' => false,
+        ]);
+
+        $order = Order::create([
+            'order_number' => 'VM-INIT-UNCERTAIN',
+            'customer_id' => $this->customerUser->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'pending',
+            'payment_status' => 'pending',
+            'payment_method' => 'paystack',
+            'payment_reference' => 'VM-INIT-UNCERTAIN-REF',
+            'guest_access_token' => bin2hex(random_bytes(16)),
+            'merchandise_subtotal' => '10000.00',
+            'delivery_fee' => '0.00',
+            'grand_total' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '500.00',
+        ]);
+
+        Http::fake(function () {
+            throw new ConnectionException('Simulated timeout after request dispatch.');
+        });
+
+        $result = app(PaystackService::class)->initializeTransaction(
+            $order,
+            'https://example.com/callback',
+            $this->customerUser->email
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('NETWORK_ERROR', $result['code']);
+        Http::assertSentCount(1);
+    }
+
 }
