@@ -322,7 +322,8 @@ class Order extends Model
         $allocated = (string)$this->payoutAllocations()
             ->where('status', '!=', 'reversed')
             ->whereHas('payoutRequest', function ($q) {
-                $q->where('status', '!=', 'rejected');
+                $q->where('status', '!=', 'rejected')
+                    ->where('vendor_id', $this->vendor_id);
             })
             ->sum('allocated_amount');
 
