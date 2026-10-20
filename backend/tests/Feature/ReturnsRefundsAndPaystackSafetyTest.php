@@ -930,4 +930,18 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             ->assertUnauthorized();
     }
 
+
+    public function test_public_delivery_confirmation_aliases_require_authentication(): void
+    {
+        $payload = [
+            'order_number' => 'ORD-UNKNOWN',
+            'delivery_otp' => '123456',
+        ];
+
+        $this->postJson('/api/v1/customer/order/confirm-doorstep-delivery', $payload)
+            ->assertUnauthorized();
+        $this->postJson('/api/v1/customer/order/confirm-inshop-pickup', $payload)
+            ->assertUnauthorized();
+    }
+
 }
