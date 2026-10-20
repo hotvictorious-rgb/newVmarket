@@ -258,3 +258,27 @@ Produce:
 8. A list of unresolved issues, deployment risks, and rollback steps.
 
 Work in small, reviewable commits on a dedicated feature branch. Never silently change the business rules, delete historical financial data, or bypass the financial engine to make a test pass.
+
+## Independent merchandise and delivery-fee refund approval (binding)
+
+Merchandise and delivery are different captured components and must not be mixed in a single approval decision. One customer case may contain both, but the backend must create and audit two independent component decisions.
+
+- Merchandise refund approval covers only identified item/order-line quantities and the merchandise amount after original discount allocation. It reverses only the actual merchandise vendor/cashback/platform allocation (90/5/5).
+- Delivery-fee refund approval covers only the delivery fee captured for the specific vendor child order and must have its own reason, evidence, approved amount, actor/time and decision. It reverses only the actual delivery vendor/platform allocation (90/10). Delivery approval is not implied by item approval, and item approval is not implied by delivery approval.
+- Each approved component creates its own idempotent refund operation and reservation, linked to the same original parent Paystack capture and the correct child vendor order. The launch refund destination remains the original Paystack channel; wallet refunds remain disabled.
+- A component may be approved, rejected, pending, or confirmed independently of its sibling. Webhook events, failures, timeouts and reconciliation update only the exact matching component operation.
+- Enforce component and child-order ceilings plus the shared parent-capture ceiling under locks, counting confirmed refunds and active reservations across all child orders/components. A in_shop_pickup order has zero delivery fee and therefore no delivery-fee refund.
+- Do not calculate a refund using current product prices or current vendor delivery settings. Use immutable checkout allocation snapshots and previously refunded/reserved amounts.
+- Vendor recovery and cashback recovery are separate accounting operations. They do not authorize a refund and do not make customer refund completion dependent on vendor recovery.
+- The 24-hour return/claim window remains measured from verified delivery or confirmed in-shop pickup. The separate further 24-hour buffer affects cashback maturity only.
+
+Approval is not completion: each component is reported as refunded only after the exact Paystack refund operation is provider-confirmed. A failed or uncertain operation leaves that component open for reconciliation.
+
+### Implementation acceptance tests
+- Merchandise-only approval with delivery denied.
+- Delivery-only approval with merchandise denied.
+- Both components approved through two separate decision/operation records.
+- One component remains pending/failed while the other confirms.
+- Zero-fee in-shop pickup rejects a delivery-fee refund.
+- Discounts, partial quantities, multiple vendors, concurrent reservations and aggregate parent-capture limits remain correct.
+- Each webhook and idempotency key is bound to the exact component, amount, child order and original capture.
