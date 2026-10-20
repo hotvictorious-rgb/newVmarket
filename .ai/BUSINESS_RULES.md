@@ -1,7 +1,7 @@
 # VICTORIOUS MARKET — Authoritative Business Rules
 
 **Status:** Authoritative business-rule baseline for vendor-managed fulfilment
-**Last reviewed:** 19 October 2026
+**Last reviewed:** 20 October 2026
 **Review note:** The rules are approved requirements; Section 14 lists implementation gaps found in the audit branch, not completed fixes.  
 **Scope:** Delivery, vendor-linked riders, in-shop pickup, customer privacy, failed delivery, delivery fees, COD boundaries, and legacy logistics.  
 **Authority:** These rules supersede older descriptions of platform-managed logistics, logistics-company dispatch, rider earnings, and rider payouts. Historical records must be preserved.
@@ -27,6 +27,8 @@ The selected answers are recorded here so implementation teams do not revert to 
 | 13 | Failed delivery — B | Record attempts and proof, apply the configured threshold, return the parcel to its owning vendor, and review any financial remedy separately. |
 | 14 | Admin boundaries — A | Platform admin handles oversight/security/disputes, not dispatch or rider pay. |
 | 15 | Legacy logistics records — A | Preserve history for audit; disable legacy fleet paths for new assignments after safe dependency mapping. |
+| 16 | Refund responsibility — A | Victorious MARKET owns the customer refund process and executes approved refunds through the authorized financial workflow; recover from the vendor where policy, fault, and actual allocation justify it. | 
+| 17 | Vendor settlement timing — B | Vendor proceeds are not eligible for release until successful doorstep delivery or confirmed in-shop pickup; configured refund/dispute, vendor eligibility, and payout-security controls still apply. |
 
 
 ## 1. Non-negotiable operating model
@@ -170,6 +172,20 @@ If COD is enabled by the business, the workflow must define a vendor-owned colle
 - If historical orders contain logistics-company financial entries, preserve and reconcile them under legacy rules. Do not reclassify historical amounts as vendor income or delete journal entries.
 - All new financial movements must remain idempotent, balanced, authorized, and reconcilable.
 
+### Vendor settlement timing and eligibility
+- Vendor proceeds must remain held before fulfilment. The qualifying fulfilment event is verified successful customer handover for `doorstep_delivery` or verified customer handover at the owning vendor's counter for `in_shop_pickup`.
+- A rider's operational delivery event alone is not a payout instruction. The backend must verify the correct child order, vendor, fulfilment type, customer handover proof, and final state before the financial engine can consider settlement.
+- Successful delivery or confirmed customer pickup is the earliest settlement-eligibility trigger, not permission to bypass an applicable published refund window, an open return/dispute, vendor account restrictions, bank-account security cooldown, payout authorization, or required transfer proof. Once the applicable hold has expired and no blocking case exists, the order may become eligible under the existing settlement controls. Do not invent additional delay periods or settle before fulfilment.
+- For multi-vendor checkout, settlement eligibility is evaluated per vendor child order. One vendor's delivery/pickup or dispute must not release or block another child order's funds except where a documented parent-level financial risk requires it.
+
+### Customer refunds and vendor recovery
+- Victorious MARKET is responsible for processing the customer's approved refund. The customer should not be redirected to negotiate or collect the marketplace refund from the vendor. Refund execution must use the verified original payment/reference and the authorized financial-operation workflow, ordinarily returning funds to the original payment channel.
+- Refund approval, Paystack execution, confirmation, journal posting, order/return-case updates, and vendor recovery are separate auditable stages. A request, rider event, complaint, or return opening is not proof that money was refunded.
+- Recover the refund from the vendor where the approved reason, responsibility decision, and actual order allocation make the vendor responsible. First apply an authorized offset against that vendor's unpaid/held proceeds for the affected order where legally and financially valid. If proceeds have already been paid, record a vendor recovery receivable/liability and recover through an authorized future-settlement offset or separately approved recovery process; do not pretend the original payable is still available and do not create an unbalanced journal.
+- Do not charge a rider, create a rider payable, or deduct rider compensation. Rider-to-vendor compensation remains outside platform financial systems.
+- Refund and recovery amounts must use the immutable child-order payment/allocation, approved refundable merchandise and delivery components, prior refunds, cashback already accrued/used, discounts, and whether vendor proceeds were already disbursed. Delivery-fee refunds are decided under the published reason-specific customer policy and applicable law; do not automatically refund or retain delivery fees for every reason.
+- The platform must complete the customer refund even when vendor recovery is disputed or delayed, subject to verified payment and approved refund controls. Track recovery separately so vendor collection failure does not leave the customer refund falsely marked pending or completed based on the wrong event.
+
 ## 12. Legacy migration and compatibility
 
 1. Keep historical logistics company profiles, payout requests, fleet rider links, delivery lanes, collection points, and ledger entries for audit/history unless a separately approved data-retention plan says otherwise.
@@ -191,6 +207,9 @@ If COD is enabled by the business, the workflow must define a vendor-owned colle
 - Doorstep delivery requires correct proof/OTP but does not expose the OTP in list/history payloads.
 - Failed attempts create operational records only; no automatic wallet credit, rider/logistics payable, refund, or vendor settlement release.
 - Repeated delivery callbacks, failed attempts, assignment requests, and pickup confirmation cannot duplicate state transitions or financial entries.
+- Vendor settlement cannot become eligible before verified doorstep delivery or verified customer in-shop pickup; a disputed/return-pending order remains blocked under the applicable hold policy.
+- Victorious MARKET executes the approved customer refund; vendor recovery is a separate, auditable allocation/recovery workflow and never a rider payout.
+- A refund after vendor settlement records a vendor recovery receivable or other approved recovery mechanism rather than blindly debiting an exhausted vendor payable.
 - Historical logistics records remain accessible for authorized audit and are not used to route new deliveries.
 - COD remains disabled unless its vendor-owned collection and reconciliation design passes explicit privacy and financial-control tests.
 
