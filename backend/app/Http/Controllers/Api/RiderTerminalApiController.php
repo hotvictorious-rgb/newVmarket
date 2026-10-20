@@ -25,8 +25,8 @@ class RiderTerminalApiController extends Controller
      * STRICT ZERO-TRUST GUARD & ROLE INVARIANT:
      * 1. Only users with user_type === 'rider' can access this terminal.
      *    Logistics companies, vendors, and customers are strictly prohibited.
-     * 2. All delivery persons/riders MUST belong to an active Vendor (merchant)
-     *    or an authorized logistics fleet. Unaffiliated dispatch is prohibited.
+     * 2. New delivery work requires exactly one active owning Vendor.
+     *    Legacy fleet-only or ambiguous rider profiles cannot use this terminal.
      */
     protected function guardRiderWithLogistics(Request $request): ?JsonResponse
     {
@@ -60,27 +60,18 @@ class RiderTerminalApiController extends Controller
             ], 403);
         }
 
-        if (!$rider->vendor_id && !$rider->logistics_company_id) {
+        if (!$rider->vendor_id || $rider->logistics_company_id) {
             return response()->json([
                 'status' => false,
-                'message' => 'Unauthorized: Rider is not affiliated with any registered logistics company. All riders must belong to an active logistics company.',
+                'message' => 'Unauthorized: Active delivery work requires one owning vendor; legacy fleet-only or ambiguously linked riders are not eligible.',
             ], 403);
         }
 
-        if ($rider->vendor_id) {
-            if (!$rider->vendor || $rider->vendor->marketplace_status !== 'active' || ($rider->vendor->user && $rider->vendor->user->status !== 'active')) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Unauthorized: Parent merchant account is inactive or suspended.',
-                ], 403);
-            }
-        } elseif ($rider->logistics_company_id) {
-            if (!$rider->logisticsCompany || $rider->logisticsCompany->status !== 'active' || ($rider->logisticsCompany->user && $rider->logisticsCompany->user->status !== 'active')) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Unauthorized: Parent logistics company fleet is currently inactive or suspended.',
-                ], 403);
-            }
+        if (!$rider->vendor || $rider->vendor->marketplace_status !== 'active' || ($rider->vendor->user && $rider->vendor->user->status !== 'active')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: Owning vendor account is inactive or suspended.',
+            ], 403);
         }
 
         return null;
@@ -94,7 +85,7 @@ class RiderTerminalApiController extends Controller
 
         $user = $request->user();
         $rider = $user->riderProfile;
-        $fleetName = $rider->vendor?->business_name ?? $rider->logisticsCompany?->company_name ?? 'Vendor Delivery Dispatch';
+        $vendorName = $rider->vendor?->business_name ?? 'Vendor Delivery';
 
         $activeOrders = Order::where('rider_id', $rider->id)
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
@@ -106,7 +97,7 @@ class RiderTerminalApiController extends Controller
 
         $activeOrdersList = Order::where('rider_id', $rider->id)
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
-            ->with(['shop:id,name,address,phone,lga_id', 'customer:id,name,phone', 'items:id,order_id,product_name,quantity', 'destinationLga:id,name'])
+            ->with(['shop:id,name,address,phone,lga_id', 'customer:id,name', 'customerAddress.lga', 'customerAddress.state', 'items:id,order_id,product_name,quantity', 'destinationLga:id,name'])
             ->get();
 
         return response()->json([
@@ -117,8 +108,8 @@ class RiderTerminalApiController extends Controller
                     'id' => $rider->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'phone' => $user->phone ?? '+234 800 000 0000',
-                    'fleet_company' => $fleetName,
+                    'phone' => $user->phone,
+                    'vendor_name' => $vendorName,
                     'vehicle_type' => $rider->vehicle_type ?? 'Motorbike (Speed Cargo)',
                     'license_plate' => $rider->license_plate ?? 'VM-RDR-042',
                     'is_active' => (bool)$rider->is_active,
@@ -206,8 +197,6 @@ class RiderTerminalApiController extends Controller
             'order_number' => $order->order_number,
             'fulfillment_type' => $order->fulfillment_type,
             'order_status' => $order->order_status,
-            'payment_status' => $order->payment_status,
-            'delivery_fee' => $order->delivery_fee,
             'vendor_handover_ready_at' => $order->vendor_handover_ready_at ? $order->vendor_handover_ready_at->toIso8601String() : null,
             'pickup_confirmed_by_rider' => (bool)$order->pickup_confirmed_by_rider,
             'picked_up_at' => $order->picked_up_at ? $order->picked_up_at->toIso8601String() : null,
@@ -226,9 +215,8 @@ class RiderTerminalApiController extends Controller
                 'lga_id' => $order->shop->lga_id,
             ] : null,
             'customer' => $order->customer ? [
-                'id' => $order->customer->id,
-                'name' => $order->customer->name,
-                'phone' => $order->customer->phone,
+                'name' => $order->customerAddress?->contact_name ?: $order->customer->name,
+                'delivery_address' => $this->formatCustomerDeliveryAddress($order),
             ] : null,
             'destination_lga' => $order->destinationLga ? [
                 'id' => $order->destinationLga->id,
@@ -244,6 +232,32 @@ class RiderTerminalApiController extends Controller
                 'defect_photo_path' => $item->defect_photo_path ? url($item->defect_photo_path) : null,
             ])->values()->all() : [],
         ];
+    }
+
+    /**
+     * Build the selected delivery address from the address snapshot linked to this order.
+     * Never include address phone/contact phone in a rider projection.
+     */
+    private function formatCustomerDeliveryAddress(Order $order): ?string
+    {
+        $address = $order->customerAddress;
+        if (!$address) {
+            return null;
+        }
+
+        $parts = [
+            $address->address_line,
+            $address->landmark,
+            $address->lga?->name,
+            $address->state?->name,
+        ];
+
+        $parts = array_values(array_filter(array_map(
+            static fn ($part) => is_string($part) ? trim($part) : '',
+            $parts
+        ), static fn ($part) => $part !== ''));
+
+        return $parts ? implode(', ', $parts) : null;
     }
 
     public function verifyPickupOtp(Request $request): JsonResponse
@@ -267,7 +281,7 @@ class RiderTerminalApiController extends Controller
             return response()->json(['status' => false, 'message' => 'Pickup has already been confirmed and sealed. Photo proof is immutable.'], 422);
         }
 
-        if ($order->rider_id && (int)$order->rider_id !== (int)$rider->id) {
+        if ((int)$order->rider_id !== (int)$rider->id) {
             return response()->json(['status' => false, 'message' => 'Unauthorized: This order is assigned to another dispatch courier.'], 403);
         }
 
@@ -543,9 +557,6 @@ class RiderTerminalApiController extends Controller
             'status' => $result['success'],
             'message' => $result['message'],
             'data' => $result['success'] ? [
-                'accepted_amount' => $result['accepted_amount'],
-                'rejected_amount' => $result['rejected_amount'],
-                'refund_requested_amount' => $result['refund_requested_amount'],
                 'return_case' => $result['return_case'],
             ] : null,
         ], $result['success'] ? 200 : 422);
@@ -605,7 +616,7 @@ class RiderTerminalApiController extends Controller
                   ->orWhereHas('order', fn($oq) => $oq->where('rider_id', $rider->id));
             })
             ->where('status', 'in_transit_back_to_vendor')
-            ->with(['order.shop', 'order.customer', 'order.items'])
+            ->with(['order.shop', 'order.customer', 'order.customerAddress.lga', 'order.customerAddress.state', 'order.items'])
             ->get();
 
         return response()->json([
@@ -620,12 +631,11 @@ class RiderTerminalApiController extends Controller
                     'shop_name' => $case->order && $case->order->shop ? $case->order->shop->name : 'Merchant Store',
                     'shop_address' => $case->order && $case->order->shop ? $case->order->shop->address : 'Vendor Location',
                     'shop_phone' => $case->order && $case->order->shop ? $case->order->shop->phone : null,
-                    'customer_name' => $case->order && $case->order->customer ? $case->order->customer->name : 'Customer',
-                    'customer_phone' => $case->order && $case->order->customer ? $case->order->customer->phone : null,
+                    'customer_name' => $case->order && $case->order->customer ? ($case->order->customerAddress?->contact_name ?: $case->order->customer->name) : 'Customer',
+                    'delivery_address' => $case->order ? $this->formatCustomerDeliveryAddress($case->order) : null,
                     'rejection_category' => $case->rejection_category,
                     'status' => $case->status,
                     'doorstep_photo_path' => $case->doorstep_photo_path,
-                    'total_refundable_amount' => $case->total_refundable_amount,
                     'items_summary' => $case->order && $case->order->items ? $case->order->items->where('rejected_quantity', '>', 0)->pluck('product_name')->join(', ') : 'Rejected item(s)',
                     'created_at' => $case->created_at ? $case->created_at->toIso8601String() : null,
                 ];
