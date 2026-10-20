@@ -125,42 +125,61 @@ class PayoutFinalizationService
                     ->where('payment_status', 'paid')
                     ->where('order_status', 'delivered')
                     ->whereDoesntHave('returnCases', function ($q) {
-                        $q->whereNotIn('status', ['resolved', 'rejected']);
+                        $q->whereNotIn('status', ['resolved', 'refunded', 'replacement_completed', 'rejected', 'closed']);
                     })
                     ->whereDoesntHave('dispute', function ($q) {
                         $q->whereIn('status', ['filed', 'under_review']);
                     })
                     ->with(['payoutAllocations.payoutRequest'])
-                    ->orderBy('id', 'asc')
+                    // Use the same canonical FIFO order as request validation and pre-transfer allocation.
+                    ->orderBy('created_at')
+                    ->orderBy('id')
                     ->lockForUpdate()
                     ->get();
 
+                // Plan all fallback allocations first. A confirmed transfer cannot be
+                // undone, but it must never cause a partial earning-record allocation.
+                // If the amount cannot be composed from whole records, preserve the
+                // gateway-confirmed payout and route the allocation discrepancy to finance.
+                $allocationPlan = [];
+                $plannedRemainder = $remainingToSettle;
                 foreach ($eligibleOrders as $order) {
-                    if (bccomp($remainingToSettle, '0.00', 2) <= 0) {
+                    if (bccomp($plannedRemainder, '0.00', 2) <= 0) {
                         break;
                     }
-                    $orderAvailable = $order->remaining_payable_to_vendor;
+                    $orderAvailable = (string) $order->remaining_payable_to_vendor;
                     if (bccomp($orderAvailable, '0.00', 2) <= 0) {
                         continue;
                     }
-
-                    $allocated = (bccomp($remainingToSettle, $orderAvailable, 2) >= 0) ? $orderAvailable : $remainingToSettle;
-
-                    VendorPayoutAllocation::create([
-                        'vendor_payout_request_id' => $lockedPayout->id,
-                        'order_id' => $order->id,
-                        'allocated_amount' => $allocated,
-                        'status' => 'allocated',
-                    ]);
-
-                    $remainingToSettle = bcsub($remainingToSettle, $allocated, 2);
-                    $totalNewlyAllocated = bcadd($totalNewlyAllocated, $allocated, 2);
-
-                    // Reload and check if order is fully settled
-                    $order->refresh();
-                    if (bccomp($order->remaining_payable_to_vendor, '0.00', 2) <= 0) {
-                        $order->update(['vendor_settlement_status' => 'settled']);
+                    if (bccomp($orderAvailable, $plannedRemainder, 2) > 0) {
+                        break;
                     }
+
+                    $allocationPlan[] = ['order' => $order, 'amount' => $orderAvailable];
+                    $plannedRemainder = bcsub($plannedRemainder, $orderAvailable, 2);
+                }
+
+                if (bccomp($plannedRemainder, '0.00', 2) === 0) {
+                    foreach ($allocationPlan as $planned) {
+                        VendorPayoutAllocation::create([
+                            'vendor_payout_request_id' => $lockedPayout->id,
+                            'order_id' => $planned['order']->id,
+                            'allocated_amount' => $planned['amount'],
+                            'status' => 'allocated',
+                        ]);
+
+                        $totalNewlyAllocated = bcadd($totalNewlyAllocated, $planned['amount'], 2);
+                        $order = $planned['order'];
+                        $order->refresh();
+                        if (bccomp($order->remaining_payable_to_vendor, '0.00', 2) <= 0) {
+                            $order->update(['vendor_settlement_status' => 'settled']);
+                        }
+                    }
+                    $remainingToSettle = '0.00';
+                } else {
+                    Log::emergency("Treasury Discrepancy: confirmed vendor payout #{$lockedPayout->id} cannot be allocated using strict FIFO whole earning records; ₦{$remainingToSettle} remains unallocated. No partial earning record was allocated. Manual finance reconciliation is required.");
+                    $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . "ALLOCATION_DISCREPANCY: confirmed transfer could not be mapped to whole FIFO earning records; ₦{$remainingToSettle} left unallocated; no partial allocation created.";
+                    $lockedPayout->save();
                 }
             }
 
@@ -179,9 +198,11 @@ class PayoutFinalizationService
             $unallocatedDiscrepancy = bcsub($formattedPayoutAmount, $grandTotalAllocated, 2);
 
             if ($hasRequestJournal) {
-                if (bccomp($unallocatedDiscrepancy, '0.00', 2) > 0) {
-                    Log::emergency("Treasury Discrepancy: payout #{$lockedPayout->id} has an allocation shortfall of ₦{$unallocatedDiscrepancy}; the confirmed transfer is journaled against payout payable and requires manual finance reconciliation.");
-                    $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . "ALLOCATION_DISCREPANCY: confirmed payout exceeds recorded allocations by ₦{$unallocatedDiscrepancy}; no vendor receivable inferred, manual finance reconciliation required.";
+                if (bccomp($unallocatedDiscrepancy, '0.00', 2) !== 0) {
+                    $direction = bccomp($unallocatedDiscrepancy, '0.00', 2) > 0 ? 'shortfall' : 'over-allocation';
+                    $absoluteDiscrepancy = ltrim($unallocatedDiscrepancy, '-');
+                    Log::emergency("Treasury Discrepancy: payout #{$lockedPayout->id} has an allocation {$direction} of ₦{$absoluteDiscrepancy}; the confirmed transfer is journaled and requires manual finance reconciliation.");
+                    $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . "ALLOCATION_DISCREPANCY: confirmed payout has allocation {$direction} of ₦{$absoluteDiscrepancy}; no vendor receivable inferred, manual finance reconciliation required.";
                     $lockedPayout->save();
                 }
                 // New lifecycle: the request already reclassified the vendor liability
