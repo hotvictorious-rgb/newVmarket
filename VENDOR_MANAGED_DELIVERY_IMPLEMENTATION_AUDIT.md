@@ -266,3 +266,33 @@ Subscribe to and handle the following events for the enabled launch products:
 
 Do not subscribe to DVA assignment events at launch because DVA is deferred. Subscribe to invoice, subscription, payment-request or customer-identification events only if those separate Paystack products are deliberately enabled. All events require signature validation, immutable event identity, exact reference/amount/currency matching, idempotent state transitions, audit logging and reconciliation.
 
+
+
+## 11. Final cross-document reconciliation and launch gate (20 October 2026)
+
+The following are the single aligned owner-approved decisions in all three policy documents. If older copy, UI text, an API contract, or implementation behavior conflicts, follow these decisions and update that artifact; do not silently change the business model.
+
+| Topic | Binding rule | Acceptance evidence required |
+|---|---|---|
+| Multi-vendor checkout | One parent checkout/Paystack capture; separate child order per vendor, with immutable allocation and independent fulfilment, delivery fee, refund ceiling and settlement gate | Parent captured amount equals sum of child allocations exactly; child states/fees/refunds do not leak across vendors |
+| Payment channels | Paystack card + standard bank transfer only; COD disabled everywhere; DVA, USSD and mobile money deferred | UI, API, server configuration and legacy paths reject disabled methods; both enabled channels pass authoritative verification |
+| Refund destination/approval | Original Paystack channel only; wallet refund disabled. Automatic approval only for verified duplicate capture or verified pre-vendor-action cancellation; all other refunds require persisted human approval | Service-level authorization, approval actor/time/reason/amount/allocation snapshot, and tests proving webhook alone cannot approve or dispatch |
+| Refund ceilings | Enforce both child-order allocation ceiling and aggregate parent capture ceiling under locks, counting confirmed refunds plus active reservations; idempotency key must bind to the exact instruction | Concurrency tests across multiple child orders and partial refunds; same-key exact retry succeeds; changed amount/order/reason is rejected |
+| Protection/cashback | 168-hour protection window, then 24-hour buffer after valid fulfilment; blocking return/dispute prevents maturity; recoverable spent cashback offsets future cashback only at maturity | Settings fallback/seed audited; maturity job uses actual expiry timestamp; recovery ledger prevents negative spendable wallet balance; T&C/legal review completed before release |
+| Commercial split | Merchandise 90/5/5 on actual post-discount merchandise collected, excluding delivery; delivery 90/10; platform absorbs rounding remainder and Paystack fees; no rider payable | Immutable checkout snapshot, exact integer-kobo tests with discounts and fees, balanced journals and no logistics/rider beneficiary for new orders |
+| Vendor-managed fulfilment | Vendor owns its riders and manual assignments. Rider sees only customer name, delivery address and protected Call Customer action; no customer financial data. In-shop pickup is zero-fee and uses `RES-XXXXXX` | Role/IDOR/privacy tests, no raw phone or financial data in rider payloads, no rider financial posting, counter pickup tests, per-child settlement proof |
+| Refund/recovery separation | Platform executes authorized customer refund; vendor recovery is separate, evidence-based and authorized. A failed refund attempt leaves the customer obligation open | Unified idempotent finalizer uses actual allocation; held vendor proceeds are offset only where justified; paid-out vendor share creates a recovery receivable; customer refund status is not coupled to recovery status |
+| Webhook subscriptions | `charge.success`, `bank.transfer.rejected`, `refund.pending`, `refund.processing`, `refund.needs-attention`, `refund.processed`, `refund.failed`, `charge.dispute.create`, `charge.dispute.remind`, `charge.dispute.resolve`, `transfer.success`, `transfer.failed`, `transfer.reversed` | Raw-body HMAC-SHA512 verification, immutable event payload hash, exact reference/amount/currency matching, idempotent locked transitions, unmatched/manual-review path and scheduled reconciliation |
+| Release control | Documentation describes policy; it does not prove code compliance. Work stays on `audit/paystack-refund-webhook-safety` | Targeted regression suites and full backend/frontend checks pass; review records exact commit and CI URL. Do not merge `main` without explicit owner approval |
+
+### Implementation order after policy reconciliation
+
+1. **P0 — Money safety:** refund approval gate and launch wallet-refund block; exact parent/child allocation and cumulative refund ceilings; bank-transfer rejection handling; explicit refund lifecycle and charge-dispute handlers; no blind retry or duplicate refund.
+2. **P0 — Delivery/privacy boundary:** remove rider-triggered wallet/journal/refund behavior and logistics-company payables from new flows; enforce exact vendor/rider ownership and assignment; remove raw phone and financial fields from rider API/UI; disable COD.
+3. **P1 — Settlement and recovery:** gate settlement independently per child after verified delivery or vendor-counter pickup plus the 168-hour window and 24-hour buffer; unify refund finalization and vendor recovery using actual immutable allocations; remove duplicate parent/child delivery-fee accounting.
+4. **P1 — Cashback and fee proof:** maturity-based recovery offset, settings/seed audit, customer terms and legal review, and integer-kobo split tests.
+5. **Release evidence:** run focused tests for each acceptance row above, then full backend/frontend suites. Report actual outcomes. No merge to `main` without explicit approval.
+
+### Status clarification
+
+The latest documentation edits align policy; they do **not** close the previously recorded source-code findings. Until implementation and tests prove each acceptance condition, the corresponding item remains open and the marketplace is not release-ready for that behavior.
