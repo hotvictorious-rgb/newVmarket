@@ -1869,11 +1869,6 @@ class PortalController extends Controller
                 return ['valid' => false, 'message' => 'Disbursement blocked: Logistics company bank account was recently updated and is under a 48-hour security cooldown.'];
             }
 
-            // Executive Authorization Guard: Transfers > N10,000,000 require SuperAdmin
-            if (\App\Services\BcMathService::comp((string)$payout->amount, '10000000.00') > 0 && !$admin->isSuperAdmin()) {
-                return ['valid' => false, 'message' => 'Disbursement ceiling exceeded: Transfers above ₦10,000,000 require Super Admin executive authorization.'];
-            }
-
             // Validate corporate bank details
             $accountNum = trim((string)($company->account_number ?? $payout->account_number));
             $bankName = trim((string)($company->bank_name ?? $payout->bank_name));
@@ -2230,11 +2225,6 @@ class PortalController extends Controller
                         'status' => 'allocated',
                     ]);
                 }
-            }
-
-            // Executive Authorization Guard: Transfers > N10,000,000 require SuperAdmin
-            if (\App\Services\BcMathService::comp((string)$payout->amount, '10000000.00') > 0 && !$admin->isSuperAdmin()) {
-                return ['valid' => false, 'message' => 'Disbursement ceiling exceeded: Transfers above ₦10,000,000 require Super Admin executive authorization.'];
             }
 
             // Validate Merchant bank details
