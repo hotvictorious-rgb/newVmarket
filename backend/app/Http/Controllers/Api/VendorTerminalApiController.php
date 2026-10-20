@@ -309,30 +309,15 @@ class VendorTerminalApiController extends Controller
 
         $order = $query->findOrFail($id);
 
-        // This endpoint is for vendor-to-courier handover on paid doorstep orders.
-        // Do not allow an unpaid, pickup, returned, disputed, or otherwise out-of-sequence
-        // order to jump directly into a dispatch-ready state.
-        $allowedSourceStates = ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'];
-        if (
-            $order->fulfillment_type !== 'doorstep_delivery'
-            || $order->payment_status !== 'paid'
-            || !in_array($order->order_status, $allowedSourceStates, true)
-        ) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Only paid doorstep-delivery orders in an allowed pre-dispatch state can be marked ready for handover.',
-            ], 422);
-        }
-
-        $order->order_status = 'ready_for_pickup';
-        $order->vendor_handover_ready_at = Carbon::now();
-        $order->save();
+        // Use the shared lifecycle service so API and web entry points enforce
+        // the same locked transition, payment gate, OTP generation, and notification path.
+        $result = $this->settlementService->markVendorHandoverReady($order, $ctx['user']);
 
         return response()->json([
-            'status' => true,
-            'message' => "Order #{$order->order_number} marked ready for courier dispatch handover.",
-            'data' => $order,
-        ]);
+            'status' => (bool) ($result['success'] ?? false),
+            'message' => $result['message'] ?? 'Unable to authorize handover.',
+            'data' => $result['order'] ?? null,
+        ], ($result['success'] ?? false) ? 200 : 422);
     }
 
     /**
