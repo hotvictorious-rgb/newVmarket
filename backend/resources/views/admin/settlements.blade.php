@@ -19,7 +19,7 @@
                 <span>90/5/5 Sovereign Escrow &amp; Settlement Desk</span>
             </h1>
             <p class="page-header-subtitle">
-                Dual-Commission Escrow &amp; Corporate Settlement Desk &mdash; Sovereign 90/5/5 Mathematical Split Formula &mdash; Super Admin Treasury Governance &mdash; Authorize or reject automated Paystack NUBAN bank transfers for both <strong>Merchants (90% Sales)</strong> and <strong>Logistics Fleets (90% Delivery)</strong>. Zero manual receipts. Rejections atomically restore claimant balances.
+                Dual-Commission Escrow &amp; Treasury Settlement Desk &mdash; Sovereign 90/5/5 Mathematical Split Formula (90% Merchandise) &amp; 90/10 Delivery Fee Split &mdash; Super Admin Treasury Governance &mdash; Authorize or reject automated Paystack NUBAN bank transfers for <strong>Merchants (90% Sales + 90% Delivery Fees)</strong> under strict FIFO whole-earning rules (&ge; &#8358;5,000 to &le; &#8358;500,000). Historical logistics fleet requests preserved for audit integrity.
             </p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -83,9 +83,9 @@
 
         <div class="stat-card stat-card-border-blue">
             <div class="stat-card-info">
-                <span class="stat-card-label">Pending Fleet Withdrawals</span>
+                <span class="stat-card-label">Historical Fleet Requests</span>
                 <span class="stat-card-value">{{ $pendingLogisticsList->where('status', 'pending')->count() }}</span>
-                <span class="stat-card-subtext" style="color: var(--adm-info);">&#8358;{{ number_format((float)$logisticsPendingSum, 2) }} Queued</span>
+                <span class="stat-card-subtext" style="color: var(--adm-info);">&#8358;{{ number_format((float)$logisticsPendingSum, 2) }} Audit-Only</span>
             </div>
             <div class="stat-card-icon-box icon-box-blue">🚚</div>
         </div>
@@ -140,7 +140,7 @@
             🏪 Merchant Payout Requests ({{ $pendingVendorsList->where('status', 'pending')->count() }})
         </button>
         <button type="button" onclick="switchDeskTab('logisticsTab')" id="tabBtn-logisticsTab" class="btn-dash btn-dash-outline" style="padding: 8px 18px; font-size: 13px; font-weight: 800;">
-            🚚 Logistics Fleet Requests ({{ $pendingLogisticsList->where('status', 'pending')->count() }})
+            🚚 Logistics Fleet (Audit-Only) ({{ $pendingLogisticsList->where('status', 'pending')->count() }})
         </button>
         <button type="button" onclick="switchDeskTab('ordersTab')" id="tabBtn-ordersTab" class="btn-dash btn-dash-outline" style="padding: 8px 18px; font-size: 13px; font-weight: 800;">
             📦 Escrow Clearance Ledger ({{ count($pendingSettlements) }})
@@ -154,8 +154,8 @@
                 <div class="dash-card-title">
                     <span>🏪</span>
                     <div>
-                        <div>Merchant 90% Merchandise Escrow Queue &amp; Withdrawal Requests ({{ $pendingVendorsList->where('status', 'pending')->count() }} Pending)</div>
-                        <span class="dash-card-subtitle">Merchants requesting automated Paystack bank disbursement of cleared merchandise earnings.</span>
+                        <div>Merchant Payout Queue &mdash; FIFO Batched Earnings ({{ $pendingVendorsList->where('status', 'pending')->count() }} Pending)</div>
+                        <span class="dash-card-subtitle">Merchants requesting automated Paystack bank disbursement of matured 90% merchandise + 90% delivery fee earnings (&#8358;5,000 min, &#8358;500,000 max).</span>
                     </div>
                 </div>
                 <span class="dash-badge dash-badge-success">Merchant Treasury</span>
@@ -187,7 +187,7 @@
                                 </td>
                                 <td>
                                     <strong style="font-size: 15px; color: #047857;">&#8358;{{ number_format((float)$payout->amount, 2) }}</strong>
-                                    <div style="font-size: 10.5px; color: var(--adm-text-muted);">90% merchandise share</div>
+                                    <div style="font-size: 10.5px; color: var(--adm-text-muted);">90% net earnings (sales &amp; delivery)</div>
                                 </td>
                                 <td>
                                     <div style="font-weight: 700; color: var(--adm-text);">{{ $payout->bank_name }}</div>
@@ -262,18 +262,29 @@
         </div>
     </div>
 
-    <!-- TAB 2: LOGISTICS FLEET PAYOUT REQUESTS QUEUE -->
+    <!-- TAB 2: LOGISTICS FLEET PAYOUT REQUESTS QUEUE (HISTORICAL / AUDIT) -->
     <div id="logisticsTab" class="desk-tab-content" style="display: none;">
+        <!-- Architecture Alignment Audit Banner -->
+        <div style="background: #EFF6FF; border: 1.5px solid #BFDBFE; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 22px;">ℹ️</span>
+            <div>
+                <strong style="color: #1E40AF; font-size: 13.5px;">Historical Logistics Fleet Desk (Audit-Only)</strong>
+                <div style="font-size: 12px; color: #1D4ED8; margin-top: 2px;">
+                    Under Victorious MARKET's streamlined delivery architecture, all new doorstep deliveries are fulfilled directly by vendor-managed riders. 90% of delivery fees accrue directly to the fulfilling merchant and 10% to the platform. Fleet withdrawal records below represent pre-existing or external fleet claims preserved for complete financial audit integrity.
+                </div>
+            </div>
+        </div>
+
         <div class="dash-card" style="margin-bottom: 28px;">
             <div class="dash-card-header">
                 <div class="dash-card-title">
                     <span>🚚</span>
                     <div>
-                        <div>Logistics Fleet Corporate Withdrawal Queue ({{ $pendingLogisticsList->where('status', 'pending')->count() }} Pending)</div>
-                        <span class="dash-card-subtitle">Logistics operators requesting bank payout from their verified 90% delivery fee earnings.</span>
+                        <div>Logistics Fleet Corporate Withdrawal Queue &mdash; Audit Console ({{ $pendingLogisticsList->where('status', 'pending')->count() }} Pending)</div>
+                        <span class="dash-card-subtitle">Historical logistics operators requesting bank payout from their verified 90% delivery fee earnings.</span>
                     </div>
                 </div>
-                <span class="dash-badge dash-badge-info">Fleet Treasury</span>
+                <span class="dash-badge dash-badge-info">Fleet Audit</span>
             </div>
 
             <div class="dash-table-responsive">

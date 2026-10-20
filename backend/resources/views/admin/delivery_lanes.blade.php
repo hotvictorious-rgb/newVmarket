@@ -1,8 +1,8 @@
 @extends('layouts.dashboard')
 
-@section('title', 'Directional LGA Delivery Lanes & 3-Tier Distance Matrix')
+@section('title', 'Standard Delivery Fee Matrix & 3-Tier Distance Schedule — Super Admin')
 @section('role_title', 'Super Admin')
-@section('page_title', 'Directional LGA Delivery Lanes')
+@section('page_title', 'Standard Delivery Fee Matrix')
 @section('role_badge', 'SUPER ADMIN')
 @section('role_badge_class', 'role-badge-super-admin')
 
@@ -160,10 +160,10 @@
         <div>
             <h1 class="page-header-title">
                 <span style="font-size: 26px;">🛣️</span>
-                <span>Directional LGA Delivery Lanes &amp; 3-Tier Distance Matrix</span>
+                <span>Standard Delivery Fee Matrix &mdash; Directional LGA Delivery Lanes &amp; 3-Tier Distance Matrix</span>
             </h1>
             <p class="page-header-subtitle">
-                Authoritative logistics topology: Configure Origin ⇄ Destination LGA Corridors, 3-Tier Distance Baselines, and Bulky Cargo Surcharges.
+                Authoritative logistics pricing: Super Admin sets standard corridor fees and 3-tier zonal distance baselines (Municipal, Regional, Inter-State). Merchants individually configure physical shop delivery coverage (LGAs/states). Uncovered destinations fail closed to in-shop pickup.
             </p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -171,7 +171,7 @@
                 &larr; Back to Command Tower
             </a>
             <span class="dash-badge dash-badge-purple" style="padding: 6px 12px; font-size: 12px;">
-                ⚡ Fail-Safe Coverage Guaranteed
+                ⚡ Standard Rates &amp; Coverage Governed
             </span>
         </div>
     </div>
@@ -223,9 +223,9 @@
                 <div class="dash-card-title">
                     <span style="font-size: 18px;">🛣️</span>
                     <div>
-                        <span style="font-weight: 800; color: var(--adm-text);">Directional Delivery Corridors &amp; Zonal Matrix</span>
+                        <span style="font-weight: 800; color: var(--adm-text);">Standard Delivery Corridors &amp; Zonal Matrix</span>
                         <div class="dash-card-subtitle" style="margin-top: 2px;">
-                            Authoritative directional logistics topology with bidirectional synchronization and automatic 3-tier zonal distance fallback.
+                            Authoritative standard delivery fee schedule with bidirectional synchronization and automatic 3-tier zonal distance baseline fallback for vendor-covered areas.
                         </div>
                     </div>
                 </div>
@@ -252,8 +252,8 @@
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <span style="font-size: 20px;">🛡️</span>
                         <div>
-                            <strong style="color: #166534; font-size: 13.5px;">100% Fail-Safe Nationwide Coverage Engine Active</strong>
-                            <div style="font-size: 12px; color: #15803D;">If an Origin ⇄ Destination LGA corridor has no custom fee entered, the checkout automatically falls back to these 3 zonal tiers.</div>
+                            <strong style="color: #166534; font-size: 13.5px;">Standard 3-Tier Distance Baseline Rates Active</strong>
+                            <div style="font-size: 12px; color: #15803D;">When a vendor covers a destination LGA and no custom corridor fee exists, checkout automatically calculates delivery with these 3 zonal tiers. If a destination is outside the vendor's physical shop coverage, doorstep delivery is blocked and checkout fails closed to In-Shop Pickup.</div>
                         </div>
                     </div>
                 </div>

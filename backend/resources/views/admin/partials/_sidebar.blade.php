@@ -8,7 +8,7 @@
 <li class="sidebar-nav-item">
     <a href="{{ route('admin.delivery_lanes.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.delivery_lanes.*') ? 'active' : '' }}">
         <span class="nav-link-icon">🛣️</span>
-        <span>Directional LGA Lanes</span>
+        <span>Standard Delivery Fee Matrix</span>
     </a>
 </li>
 <li class="sidebar-nav-item">
@@ -87,7 +87,7 @@
 <li class="sidebar-nav-item">
     <a href="{{ route('logistics.dashboard') }}" class="sidebar-nav-link">
         <span class="nav-link-icon">🚚</span>
-        <span>Inspect Logistics Fleet</span>
+        <span>Logistics Fleet (Historical)</span>
     </a>
 </li>
 <li class="sidebar-nav-item">

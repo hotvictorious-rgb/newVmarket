@@ -118,10 +118,17 @@
                                     <span class="dash-badge dash-badge-gold" style="font-size: 11px;">
                                         🏬 In-Shop Pickup
                                     </span>
+                                    <div style="font-size: 10.5px; color: #64748B; margin-top: 2px;">Counter Inspection</div>
                                 @else
                                     <span class="dash-badge dash-badge-blue" style="font-size: 11px;">
                                         🚚 Doorstep Delivery
                                     </span>
+                                    @if($order->rider && $order->rider->user)
+                                        <div style="font-size: 11px; color: #0F172A; font-weight: 600; margin-top: 2px;">Rider: {{ $order->rider->user->name }}</div>
+                                        <div style="font-size: 10px; color: #64748B;">Vendor Internal Courier</div>
+                                    @else
+                                        <div style="font-size: 10.5px; color: #D97706; margin-top: 2px;">Awaiting Rider Assignment</div>
+                                    @endif
                                 @endif
                             </td>
                             <td>
@@ -161,7 +168,7 @@
                                             'status' => ucfirst(str_replace('_', ' ', $order->order_status)),
                                             'customer' => $order->customer->name ?? 'Guest Shopper',
                                             'vendor' => $order->vendor->business_name ?? 'Vendor',
-                                            'rider' => $order->rider->user->name ?? 'Unassigned Courier',
+                                            'rider' => $order->rider->user->name ?? 'Unassigned Rider',
                                             'pickup_photo' => $order->pickup_proof_image ? asset($order->pickup_proof_image) : null,
                                             'picked_up_at' => $order->picked_up_at ? $order->picked_up_at->format('M d, H:i') : null,
                                             'delivery_photo' => $order->proof_of_delivery_image ? asset($order->proof_of_delivery_image) : null,
@@ -264,7 +271,7 @@
                         <strong style="font-size: 13px; color: #0F172A;">${data.vendor}</strong>
                     </div>
                     <div style="background: #F8FAFC; padding: 12px; border-radius: 10px; border: 1px solid #E2E8F0;">
-                        <span style="font-size: 10.5px; color: #64748B; font-weight: 700; display: block; text-transform: uppercase;">Courier</span>
+                        <span style="font-size: 10.5px; color: #64748B; font-weight: 700; display: block; text-transform: uppercase;">Vendor Assigned Rider</span>
                         <strong style="font-size: 13px; color: #0F172A;">${data.rider}</strong>
                     </div>
                 </div>
@@ -287,7 +294,7 @@
                             <img src="${data.pickup_photo}" alt="Pickup Proof" style="width: 140px; height: 100px; object-fit: cover; border-radius: 10px; border: 1px solid #CBD5E1;">
                             <div>
                                 <span style="font-size: 12px; font-weight: 700; color: #059669; display: block;">✓ Dual OTP Handshake Authenticated</span>
-                                <p style="font-size: 11.5px; color: #64748B; margin: 4px 0 8px;">Rider inspected package condition at vendor counter and entered shop OTP.</p>
+                                <p style="font-size: 11.5px; color: #64748B; margin: 4px 0 8px;">Vendor's rider inspected package condition at vendor counter and verified shop OTP.</p>
                                 <a href="${data.pickup_photo}" target="_blank" style="font-size: 11px; font-weight: 700; color: #6366F1; text-decoration: none;">View High-Res Photo ↗</a>
                             </div>
                         </div>
@@ -316,7 +323,7 @@
                             <img src="${data.delivery_photo}" alt="Delivery Proof" style="width: 140px; height: 100px; object-fit: cover; border-radius: 10px; border: 1px solid #10B981;">
                             <div>
                                 <span style="font-size: 12px; font-weight: 700; color: #059669; display: block;">✓ Recipient Doorstep PIN Verified</span>
-                                <p style="font-size: 11.5px; color: #64748B; margin: 4px 0 8px;">Courier snapped live condition proof during customer PIN verification at doorstep.</p>
+                                <p style="font-size: 11.5px; color: #64748B; margin: 4px 0 8px;">Vendor's rider snapped live condition proof during customer PIN verification at doorstep.</p>
                                 <a href="${data.delivery_photo}" target="_blank" style="font-size: 11px; font-weight: 700; color: #10B981; text-decoration: none;">View High-Res Photo ↗</a>
                             </div>
                         </div>

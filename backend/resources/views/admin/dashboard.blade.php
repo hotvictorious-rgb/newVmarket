@@ -90,13 +90,13 @@
                         </div>
                         <span class="dash-badge dash-badge-purple">{{ count($deliveryLanes) }} Corridors</span>
                     </div>
-                    <div class="module-card-title">Directional LGA Lanes &amp; Zonal Matrix</div>
+                    <div class="module-card-title">Standard Delivery Fee Matrix &amp; Zonal Baselines</div>
                     <div class="module-card-desc">
-                        Manage Origin ⇄ Destination LGA Corridors, 3-tier distance baseline pricing (Municipal, Regional, Inter-State), bulky cargo addons, and bidirectional sync.
+                        Manage Origin ⇄ Destination LGA Corridors, 3-tier distance baseline pricing (Municipal, Regional, Inter-State), bulky cargo addons, and bidirectional sync. Merchants configure individual shop delivery coverage.
                     </div>
                 </div>
                 <div class="module-card-footer">
-                    <span style="font-size: 11.5px; color: #047857; font-weight: 700;">● 100% Nationwide Fallback</span>
+                    <span style="font-size: 11.5px; color: #047857; font-weight: 700;">● Standard Rate Schedule</span>
                     <a href="{{ route('admin.delivery_lanes.index') }}" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 700;">
                         Open Lanes Setup &rarr;
                     </a>
@@ -112,9 +112,9 @@
                         </div>
                         <span class="dash-badge dash-badge-success">{{ count($pendingSettlements) }} Ready for Payout</span>
                     </div>
-                    <div class="module-card-title">Manual Settlement Desk</div>
+                    <div class="module-card-title">90/5/5 &amp; 90/10 Settlement Desk</div>
                     <div class="module-card-desc">
-                        Review verified orders, disburse 90% merchant payouts to vendor bank accounts, track 24-hour dispute buffer, and balance the 5% cashback ledger (&Delta; = &#8358;0.00).
+                        Review verified orders, disburse 90% merchant payouts (merchandise + delivery) via FIFO batches, track dispute inspection window, and balance the 5% cashback ledger (&Delta; = &#8358;0.00).
                     </div>
                 </div>
                 <div class="module-card-footer">
@@ -158,7 +158,7 @@
                     </div>
                     <div class="module-card-title">Platform Escrow Orders &amp; Fulfillment</div>
                     <div class="module-card-desc">
-                        Audit full order journeys from Shopper &rarr; Vendor &rarr; Plaza Counter &rarr; Delivery Rider. Check physical inspection passes and delivery OTP handshakes.
+                        Audit full order journeys from Shopper &rarr; Vendor &rarr; Plaza Counter &rarr; Vendor Rider. Check physical inspection passes and delivery OTP handshakes.
                     </div>
                 </div>
                 <div class="module-card-footer">
