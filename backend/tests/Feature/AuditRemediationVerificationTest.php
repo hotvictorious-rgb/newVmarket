@@ -1079,4 +1079,57 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertSame(2, \App\Models\CheckoutIntent::where('user_id', $this->customer->id)->count());
     }
 
+
+    public function test_order_checkout_retry_reuses_order_and_never_reinitializes_paystack(): void
+    {
+        \\Laravel\\Sanctum\\Sanctum::actingAs($this->customer);
+        $this->product->update([
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => now(),
+            'inventory_quantity' => 10,
+            'is_in_stock' => true,
+        ]);
+
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldReceive('initializeTransaction')->once()->andReturn([
+            'success' => true,
+            'authorization_url' => 'https://checkout.paystack.test/once',
+            'access_code' => 'access_once',
+            'reference' => 'VM-IDEMPOTENT-ORDER-001',
+        ]);
+        $this->app->instance(PaystackService::class, $gateway);
+
+        $payload = [
+            'shop_id' => $this->shop->id,
+            'fulfillment_type' => 'in_shop_pickup',
+            'items' => [['product_id' => $this->product->id, 'quantity' => 1]],
+            'payment_method' => 'paystack',
+        ];
+
+        $first = $this->withHeader('Idempotency-Key', 'order-retry-001')
+            ->postJson('/api/v1/customer/orders/checkout', $payload);
+        $first->assertCreated();
+        $orderNumber = $first->json('data.order_number');
+
+        $retry = $this->withHeader('Idempotency-Key', 'order-retry-001')
+            ->postJson('/api/v1/customer/orders/checkout', $payload);
+        $retry->assertOk();
+        $this->assertSame($orderNumber, $retry->json('data.order_number'));
+        $this->assertSame(
+            $first->json('data.paystack.authorization_url'),
+            $retry->json('data.paystack.authorization_url')
+        );
+        $this->assertSame(1, Order::where('customer_id', $this->customer->id)->count());
+        $this->assertSame(1, Order::where('customer_id', $this->customer->id)
+            ->where('checkout_idempotency_key', 'order-retry-001')->count());
+
+        $changed = $payload;
+        $changed['items'][0]['quantity'] = 2;
+        $this->withHeader('Idempotency-Key', 'order-retry-001')
+            ->postJson('/api/v1/customer/orders/checkout', $changed)
+            ->assertStatus(409);
+        $this->assertSame(1, Order::where('customer_id', $this->customer->id)->count());
+    }
+
 }
