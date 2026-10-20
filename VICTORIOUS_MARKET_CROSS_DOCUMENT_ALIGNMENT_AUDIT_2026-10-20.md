@@ -122,3 +122,16 @@ Required implementation alignment:
 - Verify repayment from bank/provider records. Offsets require explicit authorised approval and contractual basis. Repayment/offset must reduce the receivable exactly once; no double recovery, silent offsets, or edits to completed ledger entries.
 
 **Open code evidence required:** Trace and test whether current refund execution is independent from vendor recovery; whether an already-paid vendor allocation can be reversed into a separate receivable without changing the historical bank transfer; whether the platform cash/settlement ledger remains balanced; whether available refund liquidity excludes receivables; and whether partial/shared-fault recovery and duplicate callbacks are safe. Do not mark this as implemented until tests and reconciliation evidence exist.
+
+## Owner-confirmed accounting invariant — balanced ledger does not mean no loss (20 October 2026)
+
+**Binding policy for all documents and implementation:** every posted journal must balance (debits equal credits in the same currency), but the platform may still incur a genuine loss or liquidity shortfall. Balance is not a promise of profitability or solvency.
+
+Required controls:
+- Customer refunds are funded from actual platform-controlled liquidity, independently of vendor repayment. Record the refund as a cash outflow and post linked, idempotent reversals of original allocations; never delete history or treat a completed vendor transfer as reversed.
+- Create a vendor receivable only after authorised evidence and contractual terms establish the vendor's responsibility and recoverable amount. A complaint alone is not debt; never assume every refund is wholly recoverable from the vendor.
+- Exclude receivables, disputed debt, pending repayments and uncertain transfers from available cash/refund liquidity. Show cash, receivables/ageing, platform income/expenses, and losses/write-offs separately.
+- If a receivable is unrecoverable, use an authorised, accountant-approved impairment/write-off entry and preserve the audit trail. A write-off is not a cash receipt and must not conceal the original debt or loss.
+- Ensure atomic balanced postings, idempotent webhooks/retries, verified repayments, authorised contract-based offsets, no double recovery, and a monitored refund reserve/forecast. Obtain qualified-accountant review of production journal mappings.
+
+**Closure evidence required:** automated tests and reconciliation reports must prove journal balance, separation of cash and receivables, independent customer refund, preservation of vendor payout history, correct debt recovery/write-off, and visibility of actual losses and liquidity shortfalls. Documentation alone does not prove code implementation.
