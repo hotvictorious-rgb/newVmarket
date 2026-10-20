@@ -923,4 +923,11 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             ->assertNotFound();
     }
 
+
+    public function test_public_pickup_reservation_lookup_requires_authentication(): void
+    {
+        $this->getJson('/api/v1/pickup-reservations/RES-ABC123')
+            ->assertUnauthorized();
+    }
+
 }
