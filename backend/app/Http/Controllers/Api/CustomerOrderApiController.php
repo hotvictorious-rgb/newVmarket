@@ -127,6 +127,34 @@ class CustomerOrderApiController extends Controller
         }
 
         $user = $request->user();
+        $idempotencyKey = $request->header('Idempotency-Key');
+        if ($idempotencyKey !== null) {
+            $idempotencyKey = trim($idempotencyKey);
+            if ($idempotencyKey === '' || strlen($idempotencyKey) > 100) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Idempotency-Key must contain between 1 and 100 characters.',
+                ], 422);
+            }
+
+            $canonical = [
+                'intent_id' => isset($validated['intent_id']) ? (int) $validated['intent_id'] : null,
+                'shop_id' => (int) $validated['shop_id'],
+                'fulfillment_type' => $validated['fulfillment_type'],
+                'customer_address_id' => isset($validated['customer_address_id']) ? (int) $validated['customer_address_id'] : null,
+                'items' => array_map(static fn (array $item): array => [
+                    'product_id' => (int) $item['product_id'],
+                    'quantity' => (int) $item['quantity'],
+                ], $validated['items']),
+                'redeem_cashback' => (bool) ($validated['redeem_cashback'] ?? false),
+                'payment_method' => $validated['payment_method'] ?? 'paystack',
+            ];
+            usort($canonical['items'], static fn (array $a, array $b): int =>
+                [$a['product_id'], $a['quantity']] <=> [$b['product_id'], $b['quantity']]
+            );
+            $validated['_checkout_idempotency_key'] = $idempotencyKey;
+            $validated['_checkout_request_hash'] = hash('sha256', json_encode($canonical));
+        }
         $result = $checkoutExecutionService->execute($user, $validated);
 
         if (!$result['success']) {
