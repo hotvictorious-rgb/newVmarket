@@ -49,8 +49,8 @@ class CheckoutAndReservationApiController extends Controller
             'items.*.quantity' => 'required|integer|min:1|max:1000',
             'redeem_cashback' => 'nullable|boolean',
             'redeem_wallet_credit' => 'nullable|boolean',
-            'rider_id' => 'nullable|integer|exists:rider_profiles,id',
-            'logistics_company_id' => 'nullable|integer|exists:logistics_company_profiles,id',
+            'rider_id' => 'prohibited',
+            'logistics_company_id' => 'prohibited',
         ], [
             'items.*.quantity.max' => 'Maximum allowed quantity per line item is 1,000 units.',
         ]);
@@ -97,51 +97,7 @@ class CheckoutAndReservationApiController extends Controller
             ], 422);
         }
 
-        // Guard 3: Explicit Logistics Company Invariant
-        if (!empty($validated['logistics_company_id'])) {
-            $logistics = \App\Models\LogisticsCompanyProfile::withTrashed()->with('user')->find($validated['logistics_company_id']);
-            if (!$logistics || $logistics->trashed() || $logistics->status !== 'active') {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'The selected logistics company is currently inactive or suspended.',
-                ], 422);
-            }
-            if ($logistics->user && $logistics->user->status !== 'active') {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'The logistics company user account is inactive.',
-                ], 422);
-            }
-        }
-
-        // Guard 4: Explicit Designated Courier / Rider Invariant
-        if (!empty($validated['rider_id'])) {
-            $rider = \App\Models\RiderProfile::withTrashed()->with(['user', 'vendor.user', 'logisticsCompany.user'])->find($validated['rider_id']);
-            if (!$rider || $rider->trashed() || !$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'The designated delivery rider is currently inactive or suspended.',
-                ], 422);
-            }
-            if ($rider->vendor_id && (int)$rider->vendor_id !== (int)$shop->vendor_id) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'The designated delivery rider does not belong to the merchant for this order.',
-                ], 422);
-            }
-            if ($rider->vendor && ($rider->vendor->trashed() || $rider->vendor->marketplace_status !== 'active' || ($rider->vendor->user && $rider->vendor->user->status !== 'active'))) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'The merchant organization for this delivery rider is currently deactivated or suspended.',
-                ], 422);
-            }
-            if ($rider->logisticsCompany && ($rider->logisticsCompany->trashed() || $rider->logisticsCompany->status !== 'active' || ($rider->logisticsCompany->user && $rider->logisticsCompany->user->status !== 'active'))) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'The logistics fleet for this delivery rider is currently deactivated or suspended.',
-                ], 422);
-            }
-        }
+        // Rider and central fleet assignment are deliberately deferred until after checkout.
 
         // Calculate merchandise subtotal using BCMath
         $merchandiseSubtotal = '0.00';
