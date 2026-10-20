@@ -526,8 +526,38 @@ class PayoutFinalizationService
                 ];
             }
 
-            // Restore ONLY the exact orders that were allocated to this failed payout request
-            $allocatedItems = $lockedPayout->allocations()->where('status', 'allocated')->get();
+            // Restore only allocations that are provably owned by this payout's vendor.
+            // A corrupt/missing/cross-vendor order link must quarantine the whole reversal
+            // before any allocation, order, wallet, or journal mutation.
+            $allocatedItems = $lockedPayout->allocations()
+                ->where('status', 'allocated')
+                ->with('order')
+                ->get();
+            $invalidAllocation = $allocatedItems->first(function ($allocation) use ($lockedPayout) {
+                return !$allocation->order
+                    || (int) $allocation->order->vendor_id !== (int) $lockedPayout->vendor_id;
+            });
+            if ($invalidAllocation) {
+                $message = "ALLOCATION_INVARIANT_FAILED: payout allocation #{$invalidAllocation->id} points to a missing or different-vendor order; transfer reversal quarantined for finance reconciliation.";
+                Log::emergency("Payout Reversal: " . $message, [
+                    'payout_id' => $lockedPayout->id,
+                    'allocation_id' => $invalidAllocation->id,
+                    'order_id' => $invalidAllocation->order_id,
+                    'payout_vendor_id' => $lockedPayout->vendor_id,
+                    'order_vendor_id' => $invalidAllocation->order?->vendor_id,
+                ]);
+                $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . $message;
+                $lockedPayout->save();
+
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'payout' => $lockedPayout,
+                    'message' => 'Transfer reversal quarantined: payout allocation ownership mismatch requires finance reconciliation.',
+                ];
+            }
+
             if ($allocatedItems->isNotEmpty()) {
                 foreach ($allocatedItems as $alloc) {
                     $alloc->update([
