@@ -782,6 +782,13 @@ class VendorPayoutLifecycleTest extends TestCase
 
         $this->assertEquals('9000.00', $this->vendor->getWithdrawableBalance());
 
+        // The web portal must reject fractional-kobo precision rather than silently rounding it.
+        $invalidPrecision = $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
+            'amount' => '5000.001',
+        ]);
+        $invalidPrecision->assertSessionHasErrors('amount');
+        $this->assertSame(0, VendorPayoutRequest::where('vendor_id', $this->vendor->id)->count());
+
         // A request that would split the oldest earning record is rejected before reserving funds.
         $partial = $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
             'amount' => '5000.00',
