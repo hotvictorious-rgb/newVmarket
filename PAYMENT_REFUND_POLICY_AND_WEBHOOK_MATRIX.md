@@ -1,0 +1,217 @@
+# VICTORIOUS MARKET — Payment, Refund, Settlement & Paystack Webhook Policy
+
+**Status:** Draft decision matrix for owner review; unresolved recommendations are not implementation authorization.
+**Prepared:** 20 October 2026
+**Branch:** audit/paystack-refund-webhook-safety
+**Canonical delivery rules:** .ai/BUSINESS_RULES.md
+**No-merge rule:** Do not merge to main without explicit owner approval.
+
+## 1. Scope and authority
+
+This draft extends the approved marketplace model: one parent checkout can contain vendor-specific child orders; Victorious MARKET controls payment verification, customer refunds, vendor settlement, disputes and financial audit; vendors manage their own riders; riders have no financial role. It preserves the approved merchandise allocation of 90% vendor / 5% customer cashback / 5% platform and delivery-fee allocation of 90% vendor / 10% platform, with no rider payable.
+
+The 24 payment/refund recommendations are captured below. The source text describes them as “recommended answers” and asks for review/overrides, so this file distinguishes proposed rules from already approved vendor-delivery rules. Any rule marked **OWNER CONFIRMATION REQUIRED** must be confirmed before implementation changes that materially affect money, customer rights, payment channels, or accounting.
+
+## 2. Checkout and payment decisions (Q1–Q8)
+
+| Q | Proposed rule | Implementation / control |
+|---:|---|---|
+| 1 | One Paystack charge for a multi-vendor parent checkout; allocate the verified payment to child orders internally. | Parent amount/reference is authoritative for collection. Child allocations must sum exactly to parent total. Keep per-child fulfilment, fee, merchandise/cashback allocation and settlement eligibility separate. |
+| 2 | A valid webhook or server-side transaction verification may establish payment. | Both entry points call the same authoritative settlement service and enforce exact reference, amount in kobo, currency, customer/order binding and idempotency. Browser redirect data alone never establishes payment. |
+| 3 | Keep one valid payment for an order; identify and refund any verified duplicate charge through a controlled workflow. | Store each Paystack transaction/reference separately. A duplicate must never settle the order or credit cashback twice. Add an auditable duplicate-payment case/operation; verify the duplicate charge and obtain required authorization before refunding it. |
+| 4 | If payment succeeds after cancellation or stock is unavailable, do not reactivate or fulfil automatically; create a controlled refund case. | Re-verify payment, lock/recheck inventory and order state, mark the payment as late/exceptional, prevent vendor settlement, and route refund through the authorized approval/execution flow. A webhook must not bypass refund authorization. |
+| 5 | Underpayment: keep the order unpaid/on hold; do not fulfil. | Compare exact integer kobo to the expected parent checkout amount. Record mismatch and verified transaction for manual resolution. Never round, silently mark paid, or credit cashback/vendor proceeds. |
+| 6 | Overpayment/wrong amount: do not fulfil automatically or convert excess to wallet credit. | Flag for reconciliation and refund/resolve only after payment verification. Distinguish a fully mismatched charge from a true excess where possible; do not issue an assumed difference refund without reconciling captured amount and order liability. |
+| 7 | Launch channels: **OWNER CONFIRMATION REQUIRED** — supplied text says “card and supported online channels” but its rationale says “card-only.” | Decide whether launch is card-only or includes Paystack bank transfer, USSD, mobile money or other channels enabled for the merchant. Subscribe to channel-specific events only where the corresponding channel is enabled. |
+| 8 | Expired stock holds must not release stock while payment outcome is uncertain. | Verify/reconcile payment before releasing stock where payment may have succeeded or be in-flight. A late verified payment may be fulfilled only after an atomic stock recheck/reservation; otherwise open a controlled refund case. |
+
+## 3. Refund and cashback decisions (Q9–Q16)
+
+| Q | Proposed rule | Implementation / control |
+|---:|---|---|
+| 9 | Refund to the original payment channel by default. Wallet refund only with explicit customer consent and recorded admin authorization. | Keep gateway refund and wallet-credit refund as distinct operation types, each with authorization, immutable evidence and separate ledger treatment. Do not assume wallet credit is equivalent to a gateway refund. |
+| 10 | Authorized admin/support approval is required before a customer refund is executed; execution is a separate financial workflow. | Vendors/riders can request or provide evidence but cannot execute refunds. Webhooks report gateway state and must never create approval or initiate a refund by themselves. |
+| 11 | Partial refunds are allowed for eligible items/quantities in multi-item or multi-vendor orders. | Calculate from immutable captured child-order item prices, quantities, discounts and allocations, delivery-fee policy, cashback, previous refunds, and any vendor proceeds already disbursed. Lock relevant order/return/operation and enforce a cumulative refund ceiling. |
+| 12 | Delivery-fee refundability depends on reason and approved customer policy. | Suggested baseline: vendor fault/incorrect/defective goods or pre-dispatch cancellation may justify delivery-fee refund; customer change of mind or unjustified refusal may not. For partial item returns, decide whether the whole child-order delivery fee is refundable based on policy and facts. Admin records the decision; do not infer it solely from a webhook. |
+| 13 | Cashback becomes spendable only after successful delivery or confirmed in-shop pickup and expiry of the configured protection/return window, with no blocking case. | Cashback never applies to delivery fees. Maturation must be tied to a configured policy timestamp, not a hard-coded arbitrary year. A pending/approved return, unresolved dispute, failed delivery or unconfirmed pickup blocks maturation. |
+| 14 | If cashback has already been spent when the related item is refunded, reverse unspent cashback first and record any remaining recoverable amount as a controlled recovery balance, not an unapproved negative wallet. | **OWNER CONFIRMATION REQUIRED:** approve the proposed future-cashback-offset recovery model, accounting treatment, customer disclosures, and legal/consumer-policy constraints. Never silently debit funds or block a customer. |
+| 15 | refund.needs-attention: leave the refund unresolved, alert admin, communicate what information is needed, and track follow-up. | Keep customer refund obligation open; do not mark refunded or release related controls as if complete. Capture required account-detail workflow securely; restrict access to sensitive bank details. |
+| 16 | refund.failed: mark the attempt failed, preserve the outstanding customer refund obligation, alert admin and permit only a controlled retry after reconciliation. | Paystack documents that the merchant account is credited when a refund fails. Verify exact transaction/refund, account credit and current reservation before retry. Never retry blindly or mark the return case resolved just because one attempt failed. |
+
+## 4. Vendor settlement, disputes and failed orders (Q17–Q24)
+
+| Q | Proposed rule | Implementation / control |
+|---:|---|---|
+| 17 | Vendor proceeds remain held while fulfilment is unconfirmed, the configured return/protection window remains open, or a return/dispute blocks release. | Successful customer handover for doorstep_delivery or confirmed vendor-counter handover for in_shop_pickup is necessary but not sufficient. Evaluate each child order independently, with bank-security, vendor eligibility, payout authorization and reconciliation controls. |
+| 18 | A chargeback/dispute immediately flags the related payment/order, blocks unsettled related vendor proceeds, preserves evidence, records the response deadline and opens an admin case. | Resolve by authoritative dispute status and a recorded decision. Never release the hold solely because a reminder is absent. Keep customer/rider/vendor evidence access scoped by role. |
+| 19 | An unmatched or mismatched transfer.success is recorded as unmatched for treasury reconciliation; never create a payout record solely from a webhook. | Match exact transfer/payout reference, expected recipient, amount, currency and operation. Alert authorized finance/admin staff; no automatic ledger repair from unmatched payloads. |
+| 20 | A failed/reversed vendor transfer may be retried only after exact reference/status/amount/currency and returned-funds reconciliation. | Distinguish failed from reversed. Preserve the old attempt and use a new payout attempt/reference only after the financial service establishes retry safety. Do not let a delayed failure overwrite a confirmed success. |
+| 21 | Failed delivery is operational first; financial outcome depends on reason and customer policy. | Record reason, attempt evidence and parcel custody/return-to-vendor. Admin/customer-support workflow decides redelivery, cancellation, delivery-fee refund, customer refund and vendor recovery. Rider endpoints must not create wallet credits or financial journals. |
+| 22 | Never blindly retry an uncertain refund. Reconcile the existing refund first. | Query authoritative provider status using the existing reference where supported; use webhooks and scheduled reconciliation together. An uncertain timeout keeps the reservation/obligation open until status is resolved. |
+| 23 | Vendors may request cancellation/refund and submit evidence; only the authorized platform workflow executes a customer refund. | Enforce authorization in backend services/routes, not only UI. A vendor or rider action cannot call a gateway refund endpoint directly or bypass approval. |
+| 24 | Cancelled orders cannot settle, and cancellation must reconcile payment, refund obligation, cashback and reservations. | **Correction to supplied recommendation:** a refund attempt in failed status is not equivalent to a completed refund. Do not close the customer refund obligation or treat the order as financially resolved merely because the attempt is terminal-failed. Keep an explicit failed/retry-or-manual-review state until the obligation is satisfied or an authorized documented alternative is decided. |
+
+## 5. Payment and refund state matrix
+
+These are business states, not necessarily literal database enum values. Map existing application statuses deliberately; do not add aliases that disagree about whether money moved.
+
+### Payment / order collection
+
+| State/evidence | Allowed result | Prohibited result / next action |
+|---|---|---|
+| Checkout created, no authoritative payment | Awaiting payment; stock hold active until expiry | No vendor settlement, spendable cashback or fulfilled status |
+| Browser callback says success only | Show verification in progress | Do not mark paid from browser fields alone |
+| Verified charge.success / verified transaction | Settle once if reference, exact kobo amount, NGN currency and order binding match and order is fulfillable | No duplicate settlement or duplicate cashback |
+| Verified success but order cancelled/stock unavailable | Record late/exception payment; block fulfilment and settlement; create refund case | Do not reopen or oversell; do not bypass refund approval |
+| Underpayment / overpayment / reference or currency mismatch | Quarantine for reconciliation; preserve evidence | No fulfilment, vendor allocation, or cashback until resolved |
+| Duplicate successful charge | Keep one charge as the order payment; create separate duplicate-payment case | Do not link both charges to the same settlement or silently keep excess funds |
+| Payment status unknown/timeout | Pending reconciliation; retain financial/stock controls as policy requires | Do not assume failed, release stock blindly, or dispatch a second charge/refund |
+| Confirmed payment failure/abandonment | Release stock hold according to expiry policy | Do not create a refund for a payment that never captured funds |
+
+### Refund lifecycle
+
+| Paystack event/state | Internal business state | Required action |
+|---|---|---|
+| Admin approval, before gateway call | Approved/ready to execute | Persist approver, amount, currency, reason, payment reference, allocation snapshot and idempotency key |
+| refund.pending | Refund pending | Keep reservation/obligation open; store event and provider identifiers |
+| refund.processing | Refund processing | Keep obligation open; no final refund journal/closed status yet |
+| refund.needs-attention | Needs attention/manual action | Alert admin; request required details securely; preserve obligation and follow-up deadline |
+| refund.processed with matching operation, amount, currency and original transaction | Confirmed refund | Commit reservation and write idempotent balanced journals; update order/return state only after matching evidence |
+| refund.failed with matching operation | Failed attempt / obligation still open | Verify provider account credit and refund identity; alert admin; controlled retry/manual handling only |
+| Unmatched, conflicting or malformed event | Unmatched/manual reconciliation | Do not mutate financial operation/reservation/order; preserve event and alert authorized staff |
+| Gateway timeout / uncertain result | Uncertain; reservation remains active | Reconcile the same attempt before any retry |
+| Refund requested but not approved | Awaiting approval | No Paystack call and no final journal |
+
+**Important:** Paystack says a refund reported as processed may still take up to 10 business days for the customer to receive funds. Customer messaging should say “processed” rather than promise instant bank receipt.
+
+### Vendor payout/transfer lifecycle
+
+| Evidence | Internal result |
+|---|---|
+| Payout requested but not authorized/eligible | Held; no transfer call |
+| transfer.success matching exact payout operation | Confirm transfer once; balanced journal; close matching attempt |
+| transfer.failed | Failed attempt; reconcile returned funds and preserve vendor payable/obligation |
+| transfer.reversed | Reversal state; post balanced reversal only if original disbursement journal exists |
+| Unmatched or conflicting transfer event | Unmatched/manual treasury review; never invent a payout |
+| Late failure after confirmed success | Protect success; unmatched/manual review, no blind reversal |
+| Retry | New audited attempt/reference after reconciliation; never reuse a completed attempt as though it were new |
+
+### Dispute lifecycle
+
+| Event | Required response |
+|---|---|
+| charge.dispute.create | Open dispute case, record deadline/amount/reference, preserve payment and fulfilment evidence, hold affected unsettled vendor proceeds |
+| charge.dispute.remind | Update reminder/deadline and notify authorized case owner; keep hold |
+| charge.dispute.resolve | Verify final dispute outcome, record evidence and decision, then apply approved financial recovery/release; never infer outcome from an unverified payload |
+
+## 6. Paystack webhook subscriptions
+
+Paystack's official documentation lists supported event names. Subscribe to events required by the Paystack products/channels Victorious MARKET actually enables. Webhook subscriptions do not replace server-side transaction/refund/transfer verification, database idempotency, or scheduled reconciliation.
+
+### Required for the proposed launch
+
+| Exact event name | Why |
+|---|---|
+| charge.success | Payment settlement signal; also used to detect late, duplicate, mismatched and unexpected successful charges |
+| refund.pending | Track a newly initiated refund |
+| refund.processing | Track processor acceptance/in-progress |
+| refund.needs-attention | Handle missing information/action needed for refund |
+| refund.processed | Confirm a matched refund after strict identity/amount/currency checks |
+| refund.failed | Preserve refund obligation, reconcile merchant credit, alert for controlled follow-up |
+| transfer.success | Confirm a matched vendor payout |
+| transfer.failed | Reconcile failed payout and returned funds |
+| transfer.reversed | Reconcile reversed payout and post a valid reversal |
+| charge.dispute.create | Open/flag chargeback case and hold affected unsettled proceeds |
+| charge.dispute.remind | Track outstanding dispute reminders/deadlines |
+| charge.dispute.resolve | Record dispute outcome and trigger authorized follow-up |
+
+### Conditional: subscribe only if the corresponding product/channel is enabled
+
+| Exact event name | When required |
+|---|---|
+| bank.transfer.rejected | If Paystack bank-transfer payments are enabled; helps handle wrong amount/fraud rejection. This is documented for bank-transfer channel flows. |
+| dedicatedaccount.assign.success / dedicatedaccount.assign.failed | If dedicated virtual accounts are used |
+| customeridentification.success / customeridentification.failed | If customer identification/verification features are used |
+| paymentrequest.pending / paymentrequest.success | If Paystack Payment Requests are used |
+| invoice.create / invoice.update / invoice.payment_failed | If Paystack invoices/subscriptions are used |
+| subscription.create / subscription.disable / subscription.not_renew / subscription.expiring_cards | If Paystack subscriptions are used |
+
+Do not subscribe to subscription, invoice, payment-request, dedicated-account or customer-identification events just because they exist; they are not necessary for one-time marketplace checkout unless those Paystack products are used. Dispute event names must include the charge. prefix: charge.dispute.create, charge.dispute.remind and charge.dispute.resolve.
+
+## 7. Webhook security and processing contract
+
+1. Verify Paystack HMAC-SHA512 signature using the raw request body and merchant secret key before trusting payload. Never echo or log secrets.
+2. Persist an inbox record before business effects. Store event name, payload hash, provider identifiers, received time, attempt count, processing state and safe error summary.
+3. Treat event identity as immutable: same event ID with a different payload hash is a conflict, not a retry. Identical failed/unmatched payloads may be retried under explicit state rules.
+4. Return a successful HTTP response promptly once the event is durably accepted; do slow processing asynchronously where practical. Failed processing must be visible to reconciliation/admin.
+5. Match exact operation/payment/refund/transfer identity, reference, amount in integer kobo and currency. Never find a refund by order ID alone if multiple partial refunds exist.
+6. Apply transitions under database transactions/locks and idempotency keys. Duplicate or out-of-order events must not duplicate journal entries, cashback, reservations, refunds or payouts.
+7. A webhook is a notification, not standalone proof that an internal order or operation should be created. Unmatched events remain unmatched for review.
+8. Reconcile missing webhooks using authoritative Paystack verification/API and scheduled jobs. Never infer failure merely from a missing webhook.
+9. Monitor delivery failures, unmatched events, stale processing claims, old uncertain operations, and Paystack webhook delivery history. Alert authorized operators without exposing customer financial details to riders.
+
+## 8. Contradictions and decisions requiring owner confirmation
+
+1. **Q7 payment channels:** answer text conflicts with its rationale. Confirm card-only at launch versus card plus other Paystack online channels.
+2. **Q24 refund failure:** the suggestion to close cancellation when refund is “confirmed or failed” conflicts with Q16, which says a failed attempt preserves the refund obligation. This draft adopts the safer rule: failed attempt does not satisfy the customer refund obligation.
+3. **Automatic late-payment refund vs refund approval:** Q4 says controlled refund; Q10 requires admin approval. Late/duplicate/stock-unavailable payments therefore create a refund case, not an automatic gateway refund, unless a separate automatic-refund policy is approved.
+4. **Cashback recovery:** Q14 proposes offsetting future cashback. Confirm accounting and customer-policy treatment before implementation.
+5. **Wallet refund:** Q9 allows it only with customer consent plus admin authorization. Confirm whether this optional path is wanted at launch; otherwise disable it and refund to original channel only.
+6. **Cashback protection window:** Q13 requires a configured return/protection window, but exact duration and exceptions need a business value. Do not assume 365 days.
+7. **Dispute resolution outcomes:** map final outcome to provider evidence and authorized accounting rules. A resolved dispute does not always imply vendor proceeds should simply be released.
+8. **Payment gateway fees, tax, discounts and rounding:** the 90/5/5 and 90/10 splits are allocation rules, but exact basis (gross item price vs after discounts/tax) and rounding-residual owner must be explicit and consistent with captured checkout snapshots.
+9. **Vendor payout cadence:** fulfilment/return-window eligibility is specified, but payout schedule/batch timing, minimum payout, bank-detail cooldown and manual review thresholds remain existing approved controls unless separately changed.
+
+## 9. Required implementation changes / audit checklist
+
+These are requirements to verify against code; listing them does not mean they are already implemented.
+
+### Payment collection
+- [ ] Confirm one parent payment and immutable per-child allocation snapshots.
+- [ ] Ensure webhook and transaction verification use the same strict settlement service.
+- [ ] Record every verified charge/reference, including duplicate/late/mismatched charges.
+- [ ] Add a controlled duplicate-payment case/operation and tests for double charge.
+- [ ] Cover cancellation and stock loss between checkout and late payment; atomically recheck stock.
+- [ ] Distinguish underpayment, overpayment, currency mismatch, reference mismatch and invalid payer binding; keep each from fulfilling.
+- [ ] Add/verify reconciliation state for uncertain payment and safe stock-hold release.
+- [ ] Gate enabled payment channels to the owner-confirmed launch list.
+
+### Refunds and cashback
+- [ ] Ensure admin approval is persisted before dispatch, and cannot be created by a webhook.
+- [ ] Ensure partial-refund calculations use captured immutable item allocations and include prior confirmed refunds plus active reservations.
+- [ ] Ensure reservations are concurrency-safe across child orders, partial refunds, provisional holds and repeated idempotency keys.
+- [ ] Add original-channel refund default; if wallet refund remains enabled, require explicit customer consent and separately audited admin authorization.
+- [ ] Add secure refund.needs-attention handling, notifications and follow-up tracking.
+- [ ] On refund.failed, preserve the customer obligation and reservation policy; alert and reconcile provider credit before retry.
+- [ ] Implement cashback maturity only after verified fulfilment and configured protection-window expiry.
+- [ ] Decide/implement cashback already-spent recovery only after owner approval.
+- [ ] Make refund completion depend on matched refund.processed evidence and idempotent journal posting.
+- [ ] Preserve partial-refund sibling states; one confirmed partial refund must not falsely mark the entire child order fully refunded/completed.
+- [ ] Keep customer refund status separate from vendor recovery status.
+
+### Vendor settlements and disputes
+- [ ] Verify payout eligibility per child order after fulfilment, protection window and no blocking return/dispute.
+- [ ] Implement charge.dispute.* handlers with exact names, case/deadline tracking, evidence preservation and affected-settlement hold.
+- [ ] Never create a payout record from unmatched transfer.success.
+- [ ] Make transfer failure/reversal handling race-safe; stale failure must not overwrite success.
+- [ ] Verify provider transfer status/returned funds before retry; use a new attempt/reference.
+- [ ] Keep rider and legacy logistics payouts excluded from new vendor-managed delivery flows.
+
+### Webhook reliability
+- [ ] HMAC-SHA512 signature validation on raw body before business processing.
+- [ ] Immutable payload hash per provider event identity; conflict returns a non-success response and creates a security/audit record.
+- [ ] Safe duplicate delivery, out-of-order delivery, unmatched retry, stale-claim recovery and dead-letter/manual-review paths.
+- [ ] Store enough provider identifiers to distinguish multiple partial refunds against one original payment.
+- [ ] Scheduled reconciliation for lost webhook, uncertain timeout and stale pending refund/transfer.
+- [ ] Alerts/monitoring for unmatched/conflicting events and prolonged financial states.
+- [ ] Test exact Paystack payload shapes for every subscribed event, including amount units and reference fields.
+
+## 10. Official Paystack references
+
+- Webhooks and supported event names: https://paystack.com/docs/payments/webhooks/
+- Refund lifecycle and refund events: https://paystack.com/docs/payments/refunds/
+- Manage disputes and dispute webhooks: https://paystack.com/docs/payments/manage-disputes/
+- Payment channels, including bank-transfer rejection: https://paystack.com/docs/payments/payment-channels/
+- Webhook Events API for delivery history and retries: https://paystack.com/docs/api/webhook-events/
+
+These sources describe Paystack's event vocabulary and provider status meanings. Victorious MARKET must still apply its own authorization, identity matching, idempotency, ledger, and reconciliation rules.
