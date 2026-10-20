@@ -194,3 +194,11 @@ Every occurrence below must be traced to every writer, including controllers, se
 7. **High:** restore equivalent coverage for deleted safety tests and add concurrency/replay tests.
 
 No production merge or deployment is authorized by this register.
+
+## Webhook inbox verification follow-up — 20 October 2026
+
+- Confirmed the initial migration creates a database unique constraint on `processed_webhook_events.event_id`; the handler also stores a SHA-256 payload hash and rejects a reused event ID with a different payload.
+- Fixed the stale-worker fencing warning so it correctly interpolates the event ID and logs the claimed attempt generation (commit recorded in Git history).
+- **Still unverified:** existing tests cover HMAC rejection and payment settlement replay, but do not establish the inbox's own duplicate event delivery, concurrent claim, conflicting payload, failed/unmatched retry, stale worker fencing, or database-specific duplicate-key recovery behavior.
+- The duplicate-key recovery currently catches a database `QueryException` inside the transaction callback. Verify on the production database engine whether a uniqueness exception leaves the transaction usable; add a supported-engine-safe strategy if not. Do not assume SQLite test success proves PostgreSQL/MySQL behavior.
+- Required acceptance tests: identical completed event is a no-op; same ID/different signed payload is quarantined; concurrent same-ID deliveries cause exactly one financial effect; failed and unmatched retries retain the original identity/hash; stale workers cannot overwrite a newer attempt; all error paths leave an observable inbox status.
