@@ -246,3 +246,7 @@ A new signed `refund.failed` webhook test delivers a failure signal after its fi
 ### Positive payout reversal transition — verified in CI (20 October 2026)
 
 The positive-path `transfer.reversed` regression now verifies the full transition when the payout identity, amount/currency evidence, confirmed disbursement journal and original request journal all exist: payout transitions to rejected/failed, only its allocated order returns to eligible, exactly two reversal journal entries are added, and the inbox event completes. CI passed on commit `70afe769b46fda8a57aab29cda3bf8600e3afbf3`: **166 tests / 1,059 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39500051174). This is not a substitute for a real Paystack sandbox event or production database concurrency tests.
+
+### Refund terminal-event ordering — both directions tested (20 October 2026)
+
+The focused suite now verifies both contradictory orderings: a late `refund.failed` after `confirmed` cannot downgrade the operation; a late `refund.processed` after terminal `failed` cannot reopen it and is quarantined for manual reconciliation. No extra journal entries are created in either case. CI passed on commit `afbfd0be526cc14a1050f196f72df89c0d6500e6`: **167 tests / 1,063 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39500196677). End-to-end stale-worker fencing remains open because a stale inbox worker can still reach domain handlers before the final compare-and-set update.
