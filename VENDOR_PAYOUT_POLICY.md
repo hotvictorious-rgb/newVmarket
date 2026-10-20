@@ -1,59 +1,75 @@
-# VICTORIOUS MARKET — Vendor Payout Policy
+# VICTORIOUS MARKET — Vendor Earnings and Payout Policy
 
-**Status:** Owner-confirmed launch policy  
-**Last reviewed:** 20 October 2026  
-**Applies to:** Vendor payouts only; does not create rider, fleet, or legacy logistics payout entitlements.  
-**Implementation status:** Documentation alignment only. Code alignment and verification remain open.  
-**Authority:** This document and `.ai/BUSINESS_RULES.md` define the launch payout policy. The payment/refund/webhook matrix defines the technical controls.
+**Version:** 1.0  
+**Policy date:** 20 October 2026  
+**Status:** Owner-confirmed launch policy; implementation and verification remain open  
+**Authority:** Read with [VICTORIOUS_MARKET_SYSTEM_RULES_V1.md](VICTORIOUS_MARKET_SYSTEM_RULES_V1.md). This policy does not create a vendor wallet, rider payout, or automatic bank transfer.
 
-## 1. Launch rules
+## 1. Vendor earnings eligibility
 
-1. **Minimum payout request:** ₦5,000.
-2. **Maximum payout request:** ₦500,000 per request.
-3. **Request frequency:** A vendor may submit a request whenever its unreserved eligible/withdrawable balance is at least ₦5,000. Reaching the minimum does not trigger an automatic transfer.
-4. **Approval:** Every payout request requires review and approval by an authorized administrator before a Paystack transfer may be initiated. Request creation and approval are separate actions; approval is not proof of payment.
-5. **Excess balance:** A vendor may request up to ₦500,000. Eligible balance above the approved request remains eligible for a later request, subject to all eligibility, security, recovery, dispute, and liquidity checks. No eligible earnings are forfeited merely because they exceed the cap.
-6. **Payout aggregation:** Earnings are calculated and recorded per vendor order-item/earning record, including delivery-fee earnings separately. The normal payout method aggregates the selected eligible earnings into one payout request and one transfer; the platform must not create a bank transfer for each order by default.
-7. **No rider payouts:** Vendors pay their own riders outside Victorious MARKET. No rider wallet, rider earning, or rider payable is created by this policy.
+1. Vendor earnings become eligible for payout 24 hours after confirmed doorstep delivery or confirmed in-shop pickup, provided the affected earning has no applicable return/dispute/payment hold and all vendor, security and reconciliation checks pass.
+2. The 24-hour eligibility rule does not prevent an authorised admin from opening or approving a legitimate late refund case. If a vendor has already been paid and is responsible for an approved refund, record a separate recovery receivable.
+3. Eligible earnings are not an automatic transfer. Vendors request a payout through the platform, and an authorised administrator manually approves every payout request at launch.
+4. Track merchandise earnings per order-item earning record and delivery-fee earnings as separate records linked to the vendor child order. Use item-level records where practical so an unrelated item is not unnecessarily held.
+5. A held, reserved, paid, reversed, disputed, return-pending, unreconciled, or otherwise blocked earning cannot be selected for a new payout.
 
-## 2. Eligible balance and request calculation
+## 2. Request thresholds and server-calculated FIFO batch
 
-The backend must calculate eligible, unreserved withdrawable funds from authoritative ledger/earning records. Client-submitted amounts are requests, never trusted balances. The server must reject requests below ₦5,000, above ₦500,000, above the vendor's unreserved eligible balance, or from an ineligible vendor.
+- **Minimum payout:** ₦5,000.
+- **Maximum payout:** ₦500,000 per request.
+- The vendor does not enter the payout amount. The server calculates the request from the oldest eligible, unreserved earning records.
+- Select whole earning records in strict FIFO order. Add the oldest record in full while the cumulative total remains at or below ₦500,000.
+- If adding the next oldest whole record would make the total exceed ₦500,000, stop immediately. Do not split that record and do not skip it to select newer records. That record and all newer records remain available for a later batch.
+- If the calculated batch total is below ₦5,000, no request is created until enough eligible records can be included without breaking the cap.
+- If the oldest eligible record alone exceeds ₦500,000, do not split or skip it. Flag the case for authorised finance review and an explicit accounting-safe resolution; do not silently bypass FIFO.
+- Excess eligible earnings remain eligible for later requests, subject to holds and normal checks. Earnings are never forfeited just because they exceed the cap.
 
-Eligible earnings must have passed the applicable payment verification, fulfilment and customer-protection window, refund/return/dispute, KYC/vendor-status, bank-account security, recovery-offset, and reconciliation checks. Held, reserved, paid, reversed, disputed, return-pending, unreconciled, or otherwise blocked earnings are excluded.
+### Example
 
-## 3. Reservation, concurrency and review
+Eligible whole earning records, oldest first: ₦200,000, ₦180,000, ₦170,000.
 
-- Create the request and reserve the exact amount/earning allocations atomically under database transaction and row locks.
-- The same earnings must never back two active payout requests. Concurrent or duplicate submissions must not double-reserve funds.
-- The request records the beneficiary and bank-account details used for that request, amount, currency, timestamps, state, decision maker, decision/rejection reason, provider reference, and audit history.
-- An authorized administrator reviews the vendor status/KYC, bank details and 48-hour bank-change cooldown, open disputes/returns, recoveries/debt, payout history, and funding availability before approval.
-- Rejection releases the request's reservation exactly once; it does not erase earning history or forfeit eligible funds.
-- An approved request may be submitted to Paystack only through the authorized disbursement flow. Approval must not mark the payout as paid.
+The first request is **₦380,000**. Adding the next full record would make ₦550,000, so the system stops. It does not split the ₦170,000 record into ₦120,000 and does not skip it. The ₦170,000 record remains for the next payout batch.
 
-## 4. Transfer status and reconciliation
+## 3. One active request and reservations
 
-Track request review state separately from provider transfer state. At minimum, distinguish pending review, approved, rejected, processing/in-flight, successful, failed, reversed, and uncertain/needs reconciliation (using the application's mapped states where appropriate).
+- A vendor may have only one active payout request while it is pending review, approved but not sent, processing/in-flight, or uncertain/awaiting reconciliation.
+- A new request is allowed only after the previous request is definitively rejected, paid, failed/reversed and reconciled, or otherwise closed with a final auditable outcome.
+- Create the request and reserve its exact earning-record allocations atomically under a database transaction and appropriate row locks/unique constraints.
+- No earning record may support two active requests or be paid twice.
+- Rejection releases the reservation exactly once and preserves the original earnings history.
+- Before approval, admin reviews vendor/KYC status, bank details and the 48-hour bank-change cooldown, open disputes/returns, confirmed recoveries/debts, prior payout status, and available platform/provider funding.
+- Admin approval is separate from transfer initiation and is never proof of payment.
 
-Persist a unique transfer reference and processing identity before contacting Paystack. A timeout or unknown result must be reconciled against the same reference before any retry. Never blindly repeat a transfer, treat a pending result as success, or let a late webhook overwrite an already confirmed outcome. Finalize the payout and post balanced ledger entries exactly once only after authoritative confirmation of success. Failed/reversed transfers must restore or adjust the same reservation/source earnings through an audited, idempotent recovery flow.
+## 4. Vendor debt, disputes and recoveries
 
-## 5. Platform liquidity and provider limits
+- Confirmed vendor debt is tracked in a separate disputes/recoveries ledger, not as a spendable vendor wallet balance.
+- A vendor may repay a confirmed debt by direct bank transfer to the designated Victorious MARKET account. The platform must verify receipt against bank/provider records and attach it to a unique recovery reference, vendor, case, original order and amount. A screenshot or promise alone is not proof of repayment.
+- Alternatively, an authorised admin may approve an offset against the vendor's held or future earnings where the vendor agreement permits it. Do not automatically offset a debt without recorded admin approval.
+- The vendor must be notified and may challenge a proposed recovery. An allegation or unresolved complaint is not a confirmed debt.
+- If the vendor was already paid, record a recovery receivable; do not pretend that a completed bank transfer has been reversed. Direct repayment and approved future-earnings offset are the available recovery paths.
+- Track disputed, confirmed, outstanding, partially repaid, fully recovered and written-off states. Correct errors with linked reversing/adjustment entries, never by deleting the original record.
 
-The ₦500,000 limit is Victorious MARKET's own per-request control, not a statement of a Nigerian statutory bank limit or a guarantee that Paystack will approve every transfer. Before transfer initiation, check actual available provider funding and any account-specific/provider limits, plus the transfer amount and applicable charges. Never mark a request paid when funding is insufficient or the provider outcome is uncertain.
+## 5. Transfer and fee policy
 
-## 6. Transfer fees and stamp duty — owner decision required
+- Victorious MARKET bears outbound vendor payout transfer charges, including applicable transfer fees/stamp duty charged for the payout, as a platform expense. The vendor receives the exact approved payout amount; never deduct payout charges from vendor earnings.
+- Check actual platform/provider funding and account-specific transfer limits before initiation. The ₦500,000 cap is a platform policy limit, not a statement of a statutory bank limit or guarantee of provider approval.
+- Persist a unique transfer reference and processing identity before contacting Paystack.
+- Distinguish pending review, approved, processing/in-flight, successful, failed, reversed and uncertain/needs-reconciliation states.
+- A timeout or unknown result must be reconciled against the same transfer reference before any retry. Never blindly repeat a transfer, treat pending as success, or let a late webhook overwrite a confirmed outcome.
+- Finalise payout and balanced ledger entries exactly once after authoritative confirmation of success. Failed/reversed transfers restore or adjust the same reserved source earnings through an audited, idempotent flow.
 
-**Open decision:** Whether Victorious MARKET absorbs outbound transfer fees and applicable stamp duty or deducts them from vendor payouts has not been confirmed by this policy update. Do not silently deduct charges from vendor earnings. Before launch, record the approved fee bearer, show any vendor deduction before request confirmation if one is approved, and reconcile the actual charge separately in the financial ledger.
+## 6. Required implementation and verification
 
-## 7. Vendor examples
+Documentation is not proof of implementation. Before launch, align the web and API request endpoints, vendor dashboard, admin approval/disbursement flow, earnings ledger/reservations, vendor-debt recovery workflow, Paystack transfer initiation/webhooks, reconciliation, notifications, legal wording and tests with this policy.
 
-- Eligible balance ₦4,999: cannot submit a payout request yet.
-- Eligible balance ₦80,000: may request ₦80,000 or a smaller amount, provided the request is at least ₦5,000.
-- Eligible balance ₦720,000: may request up to ₦500,000; the remaining ₦220,000 stays eligible for a later request, subject to normal checks.
-- Existing pending request ₦100,000 and total eligible earnings ₦300,000: the reserved ₦100,000 cannot be requested again; other unreserved eligible funds may be considered for a separate request only if the system's concurrency and review controls safely support it.
-
-## 8. Required implementation and verification
-
-Documentation is not proof of implementation. Before launch, align the API and web request endpoints, vendor dashboard, admin approval/disbursement flow, payout ledger/reservations, Paystack transfer initiation and webhooks, reconciliation, notifications, tests, legal/merchant-facing wording, and any configuration values with this policy. Tests must cover minimum/maximum boundaries, excess carry-forward, duplicate/concurrent requests, approval bypass attempts, rejection release, insufficient provider balance, timeouts, duplicate/late webhooks, failed/reversed transfers, and exact-once ledger posting.
+Required tests include:
+- ₦4,999 minimum boundary and ₦5,000 threshold.
+- ₦500,000 maximum boundary.
+- Whole-record FIFO, stop-on-over-cap, no splitting, no skipping and carry-forward.
+- An oldest record greater than the cap.
+- One active request, duplicate/concurrent submissions and atomic reservations.
+- Admin approval enforcement and rejection release.
+- Admin-approved debt offsets, direct repayments, disputed debt and reversal.
+- Insufficient provider balance, timeout, duplicate/late webhooks, failed/reversed transfer and exact-once ledger posting.
 
 Do not merge broad audit-branch changes into `main` without explicit owner approval.
