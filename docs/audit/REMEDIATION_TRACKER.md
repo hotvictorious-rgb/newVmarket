@@ -19,7 +19,7 @@
 | VM-AUD-001 | High | Vendor payout request validation allowed ₦1,000–₦50,000,000. | Minimum ₦5,000; maximum ₦500,000. | Updated request validation in `PortalController::vendorRequestPayout`; regression coverage still needs boundary assertions and CI. | FIXED — CI pending |
 | VM-AUD-002 | Critical | Payout allocator could split a single order earning record to satisfy a requested amount. | Allocate whole earning records only; strict FIFO; never split or skip; stop before the next record that exceeds the remaining payout cap; oldest over-cap record goes to finance resolution. | Added deterministic `created_at, id` FIFO ordering. Allocation now plans whole records first and rejects a request that cannot be matched exactly, before creating allocations. Replaced the old partial-payout test with a whole-record regression test. | FIXED — CI pending |
 | VM-AUD-003 | High | Vendor could create another payout request while an earlier request may still reserve earnings. | One active request across pending, approved-unsent, in-flight, or uncertain states; timeout does not release reservation without reconciliation. | Added a vendor-locked active-request guard for pending/approved/processing/in-flight/uncertain statuses. Confirm actual persisted status vocabulary and test timeout/reconciliation lifecycle. | FIXED — CI pending; lifecycle verification open |
-| VM-AUD-004 | Critical | Checkout still appears to support wallet-credit as a payment tender. | Legacy wallet credit is not launch checkout tender; cashback is a separately capped merchandise discount. | Trace all API/controller/service/UI paths, disable tender without breaking separately approved cashback redemption, add negative tests. | OPEN |
+| VM-AUD-004 | Critical | Checkout supported legacy wallet-credit as a payment tender through both the checkout API and checkout-intent flow. | Legacy wallet credit is not launch checkout tender; cashback is a separately capped merchandise discount. | Restricted payment method to Paystack, rejected positive wallet-credit redemption in both API validation paths, added a service-level defense, and replaced the three wallet-tender success tests with rejection/no-spend tests. Search remaining routes and UI; CI pending. | FIXED — CI pending; residual path audit open |
 | VM-AUD-005 | Critical | Checkout service still creates one shop-scoped order and contains central logistics/fleet lane and rider-payable assumptions. | One parent checkout can create vendor child orders; vendor-managed fulfilment; no central fleet/hub for new orders. | Map data model, payment capture and fulfilment assumptions before implementing parent/child order creation. This is a cross-cutting migration and must not be approximated with a superficial controller patch. | OPEN |
 | VM-AUD-006 | High | Return flow has a 24-hour customer window but no confirmed admin route to open late/direct-contact cases for review. | 24-hour standard window; authorised admin can open/review late claims; applicable statutory rights prevail. | Trace admin routes, permissions, audit history and case creation; add controlled late-case opening with reason and audit event. | OPEN |
 | VM-AUD-007 | Critical | Return/refund service contains a wallet-credit refund branch. | Launch refunds use verified original Paystack route where supported; no wallet-credit/off-platform refund. | Remove or feature-gate wallet disbursement at launch; preserve reversal of prior wallet-credit liabilities where required; test that admin cannot select wallet as refund destination. | OPEN |
@@ -31,13 +31,18 @@
 | VM-AUD-013 | High | Refund ceilings and separate merchandise/delivery-fee refund operations need end-to-end verification. | Enforce parent/child/item/component ceilings; merchandise 90/5/5 and delivery fee 90/10 are separate; one component outcome does not imply the other. | Trace admin UI, service, reservations, webhook and ledger reversals; add concurrency and partial-component tests. | INVESTIGATING |
 | VM-AUD-014 | High | Required doorstep/in-shop proof and customer OTP confidentiality need end-to-end verification. | Doorstep: server-verified customer OTP + doorstep photo. In-shop pickup: reservation pass + separate one-time customer pickup OTP + pickup photo. OTPs must not leak into history or unauthorised rider views. | Audit API resources, logs, history serialization, pickup and delivery routes; add positive/negative authorization tests. | INVESTIGATING |
 
-## First remediation batch — payout controls
+## First remediation batch — payout controls and launch payment guard
 
 Files changed so far:
 - `backend/app/Http/Controllers/Web/PortalController.php`
 - `backend/tests/Feature/VendorPayoutLifecycleTest.php`
+- `backend/app/Http/Controllers/Api/CustomerOrderApiController.php`
+- `backend/app/Http/Controllers/Api/CheckoutAndReservationApiController.php`
+- `backend/app/Http/Requests/CreateCheckoutIntentRequest.php`
+- `backend/app/Services/CheckoutExecutionService.php`
+- `backend/tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php`
 
-Changes are on the audit branch only. The automated test suite has **not yet been observed passing after these edits**. Run the targeted payout lifecycle test and the full relevant CI workflow before treating these controls as verified.
+Changes are on the audit branch only. The workflow caught one regression-test expectation error: a pending payout request correctly reserves its requested amount even when the admin later blocks disbursement for a non-matching whole-record total. The expectation was corrected, and wallet-credit checkout paths now have negative regression tests. Latest CI runs are queued/in progress; do not mark these changes verified until the latest run completes successfully.
 
 ## Financial safety principles that remain mandatory
 
