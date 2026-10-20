@@ -889,4 +889,37 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         $this->assertEquals(0, ReturnCase::where('order_id', $orderB->id)->count());
         $this->assertEquals(27000.00, (float)$orderB->fresh()->grand_total);
     }
+
+    public function test_public_order_tracking_requires_guest_token_and_does_not_allow_order_number_enumeration(): void
+    {
+        $created = $this->createDeliveredOrder(Carbon::now()->subHours(2));
+        $order = $created['order'];
+        $token = str_repeat('a', 64);
+        $order->forceFill([
+            'guest_access_token' => $token,
+            'verification_code' => '123456',
+        ])->save();
+
+        $this->getJson('/api/v1/order/track?order_number=' . urlencode($order->order_number))
+            ->assertUnauthorized();
+
+        $this->getJson('/api/v1/order/track?order_number=' . urlencode($order->order_number) . '&guest_access_token=' . str_repeat('b', 64))
+            ->assertNotFound();
+
+        $response = $this->getJson('/api/v1/order/track?order_number=' . urlencode($order->order_number) . '&guest_access_token=' . $token);
+        $response->assertOk()
+            ->assertJsonPath('data.order_number', $order->order_number)
+            ->assertJsonPath('data.delivery_otp', '123456');
+    }
+
+    public function test_authenticated_customer_cannot_track_another_customers_order(): void
+    {
+        $created = $this->createDeliveredOrder(Carbon::now()->subHours(2));
+        $order = $created['order'];
+
+        $this->actingAs($this->otherCustomer, 'sanctum')
+            ->getJson('/api/v1/order/track?order_number=' . urlencode($order->order_number))
+            ->assertNotFound();
+    }
+
 }
