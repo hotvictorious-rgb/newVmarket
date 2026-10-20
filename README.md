@@ -17,7 +17,7 @@ Victorious MARKET is a Nigerian multi-vendor marketplace built with Laravel. Cus
 - **Application:** Laravel 12 / PHP 8.2+
 - **Currency:** NGN; payment amounts are validated in integer kobo.
 - **Only permitted payment paths:** pay before delivery through Victorious MARKET checkout, or reserve an in-shop pickup through Victorious MARKET and pay at the approved vendor shop through Victorious MARKET's authorised payment workflow.
-- **No off-platform payment:** vendors may not collect cash or private-account transfers for marketplace orders. Launch payment rails are Paystack card and standard bank transfer only unless separately approved. Doorstep COD and wallet-credit refunds are disabled; DVA, USSD, mobile money and other unapproved rails are deferred.
+- **No off-platform payment:** vendors may not collect cash or private-account transfers for marketplace orders. Launch payment rails are Paystack card and standard bank transfer only unless separately approved. Doorstep COD, wallet-credit refunds, and legacy wallet-credit checkout tender are disabled; cashback redemption is a separate capped discount. DVA, USSD, mobile money and other unapproved rails are deferred.
 - **Reservation:** the existing in-shop reservation flow remains supported with its 24-hour stock hold unless separately changed by the owner; do not release stock while payment status is successful or uncertain/in flight.
 - **Fulfilment:** vendor-managed doorstep delivery or zero-delivery-fee in-shop pickup.
 - **Primary policy documents:** see [Business and implementation documents](#business-and-implementation-documents).
