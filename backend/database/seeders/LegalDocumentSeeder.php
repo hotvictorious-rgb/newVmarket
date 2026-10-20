@@ -63,7 +63,7 @@ Victorious Market is an intentionally **controlled, centrally governed marketpla
 ### 5. Delivery, Handover & Cryptographic Handshakes
 * **Geofenced Local Delivery:** Operations commence within verified coverage zones in Akwa Ibom State (centered in Uyo LGA) and expand only across verified logistics corridors.
 * **Doorstep handover:** The customer's delivery OTP must be securely verified and a doorstep delivery photo recorded before completion.
-* **In-shop pickup:** The customer must present the `RES-XXXXXX` reservation pickup pass/secure pickup verification, and the vendor must record an in-shop pickup photo before completion. Reservation verification does not replace the photo.
+* **In-shop pickup:** The customer must present the `RES-XXXXXX` reservation pass AND complete one-time customer pickup OTP verification. The vendor must securely verify both and record an in-shop pickup photo before completion. Neither credential replaces the photo; the customer pickup OTP is distinct from any rider-to-vendor parcel-custody OTP.
 * **Evidence limits:** GPS, customer signature, separate rider-pickup photo and hub inspection photo are not mandatory. OTP/pass verification confirms the handover process; neither OTP nor photo proves product quality or removes applicable consumer rights.
 
 ---
