@@ -901,21 +901,65 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
         }
 
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:1000|max:50000000',
+            'amount' => ['required', 'numeric', 'min:5000', 'max:500000', 'regex:/^\\d+(?:\\.\\d{1,2})?$/'],
         ], [
-            'amount.min' => 'Minimum payout request amount is ₦1,000.00.',
-            'amount.max' => 'Maximum single payout request cannot exceed ₦50,000,000.00.',
+            'amount.min' => 'Minimum payout request amount is ₦5,000.00.',
+            'amount.max' => 'Maximum single payout request cannot exceed ₦500,000.00.',
+            'amount.regex' => 'Payout amount must use no more than two decimal places.',
         ]);
 
         return DB::transaction(function () use ($vendor, $validated) {
             $lockedVendor = VendorProfile::where('id', $vendor->id)->lockForUpdate()->first();
+
+            $activePayout = VendorPayoutRequest::where('vendor_id', $lockedVendor->id)
+                ->whereIn('status', ['pending', 'approved', 'processing', 'in_flight', 'uncertain'])
+                ->lockForUpdate()
+                ->first();
+            if ($activePayout) {
+                return response()->json([
+                    'status' => false,
+                    'message' => "Payout request #{$activePayout->id} is still {$activePayout->status}. Resolve it before requesting another payout.",
+                ], 409);
+            }
+
             $withdrawable = $lockedVendor->getWithdrawableBalance();
-            $amount = number_format((float)$validated['amount'], 2, '.', '');
+            $amount = bcadd((string) $validated['amount'], '0', 2);
 
             if (BcMathService::comp((string)$amount, (string)$withdrawable) > 0) {
                 return response()->json([
                     'status' => false,
                     'message' => "Insufficient withdrawable balance. Your available cleared balance is ₦" . number_format((float)$withdrawable, 2) . ". In-transit or pending orders are held in platform escrow.",
+                ], 422);
+            }
+
+            $remainingToMatch = $amount;
+            $fifoOrders = Order::where('vendor_id', $lockedVendor->id)
+                ->where('vendor_settlement_status', 'eligible')
+                ->where('payment_status', 'paid')
+                ->where('order_status', 'delivered')
+                ->whereDoesntHave('returnCases', function ($q) {
+                    $q->whereNotIn('status', ['resolved', 'rejected']);
+                })
+                ->whereDoesntHave('dispute', function ($q) {
+                    $q->whereIn('status', ['filed', 'under_review']);
+                })
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($fifoOrders as $earningOrder) {
+                if (bccomp($remainingToMatch, '0.00', 2) <= 0) break;
+                $earningAmount = (string) $earningOrder->remaining_payable_to_vendor;
+                if (bccomp($earningAmount, '0.00', 2) <= 0) continue;
+                if (bccomp($earningAmount, $remainingToMatch, 2) > 0) break;
+                $remainingToMatch = bcsub($remainingToMatch, $earningAmount, 2);
+            }
+
+            if (bccomp($remainingToMatch, '0.00', 2) !== 0) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Payout request rejected: amount must match whole eligible earning records in strict FIFO order. No request or reservation was created. If the oldest earning record exceeds the ₦500,000 cap, finance resolution is required.',
                 ], 422);
             }
 
