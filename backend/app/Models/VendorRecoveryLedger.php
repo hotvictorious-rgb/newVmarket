@@ -9,6 +9,7 @@ class VendorRecoveryLedger extends Model
     protected $fillable = [
         'vendor_id',
         'return_case_id',
+        'idempotency_key',
         'order_id',
         'amount',
         'status',
