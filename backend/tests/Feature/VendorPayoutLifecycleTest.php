@@ -453,6 +453,52 @@ class VendorPayoutLifecycleTest extends TestCase
 
 
 
+    public function test_transfer_reversed_without_confirmed_disbursement_journal_is_quarantined(): void
+    {
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '5000.00',
+            'status' => 'approved',
+            'gateway_status' => 'success',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Test Vendor',
+            'transfer_reference' => 'VND-PAYOUT-REVERSAL-NO-JOURNAL-01',
+            'paystack_transfer_code' => 'TRF_REVERSAL_NO_JOURNAL_01',
+        ]);
+
+        $payloadData = [
+            'id' => 'evt_reversal_no_journal_01',
+            'event' => 'transfer.reversed',
+            'data' => [
+                'reference' => 'VND-PAYOUT-REVERSAL-NO-JOURNAL-01',
+                'transfer_code' => 'TRF_REVERSAL_NO_JOURNAL_01',
+                'amount' => 500000,
+                'currency' => 'NGN',
+                'reason' => 'Reversal arrived without confirmed disbursement journal',
+            ],
+        ];
+
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+        $journalCountBefore = FinancialJournalEntry::count();
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+        $payout->refresh();
+        $this->assertSame('approved', $payout->status);
+        $this->assertSame('success', $payout->gateway_status);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
+        $this->assertDatabaseHas('processed_webhook_events', [
+            'event_id' => 'evt_reversal_no_journal_01',
+            'status' => 'unmatched',
+        ]);
+    }
+
     public function test_transfer_reversed_rejects_malformed_kobo_amount_without_mutating_payout(): void
     {
         $payout = VendorPayoutRequest::create([
