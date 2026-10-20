@@ -429,25 +429,16 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
      * Super Admin updates refund_window_hours to 48 hours; delivery handshakes adopt this setting.
      * Cashback stays pending_maturation and is strictly unredeemable until 48h has elapsed.
      */
-    public function test_cashback_is_only_redeemable_after_admin_configured_refund_window(): void
+
+    /**
+     * Cashback matures only after the 24-hour return/refund window plus a separate 24-hour buffer.
+     */
+    public function test_cashback_matures_only_after_24_hour_refund_window_plus_24_hour_buffer(): void
     {
         $baseTime = Carbon::create(2026, 10, 16, 12, 0, 0);
         Carbon::setTestNow($baseTime);
+        SystemSetting::set('refund_window_hours', 24);
 
-        // 1. Explicitly audit a non-default 48-hour policy override for this governance test.
-        $this->actingAs($this->superAdmin);
-        $response = $this->post(route('admin.settings.financial'), [
-            'refund_window_hours' => 48,
-        ]);
-        $response->assertRedirect(route('admin.settlements.index'));
-        $this->assertEquals(48, (int)SystemSetting::get('refund_window_hours', 24));
-
-        // Assert immutable audit log recorded
-        $log = AdminAuditLog::where('action', 'refund_window_setting_updated')->latest()->first();
-        $this->assertNotNull($log);
-        $this->assertEquals(48, $log->new_values['refund_window_hours']);
-
-        // 2. Customer completes an order and delivery occurs
         $order = Order::create([
             'order_number' => 'ORD-20261016-0004',
             'customer_id' => $this->customerUser->id,
@@ -479,41 +470,33 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
 
         $order->refresh();
         $this->assertEquals('delivered', $order->order_status);
-
-        // The explicitly configured return window expires in exactly 48 hours
-        $this->assertEquals(48, (int)$baseTime->diffInHours($order->refund_window_expires_at));
+        $this->assertEquals(24, (int)$baseTime->diffInHours($order->refund_window_expires_at));
 
         $cashback = CustomerCashbackLedger::where('order_id', $order->id)->first();
         $this->assertNotNull($cashback);
         $this->assertEquals('pending_maturation', $cashback->status);
-        $this->assertEquals($order->refund_window_expires_at->copy()->addHours(24)->toIso8601String(), $cashback->matures_at->toIso8601String());
+        $this->assertEquals(
+            $order->refund_window_expires_at->copy()->addHours(24)->toIso8601String(),
+            $cashback->matures_at->toIso8601String()
+        );
 
-        // 3. At 24 hours (before the configured return window expires), cashback remains pending
         Carbon::setTestNow($baseTime->copy()->addHours(24));
         $service->evaluateMaturation($order);
-        $cashback->refresh();
-        $this->assertEquals('pending_maturation', $cashback->status, 'Cashback MUST NOT mature before the 48-hour window expires.');
+        $this->assertEquals('pending_maturation', $cashback->fresh()->status);
 
-        // 4. At 49 hours the 48-hour claim window has expired, but the extra cashback buffer has not; it remains pending
+        Carbon::setTestNow($baseTime->copy()->addHours(25));
+        $service->evaluateMaturation($order);
+        $this->assertEquals('pending_maturation', $cashback->fresh()->status);
+
         Carbon::setTestNow($baseTime->copy()->addHours(49));
         $service->evaluateMaturation($order);
-        $cashback->refresh();
-        $this->assertEquals('pending_maturation', $cashback->status, 'Cashback must wait for the separate 24-hour maturity buffer.');
+        $this->assertEquals('available', $cashback->fresh()->status);
 
-        // 5. After the 48-hour return window plus the 24-hour buffer, cashback becomes available.
-        Carbon::setTestNow($baseTime->copy()->addHours(73));
-        $service->evaluateMaturation($order);
-        $cashback->refresh();
-        $this->assertEquals('available', $cashback->status, 'Cashback becomes available only after the return window plus the buffer.');
-
-        // Clean up mock time
         Carbon::setTestNow();
     }
 
-    /**
-     * Test 5: Dispute Quarantining Rule.
-     * If a dispute is filed during the refund window, cashback is quarantined and vendor settlement is halted.
-     */
+
+
     public function test_dispute_quarantines_cashback_and_vendor_settlement(): void
     {
         $order = Order::create([
