@@ -8,6 +8,7 @@ use App\Models\Lga;
 use App\Models\LogisticsCompanyProfile;
 use App\Models\LogisticsPayoutRequest;
 use App\Models\Order;
+use App\Models\ReturnCase;
 use App\Models\Shop;
 use App\Models\State;
 use App\Models\User;
@@ -1364,6 +1365,52 @@ class VendorPayoutLifecycleTest extends TestCase
         $this->assertEquals('0.00', $this->vendor->fresh()->getWithdrawableBalance());
         $this->assertSame(1, $wholeRequest->allocations()->count());
         $this->assertEquals('9000.00', $wholeRequest->allocations()->first()->allocated_amount);
+    }
+
+    public function test_admin_payout_allocation_accepts_closed_return_cases_consistently_with_vendor_balance(): void
+    {
+        $this->mockPaystackTransferSuccess('TRF_CLOSED_RETURN_ELIGIBILITY_01');
+
+        $order = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'vendor_settlement_status' => 'eligible',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+        ]);
+
+        ReturnCase::create([
+            'case_number' => 'RET-CLOSED-PAYOUT-01',
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'Previously resolved return',
+            'status' => 'closed',
+            'total_refundable_amount' => '0.00',
+            'refund_delivery_fee' => false,
+        ]);
+
+        $this->assertSame('9000.00', $this->vendor->fresh()->getWithdrawableBalance());
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '9000.00',
+            'status' => 'pending',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Test Vendor',
+        ]);
+
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
+            'payout_id' => $payout->id,
+            'notes' => 'Closed return should not block eligible earnings',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertSame('settled', $order->fresh()->vendor_settlement_status);
+        $this->assertSame(1, $payout->allocations()->count());
+        $this->assertSame('9000.00', (string) $payout->allocations()->first()->allocated_amount);
     }
 
     /**
