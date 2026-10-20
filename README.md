@@ -95,6 +95,8 @@ Rider compensation -> paid directly by the owning vendor outside Victorious MARK
 - A delivery fee is not a rider payout or logistics-company fare. The platform creates no rider payable, rider wallet, rider earnings balance, or rider payout request for new vendor-managed delivery.
 - Refunds must reverse only the applicable approved components from the actual order allocations, taking account of discounts, previous refunds, cashback, and vendor amounts already settled.
 - A refund request or rider handover does not mean the gateway refund is complete. Reconcile authoritative Paystack outcomes before reporting completion.
+- **Refund responsibility:** Victorious MARKET executes approved customer refunds through the authorized financial workflow. Vendor recovery is a separate, auditable obligation where the approved reason and actual allocation make the vendor responsible; it must not delay or misstate the customer refund.
+- **Vendor settlement timing:** no vendor proceeds become eligible before verified successful delivery or confirmed customer in-shop pickup. Applicable refund-window, dispute/return, vendor-eligibility, bank-security, authorization, and proof controls still apply; evaluate each vendor child order independently.
 
 ---
 
