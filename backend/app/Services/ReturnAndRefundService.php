@@ -882,19 +882,62 @@ class ReturnAndRefundService
                         'description' => "Logistics fee reversed for Return #{$lockedCase->case_number}",
                     ]);
                 } else {
-                    // Vendor-managed delivery: debit merchant vendor_payable
-                    FinancialJournalEntry::create([
-                        'order_id' => $order->id,
-                        'transaction_reference' => $refToStore,
-                        'event_id' => 'EVT-REFUND-VND-DELIVERY-' . $disburseRef,
-                        'beneficiary_type' => VendorProfile::class,
-                        'beneficiary_id' => $order->vendor_id,
-                        'account_name' => 'vendor_payable',
-                        'entry_type' => 'debit',
-                        'amount' => $deliveryFeeCut,
-                        'currency' => 'NGN',
-                        'description' => "Merchant delivery fee allocation reversed for Return #{$lockedCase->case_number}",
-                    ]);
+                    // Delivery-fee recovery is 90% of the refunded fee. Do not create a
+                    // vendor receivable after settlement unless the persisted ruling confirms fault.
+                    if ($order->vendor_settlement_status === 'settled' && $hasAuthorisedVendorFault) {
+                        $recovery = VendorRecoveryLedger::firstOrCreate(
+                            ['idempotency_key' => "return-case-{$lockedCase->id}-delivery-fee-recovery"],
+                            [
+                                'vendor_id' => $order->vendor_id,
+                                'return_case_id' => $lockedCase->id,
+                                'order_id' => $order->id,
+                                'amount' => $deliveryFeeCut,
+                                'status' => 'pending_recovery',
+                                'notes' => "Authorised vendor-fault recovery for 90% delivery-fee refund of Return #{$lockedCase->case_number}",
+                            ]
+                        );
+
+                        if ($recovery->wasRecentlyCreated) {
+                            FinancialJournalEntry::create([
+                                'order_id' => $order->id,
+                                'transaction_reference' => $refToStore,
+                                'event_id' => 'EVT-REFUND-VND-DELIVERY-RECOVERY-' . $disburseRef,
+                                'beneficiary_type' => VendorProfile::class,
+                                'beneficiary_id' => $order->vendor_id,
+                                'account_name' => 'vendor_recovery_receivable',
+                                'entry_type' => 'debit',
+                                'amount' => $deliveryFeeCut,
+                                'currency' => 'NGN',
+                                'description' => "Authorised merchant recovery for 90% delivery fee refund on Return #{$lockedCase->case_number}",
+                            ]);
+                        }
+                    } elseif ($order->vendor_settlement_status === 'settled') {
+                        FinancialJournalEntry::create([
+                            'order_id' => $order->id,
+                            'transaction_reference' => $refToStore,
+                            'event_id' => 'EVT-REFUND-PLATFORM-DELIVERY-LOSS-' . $disburseRef,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => null,
+                            'account_name' => 'platform_refund_loss_pending_mapping',
+                            'entry_type' => 'debit',
+                            'amount' => $deliveryFeeCut,
+                            'currency' => 'NGN',
+                            'description' => "Platform-funded delivery refund absorbed vendor share without authorised fault ruling; accountant mapping required for Return #{$lockedCase->case_number}",
+                        ]);
+                    } else {
+                        FinancialJournalEntry::create([
+                            'order_id' => $order->id,
+                            'transaction_reference' => $refToStore,
+                            'event_id' => 'EVT-REFUND-VND-DELIVERY-' . $disburseRef,
+                            'beneficiary_type' => VendorProfile::class,
+                            'beneficiary_id' => $order->vendor_id,
+                            'account_name' => 'vendor_payable',
+                            'entry_type' => 'debit',
+                            'amount' => $deliveryFeeCut,
+                            'currency' => 'NGN',
+                            'description' => "Merchant delivery fee allocation reversed for Return #{$lockedCase->case_number}",
+                        ]);
+                    }
                 }
 
                 FinancialJournalEntry::create([
