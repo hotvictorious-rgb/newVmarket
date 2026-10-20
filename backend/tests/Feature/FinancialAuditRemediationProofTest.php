@@ -476,6 +476,70 @@ class FinancialAuditRemediationProofTest extends TestCase
     }
 
     /**
+     * New payout requests reclassify vendor_payable to vendor_payout_payable.
+     * Successful transfer clears payout payable; confirmed reversal restores vendor payable.
+     */
+    public function test_requested_vendor_payout_liability_clears_and_restores_across_success_and_reversal(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'eligible',
+            'vendor_net_90' => '50000.00',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '50000.00',
+            'status' => 'pending',
+            'account_number' => '0123456789',
+            'account_name' => 'Audit Merchant Store',
+            'bank_name' => 'First Bank',
+        ]);
+        VendorPayoutAllocation::create([
+            'vendor_payout_request_id' => $payout->id,
+            'order_id' => $order->id,
+            'allocated_amount' => '50000.00',
+            'status' => 'allocated',
+        ]);
+
+        $requestEvent = 'EVT-MERCHANT-REQ-' . $payout->id;
+        FinancialJournalEntry::create([
+            'order_id' => null, 'transaction_reference' => 'MERCHANT-REQ-TEST-' . $payout->id,
+            'event_id' => $requestEvent, 'beneficiary_type' => VendorProfile::class,
+            'beneficiary_id' => $this->vendor->id, 'account_name' => 'vendor_payable',
+            'entry_type' => 'debit', 'amount' => '50000.00', 'currency' => 'NGN',
+            'description' => 'Test payout request liability reclassification',
+        ]);
+        FinancialJournalEntry::create([
+            'order_id' => null, 'transaction_reference' => 'MERCHANT-REQ-TEST-' . $payout->id,
+            'event_id' => $requestEvent, 'beneficiary_type' => VendorProfile::class,
+            'beneficiary_id' => $this->vendor->id, 'account_name' => 'vendor_payout_payable',
+            'entry_type' => 'credit', 'amount' => '50000.00', 'currency' => 'NGN',
+            'description' => 'Test payout request liability reclassification',
+        ]);
+
+        $finalizer = app(PayoutFinalizationService::class);
+        $finalizer->finalizeVendorPayout($payout, [
+            'transfer_code' => 'TRF_RESERVED_LIABILITY_TEST',
+            'reference' => 'VND-RESERVED-LIABILITY-' . $payout->id,
+            'status' => 'success',
+        ], $this->superAdmin);
+
+        $payoutEntries = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $payout->id)->get();
+        $this->assertCount(2, $payoutEntries);
+        $this->assertTrue($payoutEntries->contains(fn ($entry) => $entry->account_name === 'vendor_payout_payable' && $entry->entry_type === 'debit' && bccomp((string)$entry->amount, '50000.00', 2) === 0));
+        $this->assertTrue($payoutEntries->contains(fn ($entry) => $entry->account_name === 'cash_in_escrow' && $entry->entry_type === 'credit' && bccomp((string)$entry->amount, '50000.00', 2) === 0));
+
+        $result = $finalizer->revertVendorPayout($payout, 'Verified transfer reversal', $this->superAdmin, true);
+        $this->assertTrue($result['success']);
+        $reversalEntries = FinancialJournalEntry::where('event_id', 'EVT-REV-VND-' . $payout->id)->get();
+        $this->assertCount(2, $reversalEntries);
+        $this->assertTrue($reversalEntries->contains(fn ($entry) => $entry->account_name === 'cash_in_escrow' && $entry->entry_type === 'debit' && bccomp((string)$entry->amount, '50000.00', 2) === 0));
+        $this->assertTrue($reversalEntries->contains(fn ($entry) => $entry->account_name === 'vendor_payable' && $entry->entry_type === 'credit' && bccomp((string)$entry->amount, '50000.00', 2) === 0));
+    }
+
+    /**
      * Ledger invariant: reversing a payout with an allocation discrepancy balances
      * the reversal event by crediting the same suspense account used at disbursement.
      */
