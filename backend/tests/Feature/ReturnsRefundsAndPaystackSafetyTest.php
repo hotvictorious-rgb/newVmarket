@@ -9,6 +9,7 @@ use App\Models\FinancialJournalEntry;
 use App\Models\FinancialOperation;
 use App\Models\ProcessedWebhookEvent;
 use App\Services\PaystackService;
+use App\Services\FinancialOperationService;
 use App\Models\Lga;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -1087,6 +1088,53 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'status' => 'unmatched',
             'error_reason' => 'REFUND_OPERATION_AMBIGUOUS: Gateway refund reference matches multiple customer refund operations.',
         ]);
+    }
+
+    public function test_stale_webhook_generation_cannot_finalize_refund_financial_side_effects(): void
+    {
+        $operation = FinancialOperation::create([
+            'operation_reference' => 'OP-RFD-STALE-WORKER-01',
+            'idempotency_key' => 'refund-stale-worker-key',
+            'operation_type' => 'customer_refund',
+            'amount_kobo' => 125000,
+            'currency' => 'NGN',
+            'status' => 'initiated',
+            'gateway_provider' => 'paystack',
+            'metadata' => [
+                'refund_reference' => 'PAYSTACK-REFUND-STALE-01',
+                'payment_reference' => 'PAYMENT-STALE-01',
+            ],
+        ]);
+
+        $event = ProcessedWebhookEvent::create([
+            'event_id' => 'evt_refund_stale_generation_01',
+            'event_type' => 'refund.processed',
+            'payload_hash' => hash('sha256', '{"event":"refund.processed"}'),
+            'payload' => '{"event":"refund.processed"}',
+            'status' => 'processing',
+            'attempts' => 2,
+        ]);
+
+        $journalCountBefore = FinancialJournalEntry::count();
+        $result = app(FinancialOperationService::class)->finalizeRefundConfirmation(
+            $operation,
+            [
+                'status' => 'processed',
+                'amount' => 125000,
+                'currency' => 'NGN',
+                'refund_reference' => 'PAYSTACK-REFUND-STALE-01',
+            ],
+            null,
+            (int) $event->id,
+            1 // stale worker's generation; inbox has already been reclaimed as generation 2
+        );
+
+        $this->assertTrue($result['protected'] ?? false);
+        $this->assertTrue($result['stale_webhook_claim'] ?? false);
+        $this->assertSame('initiated', $operation->fresh()->status);
+        $this->assertSame('processing', $event->fresh()->status);
+        $this->assertSame(2, (int) $event->fresh()->attempts);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
     }
 
 }
