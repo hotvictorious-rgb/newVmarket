@@ -2099,8 +2099,8 @@ class PortalController extends Controller
             }
 
             // Enforce launch limits again at the transfer boundary, including legacy rows.
-            if (\\App\\Services\\BcMathService::comp((string) $payout->amount, '5000.00') < 0
-                || \\App\\Services\\BcMathService::comp((string) $payout->amount, '500000.00') > 0) {
+            if (\App\Services\BcMathService::comp((string) $payout->amount, '5000.00') < 0
+                || \App\Services\BcMathService::comp((string) $payout->amount, '500000.00') > 0) {
                 return ['valid' => false, 'message' => 'Disbursement blocked: vendor payout must be between ₦5,000 and ₦500,000. Resolve this legacy request through finance review.'];
             }
 
