@@ -95,7 +95,9 @@ class PaystackService
         try {
             $response = Http::withToken($this->secretKey)
                 ->timeout(10)
-                ->retry(2, 200)
+                // Initialization is a non-idempotent POST. A timeout can happen after
+                // Paystack accepted the request, so never retry it blindly here.
+                // Callers must reconcile the stable transaction reference instead.
                 ->post("{$this->baseUrl}/transaction/initialize", [
                     'amount' => $amountInKobo,
                     'email' => $email,
