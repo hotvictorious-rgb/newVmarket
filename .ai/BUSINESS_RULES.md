@@ -22,7 +22,7 @@ The selected answers are recorded here so implementation teams do not revert to 
 | 8 | Delivery fees/zones — A | Each vendor configures supported delivery areas and destination fees; unsupported destinations fail closed. |
 | 9 | Delivery-fee split — B | Delivery fee allocation is 90% to the vendor and 10% platform delivery-fee share; it does not create a rider payable. |
 | 10 | Vendor-to-rider compensation — A | The vendor compensates its rider directly outside platform financial systems. |
-| 11 | Cash on delivery — A | Rider stays operational-only and cannot see amount due/payment status. Do not enable rider-assigned COD until a vendor-owned collection/reconciliation flow passes privacy and financial controls. |
+| 11 | Cash on delivery — A | COD is disabled at launch across all checkout and fulfilment paths. Riders remain operational-only and never see amount due/payment status. Any future COD release requires separate explicit owner approval and a vendor-owned collection/reconciliation design that passes privacy, authorization, accounting, and financial-control tests. |
 | 12 | Delivery proof — A | Use the approved customer handover pass/OTP and required proof evidence; do not expose secrets in list/history APIs. |
 | 13 | Failed delivery — B | Record attempts and proof, apply the configured threshold, return the parcel to its owning vendor, and review any financial remedy separately. |
 | 14 | Admin boundaries — A | Platform admin handles oversight/security/disputes, not dispatch or rider pay. |
@@ -158,9 +158,9 @@ Operational order information such as order identifier, parcel/product descripti
 
 ## 10. Cash on delivery (COD) boundary
 
-COD must not reintroduce rider financial accounts or expose customer financial data to riders. The rider is operational-only and must not see the amount due or payment status.
+**COD is disabled at launch for the entire marketplace**, not merely for rider-assigned orders. Checkout, APIs, payment-method flags, legacy payment methods, vendor settings, and direct requests must all reject COD. Launch payments are Paystack card and standard bank transfer only; in-shop pickup remains a zero-delivery-fee fulfilment choice, not a cash-payment method.
 
-If COD is enabled by the business, the workflow must define a vendor-owned collection and reconciliation method that does not give the rider a financial dashboard, wallet, payout entitlement, or access to customer financial details. Until that workflow is explicitly verified, do not enable COD for rider-assigned orders by relying on the rider to calculate, collect, reconcile, or remit a displayed amount. Online prepaid fulfilment and in-shop pickup must continue to work independently.
+Riders are operational-only and must never see payment status, amount due, collect or reconcile customer money through platform rider accounts, or gain a financial entitlement. Any future COD launch requires a separate explicit owner decision and a vendor-owned collection/reconciliation design, threat model, accounting controls, and passing privacy/security/regression tests. Until then, COD stays disabled.
 
 ## 11. Financial separation
 
@@ -218,7 +218,7 @@ If COD is enabled by the business, the workflow must define a vendor-owned colle
 - Victorious MARKET executes the approved customer refund; vendor recovery is a separate, auditable allocation/recovery workflow and never a rider payout.
 - A refund after vendor settlement records a vendor recovery receivable or other approved recovery mechanism rather than blindly debiting an exhausted vendor payable.
 - Historical logistics records remain accessible for authorized audit and are not used to route new deliveries.
-- COD remains disabled unless its vendor-owned collection and reconciliation design passes explicit privacy and financial-control tests.
+- COD is disabled at launch across all checkout modes. Any future enablement requires separate explicit owner approval, a vendor-owned collection/reconciliation design, and passing privacy, accounting, authorization, and regression tests.
 
 ## 14. Required implementation work and source-audit findings
 
@@ -240,7 +240,7 @@ If COD is enabled by the business, the workflow must define a vendor-owned colle
 9. **Custody is a concurrency boundary.** Assignment/reassignment must be atomic and audited. Reassignment is permitted before custody; after custody begins, require a recorded return-to-vendor or explicit custody-transfer process. Concurrent assignment requests must not leave two active riders for one child order. `VendorTerminalApiController::updateRiderStatus()` must also prevent deactivation while the rider has a parcel in custody; currently it changes `is_active` without that custody check. Rider assignment must reject `in_shop_pickup` orders and any order outside the approved doorstep-ready states.
 10. **In-shop pickup is not doorstep delivery.** Enforce `in_shop_pickup` as a first-class fulfilment type: zero delivery fee server-side, `RES-XXXXXX` customer pickup pass, vendor-counter verification, separate status transitions, and no rider assignment or delivery payout. The current code generates an `RES-...` `PickupReservation` code but also creates a separate six-digit `Order.pickup_verification_code` when converting a reservation into an order. Reconcile this with the approved rule so the customer-facing counter pickup pass and verification flow are unambiguous and consistent; do not silently substitute one code for the other. Do not confuse a rider's parcel pickup from the vendor for doorstep delivery with a customer's own in-shop pickup.
 11. **Multi-vendor isolation.** Preserve the parent checkout with separate vendor child orders. Each child has one owning vendor, one fulfilment type, its own vendor-configured fee if doorstep delivery, and at most one active rider from that vendor. Prove that a rider cannot access another vendor's child order by guessing an ID or changing request parameters.
-12. **COD stays disabled for rider-assigned orders.** Do not expose amount due or payment state to riders. Do not rely on riders to calculate, collect, hold, reconcile, or remit customer money. COD can be reconsidered only after an explicitly approved vendor-owned collection/reconciliation design passes privacy, accounting, and authorization tests.
+12. **COD is disabled at launch across the marketplace.** Reject COD in every checkout/API/legacy path, not only rider-assigned orders. Do not expose amount due or payment state to riders or rely on riders to collect/reconcile money. Future enablement requires a separate explicit owner decision and a vendor-owned collection/reconciliation design that passes privacy, accounting, authorization, and regression tests.
 
 ### P1 — Retire active fleet/rider financial surfaces safely
 
