@@ -651,6 +651,10 @@ class ReturnAndRefundService
         ) {
             $lockedCase = ReturnCase::where('id', $caseId)->lockForUpdate()->firstOrFail();
             $order = Order::where('id', $lockedCase->order_id)->lockForUpdate()->firstOrFail();
+            $hasAuthorisedVendorFault = $lockedCase->admin_ruling === 'uphold_customer_claim'
+                && $lockedCase->cost_allocation === 'vendor_100'
+                && !empty($lockedCase->reviewed_by_admin_id)
+                && !empty($lockedCase->admin_ruled_at);
 
             $walletCredit = CustomerWalletCredit::where('return_case_id', $lockedCase->id)
                 ->whereIn('status', ['available', 'pending_approval'])
@@ -747,29 +751,48 @@ class ReturnAndRefundService
                     'committed_at' => Carbon::now(),
                 ]);
 
-            // Debit: Vendor Payable (Reduce held merchant earnings)
-            // If vendor payout is already settled, log into vendor recovery ledger
-            if ($order->vendor_settlement_status === 'settled') {
-                VendorRecoveryLedger::create([
-                    'vendor_id' => $order->vendor_id,
-                    'return_case_id' => $lockedCase->id,
-                    'order_id' => $order->id,
-                    'amount' => $vendorNetDebit,
-                    'status' => 'pending_recovery',
-                    'notes' => "Post-settlement return claim: ₦{$vendorNetDebit} owed for Return #{$lockedCase->case_number}",
-                ]);
+            // Reverse the vendor's merchandise share. A settled vendor becomes a receivable
+            // only when a persisted admin ruling explicitly confirms vendor fault; otherwise the
+            // platform absorbs the share as a tracked loss and does not create vendor debt.
+            if ($order->vendor_settlement_status === 'settled' && $hasAuthorisedVendorFault) {
+                $recovery = VendorRecoveryLedger::firstOrCreate(
+                    ['idempotency_key' => "return-case-{$lockedCase->id}-merchandise-recovery"],
+                    [
+                        'vendor_id' => $order->vendor_id,
+                        'return_case_id' => $lockedCase->id,
+                        'order_id' => $order->id,
+                        'amount' => $vendorNetDebit,
+                        'status' => 'pending_recovery',
+                        'notes' => "Authorised vendor-fault recovery for merchandise refund of Return #{$lockedCase->case_number}",
+                    ]
+                );
 
+                if ($recovery->wasRecentlyCreated) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $refToStore,
+                        'event_id' => 'EVT-REFUND-VND-RECOVERY-' . $disburseRef,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $order->vendor_id,
+                        'account_name' => 'vendor_recovery_receivable',
+                        'entry_type' => 'debit',
+                        'amount' => $vendorNetDebit,
+                        'currency' => 'NGN',
+                        'description' => "Authorised merchant recovery for post-settlement merchandise refund #{$lockedCase->case_number}",
+                    ]);
+                }
+            } elseif ($order->vendor_settlement_status === 'settled') {
                 FinancialJournalEntry::create([
                     'order_id' => $order->id,
                     'transaction_reference' => $refToStore,
-                    'event_id' => 'EVT-REFUND-VND-RECOVERY-' . $disburseRef,
-                    'beneficiary_type' => VendorProfile::class,
-                    'beneficiary_id' => $order->vendor_id,
-                    'account_name' => 'vendor_recovery_receivable',
+                    'event_id' => 'EVT-REFUND-PLATFORM-LOSS-' . $disburseRef,
+                    'beneficiary_type' => User::class,
+                    'beneficiary_id' => null,
+                    'account_name' => 'platform_refund_loss_pending_mapping',
                     'entry_type' => 'debit',
                     'amount' => $vendorNetDebit,
                     'currency' => 'NGN',
-                    'description' => "Merchant recovery claim for post-settlement return #{$lockedCase->case_number}",
+                    'description' => "Platform-funded refund absorbed vendor share because no authorised vendor-fault ruling supports a receivable; accountant mapping required for Return #{$lockedCase->case_number}",
                 ]);
             } else {
                 FinancialJournalEntry::create([
@@ -782,7 +805,7 @@ class ReturnAndRefundService
                     'entry_type' => 'debit',
                     'amount' => $vendorNetDebit,
                     'currency' => 'NGN',
-                    'description' => "Merchant 90% Net Payable reversed for Return #{$lockedCase->case_number}",
+                    'description' => "Merchant 90% net payable reversed for Return #{$lockedCase->case_number}",
                 ]);
             }
 
