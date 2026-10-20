@@ -160,8 +160,10 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             ]);
         }
 
-        $this->rider = RiderProfile::where('vendor_id', $this->vendorProfile->id)->first();
-        if (!$this->rider) {
+        $existingVendorRider = RiderProfile::where('vendor_id', $this->vendorProfile->id)->first();
+        if ($existingVendorRider) {
+            $this->rider = $existingVendorRider;
+        } else {
             $riderUser = User::create([
                 'name' => 'Kufre Dispatch',
                 'email' => 'kufre@rider.com',
