@@ -58,9 +58,9 @@ jobs:
           php -l tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php
           php -l tests/Feature/FinancialAuditRemediationProofTest.php
           php -l tests/Feature/PaystackPaymentHardeningTest.php
-          php -l tests/Feature/ReturnsRefundsAndCollectionPointsTest.php
+          php -l tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php
           php -l tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php
           php -l tests/Feature/AuditHardeningAndChildOrderSettlementTest.php
 
       - name: Run financial audit and payment hardening proof tests
-        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndCollectionPointsTest.php tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php --display-warnings
+        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php --display-warnings
