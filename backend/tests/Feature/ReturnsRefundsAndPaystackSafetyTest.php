@@ -619,13 +619,14 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             null
         );
         $this->assertTrue($createRes['success']);
+        $caseA = $createRes['case'];
 
         $manualRefund = $service->adminDisburseRefund($this->superAdmin, $caseA, 'REF-VEND-A-1234');
 
         // A legacy manual-bank path must not refund a child order or affect siblings.
         $this->assertFalse($manualRefund['success']);
         $this->assertSame('disabled', $manualRefund['status']);
-        $this->assertEquals('refund_pending', $caseA->fresh()->status);
+        $this->assertEquals('requested', $caseA->fresh()->status);
         $this->assertSame(0, FinancialJournalEntry::where('order_id', $orderA->id)->count());
 
         // Verify Vendor B's order is completely untouched
