@@ -356,7 +356,7 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
         $result = $settlementService->verifyCustomerDeliveryOtp($order, '778899', $this->rider);
 
         $this->assertFalse($result['success']);
-        $this->assertStringContainsString('Merchant marketplace account is suspended', $result['message']);
+        $this->assertStringContainsString('Owning vendor account is inactive or suspended', $result['message']);
         $this->assertEquals('out_for_delivery', $order->fresh()->order_status, 'Order status must remain out_for_delivery');
     }
 
@@ -727,7 +727,7 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
         // Verification 1: Order has delivery_halted_reason stamped
         $freshOrder = $order->fresh();
         $this->assertNotNull($freshOrder->delivery_halted_at);
-        $this->assertStringContainsString('Merchant marketplace account is suspended', $freshOrder->delivery_halted_reason);
+        $this->assertStringContainsString('Owning vendor account is inactive or suspended', $freshOrder->delivery_halted_reason);
 
         // Verification 2: AdminAuditLog entry was automatically generated
         $auditLog = \App\Models\AdminAuditLog::where('target_id', $order->id)
