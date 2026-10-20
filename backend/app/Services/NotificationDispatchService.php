@@ -530,7 +530,7 @@ class NotificationDispatchService
             $body = self::renderTemplate($eventType, 'customer', 'body', [
                 'order_number' => $orderNumber,
                 'amount' => $amountFormatted,
-            ], "Merchant accepted returned items for Order #{$orderNumber}. ₦{$amountFormatted} has been credited to your Victorious Wallet.");
+            ], "Merchant accepted returned items for Order #{$orderNumber}. Your refund request for ₦{$amountFormatted} is under review. If approved, the refund will be sent through the original Paystack payment channel; no wallet credit has been issued.");
 
             if (self::isChannelActive('in_app', $eventType)) {
                 self::createInApp($customerId, $title, $body, $eventType, ['return_case_id' => $returnCase->id]);
