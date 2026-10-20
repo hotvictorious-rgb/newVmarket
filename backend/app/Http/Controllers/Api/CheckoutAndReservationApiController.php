@@ -461,7 +461,7 @@ class CheckoutAndReservationApiController extends Controller
         $userId = $request->user()->id;
 
         $reservations = PickupReservation::where('customer_id', $userId)
-            ->with(['shop:id,name,address,lga_id', 'product:id,name,thumbnail,unit_price', 'order:id,order_number,pickup_verification_code,order_status,payment_status'])
+            ->with(['shop:id,name,address,lga_id', 'product:id,name,thumbnail,unit_price', 'order:id,order_number,order_status,payment_status'])
             ->orderBy('id', 'desc')
             ->paginate(15);
 
@@ -665,11 +665,10 @@ class CheckoutAndReservationApiController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'Pickup payment initialized. Present 6-digit PIN upon payment completion.',
+            'message' => 'Pickup payment initialized. After payment is verified, open your order status page for the customer pickup OTP. Keep your reservation pass for the cashier.',
             'data' => [
                 'order_number' => $order->order_number,
                 'reservation_code' => $code,
-                'pickup_otp' => $order->pickup_verification_code,
                 'grand_total' => $order->grand_total,
                 'paystack' => $paystackInit,
             ],
