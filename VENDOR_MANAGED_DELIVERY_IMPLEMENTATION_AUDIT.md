@@ -309,3 +309,26 @@ The following are the single aligned owner-approved decisions in all three polic
 ### Status clarification
 
 The latest documentation edits align policy; they do **not** close the previously recorded source-code findings. Until implementation and tests prove each acceptance condition, the corresponding item remains open and the marketplace is not release-ready for that behavior.
+
+## 12. Owner-confirmed rule: independent merchandise and delivery-fee refunds
+
+**Do not combine merchandise and delivery into one refund approval.** A single customer case can contain both, but each component requires its own decision, amount, authorization record, financial operation, reservation, gateway reconciliation, and ledger reversal.
+
+- Merchandise refund: scope to the vendor child order and item/order-line quantities. Calculate from immutable post-discount allocations and reverse only the related 90/5/5 merchandise/cashback/platform amounts.
+- Delivery-fee refund: scope to the delivery fee actually captured for that child order. Decide independently using reason/evidence/policy, and reverse only the actual 90/10 vendor/platform delivery allocation. It must not contain merchandise value or cashback.
+- A merchandise approval must not implicitly approve delivery. A delivery approval must not implicitly approve merchandise. Either component may be denied or remain pending while the other succeeds.
+- Use separate component-specific idempotent operations tied to the same original parent Paystack capture and exact child order. Separate refund decisions do not create a new payment or change the original-channel-only launch rule.
+- Enforce component remaining balance, child-order refund ceiling and aggregate parent-capture ceiling under locks, including active reservations and confirmed refunds from all components and vendors.
+- A zero-fee in_shop_pickup order cannot have a delivery-fee refund. Do not infer a refund from failed delivery alone.
+- Webhooks and reconciliation must match the exact provider refund identity and operation. A component's refund.processed/refund.failed event cannot change a sibling component. Uncertain/failed gateway outcome leaves that component open for reconciliation.
+- Vendor recovery and cashback recovery remain separate linked accounting operations; neither can silently alter the approval or gateway status of the other refund component.
+
+### Audit findings and required implementation work
+
+1. Inspect ReturnAndRefundService, FinancialOperationService::createRefundOperation(), refund approval endpoints, return-case/item acceptance flows, Paystack refund dispatch, webhook matching, reservations, journal posting and customer/vendor status screens for any shared refund total that combines merchandise and delivery.
+2. Add an explicit server-validated component/scope to refund request and operation metadata or normalized fields; preserve immutable item IDs, quantities, captured delivery fee, post-discount allocation and approval evidence.
+3. Replace any one-click approve-total-refund behavior with separately authorized merchandise and delivery decisions. If the UI offers approve-both, it must record two explicit component decisions, two amounts, and two operations—not one implicit blanket approval.
+4. Keep component reservations isolated while also enforcing a shared parent-capture cap. Locks must serialize concurrent requests across child orders; each operation must reserve only its component amount.
+5. Update customer/admin/vendor views and notifications so each component's request, approval, denial, gateway state and confirmed amount are shown independently. Riders must not see any of these financial fields.
+6. Test merchandise-only approval, delivery-only approval, one approved/one rejected, one pending while the other confirms, partial item quantities, discounts, pickup zero fee, multi-vendor carts, same-key conflicts, duplicate/out-of-order webhooks, concurrent reservations and correct journal reversals.
+7. Treat this as a code audit requirement, not a completed fix. Record files changed, tests executed, CI run and remaining gaps; keep all work on audit/paystack-refund-webhook-safety.
