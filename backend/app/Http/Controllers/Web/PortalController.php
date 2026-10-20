@@ -2663,6 +2663,42 @@ class PortalController extends Controller
     }
 
     /**
+     * Counter staff verifies the customer handover for an in-shop pickup.
+     * Requires the customer's reservation pass, one-time pickup OTP and photo evidence.
+     */
+    public function counterVerifyCustomerPickup(Request $request, OrderSettlementService $settlementService)
+    {
+        $validated = $request->validate([
+            'order_number' => 'required|string|exists:orders,order_number',
+            'reservation_code' => 'required|string|max:50',
+            'customer_pickup_otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
+            'proof_photo' => 'required|image|max:10240',
+        ]);
+
+        $shop = $this->resolvePrimaryShop();
+        $order = Order::where('shop_id', $shop->id)
+            ->where('order_number', trim($validated['order_number']))
+            ->firstOrFail();
+
+        $proof = app(\App\Services\ImageOptimizationService::class)
+            ->optimizeAndStoreProof($request->file('proof_photo'), 'customer_pickup_proofs');
+
+        $result = $settlementService->verifyPickupHandoverOtp(
+            $order,
+            $validated['customer_pickup_otp'],
+            Auth::user(),
+            $validated['reservation_code'],
+            $proof['path']
+        );
+
+        if (!$result['success']) {
+            return back()->withErrors(['customer_pickup_otp' => $result['message']]);
+        }
+
+        return back()->with('status', $result['message']);
+    }
+
+    /**
      * Interactive Action: Rider verifies delivery at Customer doorstep using Dual OTP
      */
     /**
