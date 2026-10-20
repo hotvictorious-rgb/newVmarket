@@ -187,3 +187,10 @@ Added the complementary case for `refund.processed` arriving after the operation
 - If the event was reclaimed by a newer worker, the stale handler exits before those financial mutations and returns retryable HTTP 429 without overwriting the inbox state.
 - Focused CI passed on `389ebac6f643dfce0ef4317eba91b3fef90ef8ef`: **168 tests / 1,069 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39501098385). Existing refund success/failure ordering tests pass. A dedicated stale-generation regression for the `refund.failed` branch is still needed.
 - `charge.success` order settlement and payout transfer webhooks still require the same transaction-level fencing treatment.
+
+### VM-AUD-038 — charge.success settlement fenced by inbox generation (20 October 2026)
+
+- Extended `OrderSettlementService::settlePaystackOrder` with optional webhook event ID/attempt generation. When invoked by the Paystack webhook, it locks the inbox row and verifies current `processing` status and exact generation inside the same transaction as order settlement and journal side effects.
+- The controller returns retryable HTTP 429 for a stale generation without changing the newer worker's inbox status.
+- Added a regression simulating generation 1 after the inbox has been reclaimed as generation 2; the order remains pending, settlement remains held, and no journal entries are added. CI passed on `d2a4657b790917556addc2acb6216330849286e8`: **169 tests / 1,076 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39501350769).
+- Remaining: payout transfer success/failure/reversal handlers still need equivalent same-transaction inbox-generation fencing; a dedicated stale-generation test for `refund.failed` also remains open.
