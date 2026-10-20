@@ -138,7 +138,7 @@ MARKDOWN;
 
 ---
 
-### 1. The 24-Hour Return Guarantee
+### 1. Standard 24-Hour Return/Claim Window
 The standard operational request window for eligible ordinary returns/refunds is **twenty-four (24) hours** from confirmed doorstep delivery or confirmed in-shop pickup. This is not a blanket waiver of applicable consumer rights or valid warranty obligations; authorised admins may review legitimate late requests.
 
 ---
