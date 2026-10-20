@@ -312,6 +312,9 @@ class PaystackPaymentController extends Controller
         $eventHash = hash('sha256', (string)$request->getContent());
         $eventId = (string)($event['id'] ?? ($event['event'] . '_' . ($event['data']['reference'] ?? ($event['data']['transfer_code'] ?? $eventHash))));
 
+        // Claim the inbox row transactionally. If a competing first insert wins the
+        // unique event_id constraint, allow this transaction to roll back before recovery.
+        try {
         // Authoritative Webhook Inbox State Machine (Audit P0 & P1 Concurrency-Safe Resolution)
         // Transactional Row-Level Lock prevents concurrent race conditions and permanent event skipping
         $claimResult = \Illuminate\Support\Facades\DB::transaction(function () use ($eventId, $event, $payload, $eventHash) {
@@ -379,40 +382,47 @@ class PaystackPaymentController extends Controller
                 }
             }
 
-            // First-time arrival: atomically insert with status = 'processing' and stored payload
-            try {
-                $newEvent = \App\Models\ProcessedWebhookEvent::create([
-                    'event_id' => $eventId,
-                    'event_type' => (string)($event['event'] ?? 'unknown'),
-                    'payload_hash' => $eventHash,
-                    'payload' => $payload,
-                    'status' => 'processing',
-                    'attempts' => 1,
-                ]);
-                return ['action' => 'process', 'event' => $newEvent];
-            } catch (\Illuminate\Database\QueryException $e) {
-                $existing = \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->first();
-                if ($existing) {
-                    $existingHash = $existing->payload_hash;
-                    if (empty($existingHash) && is_string($existing->payload)) {
-                        $existingHash = hash('sha256', $existing->payload);
-                    }
-                    if (!is_string($existingHash) || !hash_equals($existingHash, $eventHash)) {
-                        Log::critical('Paystack webhook event ID collision during inbox insert.', [
-                            'event_id' => $eventId,
-                            'stored_hash' => $existingHash,
-                            'incoming_hash' => $eventHash,
-                        ]);
-                        return ['action' => 'conflict', 'message' => 'Event ID already exists with a different payload.'];
-                    }
-                    if (in_array($existing->status, ['completed'], true)) {
-                        return ['action' => 'completed', 'message' => 'Event already processed.'];
-                    }
-                }
-                return ['action' => 'throttled', 'message' => 'Event is currently being processed.'];
-            }
+            // First-time arrival: insert with status = 'processing' and stored payload.
+            // A concurrent insert may win the unique event_id constraint; let that exception
+            // roll back this transaction before attempting to read the winning row.
+            $newEvent = \App\Models\ProcessedWebhookEvent::create([
+                'event_id' => $eventId,
+                'event_type' => (string)($event['event'] ?? 'unknown'),
+                'payload_hash' => $eventHash,
+                'payload' => $payload,
+                'status' => 'processing',
+                'attempts' => 1,
+            ]);
+            return ['action' => 'process', 'event' => $newEvent];
         });
+        } catch (\Illuminate\Database\QueryException $e) {
+            // PostgreSQL marks a transaction as failed after a constraint violation.
+            // This catch is deliberately outside DB::transaction so the lookup runs
+            // only after Laravel has rolled back the failed transaction.
+            $existing = \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)->first();
+            if (!$existing) {
+                throw $e;
+            }
 
+            $existingHash = $existing->payload_hash;
+            if (empty($existingHash) && is_string($existing->payload)) {
+                $existingHash = hash('sha256', $existing->payload);
+            }
+            if (!is_string($existingHash) || !hash_equals($existingHash, $eventHash)) {
+                Log::critical('Paystack webhook event ID collision during inbox insert.', [
+                    'event_id' => $eventId,
+                    'stored_hash' => $existingHash,
+                    'incoming_hash' => $eventHash,
+                ]);
+                $claimResult = ['action' => 'conflict', 'message' => 'Event ID already exists with a different payload.'];
+            } elseif ($existing->status === 'completed') {
+                $claimResult = ['action' => 'completed', 'message' => 'Event already processed.'];
+            } else {
+                // The winner owns processing/retry decisions. Return retryable backoff
+                // rather than claim or execute financial effects without its row lock.
+                $claimResult = ['action' => 'throttled', 'message' => 'Event is currently being processed.'];
+            }
+        }
         if ($claimResult['action'] === 'completed') {
             return response()->json(['status' => true, 'message' => $claimResult['message']], 200);
         }
