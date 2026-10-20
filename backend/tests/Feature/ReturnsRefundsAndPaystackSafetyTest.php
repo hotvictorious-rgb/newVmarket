@@ -574,6 +574,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'estimated_total' => '10000.00',
             'status' => 'payment_completed',
             'order_id' => $order->id,
+            'expires_at' => Carbon::now()->addHour(),
         ]);
 
         $service = app(\App\Services\OrderSettlementService::class);
