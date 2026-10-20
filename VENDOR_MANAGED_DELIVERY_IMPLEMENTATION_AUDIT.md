@@ -322,6 +322,8 @@ The latest documentation edits align policy; they do **not** close the previousl
 - A zero-fee in_shop_pickup order cannot have a delivery-fee refund. Do not infer a refund from failed delivery alone.
 - Webhooks and reconciliation must match the exact provider refund identity and operation. A component's refund.processed/refund.failed event cannot change a sibling component. Uncertain/failed gateway outcome leaves that component open for reconciliation.
 - Vendor recovery and cashback recovery remain separate linked accounting operations; neither can silently alter the approval or gateway status of the other refund component.
+- Keep shared provenance without collapsing states: both component decisions reference the original parent capture and child-order allocation history, but retain independent approvals, reservations, gateway outcomes and audit records. Only confirmed Paystack cash refunds plus active cash-refund reservations count against the shared parent-capture cash-refund ceiling.
+- Cashback reversal/recovery must link to the originating merchandise item/refund and use the cashback ledger. It is not a second Paystack refund and must not be counted again against the parent-capture cash-refund ceiling. Cashback maturity and recovery have separate lifecycle states and timing, but must reconcile back to the same source order/item/refund.
 
 ### Audit findings and required implementation work
 
