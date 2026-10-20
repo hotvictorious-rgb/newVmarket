@@ -317,7 +317,7 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
         $result = $settlementService->verifyCustomerDeliveryOtp($order, '112233', $this->rider);
 
         $this->assertFalse($result['success']);
-        $this->assertStringContainsString('courier profile is suspended or inactive', $result['message']);
+        $this->assertStringContainsString('Vendor rider profile is inactive', $result['message']);
         $this->assertEquals('out_for_delivery', $order->fresh()->order_status, 'Order status must remain out_for_delivery');
     }
 
