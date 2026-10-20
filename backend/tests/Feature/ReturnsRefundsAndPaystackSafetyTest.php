@@ -6,6 +6,9 @@ use App\Models\Category;
 use App\Models\Country;
 use App\Models\CustomerCashbackLedger;
 use App\Models\FinancialJournalEntry;
+use App\Models\FinancialOperation;
+use App\Models\ProcessedWebhookEvent;
+use App\Services\PaystackService;
 use App\Models\Lga;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -942,6 +945,55 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             ->assertUnauthorized();
         $this->postJson('/api/v1/customer/order/confirm-inshop-pickup', $payload)
             ->assertUnauthorized();
+    }
+
+    public function test_refund_processed_webhook_quarantines_ambiguous_gateway_reference(): void
+    {
+        foreach ([1, 2] as $suffix) {
+            FinancialOperation::create([
+                'operation_reference' => 'OP-RFD-AMBIGUOUS-' . $suffix,
+                'idempotency_key' => 'refund-ambiguous-key-' . $suffix,
+                'operation_type' => 'customer_refund',
+                'amount_kobo' => 125000,
+                'currency' => 'NGN',
+                'status' => 'initiated',
+                'gateway_provider' => 'paystack',
+                'metadata' => [
+                    'refund_reference' => 'PAYSTACK-REFUND-AMBIGUOUS-01',
+                    'payment_reference' => 'PAYMENT-AMBIGUOUS-01',
+                ],
+            ]);
+        }
+
+        $payloadData = [
+            'id' => 'evt_refund_ambiguous_reference_01',
+            'event' => 'refund.processed',
+            'data' => [
+                'refund_reference' => 'PAYSTACK-REFUND-AMBIGUOUS-01',
+                'transaction_reference' => 'PAYMENT-AMBIGUOUS-01',
+                'amount' => 125000,
+                'currency' => 'NGN',
+            ],
+        ];
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+        $journalCountBefore = FinancialJournalEntry::count();
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['status' => true]);
+        $this->assertSame(2, FinancialOperation::where('operation_type', 'customer_refund')->count());
+        $this->assertSame(0, FinancialOperation::where('operation_type', 'customer_refund')->where('status', 'confirmed')->count());
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
+        $this->assertDatabaseHas('processed_webhook_events', [
+            'event_id' => 'evt_refund_ambiguous_reference_01',
+            'status' => 'unmatched',
+            'error_reason' => 'REFUND_OPERATION_AMBIGUOUS: Gateway refund reference matches multiple customer refund operations.',
+        ]);
     }
 
 }
