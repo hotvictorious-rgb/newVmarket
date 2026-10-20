@@ -1,5 +1,8 @@
 # Victorious MARKET
 
+> **Owner-confirmed payment and handover rule (20 October 2026):** Only pay-before-delivery through Victorious MARKET or reserve in-shop pickup and pay at the vendor shop through Victorious MARKET's authorised payment workflow are permitted. No off-platform payment. Doorstep handover requires customer OTP verification plus a doorstep photo; in-shop pickup requires the RES-XXXXXX reservation pass/secure verification plus an in-shop photo. GPS, signature, separate rider-pickup photo and hub inspection photo are not mandatory. Payouts use server-calculated strict FIFO batches of whole earning records, with ₦5,000 minimum and ₦500,000 maximum; never split or skip an over-cap record.
+
+
 **Your Trusted Online Market for Quality Products**  
 **Operating principle:** Trust first. Quality always. Accountability at every stage.
 
@@ -13,8 +16,9 @@ Victorious MARKET is a Nigerian multi-vendor marketplace built with Laravel. Cus
 - **Current audit branch:** audit/paystack-refund-webhook-safety
 - **Application:** Laravel 12 / PHP 8.2+
 - **Currency:** NGN; payment amounts are validated in integer kobo.
-- **Launch payment methods:** Paystack card and standard Paystack bank transfer.
-- **Not enabled at launch:** cash on delivery (COD), wallet-credit refunds, dedicated virtual accounts, USSD, mobile money, and other unapproved channels.
+- **Only permitted payment paths:** pay before delivery through Victorious MARKET checkout, or reserve an in-shop pickup through Victorious MARKET and pay at the approved vendor shop through Victorious MARKET's authorised payment workflow.
+- **No off-platform payment:** vendors may not collect cash or private-account transfers for marketplace orders. Launch payment rails are Paystack card and standard bank transfer only unless separately approved. Doorstep COD and wallet-credit refunds are disabled; DVA, USSD, mobile money and other unapproved rails are deferred.
+- **Reservation:** the existing in-shop reservation flow remains supported with its 24-hour stock hold unless separately changed by the owner; do not release stock while payment status is successful or uncertain/in flight.
 - **Fulfilment:** vendor-managed doorstep delivery or zero-delivery-fee in-shop pickup.
 - **Primary policy documents:** see [Business and implementation documents](#business-and-implementation-documents).
 
@@ -49,7 +53,7 @@ Victorious MARKET is a Nigerian multi-vendor marketplace built with Laravel. Cus
 |---|---|---|
 | Paystack card | Enabled | Verify the transaction server-side before treating an order as paid. |
 | Standard Paystack bank transfer | Enabled | Handle payment confirmation and rejection as distinct, auditable outcomes. Verify provider status before refunding or telling a customer funds have been returned. |
-| Cash on delivery (COD) | Disabled | Reject it across checkout, API, vendor settings, and legacy paths. In-shop pickup is not a COD exception. |
+| Doorstep cash on delivery | Disabled | The only alternative is a platform-created in-shop reservation paid at the vendor shop through Victorious MARKET's authorised payment workflow; no off-platform collection. |
 | Wallet-credit refund | Disabled | Customer refunds use the verified original Paystack transaction/channel at launch. |
 | Dedicated Virtual Accounts, USSD, mobile money, other channels | Deferred | Require a separate owner-approved policy and tested implementation before enabling. |
 
@@ -290,7 +294,7 @@ Before release, verify at minimum:
 - Cashback reversal/recovery without silent wallet debit.
 - Vendor-only rider assignments, protected Call Customer action and rider response privacy.
 - Zero-fee in-shop pickup with RES-XXXXXX, no rider assignment, and no ambiguity with rider parcel codes.
-- Vendor settlement eligibility, full-balance withdrawal, approval, transfer verification and balanced journals.
+- Vendor settlement eligibility, strict FIFO whole-record payout batches, admin approval, transfer verification and balanced journals.
 - Legacy logistics paths blocked for new work while historical records remain auditable.
 
 ## Known implementation gaps
@@ -319,7 +323,7 @@ These documents serve different purposes and should remain consistent:
 5. [DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md](DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md) — delivery and accounting implementation plan.
 6. [SHARED_HOSTING_DEPLOYMENT_GUIDE.md](SHARED_HOSTING_DEPLOYMENT_GUIDE.md) — deployment instructions.
 
-If documents conflict, follow the latest owner-confirmed decision recorded in the policy documents and reconcile the conflicting document/code before release. The final owner-approved launch contract is: multi-vendor parent checkout; Paystack card plus standard bank transfer; COD disabled; original Paystack-channel refunds only; 24-hour customer return/refund window; separate additional 24-hour cashback maturity buffer; vendor-managed riders with no platform rider payouts; and zero-fee in-shop pickup using RES-XXXXXX.
+If documents conflict, follow the latest owner-confirmed decision recorded in the policy documents and reconcile the conflicting document/code before release. The final owner-approved launch contract is: multi-vendor parent checkout; two payment paths (pay before delivery through Victorious MARKET, or reserve in-shop pickup and pay at the vendor shop through Victorious MARKET's authorised workflow); Paystack card and standard bank transfer rails; no doorstep COD or off-platform payments; original Paystack-channel refunds only; 24-hour customer return/refund window; separate additional 24-hour cashback maturity buffer; vendor-managed riders with no platform rider payouts; and zero-fee in-shop pickup using RES-XXXXXX plus required secure pickup verification and an in-shop photo.
 
 ---
 
