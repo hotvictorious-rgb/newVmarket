@@ -548,8 +548,39 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'line_total' => '20000.00',
         ]);
 
-        // Settle transaction on Paystack payment confirmation
+        // Allocation mismatches must fail closed before changing payment state or posting journals.
         $settlementService = app(OrderSettlementService::class);
+        $childOrderB->update(['vendor_net_90' => '17999.99']);
+        $underAllocated = $settlementService->settlePaystackOrder($parentOrder, [
+            'reference' => $paymentRef,
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => 3150000,
+            'channel' => 'card',
+        ], $this->customer);
+        $this->assertFalse($underAllocated['success']);
+        $this->assertSame('CHILD_ORDER_ALLOCATION_MISMATCH', $underAllocated['status']);
+        $this->assertSame('pending', $parentOrder->fresh()->payment_status);
+        $this->assertSame('pending', $childOrderA->fresh()->payment_status);
+        $this->assertSame('pending', $childOrderB->fresh()->payment_status);
+        $this->assertSame(0, FinancialJournalEntry::count());
+
+        $childOrderB->update(['vendor_net_90' => '18000.01']);
+        $overAllocated = $settlementService->settlePaystackOrder($parentOrder, [
+            'reference' => $paymentRef,
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => 3150000,
+            'channel' => 'card',
+        ], $this->customer);
+        $this->assertFalse($overAllocated['success']);
+        $this->assertSame('CHILD_ORDER_ALLOCATION_MISMATCH', $overAllocated['status']);
+        $this->assertSame('pending', $parentOrder->fresh()->payment_status);
+        $this->assertSame(0, FinancialJournalEntry::count());
+
+        $childOrderB->update(['vendor_net_90' => '18000.00']);
+
+        // Settle transaction on Paystack payment confirmation
         $result = $settlementService->settlePaystackOrder($parentOrder, [
             'reference' => $paymentRef,
             'status' => 'success',
