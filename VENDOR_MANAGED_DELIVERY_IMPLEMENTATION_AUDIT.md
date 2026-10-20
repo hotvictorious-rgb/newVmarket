@@ -1,5 +1,8 @@
 # Victorious MARKET — Vendor-Managed Delivery Rules & Implementation Audit
 
+> **Owner-confirmed payment and handover rule (20 October 2026):** Only pay-before-delivery through Victorious MARKET or reserve in-shop pickup and pay at the vendor shop through Victorious MARKET's authorised payment workflow are permitted. No off-platform payment. Doorstep handover requires customer OTP verification plus a doorstep photo; in-shop pickup requires the RES-XXXXXX reservation pass/secure verification plus an in-shop photo. GPS, signature, separate rider-pickup photo and hub inspection photo are not mandatory. Payouts use server-calculated strict FIFO batches of whole earning records, with ₦5,000 minimum and ₦500,000 maximum; never split or skip an over-cap record.
+
+
 **Review date:** 20 October 2026  
 **Branch:** `audit/paystack-refund-webhook-safety`  
 **Status:** Business rules documented; implementation gaps remain open. This report is an audit and implementation plan, not proof that the code has been fixed.  
@@ -161,7 +164,7 @@ Reject COD across every checkout and API path at launch, not only rider-assigned
 12. Historical logistics orders and financial records remain readable to authorized auditors, but legacy fleet roles cannot receive new work.
 13. Merchandise 90/5/5 and delivery-fee 90/10 allocations balance and refund correctly without any rider beneficiary.
 14. Merchandise earnings are traceable to each vendor order-item line and delivery earnings separately to each vendor child order; partial item/fee refunds reverse only the correct source earning.
-15. Vendor can request exactly the entire server-computed withdrawable balance; partial/mismatched and overlapping requests are rejected without duplicate reservation.
+15. Vendor cannot choose a payout amount; server calculates strict FIFO batch of whole earning records, stops before exceeding ₦500,000, never splits/skips, and rejects overlapping requests.
 16. Admin approval precedes payment initiation; pending-review cannot call Paystack; only verified transfer success marks the snapshotted earnings paid.
 
 ## 6. Implementation order
@@ -194,7 +197,7 @@ The business rules are now explicit; this section distinguishes policy from code
 | Multi-vendor | One parent checkout; child orders isolate vendor, fulfilment, fee, and rider | Verify checkout snapshots and prevent cross-vendor reads/writes/assignment |
 | Fees and allocation | Vendor destination/fee configuration; merchandise 90/5/5 and delivery 90/10; no rider share | Validate destination/fee on server, snapshot values, reconcile refunds to actual child-order allocations |
 | Vendor earning ledger | Merchandise earnings per order-item line; delivery earning per vendor child order | Add immutable earning source records and lifecycle; stop using order-level aggregates as sole source of truth; item-level refunds/recovery reverse only affected lines/components |
-| Vendor withdrawal | Full withdrawable balance only; no partial request; active earnings atomically reserved | Compute amount server-side; reject mismatched/partial and overlapping requests; snapshot exact earning IDs and amounts |
+| Vendor withdrawal | Strict FIFO batch of whole eligible earning records; no vendor-selected amount; no split/skip; active earnings atomically reserved | Compute strict FIFO whole-record batch server-side; reject custom amounts and overlapping requests; snapshot exact earning IDs and amounts |
 | Admin payout control | Admin approval is separate from payment initiation; payout is not paid until verified gateway success | Split approval from Paystack transfer; pending-review cannot call gateway; audit actor/time/reason; reconcile timeout/failure/reversal against exact earning allocations |
 | COD | Disabled across the entire marketplace at launch; no COD payment path is enabled | Audit UI, API, vendor settings, legacy payment methods and direct requests; any future enablement needs a separate owner decision and passing vendor-owned collection/reconciliation controls |
 | Legacy logistics | Preserve history for authorized audit; no new fulfilment or new-order payouts through legacy fleet | Retire from new paths only after route/job/API/report dependency map; historical records remain read-only/auditable |
