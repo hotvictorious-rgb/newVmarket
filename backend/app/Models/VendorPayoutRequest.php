@@ -32,6 +32,20 @@ class VendorPayoutRequest extends Model
         'processing_started_at' => 'datetime',
     ];
 
+    /**
+     * A payout reserves earnings only while its outcome is unresolved.
+     * A successful transfer is terminal even though the legacy status remains "approved".
+     */
+    public function scopeActiveReservation($query)
+    {
+        return $query
+            ->whereIn('status', ['pending', 'approved', 'processing', 'in_flight', 'uncertain'])
+            ->where(function ($gateway) {
+                $gateway->whereNull('gateway_status')
+                    ->orWhereNotIn('gateway_status', ['success', 'failed', 'reversed']);
+            });
+    }
+
     public function vendor()
     {
         return $this->belongsTo(VendorProfile::class, 'vendor_id');
