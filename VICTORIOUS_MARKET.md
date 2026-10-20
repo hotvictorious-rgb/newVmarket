@@ -186,6 +186,10 @@ The intended outcome is that money cannot legitimately be spent, withdrawn, refu
 
 This remains a critical engineering objective requiring extensive testing and independent verification before production use.
 
+### Launch payment and refund rules
+
+At launch, checkout uses **one Paystack charge for the parent checkout**, with immutable internal allocations to separate vendor child orders. Enabled payment channels are **Paystack card and standard bank transfer**; Dedicated Virtual Accounts (DVA), USSD, mobile money and other channels are deferred. **COD is disabled across the marketplace at launch.** Customer refunds use the original Paystack payment channel only; wallet-credit refunds are deferred and disabled in UI, API and service authorization. The approved narrow automatic-refund exceptions are a verified duplicate successful charge (for the exact extra capture) and a verified payment for an order cancelled before any vendor action. All other refunds require persisted authorized human approval before gateway dispatch. Refund confirmation, vendor recovery and cashback reversal are separate auditable steps. The standard protection window is 7 days (168 hours), followed by a 24-hour cashback-maturity buffer, subject to qualifying fulfilment and no blocking case. These are policy requirements; they do not claim the current implementation has already passed verification.
+
 ---
 
 ## 7. Merchant Operations and Inventory
