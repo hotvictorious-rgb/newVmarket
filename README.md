@@ -175,7 +175,7 @@ Customer pickup at the vendor's physical shop remains fully supported as **in_sh
 - The owning vendor verifies the pass through the authorized counter flow.
 - Pickup has its own operational status flow; it does not require a rider assignment or create delivery compensation.
 - The pickup pass must not be exposed in rider lists, rider history, logs, analytics, or unrelated API responses.
-- Do not confuse the customer's RES-XXXXXX counter pickup pass with any separate rider parcel-handover code. Their purpose and authorization must be explicit.
+- Customer counter pickup requires both the RES-XXXXXX reservation pass and the one-time customer pickup OTP; neither is a rider credential. Do not confuse either customer credential with a separate rider-to-vendor parcel-handover OTP.
 
 ### Legacy logistics records
 
