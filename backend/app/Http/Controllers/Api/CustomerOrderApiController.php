@@ -225,6 +225,10 @@ class CustomerOrderApiController extends Controller
         ]);
 
         $user = $request->user();
+        if (!$user) {
+            return response()->json(['status' => false, 'message' => 'Authentication is required to confirm delivery.'], 401);
+        }
+
         $order = Order::where('customer_id', $user->id)
             ->where('order_number', trim($orderNumber))
             ->first();
@@ -547,6 +551,10 @@ class CustomerOrderApiController extends Controller
      */
     public function confirmDeliveryByBody(Request $request): JsonResponse
     {
+        if (!$request->user()) {
+            return response()->json(['status' => false, 'message' => 'Authentication is required to confirm delivery.'], 401);
+        }
+
         $orderNumber = $request->input('order_number');
         if (!$orderNumber && $request->filled('order_id')) {
             $ord = Order::where('customer_id', $request->user()->id)->find($request->input('order_id'));
