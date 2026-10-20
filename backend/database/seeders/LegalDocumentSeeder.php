@@ -14,13 +14,14 @@ class LegalDocumentSeeder extends Seeder
      */
     public function run(): void
     {
+        // Legal-document source edits do not update an already-running database until this seeder is deployed/run and publication is reviewed. Keep prior LegalDocumentVersion rows immutable; aligned customer-facing documents use a new version.
         $effectiveDate = Carbon::create(2026, 10, 20);
 
         // 1. TERMS OF SERVICE
         $termsContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — TERMS AND CONDITIONS OF SERVICE
 **Effective Date:** October 20, 2026  
-**Version:** 1.1.0  
+**Version:** 1.2.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 
 ---
@@ -49,7 +50,7 @@ Victorious Market is an intentionally **controlled, centrally governed marketpla
 
 ---
 
-### 4. Payments, Escrow & Revenue Allocation
+### 4. Payments, Refunds & Revenue Allocation
 * **Cryptographic Gateway Verification:** Payments are processed via Paystack. An order is marked as paid only after server-to-server cryptographic verification (HMAC-SHA512).
 * **Payment and settlement controls:** Customer payments are processed through the authorised Paystack workflow and reconciled to the parent checkout and vendor child orders. Do not promise that funds are held in a regulated or segregated escrow account unless that arrangement is independently verified. Vendor earnings become eligible only after confirmed fulfilment, expiry of the child's standard 24-hour claim window, and clearance of applicable holds and checks; eligibility is not an automatic transfer.
 * **Merchandise Revenue Allocation:**
@@ -108,7 +109,7 @@ MARKDOWN;
             [
                 'title' => 'Terms and Conditions of Service',
                 'category' => 'terms',
-                'current_version' => '1.1.0',
+                'current_version' => '1.2.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Foundational operating charter covering approved-vendor marketplace transactions, payment verification, vendor-managed fulfilment, handover evidence, customer remedies, and financial controls.',
@@ -118,12 +119,12 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc1->id,
-                'version' => '1.1.0',
+                'version' => '1.2.0',
             ],
             [
                 'title' => 'Terms and Conditions of Service',
                 'content' => $termsContent,
-                'summary_of_changes' => 'Initial bank-grade charter adoption reflecting October 2026 operating blueprint.',
+                'summary_of_changes' => 'Alignment release: corrected payment/refund claims, vendor-managed fulfilment, cashback rules, and consumer-rights safeguards; previous version retained.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -133,7 +134,7 @@ MARKDOWN;
         $refundContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — RETURN, REFUND & DOORSTEP ACCEPTANCE POLICY
 **Effective Date:** October 20, 2026  
-**Version:** 1.1.0  
+**Version:** 1.2.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 
 ---
@@ -186,7 +187,7 @@ MARKDOWN;
             [
                 'title' => 'Return, Refund & Doorstep Acceptance Policy',
                 'category' => 'returns',
-                'current_version' => '1.1.0',
+                'current_version' => '1.2.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Guidelines covering item-level partial rejection, the standard 24-hour claim window, admin-reviewed exceptions, and original-payment-route refunds.',
@@ -196,12 +197,12 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc2->id,
-                'version' => '1.1.0',
+                'version' => '1.2.0',
             ],
             [
                 'title' => 'Return, Refund & Doorstep Acceptance Policy',
                 'content' => $refundContent,
-                'summary_of_changes' => 'Initial operational release with doorstep partial rejection and hub inspection clauses.',
+                'summary_of_changes' => 'Alignment release: clarified claim-window exceptions, evidence limits, original-channel refunds, and provider reconciliation; previous version retained.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -275,7 +276,7 @@ MARKDOWN;
         $merchantContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — MERCHANT ACCREDITATION & COMMERCIAL SELLER AGREEMENT
 **Effective Date:** October 20, 2026  
-**Version:** 1.1.0  
+**Version:** 1.2.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 **Contract Type:** Commercial Vendor Agreement (B2B)  
 
@@ -312,7 +313,7 @@ By completing vendor onboarding, submitting KYB documents, or listing products o
 
 ---
 
-### 5. Financial Settlement, Escrow Custody & 90% Allocation
+### 5. Vendor Earnings, Payout & 90/5/5 Allocation
 * **Merchandise allocation:** Eligible post-discount merchandise collected is allocated 90% to vendor earnings, 5% to customer cashback liability, and 5% to Victorious MARKET. Cashback is not calculated on delivery fees. The vendor allocation is subject to item-level refunds/reversals and applicable earning holds; it is not an unconditional promise of net payout.
 * **Vendor earnings eligibility:** Vendor earnings become eligible 24 hours after confirmed doorstep delivery or confirmed in-shop pickup, provided no applicable return/dispute/payment hold or security/reconciliation check blocks them. Eligibility is not automatic transfer.
 * **Bank-change security:** A 48-hour payout cooldown applies after a change to the vendor's registered payout bank details, subject to the platform's verified security controls.
@@ -359,7 +360,7 @@ MARKDOWN;
             [
                 'title' => 'Merchant Accreditation & Commercial Seller Agreement',
                 'category' => 'merchant',
-                'current_version' => '1.1.0',
+                'current_version' => '1.2.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Commercial covenants governing approved-vendor accreditation, accurate product condition, the 90/5/5 merchandise allocation, controlled payouts, anti-counterfeit obligations, and authorised debt recovery.',
@@ -369,12 +370,12 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc4->id,
-                'version' => '1.1.0',
+                'version' => '1.2.0',
             ],
             [
                 'title' => 'Merchant Accreditation & Commercial Seller Agreement',
                 'content' => $merchantContent,
-                'summary_of_changes' => 'Initial commercial accreditation agreement for onboarded vendors.',
+                'summary_of_changes' => 'Alignment release: corrected payout eligibility, vendor debt confirmation, and vendor-managed fulfilment rules; previous version retained.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -493,6 +494,7 @@ MARKDOWN;
 **Brand Promise:** Your Trusted Online Market for Quality Products.  
 **Operating Philosophy:** Trust First. Quality Always. Accountability at Every Stage.  
 **Launch Headquarter:** Uyo, Akwa Ibom State, Federal Republic of Nigeria  
+**Version:** 1.2.0  
 
 ---
 
@@ -545,7 +547,7 @@ MARKDOWN;
             [
                 'title' => 'About Victorious Market — Operating Charter',
                 'category' => 'about',
-                'current_version' => '1.1.0',
+                'current_version' => '1.2.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Foundational operating philosophy, managed marketplace vision, geographic discipline in Akwa Ibom State, and core brand promise.',
@@ -555,12 +557,12 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc6->id,
-                'version' => '1.1.0',
+                'version' => '1.2.0',
             ],
             [
                 'title' => 'About Victorious Market — Operating Charter',
                 'content' => $aboutContent,
-                'summary_of_changes' => 'Initial publication of foundational operating charter.',
+                'summary_of_changes' => 'Alignment release: removed central-fleet and unsupported delivery-guarantee claims; previous version retained.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -570,13 +572,13 @@ MARKDOWN;
         $cancellationContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — ORDER CANCELLATION & PRE-DISPATCH POLICY
 **Effective Date:** October 20, 2026  
-**Version:** 1.1.0  
+**Version:** 1.2.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 
 ---
 
 ### 1. Overview
-Victorious Market operates an escrow-protected, deterministic cancellation workflow designed to balance customer flexibility with merchant preparation and logistics costs.
+Victorious MARKET uses a controlled cancellation and refund workflow designed to balance customer flexibility with vendor preparation and fulfilment costs. Payments and refunds must be verified and reconciled; do not represent the service as regulated or segregated escrow unless that arrangement is independently verified.
 
 ---
 
@@ -617,7 +619,7 @@ MARKDOWN;
             [
                 'title' => 'Order Cancellation & Pre-Dispatch Policy',
                 'category' => 'returns',
-                'current_version' => '1.1.0',
+                'current_version' => '1.2.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Guidelines covering ordinary cancellation stages, the 24-hour in-shop reservation hold, controlled refund approval, and customer remedies during fulfilment.',
@@ -627,12 +629,12 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc7->id,
-                'version' => '1.1.0',
+                'version' => '1.2.0',
             ],
             [
                 'title' => 'Order Cancellation & Pre-Dispatch Policy',
                 'content' => $cancellationContent,
-                'summary_of_changes' => 'Updated payment paths, reservation handling, refund rules, and owner-confirmed marketplace policy.',
+                'summary_of_changes' => 'Alignment release: corrected cancellation/refund approval, stockout remedies, and cashback reversal; previous version retained.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -642,7 +644,7 @@ MARKDOWN;
         $faqContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — FREQUENTLY ASKED QUESTIONS (FAQ)
 **Knowledge Base & Operational Answers**  
-**Effective Date:** October 20, 2026 &bull; Version: 1.0.0  
+**Effective Date:** October 20, 2026 &bull; Version: 1.2.0  
 
 ---
 
@@ -723,7 +725,7 @@ MARKDOWN;
             [
                 'title' => 'Frequently Asked Questions (FAQ) & Knowledge Base',
                 'category' => 'faq',
-                'current_version' => '1.1.0',
+                'current_version' => '1.2.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Customer answers covering payment verification, in-shop pickup, doorstep handover, the standard 24-hour claim window, cashback and approved-vendor policies.',
@@ -733,12 +735,12 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc8->id,
-                'version' => '1.1.0',
+                'version' => '1.2.0',
             ],
             [
                 'title' => 'Frequently Asked Questions (FAQ) & Knowledge Base',
                 'content' => $faqContent,
-                'summary_of_changes' => 'Initial operational knowledge base release.',
+                'summary_of_changes' => 'Alignment release: corrected payment, cashback, handover, delivery-estimate, and return-window descriptions; previous version retained.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -747,49 +749,38 @@ MARKDOWN;
         // 9. CONTACT & CUSTOMER CARE CENTER
         $contactContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — CONTACT & CUSTOMER CARE CENTER
-**Support Desk & Operational Hubs**  
+**Customer Support & Official Contact**  
 **Effective Date:** October 20, 2026 &bull; Version: 1.0.0  
 
 ---
 
-### 1. Customer Care & Hotlines
-Our dedicated customer care team is available to assist shoppers, merchants, and riders with order inquiries, delivery tracking, and dispute escalations:
+### 1. Official Contact
 
-* **Customer Care Telephone:** `0800-VMARKET` / `+234 802 000 0000`
-* **Operating Hours:** Monday – Saturday, 8:00 AM – 6:00 PM (West Africa Time)
-* **General Support Email:** `support@victoriousmarket.ng`
-* **Disputes & Legal Inquiries:** `disputes@victoriousmarket.ng` / `compliance@victoriousmarket.ng`
+For assistance with orders, payments, delivery, returns, or disputes, use the official Victorious MARKET website or contact the customer-care number below:
 
-> **Urgent Handover Tip:** When calling regarding an active delivery run or rider handshake, please have your **Order Number** (e.g. `ORD-2026-XXXX`) ready for instant verification.
+* **Phone / WhatsApp:** `09118949035`
+* **Website:** https://victoriousmarket.com.ng
 
----
-
-### 2. Operational Headquarters & Physical Hub
-* **Physical Address:** Victorious Market Central Operations Tower, Uyo, Akwa Ibom State, Nigeria.
-* **In-Person Business Desk:** Monday – Friday, 9:00 AM – 5:00 PM.
+Include your order number and the affected vendor child order/item where relevant. Never send passwords, card security codes, or one-time passwords to customer support.
 
 ---
 
-### 3. Collection Points & Hub Drop-Off Network
-Victorious Market Collection Points function as secure holding hubs for in-shop customer pickups and return drop-offs across Akwa Ibom:
-* **Uyo Central Hub:** Plaza Commercial Axis, Uyo LGA.
-* **Corridor Hubs:** Expanding along designated logistics lanes in Ikot Ekpene and Eket corridors.
-* **Hub Operating Hours:** Monday – Saturday, 8:30 AM – 5:30 PM.
+### 2. Vendor-Managed Fulfilment and Pickup
+
+New orders are fulfilled by the owning approved vendor, which manages its own riders. Victorious MARKET does not require a central fleet, central collection hub, or hub drop-off for new orders. In-shop pickup takes place only at the vendor shop identified in the order or reservation. Contact support for authorised return/inspection instructions; do not send goods to an unverified address.
 
 ---
 
-### 4. Administrative Arbitration & Dispute Escalation
-If you have an unresolved dispute with a merchant regarding product condition or a rider regarding delivery timing:
-1. Open your **Customer Portal &rarr; Orders &rarr; Request Assistance / Dispute**.
-2. Upload clear photographic or video evidence.
-3. Our Administrative Arbitration Desk reviews the order history, GPS coordinates, and inspection findings to issue an explainable, binding ruling within twenty-four (24) hours.
+### 3. Complaints and Disputes
+
+Open a support request through the website/order record or use the official contact number above. Explain the issue, identify the affected item and vendor child order, and attach available supporting evidence. An authorised administrator reviews the case and records the decision. No fixed 24-hour dispute-resolution or refund-completion time is promised. Applicable consumer rights and valid warranty obligations remain in force.
 
 ---
 
-### 5. Whistleblower & Anti-Fraud Reporting
-Victorious Market enforces strict zero tolerance for commercial malpractice:
-* To report counterfeit products, stolen goods, off-platform solicitation, or bribery attempts by any staff, merchant, or rider, email: `whistleblower@victoriousmarket.ng`.
-* All whistleblower reports are treated with strict confidentiality.
+### 4. Fraud and Off-Platform Payment Reports
+
+Use the official website or phone number above to report suspected counterfeit goods, private payment requests, impersonation, or other marketplace abuse. Do not rely on unverified email addresses or unofficial physical collection-point listings.
+
 MARKDOWN;
 
         $doc9 = LegalDocument::updateOrCreate(
@@ -797,17 +788,17 @@ MARKDOWN;
             [
                 'title' => 'Contact & Customer Care Center',
                 'category' => 'support',
-                'current_version' => '1.1.0',
+                'current_version' => '1.2.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
-                'summary' => 'Official hotlines, Uyo operational headquarters address, collection point hubs, administrative dispute escalation, and whistleblower reporting.',
+                'summary' => 'Official customer contact channel, vendor-managed fulfilment explanation, and order-support escalation steps.',
             ]
         );
 
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc9->id,
-                'version' => '1.1.0',
+                'version' => '1.2.0',
             ],
             [
                 'title' => 'Contact & Customer Care Center',
