@@ -744,16 +744,14 @@ class CustomerOrderApiController extends Controller
             return response()->json(['status' => false, 'message' => 'Products are currently out of stock.'], 422);
         }
 
-        // Apply wallet credit up to 100% of product subtotal!
-        $walletCreditApplied = \App\Services\BcMathService::comp($availableWallet, $totalCost) >= 0
-            ? $totalCost
-            : $availableWallet;
-
-        $remainingPayable = \App\Services\BcMathService::sub($totalCost, $walletCreditApplied);
+        // This endpoint is quote-only. Legacy wallet credit is not launch checkout
+        // tender and must never be presented as applied to a replacement order.
+        $walletCreditApplied = '0.00';
+        $remainingPayable = $totalCost;
 
         return response()->json([
             'status' => true,
-            'message' => 'Re-order quotation manifest prepared. Ready for checkout submission with 100% wallet credit applied.',
+            'message' => 'Replacement quote prepared. Wallet credit cannot be used for checkout at launch; pay using an approved method if you choose to proceed.',
             'data' => [
                 'operation' => 'quote_preview',
                 'is_quote' => true,
