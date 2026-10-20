@@ -31,9 +31,37 @@ class OrderSettlementService
      * currency check, idempotency against replay attacks, state transition,
      * 5% customer cashback maturation queue, and immutable audit log.
      */
-    public function settlePaystackOrder(Order $order, array $paystackData, ?User $actorUser = null, string $channel = 'paystack_webhook'): array
-    {
-        $result = DB::transaction(function () use ($order, $paystackData, $actorUser, $channel) {
+    public function settlePaystackOrder(
+        Order $order,
+        array $paystackData,
+        ?User $actorUser = null,
+        string $channel = 'paystack_webhook',
+        ?int $webhookEventId = null,
+        ?int $webhookAttempt = null
+    ): array {
+        $result = DB::transaction(function () use ($order, $paystackData, $actorUser, $channel, $webhookEventId, $webhookAttempt) {
+            // For webhook settlement, hold the inbox generation lock in the same
+            // transaction as order/payment settlement and journal side effects.
+            if ($webhookEventId !== null || $webhookAttempt !== null) {
+                if ($webhookEventId === null || $webhookAttempt === null) {
+                    throw new \\InvalidArgumentException('Webhook fencing requires both event ID and attempt generation.');
+                }
+
+                $claimedEvent = \\App\\Models\\ProcessedWebhookEvent::where('id', $webhookEventId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$claimedEvent
+                    || $claimedEvent->status !== 'processing'
+                    || (int) $claimedEvent->attempts !== $webhookAttempt) {
+                    return [
+                        'success' => false,
+                        'status' => 'STALE_WEBHOOK_CLAIM',
+                        'message' => 'Webhook claim generation is no longer current; order settlement blocked.',
+                    ];
+                }
+            }
+
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
             if (!$lockedOrder) {
