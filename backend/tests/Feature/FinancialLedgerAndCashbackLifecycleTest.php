@@ -18,6 +18,7 @@ use App\Models\RiderProfile;
 use App\Models\Shop;
 use App\Models\State;
 use App\Models\SystemSetting;
+use App\Models\VendorProfile;
 use App\Models\User;
 use App\Services\OrderSettlementService;
 use Carbon\Carbon;
@@ -34,6 +35,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
     protected Lga $uyoLga;
     protected Lga $ikotEkpeneLga;
     protected User $vendorUser;
+    protected VendorProfile $vendorProfile;
     protected Shop $shop;
     protected Category $category;
     protected Product $product;
@@ -83,6 +85,8 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         } else {
             $vendorProfile = $this->vendorUser->vendorProfile;
         }
+
+        $this->vendorProfile = $vendorProfile;
 
         $this->shop = Shop::where('vendor_id', $vendorProfile->id)->first() ?? Shop::create([
             'vendor_id' => $vendorProfile->id,
@@ -156,7 +160,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             ]);
         }
 
-        $this->rider = RiderProfile::where('logistics_company_id', $this->fleetCompany->id)->first();
+        $this->rider = RiderProfile::where('vendor_id', $this->vendorProfile->id)->first();
         if (!$this->rider) {
             $riderUser = User::create([
                 'name' => 'Kufre Dispatch',
@@ -169,13 +173,13 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
 
             $this->rider = RiderProfile::create([
                 'user_id' => $riderUser->id,
-                'logistics_company_id' => $this->fleetCompany->id,
+                'vendor_id' => $this->vendorProfile->id,
                 'assigned_lga_id' => $this->uyoLga->id,
-                'current_balance' => '0.00',
                 'is_active' => true,
                 'is_online' => true,
             ]);
         }
+        $this->rider->update(['vendor_id' => $this->vendorProfile->id, 'logistics_company_id' => null]);
 
         // Delivery Lane
         DeliveryLane::firstOrCreate([
@@ -187,7 +191,6 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'estimated_delivery_hours_min' => 2,
             'estimated_delivery_hours_max' => 4,
             'is_active' => true,
-            'assigned_logistics_company_id' => $this->fleetCompany->id,
         ]);
     }
 
@@ -204,7 +207,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         // Vendor Net 90% = 9,000.00
         // Cashback 5% reward = 500.00
         // Platform margin 5% = 500.00
-        // Logistics Net 90% = 900.00
+        // Vendor delivery earning 90% = 900.00
         // Platform delivery 10% = 100.00
         // Total Retained Platform Revenue = 500.00 + 100.00 = 600.00
         //
@@ -214,8 +217,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         // Total Debits = 11,000.00
         //
         // CREDITS:
-        // vendor_payable = 9,000.00
-        // logistics_payable = 900.00
+        // vendor_payable = 9,900.00 (merchandise + delivery fee)
         // cashback_liability (reward accrued) = 500.00
         // platform_revenue = 600.00
         // Total Credits = 11,000.00
@@ -307,7 +309,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
      * Test 2: Single-Credit Delivery Earnings Rule.
      * When logistics company is present, corporate wallet is credited with 90% fee; courier current_balance is NOT double-credited.
      */
-    public function test_single_credit_delivery_earnings_prevents_double_payout(): void
+    public function test_delivery_confirmation_does_not_pay_fleet_or_rider()
     {
         $order = Order::create([
             'order_number' => 'ORD-20261016-0002',
@@ -335,7 +337,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         ]);
 
         $fleetWalletBefore = (float)$this->fleetCompany->wallet_balance;
-        $riderBalanceBefore = (float)$this->rider->current_balance;
+        $riderBalanceBefore = (float)($this->rider->current_balance ?? 0);
 
         $service = app(OrderSettlementService::class);
         $result = $service->verifyCustomerDeliveryOtp($order, '987654', $this->rider);
@@ -345,11 +347,21 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $this->fleetCompany->refresh();
         $this->rider->refresh();
 
-        // Corporate fleet wallet must be credited 90% (900.00)
-        $this->assertEquals($fleetWalletBefore + 900.00, (float)$this->fleetCompany->wallet_balance);
-
-        // Individual courier current balance must remain unchanged (NO double credit!)
-        $this->assertEquals($riderBalanceBefore, (float)$this->rider->current_balance, 'Courier current_balance must NOT receive a duplicate credit when fleet company exists.');
+        // Vendor delivery earnings are recorded as vendor payable. Neither a fleet nor rider
+        // wallet receives platform-managed delivery compensation.
+        $this->assertEquals($fleetWalletBefore, (float)$this->fleetCompany->fresh()->wallet_balance);
+        $this->assertEquals($riderBalanceBefore, (float)($this->rider->fresh()->current_balance ?? 0));
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'vendor_payable',
+            'amount' => '900.00',
+            'entry_type' => 'credit',
+            'description' => 'Vendor 90% delivery-fee earning held for Order #' . $order->order_number,
+        ]);
+        $this->assertDatabaseMissing('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'logistics_payable',
+        ]);
     }
 
     /**
@@ -470,19 +482,25 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $cashback = CustomerCashbackLedger::where('order_id', $order->id)->first();
         $this->assertNotNull($cashback);
         $this->assertEquals('pending_maturation', $cashback->status);
-        $this->assertEquals($order->refund_window_expires_at->toIso8601String(), $cashback->matures_at->toIso8601String());
+        $this->assertEquals($order->refund_window_expires_at->copy()->addHours(24)->toIso8601String(), $cashback->matures_at->toIso8601String());
 
-        // 3. At 24 hours (less than 48 hours), evaluateMaturation CANNOT mature cashback
+        // 3. At 24 hours (before the configured return window expires), cashback remains pending
         Carbon::setTestNow($baseTime->copy()->addHours(24));
         $service->evaluateMaturation($order);
         $cashback->refresh();
         $this->assertEquals('pending_maturation', $cashback->status, 'Cashback MUST NOT mature before the 48-hour window expires.');
 
-        // 4. At 49 hours (more than 48 hours), evaluateMaturation matures cashback to available
+        // 4. At 49 hours the 48-hour claim window has expired, but the extra cashback buffer has not; it remains pending
         Carbon::setTestNow($baseTime->copy()->addHours(49));
         $service->evaluateMaturation($order);
         $cashback->refresh();
-        $this->assertEquals('available', $cashback->status, 'Cashback becomes available strictly after 48-hour refund window.');
+        $this->assertEquals('pending_maturation', $cashback->status, 'Cashback must wait for the separate 24-hour maturity buffer.');
+
+        // 5. After the 48-hour return window plus the 24-hour buffer, cashback becomes available.
+        Carbon::setTestNow($baseTime->copy()->addHours(73));
+        $service->evaluateMaturation($order);
+        $cashback->refresh();
+        $this->assertEquals('available', $cashback->status, 'Cashback becomes available only after the return window plus the buffer.');
 
         // Clean up mock time
         Carbon::setTestNow();
