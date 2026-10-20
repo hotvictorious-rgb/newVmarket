@@ -55,6 +55,7 @@ Victorious MARKET is a Nigerian multi-vendor marketplace built with Laravel. Cus
 | Standard Paystack bank transfer | Enabled | Handle payment confirmation and rejection as distinct, auditable outcomes. Verify provider status before refunding or telling a customer funds have been returned. |
 | Doorstep cash on delivery | Disabled | The only alternative is a platform-created in-shop reservation paid at the vendor shop through Victorious MARKET's authorised payment workflow; no off-platform collection. |
 | Wallet-credit refund | Disabled | Customer refunds use the verified original Paystack transaction/channel at launch. |
+| Legacy wallet-credit checkout tender | Disabled | Preserve historical wallet-credit records; do not accept them as a third launch payment path. Cashback redemption is a separate capped loyalty discount. |
 | Dedicated Virtual Accounts, USSD, mobile money, other channels | Deferred | Require a separate owner-approved policy and tested implementation before enabling. |
 
 A browser redirect, customer screenshot, rider report, or webhook name by itself is not proof of successful payment. The backend must verify the authoritative transaction and bind it to the expected reference, amount in kobo, NGN currency, and correct checkout/customer.
