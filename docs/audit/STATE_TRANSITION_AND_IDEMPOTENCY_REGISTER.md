@@ -315,3 +315,8 @@ Doorstep delivery completion must require payment_status=paid inside the row-loc
 ### VM-AUD-052 — partial doorstep handover preconditions
 
 DoorstepHandshakeService::processDoorstepHandover is a separate writer of delivered/returned state and item-level financial outcomes. It may proceed only for doorstep fulfilment, payment_status=paid, and order_status=out_for_delivery, after rider/vendor assignment and OTP/manifest checks. Reject unpaid or wrong-source-state orders before changing order items, creating return cases/refund reservations, changing order status, or enqueuing cashback. Regression test committed; CI verification pending. Mandatory photo/custody preconditions and all other writers still require full inventory.
+
+
+### VM-AUD-053 — mandatory doorstep evidence at service boundary
+
+DoorstepHandshakeService::processDoorstepHandover must reject an absent/blank doorstep proof path, even when invoked without the HTTP controller. API validation alone is not authoritative for direct callers. This guard runs before OTP and any handover side effects; regression coverage asserts no order completion or ReturnCase mutation. CI verification pending.
