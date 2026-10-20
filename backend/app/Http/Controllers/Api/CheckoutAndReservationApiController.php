@@ -649,24 +649,32 @@ class CheckoutAndReservationApiController extends Controller
     public function cancelPickupReservation(Request $request, string $code): JsonResponse
     {
         $user = $request->user();
-        $reservation = PickupReservation::where('customer_id', $user->id)
-            ->where('reservation_code', strtoupper(trim($code)))
-            ->first();
+        $result = DB::transaction(function () use ($user, $code) {
+            $reservation = PickupReservation::where('customer_id', $user->id)
+                ->where('reservation_code', strtoupper(trim($code)))
+                ->lockForUpdate()
+                ->first();
 
-        if (!$reservation) {
-            return response()->json(['status' => false, 'message' => 'Reservation not found.'], 404);
-        }
+            if (!$reservation) {
+                return ['success' => false, 'code' => 404, 'message' => 'Reservation not found.'];
+            }
 
-        if (in_array($reservation->status, ['order_placed', 'canceled', 'cancelled'])) {
-            return response()->json(['status' => false, 'message' => "Reservation cannot be cancelled in status {$reservation->status}."], 422);
-        }
+            // Payment/order creation locks this same reservation row. Re-check its
+            // current state after acquiring the lock so cancellation cannot race a
+            // successful pay transition and leave a paid order with a canceled hold.
+            if (in_array($reservation->status, ['order_placed', 'canceled', 'cancelled', 'expired', 'payment_completed'], true)) {
+                return ['success' => false, 'code' => 422, 'message' => "Reservation cannot be cancelled in status {$reservation->status}."];
+            }
 
-        $reservation->status = 'canceled';
-        $reservation->save();
+            $reservation->status = 'canceled';
+            $reservation->save();
+
+            return ['success' => true, 'code' => 200, 'message' => 'Pickup reservation cancelled successfully.'];
+        });
 
         return response()->json([
-            'status' => true,
-            'message' => 'Pickup reservation cancelled successfully.',
-        ]);
+            'status' => $result['success'],
+            'message' => $result['message'],
+        ], $result['code']);
     }
 }
