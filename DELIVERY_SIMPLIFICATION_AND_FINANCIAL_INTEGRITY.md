@@ -191,7 +191,7 @@ If a vendor sells an item offline and forgets to update their VMARKET status, a 
 4. Record timestamps, actor identity, relevant evidence, and transition history.
 5. Remove obsolete platform dispatch dependencies from critical paths.
 6. Keep the rider app as an operational tool for vendor-linked riders, but remove platform-managed dispatch, fleet affiliation for new orders, and every rider financial/payout workflow. Enforce that each active rider belongs to one vendor and only receives that vendor's manually assigned orders. Preserve legacy logistics dependencies for historical records until dependency mapping supports safe retirement.
-7. **Settlement trigger:** do not make vendor proceeds eligible before verified successful doorstep delivery or confirmed customer in-shop pickup. Keep the configured refund window, active return/dispute holds, vendor eligibility, bank-security cooldown, authorization, and transfer-proof controls. Evaluate eligibility per vendor child order; a rider operational event is evidence, not a payout instruction.
+7. **Settlement trigger:** do not make vendor proceeds eligible before verified successful doorstep delivery or confirmed customer in-shop pickup. Keep the 24-hour return/refund window, active return/dispute holds, vendor eligibility, bank-security cooldown, authorization, and transfer-proof controls. Evaluate eligibility per vendor child order; a rider operational event is evidence, not a payout instruction.
 7. Preserve existing order data and avoid destructive migrations.
 ## Current-code findings that must be addressed
 
