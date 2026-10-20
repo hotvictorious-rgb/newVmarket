@@ -194,3 +194,10 @@ Added the complementary case for `refund.processed` arriving after the operation
 - The controller returns retryable HTTP 429 for a stale generation without changing the newer worker's inbox status.
 - Added a regression simulating generation 1 after the inbox has been reclaimed as generation 2; the order remains pending, settlement remains held, and no journal entries are added. CI passed on `d2a4657b790917556addc2acb6216330849286e8`: **169 tests / 1,076 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39501350769).
 - Remaining: payout transfer success/failure/reversal handlers still need equivalent same-transaction inbox-generation fencing; a dedicated stale-generation test for `refund.failed` also remains open.
+
+### VM-AUD-039 — payout transfer handlers fenced by inbox generation (20 October 2026)
+
+- Vendor and logistics payout finalization and reversal methods now accept the webhook event ID/attempt generation and validate it by locking the inbox row inside the same financial transaction. This covers `transfer.success`, `transfer.failed`, and `transfer.reversed` paths routed through the shared payout finalization service.
+- The controller returns retryable HTTP 429 for a stale generation without changing the newer worker's inbox status.
+- Added a regression for a stale `transfer.success` generation: vendor payout status/gateway status and journal count remain unchanged. CI passed on `0cc2f34b9b977ca50eecc97e65ccdabb3f292c5e`: **170 tests / 1,083 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39501738865).
+- Coverage is now transaction-fenced for refund success, charge success, refund failure, and payout transfer paths. Dedicated stale-generation regression remains missing for `refund.failed`, logistics payout finalization/reversal, and concurrent reclaim on PostgreSQL/production DB. Verify these before calling the entire webhook system race-proof.
