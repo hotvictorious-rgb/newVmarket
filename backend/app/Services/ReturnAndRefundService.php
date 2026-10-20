@@ -412,7 +412,7 @@ class ReturnAndRefundService
     /**
      * Authoritative Super Admin Manual Refund Disbursement.
      * Enforces strict double-entry balancing, reversals of 90/5/5 merchandise cuts,
-     * cashback reward cancellation, Paystack API integration, or documented bank transfer proof.
+     * cashback reward cancellation, and Paystack refunds to the verified original transaction.
      */
     public function adminDisburseRefund(
         User $adminUser,
@@ -423,6 +423,17 @@ class ReturnAndRefundService
     ): array {
         if (!$adminUser->isSuperAdmin()) {
             return ['success' => false, 'message' => 'Unauthorized: Only Super Admin can disburse treasury refunds.'];
+        }
+
+        // Launch policy: customer refunds must return through the verified original
+        // Paystack transaction. Manual bank transfers and wallet credits are disabled
+        // at the service boundary, even if a caller supplies a reference or proof file.
+        if ($bankReference !== null && trim($bankReference) !== '') {
+            return [
+                'success' => false,
+                'status' => 'disabled',
+                'message' => 'Manual bank and wallet refunds are disabled at launch. Use the authorized Paystack refund workflow for the original payment.',
+            ];
         }
 
         // 1. Initial State Validation & Pre-disbursement Lock
