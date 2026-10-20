@@ -24,10 +24,12 @@ This specification does not override applicable Nigerian law, consumer rights, v
 ## 3. Parent checkout, child orders and payment
 
 - One parent checkout may contain products from multiple vendors. It creates separate child orders per vendor, each with its own fulfilment, delivery fee, delivery status, item-level earnings and claim/settlement evaluation.
-- COD is disabled at launch across all checkout and fulfilment paths.
-- Launch payment collection uses Paystack card and standard bank transfer, subject to the configured account capabilities.
+- Only two customer payment paths are permitted at launch: **(1) pay before delivery through Victorious MARKET checkout**, or **(2) reserve an in-shop pickup order through Victorious MARKET and pay at the approved vendor's shop when collecting it**.
+- The reserve-and-pay-at-shop option is for customer counter pickup only; it is not cash-on-delivery and cannot be used for doorstep delivery.
+- All payment collection and payment records must go through Victorious MARKET's authorised payment workflow. Vendors must not accept or solicit private cash payments, personal-account bank transfers, or other off-platform settlement. For an in-shop reservation, the vendor must complete/record the payment through the platform's approved payment flow before marking the order paid or releasing the item. Launch payment rails are Paystack card and standard bank transfer only, unless the owner separately approves another platform-integrated rail.
+- A reservation is created in Victorious MARKET and tied to the customer, vendor child order, item/quantity, price snapshot and expiry. Preserve the existing 24-hour reservation expiry unless separately changed by the owner. Expiry releases the stock hold only after confirming no payment is successful or uncertain/in flight; uncertain payment must be reconciled first.
 - Payment success must be established by trusted server-side provider verification or an authenticated, verified webhook. Browser redirects, screenshots and client-supplied status are not proof.
-- Validate transaction reference, order association, amount, currency and provider status. A parent capture is collected once and allocated to child orders once; child allocations must sum to the verified parent capture.
+- Validate transaction reference, order association, amount, currency and provider status. A parent checkout charge is collected once and allocated to child orders once; child allocations must sum to the verified parent capture. Shop payment must also have a unique platform order/payment reference and be reconciled to the correct reservation/child order.
 - Timeouts and missing/out-of-order webhooks trigger verification/reconciliation of the original transaction, not a blind retry or duplicate charge.
 - Refunds use the verified original payment route where supported. Customer wallet-credit refunds and off-platform refunds are disabled at launch unless a separately approved, lawful exception is documented.
 
@@ -41,15 +43,21 @@ This specification does not override applicable Nigerian law, consumer rights, v
 - Repeated, unsupported refusal of conforming goods may trigger a fair account review; it does not permit automatic forfeiture of statutory rights or money.
 - Failed delivery, refusal at the door, return-to-vendor, redelivery, refund and vendor recovery are distinct states and events. None may silently create a wallet credit, mark a refund complete, release money, or charge a vendor without an authorised and auditable financial decision.
 
-## 5. Required fulfilment photos
+## 5. Required fulfilment evidence and pickup reservation
 
-The only mandatory fulfilment evidence types at launch are:
+The only mandatory **photo evidence** types at launch are:
 1. **Doorstep delivery photo** linked to the relevant vendor child order.
 2. **In-shop pickup photo** linked to the relevant vendor child order.
 
-The system should record the order, actor, timestamp and photo reference as metadata. Do not make delivery OTP, pickup OTP, GPS, customer signature, rider pickup photo or collection-point/hub inspection a mandatory completion condition under this policy. Existing credentials such as the `RES-XXXXXX` pickup pass may remain for their separate reservation/collection security purpose, but they are not a substitute for the required in-shop pickup photo and must not be described as mandatory photo evidence.
+OTP verification remains mandatory alongside the photos:
+- **Doorstep delivery:** the customer delivery OTP must be securely verified and a doorstep delivery photo recorded before the handover is marked complete.
+- **In-shop pickup:** the customer must present the reservation pickup pass (`RES-XXXXXX`) and complete the required secure pickup verification; the vendor must verify the credential and record an in-shop pickup photo before completing the handover. Reservation/pass verification does not replace the photo.
+- Keep customer counter pickup separate from rider-to-vendor parcel custody. Do not expose OTPs or pickup secrets in ordinary order lists/history, logs, analytics or unauthorised rider views. Verify on the backend, expire credentials where applicable, and prevent reuse.
+- GPS, customer signature, separate rider-pickup photo and collection-point/hub inspection photo are not mandatory at launch.
 
-A photo proves that a photo was submitted; it does not by itself prove product quality, customer satisfaction or vendor liability. Admin may request relevant additional claim evidence when reasonable, and must record evidence exceptions. Protect photo access and customer privacy.
+A reservation is created through Victorious MARKET and holds the selected stock for the existing 24-hour window unless an owner-approved rule changes it. The customer pays at the approved vendor shop through Victorious MARKET's authorised payment workflow; the vendor must not release the item on an unpaid or payment-uncertain reservation, accept private off-platform payment, or mark payment successful based on a screenshot alone. On expiry, release the hold only after payment state is safely resolved.
+
+OTP/pass verification confirms the handover process, while a photo provides supporting evidence. Neither proves product quality, customer satisfaction or vendor liability. Admin may request relevant additional claim evidence when reasonable and must record evidence exceptions. Protect photo and credential access and customer privacy.
 
 ## 6. Standard return/refund window and admin exceptions
 
@@ -117,7 +125,7 @@ A photo proves that a photo was submitted; it does not by itself prove product q
 
 Before implementation begins:
 1. Update all business and customer/vendor legal documents to this specification.
-2. Identify and remove conflicting statements, including legacy logistics fleet/hub terms, mandatory OTP-as-proof rules, wallet-refund promises, old payout calculation rules and incorrect cashback maturity descriptions.
+2. Identify and remove conflicting statements, including legacy logistics fleet/hub terms, conflicting OTP/photo requirements, wallet-refund promises, old payout calculation rules, off-platform/in-shop payment ambiguity and incorrect cashback maturity descriptions.
 3. Keep legacy records for audit but clearly mark retired legacy fleet documents/flows as inactive for new orders.
 4. Audit current code and database-seeded legal documents against every rule and mark each item implemented, partial, missing or conflicting.
 5. Prepare a prioritised implementation plan and regression tests. Do not claim code alignment until changes are implemented, tested and reviewed.
