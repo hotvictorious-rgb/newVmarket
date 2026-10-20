@@ -2098,6 +2098,12 @@ class PortalController extends Controller
                 return ['valid' => false, 'message' => "Vendor payout request #{$payout->id} has already been {$payout->status}."];
             }
 
+            // Enforce launch limits again at the transfer boundary, including legacy rows.
+            if (\\App\\Services\\BcMathService::comp((string) $payout->amount, '5000.00') < 0
+                || \\App\\Services\\BcMathService::comp((string) $payout->amount, '500000.00') > 0) {
+                return ['valid' => false, 'message' => 'Disbursement blocked: vendor payout must be between ₦5,000 and ₦500,000. Resolve this legacy request through finance review.'];
+            }
+
             if ($payout->processing_token === 'HOLD_TIMEOUT_RECONCILIATION' || str_contains((string)$payout->admin_notes, 'GATEWAY_TIMEOUT')) {
                 return ['valid' => false, 'message' => "Payout request #{$payout->id} is locked in GATEWAY TIMEOUT state. An automated transfer was already dispatched to Paystack and may have completed. You must perform Gateway Reconciliation before any retry."];
             }
