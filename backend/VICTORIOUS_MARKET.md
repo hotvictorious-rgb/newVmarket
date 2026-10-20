@@ -251,7 +251,7 @@ The rider may see only the customer's name, delivery address, and a protected **
 
 ### In-shop pickup
 
-`in_shop_pickup` remains a first-class option. The customer collects the order at the owning vendor's physical shop/counter. Delivery fee is always zero, enforced server-side regardless of client input or delivery-zone settings. The customer uses the **RES-XXXXXX** reservation pickup pass/secure pickup verification, and the vendor records the mandatory in-shop pickup photo. The customer reserves through Victorious MARKET and pays at the approved vendor shop through Victorious MARKET's authorised payment workflow before release. The existing 24-hour reservation hold remains in force unless separately changed by the owner. Pickup has separate status transitions; it requires no rider assignment and creates no delivery fee, rider compensation, or logistics payout.
+`in_shop_pickup` remains a first-class option. The customer collects the order at the owning vendor's physical shop/counter. Delivery fee is always zero, enforced server-side regardless of client input or delivery-zone settings. The customer presents the **RES-XXXXXX** reservation pass AND completes one-time customer pickup OTP verification; the vendor verifies both and records the mandatory in-shop pickup photo. The customer reserves through Victorious MARKET and pays at the approved vendor shop through Victorious MARKET's authorised payment workflow before release. The existing 24-hour reservation hold remains in force unless separately changed by the owner. Pickup has separate status transitions; it requires no rider assignment and creates no delivery fee, rider compensation, or logistics payout.
 
 ### Vendor-configured delivery areas and fees
 
