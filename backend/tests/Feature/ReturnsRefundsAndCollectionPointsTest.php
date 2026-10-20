@@ -497,7 +497,7 @@ class ReturnsRefundsAndCollectionPointsTest extends TestCase
     /**
      * 6. Hub physical inspection & Super Admin manual refund workflow with balanced double-entry ledger
      */
-    public function test_hub_inspection_and_manual_refund_with_balanced_ledger()
+    public function test_manual_bank_refund_is_disabled_at_launch_without_posting_ledger_entries()
     {
         Storage::fake('public');
 
@@ -565,35 +565,25 @@ class ReturnsRefundsAndCollectionPointsTest extends TestCase
             true // also refund delivery fee
         );
 
-        $this->assertTrue($refundRes['success']);
+        $this->assertFalse($refundRes['success']);
+        $this->assertSame('disabled', $refundRes['status']);
+        $this->assertStringContainsString('disabled at launch', $refundRes['message']);
         $case->refresh();
 
-        $this->assertEquals('refunded', $case->status);
-        // Item amount ₦10,000 + Delivery Fee ₦1,500 = ₦11,500
-        $this->assertEquals(11500.00, (float)$case->refunded_amount);
-        $this->assertEquals('ZENITH-REF-99887766', $case->refund_reference);
-        $this->assertEquals($proofPath, $case->refund_receipt_path);
-
-        // Verify customer cashback lot was forfeited
-        $cashback->refresh();
-        $this->assertEquals('forfeited', $cashback->status);
-
-        // Verify balanced double-entry accounting entries exist for this order
-        $entries = FinancialJournalEntry::where('order_id', $order->id)->get();
-        $this->assertGreaterThan(0, $entries->count());
-
-        $totalDebits = $entries->where('entry_type', 'debit')->sum('amount');
-        $totalCredits = $entries->where('entry_type', 'credit')->sum('amount');
-
-        $this->assertGreaterThan(0, (float)$totalDebits);
-        $this->assertEquals((float)$totalDebits, (float)$totalCredits, 'Zero-drift invariant violated: Debits must strictly equal Credits.');
-        $this->assertTrue(FinancialJournalEntry::assertOrderBalanced($order->id));
-
-        // Verify admin audit log
-        $this->assertDatabaseHas('admin_audit_logs', [
+        // A bank reference/proof must not bypass the original-Paystack-channel rule.
+        $this->assertEquals('refund_pending', $case->status);
+        $this->assertEquals(0.00, (float)$case->refunded_amount);
+        $this->assertNull($case->refund_reference);
+        $this->assertNull($case->refund_receipt_path);
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $order->id)->count());
+        $this->assertDatabaseMissing('admin_audit_logs', [
             'action' => 'return_refund_disbursed_manually',
             'target_id' => $case->id,
         ]);
+
+        // Rejection does not silently alter the customer's cashback lot.
+        $cashback->refresh();
+        $this->assertNotSame('forfeited', $cashback->status);
     }
 
     /**
@@ -652,7 +642,7 @@ class ReturnsRefundsAndCollectionPointsTest extends TestCase
         // existing Paystack reference and create a second customer payout.
         $walletRetry = $service->adminDisburseRefund($this->superAdmin, $case->fresh(), 'wallet');
         $this->assertFalse($walletRetry['success']);
-        $this->assertSame('reconciliation_required', $walletRetry['status']);
+        $this->assertSame('disabled', $walletRetry['status']);
         $this->assertSame(0, \App\Models\CustomerWalletCredit::where('return_case_id', $case->id)->count());
         $this->assertSame(0, \App\Models\FinancialJournalEntry::where('order_id', $order->id)->count());
     }
@@ -774,10 +764,13 @@ class ReturnsRefundsAndCollectionPointsTest extends TestCase
             'accept_for_refund'
         );
         $service->adminApproveReturn($this->superAdmin, $caseA);
-        $service->adminDisburseRefund($this->superAdmin, $caseA, 'REF-VEND-A-1234');
+        $manualRefund = $service->adminDisburseRefund($this->superAdmin, $caseA, 'REF-VEND-A-1234');
 
-        // Verify Order A is returned/refunded
-        $this->assertEquals('refunded', $caseA->fresh()->status);
+        // A legacy manual-bank path must not refund a child order or affect siblings.
+        $this->assertFalse($manualRefund['success']);
+        $this->assertSame('disabled', $manualRefund['status']);
+        $this->assertEquals('refund_pending', $caseA->fresh()->status);
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $orderA->id)->count());
 
         // Verify Vendor B's order is completely untouched
         $this->assertEquals('delivered', $orderB->fresh()->order_status);
