@@ -9,6 +9,11 @@ class Order extends Model
 {
     protected $fillable = [
         'order_number',
+        'checkout_idempotency_key',
+        'checkout_request_hash',
+        'paystack_initialization_status',
+        'paystack_authorization_url',
+        'paystack_access_code',
         'parent_order_id',
         'customer_id',
         'customer_address_id',
