@@ -368,6 +368,25 @@ class VendorPayoutLifecycleTest extends TestCase
         $this->assertDatabaseMissing('financial_journal_entries', [
             'event_id' => 'EVT-MERCHANT-REJECT-' . $payout->id,
         ]);
+
+        // "pending" is also unresolved, even if a delayed callback has not
+        // persisted transfer identifiers yet.
+        $payout->gateway_status = 'pending';
+        $payout->paystack_transfer_code = null;
+        $payout->transfer_reference = null;
+        $payout->save();
+
+        $pendingGatewayResponse = $this->actingAs($this->superAdmin)->post(route('admin.reject.vendor_payout'), [
+            'payout_id' => $payout->id,
+            'rejection_reason' => 'Bank account details require correction before retry.',
+        ]);
+
+        $pendingGatewayResponse->assertSessionHas('error');
+        $this->assertEquals('pending', $payout->fresh()->status);
+        $this->assertEquals('3000.00', $this->vendor->fresh()->getWithdrawableBalance());
+        $this->assertDatabaseMissing('financial_journal_entries', [
+            'event_id' => 'EVT-MERCHANT-REJECT-' . $payout->id,
+        ]);
     }
 
     public function test_super_admin_can_reject_vendor_payout_and_funds_are_atomically_restored(): void
