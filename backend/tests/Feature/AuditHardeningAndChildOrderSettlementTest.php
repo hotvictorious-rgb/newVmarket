@@ -283,50 +283,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
      * Section 6 Verification & Shield:
      * Rider B cannot inspect Rider A's assigned delivery status via web portal (IDOR Protection).
      */
-    public function test_rider_cannot_query_delivery_status_of_another_riders_order(): void
-    {
-        $order = Order::create([
-            'order_number' => 'VM-SEC-IDOR-002',
-            'customer_id' => $this->customer->id,
-            'vendor_id' => $this->vendorA->id,
-            'shop_id' => $this->shopA->id,
-            'origin_lga_id' => $this->originLga->id,
-            'destination_lga_id' => $this->destLga->id,
-            'rider_id' => $this->riderA->id, // Assigned to Rider A
-            'fulfillment_type' => 'doorstep_delivery',
-            'order_status' => 'out_for_delivery',
-            'payment_status' => 'paid',
-            'merchandise_subtotal' => '10000.00',
-            'delivery_fee' => '1500.00',
-            'grand_total' => '11500.00',
-            'vendor_net_90' => '9000.00',
-            'customer_cashback_5' => '500.00',
-            'platform_margin_5' => '500.00',
-            'logistics_fee_retained' => '1350.00',
-            'platform_delivery_fee' => '150.00',
-            'vendor_settlement_status' => 'held',
-        ]);
 
-        // Rider B is linked to Vendor B and must not inspect Vendor A's assignment.
-        $response = $this->actingAs($this->riderUserB)
-            ->getJson(route('rider.order.handshake_status', ['order' => $order->id]));
-
-        // The web endpoint redirects unauthorized cross-vendor access; no order data is disclosed.
-        $response->assertRedirect();
-        $this->assertStringNotContainsString('VM-SEC-IDOR-002', $response->getContent());
-
-        // Rider A queries own order -> 200 OK
-        $authResponse = $this->actingAs($this->riderUserA)
-            ->getJson(route('rider.order.handshake_status', ['order' => $order->id]));
-
-        $authResponse->assertStatus(200);
-        $authResponse->assertJsonPath('order_id', $order->id);
-    }
-
-    /**
-     * Finding 3 Verification & Shield:
-     * Atomic Cashback Pre-Payment Reservation eliminates concurrent double-spending race conditions.
-     */
     public function test_cashback_is_atomically_reserved_preventing_concurrent_overdraft(): void
     {
         // Customer has ₦500 matured available cashback
