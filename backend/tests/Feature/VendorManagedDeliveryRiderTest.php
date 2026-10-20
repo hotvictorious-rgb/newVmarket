@@ -449,7 +449,7 @@ class VendorManagedDeliveryRiderTest extends TestCase
         $res->assertStatus(403);
         $res->assertJson([
             'status' => false,
-            'message' => 'Unauthorized: Rider is not affiliated with any registered logistics company. All riders must belong to an active logistics company.',
+            'message' => 'Unauthorized: Active delivery work requires one owning vendor; legacy fleet-only or ambiguously linked riders are not eligible.',
         ]);
     }
 }
