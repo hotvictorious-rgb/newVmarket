@@ -113,8 +113,8 @@ class CustomerOrderApiController extends Controller
             'redeem_cashback' => 'nullable|boolean',
             'redeem_wallet_credit' => 'nullable|boolean',
             'payment_method' => 'nullable|string|in:paystack',
-            'rider_id' => 'nullable|integer|exists:rider_profiles,id',
-            'logistics_company_id' => 'nullable|integer|exists:logistics_company_profiles,id',
+            'rider_id' => 'prohibited',
+            'logistics_company_id' => 'prohibited',
         ], [
             'items.*.quantity.max' => 'Maximum allowed quantity per line item is 1,000 units.',
         ]);
