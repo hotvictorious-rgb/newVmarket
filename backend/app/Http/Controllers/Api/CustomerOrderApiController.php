@@ -500,24 +500,40 @@ class CustomerOrderApiController extends Controller
         $user = $request->user();
         $orderId = $request->input('order_id');
         $orderNumber = $request->input('order_number');
+        $guestToken = $request->input('guest_access_token');
+
+        if (!$orderNumber && !$orderId) {
+            return response()->json(['status' => false, 'message' => 'order_id or order_number is required.'], 422);
+        }
+
+        // Order numbers and integer IDs are not credentials. This public/hybrid
+        // route must require either an authenticated owner or the unguessable
+        // guest access token issued for the order before returning tracking data
+        // or a customer handover OTP.
+        if (!$user && (!is_string($guestToken) || !preg_match('/^[a-f0-9]{64}$/i', $guestToken))) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Authentication or a valid guest access token is required to track this order.',
+            ], 401);
+        }
 
         $query = Order::query();
         if ($user) {
             $query->where('customer_id', $user->id);
+        } else {
+            $query->where('guest_access_token', $guestToken);
         }
 
         if ($orderNumber) {
-            $query->where('order_number', trim($orderNumber));
-        } elseif ($orderId) {
-            $query->where('id', (int)$orderId);
+            $query->where('order_number', trim((string) $orderNumber));
         } else {
-            return response()->json(['status' => false, 'message' => 'order_id or order_number is required.'], 422);
+            $query->where('id', (int) $orderId);
         }
 
         $order = $query->with(['shop', 'vendor', 'items.product', 'rider.user'])->first();
 
         if (!$order) {
-            return response()->json(['status' => false, 'message' => 'Order not found.'], 404);
+            return response()->json(['status' => false, 'message' => 'Order not found or unauthorized access.'], 404);
         }
 
         return response()->json([
