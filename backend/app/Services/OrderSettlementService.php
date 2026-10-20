@@ -735,6 +735,13 @@ class OrderSettlementService
                 ];
             }
 
+            if ($lockedOrder->payment_status !== 'paid') {
+                return [
+                    'success' => false,
+                    'message' => 'Only paid orders can be staged for courier handover.',
+                ];
+            }
+
             if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'])) {
                 return [
                     'success' => false,
