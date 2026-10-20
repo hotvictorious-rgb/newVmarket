@@ -119,6 +119,7 @@ Required operational states: `pending -> approved -> processing/in_flight -> suc
 - Admin approval precedes gateway transfer. Amount and FIFO allocation plan are recalculated/locked at approval and revalidated at dispatch.
 - Timeout/network exception retains reservation as uncertain. Only verified provider status releases or finalizes it.
 - Success finalization is idempotent; failed confirmed transfer restores the exact original whole earning reservations once; never reverse a completed transfer without a real reversal event.
+- **Payout liability journal contract (remediation in CI):** request reclassifies Dr `vendor_payable` / Cr `vendor_payout_payable`; confirmed transfer clears Dr `vendor_payout_payable` / Cr `cash_in_escrow`; rejection or failed-before-success reverses Dr `vendor_payout_payable` / Cr `vendor_payable`; a verified successful-transfer reversal restores Dr `cash_in_escrow` / Cr `vendor_payable`. If the original request journal is missing, do not invent a reversal; log and route to finance reconciliation. Legacy allocation-discrepancy journal paths remain separately flagged for finance review.
 - **OPEN:** confirm all web/API/admin/reconciliation paths share one state machine and all unique operation references are database-enforced.
 
 ## 9. Vendor recovery, repayment, offset and write-off
