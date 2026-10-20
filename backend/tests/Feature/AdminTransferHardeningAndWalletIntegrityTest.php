@@ -237,7 +237,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertEquals('pending', $payout->fresh()->status);
     }
 
-    public function test_vendor_withdrawable_balance_deducts_unrecovered_debts()
+    public function test_vendor_withdrawable_balance_does_not_automatically_offset_unrecovered_debts()
     {
         $order = $this->createTestOrder([
             'merchandise_subtotal' => '100000.00',
@@ -268,8 +268,8 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'notes' => 'Damaged return compensation',
         ]);
 
-        // Withdrawable balance must reflect 90,000 - 25,000 = 65,000.00
-        $this->assertEquals('65000.00', $this->vendor->getWithdrawableBalance());
+        // Recovery debt remains a separate receivable; no automatic offset without authorised approval.
+        $this->assertEquals('90000.00', $this->vendor->getWithdrawableBalance());
     }
 
     public function test_vendor_withdrawable_balance_quarantines_orders_with_active_return_cases()
