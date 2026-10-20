@@ -327,19 +327,49 @@ class CheckoutAndReservationApiController extends Controller
         ], 201);
     }
 
-    public function showPickupReservation(string $code): JsonResponse
+    public function showPickupReservation(Request $request, string $code): JsonResponse
     {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Authentication is required to view pickup reservation details.',
+            ], 401);
+        }
+
         $reservation = PickupReservation::where('reservation_code', strtoupper(trim($code)))
+            ->where('customer_id', $user->id)
             ->with(['shop:id,name,address,lga_id', 'product:id,name,thumbnail,unit_price'])
             ->first();
 
         if (!$reservation) {
-            return response()->json(['status' => false, 'message' => 'Reservation code not found.'], 404);
+            return response()->json(['status' => false, 'message' => 'Reservation not found or unauthorized access.'], 404);
         }
 
+        // Never serialize the model wholesale: it can contain customer handover
+        // OTPs and internal reservation/payment metadata. Return only the fields
+        // required for customer-facing reservation status.
         return response()->json([
             'status' => true,
-            'data' => $reservation,
+            'data' => [
+                'reservation_code' => $reservation->reservation_code,
+                'status' => $reservation->status,
+                'quantity' => $reservation->quantity,
+                'total_amount' => $reservation->total_amount,
+                'expires_at' => $reservation->expires_at,
+                'created_at' => $reservation->created_at,
+                'shop' => $reservation->shop ? [
+                    'id' => $reservation->shop->id,
+                    'name' => $reservation->shop->name,
+                    'address' => $reservation->shop->address,
+                ] : null,
+                'product' => $reservation->product ? [
+                    'id' => $reservation->product->id,
+                    'name' => $reservation->product->name,
+                    'thumbnail' => $reservation->product->thumbnail,
+                    'unit_price' => $reservation->product->unit_price,
+                ] : null,
+            ],
         ]);
     }
 
