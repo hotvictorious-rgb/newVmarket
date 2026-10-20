@@ -128,7 +128,7 @@ class FinancialOperationService
                 if (($authorization['refund_delivery_fee'] ?? false) === true) {
                     if (!(bool) $returnCase->refund_delivery_fee
                         || bccomp((string) $lockedOrder->delivery_fee, '0.00', 2) <= 0) {
-                        throw new \\DomainException(
+                        throw new \DomainException(
                             'Delivery-fee refund is not separately authorized for this return case.'
                         );
                     }
