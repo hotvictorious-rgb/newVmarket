@@ -503,8 +503,8 @@ class CheckoutExecutionService
                         'customer_id' => $user->id,
                         'amount' => $customerCashback5,
                         'status' => 'pending_maturation',
-                        'matures_at' => Carbon::now()->addDays(365),
-                        'expires_at' => Carbon::now()->addDays(730),
+                        'matures_at' => null, // Starts only after verified fulfilment and the 24-hour claim window.
+                        'expires_at' => null, // The 365-day validity period starts at maturity.
                     ]);
                 }
 
