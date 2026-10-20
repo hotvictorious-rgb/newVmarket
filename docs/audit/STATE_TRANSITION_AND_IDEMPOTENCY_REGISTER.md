@@ -1,0 +1,196 @@
+# Victorious MARKET — State Transition and Idempotency Register
+
+**Status:** Initial system-wide inventory; implementation verification is intentionally incomplete.
+**Branch:** `audit/paystack-refund-webhook-safety`
+**Rule:** No event may apply a state transition or financial effect unless its source state, authorization, evidence, and idempotency identity are valid. Duplicate delivery must return the recorded outcome without repeating the effect. Unknown provider outcomes remain pending/uncertain until reconciled; never guess success or failure.
+**Important:** The lists below distinguish states found in current enums/policy from required lifecycle states that still need code-level mapping. They are not a claim that every transition is currently enforced.
+
+## 1. Global transition contract
+
+Every state-changing command/event must:
+1. Identify the aggregate and unique business operation (order/child, payment capture, refund operation, earning, payout, recovery, reservation, handover, case).
+2. Lock/reload the current aggregate and verify the expected source state inside the same database transaction as the transition and local ledger writes.
+3. Enforce an explicit allowed-transition table; reject illegal skips, backward transitions, cross-fulfilment transitions, and terminal-state mutation except through an explicit reversal/compensation workflow.
+4. Enforce authorization and evidence at the final service boundary, not only in controllers/UI.
+5. Use a stable unique idempotency key for inbound provider events and outbound financial operations; database uniqueness is required. A check-then-insert without a unique constraint is not sufficient.
+6. Atomically record the event outcome and all local effects, or use a transactional outbox/inbox pattern where external gateways cannot participate in the DB transaction.
+7. Verify provider signature, environment, reference, amount, currency, transaction ownership and current operation before accepting a webhook.
+8. Treat duplicate event ID/reference as replay: return/no-op against the already-recorded result. Same key with conflicting payload must be quarantined for investigation.
+9. Treat network timeout as `uncertain`, not failed or successful; retain reservations until verified reconciliation.
+10. Write immutable ledger entries and compensating entries, never edit/delete a completed financial fact to hide a duplicate.
+11. Make scheduled jobs, queues, admin actions, APIs, webhooks and callbacks invoke the same domain transition service.
+12. Log actor, source state, target state, operation key, evidence/reason, timestamps and correlation IDs without logging secrets or customer OTPs.
+
+## 2. Order lifecycle states found in `OrderStatus`
+
+### Doorstep delivery values
+`pending`, `confirmed`, `processing`, `ready_for_dispatch`, `ready_for_pickup` (legacy/staged alias), `shipped`, `out_for_delivery`, `delivered`, `delivery_attempt_failed`, `doorstep_rejected`, `returned_to_vendor`, `disputed`, `returned`, `cancelled`, `paid_stock_unavailable`.
+
+### In-shop pickup values
+`pickup_reserved`, `ready_for_counter_pickup`, `counter_inspecting`, `picked_up`, `counter_rejected`, `pickup_expired`, `pickup_cancelled`.
+
+### Required transition constraints
+- Checkout creates a pending payment/order state; it must not mark an order paid/confirmed merely because the requested payable amount is zero or a legacy wallet balance exists.
+- Verified payment can advance only the matching unpaid/pending order/parent capture; repeated success callbacks cannot re-consume inventory, duplicate cashback, duplicate journals, or duplicate notifications.
+- Vendor acceptance/preparation is a real transition and forms the cancellation boundary; post-boundary cancellation must use a remedy/return/refund flow, not silently rewrite history.
+- Delivery states are only valid for `doorstep_delivery`; pickup states only for `in_shop_pickup`. `delivered` and `picked_up` require their distinct server-verified handover evidence.
+- Delivery completion requires valid one-time customer OTP plus doorstep photo. Pickup completion requires reservation pass, separate one-time customer OTP plus in-shop photo. OTPs cannot be reused or exposed through unrelated views.
+- Failed attempt, rejection, dispute, return, cancellation and stock-unavailable paths must not bypass payment/refund authorization or terminal-state guards.
+- The enum's `isTerminal()` includes `delivered` and `picked_up`; those mean fulfilment completed, not that all later claims/refunds are impossible. Claims are separate aggregates.
+- **OPEN verification:** enumerate every writer of `orders.order_status`; prove all use one transition guard and verify no direct arbitrary status assignment remains. Explicit transition edges are not yet certified by this inventory.
+
+## 3. Payment lifecycle
+
+### Current `PaymentStatus` enum
+`unpaid`, `pending`, `pending_payment`, `paid`, `partially_refunded`, `refunded`, `failed`.
+
+### Required event/state handling
+- Checkout initiated: `unpaid/pending_payment -> pending` only with a persisted unique payment attempt/reference.
+- Provider initialization failure before any charge: record failure for that attempt; order remains unpaid and retry uses a new attempt/reference.
+- Verified capture/success: `pending/unpaid -> paid` once; amount/currency/order/reference must match. A duplicate successful capture is not a second order payment; record a duplicate-capture exception and refund only under the documented automatic exception.
+- Provider failure: may mark that attempt failed only if verified and no successful capture exists for that reference. Late failure must not downgrade a paid transaction.
+- Timeout, missing webhook, or conflicting status: `uncertain/pending` operational state until query/reconciliation; do not mark failed or release inventory/cashback reservation on timeout alone.
+- Refund success updates payment aggregate to `partially_refunded` or `refunded` based on confirmed cumulative refunds; request/approval/dispatch alone must not set `refunded`.
+- **OPEN verification:** payment-attempt entity/statuses, uniqueness constraints, late-event ordering, bank-transfer confirmation, and all callback/webhook/controller/job writers require exhaustive code audit.
+
+## 4. Return and refund case lifecycle
+
+### Current `ReturnCaseStatus` enum
+`requested`, `pending`, `in_transit`, `in_transit_back_to_vendor`, `inspected`, `approved_for_return`, `refund_pending`, `refunded`, `rejected`, `closed`.
+
+### Required event/state handling
+- Customer request or authorised late/direct-contact intake: create `requested` once per valid case identity; intake is not approval.
+- Review starts: `requested -> pending` only by authorised workflow.
+- Return logistics/evidence: transit and inspection states only where the return method requires them; never require a hub step where policy does not.
+- Decision: `pending/inspected -> approved_for_return` or `rejected`, with persisted actor, reason, ruling and authorized merchandise/delivery component scope.
+- Refund preparation: `approved_for_return -> refund_pending` only after persisted approval and exact amount/child/item/component ceiling validation.
+- Gateway accepted/processing/timeout remains a pending/uncertain refund operation; do not set case `refunded` until provider confirms success.
+- Provider-confirmed full case refund may set `refunded`; partial component refund must preserve remaining allowed balance and cannot close/refund unrelated components.
+- `closed` requires a defined terminal outcome; cannot erase a still-owed customer remedy or unresolved gateway outcome.
+- Late case intake is allowed for authorised admins with a recorded reason; the normal 24-hour rule is not a blanket waiver of statutory rights.
+- **OPEN verification:** one explicit transition table across service, controllers, admin UI, webhook and reconciliation is not yet certified.
+
+## 5. Refund-operation lifecycle (required canonical model; map existing fields before altering schema)
+
+Required states: `requested -> authorization_pending -> approved -> dispatching -> provider_pending -> succeeded`; alternate paths `rejected`, `failed_confirmed`, `uncertain`, `needs_attention`, and `cancelled_before_dispatch` only when provider confirms no dispatch occurred.
+
+- Persist the human approver and component scope before dispatch except the two approved auto-approval exceptions: verified duplicate successful capture and verified payment for an order cancelled before vendor action.
+- One immutable operation identity per refund attempt; retries after a confirmed provider failure may create a linked attempt only after reconciliation proves no successful refund exists.
+- Never issue wallet-credit/off-platform refunds at launch.
+- Enforce child allocation, aggregate parent capture, item quantity/value, merchandise component and delivery-fee component ceilings under row locks.
+- Repeated webhook/callback/admin-click/queue retry must not create a second gateway refund or second journal.
+- `refund.failed` or `refund.needs-attention` is not proof the customer is owed nothing; retain the case for reconciliation.
+- **OPEN:** confirm whether current schema already represents all states; do not introduce parallel status columns without first mapping existing refund operation data.
+
+## 6. Vendor fulfilment and handover events
+
+- Vendor order acceptance/preparation: only valid from the appropriate paid/reserved state; duplicate accept is idempotent; rejected/expired/cancelled order cannot be resurrected by late acceptance.
+- Vendor rider assignment: rider must belong to the same vendor; assignment is operational only, not a platform logistics payable. Assignment change must not reset handover evidence or financial state.
+- Doorstep: `ready_for_dispatch -> shipped -> out_for_delivery -> delivered` only through allowed edges; failed attempts/rejection use explicit exception transitions. The customer OTP and photo are one-time evidence; concurrent submissions must have one winner.
+- In-shop pickup: `pickup_reserved -> ready_for_counter_pickup -> counter_inspecting -> picked_up`, with explicit counter rejection/expiry/cancellation branches. Require reservation pass + customer OTP + photo and verified payment before handover.
+- Vendor-to-rider custody OTP, where still present in legacy paths, is not customer handover proof and must never be returned as the customer's pickup PIN.
+- **OPEN:** audit every vendor/rider API and admin endpoint for direct status writes, ownership checks, replay races, OTP clearing, and photo storage.
+
+## 7. Cashback lifecycle
+
+Required business states: `reserved`, `pending_maturation`, `matured/spendable`, `redeemed`, `expired`, `reversed_unspent`, plus separate `recovery_due`/recovery ledger for already-spent amounts (do not make the customer's cash wallet negative).
+
+- Create cashback liability only once from verified eligible merchandise allocation; no cashback on delivery.
+- Reserve redemption atomically and enforce the 50% merchandise-subtotal cap; payment retry/failure releases only the matching reservation once.
+- Start the 24-hour claim clock from each child order's verified fulfilment time; mature no earlier than claim-window expiry plus separate 24-hour buffer and only if no blocking case remains.
+- 365-day expiry starts at actual `matures_at`; null maturity means not spendable.
+- Refund reverses unspent cashback once. Spent cashback recovery is separate and can offset only future cashback when it matures; never silently debit cash wallet.
+- Duplicate fulfilment/refund/maturity jobs must not double-credit, double-reverse or mature early.
+- **OPEN:** enumerate cashback ledger status values, uniqueness keys, concurrent reservation behavior and every scheduled job/service writer.
+
+## 8. Vendor earning, settlement and payout lifecycle
+
+### Earning/settlement
+Required concepts: `held -> eligible -> reserved_for_payout -> paid_out`; exceptions/holds remain separately represented (dispute, return, security, reconciliation). Never turn eligibility directly into transfer success.
+- Vendor merchandise earning must be tied to child-order item allocation; delivery earning is a separate record tied to the child order.
+- Eligibility requires verified fulfilment, that child's 24-hour claim window expired, and no blocking case/security/reconciliation issue.
+- Every earning can be allocated to at most one active payout; strict FIFO uses stable `created_at, id`; only whole records; never split or skip; maximum request ₦500,000, minimum ₦5,000.
+- Platform pays transfer fee; no rider payable for vendor-managed orders.
+- **OPEN:** map these conceptual states to current earning records and ensure database constraints prevent double allocation/settlement.
+
+### Payout request/transfer
+Required operational states: `pending -> approved -> processing/in_flight -> succeeded`; branches `rejected`, `failed_confirmed`, `uncertain` and explicit reconciled retry. Existing persisted vocabulary may differ and must be mapped before migrations.
+- One active vendor request across pending, approved-unsent, processing, in-flight and uncertain.
+- Admin approval precedes gateway transfer. Amount and FIFO allocation plan are recalculated/locked at approval and revalidated at dispatch.
+- Timeout/network exception retains reservation as uncertain. Only verified provider status releases or finalizes it.
+- Success finalization is idempotent; failed confirmed transfer restores the exact original whole earning reservations once; never reverse a completed transfer without a real reversal event.
+- **OPEN:** confirm all web/API/admin/reconciliation paths share one state machine and all unique operation references are database-enforced.
+
+## 9. Vendor recovery, repayment, offset and write-off
+
+Required states: `proposed` (not a receivable), `authorized_receivable`, `partially_repaid`, `repaid`, `disputed`, `impaired/writeoff_pending`, `written_off`. Use the actual schema only after mapping it.
+- Customer refund funding and vendor recovery are separate processes. Refund can be owed and funded even if vendor cannot repay.
+- Create receivable only after platform refund funding and an authorized, evidence-based fault ruling plus contractual basis.
+- Repayment counts only after bank/provider verification; screenshot is not proof.
+- Offset requires explicit authorized approval and contractual basis; no automatic debt deduction from withdrawable balance/cashback.
+- Write-off/impairment requires authorized decision and accountant-approved mapping; balanced journals do not by themselves prove liquidity or absence of loss.
+- Idempotency key must prevent duplicate receivable creation and duplicate repayment application; never recover the same amount twice.
+- **OPEN:** repayment, approved offset and write-off workflows need implementation and tests.
+
+## 10. Parent checkout and multi-vendor allocation
+
+Required aggregate states: parent checkout/payment attempt and per-vendor child-order lifecycle must remain separate. Parent payment success is not proof that every child has been fulfilled; one child's fulfilment/refund must not mutate another child's state.
+- One parent capture, immutable vendor-child allocations, independent vendor fulfilment, delivery fees, return windows, refunds, cashback maturity and settlement.
+- Parent capture ceiling is shared across child refund operations; each child and each item/component also has its own remaining refundable ceiling.
+- Parent status is derived from child states under a documented aggregation rule, not blindly copied from one child.
+- Duplicate checkout submission/payment initialization must be idempotent or return the existing checkout result; unique checkout idempotency key and unique provider reference are required.
+- **OPEN / CRITICAL:** checkout service currently creates a single shop-scoped order; full parent/child architecture and its constraints are not implemented/verified.
+
+## 11. Webhook inbox and idempotency coverage
+
+For each provider event, persist provider + provider event ID (or documented stable fallback identity), reference, event type, payload hash, received time, processing status, attempt count and outcome. Unique index must prevent concurrent duplicate processing. If provider lacks stable event IDs, derive a stable identity from immutable provider fields and treat same identity/different payload as a conflict.
+- Verify signature against raw request body and correct secret/environment before trusting event content.
+- Handle out-of-order events by querying provider state and applying only a valid transition; older failure events cannot downgrade success.
+- Record unsupported/unmatched events as ignored/quarantined with reason; do not mutate money.
+- Use transactional outbox for external dispatch and unique operation keys for gateway refund/transfer creation.
+- **OPEN:** `ProcessedWebhookEvent` exists, but full coverage, unique index, raw signature verification, transaction boundaries, and all gateway event types must be inspected and tested. Do not infer coverage from the model existing.
+
+## 12. System event inventory — required audit coverage
+
+Every occurrence below must be traced to every writer, including controllers, services, observers, listeners, scheduled commands, queue jobs, webhook handlers, callbacks, admin tools and mobile API routes.
+
+| Domain | Events to inventory | State/effect that must be idempotent |
+|---|---|---|
+| Checkout | create/retry, reserve stock, reserve cashback, initialize payment, abandon/expire | parent/child creation, stock reservation, cashback reservation, payment reference |
+| Payment | provider initialized, success/capture, failed, transfer/bank confirmation, duplicate capture, timeout, reconciliation | payment attempt/order paid state, allocation journals, stock confirmation, notifications |
+| Fulfilment | vendor accept/reject, prepare, ready, assign/change rider, dispatch, out-for-delivery, failed attempt, reject, delivered | order state, inventory, evidence, claim-window timestamp |
+| Pickup | reserve, pay, ready, inspect, pass accepted, OTP success/failure, photo upload, handover, reject, expiry/cancel | reservation state, one-time OTP, inventory and fulfilment timestamp |
+| Returns/disputes | open, late intake, review, approve/reject, arbitration, evidence, escalation, resolve/close | case state, ruling, authorized components, holds |
+| Refund | authorize, approve/reject, dispatch, accepted, processing, success, failed, needs-attention, timeout, retry, reconciliation | refund operation, remaining ceilings, payment status, journal, vendor recovery |
+| Cashback | accrue, reserve, consume, release, mature, expire, reverse, recovery-offset | liability and spendable lots, each once |
+| Settlement | hold, eligibility, reserve earning, release hold, reversal, paid out | earning state, available balance and vendor payable |
+| Payout | request, approve, reject, recipient validation, transfer create, provider success/failure, timeout, reconcile, retry | request, whole earning allocation, transfer reference, journal |
+| Recovery | propose, authorize debt, repay, verify repayment, offset approve/apply, impair/write off | receivable balance, repayments, offset, expense |
+| Security/admin | bank change/cooldown, role/permission change, manual override, admin correction, webhook replay | authorization, audit trail, cooldown, one-time tokens |
+| Notifications | order/payment/refund/payout/return messages, queue retry | delivery dedupe where practical; must never trigger domain money mutation |
+| Reconciliation/jobs | expire unpaid, mature cashback, settle earnings, retry provider query, repair stuck operations | repeat-safe state change and immutable reconciliation evidence |
+
+## 13. Required acceptance tests before declaring this complete
+
+- For every event, test valid source-to-target transition and each invalid source state.
+- Deliver the same event twice sequentially and concurrently; assert exactly one state change, ledger/journal effect, stock effect, gateway operation and cashback mutation.
+- Deliver success then late failure, failure then success, duplicate IDs with conflicting payload, and events out of order.
+- Simulate timeout after provider accepted operation; assert reservation remains held and retry cannot create a second gateway operation.
+- Simulate DB rollback after event receipt; assert retry processes safely, or outbox/inbox resumes without duplicate external effect.
+- Race two checkouts against stock, two OTP submissions, two refund approvals, two payout requests, and two payout finalizations.
+- Assert journal balance AND correct account classification; balanced entries alone are not sufficient.
+- Assert parent/child/item/component ceilings under concurrent partial refunds.
+- Assert all legacy endpoints, scheduled commands, admin actions and mobile APIs enforce the same transitions.
+- Verify old safety tests retain equivalent coverage after logistics tests are removed/renamed.
+
+## 14. Current priority order
+
+1. **Critical:** map and enforce payment/refund/webhook idempotency and legal transitions at service/database boundaries.
+2. **Critical:** implement parent checkout/child allocations before claiming multi-vendor checkout is supported.
+3. **Critical:** prove all order status writers and handover paths use explicit transitions.
+4. **High:** unify payout/earning transitions and transfer idempotency across web/API/admin/reconciliation.
+5. **High:** formalize cashback and return case transitions; test scheduled jobs and concurrent retries.
+6. **High:** implement verified vendor repayment, authorized offset and accountant-approved write-off.
+7. **High:** restore equivalent coverage for deleted safety tests and add concurrency/replay tests.
+
+No production merge or deployment is authorized by this register.
