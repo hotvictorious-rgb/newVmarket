@@ -21,12 +21,12 @@ The detailed and controlling rules are in [.ai/BUSINESS_RULES.md](.ai/BUSINESS_R
 ## Vendor payout policy summary
 
 - Minimum request ₦5,000; maximum request ₦500,000.
-- Vendors may request whenever unreserved eligible funds meet the minimum; no automatic transfer is triggered by the balance threshold.
+- The platform calculates a strict FIFO batch of oldest eligible, unreserved whole earning records; the minimum is ₦5,000 and maximum is ₦500,000. Stop before the next record would exceed the cap; never split or skip. If the oldest record itself exceeds the cap, flag it for authorised finance resolution.
 - Every request requires authorized admin approval before Paystack transfer initiation.
-- Earnings remain itemized in the ledger but are normally aggregated into one payout request/transfer rather than paid per order.
-- Eligible excess remains eligible for a later request. Exact amounts must be reserved atomically, and concurrent/duplicate claims must be blocked.
+- Earnings remain itemized in the ledger and are grouped into each system-calculated strict FIFO payout batch.
+- Records not included in the batch remain eligible for a later batch. Reserve the exact selected whole records atomically; block duplicate/concurrent requests. One active request per vendor remains active through pending, approved-unsent, in-flight or uncertain states.
 - Check provider funding and account-specific limits; reconcile uncertain, failed, successful, and reversed transfers idempotently.
-- Transfer-fee/stamp-duty allocation remains an open owner decision. Never silently deduct charges from vendor earnings.
+- Victorious MARKET bears vendor payout transfer fees/stamp duty as platform expense; the vendor receives the exact approved amount.
 
 ## Operating model
 
