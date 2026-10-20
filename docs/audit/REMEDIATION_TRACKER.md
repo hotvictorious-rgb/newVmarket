@@ -100,3 +100,12 @@ Changes are on the audit branch only. The workflow caught and helped correct pay
 
 
 - **Continuation finding (20 October 2026):** `CustomerOrderApiController` already rejected `redeem_wallet_credit=true`, and the checkout service rejected it too, but the API validator still accepted the legacy field when explicitly supplied as `false`. Changed the request contract to `prohibited`, so clients cannot send this legacy tender field at all. Cashback redemption remains a separate supported field. Commit: `d93782569c378ffea4c83ef6bb1d9f40dcaa34d9`. CI for this latest commit is not yet confirmed.
+
+
+## System-wide state-transition and idempotency audit (20 October 2026)
+
+- Added [`docs/audit/STATE_TRANSITION_AND_IDEMPOTENCY_REGISTER.md`](STATE_TRANSITION_AND_IDEMPOTENCY_REGISTER.md) to inventory current enum states, required lifecycle states, event families, transition constraints, replay/timeout rules, and acceptance tests. It explicitly labels implementation gaps instead of treating policy documentation as proof.
+- **Critical / OPEN:** this is an initial register, not yet proof that every writer is guarded. Must trace all status writers across controllers, services, observers, listeners, jobs, commands, webhooks, callbacks, admin UI and mobile APIs; add explicit transition guards and database uniqueness/inbox constraints where absent; test duplicate and concurrent delivery.
+- **Confirmed architectural gap remains:** checkout still creates a single shop-scoped order; parent checkout + vendor child allocation is not implemented/verified. Do not claim multi-vendor checkout complete.
+- **Idempotency invariant:** every gateway or financial side effect must have a stable unique operation identity and be applied once; timeouts stay uncertain until provider reconciliation. Duplicate events are no-ops against persisted outcomes; conflicting payloads are quarantined. This applies across payment, refund, cashback, settlement, payout, recovery, pickup/delivery handover and scheduled jobs.
+- Register commit: `0cadbfbac64f4197e2955f07cea9b40607b80572`. CI for this documentation-only commit and the immediately preceding wallet-credit validation fix remains pending at time of recording.
