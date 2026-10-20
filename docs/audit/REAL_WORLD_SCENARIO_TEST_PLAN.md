@@ -124,3 +124,4 @@ For each scenario:
 P0: S01–S07, S10–S13, S16 (money, state integrity, proof and race conditions).
 P1: S08–S09, S14–S15, S17.
 Provider sandbox tests and PostgreSQL concurrency are separate required gates; mocks and SQLite are not substitutes.
+\n\n### Newly discovered VM-AUD-065 — duplicate order execution\n- Arrange: send the same authenticated checkout request twice (and concurrently) with the same logical attempt.\n- Expected: one order and one Paystack initialization; subsequent calls replay that order result. Uncertain provider initialization must be reconciled, not blindly reinitialized.\n- Verify: order count, cashback reservations, inventory reservations, payment references, Paystack initialization count and journal entries.\n
