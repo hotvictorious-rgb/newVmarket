@@ -1123,7 +1123,9 @@ class PortalController extends Controller
         $vendor = $this->resolveVendorProfile();
 
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:5000|max:500000',
+            'amount' => ['required', 'numeric', 'min:5000', 'max:500000', 'regex:/^\\d+(?:\\.\\d{1,2})?$/'],
+        ], [
+            'amount.regex' => 'Payout amount must use no more than two decimal places.',
         ]);
 
         if ($vendor->marketplace_status !== 'active') {
@@ -1167,7 +1169,7 @@ class PortalController extends Controller
                 ->where('payment_status', 'paid')
                 ->where('order_status', 'delivered')
                 ->whereDoesntHave('returnCases', function ($q) {
-                    $q->whereNotIn('status', ['resolved', 'rejected']);
+                    $q->whereNotIn('status', ['resolved', 'refunded', 'replacement_completed', 'rejected', 'closed']);
                 })
                 ->whereDoesntHave('dispute', function ($q) {
                     $q->whereIn('status', ['filed', 'under_review']);
