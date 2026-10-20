@@ -2,20 +2,16 @@
 
 namespace Tests\Feature;
 
-use App\Models\AdminAuditLog;
 use App\Models\Category;
 use App\Models\Country;
 use App\Models\DisputeAndReturn;
-use App\Models\FinancialJournalEntry;
 use App\Models\Lga;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\RiderProfile;
 use App\Models\Shop;
 use App\Models\State;
 use App\Models\User;
 use App\Models\VendorProfile;
-use App\Services\BcMathService;
 use App\Services\OrderSettlementService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -124,12 +120,10 @@ class VendorSettlementProtectionWindowTest extends TestCase
         ]);
     }
 
-        /**
-     * Test 2: Complete Elimination of Rider Wallet Domain Capabilities.
-     * Couriers are purely operational dispatch agents; creditBalance and debitBalance do not exist.
+    /**
+     * Vendor settlement must remain held during the 24-hour protection window
+     * and must remain blocked while a customer dispute is active.
      */
-
-
     public function test_vendor_cannot_be_disbursed_what_they_did_not_earn_or_before_refund_window(): void
     {
         $service = app(OrderSettlementService::class);
