@@ -164,6 +164,7 @@ For each provider event, persist provider + provider event ID (or documented sta
 - Verify signature against raw request body and correct secret/environment before trusting event content.
 - Handle out-of-order events by querying provider state and applying only a valid transition; older failure events cannot downgrade success.
 - Record unsupported/unmatched events as ignored/quarantined with reason; do not mutate money.
+- **Verified subcase (VM-AUD-063):** valid unsupported event types now transition inbox `processing -> completed` with `processed_at`; a duplicate of the same event returns the recorded outcome without increasing attempts. This does not close the broader webhook coverage item below.
 - Use transactional outbox for external dispatch and unique operation keys for gateway refund/transfer creation.
 - **OPEN:** `ProcessedWebhookEvent` exists, but full coverage, unique index, raw signature verification, transaction boundaries, and all gateway event types must be inspected and tested. Do not infer coverage from the model existing.
 
