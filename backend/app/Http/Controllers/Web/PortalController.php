@@ -1063,7 +1063,53 @@ class PortalController extends Controller
             ->latest()
             ->get();
 
-        return view('vendor.orders', compact('vendor', 'orders'));
+        $riders = RiderProfile::where('vendor_id', $vendor->id)
+            ->where('is_active', true)
+            ->whereNull('logistics_company_id')
+            ->with('user')
+            ->get();
+
+        return view('vendor.orders', compact('vendor', 'orders', 'riders'));
+    }
+
+    /**
+     * Vendor assigns their own rider to a doorstep delivery order
+     */
+    public function vendorAssignRider(Request $request, $id)
+    {
+        $vendor = $this->resolveVendorProfile();
+
+        $validated = $request->validate([
+            'rider_id' => 'required|integer|exists:rider_profiles,id',
+        ]);
+
+        $order = Order::where('id', $id)->where('vendor_id', $vendor->id)->firstOrFail();
+        $rider = RiderProfile::where('id', $validated['rider_id'])->where('vendor_id', $vendor->id)->first();
+
+        if (!$rider) {
+            return back()->with('error', 'Unauthorized: This delivery rider does not belong to your merchant account.');
+        }
+
+        if (!$rider->is_active) {
+            return back()->with('error', 'This delivery rider is currently inactive.');
+        }
+
+        if (!empty($rider->logistics_company_id)) {
+            return back()->with('error', 'Unauthorized: Legacy or fleet-linked riders cannot receive new vendor deliveries.');
+        }
+
+        if ($order->fulfillment_type !== 'doorstep_delivery') {
+            return back()->with('error', 'Cannot assign delivery rider: this order is configured for in-shop pickup.');
+        }
+
+        if (in_array($order->order_status, ['out_for_delivery', 'delivered', 'cancelled', 'returned', 'disputed'])) {
+            return back()->with('error', "Cannot reassign rider: order is in '{$order->order_status}' status. Reassignment is blocked once physical custody is taken.");
+        }
+
+        $order->rider_id = $rider->id;
+        $order->save();
+
+        return back()->with('success', "Order #{$order->order_number} assigned to delivery person {$rider->user->name}.");
     }
 
     /**

@@ -452,4 +452,244 @@ class VendorManagedDeliveryRiderTest extends TestCase
             'message' => 'Unauthorized: Active delivery work requires one owning vendor; legacy fleet-only or ambiguously linked riders are not eligible.',
         ]);
     }
+
+    /**
+     * Test 6: Non-vendors (customers, unauthenticated users) cannot add riders
+     */
+    public function test_only_authenticated_vendors_can_add_riders_and_others_are_strictly_forbidden(): void
+    {
+        // Unauthenticated call
+        $unauth = $this->postJson('/api/v1/vendor/riders', [
+            'name' => 'Intruder Rider',
+            'phone' => '08099991111',
+            'password' => 'password123',
+        ]);
+        $unauth->assertStatus(401);
+
+        // Customer attempts to call vendor rider creation
+        $customerAttempt = $this->actingAs($this->customer, 'sanctum')->postJson('/api/v1/vendor/riders', [
+            'name' => 'Intruder Rider',
+            'phone' => '08099991111',
+            'password' => 'password123',
+        ]);
+        $customerAttempt->assertStatus(403);
+    }
+
+    private function createTestOrder(array $attributes = []): Order
+    {
+        $defaults = [
+            'order_number' => 'VM-ORD-' . uniqid(),
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendorA->id,
+            'shop_id' => $this->shopA->id,
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'confirmed',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '5000.00',
+            'delivery_fee' => '1000.00',
+            'grand_total' => '6000.00',
+            'vendor_net_90' => '4500.00',
+            'customer_cashback_5' => '250.00',
+            'platform_margin_5' => '250.00',
+            'logistics_fee_retained' => '900.00',
+            'platform_delivery_fee' => '100.00',
+            'verification_code' => '123456',
+        ];
+
+        return Order::create(array_merge($defaults, $attributes));
+    }
+
+    /**
+     * Test 7: Rider assignment fails if order is in-shop pickup or already in transit custody
+     */
+    public function test_rider_assignment_fails_if_order_is_pickup_or_already_in_transit_custody(): void
+    {
+        $riderUser = User::create([
+            'name' => 'Assigned Test Rider',
+            'email' => 'assigned@bassey.ng',
+            'phone' => '08066667777',
+            'password' => bcrypt('password'),
+            'user_type' => 'rider',
+            'status' => 'active',
+        ]);
+        $rider = RiderProfile::create([
+            'user_id' => $riderUser->id,
+            'vendor_id' => $this->vendorA->id,
+            'is_active' => true,
+        ]);
+
+        // 1. Pickup order attempt
+        $pickupOrder = $this->createTestOrder([
+            'order_number' => 'VM-ORD-PICKUP-TEST',
+            'fulfillment_type' => 'in_shop_pickup',
+            'delivery_fee' => '0.00',
+            'grand_total' => '5000.00',
+            'logistics_fee_retained' => '0.00',
+            'platform_delivery_fee' => '0.00',
+        ]);
+
+        $resPickup = $this->actingAs($this->vendorUserA, 'sanctum')->postJson("/api/v1/vendor/orders/{$pickupOrder->id}/assign-rider", [
+            'rider_id' => $rider->id,
+        ]);
+        $resPickup->assertStatus(422);
+        $resPickup->assertJsonFragment([
+            'message' => 'Cannot assign delivery rider: this order is configured for in-shop pickup.',
+        ]);
+
+        // 2. Order already out for delivery / custody taken
+        $inTransitOrder = $this->createTestOrder([
+            'order_number' => 'VM-ORD-TRANSIT-TEST',
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'out_for_delivery',
+        ]);
+
+        $resTransit = $this->actingAs($this->vendorUserA, 'sanctum')->postJson("/api/v1/vendor/orders/{$inTransitOrder->id}/assign-rider", [
+            'rider_id' => $rider->id,
+        ]);
+        $resTransit->assertStatus(422);
+        $this->assertStringContainsString('Reassignment is blocked once physical custody is taken', $resTransit->json('message'));
+    }
+
+    /**
+     * Test 8: Cannot assign rider with legacy logistics_company_id
+     */
+    public function test_cannot_assign_rider_with_legacy_logistics_company_id(): void
+    {
+        $companyUser = User::create([
+            'name' => 'Legacy Fleet Company',
+            'email' => 'company@legacy.ng',
+            'phone' => '08099112233',
+            'password' => bcrypt('password'),
+            'user_type' => 'logistics_company',
+            'status' => 'active',
+        ]);
+        $company = \App\Models\LogisticsCompanyProfile::create([
+            'user_id' => $companyUser->id,
+            'company_name' => 'Legacy Fleet Ltd',
+            'registration_number' => 'RC123456',
+            'verification_status' => 'approved',
+        ]);
+
+        $fleetRiderUser = User::create([
+            'name' => 'Legacy Fleet Rider',
+            'email' => 'fleet@legacy.ng',
+            'phone' => '08055554444',
+            'password' => bcrypt('password'),
+            'user_type' => 'rider',
+            'status' => 'active',
+        ]);
+        $fleetRider = RiderProfile::create([
+            'user_id' => $fleetRiderUser->id,
+            'vendor_id' => $this->vendorA->id,
+            'logistics_company_id' => $company->id,
+            'is_active' => true,
+        ]);
+
+        $doorstepOrder = $this->createTestOrder([
+            'order_number' => 'VM-ORD-DOORSTEP-TEST2',
+            'fulfillment_type' => 'doorstep_delivery',
+        ]);
+
+        $res = $this->actingAs($this->vendorUserA, 'sanctum')->postJson("/api/v1/vendor/orders/{$doorstepOrder->id}/assign-rider", [
+            'rider_id' => $fleetRider->id,
+        ]);
+        $res->assertStatus(403);
+        $res->assertJsonFragment([
+            'message' => 'Unauthorized: Legacy or fleet-linked riders cannot receive new vendor deliveries.',
+        ]);
+    }
+
+    /**
+     * Test 9: Vendor cannot deactivate rider holding parcels in transit custody
+     */
+    public function test_vendor_cannot_deactivate_rider_holding_parcels_in_transit_custody(): void
+    {
+        $riderUser = User::create([
+            'name' => 'Active Custody Rider',
+            'email' => 'custody@bassey.ng',
+            'phone' => '08044443333',
+            'password' => bcrypt('password'),
+            'user_type' => 'rider',
+            'status' => 'active',
+        ]);
+        $rider = RiderProfile::create([
+            'user_id' => $riderUser->id,
+            'vendor_id' => $this->vendorA->id,
+            'is_active' => true,
+        ]);
+
+        // Order out for delivery assigned to this rider
+        $this->createTestOrder([
+            'order_number' => 'VM-ORD-CUSTODY-HELD',
+            'rider_id' => $rider->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'out_for_delivery',
+        ]);
+
+        $deactRes = $this->actingAs($this->vendorUserA, 'sanctum')->patchJson("/api/v1/vendor/riders/{$rider->id}/status", [
+            'is_active' => false,
+        ]);
+        $deactRes->assertStatus(422);
+        $this->assertStringContainsString('physical custody', $deactRes->json('message'));
+
+        $rider->refresh();
+        $this->assertTrue((bool)$rider->is_active);
+    }
+
+    /**
+     * Test 10: Vendor web portal order assignment enforces multi-tenant isolation
+     */
+    public function test_vendor_can_assign_rider_via_web_portal_with_isolation(): void
+    {
+        $riderUserA = User::create([
+            'name' => 'Web Rider A',
+            'email' => 'webriderA@bassey.ng',
+            'phone' => '08022221111',
+            'password' => bcrypt('password'),
+            'user_type' => 'rider',
+            'status' => 'active',
+        ]);
+        $riderA = RiderProfile::create([
+            'user_id' => $riderUserA->id,
+            'vendor_id' => $this->vendorA->id,
+            'is_active' => true,
+        ]);
+
+        $riderUserB = User::create([
+            'name' => 'Web Rider B',
+            'email' => 'webriderB@anietie.ng',
+            'phone' => '08033332222',
+            'password' => bcrypt('password'),
+            'user_type' => 'rider',
+            'status' => 'active',
+        ]);
+        $riderB = RiderProfile::create([
+            'user_id' => $riderUserB->id,
+            'vendor_id' => $this->vendorB->id,
+            'is_active' => true,
+        ]);
+
+        $orderA = $this->createTestOrder([
+            'order_number' => 'VM-ORD-WEB-001',
+            'fulfillment_type' => 'doorstep_delivery',
+        ]);
+
+        // Vendor A attempts to assign Vendor B's rider via Web Portal
+        $rejectCross = $this->actingAs($this->vendorUserA)->post("/vendor/orders/{$orderA->id}/assign-rider", [
+            'rider_id' => $riderB->id,
+        ]);
+        $rejectCross->assertSessionHas('error');
+        $orderA->refresh();
+        $this->assertNull($orderA->rider_id);
+
+        // Vendor A assigns their own rider via Web Portal
+        $successAssign = $this->actingAs($this->vendorUserA)->post("/vendor/orders/{$orderA->id}/assign-rider", [
+            'rider_id' => $riderA->id,
+        ]);
+        $successAssign->assertSessionHas('success');
+        $orderA->refresh();
+        $this->assertEquals($riderA->id, $orderA->rider_id);
+    }
 }

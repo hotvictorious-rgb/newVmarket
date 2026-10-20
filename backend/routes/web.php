@@ -144,6 +144,8 @@ Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
 
     Route::post('/approve-inspection', [PortalController::class, 'vendorApproveInspection'])->name('vendor.approve.inspection');
     Route::post('/orders/{id}/ready-for-handover', [PortalController::class, 'vendorMarkHandoverReady'])->name('vendor.orders.handover_ready');
+    Route::post('/orders/{id}/assign-rider', [PortalController::class, 'vendorAssignRider'])->name('vendor.orders.assign_rider');
+    Route::post('/shops/{shop}/coverage', [PortalController::class, 'vendorUpdateDeliveryCoverage'])->name('vendor.shops.coverage');
 });
 
 // 4. In-Shop Branch Counter Staff Terminal

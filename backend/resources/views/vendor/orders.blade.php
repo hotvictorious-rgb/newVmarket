@@ -162,36 +162,64 @@
                                             </button>
                                         </div>
                                     </div>
-                                @elseif($order->isVendorHandoverReady())
-                                    <!-- Vendor clicked handover ready: reveal secret OTP to show to courier -->
-                                    <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border: 1.5px solid #F59E0B; border-radius: 10px; padding: 10px 14px; color: #FFFFFF;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                            <span style="font-size: 10.5px; font-weight: 800; color: #FBBF24; text-transform: uppercase;">
-                                                🔑 SHOW TO COURIER
-                                            </span>
-                                            <span class="pulse-dot" style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #10B981;"></span>
-                                        </div>
-                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                                            <span style="font-family: monospace; font-size: 22px; font-weight: 900; color: #FFD700; letter-spacing: 4px;">
-                                                {{ $order->pickup_verification_code }}
-                                            </span>
-                                            <button type="button" onclick="navigator.clipboard.writeText('{{ $order->pickup_verification_code }}'); alert('PIN copied: {{ $order->pickup_verification_code }}');" style="background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.3); color: #FFFFFF; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer;">
-                                                Copy
-                                            </button>
-                                        </div>
-                                        <p style="font-size: 10.5px; color: #CBD5E1; margin: 4px 0 0; line-height: 1.3;">
-                                            Courier enters this PIN on their phone to verify package condition and release custody.
-                                        </p>
-                                    </div>
                                 @else
-                                    <!-- Not yet marked ready: Click button when rider arrives at counter -->
-                                    <form method="POST" action="{{ route('vendor.orders.handover_ready', $order->id) }}" onsubmit="return confirm('Authorize package handover for Order {{ $order->order_number }}? This will display the 6-digit pickup code for the courier.');">
-                                        @csrf
-                                        <button type="submit" class="btn-dash btn-dash-primary" style="padding: 7px 12px; font-size: 12px; font-weight: 700; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; background: linear-gradient(135deg, #4F46E5 0%, #3730A3 100%); border: none;">
-                                            <span>🏍️</span>
-                                            <span>Rider Arrived? Click Handover</span>
-                                        </button>
-                                    </form>
+                                    <!-- Doorstep delivery order: Assign own rider & Handover -->
+                                    <div style="margin-bottom: 8px; background: #F8FAFC; border: 1px solid #E2E8F0; padding: 8px 10px; border-radius: 8px;">
+                                        <div style="font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 5px; display: flex; align-items: center; justify-content: space-between;">
+                                            <span>🏍️ Courier:</span>
+                                            <span style="font-weight: 800; color: {{ $order->rider ? '#059669' : '#D97706' }};">
+                                                {{ $order->rider->user->name ?? 'Unassigned' }}
+                                            </span>
+                                        </div>
+                                        @if(isset($riders) && $riders->isNotEmpty())
+                                            <form method="POST" action="{{ route('vendor.orders.assign_rider', $order->id) }}" style="display: flex; gap: 4px; margin-bottom: 4px;">
+                                                @csrf
+                                                <select name="rider_id" required style="font-size: 11px; padding: 4px 6px; border-radius: 6px; border: 1px solid #CBD5E1; background: #FFF; flex: 1;">
+                                                    <option value="">-- Assign Rider --</option>
+                                                    @foreach($riders as $r)
+                                                        <option value="{{ $r->id }}" {{ (int)$order->rider_id === (int)$r->id ? 'selected' : '' }}>
+                                                            {{ $r->user->name }} ({{ $r->vehicle_type ?? 'motorcycle' }})
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                                <button type="submit" style="background: #4F46E5; color: #FFF; border: none; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 700; cursor: pointer;">
+                                                    {{ $order->rider_id ? 'Reassign' : 'Assign' }}
+                                                </button>
+                                            </form>
+                                        @endif
+                                    </div>
+
+                                    @if($order->isVendorHandoverReady())
+                                        <!-- Vendor clicked handover ready: reveal secret OTP to show to courier -->
+                                        <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border: 1.5px solid #F59E0B; border-radius: 10px; padding: 10px 14px; color: #FFFFFF;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                                <span style="font-size: 10.5px; font-weight: 800; color: #FBBF24; text-transform: uppercase;">
+                                                    🔑 SHOW TO COURIER
+                                                </span>
+                                                <span class="pulse-dot" style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #10B981;"></span>
+                                            </div>
+                                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                                                <span style="font-family: monospace; font-size: 22px; font-weight: 900; color: #FFD700; letter-spacing: 4px;">
+                                                    {{ $order->pickup_verification_code }}
+                                                </span>
+                                                <button type="button" onclick="navigator.clipboard.writeText('{{ $order->pickup_verification_code }}'); alert('PIN copied: {{ $order->pickup_verification_code }}');" style="background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.3); color: #FFFFFF; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer;">
+                                                    Copy
+                                                </button>
+                                            </div>
+                                            <p style="font-size: 10.5px; color: #CBD5E1; margin: 4px 0 0; line-height: 1.3;">
+                                                Courier enters this PIN on their phone to verify package condition and release custody.
+                                            </p>
+                                        </div>
+                                    @else
+                                        <!-- Not yet marked ready: Click button when rider arrives at counter -->
+                                        <form method="POST" action="{{ route('vendor.orders.handover_ready', $order->id) }}" onsubmit="return confirm('Authorize package handover for Order {{ $order->order_number }}? This will display the 6-digit pickup code for the courier.');">
+                                            @csrf
+                                            <button type="submit" class="btn-dash btn-dash-primary" style="padding: 7px 12px; font-size: 12px; font-weight: 700; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; background: linear-gradient(135deg, #4F46E5 0%, #3730A3 100%); border: none;">
+                                                <span>🏍️</span>
+                                                <span>Rider Arrived? Click Handover</span>
+                                            </button>
+                                        </form>
+                                    @endif
                                 @endif
                             </td>
                         </tr>

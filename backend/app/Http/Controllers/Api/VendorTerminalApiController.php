@@ -1240,6 +1240,15 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
         ]);
 
         $rider = RiderProfile::where('id', $id)->where('vendor_id', $vendor->id)->firstOrFail();
+
+        $reason = null;
+        if (!$validated['is_active'] && !$rider->canBeDeactivated($reason)) {
+            return response()->json([
+                'status' => false,
+                'message' => $reason ?? 'Cannot deactivate rider while holding parcels in active transit custody.',
+            ], 422);
+        }
+
         $rider->is_active = $validated['is_active'];
         $rider->save();
 
@@ -1280,6 +1289,27 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             return response()->json([
                 'status' => false,
                 'message' => 'This delivery rider is currently inactive.',
+            ], 422);
+        }
+
+        if (!empty($rider->logistics_company_id)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized: Legacy or fleet-linked riders cannot receive new vendor deliveries.',
+            ], 403);
+        }
+
+        if ($order->fulfillment_type !== 'doorstep_delivery') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Cannot assign delivery rider: this order is configured for in-shop pickup.',
+            ], 422);
+        }
+
+        if (in_array($order->order_status, ['out_for_delivery', 'delivered', 'cancelled', 'returned', 'disputed'])) {
+            return response()->json([
+                'status' => false,
+                'message' => "Cannot reassign rider: order is in '{$order->order_status}' status. Reassignment is blocked once physical custody is taken.",
             ], 422);
         }
 
