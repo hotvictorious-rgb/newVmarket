@@ -179,11 +179,13 @@ class FinancialAuditRemediationProofTest extends TestCase
     public function test_refund_reconciliation_verifies_against_gateway_and_does_not_manufacture_synthetic_ids(): void
     {
         $order = $this->createTestOrder([
-            'order_status' => 'cancelled',
+            'order_status' => 'paid_stock_unavailable',
             'payment_status' => 'paid',
+            'vendor_settlement_status' => 'refund_pending',
             'grand_total' => '15000.00',
+            'payment_reference' => 'REF-LATE-PAYMENT-INVENTORY-RECON',
             'paystack_refund_reference' => null,
-            'paystack_refund_status' => 'pending', // Explicit refund instruction
+            'paystack_refund_status' => 'pending', // Explicit refund instruction under the approved late-payment exception
         ]);
 
         $mock = Mockery::mock(PaystackService::class);
