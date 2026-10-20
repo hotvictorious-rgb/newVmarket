@@ -186,12 +186,16 @@ class PayoutFinalizationService
                 }
             }
 
-            // Ensure all allocated orders for this payout transition to settled if fully allocated
-            $allAllocations = $lockedPayout->allocations()->where('status', 'allocated')->get();
-            foreach ($allAllocations as $alloc) {
-                $ord = $alloc->order;
-                if ($ord && bccomp($ord->remaining_payable_to_vendor, '0.00', 2) <= 0) {
-                    $ord->update(['vendor_settlement_status' => 'settled']);
+            // Existing allocation records that exceed the confirmed transfer amount
+            // are untrusted until finance reconciles them. Never mark their orders settled
+            // merely because corrupted/duplicate allocation rows sum to the order payable.
+            if (bccomp($existingAllocationsSum, $formattedPayoutAmount, 2) <= 0) {
+                $allAllocations = $lockedPayout->allocations()->where('status', 'allocated')->get();
+                foreach ($allAllocations as $alloc) {
+                    $ord = $alloc->order;
+                    if ($ord && bccomp($ord->remaining_payable_to_vendor, '0.00', 2) <= 0) {
+                        $ord->update(['vendor_settlement_status' => 'settled']);
+                    }
                 }
             }
 
