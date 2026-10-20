@@ -299,3 +299,8 @@ VM-AUD-059 verification update (20 October 2026): implementation CI passed ([run
 ### VM-AUD-060 — admin rejection bypassed return-case state machine (21 October 2026)
 
 The admin rejection controller directly overwrote ReturnCase status without a row lock, allowed-source-state check, transaction, or accurate old-state audit. It could overwrite a case already in `refund_pending`/financial processing while a Paystack refund was in flight. Rejection is now a service-owned transition under a row lock and transaction, authorized only for admin staff and limited to reviewable states (`requested`, `under_review`, `received_at_hub`, `inspected`, `returned_to_vendor`). It records the actual source state and rejects advanced/terminal cases without mutation. Regression covers both protected refund_pending state and a permitted under_review rejection. Status: IMPLEMENTED — CI pending.
+
+
+### VM-AUD-061 — pickup cancellation raced payment/order creation (21 October 2026)
+
+The customer cancellation endpoint read and updated a pickup reservation without a transaction or row lock, while the payment/order-creation path locks that reservation. A concurrent cancellation could therefore race a successful payment transition. Cancellation now locks the same row, rechecks state while locked, and refuses cancellation once status is `order_placed`, `payment_completed`, `canceled`, `cancelled`, or `expired`. Added API regression for refusing an order-placed reservation and allowing cancellation from `inspected_accepted`. Status: IMPLEMENTED — CI pending.
