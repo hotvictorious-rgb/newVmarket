@@ -186,36 +186,39 @@ class VendorProfile extends Model
 
     public function getLifetimeNetEarnings(): string
     {
-        $sum = Order::where('vendor_id', $this->id)
+        $orders = Order::where('vendor_id', $this->id)
             ->where('payment_status', 'paid')
-            ->whereNotIn('vendor_settlement_status', ['refunded'])
-            ->sum('vendor_net_90');
-        return number_format((float)$sum, 2, '.', '');
+            ->whereNotIn('vendor_settlement_status', ['refunded']);
+        $merchandise = (string) (clone $orders)->sum('vendor_net_90');
+        $delivery = (string) (clone $orders)->whereNull('logistics_company_id')->sum('logistics_fee_retained');
+        return \\App\\Services\\BcMathService::add($merchandise, $delivery);
     }
 
     public function getEscrowHeldBalance(): string
     {
-        $sum = Order::where('vendor_id', $this->id)
+        $orders = Order::where('vendor_id', $this->id)
             ->where('payment_status', 'paid')
-            ->whereIn('vendor_settlement_status', ['held', 'disputed'])
-            ->sum('vendor_net_90');
-        return number_format((float)$sum, 2, '.', '');
+            ->whereIn('vendor_settlement_status', ['held', 'disputed']);
+        $merchandise = (string) (clone $orders)->sum('vendor_net_90');
+        $delivery = (string) (clone $orders)->whereNull('logistics_company_id')->sum('logistics_fee_retained');
+        return \\App\\Services\\BcMathService::add($merchandise, $delivery);
     }
 
     public function getPendingPayoutBalance(): string
     {
         $sum = VendorPayoutRequest::where('vendor_id', $this->id)
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'approved', 'processing', 'in_flight', 'uncertain'])
             ->sum('amount');
         return number_format((float)$sum, 2, '.', '');
     }
 
     public function getTotalSettledBalance(): string
     {
-        $sum = Order::where('vendor_id', $this->id)
-            ->where('vendor_settlement_status', 'settled')
-            ->sum('vendor_net_90');
-        return number_format((float)$sum, 2, '.', '');
+        $orders = Order::where('vendor_id', $this->id)
+            ->where('vendor_settlement_status', 'settled');
+        $merchandise = (string) (clone $orders)->sum('vendor_net_90');
+        $delivery = (string) (clone $orders)->whereNull('logistics_company_id')->sum('logistics_fee_retained');
+        return \\App\\Services\\BcMathService::add($merchandise, $delivery);
     }
 
     public function getWithdrawableBalance(): string
