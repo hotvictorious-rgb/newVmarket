@@ -47,6 +47,7 @@ class Order extends Model
         'vendor_handover_ready_at',
         'pickup_confirmed_by_rider',
         'pickup_proof_image',
+        'customer_pickup_photo_path',
         'picked_up_at',
         'pickup_notes',
         'pickup_failed_attempts',
