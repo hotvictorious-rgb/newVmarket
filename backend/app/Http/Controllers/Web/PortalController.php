@@ -2393,6 +2393,17 @@ class PortalController extends Controller
                 return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
             }
 
+            // A payout may remain in the legacy "pending" status after Paystack accepts
+            // the transfer. Never release its reservation while the gateway outcome is
+            // processing, uncertain, or already associated with a transfer code/reference.
+            if (in_array((string) $payout->gateway_status, ['processing', 'pending', 'otp', 'received', 'unknown'], true)
+                || !empty($payout->paystack_transfer_code)
+                || !empty($payout->transfer_reference)
+                || $payout->processing_token === 'HOLD_TIMEOUT_RECONCILIATION'
+                || str_contains((string) $payout->admin_notes, 'GATEWAY_TIMEOUT')) {
+                return back()->with('error', "Payout request #{$payout->id} has a gateway submission or uncertain outcome. Reconcile with Paystack before it can be rejected.");
+            }
+
             $vendor = $payout->vendor;
             $payout->status = 'rejected';
             $payout->rejection_reason = strip_tags(trim($validated['rejection_reason']));
