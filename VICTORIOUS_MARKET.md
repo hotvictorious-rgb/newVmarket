@@ -300,6 +300,8 @@ The platform must verify the amount due, account for discounts and previously is
 
 A refund should not be presented to the customer as completed merely because a request was submitted to a payment gateway.
 
+**Refund responsibility:** Victorious MARKET owns the approved customer refund process and executes refunds through the authorized financial workflow, ordinarily to the original payment channel. The customer must not be redirected to collect a marketplace refund from the vendor. Where the approved reason and actual order allocation make the vendor responsible, vendor recovery is tracked separately. If vendor proceeds remain held, an authorized offset may be applied; if already paid, record a recovery receivable/liability and use an approved future-settlement offset or recovery process. Customer refund completion depends on verified refund execution, not on whether vendor recovery has completed.
+
 ### Dispute resolution
 
 Where parties disagree, VICTORIOUS MARKET should maintain an evidence-based review process.
@@ -314,7 +316,7 @@ The objective is not to automatically favor the customer or the merchant.
 
 ## 11. Vendor Settlements and Financial Controls
 
-Vendor settlements remain subject to payment verification, order fulfilment, customer-protection conditions, authorized release controls, and reconciliation. Paystack transfer states must distinguish requested, authorized, processing, confirmed successful, failed, and reversed. Failed transfers must restore the correct obligations without reopening settled orders or creating duplicate balances.
+Vendor settlements remain subject to payment verification, order fulfilment, customer-protection conditions, authorized release controls, and reconciliation. Vendor proceeds are not eligible for release before verified successful doorstep delivery or confirmed customer in-shop pickup. This fulfilment event is the earliest eligibility trigger, not an override of the configured refund/return window, active disputes/returns, vendor account restrictions, bank-security cooldown, authorization, or required transfer proof. Evaluate eligibility per vendor child order; a rider's operational status alone is not a payout instruction. Paystack transfer states must distinguish requested, authorized, processing, confirmed successful, failed, and reversed. Failed transfers must restore the correct obligations without reopening settled orders or creating duplicate balances.
 
 Riders are not settlement beneficiaries. Victorious MARKET does not operate rider earnings, rider wallets, rider payout requests, logistics-company payouts for new vendor-managed orders, or rider financial dashboards. Vendors handle rider compensation directly outside the platform. A rider's operational status must never directly release vendor funds or create a financial journal entry.
 
