@@ -34,11 +34,13 @@ class CustomerCashbackLedger extends Model
 
     public function isMatured(): bool
     {
-        return Carbon::now()->gte($this->matures_at);
+        // Cashback has no maturity clock until fulfilment establishes the claim-window expiry.
+        return $this->matures_at !== null && Carbon::now()->gte($this->matures_at);
     }
 
     public function isExpired(): bool
     {
-        return Carbon::now()->gt($this->expires_at);
+        // The validity period starts at maturity; unfulfilled cashback cannot expire yet.
+        return $this->expires_at !== null && Carbon::now()->gt($this->expires_at);
     }
 }
