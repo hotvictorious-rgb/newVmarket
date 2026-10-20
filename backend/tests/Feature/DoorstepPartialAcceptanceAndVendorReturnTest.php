@@ -1244,4 +1244,27 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $this->assertDatabaseMissing('return_cases', ['order_id' => $order->id]);
     }
 
+
+    public function test_unpaid_order_cannot_be_marked_returned_by_failed_delivery_attempts(): void
+    {
+        [$order] = $this->createOutForDeliveryOrder();
+        $order->payment_status = 'pending';
+        $order->delivery_attempt_count = 1;
+        $order->save();
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->postJson('/api/v1/rider/orders/delivery-attempt-failed', [
+            'order_id' => $order->id,
+            'reason' => 'customer_unreachable',
+            'proof_photo' => UploadedFile::fake()->image('unpaid_attempt.jpg'),
+        ]);
+
+        $response->assertStatus(422);
+        $order->refresh();
+        $this->assertSame('pending', $order->payment_status);
+        $this->assertSame('out_for_delivery', $order->order_status);
+        $this->assertSame(1, (int) $order->delivery_attempt_count);
+        $this->assertDatabaseMissing('return_cases', ['order_id' => $order->id]);
+    }
+
 }
