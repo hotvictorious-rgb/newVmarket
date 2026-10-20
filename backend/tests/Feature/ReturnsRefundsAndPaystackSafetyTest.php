@@ -257,10 +257,6 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         return ['order' => $order, 'item' => $orderItem, 'cashback' => $cashback];
     }
 
-    /**
-     * 1. Super Admin manages collection points (Return Hubs)
-     */
-
     public function test_customer_can_request_item_level_return_within_24h_window()
     {
         $deliveredAt = Carbon::now()->subHours(3); // within 24h
