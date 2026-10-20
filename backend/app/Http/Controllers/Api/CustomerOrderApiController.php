@@ -262,7 +262,7 @@ class CustomerOrderApiController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'Delivery confirmed! Escrow released and cashback rewarded.',
+            'message' => 'Delivery confirmed. Cashback remains subject to the claim window and maturity rules.',
             'data' => $this->formatOrderFull($order),
         ]);
     }
