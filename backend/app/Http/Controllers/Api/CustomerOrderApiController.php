@@ -303,7 +303,16 @@ class CustomerOrderApiController extends Controller
             'fulfillment_type' => $order->fulfillment_type,
             'tracking_stage' => $currentStage,
             'stage_description' => $this->getStageDescription($order, $currentStage),
-            'delivery_otp' => $order->verification_code,
+            'delivery_otp' => (
+                $order->fulfillment_type === 'doorstep_delivery'
+                && $order->payment_status === 'paid'
+                && !in_array($order->order_status, ['delivered', 'cancelled'], true)
+            ) ? $order->verification_code : null,
+            'customer_pickup_otp' => (
+                $order->fulfillment_type === 'in_shop_pickup'
+                && $order->payment_status === 'paid'
+                && !in_array($order->order_status, ['picked_up', 'delivered', 'cancelled'], true)
+            ) ? $order->verification_code : null,
             'is_handshake_pending' => $order->isCustomerHandshakePending(),
             'has_rider_arrived' => $order->hasRiderArrived(),
             'financials' => [
