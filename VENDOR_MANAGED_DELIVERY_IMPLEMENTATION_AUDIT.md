@@ -1,6 +1,6 @@
 # Victorious MARKET — Vendor-Managed Delivery Rules & Implementation Audit
 
-**Review date:** 19 October 2026  
+**Review date:** 20 October 2026  
 **Branch:** `audit/paystack-refund-webhook-safety`  
 **Status:** Business rules documented; implementation gaps remain open. This report is an audit and implementation plan, not proof that the code has been fixed.  
 **Controlling policy:** `.ai/BUSINESS_RULES.md`  
@@ -8,7 +8,7 @@
 
 ## 1. Approved operating model
 
-The business owner’s 15 answers and additional requirements are binding:
+The business owner’s 15 original delivery answers, additional privacy/pickup requirements, and two later financial-policy decisions are binding:
 
 - Victorious MARKET is a marketplace, payments/financial-control, safety, and dispute platform. It does not run delivery dispatch, a central fleet, logistics-company fulfilment, route management, rider payroll, or rider payouts for new orders.
 - Each active rider has exactly one active owning vendor. The vendor creates/manages its riders and manually assigns that vendor’s own doorstep-delivery child orders to them.
@@ -22,6 +22,8 @@ The business owner’s 15 answers and additional requirements are binding:
 - In-shop pickup (`in_shop_pickup`) remains fully supported, always costs zero delivery fee, uses the pickup pass format `RES-XXXXXX`, is verified by the vendor at the counter, and creates no rider assignment or delivery payout.
 - Rider customer information is limited to the customer’s name, delivery address, and a protected **Call Customer** action. Raw phone number, payment/card/bank data, amount due, payment status, refunds, wallet balances, delivery-fee financial fields, cashback, commission, vendor settlement, and payout information are prohibited from rider responses and interfaces.
 - Legacy logistics-company/fleet records and financial history are retained for authorized audit/reconciliation. They are not eligible for new assignments or new-order financial activity. Do not perform destructive cleanup until dependencies are mapped.
+- Victorious MARKET is responsible for executing approved customer refunds through the authorized financial workflow; vendor recovery is separate and applies where the approved reason and actual allocation make the vendor responsible.
+- Vendor settlement cannot become eligible before verified successful doorstep delivery or confirmed customer in-shop pickup. Applicable refund-window, dispute, vendor-status, bank-security, authorization, and proof controls still apply; fulfilment confirmation is necessary, not a bypass for those controls.
 
 ## 2. Documentation consistency review
 
@@ -179,6 +181,31 @@ The business rules are now explicit; this section distinguishes policy from code
 - A protected Call Customer action must not be implemented by returning a hidden or masked raw phone number to the rider.
 - Rider operational events may be inputs to a separately authorized financial service only where the approved financial policy calls for it; the rider endpoint itself must not create financial postings or return financial results.
 - Any legacy logistics route, wallet, earnings, or payout feature shown to a rider or used for new vendor-managed work is a policy violation even if the old database records are retained.
+
+## 9. Additional financial-policy decisions and code audit (20 October 2026)
+
+The owner has now explicitly decided:
+
+- **Refund responsibility: A.** Victorious MARKET owns the customer refund workflow and executes the approved refund. It must not make the customer chase the vendor for a marketplace refund. Where vendor responsibility is established, the platform separately recovers the vendor-funded portion using the actual child-order allocation and a recorded reason/decision.
+- **Vendor settlement timing: B.** Vendor proceeds are held until verified successful customer delivery or confirmed customer in-shop pickup. This is the earliest eligibility trigger; the configured refund window, open disputes/returns, vendor/account restrictions, bank-account security cooldown, authorization, and transfer-proof controls still apply. Settlement must be evaluated per vendor child order.
+
+### Confirmed implementation gaps for these decisions
+
+1. **New payment capture still creates legacy logistics-company payables.** In `backend/app/Services/OrderSettlementService.php::settlePaystackOrder`, the child-order and single-order paths create `logistics_payable` credits from the delivery-fee share and use logistics-company beneficiaries. This contradicts vendor-managed delivery and the approved 90% vendor / 10% platform delivery-fee allocation. Replace new-order delivery allocation with the owning vendor's delivery-fee payable and the platform's 10% revenue, scoped to each child order. Keep old fleet entries historical and auditable.
+2. **Delivery confirmation still pays a logistics-company wallet.** `verifyCustomerDeliveryOtp()` credits a logistics-company corporate wallet and writes `logistics_payable` / `logistics_company_wallet` journal entries. This is an active fleet payout path triggered by delivery confirmation. Remove it from new vendor-managed orders; a rider delivery event must not generate rider/fleet compensation. Vendor delivery-fee proceeds remain vendor proceeds and vendor-to-rider compensation is outside platform systems.
+3. **Vendor settlement has a partial timing gate but needs fulfilment-type and child-order proof.** `verifyCustomerDeliveryOtp()` sets the order to `delivered`, sets `vendor_settlement_status = held`, and starts the configured refund window. `evaluateMaturation()` only advances fulfilled orders after the return window expires and blocks active disputes/returns; `disburseVendorSettlement()` then requires eligible status, active vendor, bank cooldown clearance, and proof. Preserve these controls, but verify the same policy for the owning vendor's `in_shop_pickup` confirmation and every child order. Parent payment capture or a rider's operational status update must never release vendor funds.
+4. **Refund completion does not yet implement a complete vendor-recovery lifecycle.** `FinancialOperationService::finalizeRefundConfirmation()` posts refund journals, but the non-return/cancellation branch only posts the cash outflow; it does not record vendor recovery. In the return-case branch, it debits `vendor_payable` using a percentage split without first determining whether that vendor payable remains unpaid, has already been disbursed, or differs due to discounts/line-item allocation. This risks a negative/fictional payable and does not satisfy the approved recovery rule.
+5. **No verified customer-refund ownership contract is enforced end-to-end by the delivery flows.** Rider handover and failed-delivery paths currently mix operational evidence with wallet-credit/refund-reservation/journal work (see the P0 findings above). Keep the platform as refund operator, but make the rider only an evidence source; refund decision and execution belong to the authorized return/refund workflow.
+6. **Parent and child financial allocations must not be double-counted.** Existing payment settlement creates some delivery-fee entries at both child and parent levels. During the change, map exactly which order owns each captured fee and journal event, and assert that each delivery fee is allocated once to vendor (90%) and platform (10%). Do not fix the issue by deleting legacy entries or silently reclassifying posted historical entries.
+
+### Required implementation work
+
+- Add a single authoritative fulfilment gate for settlement eligibility: `doorstep_delivery` requires verified customer handover; `in_shop_pickup` requires owning-vendor counter confirmation using the approved `RES-XXXXXX` pass. Both must record actor, timestamp, order/child vendor, and evidence; neither can be simulated by a rider pickup/custody event.
+- Rework new-order settlement journals to credit the correct vendor payable for the 90% delivery-fee allocation and platform revenue for 10%, once per vendor child order; do not create logistics-company or rider beneficiaries.
+- Keep vendor funds held until fulfilment is confirmed, the configured refund/return window has expired, no blocking dispute/return remains, the vendor is eligible, and payout security controls pass. Test single-vendor, multi-vendor, doorstep, and counter-pickup orders independently.
+- Extend the refund financial model to distinguish customer refund execution from vendor recovery. On refund confirmation, reverse only the actual approved components and actual original allocations. If proceeds remain held, offset the appropriate vendor payable. If already paid, record a vendor recovery receivable/liability and collect via an authorized future settlement offset or approved recovery process. Do not mark customer refund success based on recovery success/failure.
+- Make recovery idempotent and auditable: store responsible vendor, approved reason, amount, order/child reference, whether payable was held or already disbursed, recovery journal/receivable reference, offsets, and outstanding balance. Do not create rider compensation or expose any of this to riders.
+- Add tests for no settlement before delivery/pickup; delivery/pickup gates each child order independently; open return/dispute blocks settlement; zero-fee pickup creates no delivery allocation; new order creates no logistics payable/wallet credit; refund before vendor payout offsets held payable; refund after vendor payout creates a recovery receivable; repeated refund/recovery events do not duplicate entries; multi-vendor refunds recover only the responsible vendor's actual share.
 
 ### Verification status
 
