@@ -207,7 +207,7 @@ class VendorProfile extends Model
     public function getPendingPayoutBalance(): string
     {
         $sum = VendorPayoutRequest::where('vendor_id', $this->id)
-            ->whereIn('status', ['pending', 'approved', 'processing', 'in_flight', 'uncertain'])
+            ->activeReservation()
             ->sum('amount');
         return number_format((float)$sum, 2, '.', '');
     }
@@ -245,7 +245,7 @@ class VendorProfile extends Model
 
         // Payout requests reserve funds while pending, approved-unsent, in flight or uncertain.
         $activePayoutReservations = VendorPayoutRequest::where('vendor_id', $this->id)
-            ->whereIn('status', ['pending', 'approved', 'processing', 'in_flight', 'uncertain'])
+            ->activeReservation()
             ->sum('amount');
 
         // Recovery debt is displayed separately and is NOT automatically offset against earnings.
