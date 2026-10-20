@@ -10,7 +10,7 @@
 
 This audit compared the authoritative business rules with the payment/refund matrix, payout policy, vendor-delivery business rules, implementation audit, delivery/financial-integrity plan, root and backend project overviews, README files, and `backend/database/seeders/LegalDocumentSeeder.php`. It also traced selected checkout, reservation, settlement, and refund service paths.
 
-This is **not** proof that production is aligned. The live database's published legal-document rows, production configuration, provider dashboard, bank records, and deployed runtime were not inspected in this pass. No application code was changed in this documentation-alignment pass, and no test suite was run here. Source-code findings below are therefore open remediation/verification items, not claims of completed fixes.
+This is **not** proof that production is aligned. The live database's published legal-document rows, production configuration, provider dashboard, bank records, and deployed runtime were not inspected in this pass. The legal-document seeder source and documentation were changed, but no runtime checkout, payment, fulfilment, refund, cashback, or payout service/controller code was changed in this pass, and no test suite was run here. Source-code findings below are therefore open remediation/verification items, not claims of completed fixes.
 
 ## 2. Canonical business baseline
 
