@@ -489,6 +489,62 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
 
 
 
+    public function test_settled_vendor_is_not_debited_for_refund_without_authorised_fault_ruling(): void
+    {
+        $fixture = $this->createDeliveredOrder(Carbon::now()->subHours(4), 1);
+        $order = $fixture['order'];
+        $order->update([
+            'vendor_settlement_status' => 'settled',
+            'payment_reference' => 'REFUND-LOSS-TEST-' . strtoupper(uniqid()),
+        ]);
+
+        $case = ReturnCase::create([
+            'case_number' => 'RET-LOSS-' . strtoupper(uniqid()),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $order->vendor_id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'refund_delivery_fee' => false,
+            'delivery_fee_refunded' => '0.00',
+            'refunded_amount' => '0.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+            // No admin_ruling/cost_allocation: approval to refund is not a vendor-fault ruling.
+        ]);
+
+        $paystack = \\Mockery::mock(\\App\\Services\\PaystackService::class);
+        $paystack->shouldReceive('initiateRefund')
+            ->once()
+            ->withAnyArgs()
+            ->andReturn([
+                'success' => true,
+                'status' => 'completed',
+                'refund_reference' => 'rf_platform_loss_no_fault',
+                'data' => ['status' => 'completed', 'reference' => 'rf_platform_loss_no_fault'],
+            ]);
+        $this->app->instance(\\App\\Services\\PaystackService::class, $paystack);
+
+        $result = app(ReturnAndRefundService::class)->adminDisburseRefund($this->superAdmin, $case);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('refunded', $case->fresh()->status);
+        $this->assertSame(0, VendorRecoveryLedger::where('return_case_id', $case->id)->count());
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $order->id)
+            ->where('account_name', 'vendor_recovery_receivable')->count());
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'platform_refund_loss_pending_mapping',
+            'entry_type' => 'debit',
+            'amount' => '9000.00',
+        ]);
+
+        $debits = (float) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
+        $credits = (float) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
+        $this->assertEquals($credits, $debits, 'The platform-funded refund must remain balanced without creating vendor debt.');
+    }
+
     public function test_retry_of_pending_paystack_refund_does_not_post_settlement_journals(): void
     {
         $fixture = $this->createDeliveredOrder(Carbon::now()->subHours(4), 1);
