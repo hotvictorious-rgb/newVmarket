@@ -307,3 +307,8 @@ The customer cancellation endpoint read and updated a pickup reservation without
 
 
 VM-AUD-060/061 verification update (21 October 2026): the return-rejection and pickup-cancellation implementation, regression, and audit-document validation runs have completed successfully. Latest branch-head validation passed: [run 39512965854](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39512965854). This verifies the CI workflow only; PostgreSQL concurrency and provider sandbox checks remain separate open items. No merge or deployment has occurred.
+
+
+### VM-AUD-062 — pickup inspection used stale reservation state (21 October 2026)
+
+The inspection service checked `reserved` and expiry on a potentially stale model, then saved `inspected_accepted` without a transaction or row lock. Concurrent cancellation or another transition could win after the check and be overwritten by stale inspection. The service now locks and reloads the reservation, repeats staff/branch authorization and source-state/expiry checks inside a transaction, and only permits `reserved -> inspected_accepted` (or `reserved -> expired` when expired). Added regression for successful inspection followed by rejection of a repeated transition. Status: IMPLEMENTED — CI verification pending; no merge/deployment.
