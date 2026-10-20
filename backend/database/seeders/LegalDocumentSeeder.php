@@ -382,7 +382,9 @@ MARKDOWN;
 
         // 5. LOGISTICS FLEET OPERATIONS & CHAIN-OF-CUSTODY SLA
         $logisticsContent = <<<'MARKDOWN'
-# VICTORIOUS MARKET — LOGISTICS FLEET OPERATIONS & CHAIN-OF-CUSTODY SLA
+# LEGACY — LOGISTICS FLEET OPERATIONS & CHAIN-OF-CUSTODY SLA (INACTIVE FOR NEW ORDERS)
+
+> **Historical record only:** Victorious MARKET does not assign new orders to a central fleet, operate collection hubs for new fulfilment, or pay rider/logistics compensation for new vendor-managed orders. This document is retained for audit and historical obligations only; it is not the active policy for new orders.
 **Effective Date:** October 20, 2026  
 **Version:** 1.1.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
@@ -460,12 +462,12 @@ MARKDOWN;
         $doc5 = LegalDocument::updateOrCreate(
             ['slug' => 'logistics-service-agreement'],
             [
-                'title' => 'Logistics Fleet Operations & Chain-of-Custody SLA',
+                'title' => 'LEGACY — Logistics Fleet Operations & Chain-of-Custody SLA (Inactive for New Orders)',
                 'category' => 'logistics',
                 'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
-                'is_published' => true,
-                'summary' => 'Operational Service Level Agreement binding logistics fleet operators and riders to strict OTP custody transfer, photographic proof, 90/10 payout reconciliation, and package loss liability.',
+                'is_published' => false,
+                'summary' => 'Historical logistics-fleet policy retained for authorized audit only; inactive for new vendor-managed orders and new financial activity.'
             ]
         );
 
