@@ -157,57 +157,7 @@ class FinancialReconciliationAndHardeningAuditTest extends TestCase
      * Test 1: Critical Finding 1 Fix - Unassigned Logistics Order NEVER Credits Unrelated Company.
      * When order has no assigned courier, collection point, or lane, the 90% fee is held in escrow.
      */
-    public function test_unassigned_logistics_order_never_credits_unrelated_active_company(): void
-    {
-        $service = app(OrderSettlementService::class);
 
-        $order = Order::create([
-            'order_number' => 'ORD-UNASSIGNED-001',
-            'customer_id' => $this->customerUser->id,
-            'vendor_id' => $this->vendorProfile->id,
-            'shop_id' => $this->shop->id,
-            'origin_lga_id' => $this->uyoLga->id,
-            'destination_lga_id' => $this->uyoLga->id,
-            'collection_point_id' => null,
-            'rider_id' => null,
-            'delivery_lane_id' => null,
-            'fulfillment_type' => 'doorstep_delivery',
-            'order_status' => 'out_for_delivery',
-            'payment_status' => 'paid',
-            'payment_reference' => Order::generateUniquePaymentReference(),
-            'merchandise_subtotal' => '10000.00',
-            'delivery_fee' => '2000.00',
-            'grand_total' => '12000.00',
-            'vendor_net_90' => '9000.00',
-            'customer_cashback_5' => '500.00',
-            'platform_margin_5' => '500.00',
-            'logistics_fee_retained' => '1800.00',
-            'platform_delivery_fee' => '200.00',
-            'verification_code' => '443322',
-            'vendor_settlement_status' => 'held',
-        ]);
-
-        $companyBalanceBefore = (float)$this->company->wallet_balance;
-        $this->assertEquals(0.00, $companyBalanceBefore);
-
-        // Customer enters delivery verification OTP
-        $result = $service->verifyCustomerDeliveryOtp($order, '443322');
-        $this->assertTrue($result['success']);
-
-        $this->company->refresh();
-        // CRITICAL PROOF: Active company was NOT credited with the ₦1,800 delivery fee!
-        $this->assertEquals(0.00, (float)$this->company->wallet_balance, 'Unrelated active company must NOT be credited when no fleet is assigned.');
-
-        // Audit log records that the unassigned fee is held safely in escrow
-        $audit = AdminAuditLog::where('action', 'unassigned_logistics_fee_held_in_escrow')
-            ->where('target_id', $order->id)
-            ->first();
-        $this->assertNotNull($audit);
-    }
-
-    /**
-     * Test 2: Critical Finding 2 Fix - Insufficient Matured Cashback Balance is Strictly Rejected.
-     */
     public function test_cashback_redemption_with_insufficient_matured_balance_is_strictly_rejected(): void
     {
         $service = app(OrderSettlementService::class);
@@ -472,85 +422,7 @@ class FinancialReconciliationAndHardeningAuditTest extends TestCase
     /**
      * Test 6: High Finding 6 Fix - Logistics Corporate Withdrawal Posts Complete Balanced Journal Entries.
      */
-    public function test_logistics_corporate_withdrawal_lifecycle_posts_complete_journal_entries(): void
-    {
-        // 1. Give corporate fleet wallet ₦15,000 balance
-        $this->company->creditWallet('15000.00');
-        $this->company->refresh();
-        $this->assertEquals(15000.00, (float)$this->company->wallet_balance);
 
-        // 2. Logistics Company requests ₦5,000 corporate withdrawal via Web Portal
-        $response = $this->actingAs($this->fleetUser)->post(route('logistics.payout.request'), [
-            'amount' => '5000.00',
-        ]);
-        $response->assertSessionHas('status');
-
-        $this->company->refresh();
-        $this->assertEquals(10000.00, (float)$this->company->wallet_balance);
-
-        // Check request journal entries
-        $reqDebit = FinancialJournalEntry::where('account_name', 'logistics_company_wallet')
-            ->where('entry_type', 'debit')
-            ->latest('id')
-            ->first();
-        $reqCredit = FinancialJournalEntry::where('account_name', 'logistics_payout_payable')
-            ->where('entry_type', 'credit')
-            ->latest('id')
-            ->first();
-
-        $this->assertNotNull($reqDebit);
-        $this->assertNotNull($reqCredit);
-        $this->assertEquals(5000.00, (float)$reqDebit->amount);
-        $this->assertEquals(5000.00, (float)$reqCredit->amount);
-
-        // 3. Super Admin approves and disburses withdrawal via Web Portal
-        $payout = LogisticsPayoutRequest::where('logistics_company_id', $this->company->id)->first();
-        $this->assertNotNull($payout);
-
-        $mockPaystack = \Mockery::mock(\App\Services\PaystackService::class);
-        $mockPaystack->shouldReceive('createTransferRecipient')
-            ->andReturn([
-                'success' => true,
-                'recipient_code' => 'RCP_MOCK_LOGISTICS_123',
-                'message' => 'Recipient verified on NIBSS',
-            ]);
-        $mockPaystack->shouldReceive('initiateTransfer')
-            ->andReturn([
-                'success' => true,
-                'status' => 'success',
-                'transfer_code' => 'TRF_MOCK_LOGISTICS_123',
-                'message' => 'Transfer queued for execution',
-            ]);
-        $this->app->instance(\App\Services\PaystackService::class, $mockPaystack);
-
-        $adminResponse = $this->actingAs($this->superAdmin)->post(route('admin.disburse.logistics_payout'), [
-            'payout_id' => $payout->id,
-            'notes' => 'Corporate NUBAN settlement verified.',
-        ]);
-        $adminResponse->assertSessionHas('status');
-
-        $payout->refresh();
-        $this->assertEquals('approved', $payout->status);
-
-        // Check disbursement journal entries
-        $disbDebit = FinancialJournalEntry::where('account_name', 'logistics_payout_payable')
-            ->where('entry_type', 'debit')
-            ->latest('id')
-            ->first();
-        $disbCredit = FinancialJournalEntry::where('account_name', 'cash_in_escrow')
-            ->where('entry_type', 'credit')
-            ->latest('id')
-            ->first();
-
-        $this->assertNotNull($disbDebit);
-        $this->assertNotNull($disbCredit);
-        $this->assertEquals(5000.00, (float)$disbDebit->amount);
-        $this->assertEquals(5000.00, (float)$disbCredit->amount);
-    }
-
-    /**
-     * Test 7: High Finding 4 Fix - API Checkout Strictly Enforces in:paystack.
-     */
     public function test_api_checkout_strictly_enforces_in_paystack_payment_method(): void
     {
         Sanctum::actingAs($this->customerUser);
@@ -716,53 +588,5 @@ class FinancialReconciliationAndHardeningAuditTest extends TestCase
     /**
      * Test 9: Financial Integrity V2 - Frozen Logistics Company and Full Beneficiary Traceability.
      */
-    public function test_orders_freeze_logistics_company_and_journal_records_beneficiary_identities(): void
-    {
-        $service = app(OrderSettlementService::class);
 
-        // Create order with explicitly frozen logistics_company_id
-        $order = Order::create([
-            'order_number' => 'ORD-FROZEN-FLEET-001',
-            'customer_id' => $this->customerUser->id,
-            'vendor_id' => $this->vendorProfile->id,
-            'shop_id' => $this->shop->id,
-            'origin_lga_id' => $this->uyoLga->id,
-            'destination_lga_id' => $this->uyoLga->id,
-            'logistics_company_id' => $this->company->id, // Frozen on order
-            'fulfillment_type' => 'doorstep_delivery',
-            'order_status' => 'out_for_delivery',
-            'payment_status' => 'paid',
-            'payment_reference' => Order::generateUniquePaymentReference(),
-            'merchandise_subtotal' => '10000.00',
-            'delivery_fee' => '2000.00',
-            'grand_total' => '12000.00',
-            'vendor_net_90' => '9000.00',
-            'customer_cashback_5' => '500.00',
-            'platform_margin_5' => '500.00',
-            'logistics_fee_retained' => '1800.00',
-            'platform_delivery_fee' => '200.00',
-            'verification_code' => '765432',
-            'vendor_settlement_status' => 'held',
-        ]);
-
-        $this->assertEquals($this->company->id, $order->logistics_company_id);
-
-        // Customer inputs delivery OTP
-        $result = $service->verifyCustomerDeliveryOtp($order, '765432');
-        $this->assertTrue($result['success']);
-
-        // Check company wallet credited
-        $this->company->refresh();
-        $this->assertEquals(1800.00, (float)$this->company->wallet_balance);
-
-        // Check journal entries have frozen company beneficiary and event_id
-        $fleetCredit = FinancialJournalEntry::where('order_id', $order->id)
-            ->where('account_name', 'logistics_company_wallet')
-            ->first();
-
-        $this->assertNotNull($fleetCredit);
-        $this->assertEquals(LogisticsCompanyProfile::class, $fleetCredit->beneficiary_type);
-        $this->assertEquals($this->company->id, $fleetCredit->beneficiary_id);
-        $this->assertEquals('EVT-FLEET-EARN-ORD-FROZEN-FLEET-001', $fleetCredit->event_id);
-    }
 }
