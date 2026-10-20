@@ -312,7 +312,7 @@ class RiderTerminalApiController extends Controller
         $rider = $request->user()->riderProfile;
         $order = Order::findOrFail($validated['order_id']);
 
-        if ($order->rider_id && (int)$order->rider_id !== (int)$rider->id) {
+        if ((int)$order->rider_id !== (int)$rider->id) {
             return response()->json(['status' => false, 'message' => 'Unauthorized: This order is assigned to another delivery courier.'], 403);
         }
 
@@ -345,7 +345,7 @@ class RiderTerminalApiController extends Controller
         $rider = $request->user()->riderProfile;
         $order = Order::with(['items', 'customer'])->findOrFail($validated['order_id']);
 
-        if ($order->rider_id && (int)$order->rider_id !== (int)$rider->id) {
+        if ((int)$order->rider_id !== (int)$rider->id) {
             return response()->json(['status' => false, 'message' => 'Unauthorized: This order is assigned to another delivery courier.'], 403);
         }
 
@@ -466,7 +466,7 @@ class RiderTerminalApiController extends Controller
             return response()->json(['status' => false, 'message' => 'Delivery has already been confirmed and sealed. Photo proof is immutable.'], 422);
         }
 
-        if ($order->rider_id && (int)$order->rider_id !== (int)$rider->id) {
+        if ((int)$order->rider_id !== (int)$rider->id) {
             return response()->json(['status' => false, 'message' => 'Unauthorized: This order is assigned to another delivery courier.'], 403);
         }
 
