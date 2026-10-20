@@ -409,6 +409,7 @@ class VendorPayoutLifecycleTest extends TestCase
                 'reference' => 'VND-PAYOUT-CONFIRM-01',
                 'transfer_code' => 'TRF_CONFIRM_123',
                 'amount' => 1500000,
+                'currency' => 'NGN',
             ],
         ];
 
@@ -472,12 +473,34 @@ class VendorPayoutLifecycleTest extends TestCase
             'allocated_amount' => '18000.00',
         ]);
 
+        // Simulate the original confirmed disbursement journal; reversal must only
+        // restore cash when a matching original payout event exists.
+        foreach ([
+            ['account_name' => 'vendor_payable', 'entry_type' => 'debit'],
+            ['account_name' => 'cash_in_escrow', 'entry_type' => 'credit'],
+        ] as $entry) {
+            FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => 'VND-PAYOUT-FAIL-01',
+                'event_id' => 'EVT-VND-PAYOUT-' . $payout->id,
+                'beneficiary_type' => VendorProfile::class,
+                'beneficiary_id' => $this->vendor->id,
+                'account_name' => $entry['account_name'],
+                'entry_type' => $entry['entry_type'],
+                'amount' => '18000.00',
+                'currency' => 'NGN',
+                'description' => 'Original vendor payout disbursement journal',
+            ]);
+        }
+
         $payloadData = [
             'event' => 'transfer.failed',
             'data' => [
                 'reference' => 'VND-PAYOUT-FAIL-01',
                 'transfer_code' => 'TRF_VND_FAIL_88',
                 'reason' => 'Account number does not exist on NIBSS',
+                'amount' => 1800000,
+                'currency' => 'NGN',
             ],
         ];
 
@@ -696,6 +719,17 @@ class VendorPayoutLifecycleTest extends TestCase
      */
     public function test_webhook_idempotency_blocks_duplicate_event_processing(): void
     {
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '5000.00',
+            'status' => 'approved',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Victorious Electronics Ltd',
+            'settlement_proof_path' => 'paystack_transfer:TRF_IDEM_001',
+            'admin_notes' => 'Automated Paystack NUBAN Transfer (TRF_IDEM_001)',
+        ]);
+
         $payloadData = [
             'event' => 'transfer.success',
             'id' => 'evt_unique_test_12345',
@@ -703,6 +737,7 @@ class VendorPayoutLifecycleTest extends TestCase
                 'reference' => 'VND-IDEM-001',
                 'transfer_code' => 'TRF_IDEM_001',
                 'amount' => 500000,
+                'currency' => 'NGN',
             ],
         ];
 
