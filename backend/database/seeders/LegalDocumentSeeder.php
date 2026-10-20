@@ -493,7 +493,7 @@ MARKDOWN;
 
 **Brand Promise:** Your Trusted Online Market for Quality Products.  
 **Operating Philosophy:** Trust First. Quality Always. Accountability at Every Stage.  
-**Launch Headquarter:** Uyo, Akwa Ibom State, Federal Republic of Nigeria  
+**Primary launch market:** Uyo, Akwa Ibom State, Federal Republic of Nigeria  
 **Version:** 1.2.0  
 
 ---
@@ -750,7 +750,7 @@ MARKDOWN;
         $contactContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — CONTACT & CUSTOMER CARE CENTER
 **Customer Support & Official Contact**  
-**Effective Date:** October 20, 2026 &bull; Version: 1.0.0  
+**Effective Date:** October 20, 2026 &bull; Version: 1.2.0  
 
 ---
 
@@ -803,7 +803,7 @@ MARKDOWN;
             [
                 'title' => 'Contact & Customer Care Center',
                 'content' => $contactContent,
-                'summary_of_changes' => 'Initial publication of customer care center and escalation matrix.',
+                'summary_of_changes' => 'Alignment release: replaced unverified contact/address/hub claims with official contact details and vendor-managed support instructions; previous version retained.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
