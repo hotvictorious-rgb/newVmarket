@@ -85,7 +85,7 @@ class ReturnAndRefundService
                 return [
                     'success' => false,
                     'code' => 'RETURN_WINDOW_EXPIRED',
-                    'message' => "The {$refundHours}-hour return and refund window for this order has expired. An authorised administrator must open late claims with a documented reason.",
+                    'message' => "The {$refundHours}-hour return and refund window for this order has expired.",
                 ];
             }
 
