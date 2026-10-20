@@ -207,7 +207,6 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         ]);
         $this->riderB = RiderProfile::create([
             'user_id' => $this->riderUserB->id,
-            'logistics_company_id' => $this->company->id,
             'assigned_lga_id' => $this->originLga->id,
             'vehicle_type' => 'motorcycle',
             'license_plate' => 'UY-02-RDR',
@@ -231,7 +230,6 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'origin_lga_id' => $this->originLga->id,
             'destination_lga_id' => $this->destLga->id,
             'rider_id' => $this->riderA->id,
-            'logistics_company_id' => $this->company->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'confirmed',
             'payment_status' => 'paid',
@@ -295,7 +293,6 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'origin_lga_id' => $this->originLga->id,
             'destination_lga_id' => $this->destLga->id,
             'rider_id' => $this->riderA->id, // Assigned to Rider A
-            'logistics_company_id' => $this->company->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'out_for_delivery',
             'payment_status' => 'paid',
@@ -490,7 +487,6 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         $lane = DeliveryLane::create([
             'origin_lga_id' => $this->originLga->id,
             'destination_lga_id' => $this->destLga->id,
-            'logistics_company_id' => $this->company->id,
             'delivery_fee' => '1500.00',
             'is_active' => true,
         ]);
@@ -504,7 +500,6 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'vendor_id' => $this->vendorA->id,
             'shop_id' => $this->shopA->id,
             'rider_id' => $this->riderA->id,
-            'logistics_company_id' => $this->company->id,
             'delivery_lane_id' => $lane->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'pending',
@@ -533,7 +528,6 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'vendor_id' => $this->vendorA->id,
             'shop_id' => $this->shopA->id,
             'rider_id' => $this->riderA->id,
-            'logistics_company_id' => $this->company->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'pending',
             'payment_status' => 'pending',
@@ -568,8 +562,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'customer_id' => $this->customer->id,
             'vendor_id' => $this->vendorB->id,
             'shop_id' => $this->shopB->id,
-            'rider_id' => $this->riderA->id,
-            'logistics_company_id' => $this->company->id,
+            'rider_id' => $this->riderB->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'pending',
             'payment_status' => 'pending',
@@ -578,14 +571,14 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'origin_lga_id' => $this->originLga->id,
             'destination_lga_id' => $this->destLga->id,
             'merchandise_subtotal' => '20000.00',
-            'delivery_fee' => '0.00',
+            'delivery_fee' => '1000.00',
             'cashback_redeemed' => '0.00',
-            'grand_total' => '20000.00',
+            'grand_total' => '21000.00',
             'vendor_net_90' => '18000.00',
             'customer_cashback_5' => '1000.00',
             'platform_margin_5' => '1000.00',
-            'logistics_fee_retained' => '0.00',
-            'platform_delivery_fee' => '0.00',
+            'logistics_fee_retained' => '900.00',
+            'platform_delivery_fee' => '100.00',
             'vendor_settlement_status' => 'held',
         ]);
         OrderItem::create([
