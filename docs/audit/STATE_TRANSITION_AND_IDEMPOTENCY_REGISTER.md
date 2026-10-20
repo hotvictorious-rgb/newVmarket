@@ -219,3 +219,8 @@ No production merge or deployment is authorized by this register.
 ### Payout reversal evidence gate — VM-AUD-032 (20 October 2026)
 
 `transfer.reversed` is a financial state-changing event, not merely a notification. It must resolve exactly one payout, match the persisted transfer reference/code, include an explicit amount represented as integer kobo and an explicit `NGN` currency, and match the payout amount exactly before any payout or journal mutation. Reject malformed amounts before integer conversion; never allow fractional values to be truncated into a match. The handler now applies the strict amount/currency requirement to reversal events and validates integer-kobo representation. **OPEN for verification:** tests must cover missing amount/currency, malformed/fractional amount, wrong amount/currency, valid reversal, and late/duplicate reversal after terminal failure; confirm the provider's real reversal payload in sandbox before deployment.
+
+
+### Shop creation → initial delivery coverage — VM-AUD-033 (20 October 2026)
+
+On `Shop` creation, if a valid physical `lga_id` exists, create the default active coverage row for that LGA using the LGA's canonical `state_id`. Use `firstOrCreate` so the model hook and the vendor-controller initialization may safely coexist without duplicate coverage. Subsequent vendor coverage replacement is an explicit authorized transition and is not implicitly overwritten by unrelated shop updates. Checkout remains fail-closed for destinations not covered. **Verification pending:** CI must demonstrate a newly seeded/model-created shop can check out for its own LGA and that explicitly removed coverage is still rejected.
