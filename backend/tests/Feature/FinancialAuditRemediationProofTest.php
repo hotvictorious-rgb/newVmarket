@@ -18,6 +18,7 @@ use App\Models\VendorPayoutAllocation;
 use App\Models\VendorPayoutRequest;
 use App\Models\VendorProfile;
 use App\Services\FinancialOperationService;
+use App\Services\ReturnAndRefundService;
 use App\Services\FinancialReconciliationEngine;
 use App\Services\PayoutFinalizationService;
 use App\Services\PaystackService;
@@ -2284,6 +2285,19 @@ class FinancialAuditRemediationProofTest extends TestCase
             ->where('purpose', 'customer_refund_hold')
             ->where('status', 'active')
             ->count());
+
+        // Once an operation exists, a retry cannot silently change its component
+        // scope; otherwise reconciliation could post a delivery reversal that the
+        // gateway operation did not include.
+        $scopeChange = app(ReturnAndRefundService::class)->adminDisburseRefund(
+            $this->superAdmin,
+            $returnCase,
+            null,
+            null,
+            false
+        );
+        $this->assertFalse($scopeChange['success']);
+        $this->assertStringContainsString('component scope is immutable', $scopeChange['message']);
     }
 
 }
