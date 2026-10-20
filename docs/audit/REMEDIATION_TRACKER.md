@@ -180,3 +180,10 @@ Added the complementary case for `refund.processed` arriving after the operation
 - A stale generation exits before any financial mutation and returns HTTP 429 without overwriting the newer worker's inbox state. Scheduled/non-webhook callers retain the optional no-inbox-fence behavior.
 - Added a regression that simulates the inbox being reclaimed to generation 2 while a generation-1 worker attempts to finalize; it asserts operation and journal remain unchanged. Focused CI passed on `94cb14368f142b66199b7868422b840d325f5802`: **168 tests / 1,069 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39500860286).
 - Scope remains partial: apply the same in-transaction inbox fence to refund failure, order settlement for `charge.success`, and payout transfer success/failure/reversal handlers. This fix does not claim all webhook paths are fenced.
+
+### VM-AUD-037 — refund failure reconciliation fenced by inbox generation (20 October 2026)
+
+- Applied the same inbox-row lock and exact attempt-generation check inside the transaction that marks a refund failed, releases active reservations, updates gateway attempts, and recalculates order refund summary.
+- If the event was reclaimed by a newer worker, the stale handler exits before those financial mutations and returns retryable HTTP 429 without overwriting the inbox state.
+- Focused CI passed on `389ebac6f643dfce0ef4317eba91b3fef90ef8ef`: **168 tests / 1,069 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39501098385). Existing refund success/failure ordering tests pass. A dedicated stale-generation regression for the `refund.failed` branch is still needed.
+- `charge.success` order settlement and payout transfer webhooks still require the same transaction-level fencing treatment.
