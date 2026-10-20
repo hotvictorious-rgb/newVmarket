@@ -1474,7 +1474,16 @@ class OrderSettlementService
         foreach ($expiredOrders as $order) {
             DB::transaction(function () use ($order, &$count) {
                 $locked = Order::where('id', $order->id)->lockForUpdate()->first();
-                if (!$locked || $locked->payment_status !== 'pending' || $locked->order_status !== 'pending') {
+                if (
+                    !$locked
+                    || $locked->payment_status !== 'pending'
+                    || $locked->order_status !== 'pending'
+                    || !$locked->expires_at
+                    || $locked->expires_at->gt(Carbon::now())
+                ) {
+                    // The candidate query may be stale. Re-check expiry under the row
+                    // lock so a renewed/extended pending order is never cancelled by an
+                    // older scheduler snapshot.
                     return;
                 }
 
