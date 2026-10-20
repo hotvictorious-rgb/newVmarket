@@ -679,17 +679,10 @@ class DoorstepHandshakeService
                 // Vendor dispute upheld: Merchant is innocent. Customer pays 100% of delivery fee.
                 $lockedCase->cost_allocation = 'customer_100';
             } elseif ($ruling === 'uphold_customer_claim') {
-                // Customer claim upheld: Vendor fault confirmed.
+                // Customer claim upheld: vendor fault is established, but no receivable is posted
+                // until the platform actually funds a refund. ReturnAndRefundService posts the
+                // authorised, component-specific recovery exactly once at refund settlement.
                 $lockedCase->cost_allocation = 'vendor_100';
-                // Debit vendor recovery ledger for delivery fee penalty
-                VendorRecoveryLedger::create([
-                    'vendor_id' => $lockedCase->vendor_id,
-                    'order_id' => $lockedCase->order_id,
-                    'return_case_id' => $lockedCase->id,
-                    'amount' => $lockedCase->order->delivery_fee ?? 1500.00,
-                    'recovery_reason' => "Arbitration penalty: Vendor fault upheld for Return #{$lockedCase->case_number}",
-                    'status' => 'pending_recovery',
-                ]);
             } else {
                 // Platform transit protection: VMarket absorbs the transit risk
                 $lockedCase->cost_allocation = 'platform_absorbed';
