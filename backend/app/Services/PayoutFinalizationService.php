@@ -675,6 +675,7 @@ class PayoutFinalizationService
      */
     public function revertLogisticsPayout(LogisticsPayoutRequest $payout, string $reason, ?User $admin = null, bool $allowSuccessfulReversal = false, ?string $expectedProcessingToken = null, ?int $webhookEventId = null, ?int $webhookAttempt = null): array
     {
+        $result = DB::transaction(function () use ($payout, $reason, $admin, $allowSuccessfulReversal, $expectedProcessingToken, $webhookEventId, $webhookAttempt) {
             if (!$this->isCurrentWebhookClaim($webhookEventId, $webhookAttempt)) {
                 return [
                     'success' => false,
@@ -684,7 +685,6 @@ class PayoutFinalizationService
                 ];
             }
 
-        $result = DB::transaction(function () use ($payout, $reason, $admin, $allowSuccessfulReversal, $expectedProcessingToken) {
             $lockedPayout = LogisticsPayoutRequest::with('company')
                 ->where('id', $payout->id)
                 ->lockForUpdate()
@@ -851,7 +851,8 @@ class PayoutFinalizationService
         }
 
         return $result;
-    
+    }
+
     /**
      * Verify the inbox lease inside the caller's financial transaction.
      * Locking the inbox row here serializes stale workers against reclaims.
@@ -865,7 +866,7 @@ class PayoutFinalizationService
             return false;
         }
 
-        $event = \\App\\Models\\ProcessedWebhookEvent::where('id', $eventId)
+        $event = \App\Models\ProcessedWebhookEvent::where('id', $eventId)
             ->lockForUpdate()
             ->first();
 
@@ -873,6 +874,4 @@ class PayoutFinalizationService
             && $event->status === 'processing'
             && (int) $event->attempts === $attempt;
     }
-
-}
 }
