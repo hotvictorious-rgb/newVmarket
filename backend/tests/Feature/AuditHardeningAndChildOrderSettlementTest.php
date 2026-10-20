@@ -432,7 +432,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
 
         $callbackRes->assertRedirect();
         $callbackRes->assertSessionHas('warning');
-        $this->assertStringContainsString('refund of ₦10,000.00 has been initiated', session('warning'));
+        $this->assertStringContainsString('refund is pending reconciliation', session('warning'));
     }
 
     /**
