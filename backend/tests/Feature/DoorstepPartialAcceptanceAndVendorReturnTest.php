@@ -530,10 +530,9 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $this->assertEquals('vendor_100', $returnCase->cost_allocation);
         $this->assertNotNull($returnCase->admin_ruled_at);
 
-        // Check vendor penalty in recovery ledger
-        $penalty = VendorRecoveryLedger::where('return_case_id', $returnCase->id)->first();
-        $this->assertNotNull($penalty);
-        $this->assertEquals(1500.00, (float)$penalty->amount);
+        // The ruling establishes fault but does not itself create a debt.
+        // Receivable is posted only when Victorious MARKET actually funds an authorised refund.
+        $this->assertSame(0, VendorRecoveryLedger::where('return_case_id', $returnCase->id)->count());
     }
 
     /**
