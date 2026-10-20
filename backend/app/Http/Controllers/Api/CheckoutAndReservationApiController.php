@@ -48,19 +48,12 @@ class CheckoutAndReservationApiController extends Controller
             'items.*.product_id' => 'required|integer|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1|max:1000',
             'redeem_cashback' => 'nullable|boolean',
-            'redeem_wallet_credit' => 'nullable|boolean',
+            'redeem_wallet_credit' => 'prohibited',
             'rider_id' => 'prohibited',
             'logistics_company_id' => 'prohibited',
         ], [
             'items.*.quantity.max' => 'Maximum allowed quantity per line item is 1,000 units.',
         ]);
-
-        if (!empty($validated['redeem_wallet_credit'])) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Wallet credit cannot be used to pay for orders at launch. Use an approved payment method.',
-            ], 422);
-        }
 
         $user = $request->user();
 
@@ -169,19 +162,11 @@ class CheckoutAndReservationApiController extends Controller
             $cashbackApplied = BcMathService::comp($availableCashbackStr, $maxRedemption) > 0 ? $maxRedemption : $availableCashbackStr;
         }
 
-        // Customer Instant Refund Wallet Credit redemption (100% spendable, covers up to 100% of order payable)
+        // Legacy refund wallet credit is not checkout tender at launch.
+        // Cashback is the only customer balance that may reduce merchandise subtotal.
         $subtotalAfterCashback = BcMathService::sub($merchandiseSubtotal, $cashbackApplied);
-        $totalBeforeWallet = BcMathService::add($subtotalAfterCashback, $deliveryFee);
-
+        $totalPayable = BcMathService::add($subtotalAfterCashback, $deliveryFee);
         $walletCreditApplied = '0.00';
-        if (!empty($validated['redeem_wallet_credit'])) {
-            $availableWallet = CustomerWalletCredit::getAvailableBalance($user->id);
-            $walletCreditApplied = BcMathService::comp($availableWallet, $totalBeforeWallet) > 0
-                ? $totalBeforeWallet
-                : $availableWallet;
-        }
-
-        $totalPayable = BcMathService::sub($totalBeforeWallet, $walletCreditApplied);
 
         if (bccomp($totalPayable, '100000000.00', 2) > 0) {
             return response()->json([
