@@ -240,17 +240,14 @@ class VendorProfile extends Model
             $eligible = \App\Services\BcMathService::add($eligible, $order->remaining_payable_to_vendor);
         }
 
-        $pending = VendorPayoutRequest::where('vendor_id', $this->id)
-            ->where('status', 'pending')
+        // Payout requests reserve funds while pending, approved-unsent, in flight or uncertain.
+        $activePayoutReservations = VendorPayoutRequest::where('vendor_id', $this->id)
+            ->whereIn('status', ['pending', 'approved', 'processing', 'in_flight', 'uncertain'])
             ->sum('amount');
 
-        // Deduct unrecovered liabilities/debts from previous returns or penalties
-        $unrecoveredDebt = \App\Models\VendorRecoveryLedger::where('vendor_id', $this->id)
-            ->where('status', 'pending_recovery')
-            ->sum('amount');
-
-        $totalDeductions = \App\Services\BcMathService::add((string)$pending, (string)$unrecoveredDebt);
-        $diff = \App\Services\BcMathService::sub((string)$eligible, (string)$totalDeductions);
+        // Recovery debt is displayed separately and is NOT automatically offset against earnings.
+        // Any future offset must have its own persisted authorisation and contractual basis.
+        $diff = \App\Services\BcMathService::sub((string)$eligible, (string)$activePayoutReservations);
         if (\App\Services\BcMathService::comp($diff, '0.00') < 0) {
             return '0.00';
         }
