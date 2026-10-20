@@ -17,6 +17,7 @@ use App\Models\PickupReservation;
 use App\Models\Product;
 use App\Models\RiderProfile;
 use App\Models\Shop;
+use App\Models\ShopDeliveryCoverage;
 use App\Models\State;
 use App\Models\User;
 use App\Models\VendorProfile;
@@ -1085,10 +1086,15 @@ class PortalController extends Controller
     public function vendorShopsPage(Request $request)
     {
         $vendor = $this->resolveVendorProfile();
-        $shops = Shop::where('vendor_id', $vendor->id)->with('lga.state')->get();
+        $shops = Shop::where('vendor_id', $vendor->id)
+            ->with(['lga.state', 'deliveryCoverages.lga', 'deliveryCoverages.state'])
+            ->get();
+        $allStates = State::with(['lgas' => function ($q) {
+            $q->where('is_active', true)->orderBy('name', 'asc');
+        }])->where('is_active', true)->orderBy('name', 'asc')->get();
         $allLgas = Lga::with('state')->where('is_active', true)->orderBy('name', 'asc')->get();
 
-        return view('vendor.shops', compact('vendor', 'shops', 'allLgas'));
+        return view('vendor.shops', compact('vendor', 'shops', 'allLgas', 'allStates'));
     }
 
     /**
@@ -3497,7 +3503,16 @@ class PortalController extends Controller
             'is_active' => true,
         ]);
 
-        return redirect()->to(route('vendor.dashboard') . '#shop-branches')->with('status', "New branch outlet '{$shop->name}' registered!");
+        // Default initial coverage: physical shop starts covering its own local origin LGA
+        ShopDeliveryCoverage::firstOrCreate([
+            'shop_id' => $shop->id,
+            'state_id' => $shop->state_id,
+            'lga_id' => $shop->lga_id,
+        ], [
+            'is_active' => true,
+        ]);
+
+        return redirect()->to(route('vendor.dashboard') . '#shop-branches')->with('status', "New branch outlet '{$shop->name}' registered with initial municipal LGA coverage!");
     }
 
     public function vendorUpdateShop(Request $request, int $id)
@@ -3564,6 +3579,75 @@ class PortalController extends Controller
         $shop->delete();
 
         return redirect()->to(route('vendor.dashboard') . '#shop-branches')->with('status', "Branch outlet '{$shopName}' has been deleted.");
+    }
+
+    /**
+     * Interactive Action: Merchant updates delivery coverage areas for a physical shop.
+     * Admin sets standard platform delivery fees; vendor specifies covered LGAs and states.
+     */
+    public function vendorUpdateDeliveryCoverage(Request $request, int $id)
+    {
+        $vendor = $this->resolveVendorProfile();
+
+        if ($vendor->marketplace_status !== 'active') {
+            abort(403, 'Merchant marketplace account is currently not active.');
+        }
+
+        $shop = Shop::where('vendor_id', $vendor->id)->findOrFail($id);
+
+        $validated = $request->validate([
+            'lga_ids' => 'nullable|array',
+            'lga_ids.*' => 'integer|exists:lgas,id',
+            'state_ids' => 'nullable|array',
+            'state_ids.*' => 'integer|exists:states,id',
+        ]);
+
+        $selectedLgaIds = array_map('intval', $validated['lga_ids'] ?? []);
+        $selectedStateIds = array_map('intval', $validated['state_ids'] ?? []);
+
+        DB::transaction(function () use ($shop, $selectedLgaIds, $selectedStateIds) {
+            ShopDeliveryCoverage::where('shop_id', $shop->id)->delete();
+
+            $records = [];
+            $now = Carbon::now();
+
+            // Whole state coverages (lga_id is null)
+            foreach ($selectedStateIds as $stateId) {
+                $records[] = [
+                    'shop_id' => $shop->id,
+                    'state_id' => $stateId,
+                    'lga_id' => null,
+                    'is_active' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+
+            // Specific LGA coverages
+            if (!empty($selectedLgaIds)) {
+                $lgas = Lga::whereIn('id', $selectedLgaIds)->get();
+                foreach ($lgas as $lga) {
+                    if (in_array((int)$lga->state_id, $selectedStateIds, true)) {
+                        continue; // Whole state already covers this LGA
+                    }
+                    $records[] = [
+                        'shop_id' => $shop->id,
+                        'state_id' => (int)$lga->state_id,
+                        'lga_id' => (int)$lga->id,
+                        'is_active' => true,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+            }
+
+            if (!empty($records)) {
+                ShopDeliveryCoverage::insert($records);
+            }
+        });
+
+        $count = count($selectedLgaIds) + count($selectedStateIds);
+        return back()->with('status', "Delivery coverage updated for '{$shop->name}' ({$count} areas saved). Standard platform delivery fees set by Admin apply to covered areas.");
     }
 
     // ==========================================

@@ -39,6 +39,33 @@ class FulfillmentAvailabilityService
             ];
         }
 
+        $destLga = \App\Models\Lga::with('state')->find($destinationLgaId);
+        if (!$destLga) {
+            return [
+                'is_available' => false,
+                'message' => 'Destination LGA not found or invalid.',
+                'fee' => '0.00',
+            ];
+        }
+
+        // VENDOR COVERAGE RULE:
+        // Admin sets standard delivery fees; vendors configure the individual LGAs and states
+        // their physical shop's riders can physically service. Unsupported destinations fail closed.
+        if (!$shop->coversDestination($destinationLgaId, $destLga->state_id)) {
+            $shopLgaName = $shop->lga ? $shop->lga->name : 'its physical branch';
+            return [
+                'is_available' => false,
+                'lane_id' => null,
+                'origin_lga_id' => $shop->lga_id,
+                'destination_lga_id' => $destinationLgaId,
+                'fee' => '0.00',
+                'message' => "Merchant outlet ({$shop->name} in {$shopLgaName} LGA) does not offer doorstep delivery to {$destLga->name} LGA. In-shop pickup is available at the physical outlet.",
+                'rate_tier' => 'vendor_unserviced_area',
+                'is_collection_point' => false,
+                'collection_points' => [],
+            ];
+        }
+
         $isKekeOrBulky = in_array(strtolower($packageTier), ['keke', 'bulky'], true);
 
         $lane = DeliveryLane::where('origin_lga_id', $shop->lga_id)
@@ -93,8 +120,7 @@ class FulfillmentAvailabilityService
             ];
         }
 
-        // 3-Tier Zonal Distance Fallback (100% Nationwide Coverage for unscheduled routes)
-        $destLga = \App\Models\Lga::with('state')->find($destinationLgaId);
+        // 3-Tier Zonal Distance Fallback (Nationwide Coverage for unscheduled routes)
         $shopLga = $shop->lga;
 
         // Check if out-of-state corridor to this entire destination state is suspended
@@ -154,21 +180,6 @@ class FulfillmentAvailabilityService
                 $fee = number_format((float)$fee, 2, '.', '');
                 $collectionPoints = $this->resolveCollectionPoints($destinationLgaId);
 
-                // Truthful Serviceability Guard: Require active collection point in destination LGA
-                if (empty($collectionPoints)) {
-                    return [
-                        'is_available' => false,
-                        'lane_id' => null,
-                        'origin_lga_id' => $shop->lga_id,
-                        'destination_lga_id' => $destinationLgaId,
-                        'fee' => '0.00',
-                        'message' => "No active logistics collection point operates in {$destLga->name} LGA yet. Cross-LGA delivery is unserviced.",
-                        'rate_tier' => 'tier_2_inter_lga_unserviced',
-                        'is_collection_point' => true,
-                        'collection_points' => [],
-                    ];
-                }
-
                 return [
                     'is_available' => true,
                     'lane_id' => null,
@@ -179,32 +190,17 @@ class FulfillmentAvailabilityService
                     'estimated_delivery_hours_max' => 24,
                     'estimated_time_text' => $eta,
                     'rate_tier' => 'tier_2_inter_lga',
-                    'is_collection_point' => true,
+                    'is_collection_point' => !empty($collectionPoints),
                     'collection_points' => $collectionPoints,
                 ];
             }
 
-            // Tier 3: Inter-State (National freight) -> Collection Point Pickup
+            // Tier 3: Inter-State (National corridor)
             $baseFee = number_format((float)\App\Models\SystemSetting::get('zone_inter_state_fee', '3500.00'), 2, '.', '');
             $eta = (string)\App\Models\SystemSetting::get('zone_inter_state_eta', '2-4 business days');
             $fee = $isKekeOrBulky ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
             $fee = number_format((float)$fee, 2, '.', '');
             $collectionPoints = $this->resolveCollectionPoints($destinationLgaId);
-
-            // Truthful Serviceability Guard: Require active collection point in destination LGA
-            if (empty($collectionPoints)) {
-                return [
-                    'is_available' => false,
-                    'lane_id' => null,
-                    'origin_lga_id' => $shop->lga_id,
-                    'destination_lga_id' => $destinationLgaId,
-                    'fee' => '0.00',
-                    'message' => "No active logistics collection point operates in {$destLga->name} LGA yet. Inter-state freight delivery is unserviced.",
-                    'rate_tier' => 'tier_3_inter_state_unserviced',
-                    'is_collection_point' => true,
-                    'collection_points' => [],
-                ];
-            }
 
             return [
                 'is_available' => true,
@@ -216,7 +212,7 @@ class FulfillmentAvailabilityService
                 'estimated_delivery_hours_max' => 96,
                 'estimated_time_text' => $eta,
                 'rate_tier' => 'tier_3_inter_state',
-                'is_collection_point' => true,
+                'is_collection_point' => !empty($collectionPoints),
                 'collection_points' => $collectionPoints,
             ];
         }

@@ -75,6 +75,34 @@ class Shop extends Model
         return $this->hasMany(PickupReservation::class, 'shop_id');
     }
 
+    public function deliveryCoverages()
+    {
+        return $this->hasMany(ShopDeliveryCoverage::class, 'shop_id');
+    }
+
+    /**
+     * Checks if this shop's riders cover a destination LGA or entire state.
+     */
+    public function coversDestination(int $destinationLgaId, ?int $destinationStateId = null): bool
+    {
+        if (!$destinationStateId) {
+            $destinationStateId = Lga::where('id', $destinationLgaId)->value('state_id');
+        }
+
+        return $this->deliveryCoverages()
+            ->where('is_active', true)
+            ->where(function ($q) use ($destinationLgaId, $destinationStateId) {
+                $q->where('lga_id', $destinationLgaId);
+                if ($destinationStateId) {
+                    $q->orWhere(function ($stateQuery) use ($destinationStateId) {
+                        $stateQuery->whereNull('lga_id')
+                                   ->where('state_id', $destinationStateId);
+                    });
+                }
+            })
+            ->exists();
+    }
+
     /**
      * Active state from database column, with helper for full cascade
      */

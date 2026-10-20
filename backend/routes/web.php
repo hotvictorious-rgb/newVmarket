@@ -220,6 +220,7 @@ Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
     Route::post('/products/{id}/toggle-stock', [PortalController::class, 'vendorToggleProductStock'])->name('vendor.products.toggle-stock');
     Route::post('/shops', [PortalController::class, 'vendorStoreShop'])->name('vendor.shops.store');
     Route::post('/shops/{id}/update', [PortalController::class, 'vendorUpdateShop'])->name('vendor.shops.update');
+    Route::post('/shops/{id}/coverage', [PortalController::class, 'vendorUpdateDeliveryCoverage'])->name('vendor.shops.coverage.update');
     Route::delete('/shops/{id}', [PortalController::class, 'vendorDeleteShop'])->name('vendor.shops.delete');
 });
 
