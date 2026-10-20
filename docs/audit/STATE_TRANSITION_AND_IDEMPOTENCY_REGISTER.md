@@ -274,3 +274,10 @@ Regression verifies that a stale `transfer.reversed` attempt cannot change a log
 ### VM-AUD-041 — logistics success stale-generation transition
 
 A stale `transfer.success` generation is now tested against logistics payout finalization. It cannot change payout status/gateway status, credit/debit the company wallet, post journal entries, or overwrite the newer inbox attempt. CI passed on `43c4f3cf5f43edc8c7fb770d8953de710da57593`: **172 tests / 1,099 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39502030887). Dedicated stale `refund.failed` and production-engine concurrent reclaim verification remain open.
+### VM-AUD-042 — payout eligibility and return-case terminal states
+
+Vendor balance calculation and vendor payout request validation treat `resolved`, `refunded`, `replacement_completed`, `rejected`, and `closed` return cases as terminal/non-blocking for an otherwise eligible earning. The admin payout allocation query now uses that exact same set. A closed return case must not make an otherwise eligible whole earning record disappear between request and disbursement. Regression passed in CI: `f20026303486320b35c4f09cd78d73dc0ff6ab24`, **179 tests / 1,125 assertions** (https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39503186205).
+
+### VM-AUD-043 — refund-failure inbox generation fence proof
+
+A `refund.failed` handler may mark an operation failed, release its active reservation, update gateway attempts, and recompute the order summary only while holding the current inbox generation inside the same transaction. The regression simulates a generation change after operation lookup; generation 1 returns retryable HTTP 429 and must not mutate operation/reservation/journals or overwrite generation 2. CI passed on `f20026303486320b35c4f09cd78d73dc0ff6ab24`: **179 tests / 1,125 assertions**. Concurrent execution on PostgreSQL/production DB is still unverified.
