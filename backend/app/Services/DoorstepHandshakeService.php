@@ -260,9 +260,9 @@ class DoorstepHandshakeService
             $fleetDeliveryCut = bcmul($deliveryFee, '0.9000', 2);
             $platDeliveryCut = bcmul($deliveryFee, '0.1000', 2);
 
-            // 6. Handle Rejection Flow (Spawn Return Case + Provisional Customer Wallet Reservation)
+            // 6. Handle Rejection Flow (Return Case + Refund Reservation)
             $returnCase = null;
-            $customerRefundWalletAmount = '0.00';
+            $refundRequestedAmount = '0.00';
 
             if ($hasRejectedItems) {
                 // Generate 6-Digit Vendor Return Handshake OTP
@@ -311,17 +311,17 @@ class DoorstepHandshakeService
                 // Calculate Cost Allocation & Refund Liability
                 if ($predominantRejectionCategory === 'customer_change_of_mind') {
                     // Customer change of mind: Delivery fee was rendered and paid upfront; customer receives product refund only (NOT deducted twice)
-                    $customerRefundWalletAmount = $totalRejectedMerchandise;
+                    $refundRequestedAmount = $totalRejectedMerchandise;
                     $returnCase->cost_allocation = 'customer_100';
                 } elseif ($predominantRejectionCategory === 'transit_damage') {
                     // Under vendor-managed delivery, the owning vendor is responsible for
                     // its rider's transit handling. Any vendor recovery is separately reviewed;
                     // the platform creates no fleet/rider payable.
-                    $customerRefundWalletAmount = $totalRejectedMerchandise;
+                    $refundRequestedAmount = $totalRejectedMerchandise;
                     $returnCase->cost_allocation = 'vendor_100';
                 } else {
                     // Vendor issue: Vendor penalized, Customer gets full refund
-                    $customerRefundWalletAmount = $totalRejectedMerchandise;
+                    $refundRequestedAmount = $totalRejectedMerchandise;
                     $returnCase->cost_allocation = 'vendor_100';
                 }
                 $returnCase->save();
@@ -335,7 +335,7 @@ class DoorstepHandshakeService
                     'financial_operation_id' => null,
                     'source_type' => Order::class,
                     'source_id' => $lockedOrder->id,
-                    'reserved_amount_kobo' => (int) bcmul($customerRefundWalletAmount, '100', 0),
+                    'reserved_amount_kobo' => (int) bcmul($refundRequestedAmount, '100', 0),
                     'purpose' => 'customer_refund_hold',
                     'status' => 'active',
                 ]);
@@ -512,7 +512,7 @@ class DoorstepHandshakeService
                     'accepted_merchandise' => $totalAcceptedMerchandise,
                     'rejected_merchandise' => $totalRejectedMerchandise,
                     'return_case_id' => $returnCase?->id,
-                    'refund_requested_amount' => $customerRefundWalletAmount,
+                    'refund_requested_amount' => $refundRequestedAmount,
                 ],
                 'ip_address' => request()->ip() ?? '127.0.0.1',
                 'user_agent' => request()->userAgent(),
@@ -526,7 +526,7 @@ class DoorstepHandshakeService
                 'accepted_amount' => $totalAcceptedMerchandise,
                 'rejected_amount' => $totalRejectedMerchandise,
                 'return_case' => $returnCase,
-                'refund_requested_amount' => $customerRefundWalletAmount,
+                'refund_requested_amount' => $refundRequestedAmount,
             ];
         });
     }
