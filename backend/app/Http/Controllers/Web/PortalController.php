@@ -4967,35 +4967,23 @@ class PortalController extends Controller
         return redirect()->route('admin.returns.show', $case->id)->with('status', $result['message']);
     }
 
-    public function adminRejectReturnAction(Request $request, int $id)
+    public function adminRejectReturnAction(Request $request, int $id, ReturnAndRefundService $service)
     {
+        $validated = $request->validate([
+            'rejection_reason' => 'required|string|min:3|max:500',
+        ]);
         $case = ReturnCase::findOrFail($id);
         $admin = Auth::user();
+        if (!$admin) {
+            abort(403);
+        }
 
-        $validated = $request->validate([
-            'rejection_reason' => 'required|string|max:500',
-        ]);
+        $result = $service->adminRejectReturn($admin, $case, $validated['rejection_reason']);
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
 
-        $case->status = 'rejected';
-        $case->resolution_type = 'rejected';
-        $case->reviewed_by_admin_id = $admin->id;
-        $case->admin_notes = $validated['rejection_reason'];
-        $case->save();
-
-        ReturnItem::where('return_case_id', $case->id)->update(['status' => 'rejected']);
-
-        AdminAuditLog::create([
-            'user_id' => $admin->id,
-            'action' => 'return_case_rejected',
-            'target_type' => ReturnCase::class,
-            'target_id' => $case->id,
-            'old_values' => null,
-            'new_values' => ['status' => 'rejected', 'admin_notes' => $validated['rejection_reason']],
-            'ip_address' => $request->ip() ?? '127.0.0.1',
-            'user_agent' => $request->userAgent(),
-        ]);
-
-        return redirect()->route('admin.returns.show', $case->id)->with('status', "Return Case #{$case->case_number} has been rejected.");
+        return redirect()->route('admin.returns.show', $case->id)->with('status', $result['message']);
     }
 
     public function adminArbitrateReturnAction(Request $request, int $id, DoorstepHandshakeService $handshakeService)
