@@ -513,7 +513,7 @@ class VendorPayoutLifecycleTest extends TestCase
             'company_name' => 'Reversal Evidence Fleet Ltd',
             'hq_lga_id' => $this->uyoLga->id,
             'is_active' => true,
-            'status' => 'approved',
+            'status' => 'active',
             'wallet_balance' => '25000.00',
             'bank_name' => 'Zenith Bank',
             'account_number' => '1012345678',
