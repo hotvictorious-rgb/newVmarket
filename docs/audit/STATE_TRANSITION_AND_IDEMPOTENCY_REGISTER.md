@@ -320,3 +320,8 @@ DoorstepHandshakeService::processDoorstepHandover is a separate writer of delive
 ### VM-AUD-053 — mandatory doorstep evidence at service boundary
 
 DoorstepHandshakeService::processDoorstepHandover must reject an absent/blank doorstep proof path, even when invoked without the HTTP controller. API validation alone is not authoritative for direct callers. This guard runs before OTP and any handover side effects; regression coverage asserts no order completion or ReturnCase mutation. CI verification pending.
+
+
+### VM-AUD-054 — failed delivery attempt transition contract
+
+The delivery-attempt-failed API is an authoritative order writer and must use a row lock/transaction. Allowed only when the assigned rider owns the order, payment_status=paid, fulfillment_type=doorstep_delivery, and order_status=out_for_delivery. Attempt counter, evidence, audit log, optional ReturnCase and returned transition are committed atomically; repeated concurrent requests cannot race the attempt threshold. Regression test covers unpaid order rejection with no state/ReturnCase mutation. CI verification pending.
