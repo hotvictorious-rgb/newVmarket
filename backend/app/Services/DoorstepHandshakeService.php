@@ -47,6 +47,20 @@ class DoorstepHandshakeService
                 ];
             }
 
+            // A customer OTP proves handover only; it does not establish payment.
+            // This alternate manifest path must enforce the same payment prerequisite
+            // as the standard delivery service before any item, refund or cashback writes.
+            if ($lockedOrder->payment_status !== 'paid') {
+                return ['success' => false, 'message' => 'Unpaid orders cannot undergo doorstep handover.'];
+            }
+
+            // This service is the terminal doorstep handover transition, not a shortcut
+            // from vendor preparation or pickup-ready states. Rider custody must already
+            // have moved the order into out_for_delivery.
+            if ($lockedOrder->order_status !== 'out_for_delivery') {
+                return ['success' => false, 'message' => 'Order must be out for delivery before doorstep handover.'];
+            }
+
             // Guard against invalid or cancelled order states under lock
             if (in_array($lockedOrder->order_status, ['cancelled', 'pending_payment', 'refunded'])) {
                 return [
