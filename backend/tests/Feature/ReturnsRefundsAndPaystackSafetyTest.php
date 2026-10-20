@@ -1062,7 +1062,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'source_type' => Order::class,
             'source_id' => 999999,
             'reserved_amount_kobo' => 125000,
-            'purpose' => 'customer_refund',
+            'purpose' => 'customer_refund_hold',
             'status' => 'active',
         ]);
 
