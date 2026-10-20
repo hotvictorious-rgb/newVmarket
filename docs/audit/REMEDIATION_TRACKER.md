@@ -286,3 +286,8 @@ VM-AUD-057 verification update (20 October 2026): the full financial/payment har
 
 
 VM-AUD-058 verification update (20 October 2026): the service implementation CI passed ([run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39511432954)), the stale-expiry regression CI passed ([run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39511441860)), and the full financial/payment hardening suite passed ([run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39511448338)). The latest documentation-only validation runs are still in progress at the time of this update.
+
+
+### VM-AUD-059 — late payment reinstated order but not linked pickup reservation (20 October 2026)
+
+A verified late payment could reinstate a cancelled in-shop pickup order as `confirmed` while the linked pickup reservation remained `canceled` or `expired`. This split state could block the counter workflow even though the order was paid and reinstated. The settlement transaction now moves eligible linked reservations to `payment_completed` only when the cancelled order is successfully reinstated and its fulfilment type is `in_shop_pickup`; the stock-unavailable/refund-only branch does not restore the reservation. Added a regression asserting order, payment and reservation states align. Status: FIXED — implementation/test CI pending.
