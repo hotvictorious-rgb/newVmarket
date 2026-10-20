@@ -24,6 +24,7 @@ The owner has confirmed the following final choices. These are binding and super
 - **Refund approval:** automatic approval is limited to a verified duplicate successful capture and a verified payment for an order cancelled before any vendor action. All other refunds require persisted authorized human approval before gateway dispatch.
 - **Protection/cashback:** 24-hour return/refund/protection window plus a separate further 24-hour cashback-maturity buffer after qualifying fulfilment; no maturity while a blocking return/dispute remains. The cashback buffer does not extend the customer return/refund window. The 24-hour window is the standard customer return/claim window after fulfilment, not a gateway refund-processing SLA. Verified duplicate-charge corrections, pre-vendor-action cancellation refunds, payment exceptions, chargebacks, and applicable non-waivable legal obligations remain governed by their separate authorization and evidence rules. Recoverable spent cashback is offset against future cashback only at maturity, not by silently debiting spendable wallet funds.
 - **Commercial split:** eligible post-discount merchandise collected, excluding delivery, is allocated 90% vendor / 5% cashback liability / 5% platform; delivery fee is allocated 90% vendor / 10% platform. Rounding remainder and Paystack processing fees belong to the platform share. No rider payable is created.
+- **Vendor earnings and withdrawals:** every merchandise earning is independently recorded against its vendor order-item line; the 90% delivery-fee earning is a separate record tied to that vendor child order. Vendors can request only the entire server-computed withdrawable balance, not a partial amount. An admin must approve the request before an authorized admin initiates payment. No rider or legacy logistics payout is created for new vendor-managed orders.
 - **Refund/settlement integrity:** partial refunds use immutable captured allocations and are limited by both each child order's refundable allocation and the aggregate parent capture. Refund success is distinct from vendor recovery success; vendor recovery is evidence-based and separately authorized.
 - **Release control:** the policy documents are not proof of implementation. Keep all changes on `audit/paystack-refund-webhook-safety`; do not merge `main` without explicit owner approval.
 
@@ -107,17 +108,45 @@ These are business states, not necessarily literal database enum values. Map exi
 
 **Important:** Paystack says a refund reported as processed may still take up to 10 business days for the customer to receive funds. Customer messaging should say “processed” rather than promise instant bank receipt.
 
-### Vendor payout/transfer lifecycle
+### Vendor earning ledger and payout authorization lifecycle
+
+Each earning is a separate traceable financial record, not merely a total stored on an order or vendor profile.
+
+| Earning type | Required source link | Calculation and lifecycle |
+|---|---|---|
+| Merchandise vendor earning | Parent payment, vendor child order, exact order-item/line ID and immutable line allocation snapshot | 90% of that line's actual post-discount merchandise amount collected, in integer kobo. Hold until that earning passes payment, fulfilment, 24-hour protection-window, return/dispute, vendor/KYC, bank-security, and reconciliation checks. Item refunds/rejections reverse only the affected line's actual vendor allocation. |
+| Delivery vendor earning | Exact vendor child order and immutable captured delivery-fee snapshot | 90% of that child order's delivery fee. Track separately from merchandise lines. Zero for in_shop_pickup. A parent-level aggregate without child attribution is not sufficient. |
+| Platform merchandise share / cashback | Exact item allocation | The remaining 5% platform share and 5% cashback liability are not vendor earnings. Cashback has its own maturity and recovery rules. |
+| Platform delivery share | Exact vendor child order delivery-fee allocation | 10% platform share; never a rider/logistics payable. |
+
+Every earning record must retain amount in kobo, currency, vendor, source IDs, allocation version/snapshot, status, event/idempotency key, and any refund/recovery links. Use independent lifecycle states equivalent to held, withdrawable, reserved, paid, reversed/recovered, or blocked for review. Names may map to existing enums, but the semantics must remain distinct and auditable. The vendor's dashboard totals are derived from these records; they must not replace the source ledger.
+
+#### Full-balance-only vendor payout flow
+
+1. **Eligibility calculation:** derive the withdrawable amount on the server from all earning records that have passed the approved checks. Exclude held, reserved, paid, reversed, disputed, return-pending, unreconciled, or otherwise blocked earnings. Validate vendor status/KYC, verified bank details, 48-hour bank-account change cooldown, recovery offsets and other existing payout-security controls.
+2. **Vendor request:** the vendor requests the entire current withdrawable balance. The backend calculates the amount under transaction/row locks and must not trust a client-supplied amount. Reject partial requests, mismatched amount submissions, zero balance, duplicate active requests, and concurrent requests. Snapshot and reserve the exact earning-record IDs and amounts atomically.
+3. **Admin review:** request state becomes pending review. An authorized admin separately approves or rejects it, recording actor, timestamp, decision and reason/notes. Rejection releases the exact reserved earnings once; it does not erase their earning history.
+4. **Admin payment:** only an approved request may be submitted by an authorized admin for Paystack transfer. Approval alone does not mark earnings paid. Persist transfer reference and attempt identity before gateway call; preserve the in-flight/uncertain state on timeout and reconcile before retry.
+5. **Provider confirmation:** transfer.success or authoritative verification matching exact payout reference, recipient, amount and currency finalizes the payout exactly once, writes balanced journals and marks the exact earning records paid. transfer.failed or transfer.reversed uses the audited recovery flow and restores/adjusts the same source records only after provider funds/state are reconciled. A late event must not overwrite a confirmed success.
+6. **No partial release:** one payout request contains all withdrawable earnings at the instant it is accepted. Earnings that become withdrawable after the snapshot remain outside that request and are included in a later full-balance request after the current request is terminal.
+7. **No rider payout:** the vendor's own compensation of its riders is outside platform accounting. Do not use the vendor payout flow to pay riders, logistics companies or another vendor.
 
 | Evidence | Internal result |
 |---|---|
-| Payout requested but not authorized/eligible | Held; no transfer call |
-| transfer.success matching exact payout operation | Confirm transfer once; balanced journal; close matching attempt |
-| transfer.failed | Failed attempt; reconcile returned funds and preserve vendor payable/obligation |
+| No eligible earning records / zero withdrawable balance | Reject request; no payout record or transfer call |
+| Vendor request matches full server-computed withdrawable balance | Reserve exact earning records and create pending-review request |
+| Client asks for less or more than full withdrawable balance | Reject as partial/mismatched; do not reserve any earning |
+| Existing active request or concurrent request | Reject or return the existing request; never reserve the same earning twice |
+| Pending-review request | No Paystack transfer call allowed |
+| Admin rejects request | Record actor/reason; release exact reservations once; preserve earning history |
+| Admin approves request | Approved only; no ledger payout-finalization yet |
+| Admin initiates approved request | Persist transfer attempt/reference and move to processing; do not mark paid |
+| transfer.success matching exact approved payout | Confirm transfer once; balanced journal; mark only snapshotted earnings paid |
+| transfer.failed | Preserve obligation, reconcile returned funds; controlled release/retry only after safe reconciliation |
 | transfer.reversed | Reversal state; post balanced reversal only if original disbursement journal exists |
-| Unmatched or conflicting transfer event | Unmatched/manual treasury review; never invent a payout |
+| Unmatched/conflicting transfer event | Unmatched/manual treasury review; never invent a payout |
 | Late failure after confirmed success | Protect success; unmatched/manual review, no blind reversal |
-| Retry | New audited attempt/reference after reconciliation; never reuse a completed attempt as though it were new |
+| Retry | New audited attempt/reference after reconciliation and re-authorization as required; never reuse a completed attempt as though it were new |
 
 ### Dispute lifecycle
 
@@ -187,7 +216,7 @@ Do not subscribe to subscription, invoice, payment-request, dedicated-account or
 10. **Chargeback losses:** vendor recovery is evidence- and fault-based. Recover only when documented vendor fault or approved allocation justifies it. If the platform provided required evidence but still loses, or responsibility remains ambiguous, the platform bears the loss unless an authorized case decision establishes a justified recovery.
 11. **Multi-vendor checkout:** one Paystack charge for the parent checkout, with immutable child-order allocations and independent fulfilment/settlement gates.
 12. **Bank-transfer rejection message:** “Your bank transfer could not be processed. We are checking the status with our payment provider and will update you within 24 hours. If funds left your account, they will be returned to you once confirmed. Please do not attempt another payment until you receive an update.” Never promise a refund until authoritative provider evidence confirms the applicable outcome.
-13. **Dispute outcomes and payout cadence:** final dispute outcomes must be linked to provider evidence and an authorized accounting decision. Existing payout cadence, minimums, bank-detail cooldowns and review thresholds remain unchanged unless separately approved.
+13. **Vendor earnings/payout:** merchandise earnings are tracked per order-item line; delivery earnings are separate per vendor child order. Vendors can withdraw only the entire server-computed withdrawable balance; partial withdrawals are disabled. Admin approval and payment initiation are separate steps, and payment is complete only on verified Paystack success/reconciliation. Existing payout cadence/minimums are superseded where they conflict with this full-balance-only rule; existing bank-detail cooldown and other security controls remain. No rider or logistics-company payout is created for new orders.
 
 These business questions are resolved. Technical implementation questions and verification gaps remain open in the checklist below.
 
@@ -209,6 +238,11 @@ These are requirements to verify against code; listing them does not mean they a
 - [ ] Restrict enabled payment channels to Paystack card + standard bank transfer; implement and test `bank.transfer.rejected` without duplicate refunding.
 - [ ] Keep COD disabled across every launch path; no rider/customer cash collection workflow is enabled.
 - [ ] Keep DVA disabled at launch; reject or ignore DVA-only flows safely and do not subscribe to `dedicatedaccount.assign.success` / `dedicatedaccount.assign.failed` until DVA is separately approved.
+- [ ] Add an immutable earning ledger: one merchandise earning per vendor order-item line and one separate delivery earning per vendor child order; store source IDs, integer-kobo amount, allocation snapshot, lifecycle, and refund/recovery links.
+- [ ] Make vendor withdrawable balance a derived total of eligible earning records, not an order-level aggregate alone; apply payment, fulfilment, 24-hour window, returns/disputes, KYC/vendor status, bank cooldown and recovery checks per earning.
+- [ ] Reject partial withdrawal requests; compute the full withdrawable amount server-side and atomically reserve all included earnings. Reject zero/mismatched amounts, duplicate active requests and concurrent double-reservation.
+- [ ] Split admin payout approval from payment initiation. Pending review cannot call Paystack; only an approved request can enter processing; verified transfer success finalizes the exact earning snapshot.
+- [ ] Test rejection/failed/reversed/timeout payout states, exact reservation restoration, webhook races, and no rider/logistics beneficiary for new vendor-managed orders.
 
 ### Refunds and cashback
 - [ ] Persist authorization provenance before dispatch. Permit automatic approval only for verified duplicate charges and pre-vendor-action cancellation under the narrow policy in Q10; require authorized human approval for all other refunds.
