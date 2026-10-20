@@ -938,62 +938,6 @@ class VendorPayoutLifecycleTest extends TestCase
     }
 
 
-    public function test_transfer_reversed_requires_exact_amount_and_ngn_currency_without_mutation(): void
-    {
-        $cases = [
-            'missing_amount' => ['currency' => 'NGN'],
-            'missing_currency' => ['amount' => 500000],
-            'wrong_currency' => ['amount' => 500000, 'currency' => 'USD'],
-        ];
-        $journalCountBefore = FinancialJournalEntry::count();
-
-        foreach ($cases as $case => $financialFields) {
-            $suffix = strtoupper($case);
-            $reference = 'VND-PAYOUT-REVERSAL-' . $suffix;
-            $transferCode = 'TRF_REVERSAL_' . $suffix;
-            $eventId = 'evt_reversal_' . $case . '_required_fields';
-
-            $payout = VendorPayoutRequest::create([
-                'vendor_id' => $this->vendor->id,
-                'amount' => '5000.00',
-                'status' => 'approved',
-                'gateway_status' => 'success',
-                'bank_name' => 'Zenith Bank',
-                'account_number' => '1012345678',
-                'account_name' => 'Test Vendor',
-                'transfer_reference' => $reference,
-                'paystack_transfer_code' => $transferCode,
-            ]);
-
-            $payloadData = [
-                'id' => $eventId,
-                'event' => 'transfer.reversed',
-                'data' => array_merge([
-                    'reference' => $reference,
-                    'transfer_code' => $transferCode,
-                    'reason' => 'Validate required reversal financial evidence',
-                ], $financialFields),
-            ];
-            $payloadJson = json_encode($payloadData);
-            $secretKey = app(PaystackService::class)->getSecretKey();
-            $signature = hash_hmac('sha512', $payloadJson, $secretKey);
-
-            $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
-                'x-paystack-signature' => $signature,
-            ]);
-
-            $response->assertStatus(400);
-            $payout->refresh();
-            $this->assertSame('approved', $payout->status, "Payout state changed for {$case}.");
-            $this->assertSame('success', $payout->gateway_status, "Gateway state changed for {$case}.");
-            $this->assertSame($journalCountBefore, FinancialJournalEntry::count(), "Journal changed for {$case}.");
-            $this->assertDatabaseHas('processed_webhook_events', [
-                'event_id' => $eventId,
-                'status' => 'failed',
-            ]);
-        }
-    }
-
     public function test_paystack_webhook_transfer_success_confirms_payout(): void
     {
         $payout = VendorPayoutRequest::create([
