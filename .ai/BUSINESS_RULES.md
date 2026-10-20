@@ -257,3 +257,7 @@ If COD is enabled by the business, the workflow must define a vendor-owned colle
 These rules are the authoritative business requirements for vendor-managed fulfilment. Older documents that describe platform-managed logistics, logistics-provider revenue shares, rider earnings, rider payouts, or an unresolved choice to retire/keep the rider app must be updated to this model. Business-rule changes require explicit owner approval and consistent updates to API contracts, database rules, implementation, tests, and customer/vendor policies.
 
 Do not merge to main without the user's explicit approval.
+
+## Payment/refund policy extension (draft)
+
+The detailed payment, refund, settlement, state-transition, Paystack webhook, contradiction, and implementation matrix is maintained in [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](../PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md). It records the 24 proposed answers and the official Paystack event names. Items explicitly marked OWNER CONFIRMATION REQUIRED remain provisional; they must not override this authoritative business-rules file or be implemented as binding policy until the owner confirms them. In particular, launch payment channels, cashback recovery treatment, protection-window duration, and the failed-refund terminal-state rule need explicit resolution.
