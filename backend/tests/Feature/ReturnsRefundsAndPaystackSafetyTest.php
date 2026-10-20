@@ -545,6 +545,69 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         $this->assertEquals($credits, $debits, 'The platform-funded refund must remain balanced without creating vendor debt.');
     }
 
+    public function test_settled_vendor_recovery_is_posted_only_after_persisted_fault_ruling_and_refund(): void
+    {
+        $fixture = $this->createDeliveredOrder(Carbon::now()->subHours(4), 1);
+        $order = $fixture['order'];
+        $order->update([
+            'vendor_settlement_status' => 'settled',
+            'payment_reference' => 'REFUND-FAULT-TEST-' . strtoupper(uniqid()),
+        ]);
+
+        $case = ReturnCase::create([
+            'case_number' => 'RET-FAULT-' . strtoupper(uniqid()),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $order->vendor_id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'refund_delivery_fee' => false,
+            'delivery_fee_refunded' => '0.00',
+            'refunded_amount' => '0.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+            'admin_ruling' => 'uphold_customer_claim',
+            'admin_ruled_at' => Carbon::now(),
+            'cost_allocation' => 'vendor_100',
+        ]);
+
+        $paystack = \Mockery::mock(\App\Services\PaystackService::class);
+        $paystack->shouldReceive('initiateRefund')
+            ->once()
+            ->withAnyArgs()
+            ->andReturn([
+                'success' => true,
+                'status' => 'completed',
+                'refund_reference' => 'rf_authorised_fault_recovery',
+                'data' => ['status' => 'completed', 'reference' => 'rf_authorised_fault_recovery'],
+            ]);
+        $this->app->instance(\App\Services\PaystackService::class, $paystack);
+
+        $result = app(ReturnAndRefundService::class)->adminDisburseRefund($this->superAdmin, $case);
+        $this->assertTrue($result['success']);
+        $this->assertSame('refunded', $case->fresh()->status);
+
+        $recovery = VendorRecoveryLedger::where('return_case_id', $case->id)->firstOrFail();
+        $this->assertSame("return-case-{$case->id}-merchandise-recovery", $recovery->idempotency_key);
+        $this->assertEquals(9000.00, (float) $recovery->amount);
+        $this->assertSame('pending_recovery', $recovery->status);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'vendor_recovery_receivable',
+            'entry_type' => 'debit',
+            'amount' => '9000.00',
+        ]);
+
+        $debits = (float) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
+        $credits = (float) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
+        $this->assertEquals($credits, $debits, 'Authorised vendor recovery must not unbalance the refund journal.');
+
+        $retry = app(ReturnAndRefundService::class)->adminDisburseRefund($this->superAdmin, $case->fresh());
+        $this->assertFalse($retry['success']);
+        $this->assertSame(1, VendorRecoveryLedger::where('return_case_id', $case->id)->count());
+    }
+
     public function test_retry_of_pending_paystack_refund_does_not_post_settlement_journals(): void
     {
         $fixture = $this->createDeliveredOrder(Carbon::now()->subHours(4), 1);
