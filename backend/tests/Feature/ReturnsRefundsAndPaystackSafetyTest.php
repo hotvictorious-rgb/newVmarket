@@ -473,6 +473,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'refund_delivery_fee' => false,
             'delivery_fee_refunded' => '0.00',
             'refunded_amount' => '0.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
         ]);
 
         $paystack = \Mockery::mock(\App\Services\PaystackService::class);
