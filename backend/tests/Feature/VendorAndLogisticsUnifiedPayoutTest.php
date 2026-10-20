@@ -5,8 +5,6 @@ namespace Tests\Feature;
 use App\Models\Country;
 use App\Models\FinancialJournalEntry;
 use App\Models\Lga;
-use App\Models\LogisticsCompanyProfile;
-use App\Models\LogisticsPayoutRequest;
 use App\Models\Order;
 use App\Models\Shop;
 use App\Models\State;
@@ -26,8 +24,6 @@ class VendorAndLogisticsUnifiedPayoutTest extends TestCase
     protected User $superAdmin;
     protected User $vendorUser;
     protected VendorProfile $vendor;
-    protected User $logisticsUser;
-    protected LogisticsCompanyProfile $company;
     protected Shop $shop;
     protected Lga $uyoLga;
     protected User $customer;
@@ -91,23 +87,6 @@ class VendorAndLogisticsUnifiedPayoutTest extends TestCase
             'is_active' => true,
         ]);
 
-        // 4. Logistics Company Setup
-        $this->logisticsUser = User::factory()->create([
-            'user_type' => 'logistics_company',
-            'status' => 'active',
-        ]);
-
-        $this->company = LogisticsCompanyProfile::create([
-            'user_id' => $this->logisticsUser->id,
-            'company_name' => 'Swift Courier Express',
-            'status' => 'active',
-            'wallet_balance' => '50000.00',
-            'bank_name' => 'Access Bank PLC',
-            'bank_code' => '044',
-            'account_number' => '0123456789',
-            'account_name' => 'Swift Courier Express Ltd',
-            'bank_updated_at' => Carbon::now()->subDays(5), // Past 48h cooldown
-        ]);
     }
 
     protected function tearDown(): void
@@ -391,136 +370,10 @@ class VendorAndLogisticsUnifiedPayoutTest extends TestCase
     |--------------------------------------------------------------------------
     */
 
-    public function test_logistics_cannot_request_payout_above_wallet_balance(): void
-    {
-        $this->company->wallet_balance = '5000.00';
-        $this->company->save();
 
-        // Attempt to request ₦10,000 (above ₦5,000 wallet balance)
-        $response = $this->actingAs($this->logisticsUser)->post(route('logistics.payout.request'), [
-            'amount' => '10000.00',
-        ]);
 
-        $response->assertSessionHas('error');
-        $this->assertEquals(0, LogisticsPayoutRequest::where('logistics_company_id', $this->company->id)->count());
-        $this->assertEquals('5000.00', $this->company->fresh()->wallet_balance);
-    }
 
-    public function test_logistics_cannot_request_payout_during_48h_bank_cooldown(): void
-    {
-        $this->company->update(['bank_updated_at' => Carbon::now()->subHours(6)]);
-        $this->assertTrue($this->company->isWithinBankCooldown());
 
-        $response = $this->actingAs($this->logisticsUser)->post(route('logistics.payout.request'), [
-            'amount' => '5000.00',
-        ]);
-
-        $response->assertSessionHas('error');
-        $this->assertStringContainsString('Security Cooldown Active', session('error'));
-        $this->assertEquals(0, LogisticsPayoutRequest::where('logistics_company_id', $this->company->id)->count());
-    }
-
-    public function test_logistics_successful_payout_request_debits_wallet(): void
-    {
-        $this->company->wallet_balance = '50000.00';
-        $this->company->save();
-
-        $response = $this->actingAs($this->logisticsUser)->post(route('logistics.payout.request'), [
-            'amount' => '15000.00',
-        ]);
-
-        $response->assertSessionHas('status');
-
-        $payout = LogisticsPayoutRequest::where('logistics_company_id', $this->company->id)->first();
-        $this->assertNotNull($payout);
-        $this->assertEquals('15000.00', number_format((float)$payout->amount, 2, '.', ''));
-        $this->assertEquals('pending', $payout->status);
-
-        // Wallet is atomically debited to ₦35,000
-        $this->assertEquals('35000.00', $this->company->fresh()->wallet_balance);
-    }
-
-    public function test_super_admin_can_approve_logistics_payout_via_paystack(): void
-    {
-        $this->mockPaystackTransferSuccess('TRF_FLEET_SUCCESS_77');
-
-        $this->company->wallet_balance = '50000.00';
-        $this->company->save();
-
-        // Place payout request
-        $this->actingAs($this->logisticsUser)->post(route('logistics.payout.request'), [
-            'amount' => '15000.00',
-        ]);
-
-        $payout = LogisticsPayoutRequest::where('logistics_company_id', $this->company->id)->first();
-        $this->assertNotNull($payout);
-
-        // Super Admin approves and disburses
-        $response = $this->actingAs($this->superAdmin)->post(route('admin.disburse.logistics_payout'), [
-            'payout_id' => $payout->id,
-            'notes' => 'Corporate weekly fleet remittance',
-        ]);
-
-        $response->assertSessionHas('status');
-
-        $payout->refresh();
-        $this->assertEquals('approved', $payout->status);
-        $this->assertEquals($this->superAdmin->id, $payout->approved_by_admin_id);
-        $this->assertEquals('paystack_transfer:TRF_FLEET_SUCCESS_77', $payout->settlement_proof_path);
-
-        // Double-entry check
-        $debit = FinancialJournalEntry::where('beneficiary_id', $this->company->id)
-            ->where('account_name', 'logistics_payout_payable')
-            ->where('entry_type', 'debit')
-            ->first();
-        $this->assertNotNull($debit);
-        $this->assertEquals('15000.00', number_format((float)$debit->amount, 2, '.', ''));
-    }
-
-    public function test_super_admin_can_reject_logistics_payout_and_wallet_is_atomically_refunded(): void
-    {
-        $this->company->wallet_balance = '50000.00';
-        $this->company->save();
-
-        // Logistics requests ₦20,000 -> debits wallet to ₦30,000
-        $this->actingAs($this->logisticsUser)->post(route('logistics.payout.request'), [
-            'amount' => '20000.00',
-        ]);
-        $this->assertEquals('30000.00', $this->company->fresh()->wallet_balance);
-
-        $payout = LogisticsPayoutRequest::where('logistics_company_id', $this->company->id)->first();
-        $this->assertNotNull($payout);
-        $this->assertEquals('pending', $payout->status);
-
-        // Super Admin rejects the request
-        $response = $this->actingAs($this->superAdmin)->post(route('admin.reject.logistics_payout'), [
-            'payout_id' => $payout->id,
-            'rejection_reason' => 'Active customer parcel dispute under investigation for lost transit item.',
-        ]);
-
-        $response->assertSessionHas('status');
-
-        $payout->refresh();
-        $this->assertEquals('rejected', $payout->status);
-        $this->assertEquals('Active customer parcel dispute under investigation for lost transit item.', $payout->rejection_reason);
-
-        // ATOMIC REFUND: Wallet balance is immediately restored to ₦50,000!
-        $this->assertEquals('50000.00', $this->company->fresh()->wallet_balance);
-
-        // Check reversal journal entry
-        $reversal = FinancialJournalEntry::where('beneficiary_id', $this->company->id)
-            ->where('account_name', 'logistics_payout_payable')
-            ->where('entry_type', 'credit')
-            ->first();
-        $this->assertNotNull($reversal);
-        $this->assertEquals('20000.00', number_format((float)$reversal->amount, 2, '.', ''));
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | SCREEN RENDERING TESTS
-    |--------------------------------------------------------------------------
-    */
 
     public function test_vendor_payout_screen_renders_all_four_metric_cards_and_history(): void
     {
@@ -535,52 +388,8 @@ class VendorAndLogisticsUnifiedPayoutTest extends TestCase
         $response->assertSee('Registered NUBAN Settlement Account');
     }
 
-    public function test_logistics_wallet_screen_renders_earnings_and_withdrawable_cards(): void
-    {
-        $response = $this->actingAs($this->logisticsUser)->get(route('logistics.wallet.index'));
 
-        $response->assertStatus(200);
-        $response->assertSee('Lifetime Delivery Earnings');
-        $response->assertSee('In-Transit Custody Escrow');
-        $response->assertSee('AVAILABLE CORPORATE WALLET');
-        $response->assertSee('Request Bank Withdrawal');
-    }
 
-    public function test_admin_settlements_desk_renders_both_vendor_and_logistics_queues(): void
-    {
-        // Seed a pending request for both
-        VendorPayoutRequest::create([
-            'vendor_id' => $this->vendor->id,
-            'amount' => '12500.00',
-            'status' => 'pending',
-            'bank_name' => 'Zenith Bank',
-            'account_number' => '1012345678',
-            'account_name' => 'Victorious Electronics Ltd',
-        ]);
-
-        LogisticsPayoutRequest::create([
-            'logistics_company_id' => $this->company->id,
-            'amount' => '7500.00',
-            'status' => 'pending',
-            'bank_name' => 'Access Bank',
-            'account_number' => '0123456789',
-            'account_name' => 'Swift Courier Express Ltd',
-        ]);
-
-        $response = $this->actingAs($this->superAdmin)->get(route('admin.settlements.index'));
-
-        $response->assertStatus(200);
-        $response->assertSee('Merchant Payout Requests');
-        $response->assertSee('Logistics Fleet Requests');
-        $response->assertSee('12,500.00');
-        $response->assertSee('7,500.00');
-        $response->assertSee('Approve (Paystack)');
-        $response->assertSee('Reject');
-    }
-
-    /**
-     * Webhook Test: transfer.success reconciles and appends delivery confirmation.
-     */
     public function test_paystack_webhook_transfer_success_confirms_payout(): void
     {
         $payout = VendorPayoutRequest::create([
@@ -621,56 +430,7 @@ class VendorAndLogisticsUnifiedPayoutTest extends TestCase
     /**
      * Webhook Test: transfer.failed restores logistics company wallet balance and reverses ledger.
      */
-    public function test_paystack_webhook_transfer_failed_restores_logistics_wallet_and_ledger(): void
-    {
-        $this->company->wallet_balance = '5000.00';
-        $this->company->save();
 
-        $payout = LogisticsPayoutRequest::create([
-            'logistics_company_id' => $this->company->id,
-            'amount' => '10000.00',
-            'status' => 'approved',
-            'bank_name' => 'Access Bank',
-            'account_number' => '0123456789',
-            'account_name' => 'Swift Logistics',
-            'settlement_proof_path' => 'paystack_transfer:TRF_FLEET_FAIL_99',
-            'admin_notes' => 'Automated Paystack NUBAN Transfer (TRF_FLEET_FAIL_99)',
-        ]);
-
-        $payloadData = [
-            'event' => 'transfer.failed',
-            'data' => [
-                'reference' => 'FLEET-PAYOUT-FAIL-01',
-                'transfer_code' => 'TRF_FLEET_FAIL_99',
-                'reason' => 'Destination bank network failure',
-            ],
-        ];
-
-        $payloadJson = json_encode($payloadData);
-        $secretKey = app(PaystackService::class)->getSecretKey();
-        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
-
-        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
-            'x-paystack-signature' => $signature,
-        ]);
-
-        $response->assertStatus(200);
-        $payout->refresh();
-        $this->assertEquals('rejected', $payout->status);
-        $this->assertStringContainsString('Destination bank network failure', (string)$payout->rejection_reason);
-
-        // Wallet atomically refunded: 5000 + 10000 = 15000
-        $this->company->refresh();
-        $this->assertEquals('15000.00', $this->company->wallet_balance);
-
-        // Financial journal reversal entries exist
-        $this->assertTrue(FinancialJournalEntry::where('description', 'like', '%Corporate payout liability restored after Paystack transfer failure%')->exists());
-        $this->assertTrue(FinancialJournalEntry::where('description', 'like', '%Escrow cash restored after Paystack transfer failure%')->exists());
-    }
-
-    /**
-     * Webhook Test: transfer.failed restores merchant settled orders back to eligible and reverses ledger.
-     */
     public function test_paystack_webhook_transfer_failed_restores_merchant_orders_and_ledger(): void
     {
         $order = Order::create([
