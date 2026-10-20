@@ -598,7 +598,10 @@ class OrderSettlementService
                     $op = $finOpService->createRefundOperation(
                         $orderToRefund,
                         $result['refund_amount'],
-                        "Automated refund for out-of-stock/cancelled Order #{$result['refund_order_number']}"
+                        "Automated refund for out-of-stock/cancelled Order #{$result['refund_order_number']}",
+                        null,
+                        null,
+                        ['type' => 'auto_late_payment_cancelled_before_vendor_action']
                     );
                     $dispatchRes = $finOpService->dispatchRefund($op);
 
