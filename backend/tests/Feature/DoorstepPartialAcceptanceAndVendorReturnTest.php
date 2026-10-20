@@ -829,7 +829,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'status' => 'available',
         ]);
 
-        $customerAddress = \App\\Models\\CustomerAddress::create([
+        $customerAddress = \App\Models\CustomerAddress::create([
             'user_id' => $this->customer->id,
             'contact_name' => 'Emeka Shopper',
             'phone' => '+2348011223344',
@@ -852,7 +852,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         ]);
 
         $response->assertStatus(422);
-        $this->assertSame(0, \App\\Models\\CheckoutIntent::where('customer_id', $this->customer->id)->count());
+        $this->assertSame(0, \App\Models\CheckoutIntent::where('customer_id', $this->customer->id)->count());
         $this->assertEquals('10000.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
     }
 
@@ -868,7 +868,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'status' => 'available',
         ]);
 
-        $customerAddress = \App\\Models\\CustomerAddress::create([
+        $customerAddress = \App\Models\CustomerAddress::create([
             'user_id' => $this->customer->id,
             'contact_name' => 'Emeka Shopper',
             'phone' => '+2348011223344',
