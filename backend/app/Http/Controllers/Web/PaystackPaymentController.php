@@ -980,8 +980,16 @@ class PaystackPaymentController extends Controller
             return response()->json(['status' => true, 'message' => 'Refund failure reconciled against its financial operation.'], 200);
         }
 
-        // Only process charge.success events
+        // Unsupported-but-valid Paystack event types are intentionally ignored, but
+        // the inbox claim must still reach a terminal state. Leaving it as "processing"
+        // causes needless retries forever and obscures actual crash recovery.
         if ($event['event'] !== 'charge.success') {
+            $this->updateProcessedEvent($processedEvent, [
+                'status' => 'completed',
+                'processed_at' => Carbon::now(),
+                'error_reason' => null,
+            ]);
+
             return response()->json([
                 'status' => true,
                 'message' => 'Event ignored: ' . $event['event'],
