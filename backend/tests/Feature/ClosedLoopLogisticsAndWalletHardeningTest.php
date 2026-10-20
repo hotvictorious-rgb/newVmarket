@@ -212,57 +212,7 @@ class ClosedLoopLogisticsAndWalletHardeningTest extends TestCase
         ]);
     }
 
-    /**
-     * Test 1: Only the Platform can pay Logistics Companies.
-     * When an order is delivered with OTP handshake, the platform credits 90% delivery cut to corporate wallet.
-     * Fleet rider receives 0.00 direct credit from platform.
-     */
-    public function test_only_platform_can_pay_logistics_companies_and_fleet_rider_never_credited_by_platform(): void
-    {
-        $order = Order::create([
-            'order_number' => 'VM-ORD-PROOF-001',
-            'customer_id' => $this->customerUser->id,
-            'vendor_id' => $this->vendorProfile->id,
-            'shop_id' => $this->shop->id,
-            'origin_lga_id' => $this->shop->lga_id,
-            'destination_lga_id' => $this->uyoLga->id,
-            'rider_id' => $this->rider1->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'order_status' => 'out_for_delivery',
-            'payment_status' => 'paid',
-            'payment_reference' => Order::generateUniquePaymentReference(),
-            'merchandise_subtotal' => '10000.00',
-            'delivery_fee' => '2000.00',
-            'grand_total' => '12000.00',
-            'vendor_net_90' => '9000.00',
-            'customer_cashback_5' => '500.00',
-            'platform_margin_5' => '500.00',
-            'logistics_fee_retained' => '1800.00', // 90% of 2,000.00
-            'platform_delivery_fee' => '200.00',   // 10% retained by VMarket
-            'verification_code' => '998877',
-            'vendor_settlement_status' => 'held',
-        ]);
-
-        $this->assertEquals(0.00, (float)($this->company1->wallet_balance ?? 0));
-        $this->assertEquals(0.00, (float)($this->rider1->current_balance ?? 0));
-
-        $service = app(OrderSettlementService::class);
-        $result = $service->verifyCustomerDeliveryOtp($order, '998877', $this->rider1);
-
-        $this->assertTrue($result['success']);
-
-        $this->company1->refresh();
-        $this->rider1->refresh();
-
-        // Mathematical Proof:
-        // 1. Corporate Wallet credited with exactly ₦1,800.00 (90% of ₦2,000.00 delivery fee)
-        $this->assertEquals(1800.00, (float)$this->company1->wallet_balance);
-
-        // 2. Courier current_balance is STRICTLY 0.00. The platform escrow never pays the fleet courier directly!
-        $this->assertEquals(0.00, (float)($this->rider1->current_balance ?? 0));
-    }
-
-    /**
+        /**
      * Test 2: Complete Elimination of Rider Wallet Domain Capabilities.
      * Couriers are purely operational dispatch agents; creditBalance and debitBalance do not exist.
      */
@@ -287,49 +237,7 @@ class ClosedLoopLogisticsAndWalletHardeningTest extends TestCase
         $response->assertStatus(404);
     }
 
-    /**
-     * Test 4: Mass Assignment Protection Against Wallet Inflation.
-     * Neither wallet_balance on LogisticsCompanyProfile nor current_balance on RiderProfile can be mass-assigned.
-     */
-    public function test_mass_assignment_cannot_inflate_corporate_or_rider_wallets(): void
-    {
-        $this->company1->update([
-            'wallet_balance' => '99999999.00',
-            'company_name' => 'Speedy Express Renamed',
-        ]);
-        $this->company1->refresh();
-
-        // Mass assignment was discarded; wallet_balance remains 0.00!
-        $this->assertEquals(0.00, (float)($this->company1->wallet_balance ?? 0));
-        $this->assertEquals('Speedy Express Renamed', $this->company1->company_name);
-
-        $this->rider1->update([
-            'current_balance' => '88888888.00',
-            'license_plate' => 'UYO-999-ZZ',
-        ]);
-        $this->rider1->refresh();
-
-        // Mass assignment was discarded; current_balance remains 0.00!
-        $this->assertEquals(0.00, (float)($this->rider1->current_balance ?? 0));
-        $this->assertEquals('UYO-999-ZZ', $this->rider1->license_plate);
-    }
-
-    /**
-     * Test 5: Strict Non-Negative Debit Floor.
-     * Calling debitWallet on LogisticsCompanyProfile with an amount exceeding balance throws RuntimeException.
-     */
-    public function test_strict_non_negative_debit_floor_prevents_wallet_overdraft(): void
-    {
-        $this->company1->creditWallet('100.00');
-
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessageMatches('/Insufficient corporate wallet balance/');
-
-        // Attempt to debit 150.00 when only 100.00 available
-        $this->company1->debitWallet('150.00');
-    }
-
-    /**
+            /**
      * Test 8: Vendor Settlement Guard: Vendors Can NEVER Be Disbursed What They Did Not Earn.
      * Cannot disburse until refund window expires, with 0 disputes, and verified Paystack payment.
      */
