@@ -107,6 +107,49 @@ class VendorApiTerminalTest extends TestCase
         $response->assertStatus(403);
     }
 
+    public function test_vendor_in_shop_handover_requires_reservation_code_and_photo_upload(): void
+    {
+        [$user, $vendor, $shop] = $this->createVendor('Pickup Security Store', 'pickup-security@example.com', '08022334457');
+        $customer = User::create([
+            'name' => 'Pickup Customer',
+            'email' => 'pickup-customer@example.com',
+            'phone' => '08022334458',
+            'password' => bcrypt('test'),
+            'user_type' => 'customer',
+            'status' => 'active',
+        ]);
+        $order = Order::create([
+            'order_number' => 'VM-PICKUP-SEC-01',
+            'customer_id' => $customer->id,
+            'vendor_id' => $vendor->id,
+            'shop_id' => $shop->id,
+            'fulfillment_type' => 'in_shop_pickup',
+            'order_status' => 'confirmed',
+            'payment_status' => 'paid',
+            'payment_method' => 'paystack',
+            'payment_reference' => 'REF-PICKUP-SEC-01',
+            'merchandise_subtotal' => '10000.00',
+            'delivery_fee' => '0.00',
+            'grand_total' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '500.00',
+            'verification_code' => '112233',
+            'pickup_verification_code' => '998877',
+            'vendor_settlement_status' => 'held',
+        ]);
+
+        Sanctum::actingAs($user);
+        $response = $this->postJson('/api/v1/vendor/orders/verify-handover-otp', [
+            'order_id' => $order->id,
+            'otp' => '112233',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertSame('confirmed', $order->fresh()->order_status);
+        $this->assertNull($order->fresh()->customer_pickup_photo_path);
+    }
+
     public function test_vendor_dashboard_returns_fintech_metrics_and_cooldown_status(): void
     {
         [$user, $vendor, $shop] = $this->createVendor('Apex Retail', 'apex@example.com', '08022334455');
