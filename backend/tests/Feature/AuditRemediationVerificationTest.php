@@ -687,9 +687,12 @@ class AuditRemediationVerificationTest extends TestCase
         $response->assertStatus(200);
         $response->assertJson([
             'status' => true,
+            'message' => 'Replacement quote prepared. Wallet credit cannot be used for checkout at launch; pay using an approved method if you choose to proceed.',
             'data' => [
                 'operation' => 'quote_preview',
                 'is_quote' => true,
+                'wallet_credit_applied' => '0.00',
+                'net_payable_cash' => '10000.00',
             ],
         ]);
     }
