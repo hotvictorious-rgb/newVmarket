@@ -563,9 +563,9 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
     }
 
     /**
-     * Test 7: Transit damage protects vendor 90% payout and allocates liability to courier fleet.
+     * Test 7: Transit damage is attributed to the owning vendor, not a platform-managed fleet.
      */
-    public function test_transit_damage_protects_vendor_and_allocates_fleet_liability(): void
+    public function test_transit_damage_is_attributed_to_owning_vendor_without_fleet_liability(): void
     {
         [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
 
@@ -583,7 +583,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
 
         $returnCase = ReturnCase::where('order_id', $order->id)->firstOrFail();
         $this->assertEquals('transit_damage', $returnCase->rejection_category);
-        $this->assertEquals('logistics_fleet_100', $returnCase->cost_allocation);
+        $this->assertEquals('vendor_100', $returnCase->cost_allocation);
     }
 
     /**
