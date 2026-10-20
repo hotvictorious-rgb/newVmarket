@@ -147,3 +147,19 @@ Required accounting treatment:
 Illustrative full-refund case: the customer paid ₦105,000 (₦100,000 merchandise + ₦5,000 delivery). The original allocation was ₦94,500 vendor, ₦5,500 platform, and ₦5,000 cashback liability. If the vendor already received ₦94,500 and the customer is later approved a full ₦105,000 refund, the platform pays the customer ₦105,000 from available platform cash/refund liquidity. It reverses the applicable original allocations; the ₦5,000 unspent cashback liability is cancelled if eligible; and the platform reverses its ₦5,500 share. Only if the documented responsibility decision and vendor contract make the paid vendor allocation recoverable does the platform separately record up to ₦94,500 as vendor receivable in this example. The platform temporarily funds the cash gap; the receivable is not treated as cash until recovered. This example assumes full vendor responsibility and a fully recoverable vendor allocation; actual cases must use the approved component-level liability calculation.
 
 Acceptance tests must prove: customer refund completes while vendor recovery is pending; refund liquidity is not overstated by a receivable; a complaint alone creates no confirmed debt; the debt cannot exceed the approved recoverable amount; verified repayments reduce the receivable once; offsets require permission and contractual basis; and a full refund cannot reverse allocations or create debt twice.
+
+## Mandatory accounting-balance and loss-recognition controls (20 October 2026)
+
+This is a binding accounting invariant, not an optional implementation note.
+
+- Every posted journal must balance: total debits equal total credits in the same currency. Required financial postings must be atomic; do not mark a financial operation complete when its required journal fails.
+- Record the customer refund as an actual platform cash outflow when paid through the verified refund route. Reverse original allocations using linked, idempotent entries; never delete or rewrite original entries or pretend a completed vendor bank transfer was reversed.
+- Record a vendor receivable only after an authorised, evidence-backed responsibility decision and contractual basis establish the recoverable amount. The receivable is separate from cash, vendor earnings, customer balances, and platform income.
+- Available cash/refund liquidity must exclude vendor receivables, disputed claims, pending repayments, uncertain transfers, and other funds not actually received and available.
+- Reconcile refund cash movement, original allocation reversals, cashback liability/reversal, vendor payout history, gateway fees, and receivables as distinct components. Retries/webhooks must not duplicate reversals, debt, or recovery.
+- If a vendor receivable becomes unrecoverable, record an authorised impairment/write-off using accountant-approved accounting treatment and preserve the audit trail. A write-off is not a cash receipt and must not conceal the loss.
+- Reports must separately show (1) actual cash and available liquidity, (2) vendor receivables with ageing/status, and (3) platform income, expenses, recognised losses and write-offs. Balanced books do not guarantee profit or sufficient liquidity.
+- Maintain a monitored refund-liquidity reserve/forecast and alert authorised operators when projected obligations exceed available funds. Never count receivables as cash in a reserve calculation.
+- Obtain qualified-accountant review of production journal mapping. Preserve immutable audit events for approvals, postings, repayments, offsets, impairments and write-offs.
+
+**Acceptance criteria:** prove balanced debit/credit journals; customer refund independent of vendor recovery; cash reports exclude receivables; completed vendor transfers remain historical facts; recovery/write-off is authorised and idempotent; and finance reports expose cash shortfalls and losses.
