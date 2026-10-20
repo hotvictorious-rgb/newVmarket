@@ -898,6 +898,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         $order->forceFill([
             'guest_access_token' => $token,
             'verification_code' => '123456',
+            'order_status' => 'out_for_delivery',
         ])->save();
 
         $this->getJson('/api/v1/order/track?order_number=' . urlencode($order->order_number))
