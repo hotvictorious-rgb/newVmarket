@@ -84,7 +84,7 @@ Victorious Market is an intentionally **controlled, centrally governed marketpla
 
 ### 8. Refunds & Customer Wallet Credits
 * **Administrative Authorization:** An authorised admin reviews and approves ordinary refunds, with evidence, reason, amount, approver and timestamps recorded. Applicable law and valid warranty obligations prevail.
-* **Disbursement Integrity:** At launch, approved refunds are initiated through the verified original Paystack payment route where supported. Wallet-credit refunds and off-platform refunds are disabled. A submitted refund is not complete until provider confirmation/reconciliation.
+* **Disbursement and tender integrity:** At launch, approved refunds are initiated through the verified original Paystack payment route where supported. Wallet-credit refunds, legacy wallet-credit checkout tender, and off-platform refunds/payments are disabled. Cashback redemption is a separate capped loyalty discount. A submitted refund is not complete until provider confirmation/reconciliation.
 
 ---
 
@@ -179,7 +179,7 @@ Where lawful and clearly disclosed, seal or hygiene restrictions may apply to th
 
 ### 6. Refund Disbursement & Timelines
 * **Gateway processing:** Approved refunds are submitted through the verified original Paystack route where supported. Actual processing and posting times depend on Paystack, the payment method, and the receiving financial institution; no fixed completion time is guaranteed. Submission is not confirmation of completion.
-* **Refund destination:** At launch, approved refunds are initiated through the verified original Paystack payment route where supported. Wallet-credit refunds and off-platform refunds are disabled.
+* **Refund destination and tender:** At launch, approved refunds are initiated through the verified original Paystack payment route where supported. Wallet-credit refunds and legacy wallet-credit checkout tender are disabled. Cashback redemption remains a separate loyalty discount; off-platform refunds/payments are prohibited.
 MARKDOWN;
 
         $doc2 = LegalDocument::updateOrCreate(
@@ -674,7 +674,7 @@ Payments are processed through Victorious MARKET's authorised Paystack workflow 
 Yes. Create an in-shop pickup reservation through Victorious MARKET. The reservation holds the item for 24 hours. At the approved vendor shop, inspect the item and complete payment through Victorious MARKET's authorised payment workflow before the item is released. Vendors may not collect cash or private-account transfers outside the platform.
 
 #### What payment methods do you accept?
-Launch payment rails are Paystack card and standard bank transfer through Victorious MARKET. Customers may pay before delivery or reserve in-shop pickup and pay at the vendor shop through the platform's authorised workflow. USSD, DVA, mobile money and other rails are not enabled unless separately approved.
+Launch payment rails are Paystack card and standard bank transfer through Victorious MARKET. Customers may pay before delivery or reserve in-shop pickup and pay at the vendor shop through the platform's authorised workflow. Legacy wallet-credit checkout tender is disabled; cashback redemption is a separate capped loyalty discount. USSD, DVA, mobile money and other rails are not enabled unless separately approved.
 
 #### What is the 5% Customer Cashback Program?
 Eligible post-discount merchandise may accrue 5% cashback; delivery fees are excluded. Cashback remains pending until verified fulfilment, expiry of the 24-hour claim window, and a separate 24-hour maturity buffer, provided no blocking case remains. Its 365-day validity starts at actual maturity. It is non-transferable and not withdrawable to a bank. Redemption is capped at 50% of merchandise subtotal per checkout. If the order is refunded, unspent cashback is reversed; any recoverable spent cashback is tracked separately and offset only against future cashback as it matures.
