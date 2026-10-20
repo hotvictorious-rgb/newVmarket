@@ -461,19 +461,6 @@ class PayoutFinalizationService
                 ];
             }
 
-            // A transfer.reversed event must have a confirmed disbursement journal.
-            // Without it, preserve the in-flight payout and route the contradiction to treasury.
-            $hasOriginalPayoutJournal = FinancialJournalEntry::where('event_id', 'EVT-FLEET-PAYOUT-' . $lockedPayout->id)->exists();
-            if ($allowSuccessfulReversal && !$hasOriginalPayoutJournal) {
-                return [
-                    'success' => false,
-                    'protected' => true,
-                    'idempotent' => true,
-                    'payout' => $lockedPayout,
-                    'message' => 'Logistics transfer reversal has no confirmed payout journal; manual reconciliation required.',
-                ];
-            }
-
             // A stale failure/reconciliation result must not undo a confirmed payout.
             // Only an explicit transfer.reversed event may reverse a successful transfer.
             if (
@@ -673,6 +660,19 @@ class PayoutFinalizationService
             }
 
             // Terminal Guard (P0): Idempotent if already rejected/failed (prevents duplicate wallet balance credits)
+            // A transfer.reversed event must have a confirmed disbursement journal.
+            // Without it, preserve the in-flight payout and route the contradiction to treasury.
+            $hasOriginalPayoutJournal = FinancialJournalEntry::where('event_id', 'EVT-FLEET-PAYOUT-' . $lockedPayout->id)->exists();
+            if ($allowSuccessfulReversal && !$hasOriginalPayoutJournal) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'payout' => $lockedPayout,
+                    'message' => 'Logistics transfer reversal has no confirmed payout journal; manual reconciliation required.',
+                ];
+            }
+
             if ($lockedPayout->status === 'rejected' && $lockedPayout->gateway_status === 'failed') {
                 return [
                     'success' => true,
