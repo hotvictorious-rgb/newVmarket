@@ -25,6 +25,14 @@ The owner directed that the supplied recommendations be used, with Paystack bank
 | 7 | Launch channels: card + Paystack bank transfer. Other channels (USSD, mobile money, etc.) are not enabled by this decision. | Configure checkout to expose only card and Paystack bank transfer. Both use `charge.success` as the authoritative successful-payment event. Add explicit `bank.transfer.rejected` exception handling. Do not confuse a rejected bank-transfer attempt with a separate refund request; Paystack documents automatic refund handling for invalid transfer amounts, so reconcile provider evidence and do not initiate a duplicate refund. |
 | 8 | Expired stock holds must not release stock while payment outcome is uncertain. | Verify/reconcile payment before releasing stock where payment may have succeeded or be in-flight. A late verified payment may be fulfilled only after an atomic stock recheck/reservation; otherwise open a controlled refund case. |
 
+### Merchandise and delivery allocation arithmetic (binding)
+
+- Calculate the 90/5/5 merchandise allocation from the actual **post-discount merchandise amount collected**, before adding delivery fee. Do not calculate from list price or an amount the customer did not pay.
+- Allocate eligible merchandise value as 90% vendor, 5% cashback liability, and 5% platform share. Cashback is never calculated on delivery fees.
+- Allocate the separately charged delivery fee 90% to the vendor and 10% to the platform. No part of this delivery allocation becomes a rider payable; vendor-to-rider compensation is paid outside platform systems.
+- Calculate in integer kobo/decimal-safe arithmetic. Preserve the exact checkout allocation snapshot for refunds and settlement. Assign any rounding remainder to the platform share so the vendor share and cashback amount remain deterministic.
+- Refunds must reverse the actual captured child-order allocation for the approved refundable component(s), considering prior refunds, discount allocation, cashback earned/redeemed, delivery-fee decision and whether vendor proceeds have already been paid. Never recompute an old refund from current product prices or current vendor settings.
+
 ## 3. Refund and cashback decisions (Q9–Q16)
 
 | Q | Proposed rule | Implementation / control |
@@ -121,7 +129,7 @@ Paystack's official documentation lists supported event names. Subscribe to even
 | transfer.success | Confirm a matched vendor payout |
 | transfer.failed | Reconcile failed payout and returned funds |
 | transfer.reversed | Reconcile reversed payout and post a valid reversal |
-| bank.transfer.rejected | Required because Paystack bank-transfer payments are enabled; record wrong-amount/fraud rejection as a payment exception, notify/reconcile, and avoid issuing a duplicate refund when Paystack has already automatically refunded an invalid-amount transfer |
+| bank.transfer.rejected | Required because Paystack bank-transfer payments are enabled; record wrong-amount/fraud rejection as a payment exception, notify/reconcile, and verify provider refund status and avoid issuing a duplicate refund for an invalid-amount transfer |
 | charge.dispute.create | Open/flag chargeback case and hold affected unsettled proceeds |
 | charge.dispute.remind | Track outstanding dispute reminders/deadlines |
 | charge.dispute.resolve | Record dispute outcome and trigger authorized follow-up |
@@ -159,7 +167,7 @@ Do not subscribe to subscription, invoice, payment-request, dedicated-account or
 5. **Wallet refund:** selected optional path is allowed only with explicit customer consent and recorded admin authorization; original channel remains the default.
 6. **Cashback protection window:** selected value is 7 days (168 hours), with cashback maturation 24 hours after expiry when no case blocks it.
 7. **Dispute resolution outcomes:** map final outcome to provider evidence and authorized accounting rules. A resolved dispute does not always imply vendor proceeds should simply be released.
-8. **Allocation basis and rounding:** resolved: calculate the merchandise 90/5/5 split from actual post-discount merchandise amount before delivery fee; delivery fee is split 90/10 vendor/platform and earns no cashback. Assign rounding remainder to the platform share. Confirm tax/gateway-fee accounting treatment against the immutable checkout snapshot before release.
+8. **Allocation basis and rounding:** resolved: calculate the merchandise 90/5/5 split from actual post-discount merchandise amount before delivery fee; delivery fee is split 90/10 vendor/platform and earns no cashback. Assign rounding remainder to the platform share. Preserve the immutable allocation snapshot. Tax/gateway-fee treatment must not alter the approved basis silently and needs accounting verification before release.
 9. **Vendor payout cadence:** fulfilment/return-window eligibility is specified, but payout schedule/batch timing, minimum payout, bank-detail cooldown and manual review thresholds remain existing approved controls unless separately changed.
 
 ## 9. Required implementation changes / audit checklist
@@ -238,7 +246,7 @@ These are observed gaps in the current audit branch, not assumptions that docume
 3. **Cashback recovery timing:** if a customer has an outstanding cashback recovery balance, should every future cashback award be applied to that balance immediately when earned, or only when it would otherwise mature after the 7-day protection window? Recommended: apply the offset at maturity, so un-matured cashback is not prematurely diverted and the existing maturity rules remain clear.
 4. **Refund exception approvals:** should low-risk refunds (e.g. pre-dispatch cancellation with no delivery, verified duplicate charge) ever use a narrowly scoped automatic approval policy, or must every refund require an authorized human approval? Current rule: every refund requires persisted admin approval before dispatch.
 5. **Delivery-fee refund matrix:** confirm whether the proposed baseline is acceptable: vendor fault/incorrect/defective item or pre-dispatch cancellation can refund delivery fee; customer change of mind/unjustified refusal normally does not; partial item return requires reason-specific review. Until confirmed, admin must decide case-by-case and the system must not infer it.
-6. **Bank-transfer rejected event handling:** Paystack documents that invalid-amount transfers may be automatically refunded. Confirm that the customer-facing message should say “Paystack rejected the transfer and is processing its automatic refund” only after the event/payload is verified, without promising immediate bank receipt.
+6. **Bank-transfer rejected customer message:** choose the exact message for `bank.transfer.rejected`. Recommended: say the transfer was rejected and its status is being checked; only say an automatic refund is processing after authoritative provider evidence confirms that refund status. Never promise immediate bank receipt.
 
 ## 12. Official Paystack references
 
