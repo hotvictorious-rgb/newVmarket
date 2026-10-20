@@ -335,3 +335,8 @@ A customer dispute may be filed only against an owned delivered order within the
 ### VM-AUD-056 — all-rejected doorstep handover must not settle delivery fee
 
 Transition: `out_for_delivery` -> `returned` only after verified customer handover OTP, complete unique manifest, mandatory photo proof and authorized return case. If accepted merchandise total is zero, no vendor/fleet delivery payable, no platform delivery revenue and no escrow-release debit may be posted by the handover event. Delivery-fee outcome remains held for separate persisted admin remedy/refund authorization; customer refund rights are not decided by this transition. If at least one item is accepted, delivery fee follows the normal allocation path. Regression checks assert the all-rejected event creates none of the three delivery-fee/escrow journal events. CI verification pending.
+
+
+### VM-AUD-057 — doorstep delivery confirmation evidence gate
+
+No event may transition `out_for_delivery` -> `delivered`, set customer-confirmed receipt, start the 24-hour claim window, or enqueue cashback solely from a valid customer OTP. The shared settlement service requires a non-empty server-stored proof image path after OTP validation and before any terminal transition. Every exposed API/web confirmation route must validate an uploaded image (image, max 10 MB), store it server-side, and pass the resulting path into the shared service. Missing proof returns failure with no delivery status, received timestamp, cashback, or settlement side effects. Rider/customer entry paths must be tested independently. CI verification pending.
