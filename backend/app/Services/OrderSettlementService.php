@@ -417,7 +417,7 @@ class OrderSettlementService
                             'customer_id' => $child->customer_id,
                             'amount' => $child->customer_cashback_5,
                             'status' => 'pending_maturation',
-                            'matures_at' => Carbon::now()->addDays(365),
+                            'matures_at' => Carbon::now(), // Placeholder only; verified fulfilment replaces this with refund-window expiry + 24 hours.
                             'expires_at' => Carbon::now()->addDays(730),
                         ]);
                     }
@@ -577,7 +577,7 @@ class OrderSettlementService
                         'customer_id' => $lockedOrder->customer_id,
                         'amount' => $lockedOrder->customer_cashback_5,
                         'status' => 'pending_maturation',
-                        'matures_at' => Carbon::now()->addDays(365), // Locked until confirmed delivery/pickup!
+                        'matures_at' => Carbon::now(), // Placeholder only; verified fulfilment replaces this with refund-window expiry + 24 hours. // Locked until confirmed delivery/pickup!
                         'expires_at' => Carbon::now()->addDays(730),
                     ]);
                 }
@@ -1014,7 +1014,7 @@ class OrderSettlementService
                 'customer_id' => $lockedOrder->customer_id,
                 'amount' => $lockedOrder->customer_cashback_5,
                 'status' => 'pending_maturation',
-                'matures_at' => $lockedOrder->refund_window_expires_at,
+                'matures_at' => $lockedOrder->refund_window_expires_at->copy()->addHours(24),
                 'expires_at' => $lockedOrder->refund_window_expires_at->copy()->addDays(365),
             ]);
 
@@ -1155,7 +1155,7 @@ class OrderSettlementService
                 'customer_id' => $lockedOrder->customer_id,
                 'amount' => $lockedOrder->customer_cashback_5,
                 'status' => 'pending_maturation',
-                'matures_at' => $lockedOrder->refund_window_expires_at,
+                'matures_at' => $lockedOrder->refund_window_expires_at->copy()->addHours(24),
                 'expires_at' => $lockedOrder->refund_window_expires_at->copy()->addDays(365),
             ]);
 
