@@ -215,6 +215,52 @@ paths:
         '409':
           description: Idempotency key reused with different request details, or the original intent expired
 
+  /api/v1/customer/orders/checkout:
+    post:
+      summary: Execute customer checkout and initialize Paystack payment
+      description: Send the same Idempotency-Key for retries of one logical order checkout. Same key and same normalized request replays the existing order; same key with changed checkout details returns 409. The header remains optional for backward compatibility, so callers omitting it are not protected against duplicate order creation.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Client-generated stable key reused for retries of this order checkout (1–100 characters).
+          schema: { type: string, minLength: 1, maxLength: 100 }
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shop_id, fulfillment_type, items]
+              properties:
+                intent_id: { type: integer, nullable: true }
+                shop_id: { type: integer }
+                fulfillment_type: { type: string, enum: [doorstep_delivery, in_shop_pickup] }
+                customer_address_id: { type: integer, nullable: true }
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [product_id, quantity]
+                    properties:
+                      product_id: { type: integer }
+                      quantity: { type: integer, minimum: 1, maximum: 1000 }
+                redeem_cashback: { type: boolean }
+                payment_method: { type: string, enum: [paystack], default: paystack }
+      responses:
+        '200':
+          description: Existing order replayed for an idempotent retry
+        '201':
+          description: Order created and Paystack initialization result returned
+        '409':
+          description: Idempotency key reused with different request details
+        '422':
+          description: Invalid checkout request or payment initialization unavailable/uncertain
+
   /api/v1/pickup-reservations/create:
     post:
       summary: Create 24-hr in-shop inspection reservation pass (₦0.00 down)
