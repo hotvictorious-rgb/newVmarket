@@ -226,8 +226,24 @@ class PaystackPaymentController extends Controller
             return ['error' => 'Conflicting transfer code'];
         }
 
-        // Amount Invariant Check (Finding P0 & P1): Exact integer kobo verification
+        // Amount Invariant Check: Paystack amounts are integer kobo. Do not
+        // cast malformed decimals/floats/strings before validating their representation.
         if (isset($tData['amount'])) {
+            $amountIsWholeKobo = is_int($tData['amount'])
+                || (is_string($tData['amount']) && preg_match('/^\\d+$/D', $tData['amount']) === 1);
+            if (!$amountIsWholeKobo) {
+                Log::critical("Paystack Webhook Malformed Transfer Amount! Payout #{$payout->id} amount must be integer kobo.", [
+                    'event_id' => $processedEvent->event_id,
+                    'received_amount' => $tData['amount'],
+                ]);
+                $this->updateProcessedEvent($processedEvent, [
+                    'status' => 'failed',
+                    'error_reason' => "MALFORMED_AMOUNT: Payout #{$payout->id} amount must be a whole integer number of kobo.",
+                    'processed_at' => Carbon::now(),
+                ]);
+                return ['error' => 'Malformed payout amount'];
+            }
+
             $webhookKobo = (int)$tData['amount'];
             $expectedKobo = (int)bcmul((string)$payout->amount, '100', 0);
             if ($webhookKobo !== $expectedKobo) {
@@ -507,7 +523,11 @@ class PaystackPaymentController extends Controller
             $reason = (string)($tData['reason'] ?? 'Bank reversal / recipient rejected');
             Log::warning("Paystack Webhook: Transfer {$event['event']} for ref '{$tRef}', code '{$tCode}'", $tData);
 
-            $resolved = $this->resolveAndValidatePayout($tData, $processedEvent);
+            $resolved = $this->resolveAndValidatePayout(
+                $tData,
+                $processedEvent,
+                $event['event'] === 'transfer.reversed'
+            );
 
             if (isset($resolved['error'])) {
                 return response()->json(['status' => false, 'message' => $resolved['error']], 400);
