@@ -24,7 +24,7 @@ Every scenario must verify:
 - Arrange: one checkout; client sends the same request twice, then retries after a timeout.
 - Expected: one intended order/payment attempt or a clearly linked idempotent result; no duplicate stock reservation, cashback reservation, or journal entries.
 - Verify: order count, provider reference uniqueness, stock state, cashback and journal totals.
-- **Implemented partial regression:** `test_duplicate_charge_success_with_distinct_event_ids_does_not_duplicate_financial_effects` simulates duplicate successful capture webhooks with different event IDs and checks paid/confirmed state, journal count, cashback ledger count and inbox completion. CI: [run 39515053888](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39515053888) (pending). This is not a full client-side double-checkout/idempotency test.
+- **Implemented partial regression:** `test_duplicate_charge_success_with_distinct_event_ids_does_not_duplicate_financial_effects` simulates duplicate successful capture webhooks with different event IDs and checks paid/confirmed state, journal count, cashback ledger count and inbox completion. CI passed: [run 39515053888](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39515053888). This is not a full client-side double-checkout/idempotency test.
 
 ### S02 — Paystack succeeds but the browser closes
 - Arrange: provider reports a successful verified payment; browser never receives the redirect.
