@@ -330,3 +330,8 @@ The delivery-attempt-failed API is an authoritative order writer and must use a 
 ### VM-AUD-055 — customer dispute idempotency and serialization
 
 A customer dispute may be filed only against an owned delivered order within the active 24-hour claim window, unless admin/legal workflow explicitly opens a late case. Serialize createDispute using a row lock on the order; re-check source status/window and existing active dispute while locked; create one dispute and freeze vendor settlement in the same transaction. Duplicate submissions must not create duplicate dispute records or race settlement state. Regression asserts exactly one dispute after duplicate submission. CI verification pending.
+
+
+### VM-AUD-056 — all-rejected doorstep handover must not settle delivery fee
+
+Transition: `out_for_delivery` -> `returned` only after verified customer handover OTP, complete unique manifest, mandatory photo proof and authorized return case. If accepted merchandise total is zero, no vendor/fleet delivery payable, no platform delivery revenue and no escrow-release debit may be posted by the handover event. Delivery-fee outcome remains held for separate persisted admin remedy/refund authorization; customer refund rights are not decided by this transition. If at least one item is accepted, delivery fee follows the normal allocation path. Regression checks assert the all-rejected event creates none of the three delivery-fee/escrow journal events. CI verification pending.
