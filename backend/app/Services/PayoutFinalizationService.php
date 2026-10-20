@@ -159,26 +159,29 @@ class PayoutFinalizationService
                     $plannedRemainder = bcsub($plannedRemainder, $orderAvailable, 2);
                 }
 
-                if (bccomp($plannedRemainder, '0.00', 2) === 0) {
-                    foreach ($allocationPlan as $planned) {
-                        VendorPayoutAllocation::create([
-                            'vendor_payout_request_id' => $lockedPayout->id,
-                            'order_id' => $planned['order']->id,
-                            'allocated_amount' => $planned['amount'],
-                            'status' => 'allocated',
-                        ]);
+                // Keep every whole FIFO record that fits, even when a residual
+                // amount cannot be matched. The residual is booked to treasury
+                // reconciliation suspense below; never split the next earning.
+                foreach ($allocationPlan as $planned) {
+                    VendorPayoutAllocation::create([
+                        'vendor_payout_request_id' => $lockedPayout->id,
+                        'order_id' => $planned['order']->id,
+                        'allocated_amount' => $planned['amount'],
+                        'status' => 'allocated',
+                    ]);
 
-                        $totalNewlyAllocated = bcadd($totalNewlyAllocated, $planned['amount'], 2);
-                        $order = $planned['order'];
-                        $order->refresh();
-                        if (bccomp($order->remaining_payable_to_vendor, '0.00', 2) <= 0) {
-                            $order->update(['vendor_settlement_status' => 'settled']);
-                        }
+                    $totalNewlyAllocated = bcadd($totalNewlyAllocated, $planned['amount'], 2);
+                    $order = $planned['order'];
+                    $order->refresh();
+                    if (bccomp($order->remaining_payable_to_vendor, '0.00', 2) <= 0) {
+                        $order->update(['vendor_settlement_status' => 'settled']);
                     }
-                    $remainingToSettle = '0.00';
-                } else {
-                    Log::emergency("Treasury Discrepancy: confirmed vendor payout #{$lockedPayout->id} cannot be allocated using strict FIFO whole earning records; ₦{$remainingToSettle} remains unallocated. No partial earning record was allocated. Manual finance reconciliation is required.");
-                    $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . "ALLOCATION_DISCREPANCY: confirmed transfer could not be mapped to whole FIFO earning records; ₦{$remainingToSettle} left unallocated; no partial allocation created.";
+                }
+                $remainingToSettle = $plannedRemainder;
+
+                if (bccomp($plannedRemainder, '0.00', 2) > 0) {
+                    Log::emergency("Treasury Discrepancy: confirmed vendor payout #{$lockedPayout->id} cannot be fully allocated using strict FIFO whole earning records; ₦{$plannedRemainder} remains unallocated. No earning record was split. Manual finance reconciliation is required.");
+                    $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . "ALLOCATION_DISCREPANCY: confirmed transfer could not be fully mapped to whole FIFO earning records; ₦{$plannedRemainder} left unallocated; no earning record split.";
                     $lockedPayout->save();
                 }
             }
