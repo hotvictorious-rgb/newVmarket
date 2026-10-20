@@ -790,11 +790,10 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
     }
 
     /**
-     * Test 12: Standard Checkout with 100% Refund Wallet Credit completes without Paystack.
+     * Launch policy: legacy refund wallet credit cannot be used as checkout tender.
      */
-    public function test_standard_checkout_with_100_percent_wallet_credit_completes_without_paystack(): void
+    public function test_standard_checkout_rejects_wallet_credit_tender(): void
     {
-        // Give customer ₦50,000 in spendable refund wallet credits
         CustomerWalletCredit::create([
             'customer_id' => $this->customer->id,
             'amount' => '50000.00',
@@ -803,18 +802,6 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'notes' => 'Initial refund wallet balance',
         ]);
 
-        $customerAddress = \App\Models\CustomerAddress::create([
-            'user_id' => $this->customer->id,
-            'contact_name' => 'Emeka Shopper',
-            'phone' => '+2348011223344',
-            'address_line' => '42 Ikot Ekpene Road',
-            'country_id' => $this->uyoLga->state->country_id,
-            'lga_id' => $this->uyoLga->id,
-            'state_id' => $this->uyoLga->state_id,
-            'is_default' => true,
-        ]);
-
-        // In-shop pickup checkout for Kettle (₦15,000)
         Sanctum::actingAs($this->customer);
         $response = $this->postJson('/api/v1/customer/orders/checkout', [
             'shop_id' => $this->shop->id,
@@ -825,42 +812,15 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'redeem_wallet_credit' => true,
         ]);
 
-        dump($response->json());
-        $response->assertStatus(201);
-        $response->assertJson([
-            'status' => true,
-            'data' => [
-                'grand_total' => '0.00',
-                'payment_method' => 'wallet_credit',
-                'payment_status' => 'paid',
-                'wallet_credit_applied' => '15000.00',
-                'paystack' => null,
-            ],
-        ]);
-
-        // Verify order is immediately marked as paid and confirmed
-        $order = Order::where('customer_id', $this->customer->id)->latest('id')->firstOrFail();
-        $this->assertEquals('paid', $order->payment_status);
-        $this->assertEquals('confirmed', $order->order_status);
-        $this->assertEquals('wallet_credit', $order->payment_method);
-        $this->assertEquals('15000.00', (string)$order->wallet_credit_applied);
-        $this->assertEquals('0.00', (string)$order->grand_total);
-
-        // Verify remaining wallet balance is ₦35,000.00
-        $remainingBalance = CustomerWalletCredit::getAvailableBalance($this->customer->id);
-        $this->assertEquals('35000.00', $remainingBalance);
-
-        // Verify Double-Entry Journal balances exactly
-        $debits = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
-        $credits = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
-        $this->assertEquals('15000.00', number_format((float)$debits, 2, '.', ''));
-        $this->assertEquals('15000.00', number_format((float)$credits, 2, '.', ''));
+        $response->assertStatus(422);
+        $this->assertSame(0, Order::where('customer_id', $this->customer->id)->count());
+        $this->assertEquals('50000.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
     }
 
     /**
-     * Test 13: Two-Phase Checkout Intent with Wallet Credit calculation.
+     * Launch policy: checkout intent must reject legacy wallet-credit redemption.
      */
-    public function test_checkout_intent_with_redeem_wallet_credit(): void
+    public function test_checkout_intent_rejects_wallet_credit_redemption(): void
     {
         CustomerWalletCredit::create([
             'customer_id' => $this->customer->id,
@@ -869,7 +829,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'status' => 'available',
         ]);
 
-        $customerAddress = \App\Models\CustomerAddress::create([
+        $customerAddress = \\App\\Models\\CustomerAddress::create([
             'user_id' => $this->customer->id,
             'contact_name' => 'Emeka Shopper',
             'phone' => '+2348011223344',
@@ -891,22 +851,15 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'redeem_wallet_credit' => true,
         ]);
 
-        $response->assertStatus(201);
-        $response->assertJson([
-            'status' => true,
-            'data' => [
-                'merchandise_subtotal' => '30000.00',
-                'delivery_fee' => '500.00',
-                'wallet_credit_applied' => '10000.00',
-                'total_payable' => '20500.00',
-            ],
-        ]);
+        $response->assertStatus(422);
+        $this->assertSame(0, \\App\\Models\\CheckoutIntent::where('customer_id', $this->customer->id)->count());
+        $this->assertEquals('10000.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
     }
 
     /**
-     * Test 14: Partial Wallet Credit Checkout with Paystack Gateway Verification balances double-entry books.
+     * Launch policy: wallet credit cannot partially offset a Paystack checkout.
      */
-    public function test_partial_wallet_credit_checkout_with_paystack_verification(): void
+    public function test_partial_wallet_credit_checkout_is_rejected_without_spending_credit(): void
     {
         CustomerWalletCredit::create([
             'customer_id' => $this->customer->id,
@@ -915,7 +868,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'status' => 'available',
         ]);
 
-        $customerAddress = \App\Models\CustomerAddress::create([
+        $customerAddress = \\App\\Models\\CustomerAddress::create([
             'user_id' => $this->customer->id,
             'contact_name' => 'Emeka Shopper',
             'phone' => '+2348011223344',
@@ -927,7 +880,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         ]);
 
         Sanctum::actingAs($this->customer);
-        $checkoutRes = $this->postJson('/api/v1/customer/orders/checkout', [
+        $response = $this->postJson('/api/v1/customer/orders/checkout', [
             'shop_id' => $this->shop->id,
             'fulfillment_type' => 'doorstep_delivery',
             'customer_address_id' => $customerAddress->id,
@@ -938,42 +891,9 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'payment_method' => 'paystack',
         ]);
 
-        $checkoutRes->assertStatus(201);
-        $orderNumber = $checkoutRes->json('data.order_number');
-        $this->assertEquals('20500.00', $checkoutRes->json('data.grand_total'));
-        $this->assertEquals('10000.00', $checkoutRes->json('data.wallet_credit_applied'));
-
-        $order = Order::where('order_number', $orderNumber)->firstOrFail();
-        $this->assertEquals('pending', $order->payment_status);
-
-        // Simulate successful Paystack server-to-server gateway callback/verification
-        $settlementService = app(\App\Services\OrderSettlementService::class);
-        $paystackPayload = [
-            'status' => 'success',
-            'amount' => 2050000, // 20,500.00 NGN in Kobo
-            'currency' => 'NGN',
-            'reference' => $order->payment_reference,
-            'channel' => 'card',
-            'id' => 9918231,
-            'customer' => ['email' => $this->customer->email],
-        ];
-
-        $settleResult = $settlementService->settlePaystackOrder($order, $paystackPayload, $this->customer);
-        $this->assertTrue($settleResult['success']);
-
-        $order->refresh();
-        $this->assertEquals('paid', $order->payment_status);
-        $this->assertEquals('confirmed', $order->order_status);
-
-        // Verify customer wallet was spent
-        $remainingWallet = CustomerWalletCredit::getAvailableBalance($this->customer->id);
-        $this->assertEquals('0.00', $remainingWallet);
-
-        // Verify Double-Entry Journal balances exactly (₦30,500 debits == ₦30,500 credits)
-        $debits = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
-        $credits = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
-        $this->assertEquals('30500.00', number_format((float)$debits, 2, '.', ''));
-        $this->assertEquals('30500.00', number_format((float)$credits, 2, '.', ''));
+        $response->assertStatus(422);
+        $this->assertSame(0, Order::where('customer_id', $this->customer->id)->count());
+        $this->assertEquals('10000.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
     }
 
     /**
