@@ -232,6 +232,14 @@ class OrderSettlementService
                     $lockedOrder->order_status = 'confirmed';
                     $lockedOrder->vendor_settlement_status = 'held';
 
+                    // A cancelled pickup reservation can be revived only as part
+                    // of this verified, locked late-payment reinstatement.
+                    if ($lockedOrder->fulfillment_type === 'in_shop_pickup') {
+                        PickupReservation::where('order_id', $lockedOrder->id)
+                            ->whereIn('status', ['reserved', 'canceled', 'cancelled', 'expired'])
+                            ->update(['status' => 'payment_completed']);
+                    }
+
                     AdminAuditLog::create([
                         'user_id' => $lockedOrder->customer_id,
                         'action' => 'paid_after_expiration_reinstated',
