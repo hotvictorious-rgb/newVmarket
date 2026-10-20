@@ -358,6 +358,20 @@ class VendorApiTerminalTest extends TestCase
         ]);
     }
 
+    public function test_vendor_api_payout_enforces_approved_minimum_and_maximum(): void
+    {
+        [$user, $vendor] = $this->createVendor('Bounded Payout Store', 'bounds@example.com', '08099334456');
+        Sanctum::actingAs($user);
+
+        $belowMinimum = $this->postJson('/api/v1/vendor/payouts', ['amount' => 1000.00]);
+        $belowMinimum->assertStatus(422);
+        $this->assertDatabaseMissing('vendor_payout_requests', ['vendor_id' => $vendor->id]);
+
+        $aboveMaximum = $this->postJson('/api/v1/vendor/payouts', ['amount' => 500001.00]);
+        $aboveMaximum->assertStatus(422);
+        $this->assertDatabaseMissing('vendor_payout_requests', ['vendor_id' => $vendor->id]);
+    }
+
     public function test_vendor_payout_rejected_when_amount_exceeds_withdrawable_balance(): void
     {
         [$user, $vendor, $shop] = $this->createVendor('Low Balance Store', 'low@example.com', '08099334455');
