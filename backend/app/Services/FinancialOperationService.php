@@ -552,10 +552,10 @@ class FinancialOperationService
             // with lease expiry and a newer worker reclaiming the event.
             if ($webhookEventId !== null || $webhookAttempt !== null) {
                 if ($webhookEventId === null || $webhookAttempt === null) {
-                    throw new \\InvalidArgumentException('Webhook fencing requires both event ID and attempt generation.');
+                    throw new \InvalidArgumentException('Webhook fencing requires both event ID and attempt generation.');
                 }
 
-                $claimedEvent = \\App\\Models\\ProcessedWebhookEvent::where('id', $webhookEventId)
+                $claimedEvent = \App\Models\ProcessedWebhookEvent::where('id', $webhookEventId)
                     ->lockForUpdate()
                     ->first();
 
