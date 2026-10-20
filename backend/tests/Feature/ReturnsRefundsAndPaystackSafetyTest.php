@@ -947,6 +947,53 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             ->assertUnauthorized();
     }
 
+    public function test_late_refund_success_after_terminal_failure_is_quarantined(): void
+    {
+        $operation = FinancialOperation::create([
+            'operation_reference' => 'OP-RFD-FAILED-THEN-LATE-SUCCESS',
+            'idempotency_key' => 'refund-failed-late-success-key',
+            'operation_type' => 'customer_refund',
+            'amount_kobo' => 125000,
+            'currency' => 'NGN',
+            'status' => 'failed',
+            'gateway_provider' => 'paystack',
+            'metadata' => [
+                'refund_reference' => 'PAYSTACK-REFUND-LATE-SUCCESS-01',
+                'payment_reference' => 'PAYMENT-LATE-SUCCESS-01',
+            ],
+        ]);
+
+        $payloadData = [
+            'id' => 'evt_refund_success_after_terminal_failure_01',
+            'event' => 'refund.processed',
+            'data' => [
+                'refund_reference' => 'PAYSTACK-REFUND-LATE-SUCCESS-01',
+                'transaction_reference' => 'PAYMENT-LATE-SUCCESS-01',
+                'amount' => 125000,
+                'currency' => 'NGN',
+                'status' => 'processed',
+            ],
+        ];
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+        $journalCountBefore = FinancialJournalEntry::count();
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+        $operation->refresh();
+        $this->assertSame('failed', $operation->status);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
+        $this->assertDatabaseHas('processed_webhook_events', [
+            'event_id' => 'evt_refund_success_after_terminal_failure_01',
+            'status' => 'unmatched',
+            'error_reason' => 'REFUND_TERMINAL_STATE_CONFLICT: Late success cannot reopen a failed/reversed refund operation; manual reconciliation required.',
+        ]);
+    }
+
     public function test_late_refund_failed_webhook_cannot_downgrade_confirmed_refund(): void
     {
         $operation = FinancialOperation::create([
