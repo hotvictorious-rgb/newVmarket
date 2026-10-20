@@ -214,6 +214,59 @@ class VendorApiTerminalTest extends TestCase
         $this->assertNotNull($order->vendor_handover_ready_at);
     }
 
+    public function test_vendor_handover_ready_rejects_unpaid_and_in_shop_orders(): void
+    {
+        [$user, $vendor, $shop] = $this->createVendor('Handover Guard Store', 'handover-guard@example.com', '08044556678');
+        $customer = User::create([
+            'name' => 'Handover Guard Customer',
+            'email' => 'handover-guard-customer@example.com',
+            'phone' => '08044556679',
+            'password' => bcrypt('test'),
+            'user_type' => 'customer',
+            'status' => 'active',
+        ]);
+
+        $cases = [
+            [
+                'order_number' => 'VM-HANDOVER-UNPAID',
+                'fulfillment_type' => 'doorstep_delivery',
+                'order_status' => 'confirmed',
+                'payment_status' => 'pending',
+            ],
+            [
+                'order_number' => 'VM-HANDOVER-PICKUP',
+                'fulfillment_type' => 'in_shop_pickup',
+                'order_status' => 'confirmed',
+                'payment_status' => 'paid',
+            ],
+        ];
+
+        Sanctum::actingAs($user);
+
+        foreach ($cases as $case) {
+            $order = Order::create(array_merge($case, [
+                'customer_id' => $customer->id,
+                'vendor_id' => $vendor->id,
+                'shop_id' => $shop->id,
+                'payment_method' => 'paystack',
+                'payment_reference' => 'REF-' . $case['order_number'],
+                'merchandise_subtotal' => '10000.00',
+                'delivery_fee' => $case['fulfillment_type'] === 'in_shop_pickup' ? '0.00' : '1500.00',
+                'grand_total' => $case['fulfillment_type'] === 'in_shop_pickup' ? '10000.00' : '11500.00',
+                'vendor_net_90' => '9000.00',
+                'customer_cashback_5' => '500.00',
+                'platform_margin_5' => '500.00',
+                'vendor_settlement_status' => 'held',
+            ]));
+
+            $response = $this->postJson("/api/v1/vendor/orders/{$order->id}/ready-for-handover");
+
+            $response->assertStatus(422)->assertJsonPath('status', false);
+            $this->assertSame($case['order_status'], $order->fresh()->order_status);
+            $this->assertNull($order->fresh()->vendor_handover_ready_at);
+        }
+    }
+
     public function test_vendor_bank_update_triggers_48h_cooldown(): void
     {
         [$user, $vendor, $shop] = $this->createVendor('Shield Store', 'shield@example.com', '08044556677');
