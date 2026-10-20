@@ -1,6 +1,6 @@
 # Victorious MARKET (newVmarket)
 
-> **Sovereign Omnichannel Retail & Directional Logistics Operating System**  
+> **Sovereign Omnichannel Retail & Vendor-Managed Fulfilment Platform**  
 > **Brand Promise:** Your Trusted Online Market for Quality Products  
 > **Operating Philosophy:** Trust First. Quality Always. Accountability at Every Stage  
 > **Brand Identity:** Royal Purple (`#5E17EB`) & Rich Gold (`#FFD700`) | **Core Asset:** `vm_icon.jpg`  
@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-**Victorious MARKET** is a zero-trust, multi-tenant digital commerce and directional logistics operating system built on Laravel. Engineered specifically for African retail environments—starting across Akwa Ibom State and expanding across Nigeria—the platform bridges digital escrow payments with verifiable physical custody.
+**Victorious MARKET** is a zero-trust, multi-tenant digital commerce platform with vendor-managed delivery built on Laravel. Engineered specifically for African retail environments—starting across Akwa Ibom State and expanding across Nigeria—the platform bridges digital escrow payments with verifiable physical custody.
 
 Traditional e-commerce platforms in emerging markets suffer from systemic vulnerabilities: phantom wallet liabilities, vendor payout theft, courier wage disputes, doorstep fraud, inventory overselling during checkout rushes, and non-reconciled gateway callbacks. Victorious MARKET eliminates these failure modes mathematically and structurally through:
 
@@ -21,7 +21,7 @@ Traditional e-commerce platforms in emerging markets suffer from systemic vulner
 5. **Conflict & Late Payment Reconciliation:** If a merchant runs out of stock offline or two shoppers attempt concurrent purchase of the last item, the vendor switches the status to Out of Stock. Any late-confirming payment for an out-of-stock item transitions safely to `paid_stock_unavailable` with a 100% full refund or spendable wallet credit guarantee—ensuring zero overselling, zero merchant forced-fulfillment, and zero customer loss.
 6. **7-Day Marketplace Freshness Invariant:** To prevent ghost listings, merchants must re-verify catalog inventory every 7 days (`freshness_confirmed_at`). Listings unconfirmed past 7 days are automatically pruned from public browsing, search, and checkout.
 7. **Triangular Physical-Custody Handshakes:** Real-world custody transitions require single-use 6-digit OTP codes, GPS arrival verification, and photographic proof across branch pickup, courier transit, doorstep delivery, and defective returns.
-8. **Decoupled Fulfillment Architecture:** Complete support for **Vendor-Managed Delivery Couriers**, **Customer In-Shop Pickup**, and **Third-Party Logistics Fleets**, eliminating hard platform fleet dependencies while keeping riders 100% free of in-app financial liability.
+8. **Decoupled Fulfillment Architecture:** Complete support for **Vendor-Managed Doorstep Delivery** and **Customer In-Shop Pickup**. Legacy logistics records are preserved for historical audit only; new orders do not use platform-managed fleets.
 
 ---
 
@@ -31,7 +31,7 @@ Traditional e-commerce platforms in emerging markets suffer from systemic vulner
 2. [Institutional Financial Core & Commission Model](#2-institutional-financial-core--commission-model)
 3. [The Two-Status Inventory Architecture & Payment Safety Reservations](#3-the-two-status-inventory-architecture--payment-safety-reservations)
 4. [7-Day Product Freshness Lifecycle](#4-7-day-product-freshness-lifecycle)
-5. [Decoupled Fulfillment: Vendor Riders, Counter Pickup & Fleet Corridors](#5-decoupled-fulfillment-vendor-riders-counter-pickup--fleet-corridors)
+5. [Vendor-Managed Fulfilment: Vendor Riders and In-Shop Pickup](#5-vendor-managed-fulfilment-vendor-riders-and-in-shop-pickup)
 6. [Triangular Custody Handshakes & Doorstep Returns](#6-triangular-custody-handshakes--doorstep-returns)
 7. [The 7 Hardened Multi-Tenant Actor Roles](#7-the-7-hardened-multi-tenant-actor-roles)
 8. [Paystack Escrow, Webhook Hardening & Crash Recovery](#8-paystack-escrow-webhook-hardening--crash-recovery)
@@ -300,17 +300,17 @@ To eliminate fraud, fake delivery claims, and disputed returns, Victorious MARKE
 
 ### Handshake 2: Doorstep Customer Handshake
 - The customer receives a private, single-use 6-digit delivery OTP visible only on their authenticated portal and sent via SMS.
-- The courier signals doorstep arrival, inputs the customer's OTP, and uploads a mandatory delivery confirmation photograph.
-- Successful verification transitions the order authoritatively to `delivered`, starts the 24-hour return timer, and releases the delivery fee to the fulfillment provider.
+- The vendor-linked rider signals doorstep arrival, follows the customer OTP/confirmation workflow, and uploads the required delivery proof.
+- Successful verification transitions the order authoritatively to `delivered` and starts the 24-hour return timer. Vendor settlement follows the vendor/platform financial rules; the rider is never paid by VMARKET.
 
 ### Handshake 3: Doorstep Partial Acceptance & Defective Returns
 - **Item-Level Manifest Selection:** If an order contains multiple items, the customer can accept conforming items and reject defective ones at the doorstep.
 - **Compulsory Defect Photography:** Rejections require photographic evidence of the defect, misrepresentation, or damage, uploaded directly via [`DoorstepHandshakeService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/DoorstepHandshakeService.php).
 - **Instant Customer Wallet Credit:** For verified rejections, the refundable amount is credited instantly to the customer's wallet (`CustomerWalletCredit`), allowing immediate re-orders without waiting days for gateway transfers.
 - **Custody Decoupled from Fault Arbitration:** Handover of the physical return parcel back to the merchant is verified via return OTP, while financial liability is arbitrated separately by [`RefundPolicyService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/RefundPolicyService.php) based on fault classification:
-  - *Customer Change of Mind:* Merchandise refunded; delivery fee retained by courier.
-  - *Vendor Fault:* Merchandise + delivery fee refunded; vendor charged for delivery liability.
-  - *Transit Damage:* Merchandise + delivery fee refunded; logistics fleet charged for loss liability.
+  - *Customer Change of Mind:* Merchandise and delivery-fee treatment follow the published, disclosed return policy; the vendor compensates its rider separately.
+  - *Vendor Fault:* Eligible merchandise and delivery-fee refunds are handled by the authorized refund process; vendor liability is determined from the evidence and policy.
+  - *Transit Damage:* Eligible refunds and any vendor recovery are determined through evidence-based dispute review. Do not automatically charge a rider or create a logistics-fleet liability.
 
 ---
 
@@ -324,7 +324,7 @@ Victorious MARKET enforces absolute privilege separation with dedicated login en
 | **2** | **Admin Staff** | `/admin-staff/login` | `/admin-staff` | N/A | Catalog moderation, 7-day freshness oversight, customer support. Zero access to banking details, wallet debits, or payout triggers. |
 | **3** | **Vendor Merchant** | `/vendor/login` | `/vendor` | `/api/v1/vendor/*` | Store management, binary stock toggle, 7-day freshness reconfirmation, vendor rider assignment, bank account settings (48h cooldown). |
 | **4** | **Branch Counter Staff** | `/counter/login` | `/counter` | N/A | Bound strictly to a single `shop_id`. In-store inspection, reservation pass (`RES-XXXXXX`) sign-off, courier pickup OTP verification. |
-| **5** | **Logistics Fleet Desk** | `/logistics/login` | `/logistics` | N/A | Fleet management, corporate rider onboarding, vehicle compliance, collection points, corporate wallet withdrawal requests (48h cooldown). |
+| **5** | **Legacy Logistics Records** | Restricted historical access | Audit-only | N/A | Historical orders, affiliations, collection points and payout records only; no new dispatch, rider management, or payout activity. |
 | **6** | **Delivery Rider** | `/rider/login` | `/rider` | `/api/v1/rider/*` | Shift toggle (On/Off Duty), counter pickup verification, doorstep OTP handshakes, return parcel custody. **Zero financial liability.** |
 | **7** | **Customer Shopper** | `/login` | `/customer` | `/api/v1/customer/*` | Multi-vendor checkout, 30-min payment holds, secret delivery OTP cards, reservation passes, 5% cashback rewards, doorstep returns. |
 
@@ -414,7 +414,7 @@ Victorious MARKET provides clean, versioned JSON REST APIs for native mobile and
 - `POST /api/v1/customer/orders/{orderNumber}/returns`: Submit item-level return requests with photos within the 24h window.
 
 ### B. Courier Terminal API (`/api/v1/rider/*`)
-- `POST /api/v1/auth/login`: Guarded courier login requiring active merchant or logistics fleet affiliation.
+- `POST /api/v1/auth/login`: Rider login requires an active rider profile linked to exactly one active vendor for new vendor-managed orders. Legacy fleet-only affiliation does not authorize new assignments.
 - `GET /api/v1/rider/dashboard`: Operational telemetry (`active_assignments_count`, `completed_trips_count`, `shift_status`). **Zero balance leakage.**
 - `POST /api/v1/rider/toggle-duty`: Toggle operational availability (`ON DUTY` / `OFF DUTY`).
 - `GET /api/v1/rider/orders/active`: Manifest of active runs with pickup plaza and customer delivery addresses.
