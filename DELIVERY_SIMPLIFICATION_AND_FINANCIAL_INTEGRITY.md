@@ -8,18 +8,91 @@ Modify the existing VICTORIOUS MARKET application to support vendor-managed deli
 
 Do not rebuild the application from scratch. Do not implement only frontend changes. Do not delete old logistics code until its dependencies, data, API consumers, jobs, and tests have been mapped.
 
+## Authoritative Business Rules — Vendor-Managed Delivery (Approved 2026-10-20)
+
+This section records the current approved business model and supersedes any older wording in this document that describes platform-managed logistics, fleet-managed riders, logistics-company payouts, or an undecided rider-app role. These are business rules, not optional implementation suggestions.
+
+### 1. Ownership and operating boundaries
+
+1. **VICTORIOUS MARKET does not operate a delivery fleet or dispatch service.** It provides marketplace, payment, order, safety, evidence, dispute, and audit infrastructure. It does not recruit riders into a platform fleet, choose riders for vendors, route deliveries, supervise shifts, or operate logistics-company dispatch.
+2. **Every active rider belongs to exactly one vendor.** A rider is that vendor's delivery person. The rider must have a vendor association before activation and must never be a free-floating marketplace rider.
+3. **Vendors create/add and manage their own riders.** A vendor can activate/deactivate riders associated with that vendor, subject to platform-wide security suspension or legal/compliance intervention. A vendor cannot view, edit, assign, or deactivate another vendor's riders.
+4. **A rider is operational, not a financial actor.** The platform must not maintain rider payable balances, rider wallets, rider payout requests, rider bank accounts, or rider financial settlement states. No financial payout from VMARKET to a rider is permitted.
+5. **Vendor-to-rider compensation is a private commercial arrangement handled by the vendor outside VMARKET's payout/ledger system.** VMARKET may retain non-financial delivery status and proof records, but must not calculate or disburse rider wages, per-drop payments, tips, or bonuses.
+6. **Vendor order assignment is controlled by the owning vendor.** A vendor assigns an eligible order to one of that vendor's active riders. The backend must verify ownership and eligibility on every assignment and operational action. A rider cannot self-assign an order or take another vendor's order.
+7. **Reassignment remains a vendor action.** A vendor may reassign an order before completion, but the system must preserve an audit trail, revoke the previous rider's access to the active assignment, and prevent a stale rider from completing or changing the order. If the parcel is physically in the former rider's custody, the vendor must first record a custody handover/return; reassignment cannot erase custody history.
+8. **Platform administrators do not dispatch orders.** They may investigate complaints, audit activity, enforce marketplace policy, suspend unsafe accounts, and intervene in exceptional disputes. Those powers do not turn VMARKET into the delivery operator.
+
+### 2. Order and fulfilment model
+
+1. **Multi-vendor checkout remains supported.** A parent checkout can contain separate vendor orders. Each vendor order has its own fulfilment choice, destination, delivery fee, vendor/rider assignment, operational timeline, evidence, and eligible refund outcome. Never assign a single vendor's rider to another vendor's child order.
+2. **Doorstep delivery** (fulfilment type 'doorstep_delivery') requires a valid vendor delivery configuration for the customer's destination. Vendor-defined LGA pricing takes precedence over a vendor's state-level fallback where both are configured. If the destination is not served or no valid fee rule applies, doorstep delivery is unavailable; do not silently invent a fee.
+3. The selected fulfilment type, destination, delivery-fee amount, fee-policy/version where available, vendor order, and relevant address snapshot must be stored server-side at checkout. Later vendor settings changes must not rewrite an existing order.
+4. **In-shop customer pickup** (fulfilment type 'in_shop_pickup') remains a first-class supported fulfilment method. It has **zero delivery fee**, does not require a rider, and must not be treated as a failed doorstep delivery. The customer receives a pickup pass in the format 'RES-XXXXXX'; the authorized vendor/shop counter verifies the pass and records the handover. The pass is an access secret: do not expose it in public order lookups or to unrelated vendors.
+5. Keep pickup and doorstep-delivery state transitions separate. A pickup pass is not a rider delivery OTP, and pickup completion must not create a rider assignment, delivery fee, rider compensation, or delivery payout.
+6. Payment method (including cash on delivery if enabled for a particular vendor/order) does not grant a rider access to financial records. Any COD collection instructions must be narrowly operational, vendor-authorized, auditable, and must not expose card details or platform commission. Rider-facing screens must never collect or store card details.
+
+### 3. Delivery-fee and financial boundaries
+
+1. The existing commercial rule in this project is a **10% VMARKET commission on the eligible vendor-order amount, including the vendor delivery fee**. The **5% customer cashback applies to eligible product value only, excluding delivery**, and is funded from the platform commission rather than deducted from rider earnings.
+2. For delivery-fee allocation, this document treats the platform's 10% commission on the eligible vendor-order total as the platform share; the remaining vendor allocation belongs to the vendor. The vendor is responsible for compensating its rider directly outside the VMARKET payout system.
+3. Do not also apply the old standalone “90% logistics company / 10% platform” split as a second charge. It is retired for new orders because there is no platform-managed logistics company or logistics-company beneficiary. The financial engine must not double-charge commission or create a logistics-company payable for vendor-managed delivery.
+4. **The zero-fee in_shop_pickup exception is mandatory.** Destination delivery-fee rules do not apply to customer pickup.
+5. Financial journals and payout workflows may settle the vendor and platform according to the approved commercial rules. They must never create rider or logistics-company payouts for new vendor-managed deliveries. Refunds, reversals, commission adjustments, and delivery-fee treatment must use the actual immutable vendor-order allocation and must not pay the rider through the platform.
+
+> **Decision interpretation note:** The original letter labels for question 9 were not stored in the repository. To avoid inventing a second fee split, this rule uses the explicit commission policy already in the project and the approved requirement that rider compensation is handled directly by the vendor. If the selected “B” meant a different numeric split, that commercial formula must be explicitly amended before any fee-allocation code is changed.
+
+### 4. Rider information and customer privacy
+
+1. Rider API and web responses must be purpose-limited. The customer contact card contains only the customer's **name**, **delivery address**, and a **Call Customer** action that uses the authorized phone number without revealing unrelated account data.
+2. Riders must never receive customer card details, payment instrument data, wallet balances, cashback, total order financial breakdowns, vendor net earnings, platform commission, platform margin, payout balances, or internal ledger/journal details.
+3. Remove payment status and delivery-fee amounts from rider-facing order payloads unless a separately approved operational requirement proves a field is essential; the current approved rule is to omit them. Do not include customer email or unrelated profile fields.
+4. Return only the operational order data necessary to deliver the parcel, such as order identifier/number, vendor pickup location, item identity and quantity, destination/address, delivery instructions, allowed status actions, and evidence-upload affordances. Do not expose secret OTPs to the rider before the customer presents them.
+5. Enforce these rules at the server/API serialization layer, not only by hiding fields in the UI. Test direct API calls and historical-order endpoints as well as dashboards.
+
+### 5. Delivery evidence, failure, and reassignment
+
+1. Delivery completion requires the approved proof workflow (customer delivery OTP/confirmation and required proof photo where configured). Evidence proves an operational event; it does not automatically approve a refund, change the order price, or release funds.
+2. Each assignment, reassignment, pickup, arrival, failed attempt, custody transfer, delivery completion, and return-to-vendor event must record actor, timestamp, order, vendor, rider, reason where applicable, and evidence reference.
+3. A failed attempt is an **operational event, not a financial event**. Record the reason, notes, and required evidence; notify the vendor; let the vendor decide and record retry, reassignment, customer coordination, or return-to-vendor according to policy.
+4. Do not automatically issue a customer wallet credit/refund, charge a rider, create a logistics payout, or finalize financial settlement merely because a delivery attempt failed or an attempt-count threshold was reached. Refund eligibility and execution follow the separate authorized return/refund workflow and require authoritative financial reconciliation.
+5. Before reassigning an order already in transit, establish parcel custody and revoke the old rider's active authorization. Old riders must be unable to view the current customer's active delivery data or perform status changes after reassignment.
+
+### 6. Historical logistics records and migration safety
+
+1. Existing logistics-company profiles, payout requests, wallets, collection-point records, rider affiliations, orders, and journal entries are historical records. **Do not hard-delete or rewrite historical financial data.**
+2. Preserve historical rows for audit, reconciliation, dispute handling, and old-order support. Mark legacy logistics functionality as retired/read-only where appropriate.
+3. For new orders, block logistics-company rider affiliation, dispatch, collection of delivery fees by logistics companies, and logistics-company payout creation. A legacy order may still display its original historical provider/financial facts to authorized staff, but those facts must not grant a legacy company access to new vendor-managed orders.
+4. Before making rider_profiles.vendor_id mandatory, backfill each active rider to its rightful vendor, investigate ambiguous or conflicting affiliations, and quarantine unresolved records. Do not guess a vendor or silently reassign historical orders. Keep a rollback and reconciliation report.
+5. Use additive, reversible migrations where practical. Do not drop historical columns/tables until dependencies, records, jobs, APIs, and financial reconciliation have been proven safe to retire.
+
+### 7. Operational acceptance criteria
+
+A release is not compliant until tests prove that:
+- A rider with no vendor, a suspended vendor, a different vendor's rider, or a legacy fleet-only rider cannot access or act on new vendor-managed orders.
+- A vendor can create, activate/deactivate, assign, and reassign only its own riders and orders.
+- A stale/reassigned rider cannot read or mutate an assignment after access is revoked.
+- Multi-vendor child orders remain isolated and each uses its own vendor's rider.
+- Rider responses contain no payment status, delivery fee, card/payment details, commission, cashback, vendor financial metrics, or payout fields.
+- No new rider/logistics-company financial journal, payable, wallet, or payout request is created.
+- Failed delivery creates an operational record only; refund/wallet credit requires the independent authorized refund path.
+- in_shop_pickup remains available at a zero delivery fee with a RES-XXXXXX pass and no rider/payout dependency.
+- Legacy records remain queryable for authorized audit without enabling retired logistics workflows.
+
+---
+
 ## Operating model
 
-- Vendors configure their own delivery destinations and positive delivery fees.
-- Vendors arrange and manage their own delivery personnel or couriers.
-- Customers can choose customer pickup where the vendor supports it.
-- Vendors may configure delivery prices for individual LGAs and state-level destinations within Nigeria.
-- Explicit LGA pricing overrides state-level pricing. No valid destination rule means delivery is unavailable.
-- Each vendor's products, fulfilment, delivery fee, and financial outcome are tracked independently within a coherent customer checkout.
-- VMARKET retains payment verification, vendor verification, fulfilment oversight, dispute review, refund authorization, ledger integrity, payout controls, and audit logs.
-- Retire mandatory platform-managed fleet, logistics-company, hub, dispatch, and rider-payout dependencies where no longer needed.
-- Preserve delivery addresses, destination validation, fulfilment events, evidence, and dispute workflows.
-- Do not let rider/delivery confirmation approve a refund, change prices, or release funds.
+- Vendors configure their own delivery destinations and fee rules; valid LGA-specific pricing overrides state-level fallback pricing.
+- Vendors add and manage their own riders; every active rider belongs to exactly one vendor and can only act on that vendor's orders.
+- Vendors assign and reassign their orders. VMARKET records secure operational events but does not dispatch, schedule, or manage a fleet.
+- Multi-vendor checkout remains supported as separate vendor orders with isolated fulfilment, fees, riders, evidence, and financial outcomes.
+- Customer in_shop_pickup remains supported at zero delivery fee with a RES-XXXXXX pickup pass and no rider dependency.
+- VMARKET retains payment verification, vendor verification, policy enforcement, evidence, dispute review, refund authorization, ledger integrity, vendor payout controls, and audit logs.
+- Retire new platform-managed logistics-company dispatch, fleet affiliation, logistics-company fee payout, and rider-payout dependencies; preserve legacy records for read-only audit/reconciliation.
+- Riders are operational only: no VMARKET rider wallet, payable, earnings ledger, bank account, or payout request.
+- Restrict rider customer-contact data to name, delivery address, and a Call Customer action. Do not expose customer financial data, card details, platform commission, cashback, or vendor financial metrics.
+- Delivery confirmation is evidence of handover only; it cannot approve a refund, change prices, or independently release funds.
 
 ## Platform Commission and Refund Accounting Rule
 
@@ -339,9 +412,9 @@ If a vendor sells an item offline and forgets to update their VMARKET status, a 
 1. Use canonical Nigerian state/LGA records and server-side destination validation.
 2. Allow vendors to enable only the destinations they serve.
 3. Support LGA-specific pricing and state-level fallback pricing.
-4. Require every enabled delivery destination to have a valid fee greater than zero.
-5. Do not permit missing, zero, negative, malformed, or client-controlled fees.
-6. Customer pickup must be modelled separately.
+4. Require every enabled doorstep-delivery destination to have a valid positive fee.
+5. Reject missing, negative, malformed, or client-controlled doorstep fees; do not reject the explicit zero-fee in_shop_pickup method.
+6. Customer pickup must be modelled separately and use the RES-XXXXXX pickup pass, with no rider assignment.
 7. Snapshot the selected destination, fulfilment method, and agreed fee at checkout. Subsequent settings changes must not alter existing orders.
 8. Fail closed for unsupported destinations.
 
@@ -358,12 +431,12 @@ If a vendor sells an item offline and forgets to update their VMARKET status, a 
 
 ### Phase 4: Vendor-managed fulfilment
 
-1. Implement or adapt secure order acceptance, preparation, readiness, dispatch, delivery/pickup confirmation, failure, and complaint transitions.
-2. Enforce vendor ownership and authorised delivery-person access on the server.
-3. Keep dispatch separate from delivery confirmation.
-4. Record timestamps, actor identity, relevant evidence, and transition history.
-5. Remove obsolete platform dispatch dependencies from critical paths.
-6. Decide whether the rider app should become an optional authorised confirmation tool or be retired. Do not leave mandatory RiderProfile or LogisticsCompany dependencies in checkout and order completion.
+1. Implement secure vendor-owned rider onboarding, activation/deactivation, order assignment, reassignment, pickup, arrival, delivery confirmation, failed-attempt, and return-to-vendor transitions.
+2. Enforce that each active rider belongs to exactly one active vendor and can act only on that vendor's assigned orders.
+3. Keep operational delivery state separate from financial settlement, refund approval, and vendor payout state.
+4. Record actor, timestamps, evidence, custody, assignment history, and reason for every transition.
+5. Keep the rider terminal as an operational tool; remove rider earnings, rider payout, and logistics-company dispatch/payout from new workflows.
+6. Preserve legacy logistics records read-only for historical orders and audit. Do not hard-delete or rewrite old financial records.
 7. Preserve existing order data and avoid destructive migrations.
 
 ### Phase 5: Returns and refunds
@@ -394,7 +467,7 @@ If a vendor sells an item offline and forgets to update their VMARKET status, a 
 
 ### Phase 7: Security and regression testing
 
-Test vendor ownership, customer ownership, role permissions, invalid destinations, altered client totals, mixed fulfilment, concurrent refunds, duplicate webhooks, uncertain gateway timeouts, partial refunds, paid vendor payouts, cashback/discount allocations, late payment confirmation, delivery evidence, and historical order compatibility.
+Test vendor ownership, vendor-only rider affiliation, assignment/reassignment fencing, rider API privacy, zero rider/logistics payouts, zero-fee pickup pass, multi-vendor fulfilment isolation, invalid destinations, altered client totals, concurrent refunds, duplicate webhooks, uncertain gateway timeouts, partial refunds, vendor payouts, cashback/discount allocations, late payment confirmation, failed-delivery non-financial handling, delivery evidence, and historical logistics-order compatibility.
 
 Run baseline and post-change tests. Add regression tests for every bug fixed. Do not claim tests passed unless they were actually executed. Do not claim the system is 100% secure.
 
@@ -410,5 +483,6 @@ Produce:
 6. A list of obsolete logistics paths removed or retired.
 7. A financial reconciliation report showing the expected ledger and refund behaviour.
 8. A list of unresolved issues, deployment risks, and rollback steps.
+9. A business-rule contradiction matrix and file-by-file implementation gap audit for vendor-managed delivery, rider privacy, zero-fee in-shop pickup, and retirement of new logistics-company/rider financial flows.
 
 Work in small, reviewable commits on a dedicated feature branch. Never silently change the business rules, delete historical financial data, or bypass the financial engine to make a test pass.
