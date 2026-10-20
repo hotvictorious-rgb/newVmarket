@@ -21,6 +21,34 @@ return new class extends Migration
                 $table->timestamp('expires_at')->nullable()->change();
             }
         });
+
+        // Reconcile legacy pending/quarantined lots to the authoritative order clock.
+        // Unfulfilled orders have no claim-window expiry, so their cashback clocks remain unset.
+        DB::table('customer_cashback_ledgers')
+            ->whereIn('status', ['pending_maturation', 'quarantined_dispute'])
+            ->orderBy('id')
+            ->chunkById(200, function ($lots): void {
+                foreach ($lots as $lot) {
+                    $windowExpiry = DB::table('orders')
+                        ->where('id', $lot->order_id)
+                        ->value('refund_window_expires_at');
+
+                    if (!$windowExpiry) {
+                        DB::table('customer_cashback_ledgers')
+                            ->where('id', $lot->id)
+                            ->update(['matures_at' => null, 'expires_at' => null]);
+                        continue;
+                    }
+
+                    $maturesAt = Carbon::parse($windowExpiry)->addHours(24);
+                    DB::table('customer_cashback_ledgers')
+                        ->where('id', $lot->id)
+                        ->update([
+                            'matures_at' => $maturesAt,
+                            'expires_at' => $maturesAt->copy()->addDays(365),
+                        ]);
+                }
+            });
     }
 
     public function down(): void
