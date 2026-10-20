@@ -75,15 +75,15 @@ Victorious Market is an intentionally **controlled, centrally governed marketpla
 ---
 
 ### 7. Returns & 24-Hour Inspection Policy
-* **24-Hour Window:** Eligible issues (defects, wrong items, undisclosed damage) must be reported within twenty-four (24) hours of confirmed delivery.
+* **24-Hour Standard Window:** Eligible ordinary issues should be reported within twenty-four (24) hours of confirmed doorstep delivery or in-shop pickup. This operational window does not waive statutory rights or valid warranty obligations; authorised admins may review legitimate late requests.
 * **Return handling:** Support/admin may arrange return to the owning vendor for inspection. A platform collection-point/hub handover is not mandatory. Applicable law and valid warranty obligations prevail.
 * **Late requests and legal rights:** The standard operational request window is 24 hours from confirmed delivery or in-shop pickup. This is not a blanket waiver of statutory rights or warranties; an authorised admin may review legitimate late requests and must record the decision.
 
 ---
 
 ### 8. Refunds & Customer Wallet Credits
-* **Administrative Authorization:** All cash refunds require Super Admin verification and inspection sign-off.
-* **Disbursement Integrity:** Approved cash refunds are credited back to the original Paystack funding source. Instant doorstep credits applied to the customer wallet are reversed if full cash gateway refund is subsequently requested.
+* **Administrative Authorization:** An authorised admin reviews and approves ordinary refunds, with evidence, reason, amount, approver and timestamps recorded. Applicable law and valid warranty obligations prevail.
+* **Disbursement Integrity:** At launch, approved refunds are initiated through the verified original Paystack payment route where supported. Wallet-credit refunds and off-platform refunds are disabled. A submitted refund is not complete until provider confirmation/reconciliation.
 
 ---
 
@@ -132,14 +132,14 @@ MARKDOWN;
         // 2. RETURN AND REFUND POLICY
         $refundContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — RETURN, REFUND & DOORSTEP ACCEPTANCE POLICY
-**Effective Date:** October 17, 2026  
-**Version:** 1.0.0  
+**Effective Date:** October 20, 2026  
+**Version:** 1.1.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 
 ---
 
 ### 1. The 24-Hour Return Guarantee
-At Victorious Market, customer protection is backed by real operational mechanisms. We operate an exact **twenty-four (24) hour return window** calculated from the timestamp of confirmed delivery OTP verification.
+The standard operational request window for eligible ordinary returns/refunds is **twenty-four (24) hours** from confirmed doorstep delivery or confirmed in-shop pickup. This is not a blanket waiver of applicable consumer rights or valid warranty obligations; authorised admins may review legitimate late requests.
 
 ---
 
@@ -186,7 +186,7 @@ MARKDOWN;
             [
                 'title' => 'Return, Refund & Doorstep Acceptance Policy',
                 'category' => 'returns',
-                'current_version' => '1.0.0',
+                'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Comprehensive guidelines covering item-level partial rejection, 24-hour return eligibility, collection point inspections, and refund disbursement.',
@@ -196,7 +196,7 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc2->id,
-                'version' => '1.0.0',
+                'version' => '1.1.0',
             ],
             [
                 'title' => 'Return, Refund & Doorstep Acceptance Policy',
@@ -210,8 +210,8 @@ MARKDOWN;
         // 3. PRIVACY & DATA PROTECTION POLICY
         $privacyContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — PRIVACY & DATA PROTECTION POLICY
-**Effective Date:** October 17, 2026  
-**Version:** 1.0.0  
+**Effective Date:** October 20, 2026  
+**Version:** 1.1.0  
 **Regulatory Compliance:** Nigeria Data Protection Act (NDPA) & NDPR  
 
 ---
@@ -250,7 +250,7 @@ MARKDOWN;
             [
                 'title' => 'Privacy and Data Protection Policy',
                 'category' => 'privacy',
-                'current_version' => '1.0.0',
+                'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'NDPA/NDPR compliant privacy policy covering KYC handling, Cloudflare R2 media encryption, and zero payment credential retention.',
@@ -260,7 +260,7 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc3->id,
-                'version' => '1.0.0',
+                'version' => '1.1.0',
             ],
             [
                 'title' => 'Privacy and Data Protection Policy',
@@ -274,8 +274,8 @@ MARKDOWN;
         // 4. MERCHANT ACCREDITATION & COMMERCIAL SELLER AGREEMENT
         $merchantContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — MERCHANT ACCREDITATION & COMMERCIAL SELLER AGREEMENT
-**Effective Date:** October 17, 2026  
-**Version:** 1.0.0  
+**Effective Date:** October 20, 2026  
+**Version:** 1.1.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 **Contract Type:** Commercial Vendor Agreement (B2B)  
 
@@ -323,7 +323,7 @@ By completing vendor onboarding, submitting KYB documents, or listing products o
 
 ### 6. Doorstep Partial Rejection & Customer Return Obligations
 * **Item-Level Rejection:** In multi-item deliveries, the Merchant agrees to accept item-level partial rejections where a customer accepts conforming goods and rejects defective or non-conforming items at doorstep delivery.
-* **Collection Point Drop-Off:** Rejected items are returned to a designated Collection Point Hub. The Merchant may inspect the returned items at the hub within forty-eight (48) hours of notification.
+* **Vendor return handling:** Rejected items return to the owning vendor. The vendor may offer a suitable replacement/redelivery only with customer agreement. No platform hub handover is mandatory.
 * **Replacement / Restock:** Conforming returned items may be retrieved by the merchant; non-conforming items must be removed from the catalog.
 
 ---
@@ -338,7 +338,7 @@ By completing vendor onboarding, submitting KYB documents, or listing products o
 
 ### 8. Debt Recovery, Deficit Balances & Right of Offset
 * **Post-Payout Liabilities:** If an order is refunded, cancelled, or chargebacked *after* settlement funds have already been withdrawn by the Merchant, the Merchant incurs an immediate, legally enforceable debt liability to Victorious Market.
-* **Contractual Set-Off:** Victorious Market reserves the express contractual right to offset and deduct such deficit balances against any current or future receivables, held payouts, or subsequent sales generated across any of the Merchant's shops or branches.
+* **Authorised recovery:** A confirmed vendor debt may be repaid by verified bank transfer or offset against held/future vendor earnings only with authorised admin approval and contractual basis. A complaint alone is not a confirmed debt; record the debt/recovery separately and allow a vendor challenge.
 
 ---
 
@@ -359,7 +359,7 @@ MARKDOWN;
             [
                 'title' => 'Merchant Accreditation & Commercial Seller Agreement',
                 'category' => 'merchant',
-                'current_version' => '1.0.0',
+                'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Legally binding commercial covenants governing vendor accreditation, catalog condition honesty, 90% escrow payouts, anti-counterfeit indemnity, and debt recovery set-off.',
@@ -369,7 +369,7 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc4->id,
-                'version' => '1.0.0',
+                'version' => '1.1.0',
             ],
             [
                 'title' => 'Merchant Accreditation & Commercial Seller Agreement',
@@ -383,8 +383,8 @@ MARKDOWN;
         // 5. LOGISTICS FLEET OPERATIONS & CHAIN-OF-CUSTODY SLA
         $logisticsContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — LOGISTICS FLEET OPERATIONS & CHAIN-OF-CUSTODY SLA
-**Effective Date:** October 17, 2026  
-**Version:** 1.0.0  
+**Effective Date:** October 20, 2026  
+**Version:** 1.1.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 **Contract Type:** Transport & Delivery Service Level Agreement (SLA)  
 
@@ -462,7 +462,7 @@ MARKDOWN;
             [
                 'title' => 'Logistics Fleet Operations & Chain-of-Custody SLA',
                 'category' => 'logistics',
-                'current_version' => '1.0.0',
+                'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Operational Service Level Agreement binding logistics fleet operators and riders to strict OTP custody transfer, photographic proof, 90/10 payout reconciliation, and package loss liability.',
@@ -472,7 +472,7 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc5->id,
-                'version' => '1.0.0',
+                'version' => '1.1.0',
             ],
             [
                 'title' => 'Logistics Fleet Operations & Chain-of-Custody SLA',
@@ -528,7 +528,7 @@ Participation in Victorious Market is subject to verification and accreditation:
 
 ### 4. Financial Integrity: The 90/5/5 Allocation
 * **90% Merchant Settlement:** Legitimate merchants receive 90% net earnings upon confirmed delivery.
-* **5% Customer Cashback:** Rewarding repeat customer loyalty with a structured 365-day maturation schedule.
+* **5% Customer Cashback:** Eligible merchandise cashback matures after fulfilment, the 24-hour standard customer claim window, and a separate additional 24-hour buffer when no blocking case remains. Its 365-day validity period starts at actual maturity, not checkout or delivery.
 * **5% Platform Sustainability Margin:** Powering platform engineering, customer support, and dispute arbitration.
 * **Logistics Split:** 90% retained by the accredited Logistics Fleet, 10% platform routing fee.
 
@@ -543,7 +543,7 @@ MARKDOWN;
             [
                 'title' => 'About Victorious Market — Operating Charter',
                 'category' => 'about',
-                'current_version' => '1.0.0',
+                'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Foundational operating philosophy, managed marketplace vision, geographic discipline in Akwa Ibom State, and core brand promise.',
@@ -553,7 +553,7 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc6->id,
-                'version' => '1.0.0',
+                'version' => '1.1.0',
             ],
             [
                 'title' => 'About Victorious Market — Operating Charter',
@@ -567,8 +567,8 @@ MARKDOWN;
         // 7. ORDER CANCELLATION POLICY
         $cancellationContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — ORDER CANCELLATION & PRE-DISPATCH POLICY
-**Effective Date:** October 17, 2026  
-**Version:** 1.0.0  
+**Effective Date:** October 20, 2026  
+**Version:** 1.1.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 
 ---
@@ -580,7 +580,7 @@ Victorious Market operates an escrow-protected, deterministic cancellation workf
 
 ### 2. Pre-Dispatch Customer Cancellation (100% Instant Refund)
 * **Permitted Window:** A customer may cancel an order for any reason **prior to merchant packaging and rider dispatch** (while order status is `pending` or `confirmed`).
-* **100% Refund:** Upon cancellation in this window, 100% of the customer's payment (including merchandise total and delivery fee) is immediately returned to the customer's wallet or queued for automated Paystack card reversal.
+* **Refund:** A verified, approved cancellation refund is initiated through the original verified Paystack payment route where supported. Wallet-credit refunds are disabled. The approved amount and delivery-fee treatment depend on the actual transaction, reason, applicable terms and law; provider completion must be reconciled.
 * **Zero Cancellation Fees:** No penalty or administrative surcharge is deducted for pre-dispatch cancellations.
 
 ---
@@ -615,7 +615,7 @@ MARKDOWN;
             [
                 'title' => 'Order Cancellation & Pre-Dispatch Policy',
                 'category' => 'returns',
-                'current_version' => '1.0.0',
+                'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Comprehensive guidelines covering pre-dispatch 100% refunds, in-shop 24-hour reservation expiries, and mid-transit doorstep rules.',
@@ -625,7 +625,7 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc7->id,
-                'version' => '1.0.0',
+                'version' => '1.1.0',
             ],
             [
                 'title' => 'Order Cancellation & Pre-Dispatch Policy',
@@ -640,7 +640,7 @@ MARKDOWN;
         $faqContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — FREQUENTLY ASKED QUESTIONS (FAQ)
 **Knowledge Base & Operational Answers**  
-**Effective Date:** October 17, 2026 &bull; Version: 1.0.0  
+**Effective Date:** October 20, 2026 &bull; Version: 1.0.0  
 
 ---
 
@@ -696,13 +696,13 @@ Electronics such as television sets, desktop computers, and large home appliance
 ### Returns, Inspections & Refunds
 
 #### How long do I have to report a problem?
-You have exactly **twenty-four (24) hours** from the timestamp of confirmed delivery OTP verification to submit a return request through your Customer Portal.
+The standard operational window for eligible ordinary claims is **twenty-four (24) hours** from confirmed delivery or in-shop pickup. Applicable consumer rights and valid warranty obligations are not waived; an authorised admin may review legitimate late requests.
 
 #### Where do I drop off a returned product?
-You can drop off returned items at any accredited **Victorious Market Collection Point / Hub** in Uyo. An inspection officer physically verifies the serial numbers, packaging, and reported fault.
+Support/admin will explain the authorised return or inspection process for your case. A platform collection-point or hub drop-off is not mandatory; the item may be returned to the owning vendor for review where appropriate.
 
 #### When will I receive my refund?
-Once the Collection Point inspection passes and Super Admin approves the case, refunds are processed immediately. You can choose:
+After an authorised admin approves the remedy, the refund is initiated through the verified original Paystack payment route where supported. Provider/bank processing times may vary, and submission is not confirmation of completion. You cannot choose wallet credit at launch.
 * **Original payment route:** At launch, approved refunds are initiated through the verified original Paystack payment route where supported. Wallet-credit refunds are not enabled. Actual provider/bank processing times may vary; submission is not confirmation of completion.
 
 ---
@@ -721,7 +721,7 @@ MARKDOWN;
             [
                 'title' => 'Frequently Asked Questions (FAQ) & Knowledge Base',
                 'category' => 'faq',
-                'current_version' => '1.0.0',
+                'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Comprehensive answers covering escrow protection, in-shop pickup, doorstep partial rejection, 24-hour returns, and merchant accreditation.',
@@ -731,7 +731,7 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc8->id,
-                'version' => '1.0.0',
+                'version' => '1.1.0',
             ],
             [
                 'title' => 'Frequently Asked Questions (FAQ) & Knowledge Base',
@@ -746,7 +746,7 @@ MARKDOWN;
         $contactContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — CONTACT & CUSTOMER CARE CENTER
 **Support Desk & Operational Hubs**  
-**Effective Date:** October 17, 2026 &bull; Version: 1.0.0  
+**Effective Date:** October 20, 2026 &bull; Version: 1.0.0  
 
 ---
 
@@ -795,7 +795,7 @@ MARKDOWN;
             [
                 'title' => 'Contact & Customer Care Center',
                 'category' => 'support',
-                'current_version' => '1.0.0',
+                'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Official hotlines, Uyo operational headquarters address, collection point hubs, administrative dispute escalation, and whistleblower reporting.',
@@ -805,7 +805,7 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc9->id,
-                'version' => '1.0.0',
+                'version' => '1.1.0',
             ],
             [
                 'title' => 'Contact & Customer Care Center',
