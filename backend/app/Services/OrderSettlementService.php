@@ -1135,41 +1135,54 @@ class OrderSettlementService
             return ['success' => false, 'message' => 'Unauthorized: User account is inactive.'];
         }
 
-        if ($staffUser->isVendorEmployee()) {
-            $employee = $staffUser->vendorEmployeeProfile;
-            if (!$employee || !$employee->is_active || !$employee->canAccessBranch($reservation->shop_id)) {
-                return ['success' => false, 'message' => 'Unauthorized: Branch isolation prevents access to this shop.'];
+        return DB::transaction(function () use ($reservation, $staffUser): array {
+            // Serialize inspection against customer cancellation, expiry, and order creation.
+            $lockedReservation = PickupReservation::whereKey($reservation->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$lockedReservation) {
+                return ['success' => false, 'message' => 'Reservation no longer exists.'];
             }
-        } elseif ($staffUser->isVendor()) {
-            $vendor = $staffUser->vendorProfile;
-            if (!$vendor || (int)$vendor->id !== (int)$reservation->vendor_id) {
-                return ['success' => false, 'message' => 'Unauthorized: Merchant ownership mismatch.'];
+
+            if ($staffUser->isVendorEmployee()) {
+                $employee = $staffUser->vendorEmployeeProfile;
+                if (!$employee || !$employee->is_active || !$employee->canAccessBranch($lockedReservation->shop_id)) {
+                    return ['success' => false, 'message' => 'Unauthorized: Branch isolation prevents access to this shop.'];
+                }
+            } elseif ($staffUser->isVendor()) {
+                $vendor = $staffUser->vendorProfile;
+                if (!$vendor || (int) $vendor->id !== (int) $lockedReservation->vendor_id) {
+                    return ['success' => false, 'message' => 'Unauthorized: Merchant ownership mismatch.'];
+                }
+                if ($vendor->marketplace_status !== 'active') {
+                    return ['success' => false, 'message' => 'Merchant marketplace account is suspended.'];
+                }
+            } elseif (!$staffUser->isSuperAdmin() && $staffUser->user_type !== 'admin_employee') {
+                return ['success' => false, 'message' => 'Unauthorized: Only authorized shop staff can inspect reservations.'];
             }
-            if ($vendor->marketplace_status !== 'active') {
-                return ['success' => false, 'message' => 'Merchant marketplace account is suspended.'];
+
+            if ($lockedReservation->status !== 'reserved') {
+                return ['success' => false, 'message' => "Reservation cannot be inspected in status {$lockedReservation->status}."];
             }
-        }
 
-        if ($reservation->status !== 'reserved') {
-            return ['success' => false, 'message' => "Reservation cannot be inspected in status {$reservation->status}."];
-        }
+            if (!$lockedReservation->expires_at || $lockedReservation->isExpired()) {
+                $lockedReservation->status = 'expired';
+                $lockedReservation->save();
+                return ['success' => false, 'message' => 'This reservation has expired.'];
+            }
 
-        if ($reservation->isExpired()) {
-            $reservation->status = 'expired';
-            $reservation->save();
-            return ['success' => false, 'message' => 'This reservation has expired.'];
-        }
+            $lockedReservation->status = 'inspected_accepted';
+            $lockedReservation->inspected_at = Carbon::now();
+            $lockedReservation->inspected_by_staff_id = $staffUser->id;
+            $lockedReservation->save();
 
-        $reservation->status = 'inspected_accepted';
-        $reservation->inspected_at = Carbon::now();
-        $reservation->inspected_by_staff_id = $staffUser->id;
-        $reservation->save();
-
-        return [
-            'success' => true,
-            'message' => 'Inspection approved. Customer digital payment is now unlocked.',
-            'reservation' => $reservation,
-        ];
+            return [
+                'success' => true,
+                'message' => 'Inspection approved. Customer digital payment is now unlocked.',
+                'reservation' => $lockedReservation,
+            ];
+        });
     }
 
     /**
