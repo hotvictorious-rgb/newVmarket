@@ -480,7 +480,7 @@ class CheckoutExecutionService
 
             return ['error' => false, 'order' => $order];
             });
-        } catch (\\Illuminate\\Database\\QueryException $exception) {
+        } catch (\Illuminate\\Database\\QueryException $exception) {
             // If another request with this key won the unique insert, return its order.
             if ($idempotencyKey !== null) {
                 $existingOrder = Order::where('customer_id', $user->id)
