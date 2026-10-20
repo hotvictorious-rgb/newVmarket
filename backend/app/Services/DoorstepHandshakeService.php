@@ -120,6 +120,12 @@ class DoorstepHandshakeService
                 return ['success' => false, 'message' => $haltReason];
             }
 
+            // Photo proof is an owner-approved fulfilment invariant, not merely an HTTP
+            // validation rule. Direct service callers must not bypass the evidence requirement.
+            if (!is_string($doorstepPhotoPath) || trim($doorstepPhotoPath) === '') {
+                return ['success' => false, 'message' => 'Doorstep photo proof is required before handover can be completed.'];
+            }
+
             // 2. Anti-Brute-Force & Lockout Check
             if ($lockedOrder->delivery_locked_until && Carbon::now()->lt($lockedOrder->delivery_locked_until)) {
                 $waitSec = Carbon::now()->diffInSeconds($lockedOrder->delivery_locked_until);
