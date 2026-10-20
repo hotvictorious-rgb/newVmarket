@@ -158,7 +158,7 @@ Doorstep COD is disabled. Customers may pay before delivery through Victorious M
 6. Two concurrent assignment requests cannot leave two active riders; assignment after custody is rejected; deactivation is blocked during custody.
 7. Failed-delivery event records evidence and custody only; concurrent duplicate attempts do not create duplicate return cases or financial entries.
 8. Rider handover records operational evidence only. No rider-triggered wallet credit, financial journal, rider/logistics payable, vendor-fund release, or financial amount is returned to the rider.
-9. Pickup `in_shop_pickup` is zero-fee, uses the approved `RES-XXXXXX` customer pickup pass at the vendor counter, requires no rider, and cannot be fulfilled through rider doorstep endpoints.
+9. Pickup `in_shop_pickup` is zero-fee, requires the `RES-XXXXXX` reservation pass AND one-time customer pickup OTP plus an in-shop pickup photo at the vendor counter, requires no rider, and cannot be fulfilled through rider doorstep endpoints.
 10. Multi-vendor checkout keeps fees, assignments, and allocations isolated by child vendor order.
 11. COD is rejected across all launch checkout modes and legacy paths; a future release requires separate explicit owner approval and passing vendor-owned collection/reconciliation controls.
 12. Historical logistics orders and financial records remain readable to authorized auditors, but legacy fleet roles cannot receive new work.
