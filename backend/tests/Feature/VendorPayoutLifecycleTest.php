@@ -499,6 +499,71 @@ class VendorPayoutLifecycleTest extends TestCase
         ]);
     }
 
+    public function test_logistics_transfer_reversed_without_confirmed_disbursement_journal_is_quarantined(): void
+    {
+        $logisticsUser = User::factory()->create([
+            'user_type' => 'logistics_company',
+            'status' => 'active',
+        ]);
+
+        $company = LogisticsCompanyProfile::create([
+            'user_id' => $logisticsUser->id,
+            'company_name' => 'Reversal Evidence Fleet Ltd',
+            'hq_lga_id' => $this->uyoLga->id,
+            'is_active' => true,
+            'status' => 'approved',
+            'wallet_balance' => '25000.00',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Reversal Evidence Fleet Ltd',
+        ]);
+
+        $payout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $company->id,
+            'amount' => '5000.00',
+            'status' => 'approved',
+            'gateway_status' => 'success',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Reversal Evidence Fleet Ltd',
+            'transfer_reference' => 'FLEET-PAYOUT-REVERSAL-NO-JOURNAL-01',
+            'paystack_transfer_code' => 'TRF_FLEET_REVERSAL_NO_JOURNAL_01',
+        ]);
+
+        $payloadData = [
+            'id' => 'evt_fleet_reversal_no_journal_01',
+            'event' => 'transfer.reversed',
+            'data' => [
+                'reference' => 'FLEET-PAYOUT-REVERSAL-NO-JOURNAL-01',
+                'transfer_code' => 'TRF_FLEET_REVERSAL_NO_JOURNAL_01',
+                'amount' => 500000,
+                'currency' => 'NGN',
+                'reason' => 'Fleet reversal arrived without confirmed disbursement journal',
+            ],
+        ];
+
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+        $journalCountBefore = FinancialJournalEntry::count();
+        $walletBefore = (string) $company->fresh()->wallet_balance;
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+        $payout->refresh();
+        $this->assertSame('approved', $payout->status);
+        $this->assertSame('success', $payout->gateway_status);
+        $this->assertSame($walletBefore, (string) $company->fresh()->wallet_balance);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
+        $this->assertDatabaseHas('processed_webhook_events', [
+            'event_id' => 'evt_fleet_reversal_no_journal_01',
+            'status' => 'unmatched',
+        ]);
+    }
+
     public function test_transfer_reversed_requires_matching_explicit_amount_and_currency(): void
     {
         $cases = [
