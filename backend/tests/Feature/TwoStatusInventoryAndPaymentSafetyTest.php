@@ -444,6 +444,72 @@ class TwoStatusInventoryAndPaymentSafetyTest extends TestCase
         $this->assertEquals('paid', $freshOrder->payment_status);
     }
 
+    public function test_late_payment_reinstatement_restores_linked_pickup_reservation(): void
+    {
+        $order = Order::create([
+            'order_number' => 'VM-ORD-LATE-PICKUP-RESTORE',
+            'customer_id' => $this->customer1->id,
+            'vendor_id' => $this->vendorProfile->id,
+            'shop_id' => $this->shop->id,
+            'origin_lga_id' => $this->shop->lga_id,
+            'destination_lga_id' => $this->shop->lga_id,
+            'fulfillment_type' => 'in_shop_pickup',
+            'order_status' => 'cancelled',
+            'payment_status' => 'pending',
+            'merchandise_subtotal' => '5000.00',
+            'delivery_fee' => '0.00',
+            'grand_total' => '5000.00',
+            'vendor_net_90' => '4500.00',
+            'customer_cashback_5' => '250.00',
+            'platform_margin_5' => '250.00',
+            'payment_reference' => 'VM-REF-LATE-PICKUP-RESTORE',
+            'verification_code' => Order::generateUniqueDeliveryOtp(),
+        ]);
+
+        OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $this->product->id,
+            'product_name' => $this->product->name,
+            'quantity' => 1,
+            'unit_price' => '5000.00',
+            'line_total' => '5000.00',
+        ]);
+
+        $reservation = PickupReservation::create([
+            'reservation_code' => 'RES-LATE-PICKUP',
+            'customer_id' => $this->customer1->id,
+            'vendor_id' => $this->shop->vendor_id,
+            'shop_id' => $this->shop->id,
+            'product_id' => $this->product->id,
+            'quantity' => 1,
+            'unit_price' => '5000.00',
+            'estimated_total' => '5000.00',
+            'status' => 'canceled',
+            'order_id' => $order->id,
+            'expires_at' => Carbon::now()->subMinutes(5),
+        ]);
+
+        $this->product->update([
+            'is_in_stock' => true,
+            'listing_confirmed_at' => Carbon::now()->subHours(1),
+        ]);
+
+        $result = app(OrderSettlementService::class)->settlePaystackOrder($order, [
+            'status' => 'success',
+            'reference' => 'VM-REF-LATE-PICKUP-RESTORE',
+            'amount' => 500000,
+            'currency' => 'NGN',
+            'channel' => 'card',
+            'id' => 99887723,
+            'customer' => ['email' => $this->customer1->email],
+        ], $this->customer1);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('confirmed', $order->fresh()->order_status);
+        $this->assertSame('paid', $order->fresh()->payment_status);
+        $this->assertSame('payment_completed', $reservation->fresh()->status);
+    }
+
     /**
      * Test 9: Vendor can toggle product stock between In Stock and Out of Stock via one-click toggle.
      */
