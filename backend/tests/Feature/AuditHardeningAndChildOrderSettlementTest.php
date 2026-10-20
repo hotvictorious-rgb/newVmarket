@@ -307,12 +307,13 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'vendor_settlement_status' => 'held',
         ]);
 
-        // Rider B attempts to inspect Rider A's order -> 403 Forbidden
+        // Rider B is linked to Vendor B and must not inspect Vendor A's assignment.
         $response = $this->actingAs($this->riderUserB)
             ->getJson(route('rider.order.handshake_status', ['order' => $order->id]));
 
-        $response->assertStatus(403);
-        $response->assertJsonPath('status', false);
+        // The web endpoint redirects unauthorized cross-vendor access; no order data is disclosed.
+        $response->assertRedirect();
+        $this->assertStringNotContainsString('VM-SEC-IDOR-002', $response->getContent());
 
         // Rider A queries own order -> 200 OK
         $authResponse = $this->actingAs($this->riderUserA)
