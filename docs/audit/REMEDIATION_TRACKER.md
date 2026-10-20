@@ -201,3 +201,7 @@ Added the complementary case for `refund.processed` arriving after the operation
 - The controller returns retryable HTTP 429 for a stale generation without changing the newer worker's inbox status.
 - Added a regression for a stale `transfer.success` generation: vendor payout status/gateway status and journal count remain unchanged. CI passed on `0cc2f34b9b977ca50eecc97e65ccdabb3f292c5e`: **170 tests / 1,083 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39501738865).
 - Coverage is now transaction-fenced for refund success, charge success, refund failure, and payout transfer paths. Dedicated stale-generation regression remains missing for `refund.failed`, logistics payout finalization/reversal, and concurrent reclaim on PostgreSQL/production DB. Verify these before calling the entire webhook system race-proof.
+
+### VM-AUD-040 — logistics payout reversal stale-generation regression (20 October 2026)
+
+Added a direct regression for a stale `transfer.reversed` generation against a logistics payout. The old generation is rejected before payout status, company wallet, or journal changes; the newer inbox attempt remains processing. Focused CI passed on `90284b14489de17430dbe144a2373a9ddb143128`: **171 tests / 1,091 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39501881418). A logistics `transfer.success` stale-generation test and a dedicated stale `refund.failed` test remain open.
