@@ -333,6 +333,43 @@ class VendorPayoutLifecycleTest extends TestCase
         $this->assertEquals('13500.00', number_format((float)$credit->amount, 2, '.', ''));
     }
 
+    public function test_admin_cannot_reject_vendor_payout_while_paystack_outcome_is_unresolved(): void
+    {
+        $this->createTestOrder([
+            'merchandise_subtotal' => '20000.00',
+            'vendor_net_90' => '18000.00',
+            'grand_total' => '20000.00',
+            'vendor_settlement_status' => 'eligible',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '15000.00',
+            'status' => 'pending',
+            'gateway_status' => 'processing',
+            'paystack_transfer_code' => 'TRF_ALREADY_SUBMITTED_01',
+            'transfer_reference' => 'VND-UNRESOLVED-01',
+            'bank_name' => $this->vendor->bank_name,
+            'bank_code' => $this->vendor->bank_code,
+            'account_number' => $this->vendor->account_number,
+            'account_name' => $this->vendor->account_name,
+        ]);
+
+        $this->assertEquals('3000.00', $this->vendor->fresh()->getWithdrawableBalance());
+
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.reject.vendor_payout'), [
+            'payout_id' => $payout->id,
+            'rejection_reason' => 'Bank account details require correction before retry.',
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertEquals('pending', $payout->fresh()->status);
+        $this->assertEquals('3000.00', $this->vendor->fresh()->getWithdrawableBalance());
+        $this->assertDatabaseMissing('financial_journal_entries', [
+            'event_id' => 'EVT-MERCHANT-REJECT-' . $payout->id,
+        ]);
+    }
+
     public function test_super_admin_can_reject_vendor_payout_and_funds_are_atomically_restored(): void
     {
         $this->createTestOrder([
