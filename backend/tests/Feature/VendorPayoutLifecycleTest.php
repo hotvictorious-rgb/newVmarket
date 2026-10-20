@@ -1453,6 +1453,89 @@ class VendorPayoutLifecycleTest extends TestCase
         $this->assertSame(2, VendorPayoutRequest::where('vendor_id', $this->vendor->id)->count());
     }
 
+    public function test_vendor_payout_reversal_quarantines_cross_vendor_allocation_without_mutation(): void
+    {
+        $otherUser = User::factory()->create([
+            'user_type' => 'vendor',
+            'status' => 'active',
+        ]);
+        $otherVendor = VendorProfile::create([
+            'user_id' => $otherUser->id,
+            'business_name' => 'Other Vendor Store',
+            'kyc_status' => 'verified',
+            'marketplace_status' => 'active',
+            'bank_name' => 'Access Bank',
+            'bank_code' => '044',
+            'account_number' => '0123456789',
+            'account_name' => 'Other Vendor Store',
+            'bank_updated_at' => Carbon::now()->subDays(5),
+        ]);
+
+        $foreignOrder = $this->createTestOrder([
+            'vendor_id' => $otherVendor->id,
+            'order_status' => 'delivered',
+            'vendor_settlement_status' => 'settled',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '5000.00',
+            'status' => 'approved',
+            'gateway_status' => 'success',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Test Vendor',
+            'transfer_reference' => 'VND-CROSS-VENDOR-REVERSAL-01',
+            'paystack_transfer_code' => 'TRF_CROSS_VENDOR_REVERSAL_01',
+        ]);
+
+        $allocation = \App\Models\VendorPayoutAllocation::create([
+            'vendor_payout_request_id' => $payout->id,
+            'order_id' => $foreignOrder->id,
+            'allocated_amount' => '5000.00',
+            'status' => 'allocated',
+        ]);
+
+        foreach ([
+            ['account_name' => 'vendor_payout_payable', 'entry_type' => 'debit'],
+            ['account_name' => 'cash_in_escrow', 'entry_type' => 'credit'],
+        ] as $entry) {
+            FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => 'VND-CROSS-VENDOR-REVERSAL-01',
+                'event_id' => 'EVT-VND-PAYOUT-' . $payout->id,
+                'beneficiary_type' => VendorProfile::class,
+                'beneficiary_id' => $this->vendor->id,
+                'account_name' => $entry['account_name'],
+                'entry_type' => $entry['entry_type'],
+                'amount' => '5000.00',
+                'currency' => 'NGN',
+                'description' => 'Confirmed payout journal for cross-vendor allocation guard',
+            ]);
+        }
+
+        $journalCountBefore = FinancialJournalEntry::count();
+        $result = app(PayoutFinalizationService::class)->revertVendorPayout(
+            $payout,
+            'Provider confirmed transfer reversal',
+            $this->superAdmin,
+            true
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected']);
+        $this->assertSame('approved', $payout->fresh()->status);
+        $this->assertSame('success', $payout->fresh()->gateway_status);
+        $this->assertSame('allocated', $allocation->fresh()->status);
+        $this->assertSame('settled', $foreignOrder->fresh()->vendor_settlement_status);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
+        $this->assertStringContainsString('ALLOCATION_INVARIANT_FAILED', (string) $payout->fresh()->admin_notes);
+    }
+
     public function test_overallocated_legacy_payout_is_quarantined_without_settling_order_or_overstating_payable(): void
     {
         $order = $this->createTestOrder([
