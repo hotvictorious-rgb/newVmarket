@@ -34,7 +34,8 @@ class FinancialOperationService
         string $amountNaira,
         string $reason,
         ?ReturnCase $returnCase = null,
-        ?string $idempotencyKey = null
+        ?string $idempotencyKey = null,
+        ?array $authorization = null
     ): FinancialOperation {
         // Money entering this service must already be expressed in whole cents.
         // BCMath's requested scale silently truncates excess fractional digits,
@@ -226,6 +227,7 @@ class FinancialOperationService
                     'return_case_id' => $returnCase?->id,
                     'return_case_number' => $returnCase?->case_number,
                     'reason' => $reason,
+                    'refund_authorization' => $authorization,
                 ],
             ]);
 
@@ -253,6 +255,36 @@ class FinancialOperationService
     }
 
     /**
+     * Validate persisted authorization at the last service boundary before gateway dispatch.
+     */
+    protected function hasValidRefundAuthorization(FinancialOperation $operation, ?array $authorization): bool
+    {
+        if (!is_array($authorization)) return false;
+        $meta = $operation->metadata ?? [];
+        $order = Order::find($meta['order_id'] ?? null);
+        if (!$order || $order->payment_status !== 'paid' || empty($order->payment_reference)) return false;
+
+        if (($authorization['type'] ?? null) === 'admin_approved_return') {
+            $caseId = $meta['return_case_id'] ?? null;
+            $case = $caseId ? ReturnCase::find($caseId) : null;
+            $approverId = (int) ($authorization['approved_by_user_id'] ?? 0);
+            return $case
+                && (int) $case->order_id === (int) $order->id
+                && in_array($case->status, ['refund_pending', 'refund_approved'], true)
+                && !empty($case->reviewed_by_admin_id)
+                && (int) $case->reviewed_by_admin_id === $approverId;
+        }
+
+        if (($authorization['type'] ?? null) === 'auto_late_payment_cancelled_before_vendor_action') {
+            return $order->order_status === 'paid_stock_unavailable'
+                && $order->vendor_settlement_status === 'refund_pending'
+                && $order->payment_status === 'paid';
+        }
+
+        return false;
+    }
+
+    /**
      * Dispatch refund to payment gateway (Paystack).
      * Rule: DB transaction is NEVER held open while awaiting Paystack HTTP response.
      */
@@ -266,6 +298,19 @@ class FinancialOperationService
                     'terminal' => true,
                     'operation' => $lockedOp,
                     'message' => "Operation is already in terminal state: {$lockedOp->status}",
+                ];
+            }
+
+            // Every refund dispatch needs persisted authorization. A return-case authorization
+            // must match the case's recorded human reviewer; the only automatic exception is a
+            // verified payment that arrived after cancellation and depleted inventory.
+            $meta = $lockedOp->metadata ?? [];
+            $authorization = $meta['refund_authorization'] ?? null;
+            if (!$this->hasValidRefundAuthorization($lockedOp, $authorization)) {
+                return [
+                    'terminal' => true,
+                    'operation' => $lockedOp,
+                    'message' => 'Refund dispatch blocked: persisted human approval or an approved automatic-refund exception is required.',
                 ];
             }
 
