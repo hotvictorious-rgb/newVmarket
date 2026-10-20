@@ -39,6 +39,11 @@ Every state-changing command/event must:
 - The enum's `isTerminal()` includes `delivered` and `picked_up`; those mean fulfilment completed, not that all later claims/refunds are impossible. Claims are separate aggregates.
 - **OPEN verification:** enumerate every writer of `orders.order_status`; prove all use one transition guard and verify no direct arbitrary status assignment remains. Explicit transition edges are not yet certified by this inventory.
 
+### Late payment after expiry — additional audited edge
+- A verified success for a previously cancelled order may reinstate it only if the locked availability check passes; otherwise it enters the refund-liability-only path.
+- Successful reinstatement for `in_shop_pickup` must also transition the linked eligible reservation to `payment_completed` in the same settlement transaction. A paid/confirmed order paired with a cancelled/expired reservation is an invalid cross-aggregate state.
+- VM-AUD-059 regression covers the linked reservation restoration; CI must pass before this edge is considered verified.
+
 ## 3. Payment lifecycle
 
 ### Current `PaymentStatus` enum
