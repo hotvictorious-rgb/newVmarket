@@ -10,6 +10,8 @@ use App\Models\Shop;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class CustomerApiContractTest extends TestCase
@@ -138,10 +140,19 @@ class CustomerApiContractTest extends TestCase
         ]);
         $failRes->assertStatus(422);
 
-        // Correct OTP succeeds
-        $passRes = $this->actingAs($customer, 'sanctum')->postJson("/api/v1/customer/orders/{$order->order_number}/confirm-delivery", [
+        // Correct OTP without photo proof must not complete handover.
+        $missingPhotoRes = $this->actingAs($customer, 'sanctum')->postJson("/api/v1/customer/orders/{$order->order_number}/confirm-delivery", [
             'delivery_otp' => '987654',
         ]);
+        $missingPhotoRes->assertStatus(422);
+        $this->assertSame('out_for_delivery', $order->fresh()->order_status);
+
+        // Correct OTP plus server-stored photo proof succeeds.
+        Storage::fake('public');
+        $passRes = $this->actingAs($customer, 'sanctum')->post("/api/v1/customer/orders/{$order->order_number}/confirm-delivery", [
+            'delivery_otp' => '987654',
+            'proof_photo' => UploadedFile::fake()->image('doorstep.jpg'),
+        ], ['Accept' => 'application/json']);
         $passRes->assertStatus(200);
         $passRes->assertJson([
             'status' => true,
