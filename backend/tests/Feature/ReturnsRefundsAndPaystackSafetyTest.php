@@ -514,7 +514,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             // No admin_ruling/cost_allocation: approval to refund is not a vendor-fault ruling.
         ]);
 
-        $paystack = \\Mockery::mock(\\App\\Services\\PaystackService::class);
+        $paystack = \Mockery::mock(\App\Services\PaystackService::class);
         $paystack->shouldReceive('initiateRefund')
             ->once()
             ->withAnyArgs()
@@ -524,7 +524,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
                 'refund_reference' => 'rf_platform_loss_no_fault',
                 'data' => ['status' => 'completed', 'reference' => 'rf_platform_loss_no_fault'],
             ]);
-        $this->app->instance(\\App\\Services\\PaystackService::class, $paystack);
+        $this->app->instance(\App\Services\PaystackService::class, $paystack);
 
         $result = app(ReturnAndRefundService::class)->adminDisburseRefund($this->superAdmin, $case);
 
