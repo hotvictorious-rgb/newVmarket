@@ -314,6 +314,11 @@ class Order extends Model
     public function getRemainingPayableToVendorAttribute(): string
     {
         $net = (string)($this->vendor_net_90 ?? '0.00');
+        // New vendor-managed orders earn 90% of the delivery fee as a separate payable.
+        // Legacy orders assigned to a logistics company keep their historical fleet allocation.
+        if (empty($this->logistics_company_id)) {
+            $net = \\App\\Services\\BcMathService::add($net, (string) ($this->logistics_fee_retained ?? '0.00'));
+        }
         $allocated = (string)$this->payoutAllocations()
             ->where('status', '!=', 'reversed')
             ->whereHas('payoutRequest', function ($q) {
