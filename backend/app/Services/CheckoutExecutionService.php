@@ -132,7 +132,8 @@ class CheckoutExecutionService
             ];
         }
 
-        try {\n            $result = DB::transaction(function () use ($validated, $user, $shop, $idempotencyKey, $requestHash) {
+        try {
+            $result = DB::transaction(function () use ($validated, $user, $shop, $idempotencyKey, $requestHash) {
             $merchandiseSubtotal = '0.00';
             $itemsToCreate = [];
 
@@ -294,7 +295,10 @@ class CheckoutExecutionService
             $paymentRef = Order::generateUniquePaymentReference();
 
             $order = Order::create([
-                'order_number' => $orderNumber,\n                'checkout_idempotency_key' => $idempotencyKey,\n                'checkout_request_hash' => $requestHash,\n                'paystack_initialization_status' => 'not_started',
+                'order_number' => $orderNumber,
+                'checkout_idempotency_key' => $idempotencyKey,
+                'checkout_request_hash' => $requestHash,
+                'paystack_initialization_status' => 'not_started',
                 'customer_id' => $user->id,
                 'customer_address_id' => $validated['customer_address_id'] ?? null,
                 'vendor_id' => $shop->vendor_id,
