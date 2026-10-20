@@ -12,6 +12,12 @@ This audit compared the authoritative business rules with the payment/refund mat
 
 This is **not** proof that production is aligned. The live database's published legal-document rows, production configuration, provider dashboard, bank records, and deployed runtime were not inspected in this pass. The legal-document seeder source and documentation were changed, but no runtime checkout, payment, fulfilment, refund, cashback, or payout service/controller code was changed in this pass, and no test suite was run here. Source-code findings below are therefore open remediation/verification items, not claims of completed fixes.
 
+## 1A. Branch and pull-request isolation warning
+
+The GitHub comparison of `main` against `audit/paystack-refund-webhook-safety` reports the audit branch as **418 commits ahead, 0 behind, with 58 changed files**. The diff is not documentation-only: it includes checkout, payment, settlement, refund, payout, delivery and storefront code, plus removed or substantially rewritten tests. Removed test files include `ClosedLoopLogisticsAndWalletHardeningTest.php`, `CustomerDoorstepHandshakeTest.php`, `HubAndSpokeDeliveryConsoleTest.php`, `LogisticsCollectionPointsTest.php`, `LogisticsCorporatePayoutTest.php`, `RiderApiTerminalTest.php`, and `VendorRiderPickupHandshakeTest.php`; `FinancialReconciliationAndHardeningAuditTest.php` also has a large deletion-only diff.
+
+The open draft PR #3 points from `docs/vendor-managed-delivery-business-rules` to `main`, not from this audit branch. Therefore, **do not merge this branch wholesale** and do not assume the open PR contains the changes described here. Before any merge, inspect the exact base/head commit and full diff, split policy/documentation changes from runtime remediation, explain every deleted test, and restore or replace coverage for removed behaviours. The 418-commit comparison is a release-control warning, not a statement that all 418 commits were authored in this session.
+
 ## 2. Canonical business baseline
 
 All project documents must preserve these rules unless the owner expressly changes them:
