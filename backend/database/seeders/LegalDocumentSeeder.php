@@ -43,8 +43,8 @@ Victorious Market is an intentionally **controlled, centrally governed marketpla
 
 ### 3. Merchant Accreditation & Catalog Integrity
 * **Verification Prerequisite:** No merchant is authorized to list products or receive orders without completing identity verification, physical shop verification, and Know-Your-Business (KYB) checks.
-* **Mandatory Condition Transparency:** All listings must explicitly state true product condition:
-  * **Brand New:** Factory sealed, genuine OEM units with applicable manufacturer warranties.
+* **Mandatory condition transparency:** Listings must accurately state product condition and any warranty/packaging/accessory limitations:
+  * **Brand New:** Accurately described new products. Factory-sealed/OEM status and any manufacturer warranty must be stated only where true and verified; do not imply a warranty that the supplier/manufacturer has not confirmed.
   * **UK Used / Pre-Owned:** Thoroughly tested, functional pre-owned items with all cosmetic blemishes, battery health indicators, and missing accessories explicitly disclosed.
 * **Zero Counterfeit Tolerance:** Presenting used goods as new or listing replica/counterfeit items results in immediate merchant suspension, listing deletion, forfeiture of platform privileges, and referral to commercial law enforcement.
 
@@ -306,10 +306,10 @@ By completing vendor onboarding, submitting KYB documents, or listing products o
 
 ---
 
-### 4. Order Fulfillment & 2-Hour Readiness SLA
+### 4. Order Acceptance, Stock Accuracy & Readiness
 * **Inventory Synchronization:** The Merchant must maintain real-time inventory records. Confirming an order that cannot be fulfilled due to preventable stockouts attracts administrative penalties.
-* **2-Hour Handover SLA:** Upon receiving automated order notification, the Merchant must prepare, package, and mark the order as "Ready for Handover" within two (2) operating hours.
-* **Handover Verification:** The Merchant must demand and verify the authorized courier's OTP before surrendering custody of packages to any logistics rider or counter representative.
+* **Order readiness:** Upon receiving an order notification, the vendor must promptly accept or reject the order in the platform, keep stock accurate, and provide a realistic readiness estimate. No fixed two-hour readiness guarantee applies unless a separately approved vendor SLA is configured and disclosed for the order.
+* **Handover verification:** For doorstep delivery, the vendor must hand the parcel only to the active rider assigned to that order and linked to the same vendor, after the approved rider-to-vendor custody verification. This custody credential is distinct from the customer's doorstep delivery OTP and the customer's in-shop pickup OTP. In-shop pickup is a separate customer-counter process and requires no rider.
 
 ---
 
