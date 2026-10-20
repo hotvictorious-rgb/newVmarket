@@ -300,3 +300,8 @@ Before dispatching a payout, every existing allocation must represent exactly on
 ### VM-AUD-049 — handover readiness transition guard
 
 **Transition rule:** The vendor API may move an order to \`ready_for_pickup\` only when the order is paid, has \`fulfillment_type=doorstep_delivery\`, and its current status is in the explicit pre-dispatch allowlist. Unpaid, in-shop pickup, delivered, cancelled, returned, and other unlisted states must be rejected with no order-state or handover-timestamp mutation. The API delegates to this same row-locked service as the web endpoints; this also prevents API-only bypass of shared OTP and notification behavior. Regression tests cover unpaid doorstep and paid in-shop pickup rejection. The test-only run passed; CI for the final shared-service/API changes remains pending.
+
+
+### VM-AUD-050 — rider pickup payment precondition
+
+verifyRiderPickupOtp may transition an order to out_for_delivery only if payment_status=paid, the fulfilment type is doorstep delivery, the source status is allowed, the active vendor-owned rider is assigned to the order, and the one-time vendor pickup OTP matches. The payment precondition is checked inside the row-locked service before any pickup state/timestamp mutation. An unpaid order with a legacy ready_for_pickup status must remain unchanged. Implementation and regression test are committed; CI verification pending. Do not treat this finding as proof that all order state writers have been inventoried or unified.
