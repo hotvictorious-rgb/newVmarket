@@ -1157,6 +1157,62 @@ class FinancialAuditRemediationProofTest extends TestCase
         $this->assertNull($order->fresh()->paystack_refund_status);
     }
 
+    public function test_refund_dispatch_requires_persisted_human_approval_or_exception(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'cancelled',
+            'payment_status' => 'paid',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-UNAPPROVED-DISPATCH',
+            'vendor_settlement_status' => 'held',
+        ]);
+
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldNotReceive('initiateRefund');
+        $this->app->instance(PaystackService::class, $mock);
+
+        $service = app(FinancialOperationService::class);
+        $operation = $service->createRefundOperation(
+            $order,
+            '500.00',
+            'attempt without approval'
+        );
+
+        $result = $service->dispatchRefund($operation);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('persisted human approval', $result['message']);
+        $this->assertSame('holding_reservation', $operation->fresh()->status);
+        $this->assertSame(0, GatewayAttempt::where('financial_operation_id', $operation->id)->count());
+    }
+
+    public function test_verified_late_payment_inventory_exception_can_dispatch_refund(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'paid_stock_unavailable',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'refund_pending',
+            'grand_total' => '22000.00',
+            'payment_reference' => 'REF-APPROVED-LATE-PAYMENT',
+        ]);
+
+        $service = app(FinancialOperationService::class);
+        $operation = $service->createRefundOperation(
+            $order,
+            '22000.00',
+            'verified late payment after cancellation and inventory depletion',
+            null,
+            null,
+            ['type' => 'auto_late_payment_cancelled_before_vendor_action']
+        );
+
+        $result = $service->dispatchRefund($operation);
+
+        $this->assertTrue($result['success']);
+        $this->assertNotSame('holding_reservation', $operation->fresh()->status);
+        $this->assertSame(1, GatewayAttempt::where('financial_operation_id', $operation->id)->count());
+    }
+
     /**
      * Terminal rejected vendor payouts must not be selected again just because a stale
      * reconciliation hold token remains on the row.
