@@ -306,8 +306,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
     }
 
     /**
-     * Test 2: Single-Credit Delivery Earnings Rule.
-     * When logistics company is present, corporate wallet is credited with 90% fee; courier current_balance is NOT double-credited.
+     * Test 2: Vendor-managed delivery earnings stay in vendor payable, with no fleet or rider wallet credit.
      */
     public function test_delivery_confirmation_does_not_pay_fleet_or_rider()
     {
@@ -351,13 +350,11 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         // wallet receives platform-managed delivery compensation.
         $this->assertEquals($fleetWalletBefore, (float)$this->fleetCompany->fresh()->wallet_balance);
         $this->assertEquals($riderBalanceBefore, (float)($this->rider->fresh()->current_balance ?? 0));
-        $this->assertDatabaseHas('financial_journal_entries', [
-            'order_id' => $order->id,
-            'account_name' => 'vendor_payable',
-            'amount' => '900.00',
-            'entry_type' => 'credit',
-            'description' => 'Vendor 90% delivery-fee earning held for Order #' . $order->order_number,
-        ]);
+        $this->assertSame(1, FinancialJournalEntry::where('order_id', $order->id)
+            ->where('account_name', 'vendor_payable')
+            ->where('amount', '900.00')
+            ->where('entry_type', 'credit')
+            ->count());
         $this->assertDatabaseMissing('financial_journal_entries', [
             'order_id' => $order->id,
             'account_name' => 'logistics_payable',
@@ -430,7 +427,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $baseTime = Carbon::create(2026, 10, 16, 12, 0, 0);
         Carbon::setTestNow($baseTime);
 
-        // 1. Super Admin configures refund window to 48 hours via admin endpoint
+        // 1. Explicitly audit a non-default 48-hour policy override for this governance test.
         $this->actingAs($this->superAdmin);
         $response = $this->post(route('admin.settings.financial'), [
             'refund_window_hours' => 48,
@@ -476,7 +473,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $order->refresh();
         $this->assertEquals('delivered', $order->order_status);
 
-        // Refund window must expire in exactly 48 hours
+        // The explicitly configured return window expires in exactly 48 hours
         $this->assertEquals(48, (int)$baseTime->diffInHours($order->refund_window_expires_at));
 
         $cashback = CustomerCashbackLedger::where('order_id', $order->id)->first();
