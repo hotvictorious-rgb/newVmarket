@@ -67,19 +67,19 @@ Victorious MARKET enforces security and accounting invariants at the database tr
                                 /                                   \
                                ▼                                     ▼
        ┌───────────────────────────────────┐       ┌───────────────────────────────────┐
-       │ ROLE 3: VENDOR (MERCHANT HQ)      │       │ ROLE 5: LOGISTICS COMPANY (FLEET) │
-       │ Store Owner & Catalog Governance  │       │ Optional Corporate Fleet Partner  │
-       │ • Binary Stock Toggle (In/Out)    │       │ • Regional Corridor Directionality│
-       │ • 7-Day Freshness Reconfirmation  │       │ • LGA Collection Points Network   │
-       │ • Vendor-Managed Delivery Couriers│       │ • 48h Withdrawal Cooldown Defense │
-       │ • 48h Bank Cooldown Defense       │       │ • Cascades to Affiliated Riders   │
+       │ ROLE 3: VENDOR (MERCHANT HQ)      │       │ ROLE 5: LEGACY LOGISTICS RECORDS │
+       │ Store Owner & Catalog Governance  │       │ Historical audit only; no new dispatch  │
+       │ • Binary Stock Toggle (In/Out)    │       │ • Read-only historical references│
+       │ • 7-Day Freshness Reconfirmation  │       │ • No new order assignments   │
+       │ • Vendor-Managed Delivery Only│       │ • No new logistics payouts │
+       │ • 48h Bank Cooldown Defense       │       │ • Historical records preserved   │
        └─────────────────┬─────────────────┘       └─────────────────┬─────────────────┘
                          │                                           │
                          ├────────────────────────┐                  │
                          ▼ (Cascades)             ▼ (Cascades)       ▼ (Cascades)
        ┌───────────────────────────────────┐ ┌─────────────────────────────────────────┐
        │ ROLE 4: BRANCH COUNTER STAFF      │ │ ROLE 6: DELIVERY RIDER (COURIER AGENT)  │
-       │ Plaza Inspection & Counter Pickup │ │ Vendor-Managed OR Fleet-Managed Courier │
+       │ Plaza Inspection & Counter Pickup │ │ Vendor-Linked Courier Only │
        │ • Strict Shop Boundary (`shop_id`)│ │ • Pure Operational Dispatch Agent       │
        │ • Reservation Pass (`RES-XXXXXX`) │ │ • ZERO In-App Wallet / Zero Liability   │
        │ • Physical Merchandise Sign-off   │ │ • Dual OTP Handshakes + Photo Proofs    │
@@ -102,12 +102,12 @@ Victorious MARKET enforces security and accounting invariants at the database tr
 ### Institutional Invariants
 
 1. **Zero Floating-Point Arithmetic:** All balances, kobo conversions, fees, discounts, and splits strictly execute using [`BcMathService`](file:///c:/Users/USER/Downloads/newVmarket/backend/app/Services/BcMathService.php) with 2-decimal precision for balances and 0-decimal precision for integer kobo.
-2. **48-Hour Bank Cooldown Defense:** When a Vendor or Logistics Company alters their payout bank account (NUBAN) details, the system timestamps `bank_updated_at = now()`. All withdrawal and payout requests are mathematically locked for 48 hours to prevent account takeover fund drains:
+2. **48-Hour Bank Cooldown Defense:** When a Vendor alters their payout bank account (NUBAN) details, the system timestamps `bank_updated_at = now()`. Vendor withdrawal requests are locked for 48 hours to prevent account takeover fund drains:
    $$\text{Block withdrawal if: } \text{now}() < \text{bank\_updated\_at} + 48\text{ hours}$$
 3. **Cascading Real-Time Suspensions:**
    - Suspending a Vendor profile immediately revokes access for all affiliated branch counter staff (`vendor_employee`) and vendor-managed couriers (`rider`) on their next request.
-   - Suspending a Logistics Company profile revokes duty toggling, corridor routing, and parcel handovers for all affiliated fleet riders.
-4. **Pure Operational Couriers (Zero Phantom Liability):** Couriers hold **no platform balance**, **no in-app wallet**, and cannot receive direct digital credits or withdrawals. Compensation (salaries, fuel stipends, or per-drop splits) is handled offline by their parent merchant or logistics company.
+   - Legacy logistics-company suspension remains relevant only to historical records; it does not create or authorize new delivery assignments.
+4. **Pure Operational Couriers (Zero Phantom Liability):** Couriers hold **no platform balance**, **no in-app wallet**, and cannot receive direct digital credits or withdrawals. Vendor-linked rider compensation (if any) is arranged directly by that rider's vendor outside VMARKET. The platform does not track or pay rider compensation.
 
 ---
 
@@ -117,51 +117,34 @@ Victorious MARKET enforces a closed, double-entry financial architecture managed
 
 ### Commercial Revenue & Commission Structure
 
-```
-                  CUSTOMER GROSS PAYMENT (Paystack Escrow Vault)
-                 Grand Total = Merchandise Subtotal + Delivery Fee
-                                         │
-        ┌────────────────────────────────┴────────────────────────────────┐
-        ▼                                                                 ▼
- MERCHANDISE SUBTOTAL (100%)                                       DELIVERY FEE (100%)
-  ├── 90% ➔ Vendor Net Payable (Post-24h window)                    ├── 90% ➔ Fulfiller Net Allocation
-  └── 10% ➔ Platform Gross Merchandise Commission                   │         (Vendor OR Fleet Corporate Wallet)
-            ├── 5% ➔ Customer Loyalty Cashback                      └── 10% ➔ Platform Delivery Cut
-            │        (Spendable on future eligible orders)                    (Infrastructure & SMS routing)
-            └── 5% ➔ Platform Retained Operating Margin
-```
+The approved commercial rule is **10% VMARKET commission on the eligible vendor-order total, including the delivery fee**. Customer cashback is **5% of eligible merchandise value only**, excluding delivery fees, and is funded from the platform commission.
 
-#### Detailed Split Breakdown
+For each vendor order:
 
-$$\text{Grand Total} = \text{Merchandise Subtotal} + \text{Delivery Fee}$$
+- **Vendor allocation:** 90% of the eligible vendor-order total before other documented adjustments.
+- **Platform gross commission:** 10% of the eligible vendor-order total, including delivery.
+- **Customer cashback:** 5% of eligible merchandise value only; funded from the platform commission and never from rider earnings.
+- **Platform remaining commission:** gross commission minus eligible cashback and any other properly recorded platform-funded incentive/adjustment.
 
-- **Vendor Merchandise Allocation (90%):** Held in double-entry escrow (`vendor_payable`) until the 24-hour post-delivery inspection window lapses with zero active disputes. Disbursed directly to the merchant's verified commercial bank account (NUBAN) via Super Admin sign-off.
-- **Platform Gross Commission (10% of Full Payment):**
-  - **10% of Merchandise Subtotal:**
-    - **5% Customer Cashback Reward:** Credited to the customer's cashback ledger in a `pending_maturation` state. It matures and becomes spendable strictly after the 24-hour return window closes. It is funded directly out of the platform's commission—**never charged to the merchant**.
-    - **5% Platform Retained Operating Margin:** Retained by Victorious MARKET to fund server infrastructure, SMS/OTP gateways, and operational oversight.
-  - **10% of Delivery Fee:** Retained as a delivery infrastructure cut to maintain routing nodes, LGA corridor matrices, and waybill dispatch.
-- **Fulfillment Net Delivery Fee (90%):**
-  - For **Vendor-Managed Delivery**, the 90% delivery fee is credited directly to the merchant's `vendor_payable` ledger upon confirmed doorstep handover.
-  - For **Third-Party Logistics Fleet Delivery**, the 90% delivery fee is credited to the fleet's corporate wallet (`LogisticsCompanyProfile::wallet_balance`).
+Calculate these amounts separately for each vendor order in a multi-vendor checkout. Never apply a separate logistics-company split in addition to the 10% total commission.
 
 #### Mathematical Split Example
 
-If a customer orders ₦90,000 worth of merchandise with a ₦10,000 delivery fee (Total = ₦100,000):
+For ₦90,000 eligible merchandise plus ₦10,000 delivery (total ₦100,000):
 
-| Component | Basis | Share | Amount |
-|---|---|---|---|
-| **Customer Gross Payment** | Total Order Amount | 100% | **₦100,000.00** |
-| **Vendor Net Merchandise** | Merchandise (₦90,000) | 90% | **₦81,000.00** |
-| **Vendor / Fleet Delivery Net** | Delivery Fee (₦10,000) | 90% | **₦9,000.00** |
-| **Customer Cashback Reward** | Merchandise Only (₦90,000) | 5% | **₦4,500.00** |
-| **Platform Retained Merchandise Margin** | Merchandise (₦90,000) | 5% | **₦4,500.00** |
-| **Platform Retained Delivery Fee Cut** | Delivery Fee (₦10,000) | 10% | **₦1,000.00** |
-| **Total Platform Commission Retained** | Margin (₦4,500) + Cut (₦1,000) | — | **₦5,500.00** |
+| Component | Basis | Amount |
+|---|---|---:|
+| Customer gross payment | Merchandise + delivery | ₦100,000.00 |
+| Vendor allocation before adjustments | 90% of eligible vendor-order total | ₦90,000.00 |
+| VMARKET gross commission | 10% of eligible vendor-order total | ₦10,000.00 |
+| Customer cashback | 5% of eligible merchandise only | ₦4,500.00 |
+| VMARKET commission remaining after cashback | ₦10,000 − ₦4,500 | ₦5,500.00 |
 
-*Verification Check:* $\text{₦81,000} + \text{₦9,000} + \text{₦4,500} + \text{₦4,500} + \text{₦1,000} = \text{₦100,000.00}$ ($\Delta = \text{₦0.00}$, exact BCMath parity).
+Verification: ₦90,000 + ₦4,500 + ₦5,500 = ₦100,000. Cashback is funded within the commission, not charged as an additional amount to the customer or deducted again from the vendor allocation.
 
----
+### Delivery-Fee Ownership and Rider Compensation
+
+There is no separate 90% logistics-company / 10% platform split for new orders. The vendor receives the vendor allocation after the platform's commission, including the delivery component, and is responsible for compensating its own rider directly outside VMARKET. No rider wallet, payable, bank account, earnings ledger, or payout request may be created by the platform. Legacy logistics-company journals and payout records remain historical audit data only.
 
 ### Platform Commission & Refund Reversal Rule
 
@@ -253,42 +236,33 @@ $$\text{Product is Fresh} \iff (\text{listing\_confirmed\_at} \ne \text{null}) \
 
 ---
 
-## 5. Decoupled Fulfillment: Vendor Riders, Counter Pickup & Fleet Corridors
+## 5. Vendor-Managed Fulfilment: Vendor Riders and In-Shop Pickup
 
-Victorious MARKET decouples fulfillment into three distinct, accountable options without imposing mandatory third-party logistics dependencies.
+VICTORIOUS MARKET supports two new-order fulfilment paths: **vendor-managed doorstep delivery** and **in-shop customer pickup**. The platform does not operate a fleet, assign riders, or route new orders through logistics companies.
 
-```
-                                  CUSTOMER CHECKOUT
-                                         │
-        ┌────────────────────────────────┼────────────────────────────────┐
-        ▼                                ▼                                ▼
-  1. IN-SHOP PICKUP              2. VENDOR-MANAGED RIDER          3. LOGISTICS FLEET CORRIDOR
-  • Zero Delivery Fee            • In-House Shop Courier          • Regional Carrier Fleet
-  • Reservation Pass             • Positive LGA Delivery Fee      • Directional Lane Pricing
-  • In-Person Inspection         • Handshake OTP + Proof Photo    • Directional Handover + Proof Photo
-  • Counter Handover Sign-off    • 90% Delivery Fee to Vendor     • 90% Delivery Fee to Fleet Wallet
-```
+### 1. In-Shop Customer Pickup
 
-### 1. In-Shop Customer Counter Pickup
-- Customers pick up items directly from the merchant's physical plaza branch.
-- Generates a cryptographically unique reservation pass (`RES-XXXXXXXX`).
-- **Physical Inspection Sign-Off:** The customer physically inspects the item at the counter. The branch counter staff validates the reservation pass on the `/counter` terminal before handing over goods.
-- Delivery fee is guaranteed **₦0.00**.
+- The customer collects from the vendor's physical shop.
+- Delivery fee is **₦0.00**.
+- The pickup pass format is exactly `RES-XXXXXX`; the owning vendor/shop counter verifies it and records handover.
+- Pickup is not a rider delivery. No rider assignment, delivery fee, logistics-company payable, or rider payout is created.
+- The pickup pass is private: it is visible to the authorized customer and may be verified only by the owning vendor/shop staff or appropriately authorized support personnel. Public tracking must not expose the pass.
+- Keep pickup state transitions separate from doorstep delivery OTP and proof flows.
 
-### 2. Vendor-Managed Delivery Couriers
-- Merchants register and manage their own in-house dispatch riders directly from the Vendor Dashboard (`RiderProfile::vendor_id`).
-- Merchants define custom delivery pricing per Nigerian State and specific Local Government Area (LGA). Explicit LGA pricing overrides state-level defaults.
-- All delivery fees must be positive ($Fee > 0$); zero or negative delivery pricing is rejected.
-- When an order is completed, **90% of the delivery fee** is credited directly to the merchant's `vendor_payable` balance, and 10% is retained by the platform.
-- **Rider Ownership Isolation:** A vendor-managed rider can only be assigned to orders belonging to their parent merchant. Cross-merchant assignments are blocked with HTTP 403.
+### 2. Vendor-Managed Doorstep Delivery
 
-### 3. Regional Fleet Corridors & Hub-and-Spoke Infrastructure
-- For merchants without their own dispatch personnel, the system routes fulfillment through accredited corporate logistics fleets (`LogisticsCompanyProfile`).
-- **Directional Asymmetry:** Pricing accounts for real-world road and transit conditions (e.g., `Uyo ➔ Oron` can be priced differently from `Oron ➔ Uyo`).
-- **Collection Points Network:** Regional depot locations (`LogisticsCollectionPoint`) enable secure parcel transit, waybill routing, and customer pickup for long-distance deliveries.
-- **90% of the delivery fee** is credited to the corporate logistics wallet upon doorstep verification.
+- Every active rider is linked to exactly one vendor. The vendor adds, activates/deactivates, assigns, and reassigns its own riders.
+- A rider may access and act only on orders belonging to that rider's vendor and currently assigned to that rider.
+- Vendors configure their own delivery coverage and fees. A specific LGA rule overrides the state-level fallback. If no valid rule exists for the destination, doorstep delivery is unavailable.
+- Doorstep delivery fees must be positive; the zero-fee exception applies only to `in_shop_pickup`.
+- Vendor assignment must be explicit and auditable. Checkout must not automatically choose a rider or logistics company. Reassignment must revoke the former rider's active access and record parcel custody before the assignment changes when the parcel is in transit.
+- Delivery completion requires the approved OTP/customer confirmation and proof-photo workflow. Failed delivery attempts are operational events; the vendor chooses a policy-compliant retry, reassignment, customer coordination, or return-to-vendor. Failed attempts must not automatically issue a wallet credit/refund or create a delivery payout.
+- The rider's customer contact card contains only the customer's name, delivery address, and a Call Customer action. Rider APIs must not reveal payment status, delivery-fee amount, card details, cashback, order financial totals, vendor earnings, platform commission, or payout/ledger data.
+- The vendor compensates its rider directly outside VMARKET. The platform records operational delivery events only and never pays riders.
 
----
+### 3. Historical Logistics Data
+
+Legacy fleet, delivery-lane, collection-point, logistics-company, and payout records must be retained for authorized audit and historical-order reconciliation. They must not authorize new logistics-company dispatch or payout activity. Do not hard-delete old records or rewrite historical financial journals as part of the transition.
 
 ## 6. Triangular Custody Handshakes & Doorstep Returns
 
