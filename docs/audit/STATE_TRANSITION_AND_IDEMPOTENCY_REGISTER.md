@@ -266,3 +266,7 @@ The webhook path into `OrderSettlementService::settlePaystackOrder` now locks th
 ### VM-AUD-039 — transfer webhook payout mutation generation fence
 
 Vendor/logistics payout finalization and reversal transactions now lock the processed-webhook inbox row and validate its `processing` status and exact attempt generation before payout, wallet/allocation, or journal mutation. Stale attempts return a protected result and the controller responds with 429 without overwriting the current inbox status. A stale vendor `transfer.success` regression verifies payout state and journal count are unchanged. CI passed on `0cc2f34b9b977ca50eecc97e65ccdabb3f292c5e`: **170 tests / 1,083 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39501738865). Remaining validation includes stale `refund.failed`, logistics-specific transfer cases, and true concurrent reclaim tests against the production database engine.
+
+### VM-AUD-040 — logistics reversal stale-generation transition
+
+Regression verifies that a stale `transfer.reversed` attempt cannot change a logistics payout from approved/success, cannot credit the company wallet, cannot post journal entries, and cannot overwrite the inbox generation owned by a newer worker. CI passed on `90284b14489de17430dbe144a2373a9ddb143128`: **171 tests / 1,091 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39501881418). Logistics success and refund-failure stale-generation regressions remain outstanding.
