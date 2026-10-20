@@ -228,6 +228,20 @@ class EcosystemDemoSeeder extends Seeder
                 'is_active' => true,
             ]);
 
+            // DatabaseSeeder intentionally suppresses model events, so seeders must
+            // explicitly establish the same safe local coverage as runtime shop creation.
+            $shopLga = Lga::query()->find($shop->lga_id);
+            if ($shopLga) {
+                \\App\\Models\\ShopDeliveryCoverage::firstOrCreate(
+                    [
+                        'shop_id' => $shop->id,
+                        'state_id' => $shopLga->state_id,
+                        'lga_id' => $shopLga->id,
+                    ],
+                    ['is_active' => true]
+                );
+            }
+
             $seededVendors[$email] = $vendorProfile;
             $seededShops[$email] = $shop;
         }
