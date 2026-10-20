@@ -97,3 +97,6 @@ Changes are on the audit branch only. The workflow caught and helped correct pay
 - Operational blocker VM-AUD-023: the previously shared Paystack test key must be rotated before any live/staging verification. The code's webhook signature check uses the configured Paystack secret key; confirm the server environment and webhook delivery after rotation. This cannot be completed from source changes alone.
 
 - Found and corrected a stale checkout-intent enum mismatch (`in_store_pickup` versus canonical `in_shop_pickup`) in `CreateCheckoutIntentRequest`. This request class is not currently injected by the controller, so the change is a consistency fix rather than proof that the active controller uses it.
+
+
+- **Continuation finding (20 October 2026):** `CustomerOrderApiController` already rejected `redeem_wallet_credit=true`, and the checkout service rejected it too, but the API validator still accepted the legacy field when explicitly supplied as `false`. Changed the request contract to `prohibited`, so clients cannot send this legacy tender field at all. Cashback redemption remains a separate supported field. Commit: `d93782569c378ffea4c83ef6bb1d9f40dcaa34d9`. CI for this latest commit is not yet confirmed.
