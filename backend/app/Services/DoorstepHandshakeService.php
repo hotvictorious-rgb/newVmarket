@@ -396,7 +396,7 @@ class DoorstepHandshakeService
                     'order_id' => $lockedOrder->id,
                     'amount' => $customerCashback,
                     'status' => 'pending_maturation',
-                    'matures_at' => $now->copy()->addHours($refundHours),
+                    'matures_at' => $now->copy()->addHours($refundHours + 24),
                     'expires_at' => $now->copy()->addMonths(6),
                     'notes' => "5% reward for accepted items on Order #{$lockedOrder->order_number}",
                 ]);
