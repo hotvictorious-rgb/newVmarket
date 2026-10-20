@@ -356,3 +356,8 @@ Allowed transition: `pending` + `payment_status=pending` + non-null `expires_at 
 
 
 VM-AUD-058 verification update (20 October 2026): the service implementation CI passed ([run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39511432954)), the stale-expiry regression CI passed ([run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39511441860)), and the full financial/payment hardening suite passed ([run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39511448338)). The latest documentation-only validation runs are still in progress at the time of this update.
+
+
+### VM-AUD-060 — administrative return rejection transition
+
+Allowed: `requested | under_review | received_at_hub | inspected | returned_to_vendor -> rejected`, only by authorized admin staff, with a reason, under a row lock and transaction. Forbidden: reject from `refund_pending`, any state with a dispatched/confirmed refund, `rejected`, or other terminal/advanced state. The case state, item state, and audit event must commit atomically; no controller may mutate ReturnCase status directly. Regression: VM-AUD-060.
