@@ -2902,6 +2902,7 @@ class PortalController extends Controller
         $validated = $request->validate([
             'order_id' => 'required|exists:orders,id',
             'delivery_otp' => ['required', 'string', 'regex:/^[0-9]{6}$/'],
+            'proof_photo' => 'required|image|max:10240',
         ], [
             'delivery_otp.regex' => 'Customer delivery verification code must be exactly 6 numerical digits.',
         ]);
@@ -2913,7 +2914,8 @@ class PortalController extends Controller
             return back()->with('error', 'Unauthorized: Rider profile is not active or suspended.');
         }
 
-        $result = $settlementService->verifyCustomerDeliveryOtp($order, $validated['delivery_otp'], $rider);
+        $proofPath = '/storage/' . $request->file('proof_photo')->store('delivery_proofs', 'public');
+        $result = $settlementService->verifyCustomerDeliveryOtp($order, $validated['delivery_otp'], $rider, $proofPath);
 
         if (!$result['success']) {
             return back()->with('error', $result['message']);
@@ -4343,7 +4345,7 @@ class PortalController extends Controller
     {
         $validated = $request->validate([
             'delivery_otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
-            'proof_photo' => 'nullable|image|max:10240',
+            'proof_photo' => 'required|image|max:10240',
             'customer_notes' => 'nullable|string|max:500',
         ], [
             'delivery_otp.regex' => 'Delivery PIN must be exactly 6 digits.',
@@ -4372,7 +4374,7 @@ class PortalController extends Controller
             return back()->with('error', 'Unauthorized: Only the customer who placed this order can confirm delivery.');
         }
 
-        // Optional photo upload
+        // Required photo proof for every doorstep confirmation
         $proofPath = null;
         if ($request->hasFile('proof_photo') && $request->file('proof_photo')->isValid()) {
             $path = $request->file('proof_photo')->store('delivery_proofs', 'public');
