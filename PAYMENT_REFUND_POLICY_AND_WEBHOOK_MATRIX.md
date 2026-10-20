@@ -12,6 +12,21 @@ This draft extends the approved marketplace model: one parent checkout can conta
 
 The owner directed that the supplied recommendations be used, with Paystack bank transfers included alongside cards. The rules below are binding for the audit plan unless a specific item is marked **OWNER QUESTION OPEN**. These are business decisions; they do not mean implementation is complete. Do not merge to main without explicit approval.
 
+
+### Final owner-confirmed launch contract
+
+The owner has confirmed the following final choices. These are binding and supersede any older or conflicting proposal elsewhere in the repository:
+
+- **Checkout shape:** one parent checkout and one Paystack capture for a multi-vendor cart, with separate vendor child orders, immutable child allocations, independent fulfilment, delivery fees, refund limits, and settlement eligibility.
+- **Enabled payment methods:** Paystack card and standard Paystack bank transfer only. **COD is disabled** marketplace-wide. Dedicated Virtual Accounts (DVA), USSD, mobile money, and other channels are deferred.
+- **Fulfilment:** vendors own delivery operations and add/manage their own riders; every active rider is linked to exactly one vendor and is operational-only. Victorious MARKET does not dispatch riders or pay rider compensation. Customer in-shop pickup remains supported as `in_shop_pickup`, has a zero delivery fee, and uses the owning vendor's `RES-XXXXXX` counter pickup pass.
+- **Refund destination:** original Paystack channel only at launch. Wallet-credit refunds are deferred and must be denied at UI, API, and service layers.
+- **Refund approval:** automatic approval is limited to a verified duplicate successful capture and a verified payment for an order cancelled before any vendor action. All other refunds require persisted authorized human approval before gateway dispatch.
+- **Protection/cashback:** 168-hour return/protection window plus a further 24-hour cashback-maturity buffer after qualifying fulfilment; no maturity while a blocking return/dispute remains. Recoverable spent cashback is offset against future cashback only at maturity, not by silently debiting spendable wallet funds.
+- **Commercial split:** eligible post-discount merchandise collected, excluding delivery, is allocated 90% vendor / 5% cashback liability / 5% platform; delivery fee is allocated 90% vendor / 10% platform. Rounding remainder and Paystack processing fees belong to the platform share. No rider payable is created.
+- **Refund/settlement integrity:** partial refunds use immutable captured allocations and are limited by both each child order's refundable allocation and the aggregate parent capture. Refund success is distinct from vendor recovery success; vendor recovery is evidence-based and separately authorized.
+- **Release control:** the policy documents are not proof of implementation. Keep all changes on `audit/paystack-refund-webhook-safety`; do not merge `main` without explicit owner approval.
+
 ## 2. Checkout and payment decisions (Q1–Q8)
 
 | Q | Proposed rule | Implementation / control |
