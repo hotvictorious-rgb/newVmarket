@@ -8,8 +8,6 @@ use App\Models\Country;
 use App\Models\CustomerCashbackLedger;
 use App\Models\FinancialJournalEntry;
 use App\Models\Lga;
-use App\Models\LogisticsCompanyProfile;
-use App\Models\LogisticsPayoutRequest;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -30,11 +28,9 @@ class FinancialReconciliationAndHardeningAuditTest extends TestCase
     protected User $superAdmin;
     protected User $customerUser;
     protected User $vendorUser;
-    protected User $fleetUser;
     protected VendorProfile $vendorProfile;
     protected Shop $shop;
     protected Product $product;
-    protected LogisticsCompanyProfile $company;
     protected Lga $uyoLga;
 
     protected function setUp(): void
@@ -128,29 +124,7 @@ class FinancialReconciliationAndHardeningAuditTest extends TestCase
             'listing_confirmed_at' => Carbon::now(),
         ]);
 
-        $this->fleetUser = User::create([
-            'name' => 'Fleet Operator',
-            'email' => 'fleet@speedy.ng',
-            'password' => bcrypt('FleetPassword123!'),
-            'user_type' => 'logistics_company',
-            'status' => 'active',
-        ]);
 
-        $this->company = LogisticsCompanyProfile::create([
-            'user_id' => $this->fleetUser->id,
-            'company_name' => 'Speedy Express Ltd',
-            'registration_number' => 'RC-998877',
-            'contact_email' => 'fleet@speedy.ng',
-            'contact_phone' => '+2348011223344',
-            'hq_address' => '50 Ikot Ekpene Road, Uyo',
-            'lga_id' => $this->uyoLga->id,
-            'wallet_balance' => '0.00',
-            'bank_name' => 'First Bank',
-            'account_number' => '3011223344',
-            'account_name' => 'Speedy Express Ltd',
-            'status' => 'active',
-            'bank_updated_at' => Carbon::now()->subHours(72),
-        ]);
     }
 
     /**
