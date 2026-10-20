@@ -348,3 +348,16 @@ Reverse the approved original merchandise/delivery allocations and eligible unsp
 The platform must maintain and forecast sufficient refund liquidity. A vendor receivable is not cash and cannot be counted as available refund funding. Verify repayments against bank/provider records; offsets require explicit authorised approval and contractual basis. Keep disputed/unconfirmed allegations separate from confirmed debt; track aged and unrecoverable balances. Never double-recover, silently offset, or rewrite ledger history.
 
 Illustration: if the customer paid ₦105,000 and the original allocation was ₦94,500 vendor / ₦5,500 platform / ₦5,000 cashback liability, then after the vendor has already received ₦94,500, Victorious MARKET funds an approved full ₦105,000 customer refund from platform liquidity. It reverses the original allocations once and cancels eligible unspent cashback liability. If full vendor responsibility and recoverability are established, up to ₦94,500 may be recorded as vendor receivable. The platform temporarily funds the cash gap; the receivable is not cash until collected.
+
+## Binding finance invariants — balanced books, real liquidity, and honest loss recognition
+
+- Every posted journal balances (debits equal credits in the same currency); required entries are atomic and idempotent.
+- A platform-funded customer refund is a real cash outflow. Reverse original allocations with linked entries, preserving immutable history and the fact of any completed vendor transfer.
+- Vendor receivables arise only after authorised evidence and contractual responsibility establish a recoverable amount. A complaint is not debt; the refund amount is not automatically the vendor's liability.
+- Receivables, disputed debt, pending repayment and uncertain transfers are never counted as cash or available refund liquidity.
+- Keep cash movements, sale/allocation reversals, cashback liability, fees, vendor receivables, repayments and write-offs distinguishable and reconcilable. Duplicate webhooks/retries must not duplicate entries or recovery.
+- An authorised write-off/impairment for an unrecoverable receivable must be recognised as a loss/expense using accountant-approved treatment, without erasing the audit trail or implying cash was received.
+- Reports must separately show available cash/liquidity, receivables and ageing, income/expenses, and recognised losses/write-offs. Balanced accounts can still reveal a real loss or liquidity shortfall.
+- Monitor a refund reserve/forecast; do not use receivables to meet liquidity requirements. Obtain qualified-accountant review of production journal mappings.
+
+Do not mark this control as implemented until tests prove balanced journals, cash/receivable separation, independent customer refund, preserved vendor transfer history, idempotent recovery, and visible recognition of unrecoverable debt.
