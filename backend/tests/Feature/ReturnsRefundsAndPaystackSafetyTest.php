@@ -623,6 +623,38 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         $this->assertFalse($replay['success']);
     }
 
+    public function test_customer_order_api_only_exposes_correct_pickup_otp_after_payment(): void
+    {
+        $fixture = $this->createDeliveredOrder(Carbon::now()->subHours(2), 1);
+        $order = $fixture['order'];
+        $order->update([
+            'fulfillment_type' => 'in_shop_pickup',
+            'order_status' => 'confirmed',
+            'payment_status' => 'pending',
+            'verification_code' => '112233',
+            'pickup_verification_code' => '998877',
+        ]);
+
+        $this->actingAs($this->customer, 'sanctum');
+        $pending = $this->getJson('/api/v1/customer/orders/' . $order->order_number);
+        $pending->assertOk();
+        $pending->assertJsonPath('data.customer_pickup_otp', null);
+        $pending->assertJsonPath('data.delivery_otp', null);
+        $this->assertStringNotContainsString('998877', $pending->getContent());
+
+        $order->update(['payment_status' => 'paid']);
+        $paid = $this->getJson('/api/v1/customer/orders/' . $order->order_number);
+        $paid->assertOk();
+        $paid->assertJsonPath('data.customer_pickup_otp', '112233');
+        $paid->assertJsonPath('data.delivery_otp', null);
+        $this->assertStringNotContainsString('998877', $paid->getContent());
+
+        $order->update(['order_status' => 'picked_up', 'verification_code' => null]);
+        $completed = $this->getJson('/api/v1/customer/orders/' . $order->order_number);
+        $completed->assertOk();
+        $completed->assertJsonPath('data.customer_pickup_otp', null);
+    }
+
     public function test_multi_vendor_child_order_returns_are_strictly_isolated()
     {
         $deliveredAt = Carbon::now()->subHours(2);
