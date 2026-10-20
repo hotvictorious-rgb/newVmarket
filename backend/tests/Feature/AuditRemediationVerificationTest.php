@@ -1031,4 +1031,45 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertTrue(in_array($order->fresh()->order_status, ['cancelled', 'paid_stock_unavailable']), 'Order must be cancelled or marked paid_stock_unavailable.');
         $this->assertEquals('refund_pending', $order->fresh()->vendor_settlement_status);
     }
+
+    public function test_checkout_intent_idempotency_key_replays_same_intent_and_rejects_changed_payload(): void
+    {
+        \\Laravel\\Sanctum\\Sanctum::actingAs($this->customer);
+        $address = CustomerAddress::create([
+            'user_id' => $this->customer->id,
+            'country_id' => Country::first()->id,
+            'state_id' => $this->state->id,
+            'lga_id' => $this->lga->id,
+            'contact_name' => 'Shopper Grace',
+            'phone' => '08011112222',
+            'address_line' => '12 Oron Road',
+            'is_default' => true,
+        ]);
+
+        $payload = [
+            'shop_id' => $this->shop->id,
+            'customer_address_id' => $address->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'items' => [['product_id' => $this->product->id, 'quantity' => 1]],
+        ];
+
+        $first = $this->withHeader('Idempotency-Key', 'checkout-retry-001')
+            ->postJson('/api/v1/checkout/intent', $payload);
+        $first->assertCreated();
+        $firstId = $first->json('data.intent_id');
+
+        $retry = $this->withHeader('Idempotency-Key', 'checkout-retry-001')
+            ->postJson('/api/v1/checkout/intent', $payload);
+        $retry->assertOk();
+        $this->assertSame($firstId, $retry->json('data.intent_id'));
+        $this->assertSame(1, \\App\\Models\\CheckoutIntent::where('user_id', $this->customer->id)->count());
+
+        $changed = $payload;
+        $changed['items'][0]['quantity'] = 2;
+        $this->withHeader('Idempotency-Key', 'checkout-retry-001')
+            ->postJson('/api/v1/checkout/intent', $changed)
+            ->assertStatus(409);
+        $this->assertSame(1, \\App\\Models\\CheckoutIntent::where('user_id', $this->customer->id)->count());
+    }
+
 }
