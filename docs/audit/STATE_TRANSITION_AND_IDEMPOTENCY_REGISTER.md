@@ -348,3 +348,6 @@ VM-AUD-057 verification update (20 October 2026): the full financial/payment har
 ### VM-AUD-058 — abandoned-order expiry transition must revalidate under lock
 
 Allowed transition: `pending` + `payment_status=pending` + non-null `expires_at <= now` -> `cancelled`, and only if all conditions remain true after locking the order row. The scheduler's initial candidate query is not authoritative after time passes or concurrent updates occur. Under lock, re-check payment state, order state, non-null expiry, and `expires_at <= current time` before cancellation, reservation cancellation, or stock restoration. A renewed/unexpired order must have no transition or inventory side effects. Regression simulates expiry extension after candidate selection. CI verification pending.
+
+
+VM-AUD-058 verification update (20 October 2026): the service implementation CI passed ([run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39511432954)), the stale-expiry regression CI passed ([run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39511441860)), and the full financial/payment hardening suite passed ([run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39511448338)). The latest documentation-only validation runs are still in progress at the time of this update.
