@@ -840,17 +840,19 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         ]);
 
         Sanctum::actingAs($this->customer);
-        $response = $this->postJson('/api/v1/checkout/intent', [
-            'shop_id' => $this->shop->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'customer_address_id' => $customerAddress->id,
-            'items' => [
-                ['product_id' => $this->blender->id, 'quantity' => 1],
-            ],
-            'redeem_wallet_credit' => true,
-        ]);
+        foreach ([true, false] as $legacyWalletCreditValue) {
+            $response = $this->postJson('/api/v1/checkout/intent', [
+                'shop_id' => $this->shop->id,
+                'fulfillment_type' => 'doorstep_delivery',
+                'customer_address_id' => $customerAddress->id,
+                'items' => [
+                    ['product_id' => $this->blender->id, 'quantity' => 1],
+                ],
+                'redeem_wallet_credit' => $legacyWalletCreditValue,
+            ]);
 
-        $response->assertStatus(422);
+            $response->assertStatus(422);
+        }
         $this->assertSame(0, \App\Models\CheckoutIntent::where('customer_id', $this->customer->id)->count());
         $this->assertEquals('10000.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
     }
