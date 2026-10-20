@@ -159,6 +159,10 @@ Customer funds are intended to remain under controlled platform settlement proce
 
 Merchant earnings should become eligible for withdrawal only after the required fulfillment and customer-protection conditions have been met.
 
+### Vendor payout launch policy
+
+Vendor requests must be at least ₦5,000 and no more than ₦500,000 per request. Vendors may request whenever their unreserved eligible balance reaches ₦5,000; this does not trigger automatic payment. Every request requires authorized admin approval before a transfer. Earnings remain tracked per order/earning record but are normally aggregated into one payout, not paid out per order. Eligible excess not included in a request remains eligible for a future request. The system must reserve the exact requested amount atomically, prevent duplicate/concurrent claims, and reconcile Paystack outcomes before finalizing the ledger. The ₦500,000 cap is a platform control, not a claim about a statutory Nigerian bank limit or a guarantee of Paystack approval. The owner must decide who bears transfer fees and stamp duty before launch; no charge may be silently deducted from vendor earnings.
+
 This approach aims to reduce the risk of merchants receiving payment for products that were not properly delivered.
 
 The platform's internal escrow-style accounting must be supported by real payment-provider balances and appropriate financial arrangements. Internal ledger labels alone do not constitute a legally regulated escrow service.
