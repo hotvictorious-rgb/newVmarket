@@ -144,66 +144,21 @@ One important distinction: reversing VMARKET's commission does not automatically
 
 Before implementing it, ensure the return policy clearly defines when delivery fees are refundable, especially for defective, incorrect or misrepresented products. The policy should not override applicable consumer-protection requirements.
 
-## Customer Cashback and Loyalty Model (5% Commission Reinvestment)
+## Customer Cashback and Loyalty Model — Authoritative Rule
 
-VMARKET takes 10% commission and uses 5% of that commission to reward customers with cashback. That means you're using half of your commission to encourage customer loyalty while retaining the other half before expenses.
+VMARKET charges a **10% commission on the eligible vendor-order amount, including delivery fees**. It funds customer cashback of **5% of eligible product value only**, excluding delivery, from that commission. Cashback is not 5% of the delivery fee, not 5% of the entire cart when delivery is included, and not an additional deduction from the vendor's 90% allocation.
 
-### How your 10% model works
+### Required calculations
 
-Let's use a customer order of ₦100,000, including the vendor's delivery fee:
+1. Calculate eligible product value after applicable product-level discounts and approved allocation rules.
+2. Calculate the 5% cashback only on eligible product value. Exclude delivery fees and any other amount the published cashback policy deems ineligible.
+3. Calculate the 10% platform commission on the eligible vendor-order amount including delivery.
+4. Treat cashback as a platform-funded loyalty cost within the platform commission. Never assign cashback funding to a rider or create a rider payable.
+5. For multi-vendor checkout, calculate commission, eligible cashback, vendor allocation, delivery-fee treatment, and refunds per child vendor order. Do not use one cart-wide split that obscures vendor ownership.
+6. On partial refund, reverse only cashback and commission attributable to the approved refunded eligible amount, using the original stored allocations and previous adjustments. Do not recalculate a historic order using current prices or rates.
+7. Do not make cashback spendable until the approved maturation/return-window policy is satisfied. Refunds or rejected items must reverse the attributable pending/available cashback through an idempotent ledger operation.
 
-| Component | Basis | Amount |
-| :--- | :--- | :--- |
-| **Total eligible customer payment** | Original payment | **₦100,000** |
-| **Vendor allocation** | Before other adjustments | **₦90,000** |
-| **Customer cashback** | 5% of the original payment | **₦5,000** |
-| **VMARKET's remaining commission** | Before operating expenses | **₦5,000** |
-
-One important distinction: in this example, the customer receives cashback worth 5% of the order payment, which consumes half of VMARKET's 10% commission. It is not 5% of the commission itself.
-
-### Why this could be powerful for VMARKET
-
-- **Customer loyalty:** customers have an additional reason to return and shop again.
-- **Repeat purchases:** cashback can encourage customers to consolidate more of their shopping on VMARKET.
-- **Competitive differentiation:** the marketplace offers a tangible reward, not just product listings.
-- **A controlled incentive:** if cashback is funded from your commission, the reward has a defined source rather than being an unexplained additional cost.
-
-### Four rules I would establish
-
-1. **Earn cashback only on eligible, successfully paid orders.** Do not reward failed, duplicated or unverified transactions.
-2. **Define when cashback becomes usable.** For example, after the order reaches the required completion state, subject to your published policy.
-3. **Reverse the relevant cashback when an order is refunded.** For partial refunds, calculate the adjustment against the eligible refunded amount.
-4. **Keep cashback separate from vendor money and commission accounting.** Track cashback earned, pending, available, redeemed and reversed so that the same funds cannot be counted twice.
-
-There is also an important business decision: will the 5% cashback apply to the full payment, including delivery, or only to the eligible product amount? I would generally favour 5% on eligible product value, excluding delivery fees, because it avoids rewarding delivery charges and makes the programme easier to control.
-
-### Definitive Policy: 5% Cashback on Eligible Products Only (Excluding Delivery Fees)
-
-My recommendation is no — calculate the 5% cashback on eligible product value only, excluding delivery fees.
-
-Your 10% commission can still apply to the full payment, including delivery, as you decided.
-
-For example, if a customer pays ₦100,000:
-
-| Breakdown | Amount |
-| :--- | :--- |
-| Products | ₦90,000 |
-| Delivery | ₦10,000 |
-| VMARKET commission (10% of full payment) | ₦10,000 |
-| Customer cashback (5% of products only) | ₦4,500 |
-| VMARKET retains before expenses | ₦5,500 |
-
-This gives you a clear model:
-
-- **10% commission:** products + delivery.
-- **5% cashback:** eligible products only.
-- **Remaining commission:** cashback deducted from your commission, before expenses and other adjustments.
-
-**Why I prefer this approach:** delivery is a fulfilment cost, not the product value you want customers to buy more of. Excluding it also helps protect your margins.
-
-**One more important rule:** if a customer receives a refund for a product, the cashback associated with that refunded product should be reversed according to your published policy.
-
-**My verdict:** this makes VMARKET's model more compelling. You're not just earning commission; you're reinvesting part of it into customer retention. The key is to make the cashback rules financially sustainable, transparent and difficult to abuse.
+Example: for ₦20,000 eligible product value plus ₦1,000 delivery, the eligible vendor-order total is ₦21,000; 10% platform commission is ₦2,100; cashback is 5% of ₦20,000 = ₦1,000; the vendor's pre-adjustment allocation is ₦18,900; platform commission remaining after cashback is ₦1,100 before other costs and adjustments. This is illustrative; checkout and ledger calculations must use exact server-side monetary arithmetic and the stored allocation.
 
 ## 30-Minute Stock-Hold and Late-Payment Reconciliation Policy
 
@@ -395,6 +350,35 @@ If a vendor sells an item offline and forgets to update their VMARKET status, a 
 1. **Never erase or alter paid records silently**: An existing paid order cannot be cancelled without an auditable ledger trail.
 2. **Controlled Refund Execution**: The order transitions to `paid_stock_unavailable` with `vendor_settlement_status = 'refund_pending'`.
 3. **Zero Customer Loss**: The full payment (merchandise + delivery fee) is either refunded to the customer's original payment channel or credited 100% to their customer wallet according to customer preference, with full double-entry ledger journal entries.
+
+## Current Implementation Gap Audit — Business Rules vs Repository
+
+**Scope:** static source inspection on the documentation branch, not a claim that runtime tests were executed. This is a file-level implementation plan; the business rules above are authoritative and the code changes remain pending.
+
+| Priority | Current implementation evidence | Contradiction / risk | Required implementation change |
+|---|---|---|---|
+| P0 — financial allocation | `backend/app/Models/Order.php` retains `vendor_net_90`, `customer_cashback_5`, `platform_margin_5`, `logistics_fee_retained`, `platform_delivery_fee`, and a legacy 90/10 delivery split helper. `backend/app/Services/OrderSettlementService.php` and `backend/app/Services/DoorstepHandshakeService.php` post legacy fleet/vendor delivery-fee journal entries. | Financial formulas and beneficiaries differ by path; the older 90/5/5 merchandise split and separate 90/10 logistics split can conflict with the approved 10% commission on eligible vendor-order total and 5% product-only cashback. | Reconcile a single server-side allocation function per vendor order; define backward-compatible meaning for existing columns; add a migration/backfill/report before any column retirement; ensure one commission is applied and no new logistics-company payable is created. Do not mutate historic journals. |
+| P0 — automatic fleet dispatch | `backend/app/Http/Controllers/Web/PortalController.php` around checkout/order creation (roughly lines 3720–3790) selects an online/active rider through `logistics_company_id`, collection points, and delivery lanes and persists `rider_id` / `logistics_company_id`. | Checkout assigns a rider before the vendor does so and creates a new-order logistics-company dependency. | Remove auto-assignment for new orders. New doorstep orders begin unassigned; vendor assigns an active rider belonging to that vendor after order readiness. Preserve legacy assignments only for historical orders. |
+| P0 — delivery completion depends on fleet | `backend/app/Services/OrderSettlementService.php` around lines 907–930 validates rider/logistics-company status; around lines 1010–1070 it resolves a logistics company and credits its 90% wallet/journal entries. | A vendor rider can be rejected for not belonging to a logistics company, or delivery completion can create a logistics-company financial beneficiary. | Enforce active vendor affiliation and same-vendor order ownership; keep delivery confirmation operational; route vendor settlement only through the approved vendor/platform financial engine. No rider or logistics-company payout for new orders. |
+| P0 — failed-delivery creates financial side effects | `backend/app/Http/Controllers/Api/RiderTerminalApiController.php`, `recordDeliveryAttemptFailed()` (roughly lines 318–450) automatically changes the order to returned after two attempts, creates a return case, issues an available `CustomerWalletCredit`, and posts a logistics-company delivery-fee journal when a fleet is resolvable. | A rider's operational failure automatically triggers refund-like wallet credit and a logistics payout, bypassing vendor decision and authorized refund controls. | Change failure handling to append attempt/evidence and notify the vendor. Vendor chooses retry/reassign/return. Any return/refund is a separate authorized workflow with idempotent financial operation and reconciliation. No logistics payout. |
+| P0 — rider privacy | `backend/app/Http/Controllers/Api/RiderTerminalApiController.php`, `formatOrderForRider()` (roughly lines 203–255), currently returns `payment_status`, `delivery_fee`, and a raw customer phone field alongside operational data. `PortalController::riderCheckDeliveryStatus()` (roughly lines 2640–2670) also returns `delivery_fee`. | This violates the rule that riders must not see financial data; raw phone values are exposed rather than a purpose-limited Call Customer action. | Remove payment status and delivery-fee values from rider responses; provide a Call Customer action only for the active assigned order; expose only required operational order fields, customer name/address, and minimal call capability. Add response-contract tests for API and web endpoints, including history. |
+| P0 — rider affiliation remains dual/optional | `backend/app/Models/RiderProfile.php` includes both `vendor_id` and `logistics_company_id`, plus `isFleetRider()`; migration `2026_10_19_000040_add_vendor_id_to_rider_profiles_table.php` adds nullable vendor/shop links. `RiderTerminalApiController::guardRiderWithLogistics()` accepts either vendor or logistics-company affiliation. | Fleet-only riders and dual-linked riders can still access the rider terminal; vendor linkage is not a database invariant. | Backfill active riders to one vendor; investigate ambiguous records; quarantine unresolved profiles; then enforce one vendor per active rider at service and schema level. Retain legacy association data for historical audit without allowing it to authorize new orders. |
+| P1 — assignment/reassignment fencing | `VendorTerminalApiController::assignRiderToOrder()` (roughly lines 1206–1240) correctly scopes the order and rider to the vendor and checks rider active status, but directly sets `rider_id` without a transaction/row lock, explicit fulfilment/status guard, custody check, assignment history, or revocation token. | Concurrent assignments can race; a rider may be replaced after custody transfer without a formal handoff; stale riders may retain access based on old IDs. | Make assignment/reassignment transactional and locked; require doorstep delivery and valid status; record immutable assignment history; require custody resolution for in-transit reassignment; fence rider actions against current assignment and vendor ID at every endpoint. |
+| P1 — active logistics portal and payout endpoints | `backend/routes/web.php` exposes `/logistics/*` dashboards, fleet rider management, collection points, wallet and payout request; `PortalController` includes logistics payout creation and admin disbursement/reconciliation; `backend/resources/views/logistics/wallet.blade.php` presents a 90% corporate delivery-fee wallet. | New platform-managed logistics operations and payout workflows remain active and visible. | Disable new use for new orders; keep a restricted read-only historical view for authorized audit. Block new payout requests/credits tied to vendor-managed orders. Do not delete historical payout data or journals. |
+| P1 — rider earnings surface | `backend/routes/web.php` exposes `/rider/earnings`; `PortalController::riderEarningsPage()` and `backend/resources/views/rider/earnings.blade.php` describe parent fleet salary, allowances, fuel disbursements, and trip telemetry. | The UI represents riders as fleet-employed and creates an earnings concept inconsistent with an operational-only rider role. | Retire the earnings/compensation screen and route; replace it with delivery history/operational metrics only. Do not show or calculate compensation. |
+| P1 — pickup pass vs order pickup OTP | `PortalController`'s separate `PickupReservation` flow creates and displays reservation codes; order fulfilment also stores `pickup_verification_code` and vendor/rider handover uses a six-digit OTP. `2026_10_19_000041_decouple_in_shop_pickup_and_delivery_statuses.php` separates some status values but does not by itself unify the pickup-pass contract. | The approved rule requires `in_shop_pickup` order fulfilment to use a `RES-XXXXXX` pass at zero fee; the repository has distinct reservation and order/OTP pathways that may not represent the same transaction. | Decide and implement one coherent order-linked pickup-pass lifecycle. Keep legacy product reservation passes working; ensure the paid order is zero-fee for delivery, no rider is assigned, only the owning shop/vendor can verify the pass, and pickup states cannot trigger delivery or rider payout logic. |
+| P1 — COD privacy/authority | Checkout and rider projections contain payment-related fields; COD-specific vendor-controlled collection behavior is not clearly enforced by the inspected rider API contract. | A rider cannot be shown customer financial totals under the privacy rule, but a cash-collection task may require an amount. | Keep COD collection authority with the vendor. Until a separate exception is approved, do not display a payable amount or card/payment data to riders; if COD is enabled, specify a vendor-authorized collection/confirmation protocol that does not leak customer financial breakdowns. |
+| P2 — vendor onboarding/approval | `VendorTerminalApiController::storeRider()`, `riders()`, and `updateRiderStatus()` already provide vendor-scoped rider creation/list/status APIs; `assignRiderToOrder()` exists. | Existing features are a foundation, but rider approval, active vendor status, unique vendor association, audit events, custody and stale-session revocation need full end-to-end verification. | Preserve the vendor-managed APIs; strengthen policy/middleware, audit logs, concurrency controls, notifications, and regression tests rather than creating a duplicate rider system. |
+
+### Contradictions that must not be reintroduced
+
+- Platform-managed dispatch vs vendor assignment: **vendor assignment wins** for new orders.
+- Logistics-company 90% payout vs vendor-managed delivery: **no new logistics-company beneficiary or payout**.
+- Rider earnings/payables vs operational-only rider: **no platform rider financial account or payout**.
+- Automatic wallet credit on failed delivery vs authorized refund workflow: **failed attempt is operational only**.
+- Rider-facing payment/delivery-fee fields vs customer financial privacy: **remove those fields from rider responses**.
+- Zero-fee pickup vs generic positive delivery-fee validation: **zero-fee exception applies to in_shop_pickup only**.
+- New policy vs legacy database records: **preserve old data; retire old new-order flows non-destructively**.
 
 ## Required workflow
 
