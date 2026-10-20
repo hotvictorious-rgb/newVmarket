@@ -14,13 +14,13 @@ class LegalDocumentSeeder extends Seeder
      */
     public function run(): void
     {
-        $effectiveDate = Carbon::create(2026, 10, 17);
+        $effectiveDate = Carbon::create(2026, 10, 20);
 
         // 1. TERMS OF SERVICE
         $termsContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — TERMS AND CONDITIONS OF SERVICE
-**Effective Date:** October 17, 2026  
-**Version:** 1.0.0  
+**Effective Date:** October 20, 2026  
+**Version:** 1.1.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 
 ---
@@ -36,7 +36,7 @@ By creating an account, browsing listings, placing orders, fulfilling deliveries
 ### 2. The Governed Marketplace Model
 Victorious Market is an intentionally **controlled, centrally governed marketplace**, not an open unmoderated classifieds board:
 * **Central Transaction Authority:** All transactions, product listings, escrow funds, dispatch waybills, doorstep handshakes, customer returns, and vendor settlements are coordinated and enforced directly by Victorious Market.
-* **Prohibition of Off-Platform Dealing:** Buyers, merchants, and riders are strictly prohibited from soliciting or transacting outside the platform (including via WhatsApp, personal phone calls, cash-on-delivery, or direct bank transfer). Any transaction negotiated or settled off-platform is void of all platform guarantees, escrow protections, return rights, and insurance coverage.
+* **Prohibition of Off-Platform Dealing:** Buyers, merchants, and riders must not bypass Victorious MARKET for marketplace transactions. The only permitted customer payment paths are (1) pay before delivery through Victorious MARKET checkout, or (2) reserve an in-shop pickup through Victorious MARKET and pay at the approved vendor shop through Victorious MARKET's authorised payment workflow. Vendors must not collect cash or private-account transfers outside the platform. In-shop reserve-and-pay is counter pickup only, not doorstep COD.
 
 ---
 
@@ -56,27 +56,28 @@ Victorious Market is an intentionally **controlled, centrally governed marketpla
   * **90%** Vendor Net Payout (disbursable post-fulfillment).
   * **5%** Victorious Customer Cashback / Loyalty Allocation.
   * **5%** Victorious Market Platform Margin.
-* **Logistics Allocation:** 90% retained by the accredited Logistics Provider, 10% platform fulfillment technology fee.
+* **Delivery-fee Allocation:** 90% of the delivery-fee allocation belongs to the owning vendor and 10% to Victorious MARKET. Vendors separately arrange and pay their own riders outside the platform's financial systems; new orders create no platform rider or logistics-company payable.
 
 ---
 
 ### 5. Delivery, Handover & Cryptographic Handshakes
 * **Geofenced Local Delivery:** Operations commence within verified coverage zones in Akwa Ibom State (centered in Uyo LGA) and expand only across verified logistics corridors.
-* **OTP Physical Verification:** Delivery riders must exchange a unique One-Time Password (OTP) with the customer at doorstep handover. Possession and risk of loss transfer to the customer only upon verified OTP confirmation.
-* **Photographic Evidence:** Handover condition, packaging integrity, and waybill numbers are photographed and cryptographically linked to the order history in Cloudflare R2 storage.
+* **Doorstep handover:** The customer's delivery OTP must be securely verified and a doorstep delivery photo recorded before completion.
+* **In-shop pickup:** The customer must present the `RES-XXXXXX` reservation pickup pass/secure pickup verification, and the vendor must record an in-shop pickup photo before completion. Reservation verification does not replace the photo.
+* **Evidence limits:** GPS, customer signature, separate rider-pickup photo and hub inspection photo are not mandatory. OTP/pass verification confirms the handover process; neither OTP nor photo proves product quality or removes applicable consumer rights.
 
 ---
 
 ### 6. Doorstep Acceptance & Partial Rejection Rights
 * **Item-Level Decisions:** In multi-item deliveries, customers maintain the right at the moment of doorstep delivery to inspect items and reject non-conforming, damaged, or incorrect items individually while accepting the valid remainder.
-* **Pro-Rata Settlement:** Only accepted items proceed to merchant settlement. Rejected items are sealed, documented by the rider, and returned to the hub for inspection.
+* **Vendor return handling:** A rejected item is documented and returned to its owning vendor. The vendor may offer a suitable replacement/redelivery only with customer agreement. If the customer declines, no suitable replacement is available, or a refund/remedy is otherwise required, an authorised admin reviews the case. No mandatory platform hub inspection is imposed.
 
 ---
 
 ### 7. Returns & 24-Hour Inspection Policy
 * **24-Hour Window:** Eligible issues (defects, wrong items, undisclosed damage) must be reported within twenty-four (24) hours of confirmed delivery.
-* **Collection Point Drop-Off:** Returned items must be surrendered at an accredited Victorious Market Collection Point / Hub for physical inspection before refund release.
-* **Ineligible Returns:** Items damaged through user misuse, missing original serial numbers, or returned after the 24-hour window are ineligible for refund.
+* **Return handling:** Support/admin may arrange return to the owning vendor for inspection. A platform collection-point/hub handover is not mandatory. Applicable law and valid warranty obligations prevail.
+* **Late requests and legal rights:** The standard operational request window is 24 hours from confirmed delivery or in-shop pickup. This is not a blanket waiver of statutory rights or warranties; an authorised admin may review legitimate late requests and must record the decision.
 
 ---
 
@@ -87,14 +88,14 @@ Victorious Market is an intentionally **controlled, centrally governed marketpla
 ---
 
 ### 9. 5% Victorious Customer Cashback Program
-* **Maturation Hold:** 5% merchandise cashback earned on purchases remains in a maturation hold for 365 days, activating only after delivery confirmation.
+* **Maturity and validity:** Eligible 5% merchandise cashback matures after confirmed fulfilment, the standard 24-hour customer claim window, and a separate additional 24-hour maturity buffer, provided no blocking case remains. Its 365-day validity period starts at actual `matures_at`, not at checkout or delivery.
 * **Non-Transferable:** Cashback is non-transferable, cannot be withdrawn to external bank accounts, and is automatically cancelled if the associated order is refunded or returned.
 
 ---
 
 ### 10. Platform Suspension & Financial Recovery
 * **Suspension Powers:** Victorious Market reserves the right to suspend or permanently ban any merchant, rider, or customer engaging in abusive returns, chargeback fraud, off-platform solicitation, or harassment.
-* **Debt Recovery:** If a refund or chargeback occurs after a vendor payout has disbursed, the platform reserves the legal right of offset against the merchant's future receivables or registered settlement account.
+* **Debt recovery:** Vendor liability must be supported by a documented, authorised decision; a complaint alone is not a debt. A confirmed debt may be repaid by verified bank transfer or offset against held/future vendor earnings only with authorised admin approval and contractual basis. Record recovery as a separate receivable; do not pretend a completed transfer has been reversed.
 
 ---
 
@@ -107,7 +108,7 @@ MARKDOWN;
             [
                 'title' => 'Terms and Conditions of Service',
                 'category' => 'terms',
-                'current_version' => '1.0.0',
+                'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Foundational operating contract governing marketplace transactions, escrow protections, merchant accreditation, delivery handshakes, and dispute resolution.',
@@ -117,7 +118,7 @@ MARKDOWN;
         LegalDocumentVersion::updateOrCreate(
             [
                 'legal_document_id' => $doc1->id,
-                'version' => '1.0.0',
+                'version' => '1.1.0',
             ],
             [
                 'title' => 'Terms and Conditions of Service',
@@ -177,7 +178,7 @@ The following products cannot be returned once unsealed, due to health, hygiene,
 
 ### 6. Refund Disbursement & Timelines
 * **Gateway Reversals:** Approved card/bank payments made through Paystack are credited back to the original funding account within 3 to 7 business banking days.
-* **Instant Wallet Credit Option:** Customers may opt for instant credit to their verified Victorious Market Wallet for zero-wait checkout on replacement items.
+* **Refund destination:** At launch, approved refunds are initiated through the verified original Paystack payment route where supported. Wallet-credit refunds and off-platform refunds are disabled.
 MARKDOWN;
 
         $doc2 = LegalDocument::updateOrCreate(
@@ -313,10 +314,10 @@ By completing vendor onboarding, submitting KYB documents, or listing products o
 
 ### 5. Financial Settlement, Escrow Custody & 90% Allocation
 * **90% Net Merchandise Allocation:** For every fulfilled, non-returned transaction, the Merchant earns exactly **ninety percent (90%)** of the product merchandise subtotal.
-* **Escrow Holding Window:** Customer payments are held under internal escrow custody (`cash_in_escrow`). Merchant earnings become eligible for withdrawal exactly twenty-four (24) hours following confirmed doorstep delivery OTP or counter inspection, provided no customer return or dispute has been lodged.
+* **Vendor earnings eligibility:** Vendor earnings become eligible 24 hours after confirmed doorstep delivery or confirmed in-shop pickup, provided no applicable return/dispute/payment hold or security/reconciliation check blocks them. Eligibility is not automatic transfer.
 * **48-Hour Bank Cooldown Security:** Any change to the Merchant's registered settlement bank account invokes a mandatory **forty-eight (48) hour withdrawal freeze** to protect against unauthorized account takeover.
-* **Vendor Payout Request Limits:** Each payout request must be at least **₦5,000** and no more than **₦500,000**. Vendors may request a payout whenever their unreserved eligible balance is at least ₦5,000; reaching that threshold does not trigger automatic payment. Every request requires authorized Victorious Market administrator approval before a Paystack transfer. Eligible funds not included in the request remain eligible for a later request, subject to the same eligibility, security, dispute, recovery, and reconciliation checks. Earnings are tracked by order/earning record but are normally aggregated into a payout request rather than transferred per order.
-* **Payout Reservation and Payment Status:** Requested funds are reserved to prevent duplicate withdrawals. An approved request is not a completed payment; the payout is final only after authoritative Paystack success and reconciliation. Unknown or timed-out transfers must be reconciled before retry. Transfer-fee and stamp-duty allocation will be disclosed under a separately approved fee rule; no charge may be silently deducted from vendor earnings.
+* **Vendor payout batch:** Each payout batch has a ₦5,000 minimum and ₦500,000 maximum. The platform calculates strict FIFO from the oldest eligible, unreserved whole earning records, adding each full record while the total remains at or below ₦500,000. Stop before a record that would exceed the cap; never split or skip. If the oldest record alone exceeds the cap, flag it for authorised finance resolution. Every request requires admin approval before transfer.
+* **Payout reservation and fees:** Reserve the exact selected whole earning records atomically. One active request per vendor is allowed while pending, approved-unsent, in-flight or uncertain. An approved request is not completed until authoritative provider success and reconciliation. Reconcile timeouts before retry. Victorious MARKET bears payout transfer fees/stamp duty as platform expense; the vendor receives the exact approved amount.
 
 ---
 
@@ -585,8 +586,9 @@ Victorious Market operates an escrow-protected, deterministic cancellation workf
 ---
 
 ### 3. In-Shop Pickup Reservations (24-Hour Expiry)
-* **Reservation Window:** In-Shop Inspection reservations hold reserved merchant stock for exactly **twenty-four (24) hours**.
-* **Automatic Expiration:** If the customer does not visit the merchant's physical plaza to inspect and complete payment within 24 hours, the reservation automatically expires with zero penalty, and stock is returned to active catalog inventory.
+* **Reservation Window:** In-shop pickup reservations hold the selected stock for **twenty-four (24) hours**.
+* **Payment and collection:** The customer reserves through Victorious MARKET and pays at the approved vendor shop through Victorious MARKET's authorised payment workflow. The vendor must not accept an off-platform cash/private-account payment and must not release the item until the platform verifies payment.
+* **Automatic Expiration:** If the customer does not complete the platform-recorded payment and pickup within 24 hours, the reservation may expire and stock may return to active inventory only after confirming there is no successful or uncertain/in-flight payment. Reconcile uncertain payments before releasing stock.
 
 ---
 
@@ -628,7 +630,7 @@ MARKDOWN;
             [
                 'title' => 'Order Cancellation & Pre-Dispatch Policy',
                 'content' => $cancellationContent,
-                'summary_of_changes' => 'Initial release of standardized marketplace cancellation policy.',
+                'summary_of_changes' => 'Updated payment paths, reservation handling, refund rules, and owner-confirmed marketplace policy.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -664,11 +666,11 @@ We are headquartered in **Uyo, Akwa Ibom State**. Our delivery coverage spans Uy
 #### How does Escrow Protection work?
 When you pay for an order, 100% of your funds are placed in our secured internal escrow vault (`cash_in_escrow`). The seller **cannot** withdraw this money until twenty-four (24) hours after you have physically received and inspected the item via your delivery OTP.
 
-#### Can I inspect an item before paying?
-Yes! Select **In-Shop Pickup (Pay on Inspection)** at checkout. This reserves the item at the vendor's physical shop for 24 hours. You visit the shop, physically test the product, and only pay if you are 100% satisfied.
+#### Can I reserve an item and pay at the vendor shop?
+Yes. Create an in-shop pickup reservation through Victorious MARKET. The reservation holds the item for 24 hours. At the approved vendor shop, inspect the item and complete payment through Victorious MARKET's authorised payment workflow before the item is released. Vendors may not collect cash or private-account transfers outside the platform.
 
 #### What payment methods do you accept?
-We accept all Nigerian debit/credit cards (Mastercard, Visa, Verve), Bank Transfers, and USSD payments securely processed through Paystack.
+Launch payment rails are Paystack card and standard bank transfer through Victorious MARKET. Customers may pay before delivery or reserve in-shop pickup and pay at the vendor shop through the platform's authorised workflow. USSD, DVA, mobile money and other rails are not enabled unless separately approved.
 
 #### What is the 5% Customer Cashback Program?
 On every non-returned merchandise order, you automatically earn 5% cashback credited to your account. This matures into spendable customer balance and can be redeemed on future platform purchases.
@@ -701,8 +703,7 @@ You can drop off returned items at any accredited **Victorious Market Collection
 
 #### When will I receive my refund?
 Once the Collection Point inspection passes and Super Admin approves the case, refunds are processed immediately. You can choose:
-* **Instant Wallet Credit:** Available in 0 seconds for purchasing an alternative item.
-* **Paystack Bank/Card Reversal:** Funds return to your bank account within 3 to 7 business banking days.
+* **Original payment route:** At launch, approved refunds are initiated through the verified original Paystack payment route where supported. Wallet-credit refunds are not enabled. Actual provider/bank processing times may vary; submission is not confirmation of completion.
 
 ---
 
