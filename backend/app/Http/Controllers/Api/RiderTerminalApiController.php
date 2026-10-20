@@ -4,12 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdminAuditLog;
-use App\Models\CustomerWalletCredit;
-use App\Models\FinancialJournalEntry;
-use App\Models\LogisticsCompanyProfile;
 use App\Models\Order;
 use App\Models\ReturnCase;
-use App\Services\BcMathService;
 use App\Services\OrderSettlementService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -389,37 +385,10 @@ class RiderTerminalApiController extends Controller
                 'total_refundable_amount' => $order->merchandise_subtotal,
             ]);
 
-            // Customer refund credit: full merchandise refunded to customer wallet credit
-            // Shipping fee is retained and paid to courier/logistics fleet
-            CustomerWalletCredit::create([
-                'customer_id' => $order->customer_id,
-                'order_id' => $order->id,
-                'return_case_id' => $returnCase->id,
-                'amount' => $order->merchandise_subtotal,
-                'credit_type' => 'doorstep_refund_credit',
-                'status' => 'available',
-                'notes' => "Refund credit for Order #{$order->order_number} (Customer unreachable after {$order->delivery_attempt_count} attempts).",
-            ]);
-
-            // Release logistics courier delivery fee to fleet
-            $logisticsFee = (string)$order->delivery_fee;
-            $logisticsCompanyId = $order->logistics_company_id ?: $rider->logistics_company_id;
-            if (bccomp($logisticsFee, '0.00', 2) > 0 && $logisticsCompanyId) {
-                $logisticsNet90 = $order->logistics_fee_retained ?? BcMathService::mul($logisticsFee, '0.90');
-
-                FinancialJournalEntry::create([
-                    'order_id' => $order->id,
-                    'transaction_reference' => $order->payment_reference ?? $order->order_number,
-                    'event_id' => 'EVT-LOG-ATTEMPT-' . $order->id,
-                    'beneficiary_type' => LogisticsCompanyProfile::class,
-                    'beneficiary_id' => $logisticsCompanyId,
-                    'account_name' => 'logistics_payable',
-                    'entry_type' => 'credit',
-                    'amount' => $logisticsNet90,
-                    'currency' => 'NGN',
-                    'description' => "Logistics payout for dispatch attempts on Order #{$order->order_number}",
-                ]);
-            }
+            // Failed delivery is an operational event only. It records the return-to-vendor
+            // workflow and evidence, but does not issue a wallet credit, create a rider/fleet
+            // payable, or decide whether the customer is owed a refund. Refunds require a
+            // separately authorized original-Paystack workflow after review.
         }
 
         $order->save();
