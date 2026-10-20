@@ -224,3 +224,8 @@ No production merge or deployment is authorized by this register.
 ### Shop creation → initial delivery coverage — VM-AUD-033 (20 October 2026)
 
 On `Shop` creation, if a valid physical `lga_id` exists, create the default active coverage row for that LGA using the LGA's canonical `state_id`. Use `firstOrCreate` so the model hook and the vendor-controller initialization may safely coexist without duplicate coverage. `DatabaseSeeder` intentionally uses `WithoutModelEvents`, so `EcosystemDemoSeeder` must initialize coverage explicitly; model events alone are not a seeder guarantee. Subsequent vendor coverage replacement is an explicit authorized transition and is not implicitly overwritten by unrelated shop updates. Checkout remains fail-closed for destinations not covered. **Verification pending:** CI must demonstrate a newly seeded/model-created shop can check out for its own LGA and that explicitly removed coverage is still rejected.
+
+
+### `transfer.reversed` requires confirmed disbursement — VM-AUD-034 (20 October 2026)
+
+A signed and correctly identified reversal event must not be treated as a generic pre-dispatch transfer failure. Before mutating payout status, vendor allocations, logistics wallet balance or journals, the finalizer must find the original confirmed payout-disbursement journal (`EVT-VND-PAYOUT-{id}` or `EVT-FLEET-PAYOUT-{id}`). If absent, return a protected/manual-reconciliation result and leave all financial state unchanged. A regression now covers vendor payout quarantine with no disbursement journal; equivalent logistics coverage and CI verification remain open.
