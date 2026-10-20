@@ -111,8 +111,8 @@ class CustomerOrderApiController extends Controller
             'items.*.product_id' => 'required|integer|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1|max:1000',
             'redeem_cashback' => 'nullable|boolean',
-            'redeem_wallet_credit' => 'nullable|boolean',
-            'payment_method' => 'nullable|string|in:paystack,wallet_credit',
+            'redeem_wallet_credit' => 'nullable|boolean|declined',
+            'payment_method' => 'nullable|string|in:paystack',
             'rider_id' => 'nullable|integer|exists:rider_profiles,id',
             'logistics_company_id' => 'nullable|integer|exists:logistics_company_profiles,id',
         ], [
