@@ -107,3 +107,18 @@ The following statements are **requirements**, not verified accomplishments:
 ## 7. Audit conclusion
 
 The policy baseline is now more internally consistent, and the legal-document source has been corrected to stop promising unsupported escrow, instant/fixed-time refunds, guaranteed delivery, and central-fleet/hub services. **The codebase is not yet proven aligned.** The open source-code findings—especially legacy fleet assignment, wallet-credit tender, end-to-end parent checkout, late-case handling, pickup credential separation, cashback recovery and refund/payout reconciliation—must be closed with tests and live-document verification before implementation is considered ready.
+
+
+## Owner decision added 20 October 2026 — refund funding versus vendor recovery
+
+The owner explicitly confirmed: **Victorious MARKET funds the approved customer refund from platform liquidity; where responsibility and contractual basis establish vendor liability, the amount is recoverable from the vendor.** This resolves the funding-source question at policy level; it does not mean the application implements it yet.
+
+Required implementation alignment:
+- Execute an approved customer refund without waiting for vendor repayment, using the original verified Paystack route where supported and all existing approval, idempotency, refund-ceiling and reconciliation controls.
+- Reverse the original approved component allocations exactly once and maintain separate linked customer-refund, platform cash, vendor receivable, vendor repayment/offset, and cashback recovery records.
+- A complaint alone must not create confirmed debt. Record a receivable only after an authorised, evidence-based liability decision and contractual basis establish the responsible vendor and approved recoverable amount.
+- Do not assume the whole customer refund is vendor debt. Use the original child/item/component allocation and approved fault/responsibility allocation. If the vendor has already received its ₦94,500 allocation in the illustrative ₦105,000 transaction, a fully approved and contractually recoverable vendor liability may be up to ₦94,500 in that example—not automatically ₦105,000. Reverse the platform share and eligible unspent cashback liability as applicable. Shared fault or component-specific responsibility can reduce the receivable.
+- Platform refund liquidity must be sufficient for approved refunds even while vendor recovery is pending or fails. A receivable is not cash and must not count as available liquidity. Add refund-liquidity monitoring/forecasting and aged/unrecoverable vendor-debt reporting.
+- Verify repayment from bank/provider records. Offsets require explicit authorised approval and contractual basis. Repayment/offset must reduce the receivable exactly once; no double recovery, silent offsets, or edits to completed ledger entries.
+
+**Open code evidence required:** Trace and test whether current refund execution is independent from vendor recovery; whether an already-paid vendor allocation can be reversed into a separate receivable without changing the historical bank transfer; whether the platform cash/settlement ledger remains balanced; whether available refund liquidity excludes receivables; and whether partial/shared-fault recovery and duplicate callbacks are safe. Do not mark this as implemented until tests and reconciliation evidence exist.
