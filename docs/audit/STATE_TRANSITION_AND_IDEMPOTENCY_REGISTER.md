@@ -310,3 +310,8 @@ verifyRiderPickupOtp may transition an order to out_for_delivery only if payment
 ### VM-AUD-051 — delivery completion payment precondition
 
 Doorstep delivery completion must require payment_status=paid inside the row-locked OrderSettlementService before validating the customer OTP or changing delivery/cashback state. A correct OTP is evidence of receipt, not evidence of payment. If payment is pending/unpaid, reject without changing order status, receipt timestamp, customer confirmation, cashback ledger or settlement state. Implementation and regression test are committed; CI verification pending. Mandatory photo evidence and all other direct order-status writers remain under audit.
+
+
+### VM-AUD-052 — partial doorstep handover preconditions
+
+DoorstepHandshakeService::processDoorstepHandover is a separate writer of delivered/returned state and item-level financial outcomes. It may proceed only for doorstep fulfilment, payment_status=paid, and order_status=out_for_delivery, after rider/vendor assignment and OTP/manifest checks. Reject unpaid or wrong-source-state orders before changing order items, creating return cases/refund reservations, changing order status, or enqueuing cashback. Regression test committed; CI verification pending. Mandatory photo/custody preconditions and all other writers still require full inventory.
