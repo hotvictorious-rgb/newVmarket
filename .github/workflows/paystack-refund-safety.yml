@@ -55,6 +55,7 @@ jobs:
           php -l app/Services/OrderSettlementService.php
           php -l app/Models/Order.php
           php -l database/migrations/2026_10_20_000046_add_customer_address_id_to_orders.php
+          php -l database/migrations/2026_10_20_000001_allow_cashback_maturity_to_start_after_fulfilment.php
           php -l tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php
           php -l tests/Feature/FinancialAuditRemediationProofTest.php
           php -l tests/Feature/PaystackPaymentHardeningTest.php
