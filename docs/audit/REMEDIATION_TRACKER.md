@@ -165,3 +165,7 @@ The focused refund-safety workflow passed on code commit `b7122f99fec327ca5f4ec5
 ### Refund event ordering regression — verification update (20 October 2026)
 
 Added a signed-webhook regression for `refund.failed` arriving after the financial operation is already `confirmed`. The operation remains confirmed, no journal count changes, and the inbox event is completed without downgrading the refund. The focused workflow passed on commit `658cd1096f0e9c4861bf8dd9e9e237e60189ab76`: **165 tests / 1,053 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39499839994). This is targeted CI, not provider-sandbox or production-database verification.
+
+### Valid reversal path — verification update (20 October 2026)
+
+Added a positive-path webhook regression: a signed `transfer.reversed` with exact integer-kobo amount and NGN currency, matching transfer identity, and both original payout/request journals reverses the payout, restores only its allocated order to eligible, posts the expected two reversal journal entries, and marks the inbox event completed. Focused CI passed on commit `70afe769b46fda8a57aab29cda3bf8600e3afbf3`: **166 tests / 1,059 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39500051174). Sandbox confirmation of Paystack's actual reversal payload and broader stale-worker fencing remain open.
