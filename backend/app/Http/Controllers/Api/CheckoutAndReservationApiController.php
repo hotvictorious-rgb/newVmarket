@@ -57,6 +57,71 @@ class CheckoutAndReservationApiController extends Controller
 
         $user = $request->user();
 
+        // An idempotency key is optional for backward compatibility; clients should
+        // send the same key for every retry of one logical checkout attempt.
+        $idempotencyKey = $request->header('Idempotency-Key');
+        if ($idempotencyKey !== null) {
+            $idempotencyKey = trim($idempotencyKey);
+            if ($idempotencyKey === '' || strlen($idempotencyKey) > 100) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Idempotency-Key must contain between 1 and 100 characters.',
+                ], 422);
+            }
+
+            $canonicalRequest = [
+                'fulfillment_type' => $validated['fulfillment_type'],
+                'customer_address_id' => $validated['customer_address_id'] ?? null,
+                'shop_id' => (int) $validated['shop_id'],
+                'items' => array_map(static function (array $item): array {
+                    return [
+                        'product_id' => (int) $item['product_id'],
+                        'quantity' => (int) $item['quantity'],
+                    ];
+                }, $validated['items']),
+                'redeem_cashback' => (bool) ($validated['redeem_cashback'] ?? false),
+            ];
+            usort($canonicalRequest['items'], static fn (array $a, array $b): int =>
+                [$a['product_id'], $a['quantity']] <=> [$b['product_id'], $b['quantity']]
+            );
+            $idempotencyRequestHash = hash('sha256', json_encode($canonicalRequest));
+
+            $existingIntent = CheckoutIntent::where('user_id', $user->id)
+                ->where('idempotency_key', $idempotencyKey)
+                ->first();
+
+            if ($existingIntent) {
+                if (!hash_equals((string) $existingIntent->idempotency_request_hash, $idempotencyRequestHash)) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'This Idempotency-Key was already used for a different checkout request.',
+                    ], 409);
+                }
+
+                if ($existingIntent->isExpired() || $existingIntent->status === 'expired') {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'This checkout attempt has expired. Start a new attempt with a new Idempotency-Key.',
+                    ], 409);
+                }
+
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Existing checkout intent returned for idempotent retry.',
+                    'data' => [
+                        'intent_id' => $existingIntent->id,
+                        'fingerprint' => $existingIntent->fingerprint,
+                        'merchandise_subtotal' => $existingIntent->merchandise_subtotal,
+                        'delivery_fee' => $existingIntent->delivery_fee,
+                        'cashback_applied' => $existingIntent->cashback_applied,
+                        'wallet_credit_applied' => $existingIntent->wallet_credit_applied,
+                        'total_payable' => $existingIntent->total_payable,
+                        'expires_at' => $existingIntent->expires_at->toIso8601String(),
+                    ],
+                ], 200);
+            }
+        }
+
         // Guard 0: Customer Account Invariant
         if ($user && $user->status !== 'active') {
             return response()->json([
@@ -191,8 +256,11 @@ class CheckoutAndReservationApiController extends Controller
 
         $fingerprint = CheckoutIntent::generateFingerprint($payload);
 
-        $intent = CheckoutIntent::create([
+        try {
+            $intent = CheckoutIntent::create([
             'user_id' => $user->id,
+            'idempotency_key' => $idempotencyKey,
+            'idempotency_request_hash' => $idempotencyKey !== null ? $idempotencyRequestHash : null,
             'fingerprint' => $fingerprint,
             'fulfillment_type' => $validated['fulfillment_type'],
             'customer_address_id' => $validated['customer_address_id'] ?? null,
@@ -205,7 +273,42 @@ class CheckoutAndReservationApiController extends Controller
             'payload_snapshot' => $payload,
             'status' => 'pending',
             'expires_at' => Carbon::now()->addHours(2),
-        ]);
+            ]);
+        } catch (\\Illuminate\\Database\\QueryException $exception) {
+            // The unique (user_id, idempotency_key) constraint is the concurrency
+            // arbiter. If a simultaneous retry won the insert, replay that row.
+            if ($idempotencyKey !== null) {
+                $existingIntent = CheckoutIntent::where('user_id', $user->id)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->first();
+
+                if ($existingIntent) {
+                    if (hash_equals((string) $existingIntent->idempotency_request_hash, $idempotencyRequestHash)) {
+                        return response()->json([
+                            'status' => true,
+                            'message' => 'Existing checkout intent returned for idempotent retry.',
+                            'data' => [
+                                'intent_id' => $existingIntent->id,
+                                'fingerprint' => $existingIntent->fingerprint,
+                                'merchandise_subtotal' => $existingIntent->merchandise_subtotal,
+                                'delivery_fee' => $existingIntent->delivery_fee,
+                                'cashback_applied' => $existingIntent->cashback_applied,
+                                'wallet_credit_applied' => $existingIntent->wallet_credit_applied,
+                                'total_payable' => $existingIntent->total_payable,
+                                'expires_at' => $existingIntent->expires_at->toIso8601String(),
+                            ],
+                        ], 200);
+                    }
+
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'This Idempotency-Key was already used for a different checkout request.',
+                    ], 409);
+                }
+            }
+
+            throw $exception;
+        }
 
         return response()->json([
             'status' => true,
