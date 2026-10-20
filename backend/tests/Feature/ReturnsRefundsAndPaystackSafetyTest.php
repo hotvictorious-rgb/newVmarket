@@ -1041,6 +1041,77 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         ]);
     }
 
+    public function test_stale_refund_failed_generation_cannot_fail_operation_or_release_reservation(): void
+    {
+        $operation = FinancialOperation::create([
+            'operation_reference' => 'OP-RFD-STALE-FAIL-GENERATION',
+            'idempotency_key' => 'refund-stale-failure-generation-key',
+            'operation_type' => 'customer_refund',
+            'amount_kobo' => 125000,
+            'currency' => 'NGN',
+            'status' => 'initiated',
+            'gateway_provider' => 'paystack',
+            'metadata' => [
+                'refund_reference' => 'PAYSTACK-REFUND-STALE-FAIL-01',
+                'payment_reference' => 'PAYMENT-STALE-FAIL-01',
+            ],
+        ]);
+
+        $reservation = \\App\\Models\\FinancialReservation::create([
+            'financial_operation_id' => $operation->id,
+            'source_type' => Order::class,
+            'source_id' => 999999,
+            'reserved_amount_kobo' => 125000,
+            'purpose' => 'customer_refund',
+            'status' => 'active',
+        ]);
+
+        $payloadData = [
+            'id' => 'evt_refund_stale_failure_generation_01',
+            'event' => 'refund.failed',
+            'data' => [
+                'refund_reference' => 'PAYSTACK-REFUND-STALE-FAIL-01',
+                'transaction_reference' => 'PAYMENT-STALE-FAIL-01',
+                'amount' => 125000,
+                'currency' => 'NGN',
+                'message' => 'Stale generation regression',
+            ],
+        ];
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+        $journalCountBefore = FinancialJournalEntry::count();
+        $bumpedGeneration = false;
+
+        // Simulate a newer worker reclaiming the inbox event after this request has
+        // claimed generation 1 but before the refund-failure transaction locks it.
+        FinancialOperation::retrieved(function (FinancialOperation $retrieved) use (&$bumpedGeneration): void {
+            if ($bumpedGeneration || $retrieved->operation_reference !== 'OP-RFD-STALE-FAIL-GENERATION') {
+                return;
+            }
+
+            $bumpedGeneration = true;
+            ProcessedWebhookEvent::where('event_id', 'evt_refund_stale_failure_generation_01')
+                ->where('status', 'processing')
+                ->update(['attempts' => 2]);
+        });
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(429);
+        $this->assertTrue($bumpedGeneration, 'The test did not simulate a reclaimed webhook generation.');
+        $this->assertSame('initiated', $operation->fresh()->status);
+        $this->assertSame('active', $reservation->fresh()->status);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
+        $this->assertDatabaseHas('processed_webhook_events', [
+            'event_id' => 'evt_refund_stale_failure_generation_01',
+            'status' => 'processing',
+            'attempts' => 2,
+        ]);
+    }
+
     public function test_refund_processed_webhook_quarantines_ambiguous_gateway_reference(): void
     {
         foreach ([1, 2] as $suffix) {
