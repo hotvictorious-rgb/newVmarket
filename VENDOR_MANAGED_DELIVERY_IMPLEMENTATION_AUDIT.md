@@ -110,10 +110,10 @@ Disable legacy fleet roles from new order assignment and new financial activity.
 
 Attempt count, threshold evaluation, order state, return case, and custody are updated without one encompassing locked transaction. Concurrent attempts can exceed or race around the threshold or duplicate return cases. Use a locked transaction, idempotency key/event identity, and one authoritative transition to return-to-vendor after the configured threshold.
 
-#### M. COD remains disabled
+#### M. COD is disabled at launch
 **Areas:** checkout/payment methods, rider views/API, vendor collection and reconciliation workflows.
 
-Ensure rider-assigned COD cannot be enabled through a UI flag, API parameter, legacy payment method, or direct request. Re-enable only after a vendor-owned collection/reconciliation design is approved and tests prove riders cannot see payment state/amount due or hold/reconcile money through platform rider accounts.
+Reject COD across every checkout and API path at launch, not only rider-assigned orders. Paystack card and standard bank transfer are the only enabled payment channels. In-shop pickup is a zero-delivery-fee fulfilment method, not a payment method. Any future COD release requires a separate explicit owner decision plus a vendor-owned collection/reconciliation design and passing privacy, accounting, authorization and regression tests. Riders must never see payment status/amount due or collect/reconcile customer money through platform rider accounts.
 
 ## 4. Pickup and multi-vendor invariants
 
@@ -137,7 +137,7 @@ Ensure rider-assigned COD cannot be enabled through a UI flag, API parameter, le
 8. Rider handover records operational evidence only. No rider-triggered wallet credit, financial journal, rider/logistics payable, vendor-fund release, or financial amount is returned to the rider.
 9. Pickup `in_shop_pickup` is zero-fee, uses the approved `RES-XXXXXX` customer pickup pass at the vendor counter, requires no rider, and cannot be fulfilled through rider doorstep endpoints.
 10. Multi-vendor checkout keeps fees, assignments, and allocations isolated by child vendor order.
-11. COD is rejected for rider-assigned orders until the approved vendor-owned collection/reconciliation workflow exists.
+11. COD is rejected across all launch checkout modes and legacy paths; a future release requires separate explicit owner approval and passing vendor-owned collection/reconciliation controls.
 12. Historical logistics orders and financial records remain readable to authorized auditors, but legacy fleet roles cannot receive new work.
 13. Merchandise 90/5/5 and delivery-fee 90/10 allocations balance and refund correctly without any rider beneficiary.
 
@@ -170,7 +170,7 @@ The business rules are now explicit; this section distinguishes policy from code
 | Pickup | in_shop_pickup is zero-fee, no rider, canonical RES-XXXXXX pass verified by vendor counter | Reconcile existing six-digit field, enforce zero server-side, dedicated counter transition, test no rider assignment and no delivery financial allocation |
 | Multi-vendor | One parent checkout; child orders isolate vendor, fulfilment, fee, and rider | Verify checkout snapshots and prevent cross-vendor reads/writes/assignment |
 | Fees and allocation | Vendor destination/fee configuration; merchandise 90/5/5 and delivery 90/10; no rider share | Validate destination/fee on server, snapshot values, reconcile refunds to actual child-order allocations |
-| COD | Rider-assigned COD remains disabled until an approved vendor-owned collection/reconciliation design passes controls | Audit UI, API, legacy payment methods, and direct requests; reject rider COD without a separately approved workflow |
+| COD | Disabled across the entire marketplace at launch; no COD payment path is enabled | Audit UI, API, vendor settings, legacy payment methods and direct requests; any future enablement needs a separate owner decision and passing vendor-owned collection/reconciliation controls |
 | Legacy logistics | Preserve history for authorized audit; no new fulfilment or new-order payouts through legacy fleet | Retire from new paths only after route/job/API/report dependency map; historical records remain read-only/auditable |
 
 ### Cross-document contradictions checked
@@ -220,9 +220,9 @@ The owner has resolved the business decisions listed below. This section is bind
 
 ### Binding decisions
 
-1. **Payment channels:** launch with Paystack card and standard bank-transfer checkout. Dedicated Virtual Accounts (DVA), USSD, mobile money and other channels are deferred unless separately approved. Handle `charge.success` for both enabled channels and `bank.transfer.rejected` as a reconciliation exception.
+1. **Payment channels:** launch with Paystack card and standard bank-transfer checkout; COD is disabled. Dedicated Virtual Accounts (DVA), USSD, mobile money and other channels are deferred unless separately approved. Handle `charge.success` for both enabled channels and `bank.transfer.rejected` as a reconciliation exception.
 2. **One parent charge:** one Paystack charge for the parent checkout; immutable internal allocations per vendor child order. Each child order keeps its own fulfilment, fee, allocation, refund ceiling and settlement gate.
-3. **Refund destination:** original Paystack channel only at launch. Wallet-credit refunds are documented for a later release and must remain disabled in UI, API and service-level authorization. Any later release requires explicit customer consent, timestamped consent, admin authorization and audit-log provenance.
+3. **Refund destination:** original Paystack channel only at launch. Wallet-credit refunds are deferred and must remain disabled in UI, API and service-level authorization. Any later release requires a separate owner-approved policy, explicit customer consent, timestamped consent, admin authorization and audit-log provenance.
 4. **Automatic refund exceptions:** only (a) a verified duplicate successful charge for the exact extra capture against an already-paid checkout, and (b) a verified payment for an order cancelled before any vendor action may use a narrow automatic-approval path. Every other refund requires persisted human authorization before dispatch. A webhook is evidence, not approval. If the state is ambiguous, fail closed to review.
 5. **Protection and cashback:** default refund/protection window is 168 hours. Cashback can mature only after qualifying delivery or vendor-counter pickup, expiry of the window and a further 24-hour buffer, with no blocking return/dispute. If cashback has already been spent and is recoverable under policy, offset future cashback at maturity before the remainder becomes spendable; never silently debit cash wallet funds or create a negative spendable balance. Terms & Conditions and legal/consumer-policy review are required before release.
 6. **Delivery-fee refunds:** vendor fault, including wrong/defective goods, and pre-dispatch cancellation may qualify. Customer change of mind and unjustified refusal normally do not. Partial returns require case-specific review and a recorded decision.
