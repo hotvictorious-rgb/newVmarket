@@ -490,11 +490,14 @@ class PaystackPaymentController extends Controller
             // events from reopening payouts that were already reversed.
             $tDataVerified = array_merge(['status' => 'success'], $tData);
             if ($resolved['type'] === 'vendor') {
-                $finalizationResult = $this->finalizationService->finalizeVendorPayout($resolved['payout'], $tDataVerified);
+                $finalizationResult = $this->finalizationService->finalizeVendorPayout($resolved['payout'], $tDataVerified, null, null, (int) $processedEvent->id, (int) $processedEvent->attempts);
             } elseif ($resolved['type'] === 'logistics') {
-                $finalizationResult = $this->finalizationService->finalizeLogisticsPayout($resolved['payout'], $tDataVerified);
+                $finalizationResult = $this->finalizationService->finalizeLogisticsPayout($resolved['payout'], $tDataVerified, null, null, (int) $processedEvent->id, (int) $processedEvent->attempts);
             }
 
+            if (!empty($finalizationResult['stale_webhook_claim'])) {
+                return response()->json(['status' => false, 'message' => 'Webhook claim expired before payout finalization; retry/reconciliation required.'], 429);
+            }
             if (!empty($finalizationResult['protected'])) {
                 $this->updateProcessedEvent($processedEvent, [
                     'status' => 'unmatched',
@@ -572,17 +575,26 @@ class PaystackPaymentController extends Controller
                     $resolved['payout'],
                     "Paystack transfer {$event['event']}: {$reason}",
                     null,
-                    $allowSuccessfulReversal
+                    $allowSuccessfulReversal,
+                    null,
+                    (int) $processedEvent->id,
+                    (int) $processedEvent->attempts
                 );
             } elseif ($resolved['type'] === 'vendor') {
                 $reversalResult = $this->finalizationService->revertVendorPayout(
                     $resolved['payout'],
                     "Paystack transfer {$event['event']}: {$reason}",
                     null,
-                    $allowSuccessfulReversal
+                    $allowSuccessfulReversal,
+                    null,
+                    (int) $processedEvent->id,
+                    (int) $processedEvent->attempts
                 );
             }
 
+            if (!empty($reversalResult['stale_webhook_claim'])) {
+                return response()->json(['status' => false, 'message' => 'Webhook claim expired before payout reversal; retry/reconciliation required.'], 429);
+            }
             if (!empty($reversalResult['protected'])) {
                 $this->updateProcessedEvent($processedEvent, [
                     'status' => 'unmatched',
