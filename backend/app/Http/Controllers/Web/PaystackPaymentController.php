@@ -712,7 +712,20 @@ class PaystackPaymentController extends Controller
                 }
 
                 $finalization = app(\App\Services\FinancialOperationService::class)
-                    ->finalizeRefundConfirmation($finOp, $rData);
+                    ->finalizeRefundConfirmation(
+                        $finOp,
+                        $rData,
+                        null,
+                        (int) $processedEvent->id,
+                        (int) $processedEvent->attempts
+                    );
+                if (!empty($finalization['stale_webhook_claim'])) {
+                    // Do not update the inbox here: a newer worker owns this generation.
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Webhook claim expired before refund finalization; retry/reconciliation required.',
+                    ], 429);
+                }
                 if (!empty($finalization['protected'])) {
                     $this->updateProcessedEvent($processedEvent, [
                         'status' => 'unmatched',
