@@ -305,3 +305,8 @@ Before dispatching a payout, every existing allocation must represent exactly on
 ### VM-AUD-050 — rider pickup payment precondition
 
 verifyRiderPickupOtp may transition an order to out_for_delivery only if payment_status=paid, the fulfilment type is doorstep delivery, the source status is allowed, the active vendor-owned rider is assigned to the order, and the one-time vendor pickup OTP matches. The payment precondition is checked inside the row-locked service before any pickup state/timestamp mutation. An unpaid order with a legacy ready_for_pickup status must remain unchanged. Implementation and regression test are committed; CI verification pending. Do not treat this finding as proof that all order state writers have been inventoried or unified.
+
+
+### VM-AUD-051 — delivery completion payment precondition
+
+Doorstep delivery completion must require payment_status=paid inside the row-locked OrderSettlementService before validating the customer OTP or changing delivery/cashback state. A correct OTP is evidence of receipt, not evidence of payment. If payment is pending/unpaid, reject without changing order status, receipt timestamp, customer confirmation, cashback ledger or settlement state. Implementation and regression test are committed; CI verification pending. Mandatory photo evidence and all other direct order-status writers remain under audit.
