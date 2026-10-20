@@ -315,9 +315,9 @@ class PaystackPaymentController extends Controller
         // Claim the inbox row transactionally. If a competing first insert wins the
         // unique event_id constraint, allow this transaction to roll back before recovery.
         try {
-        // Authoritative Webhook Inbox State Machine (Audit P0 & P1 Concurrency-Safe Resolution)
-        // Transactional Row-Level Lock prevents concurrent race conditions and permanent event skipping
-        $claimResult = \Illuminate\Support\Facades\DB::transaction(function () use ($eventId, $event, $payload, $eventHash) {
+            // Authoritative Webhook Inbox State Machine (Audit P0 & P1 Concurrency-Safe Resolution)
+            // Transactional Row-Level Lock prevents concurrent race conditions and permanent event skipping
+            $claimResult = \Illuminate\Support\Facades\DB::transaction(function () use ($eventId, $event, $payload, $eventHash) {
             $existingEvent = \App\Models\ProcessedWebhookEvent::where('event_id', $eventId)
                 ->lockForUpdate()
                 ->first();
@@ -396,6 +396,16 @@ class PaystackPaymentController extends Controller
             return ['action' => 'process', 'event' => $newEvent];
         });
         } catch (\Illuminate\Database\QueryException $e) {
+            // Recover only from a unique-constraint race. Other database errors must
+            // propagate instead of being disguised as a duplicate webhook delivery.
+            $sqlState = (string) $e->getCode();
+            $driverCode = (int) ($e->errorInfo[1] ?? 0);
+            $isUniqueViolation = $sqlState === '23505'
+                || ($sqlState === '23000' && in_array($driverCode, [19, 1062], true));
+            if (!$isUniqueViolation) {
+                throw $e;
+            }
+
             // PostgreSQL marks a transaction as failed after a constraint violation.
             // This catch is deliberately outside DB::transaction so the lookup runs
             // only after Laravel has rolled back the failed transaction.
