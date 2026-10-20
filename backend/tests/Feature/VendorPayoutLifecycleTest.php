@@ -790,10 +790,11 @@ class VendorPayoutLifecycleTest extends TestCase
         $blocked->assertSessionHas('error');
         $this->assertSame(0, $partialRequest->allocations()->count());
         $this->assertEquals('eligible', $order->fresh()->vendor_settlement_status);
-        $this->assertEquals('9000.00', $this->vendor->fresh()->getWithdrawableBalance());
+        $this->assertEquals('4000.00', $this->vendor->fresh()->getWithdrawableBalance()); // pending request reserves its amount
 
         // Finance explicitly rejects the incorrectly sized request; no funds were dispatched.
         $partialRequest->update(['status' => 'rejected']);
+        $this->assertEquals('9000.00', $this->vendor->fresh()->getWithdrawableBalance());
 
         // The complete earning record can now be requested and settled as one unit.
         $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
