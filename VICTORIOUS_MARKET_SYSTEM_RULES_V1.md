@@ -51,7 +51,7 @@ The only mandatory **photo evidence** types at launch are:
 
 OTP verification remains mandatory alongside the photos:
 - **Doorstep delivery:** the customer delivery OTP must be securely verified and a doorstep delivery photo recorded before the handover is marked complete.
-- **In-shop pickup:** the customer must present the reservation pickup pass (`RES-XXXXXX`) and complete the required secure pickup verification; the vendor must verify the credential and record an in-shop pickup photo before completing the handover. Reservation/pass verification does not replace the photo.
+- **In-shop pickup:** the customer must present the reservation pickup pass (`RES-XXXXXX`) AND complete one-time customer pickup OTP verification; the vendor must securely verify both and record an in-shop pickup photo before completing the handover. The reservation pass and OTP serve distinct security checks; neither replaces the photo.
 - Keep customer counter pickup separate from rider-to-vendor parcel custody. Do not expose OTPs or pickup secrets in ordinary order lists/history, logs, analytics or unauthorised rider views. Verify on the backend, expire credentials where applicable, and prevent reuse.
 - GPS, customer signature, separate rider-pickup photo and collection-point/hub inspection photo are not mandatory at launch.
 
