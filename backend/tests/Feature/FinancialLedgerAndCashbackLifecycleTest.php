@@ -352,11 +352,16 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         // wallet receives platform-managed delivery compensation.
         $this->assertEquals($fleetWalletBefore, (float)$this->fleetCompany->fresh()->wallet_balance);
         $this->assertEquals($riderBalanceBefore, (float)($this->rider->fresh()->current_balance ?? 0));
-        $this->assertSame(1, FinancialJournalEntry::where('order_id', $order->id)
-            ->where('account_name', 'vendor_payable')
-            ->where('amount', '900.00')
-            ->where('entry_type', 'credit')
-            ->count());
+        // Vendor delivery share is posted when payment is settled, not by the delivery OTP.
+        // Delivery confirmation itself must not create a fleet or rider payout.
+        $this->assertDatabaseMissing('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'logistics_payable',
+        ]);
+        $this->assertDatabaseMissing('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'rider_payable',
+        ]);
         $this->assertDatabaseMissing('financial_journal_entries', [
             'order_id' => $order->id,
             'account_name' => 'logistics_payable',
