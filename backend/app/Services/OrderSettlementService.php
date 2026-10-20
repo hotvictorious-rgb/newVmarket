@@ -735,28 +735,24 @@ class OrderSettlementService
                 return ['success' => false, 'message' => 'Pickup verification code must be exactly 6 digits.'];
             }
 
-            // Courier Operational Clearance Check
-            if (!$rider->is_active) {
-                return ['success' => false, 'message' => 'Courier account is currently inactive.'];
+            // Vendor-owned rider only. Assignment is made by the vendor before pickup;
+            // a rider cannot claim an unassigned order or act across vendor boundaries.
+            if (!$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
+                return ['success' => false, 'message' => 'Vendor rider account is inactive or suspended.'];
             }
-            if ($rider->user && $rider->user->status !== 'active') {
-                return ['success' => false, 'message' => 'Courier account is currently suspended.'];
+            if (!$rider->vendor_id || $rider->logistics_company_id
+                || (int) $rider->vendor_id !== (int) $lockedOrder->vendor_id) {
+                return ['success' => false, 'message' => 'Unauthorized: Rider must belong exclusively to the vendor that owns this order.'];
             }
-            if ($rider->logisticsCompany && $rider->logisticsCompany->status !== 'active') {
-                return ['success' => false, 'message' => 'Courier logistics fleet is currently suspended.'];
+            if (!$rider->vendor || $rider->vendor->marketplace_status !== 'active'
+                || ($rider->vendor->user && $rider->vendor->user->status !== 'active')) {
+                return ['success' => false, 'message' => 'Owning vendor account is inactive or suspended.'];
             }
-
-            // Merchant Operational Clearance Check
-            if ($lockedOrder->vendor && $lockedOrder->vendor->marketplace_status !== 'active') {
-                return ['success' => false, 'message' => 'Merchant marketplace account is currently suspended.'];
+            if ($lockedOrder->logistics_company_id) {
+                return ['success' => false, 'message' => 'Legacy fleet-linked orders must be safely migrated before vendor-managed delivery.'];
             }
-
-            // Enforce Rider Assignment Authorization
-            if ($lockedOrder->rider_id && (int)$lockedOrder->rider_id !== (int)$rider->id) {
-                return [
-                    'success' => false,
-                    'message' => 'Unauthorized: This order is assigned to another dispatch courier.',
-                ];
+            if ((int) $lockedOrder->rider_id !== (int) $rider->id) {
+                return ['success' => false, 'message' => 'Unauthorized: This order is not assigned to this vendor rider.'];
             }
 
             // Enforce Vendor Handover Readiness
@@ -799,7 +795,6 @@ class OrderSettlementService
             $lockedOrder->order_status = 'out_for_delivery';
             $lockedOrder->pickup_confirmed_by_rider = true;
             $lockedOrder->picked_up_at = Carbon::now();
-            $lockedOrder->rider_id = $rider->id;
 
             if ($proofImagePath) {
                 $lockedOrder->pickup_proof_image = $proofImagePath;
@@ -842,18 +837,21 @@ class OrderSettlementService
                 ];
             }
 
-            // Enforce Rider Assignment Authorization
-            if ($lockedOrder->rider_id && (int)$lockedOrder->rider_id !== (int)$rider->id) {
+            // Arrival is an operational action by the vendor-assigned rider only.
+            if (!$rider->is_active || ($rider->user && $rider->user->status !== 'active')
+                || !$rider->vendor_id || $rider->logistics_company_id
+                || (int) $rider->vendor_id !== (int) $lockedOrder->vendor_id
+                || (int) $lockedOrder->rider_id !== (int) $rider->id
+                || !$rider->vendor || $rider->vendor->marketplace_status !== 'active'
+                || ($rider->vendor->user && $rider->vendor->user->status !== 'active')
+                || $lockedOrder->logistics_company_id) {
                 return [
                     'success' => false,
-                    'message' => 'Unauthorized: This delivery is assigned to another dispatch courier.',
+                    'message' => 'Unauthorized: Only the active rider assigned by this order’s owning vendor may mark arrival.',
                 ];
             }
 
             $lockedOrder->rider_arrived_at = Carbon::now();
-            if (!$lockedOrder->rider_id) {
-                $lockedOrder->rider_id = $rider->id;
-            }
             $lockedOrder->save();
 
             // Multi-channel SMS & WhatsApp alert to customer with secret OTP
