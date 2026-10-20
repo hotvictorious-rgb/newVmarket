@@ -15,7 +15,7 @@ class CreateCheckoutIntentRequest extends FormRequest
     {
         return [
             'shop_id' => 'required|integer',
-            'fulfillment_type' => 'required|string|in:doorstep_delivery,in_store_pickup',
+            'fulfillment_type' => 'required|string|in:doorstep_delivery,in_shop_pickup',
             'customer_address_id' => 'required_if:fulfillment_type,doorstep_delivery|nullable|integer',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|integer',
