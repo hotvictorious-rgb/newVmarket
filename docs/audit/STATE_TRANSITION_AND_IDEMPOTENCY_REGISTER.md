@@ -343,3 +343,8 @@ No event may transition `out_for_delivery` -> `delivered`, set customer-confirme
 
 
 VM-AUD-057 verification update (20 October 2026): the full financial/payment hardening suite passed on implementation plus regression commit `7fbde23bde35ae405f51d5ada5f88fda5e55053b` ([CI run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39511157789)). The first CI attempt correctly exposed two existing direct-service tests that still called successful handover without evidence; both fixtures were updated to supply the proof path, and the subsequent full suite passed. A follow-up wording-only API response correction is in commit `6523ed4bc18863b6deb678d0958794295d8ba063`; its CI run is pending, so the latest branch head is not yet fully verified.
+
+
+### VM-AUD-058 — abandoned-order expiry transition must revalidate under lock
+
+Allowed transition: `pending` + `payment_status=pending` + non-null `expires_at <= now` -> `cancelled`, and only if all conditions remain true after locking the order row. The scheduler's initial candidate query is not authoritative after time passes or concurrent updates occur. Under lock, re-check payment state, order state, non-null expiry, and `expires_at <= current time` before cancellation, reservation cancellation, or stock restoration. A renewed/unexpired order must have no transition or inventory side effects. Regression simulates expiry extension after candidate selection. CI verification pending.
