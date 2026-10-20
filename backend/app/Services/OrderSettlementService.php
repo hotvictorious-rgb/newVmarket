@@ -950,8 +950,18 @@ class OrderSettlementService
         return DB::transaction(function () use ($order, $otp, $rider, $proofImagePath, $customerNotes) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
+            if (!$lockedOrder) {
+                return ['success' => false, 'message' => 'Order record not found under lock.'];
+            }
+
             if ($lockedOrder->fulfillment_type !== 'doorstep_delivery') {
                 return ['success' => false, 'message' => 'Customer doorstep verification is only for doorstep delivery orders.'];
+            }
+
+            // A valid customer OTP proves receipt, not payment. Payment must be verified
+            // independently before the terminal fulfilment transition or cashback enqueue.
+            if ($lockedOrder->payment_status !== 'paid') {
+                return ['success' => false, 'message' => 'Unpaid orders cannot be confirmed as delivered.'];
             }
 
             if ($lockedOrder->order_status !== 'out_for_delivery') {
