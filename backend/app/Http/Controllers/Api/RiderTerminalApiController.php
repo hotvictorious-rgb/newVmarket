@@ -343,106 +343,104 @@ class RiderTerminalApiController extends Controller
         }
 
         $rider = $request->user()->riderProfile;
-        $order = Order::with(['items', 'customer'])->findOrFail($validated['order_id']);
+        $photo = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('proof_photo'), 'delivery_attempts');
+        $photoPath = $photo['path'];
 
-        if ((int)$order->rider_id !== (int)$rider->id) {
-            return response()->json(['status' => false, 'message' => 'Unauthorized: This order is assigned to another delivery courier.'], 403);
-        }
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $rider, $request, $photoPath): JsonResponse {
+            $order = Order::with(['items', 'customer'])
+                ->whereKey($validated['order_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if (!in_array($order->order_status, ['out_for_delivery', 'confirmed', 'processing', 'ready_for_pickup'])) {
-            return response()->json([
-                'status' => false,
-                'message' => "Cannot record delivery attempt failure for order in '{$order->order_status}' status.",
-            ], 422);
-        }
+            if ((int) $order->rider_id !== (int) $rider->id) {
+                return response()->json(['status' => false, 'message' => 'Unauthorized: This order is assigned to another delivery courier.'], 403);
+            }
 
-        $photoPath = null;
-        if ($request->hasFile('proof_photo')) {
-            $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('proof_photo'), 'delivery_attempts');
-            $photoPath = $opt['path'];
-        }
+            if ($order->payment_status !== 'paid') {
+                return response()->json(['status' => false, 'message' => 'Unpaid orders cannot record a delivery attempt or enter return-to-vendor.'], 422);
+            }
 
-        $order->delivery_attempt_count = ((int)$order->delivery_attempt_count) + 1;
-        $order->delivery_failure_reason = $validated['reason'];
-        $order->delivery_attempt_notes = $validated['notes'] ?? null;
-        if ($photoPath) {
+            if ($order->fulfillment_type !== 'doorstep_delivery' || $order->order_status !== 'out_for_delivery') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'A failed doorstep delivery attempt can only be recorded for a paid order currently out for delivery.',
+                ], 422);
+            }
+
+            $oldAttemptCount = (int) $order->delivery_attempt_count;
+            $order->delivery_attempt_count = $oldAttemptCount + 1;
+            $order->delivery_failure_reason = $validated['reason'];
+            $order->delivery_attempt_notes = $validated['notes'] ?? null;
             $order->delivery_attempt_photo_path = $photoPath;
-        }
-        $order->last_delivery_attempt_at = Carbon::now();
+            $order->last_delivery_attempt_at = Carbon::now();
 
-        // If max attempts reached (>= 2 attempts), initiate return-to-vendor protocol!
-        $maxAttemptsReached = $order->delivery_attempt_count >= 2;
-        $returnCase = null;
+            $maxAttemptsReached = $order->delivery_attempt_count >= 2;
+            $returnCase = null;
 
-        if ($maxAttemptsReached) {
-            // Customer was repeatedly unreachable: parcel must return to vendor shop
-            $order->order_status = 'returned';
+            if ($maxAttemptsReached) {
+                $vendorReturnOtp = sprintf('%06d', random_int(100000, 999999));
+                $caseNumber = 'RET-' . date('Ymd') . '-' . strtoupper(Str::random(4));
 
-            // Generate Vendor Return OTP and create ReturnCase
-            $vendorReturnOtp = sprintf('%06d', random_int(100000, 999999));
-            $caseNumber = 'RET-' . date('Ymd') . '-' . strtoupper(Str::random(4));
+                $returnCase = ReturnCase::create([
+                    'case_number' => $caseNumber,
+                    'order_id' => $order->id,
+                    'customer_id' => $order->customer_id,
+                    'vendor_id' => $order->vendor_id,
+                    'collection_point_id' => $order->collection_point_id,
+                    'source' => 'delivery_failed_unreachable',
+                    'rejection_category' => 'customer_unreachable',
+                    'vendor_return_otp' => $vendorReturnOtp,
+                    'doorstep_photo_path' => $photoPath,
+                    'returned_by_rider_id' => $rider->id,
+                    'status' => 'in_transit_back_to_vendor',
+                    'return_reason' => 'other',
+                    'customer_description' => "Customer unreachable after {$order->delivery_attempt_count} delivery attempts ({$validated['reason']}). Parcel returning to vendor shop.",
+                    'total_refundable_amount' => $order->merchandise_subtotal,
+                ]);
 
-            $returnCase = ReturnCase::create([
-                'case_number' => $caseNumber,
-                'order_id' => $order->id,
-                'customer_id' => $order->customer_id,
-                'vendor_id' => $order->vendor_id,
-                'collection_point_id' => $order->collection_point_id,
-                'source' => 'delivery_failed_unreachable',
-                'rejection_category' => 'customer_unreachable',
-                'vendor_return_otp' => $vendorReturnOtp,
-                'doorstep_photo_path' => $photoPath,
-                'returned_by_rider_id' => $rider->id,
-                'status' => 'in_transit_back_to_vendor',
-                'return_reason' => 'other',
-                'customer_description' => "Customer unreachable after {$order->delivery_attempt_count} delivery attempts ({$validated['reason']}). Parcel returning to vendor shop.",
-                'total_refundable_amount' => $order->merchandise_subtotal,
+                $order->order_status = 'returned';
+            }
+
+            $order->save();
+
+            AdminAuditLog::create([
+                'user_id' => $rider->user_id,
+                'action' => 'delivery_attempt_failed_recorded',
+                'target_type' => Order::class,
+                'target_id' => $order->id,
+                'old_values' => ['delivery_attempt_count' => $oldAttemptCount, 'order_status' => $maxAttemptsReached ? 'out_for_delivery' : $order->order_status],
+                'new_values' => [
+                    'delivery_attempt_count' => $order->delivery_attempt_count,
+                    'reason' => $validated['reason'],
+                    'notes' => $validated['notes'] ?? null,
+                    'max_attempts_reached' => $maxAttemptsReached,
+                    'return_case_id' => $returnCase?->id,
+                    'order_status' => $order->order_status,
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent(),
             ]);
 
-            // Failed delivery is an operational event only. It records the return-to-vendor
-            // workflow and evidence, but does not issue a wallet credit, create a rider/fleet
-            // payable, or decide whether the customer is owed a refund. Refunds require a
-            // separately authorized original-Paystack workflow after review.
-        }
-
-        $order->save();
-
-        AdminAuditLog::create([
-            'user_id' => $rider->user_id,
-            'action' => 'delivery_attempt_failed_recorded',
-            'target_type' => Order::class,
-            'target_id' => $order->id,
-            'old_values' => ['delivery_attempt_count' => $order->delivery_attempt_count - 1],
-            'new_values' => [
-                'delivery_attempt_count' => $order->delivery_attempt_count,
-                'reason' => $validated['reason'],
-                'notes' => $validated['notes'] ?? null,
-                'max_attempts_reached' => $maxAttemptsReached,
-                'return_case_id' => $returnCase?->id,
-            ],
-            'ip_address' => request()->ip() ?? '127.0.0.1',
-            'user_agent' => request()->userAgent(),
-        ]);
-
-        return response()->json([
-            'status' => true,
-            'message' => $maxAttemptsReached
-                ? "Maximum delivery attempts reached ({$order->delivery_attempt_count}). Order converted to return-to-vendor. Please return parcel to merchant shop."
-                : "Delivery attempt #{$order->delivery_attempt_count} failure recorded. Dispatch can be re-attempted.",
-            'data' => [
-                'order_id' => $order->id,
-                'attempt_count' => $order->delivery_attempt_count,
-                'reason' => $order->delivery_failure_reason,
-                'max_attempts_reached' => $maxAttemptsReached,
-                'order_status' => $order->order_status,
-                'return_case' => $returnCase ? [
-                    'id' => $returnCase->id,
-                    'case_number' => $returnCase->case_number,
-                    'vendor_return_otp' => $returnCase->vendor_return_otp,
-                    'status' => $returnCase->status,
-                ] : null,
-            ],
-        ]);
+            return response()->json([
+                'status' => true,
+                'message' => $maxAttemptsReached
+                    ? "Maximum delivery attempts reached ({$order->delivery_attempt_count}). Order converted to return-to-vendor. Please return parcel to merchant shop."
+                    : "Delivery attempt #{$order->delivery_attempt_count} failure recorded. Dispatch can be re-attempted.",
+                'data' => [
+                    'order_id' => $order->id,
+                    'attempt_count' => $order->delivery_attempt_count,
+                    'reason' => $order->delivery_failure_reason,
+                    'max_attempts_reached' => $maxAttemptsReached,
+                    'order_status' => $order->order_status,
+                    'return_case' => $returnCase ? [
+                        'id' => $returnCase->id,
+                        'case_number' => $returnCase->case_number,
+                        'vendor_return_otp' => $returnCase->vendor_return_otp,
+                        'status' => $returnCase->status,
+                    ] : null,
+                ],
+            ]);
+        });
     }
 
     public function verifyDeliveryOtp(Request $request): JsonResponse
