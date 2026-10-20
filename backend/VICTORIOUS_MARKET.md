@@ -252,7 +252,7 @@ Each vendor configures the destinations it serves and the delivery fee for each 
 
 ### Failed delivery and COD
 
-A failed attempt records its reason, actor, timestamp, and required evidence. Once the configured threshold is reached, the parcel returns to its owning vendor and the vendor confirms receipt. A failed attempt must not automatically create a wallet credit/refund, rider or logistics payable, or release vendor funds; remedies follow the authorized review and financial-operation workflow. Rider-assigned cash-on-delivery remains disabled until a vendor-owned collection and reconciliation flow is explicitly approved and tested without exposing payment status or amount due to the rider.
+A failed attempt records its reason, actor, timestamp, and required evidence. Once the configured threshold is reached, the parcel returns to its owning vendor and the vendor confirms receipt. A failed attempt must not automatically create a wallet credit/refund, rider or logistics payable, or release vendor funds; remedies follow the authorized review and financial-operation workflow. **COD is disabled at launch across the marketplace**, not only for rider-assigned orders. Paystack card and standard bank transfer are the only enabled payment channels; in-shop pickup is a zero-fee fulfilment choice, not COD. Any future COD release requires a separate explicit owner decision and a vendor-owned collection/reconciliation flow that passes privacy, accounting, authorization and regression tests.
 
 ### Proof of handover
 
