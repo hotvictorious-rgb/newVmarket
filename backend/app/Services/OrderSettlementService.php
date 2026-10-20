@@ -44,10 +44,10 @@ class OrderSettlementService
             // transaction as order/payment settlement and journal side effects.
             if ($webhookEventId !== null || $webhookAttempt !== null) {
                 if ($webhookEventId === null || $webhookAttempt === null) {
-                    throw new \\InvalidArgumentException('Webhook fencing requires both event ID and attempt generation.');
+                    throw new \InvalidArgumentException('Webhook fencing requires both event ID and attempt generation.');
                 }
 
-                $claimedEvent = \\App\\Models\\ProcessedWebhookEvent::where('id', $webhookEventId)
+                $claimedEvent = \App\Models\ProcessedWebhookEvent::where('id', $webhookEventId)
                     ->lockForUpdate()
                     ->first();
 
