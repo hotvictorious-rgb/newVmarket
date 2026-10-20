@@ -455,6 +455,100 @@ class VendorPayoutLifecycleTest extends TestCase
 
 
 
+    public function test_valid_transfer_reversed_reconciles_only_with_original_payout_and_request_journals(): void
+    {
+        $order = Order::create([
+            'order_number' => 'ORD-VALID-REVERSAL-01',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'order_type' => 'delivery',
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'settled',
+            'merchandise_subtotal' => '5555.56',
+            'delivery_fee' => '0.00',
+            'grand_total' => '5555.56',
+            'total_amount' => '5555.56',
+            'vendor_net_90' => '5000.00',
+            'customer_cashback_5' => '277.78',
+            'platform_margin_5' => '277.78',
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '5000.00',
+            'status' => 'approved',
+            'gateway_status' => 'success',
+            'disbursed_at' => Carbon::now(),
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Test Vendor',
+            'transfer_reference' => 'VND-PAYOUT-VALID-REVERSAL-01',
+            'paystack_transfer_code' => 'TRF_VALID_REVERSAL_01',
+        ]);
+
+        \App\Models\VendorPayoutAllocation::create([
+            'vendor_payout_request_id' => $payout->id,
+            'order_id' => $order->id,
+            'allocated_amount' => '5000.00',
+            'status' => 'allocated',
+        ]);
+
+        foreach ([
+            ['event_id' => 'EVT-MERCHANT-REQ-' . $payout->id, 'account_name' => 'vendor_payable', 'entry_type' => 'debit'],
+            ['event_id' => 'EVT-MERCHANT-REQ-' . $payout->id, 'account_name' => 'vendor_payout_payable', 'entry_type' => 'credit'],
+            ['event_id' => 'EVT-VND-PAYOUT-' . $payout->id, 'account_name' => 'vendor_payout_payable', 'entry_type' => 'debit'],
+            ['event_id' => 'EVT-VND-PAYOUT-' . $payout->id, 'account_name' => 'cash_in_escrow', 'entry_type' => 'credit'],
+        ] as $entry) {
+            FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => 'VND-PAYOUT-VALID-REVERSAL-01',
+                'event_id' => $entry['event_id'],
+                'beneficiary_type' => VendorProfile::class,
+                'beneficiary_id' => $this->vendor->id,
+                'account_name' => $entry['account_name'],
+                'entry_type' => $entry['entry_type'],
+                'amount' => '5000.00',
+                'currency' => 'NGN',
+                'description' => 'Original payout journal evidence for reversal test',
+            ]);
+        }
+
+        $payloadData = [
+            'id' => 'evt_valid_transfer_reversed_01',
+            'event' => 'transfer.reversed',
+            'data' => [
+                'reference' => 'VND-PAYOUT-VALID-REVERSAL-01',
+                'transfer_code' => 'TRF_VALID_REVERSAL_01',
+                'amount' => 500000,
+                'currency' => 'NGN',
+                'reason' => 'Provider confirmed successful transfer reversal',
+            ],
+        ];
+        $payloadJson = json_encode($payloadData);
+        $secretKey = app(PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payloadJson, $secretKey);
+        $journalCountBefore = FinancialJournalEntry::count();
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+        $payout->refresh();
+        $this->assertSame('rejected', $payout->status);
+        $this->assertSame('failed', $payout->gateway_status);
+        $this->assertSame('eligible', $order->fresh()->vendor_settlement_status);
+        $this->assertSame($journalCountBefore + 2, FinancialJournalEntry::count());
+        $this->assertDatabaseHas('processed_webhook_events', [
+            'event_id' => 'evt_valid_transfer_reversed_01',
+            'status' => 'completed',
+        ]);
+    }
+
     public function test_transfer_reversed_without_confirmed_disbursement_journal_is_quarantined(): void
     {
         $payout = VendorPayoutRequest::create([
