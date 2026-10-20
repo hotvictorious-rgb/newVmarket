@@ -361,3 +361,8 @@ VM-AUD-058 verification update (20 October 2026): the service implementation CI 
 ### VM-AUD-060 — administrative return rejection transition
 
 Allowed: `requested | under_review | received_at_hub | inspected | returned_to_vendor -> rejected`, only by authorized admin staff, with a reason, under a row lock and transaction. Forbidden: reject from `refund_pending`, any state with a dispatched/confirmed refund, `rejected`, or other terminal/advanced state. The case state, item state, and audit event must commit atomically; no controller may mutate ReturnCase status directly. Regression: VM-AUD-060.
+
+
+### VM-AUD-061 — pickup reservation cancellation
+
+Allowed: eligible unplaced reservation -> `canceled`, only after locking and rechecking the reservation row in a transaction shared with the payment path. Forbidden from `order_placed`, `payment_completed`, `canceled`, `cancelled`, or `expired`. The same locked row must serialize cancellation against order creation/payment; no read-then-write cancellation route is permitted. Regression: VM-AUD-061.
