@@ -891,10 +891,10 @@ class PaystackPaymentController extends Controller
                 ], 200);
             }
 
-            $failureReconciliation = \\Illuminate\\Support\\Facades\\DB::transaction(function () use ($finOp, $rData, $processedEvent) {
+            $failureReconciliation = \Illuminate\\Support\\Facades\\DB::transaction(function () use ($finOp, $rData, $processedEvent) {
                 // Fence failure/release side effects in the same transaction as inbox
                 // ownership so an expired worker cannot release a newer worker's reservation.
-                $claimedEvent = \\App\\Models\\ProcessedWebhookEvent::where('id', $processedEvent->id)
+                $claimedEvent = \App\\Models\\ProcessedWebhookEvent::where('id', $processedEvent->id)
                     ->lockForUpdate()
                     ->first();
                 if (!$claimedEvent
@@ -903,7 +903,7 @@ class PaystackPaymentController extends Controller
                     return 'stale';
                 }
 
-                $lockedOp = \\App\\Models\\FinancialOperation::where('id', $finOp->id)->lockForUpdate()->firstOrFail();
+                $lockedOp = \App\\Models\\FinancialOperation::where('id', $finOp->id)->lockForUpdate()->firstOrFail();
                 if ($lockedOp->status === 'confirmed') {
                     // A late failure notification must never downgrade a confirmed refund.
                     return 'processed';
@@ -913,7 +913,7 @@ class PaystackPaymentController extends Controller
                         'status' => 'failed',
                         'failed_at' => Carbon::now(),
                     ]);
-                    \\App\\Models\\FinancialReservation::where('financial_operation_id', $lockedOp->id)
+                    \App\\Models\\FinancialReservation::where('financial_operation_id', $lockedOp->id)
                         ->where('status', 'active')
                         ->update([
                             'status' => 'released',
@@ -928,15 +928,15 @@ class PaystackPaymentController extends Controller
                     // The order-level status is a summary, not the state of this one
                     // refund. Preserve outstanding partial refunds and any earlier
                     // confirmed partial refund when one operation fails.
-                    $hasOutstandingRefund = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+                    $hasOutstandingRefund = \App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
                         ->whereJsonContains('metadata->order_id', $orderId)
                         ->whereNotIn('status', ['confirmed', 'failed', 'reversed'])
                         ->exists();
-                    $hasConfirmedRefund = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+                    $hasConfirmedRefund = \App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
                         ->whereJsonContains('metadata->order_id', $orderId)
                         ->where('status', 'confirmed')
                         ->exists();
-                    $hasPendingReturnCase = \\App\\Models\\ReturnCase::where('order_id', $orderId)
+                    $hasPendingReturnCase = \App\\Models\\ReturnCase::where('order_id', $orderId)
                         ->whereIn('status', ['refund_pending', 'refund_approved'])
                         ->exists();
 
