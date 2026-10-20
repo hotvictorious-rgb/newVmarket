@@ -606,4 +606,48 @@ class FinancialCrashRecoveryAndAdversarialTest extends TestCase
         $this->assertEquals('completed', $order->paystack_refund_status);
         $this->assertEquals('rf_reconciled_99', $order->paystack_refund_reference);
     }
+
+    /**
+     * Regression: valid Paystack events outside the handled financial event set must
+     * be acknowledged and terminally recorded, not left in processing forever.
+     */
+    public function test_unsupported_valid_webhook_event_is_completed_and_duplicate_is_idempotent(): void
+    {
+        $payloadData = [
+            'id' => 'evt_unsupported_subscription_001',
+            'event' => 'subscription.create',
+            'data' => ['id' => 991],
+        ];
+        $payloadJson = json_encode($payloadData);
+        $signature = hash_hmac('sha512', $payloadJson, app(PaystackService::class)->getSecretKey());
+
+        $first = $this->call(
+            'POST',
+            route('payment.paystack.webhook'),
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json', 'HTTP_X_PAYSTACK_SIGNATURE' => $signature],
+            $payloadJson
+        );
+        $first->assertStatus(200);
+
+        $inbox = ProcessedWebhookEvent::where('event_id', 'evt_unsupported_subscription_001')->firstOrFail();
+        $this->assertSame('completed', $inbox->status);
+        $this->assertNotNull($inbox->processed_at);
+        $this->assertSame(1, (int) $inbox->attempts);
+
+        $second = $this->call(
+            'POST',
+            route('payment.paystack.webhook'),
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json', 'HTTP_X_PAYSTACK_SIGNATURE' => $signature],
+            $payloadJson
+        );
+        $second->assertStatus(200);
+
+        $inbox->refresh();
+        $this->assertSame('completed', $inbox->status);
+        $this->assertSame(1, (int) $inbox->attempts, 'Duplicate delivery must not reclaim or repeat a completed event.');
+    }
 }
