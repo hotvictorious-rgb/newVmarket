@@ -38,9 +38,9 @@ Common concerns include:
 
 Merchants also experience significant challenges, including fraudulent orders, customers refusing legitimate deliveries, delayed settlements, stock-management problems, and unreliable delivery arrangements.
 
-Logistics providers face their own difficulties, including unverified handovers, failed deliveries, disputes over responsibility, and uncertain payment reconciliation.
+Vendors and their delivery personnel face difficulties including unverified handovers, failed deliveries, disputes over responsibility, and uncertain payment reconciliation.
 
-VICTORIOUS MARKET aims to address these problems through one coordinated system rather than leaving customers, merchants, and delivery partners to manage transactions independently.
+VICTORIOUS MARKET addresses these problems with shared order records, payment controls, secure evidence, and dispute workflows while leaving delivery operations and rider management with each vendor.
 
 Its central proposition is simple:
 
@@ -400,11 +400,11 @@ The goal is to reward genuine participation without allowing the loyalty program
 
 The initial operating focus is intended to be Uyo, Akwa Ibom State, with expansion into additional supported locations as the operational model becomes reliable.
 
-Rather than immediately making every product available nationwide, the platform can expand through verified merchants, controlled service areas, approved logistics coverage, and reliable collection points.
+Rather than immediately making every product available nationwide, the platform can expand through verified merchants, vendor-configured delivery zones, reliable vendor pickup locations, and accountable fulfilment records.
 
 This geographic discipline is intended to avoid promising deliveries that the platform cannot consistently fulfill.
 
-As VICTORIOUS MARKET matures, the system may support more merchants, branches, product categories, logistics providers, and customers.
+As VICTORIOUS MARKET matures, the system may support more merchants, branches, product categories, vendor-linked riders, and customers while keeping delivery responsibility with each vendor.
 
 Expansion should follow demonstrated operational capacity, not merely the availability of technical features.
 
@@ -444,7 +444,7 @@ These features are at different stages of implementation and verification.
 
 The platform is not yet being represented as independently security-certified or operationally proven at scale.
 
-Before broad public launch, the most important milestones are financial correctness testing, security validation, complete customer-journey testing, operational readiness, merchant onboarding, logistics reliability, and real-world pilot transactions.
+Before broad public launch, the most important milestones are financial correctness testing, security validation, complete customer-journey testing, operational readiness, merchant onboarding, vendor-managed delivery reliability, and real-world pilot transactions.
 
 ---
 
@@ -464,7 +464,7 @@ And the platform should maintain reliable records of the transactions it facilit
 
 The ultimate measure of success will not be the number of features, merchants, or products available.
 
-It will be whether customers consistently receive what they paid for, merchants receive the money they legitimately earn, delivery partners fulfill their responsibilities, and disputes are resolved fairly.
+It will be whether customers consistently receive what they paid for, vendors receive the money they legitimately earn, vendor-linked riders complete assigned deliveries responsibly, and disputes are resolved fairly.
 
 ## Conclusion
 
