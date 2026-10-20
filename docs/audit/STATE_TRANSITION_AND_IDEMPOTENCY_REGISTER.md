@@ -229,3 +229,9 @@ On `Shop` creation, if a valid physical `lga_id` exists, create the default acti
 ### `transfer.reversed` requires confirmed disbursement — VM-AUD-034 (20 October 2026)
 
 A signed and correctly identified reversal event must not be treated as a generic pre-dispatch transfer failure. Before mutating payout status, vendor allocations, logistics wallet balance or journals, the finalizer must find the original confirmed payout-disbursement journal (`EVT-VND-PAYOUT-{id}` or `EVT-FLEET-PAYOUT-{id}`). If absent, return a protected/manual-reconciliation result and leave all financial state unchanged. A regression now covers vendor payout quarantine with no disbursement journal; equivalent logistics coverage and CI verification remain open.
+
+
+### Refund webhook identity must resolve exactly one operation — VM-AUD-035 (20 October 2026)
+
+A `refund.processed` event must resolve to exactly one `customer_refund` financial operation across operation reference, persisted refund-reference metadata, and gateway-attempt references. Do not use `first()` to choose among multiple matches. Include confirmed operations in matching so duplicate success can be handled idempotently by the finalizer. Zero or multiple matches are quarantined as `unmatched` and must not mutate an operation, reservation, order summary, or journal. A regression with two operations sharing one gateway refund reference has been added; CI verification is pending.
+
