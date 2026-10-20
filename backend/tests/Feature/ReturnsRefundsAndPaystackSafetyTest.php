@@ -608,7 +608,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         $this->assertDatabaseHas('admin_audit_logs', [
             'user_id' => $this->vendorUserA->id,
             'action' => 'in_shop_customer_pickup_verified',
-            'target_type' => \\App\\Models\\Order::class,
+            'target_type' => \App\Models\Order::class,
             'target_id' => $order->id,
         ]);
 
