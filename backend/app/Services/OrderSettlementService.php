@@ -438,19 +438,19 @@ class OrderSettlementService
                         ]);
                     }
 
-                    // Credit: Logistics Fleet Payable per Child Order (90% Child Delivery Net)
+                    // Delivery fee is a separate vendor earning (90%); no fleet/rider payable.
                     if (bccomp((string)$child->logistics_fee_retained, '0.00', 2) > 0) {
                         FinancialJournalEntry::create([
                             'order_id' => $child->id,
                             'transaction_reference' => $reference,
-                            'event_id' => 'EVT-FLEET-ESCROW-' . $child->id . '-' . $reference,
-                            'beneficiary_type' => LogisticsCompanyProfile::class,
-                            'beneficiary_id' => $child->logistics_company_id ?: $lockedOrder->logistics_company_id,
-                            'account_name' => 'logistics_payable',
+                            'event_id' => 'EVT-VND-DELIVERY-ESCROW-' . $child->id . '-' . $reference,
+                            'beneficiary_type' => VendorProfile::class,
+                            'beneficiary_id' => $child->vendor_id,
+                            'account_name' => 'vendor_payable',
                             'entry_type' => 'credit',
                             'amount' => $child->logistics_fee_retained,
                             'currency' => 'NGN',
-                            'description' => "Logistics Fleet 90% Net Payable held for Child Order #{$child->order_number}",
+                            'description' => "Vendor 90% delivery-fee earning held for Child Order #{$child->order_number}",
                         ]);
                     }
 
@@ -471,37 +471,8 @@ class OrderSettlementService
                     }
                 }
 
-                // Credit: Logistics Payable (90% Delivery Net from parent order delivery fee)
-                if (bccomp((string)$lockedOrder->logistics_fee_retained, '0.00', 2) > 0) {
-                    FinancialJournalEntry::create([
-                        'order_id' => $lockedOrder->id,
-                        'transaction_reference' => $reference,
-                        'event_id' => 'EVT-FLEET-ESCROW-' . $reference,
-                        'beneficiary_type' => LogisticsCompanyProfile::class,
-                        'beneficiary_id' => $lockedOrder->logistics_company_id,
-                        'account_name' => 'logistics_payable',
-                        'entry_type' => 'credit',
-                        'amount' => $lockedOrder->logistics_fee_retained,
-                        'currency' => 'NGN',
-                        'description' => "Logistics Fleet 90% Net Payable held for Order #{$lockedOrder->order_number}",
-                    ]);
-                }
-
-                // Credit: Platform Delivery Fee Revenue (10% Delivery Cut from parent order)
-                if (bccomp((string)$lockedOrder->platform_delivery_fee, '0.00', 2) > 0) {
-                    FinancialJournalEntry::create([
-                        'order_id' => $lockedOrder->id,
-                        'transaction_reference' => $reference,
-                        'event_id' => 'EVT-PLATFORM-DELIVERY-REV-' . $reference,
-                        'beneficiary_type' => User::class,
-                        'beneficiary_id' => null,
-                        'account_name' => 'platform_revenue',
-                        'entry_type' => 'credit',
-                        'amount' => $lockedOrder->platform_delivery_fee,
-                        'currency' => 'NGN',
-                        'description' => "Victorious Market 10% Delivery Fee Retained for Order #{$lockedOrder->order_number}",
-                    ]);
-                }
+                // Parent payment is allocated across child orders above. Do not post a
+                // second parent-level delivery split: each child's 90/10 split is authoritative.
             } else {
                 // Standard Single-Vendor Order Path:
                 // Credit: Vendor Payable (90% Merchandise Net)
@@ -518,19 +489,19 @@ class OrderSettlementService
                     'description' => "Merchant 90% Net Payable held in escrow for Order #{$lockedOrder->order_number}",
                 ]);
 
-                // Credit: Logistics Payable (90% Delivery Net)
+                // Delivery fee is a separate vendor earning (90%); no fleet/rider payable.
                 if (bccomp((string)$lockedOrder->logistics_fee_retained, '0.00', 2) > 0) {
                     FinancialJournalEntry::create([
                         'order_id' => $lockedOrder->id,
                         'transaction_reference' => $reference,
-                        'event_id' => 'EVT-FLEET-ESCROW-' . $reference,
-                        'beneficiary_type' => LogisticsCompanyProfile::class,
-                        'beneficiary_id' => $lockedOrder->logistics_company_id,
-                        'account_name' => 'logistics_payable',
+                        'event_id' => 'EVT-VND-DELIVERY-ESCROW-' . $reference,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $lockedOrder->vendor_id,
+                        'account_name' => 'vendor_payable',
                         'entry_type' => 'credit',
                         'amount' => $lockedOrder->logistics_fee_retained,
                         'currency' => 'NGN',
-                        'description' => "Logistics Fleet 90% Net Payable held for Order #{$lockedOrder->order_number}",
+                        'description' => "Vendor 90% delivery-fee earning held for Order #{$lockedOrder->order_number}",
                     ]);
                 }
 
