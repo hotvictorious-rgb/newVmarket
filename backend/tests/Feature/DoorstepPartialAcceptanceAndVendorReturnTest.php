@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Country;
 use App\Models\CustomerWalletCredit;
+use App\Models\CustomerAddress;
 use App\Models\Lga;
 use App\Models\LogisticsCompanyProfile;
 use App\Models\Order;
@@ -36,6 +37,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
     protected RiderProfile $riderProfile;
     protected LogisticsCompanyProfile $logisticsCompany;
     protected User $customer;
+    protected CustomerAddress $customerAddress;
     protected Product $blender;
     protected Product $kettle;
     protected Lga $uyoLga;
@@ -108,12 +110,10 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
 
         $this->riderProfile = RiderProfile::create([
             'user_id' => $this->riderUser->id,
-            'logistics_company_id' => $this->logisticsCompany->id,
             'vehicle_type' => 'motorcycle',
             'license_plate' => 'UYO-452-XY',
             'is_active' => true,
             'is_online' => true,
-            'current_balance' => '5000.00',
         ]);
 
         // 3. Vendor & Shop
@@ -131,6 +131,13 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'contact_phone' => '+2348022334455',
             'marketplace_status' => 'active',
             'commission_rate' => 10.00,
+        ]);
+
+        // Active delivery riders are vendor-owned; legacy fleet-only profiles cannot
+        // access the new vendor-managed rider terminal.
+        $this->riderProfile->update([
+            'vendor_id' => $this->vendorProfile->id,
+            'logistics_company_id' => null,
         ]);
 
         $this->shop = Shop::create([
@@ -193,6 +200,18 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'user_type' => 'customer',
             'status' => 'active',
         ]);
+
+        $this->customerAddress = CustomerAddress::create([
+            'user_id' => $this->customer->id,
+            'contact_name' => 'Emeka Shopper',
+            'phone' => '+2348011223344',
+            'address_line' => '42 Ikot Ekpene Road',
+            'country_id' => $country->id,
+            'state_id' => $state->id,
+            'lga_id' => $this->uyoLga->id,
+            'landmark' => 'Near the market junction',
+            'is_default' => true,
+        ]);
     }
 
     /**
@@ -206,15 +225,12 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'vendor_id' => $this->vendorProfile->id,
             'shop_id' => $this->shop->id,
             'rider_id' => $this->riderProfile->id,
-            'logistics_company_id' => $this->logisticsCompany->id,
+            'customer_address_id' => $this->customerAddress->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'out_for_delivery',
             'payment_status' => 'paid',
             'origin_lga_id' => $this->uyoLga->id,
             'destination_lga_id' => $this->uyoLga->id,
-            'delivery_address' => '42 Ikot Ekpene Road, Uyo',
-            'recipient_phone' => '+2348011223344',
-            'recipient_name' => 'Emeka Shopper',
             'merchandise_subtotal' => '45000.00',
             'delivery_fee' => '1500.00',
             'grand_total' => '46500.00',
@@ -348,6 +364,22 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $this->assertNotNull($returnCase->vendor_return_otp);
         $this->assertEquals(6, strlen($returnCase->vendor_return_otp));
         $this->assertEquals($this->riderUser->id, $returnCase->returned_by_rider_id);
+    }
+
+    public function test_rider_dashboard_exposes_address_but_not_customer_phone_or_financial_fields(): void
+    {
+        $order = $this->createOutForDeliveryOrder();
+
+        Sanctum::actingAs($this->riderUser);
+        $response = $this->getJson('/api/v1/rider/dashboard');
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.active_orders.0.customer.name', 'Emeka Shopper');
+        $response->assertJsonPath('data.active_orders.0.customer.delivery_address', '42 Ikot Ekpene Road, Near the market junction, Uyo, Akwa Ibom');
+        $response->assertJsonMissingPath('data.active_orders.0.customer.phone');
+        $response->assertJsonMissingPath('data.active_orders.0.payment_status');
+        $response->assertJsonMissingPath('data.active_orders.0.delivery_fee');
+        $response->assertDontSee('+2348011223344');
     }
 
     /**
