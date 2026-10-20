@@ -294,3 +294,8 @@ A verified late payment could reinstate a cancelled in-shop pickup order as `con
 
 
 VM-AUD-059 verification update (20 October 2026): implementation CI passed ([run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39512331945)) and the late-pickup reinstatement regression passed ([run](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39512369721)). Documentation-only validation for the tracker/register is running separately; no merge or deployment has occurred.
+
+
+### VM-AUD-060 — admin rejection bypassed return-case state machine (21 October 2026)
+
+The admin rejection controller directly overwrote ReturnCase status without a row lock, allowed-source-state check, transaction, or accurate old-state audit. It could overwrite a case already in `refund_pending`/financial processing while a Paystack refund was in flight. Rejection is now a service-owned transition under a row lock and transaction, authorized only for admin staff and limited to reviewable states (`requested`, `under_review`, `received_at_hub`, `inspected`, `returned_to_vendor`). It records the actual source state and rejects advanced/terminal cases without mutation. Regression covers both protected refund_pending state and a permitted under_review rejection. Status: IMPLEMENTED — CI pending.
