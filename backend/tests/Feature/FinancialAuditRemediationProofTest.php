@@ -38,7 +38,6 @@ class FinancialAuditRemediationProofTest extends TestCase
     protected Shop $shop;
     protected Lga $uyoLga;
     protected User $customer;
-    protected LogisticsCompanyProfile $company;
 
     protected function setUp(): void
     {
@@ -85,25 +84,6 @@ class FinancialAuditRemediationProofTest extends TestCase
             'status' => 'active',
         ]);
 
-        $companyUser = User::factory()->create([
-            'user_type' => 'logistics_company',
-            'status' => 'active',
-        ]);
-
-        $this->company = LogisticsCompanyProfile::create([
-            'user_id' => $companyUser->id,
-            'company_name' => 'Swift Courier Ltd',
-            'contact_email' => 'swift@example.com',
-            'contact_phone' => '08012345678',
-            'lga_id' => $this->uyoLga->id,
-            'status' => 'active',
-            'bank_name' => 'GTBank',
-            'bank_code' => '058',
-            'account_number' => '0123456789',
-            'account_name' => 'Swift Courier Ltd',
-        ]);
-        $this->company->wallet_balance = '50000.00';
-        $this->company->save();
     }
 
     protected function tearDown(): void
@@ -333,7 +313,7 @@ class FinancialAuditRemediationProofTest extends TestCase
         $event = ProcessedWebhookEvent::where('event_id', $payloadData['id'])->first();
         $this->assertNotNull($event);
         $this->assertEquals('unmatched', $event->status);
-        $this->assertStringContainsString('No matching vendor or logistics payout', (string)$event->error_reason);
+        $this->assertStringContainsString('No matching vendor payout', (string)$event->error_reason);
     }
 
     /**
@@ -1180,12 +1160,12 @@ class FinancialAuditRemediationProofTest extends TestCase
     }
 
     /**
-     * Terminal rejected payouts must not be selected again just because a stale
+     * Terminal rejected vendor payouts must not be selected again just because a stale
      * reconciliation hold token remains on the row.
      */
-    public function test_payout_reconciliation_skips_terminal_rejected_payouts_with_stale_hold_tokens(): void
+    public function test_payout_reconciliation_skips_terminal_rejected_vendor_payouts_with_stale_hold_tokens(): void
     {
-        VendorPayoutRequest::create([
+        $payout = VendorPayoutRequest::create([
             'vendor_id' => $this->vendor->id,
             'amount' => '40000.00',
             'status' => 'rejected',
@@ -1198,19 +1178,6 @@ class FinancialAuditRemediationProofTest extends TestCase
             'bank_name' => 'Zenith Bank',
         ]);
 
-        LogisticsPayoutRequest::create([
-            'logistics_company_id' => $this->company->id,
-            'amount' => '12000.00',
-            'status' => 'rejected',
-            'gateway_status' => 'failed',
-            'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
-            'processing_started_at' => Carbon::now()->subMinutes(20),
-            'transfer_reference' => 'FLEET-TERMINAL-STALE-HOLD',
-            'account_number' => '0123456789',
-            'account_name' => 'Swift Courier Ltd',
-            'bank_name' => 'GTBank',
-        ]);
-
         $mock = Mockery::mock(PaystackService::class);
         $mock->shouldNotReceive('verifyTransfer');
         $this->app->instance(PaystackService::class, $mock);
@@ -1218,9 +1185,7 @@ class FinancialAuditRemediationProofTest extends TestCase
         $result = app(FinancialReconciliationEngine::class)->reconcilePayouts();
 
         $this->assertEquals(0, $result['vendor_reconciled']);
-        $this->assertEquals(0, $result['logistics_reconciled']);
-        $this->assertEquals('rejected', VendorPayoutRequest::where('transfer_reference', 'VND-TERMINAL-STALE-HOLD')->firstOrFail()->status);
-        $this->assertEquals('rejected', LogisticsPayoutRequest::where('transfer_reference', 'FLEET-TERMINAL-STALE-HOLD')->firstOrFail()->status);
+        $this->assertEquals('rejected', $payout->fresh()->status);
     }
 
 
@@ -1228,7 +1193,7 @@ class FinancialAuditRemediationProofTest extends TestCase
      * Lease ownership is rechecked inside the locked finalization transaction,
      * closing the race between the reconciler's pre-check and ledger mutation.
      */
-    public function test_payout_finalizers_reject_a_reconciliation_worker_with_a_lost_lease(): void
+    public function test_vendor_payout_finalizer_rejects_a_reconciliation_worker_with_a_lost_lease(): void
     {
         $vendorPayout = VendorPayoutRequest::create([
             'vendor_id' => $this->vendor->id,
@@ -1243,37 +1208,15 @@ class FinancialAuditRemediationProofTest extends TestCase
             'bank_name' => 'Zenith Bank',
         ]);
 
-        $logisticsPayout = LogisticsPayoutRequest::create([
-            'logistics_company_id' => $this->company->id,
-            'amount' => '12000.00',
-            'status' => 'pending',
-            'gateway_status' => 'processing',
-            'processing_token' => 'RECON-FLEET-NEW-OWNER',
-            'processing_started_at' => Carbon::now(),
-            'transfer_reference' => 'FLEET-LEASE-FENCE-01',
-            'account_number' => '0123456789',
-            'account_name' => 'Swift Courier Ltd',
-            'bank_name' => 'GTBank',
-        ]);
-
-        $service = app(PayoutFinalizationService::class);
-        $vendorResult = $service->finalizeVendorPayout($vendorPayout, [
+        $result = app(PayoutFinalizationService::class)->finalizeVendorPayout($vendorPayout, [
             'reference' => 'VND-LEASE-FENCE-01',
             'status' => 'success',
         ], null, 'RECON-VND-OLD-OWNER');
-        $logisticsResult = $service->finalizeLogisticsPayout($logisticsPayout, [
-            'reference' => 'FLEET-LEASE-FENCE-01',
-            'status' => 'success',
-        ], null, 'RECON-FLEET-OLD-OWNER');
 
-        $this->assertTrue($vendorResult['protected']);
-        $this->assertTrue($logisticsResult['protected']);
+        $this->assertTrue($result['protected']);
         $this->assertEquals('pending', $vendorPayout->fresh()->status);
         $this->assertEquals('RECON-VND-NEW-OWNER', $vendorPayout->fresh()->processing_token);
-        $this->assertEquals('pending', $logisticsPayout->fresh()->status);
-        $this->assertEquals('RECON-FLEET-NEW-OWNER', $logisticsPayout->fresh()->processing_token);
         $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $vendorPayout->id)->exists());
-        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-FLEET-PAYOUT-' . $logisticsPayout->id)->exists());
     }
 
 
