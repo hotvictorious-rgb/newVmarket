@@ -19,7 +19,7 @@ The selected answers are recorded here so implementation teams do not revert to 
 | 5 | Order assignment — B | The vendor manually assigns each of its orders to one of its linked riders. |
 | 6 | Reassignment — A | Vendor-managed reassignment is allowed before custody; after pickup, use an audited custody-transfer/return flow. |
 | 7 | Multi-vendor checkout — A | Keep one parent checkout with separate child vendor orders, fulfilment choices, fees, and rider assignments. |
-| 8 | Delivery fees/zones — A | Each vendor configures supported delivery areas and destination fees; unsupported destinations fail closed. |
+| 8 | Delivery fees/zones — A | Admin sets standard delivery fees (corridors and zonal rates); vendors configure the individual LGAs and states they can cover from their physical shop. Unsupported destinations fail closed to in-shop pickup. |
 | 9 | Delivery-fee split — B | Delivery fee allocation is 90% to the vendor and 10% platform delivery-fee share; it does not create a rider payable. |
 | 10 | Vendor-to-rider compensation — A | The vendor compensates its rider directly outside platform financial systems. |
 | 11 | Payment paths — owner-confirmed | Only (a) pay before delivery through Victorious MARKET checkout, or (b) reserve in-shop pickup through Victorious MARKET and pay at the approved vendor shop through the platform's authorised payment workflow. Shop reservation is not doorstep COD. No vendor cash collection, personal-account transfer or off-platform payment. Launch rails are Paystack card and standard bank transfer unless separately approved. Legacy wallet-credit checkout tender is disabled; capped cashback redemption is a separate discount, not a payment rail. |
@@ -51,7 +51,7 @@ The selected answers are recorded here so implementation teams do not revert to 
 - Activates/deactivates its own riders subject to platform account/safety restrictions.
 - Sees its own riders and vendor orders only.
 - Assigns and, within the allowed custody boundary, reassigns its own delivery orders.
-- Sets its own supported delivery areas and delivery prices.
+- Selects its own supported delivery coverage areas (individual LGAs and states); delivery fees are determined by the admin-configured platform fee schedule.
 - Coordinates delivery directly with its rider and handles compensation outside the platform.
 - Handles its fulfilment work, including preparing goods, handing over parcels, receiving returned parcels, and communicating with customers.
 

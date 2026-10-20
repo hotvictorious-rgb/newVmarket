@@ -123,7 +123,9 @@ The basis is the actual post-discount merchandise amount collected, excluding de
 | Customer cashback liability | 5% |
 | Platform merchandise share | 5% |
 
-### Vendor-configured delivery fee
+### Standardized delivery fee allocation
+
+Platform delivery fees are set by the Admin across corridors and zonal tiers. Vendors configure the individual LGAs and states their physical shop can deliver to. For delivered orders, the fee allocation is:
 
 | Allocation | Share |
 |---|---:|

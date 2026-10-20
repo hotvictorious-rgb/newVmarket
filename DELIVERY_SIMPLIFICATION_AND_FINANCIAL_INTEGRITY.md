@@ -33,7 +33,7 @@ The detailed and controlling rules are in [.ai/BUSINESS_RULES.md](.ai/BUSINESS_R
 - Each vendor manages its own delivery and registers/links its own riders.
 - Every active rider must belong to exactly one vendor; the vendor manually assigns its own child vendor orders to its own riders.
 - Riders are operational-only. The platform does not manage rider dispatch, pay riders, or maintain rider wallets/earnings/payouts.
-- Vendors configure their own supported delivery destinations and fees. Explicit LGA pricing overrides a state-level fallback; unsupported destinations fail closed.
+- Admin sets standardized delivery fees across corridors and zonal tiers; vendors configure the individual LGAs and states their physical shop's riders can physically cover. Explicit LGA or state coverage allows delivery at the admin-mandated fee; unsupported destinations fail closed (in-shop pickup remains available).
 - Each vendor's products, fulfilment choice, delivery fee, commission, cashback eligibility, and financial outcome are tracked independently within the parent checkout / child vendor-order structure.
 - In-shop pickup remains supported as a zero-delivery-fee option. The customer reserves through Victorious MARKET, pays at the approved vendor shop through Victorious MARKET's authorised payment workflow, presents the RES-XXXXXX reservation pass plus one-time customer pickup OTP verification, and the vendor records the mandatory in-shop pickup photo. The existing 24-hour reservation hold remains supported.
 - VMARKET retains payment verification, vendor verification, safety oversight, dispute review, authorized refund controls, ledger integrity, vendor settlement controls, and audit logs; it does not run delivery operations.
@@ -52,7 +52,7 @@ For eligible merchandise value, the current allocation is:
 - 5% platform merchandise share
 
 ### Delivery-fee allocation
-For the vendor-configured delivery fee, the current allocation is:
+For the admin-standardized delivery fee, the current allocation is:
 - 90% vendor allocation
 - 10% platform delivery-fee share
 
