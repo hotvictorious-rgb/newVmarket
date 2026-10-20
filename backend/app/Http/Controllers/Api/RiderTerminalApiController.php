@@ -545,7 +545,7 @@ class RiderTerminalApiController extends Controller
             'data' => $result['success'] ? [
                 'accepted_amount' => $result['accepted_amount'],
                 'rejected_amount' => $result['rejected_amount'],
-                'wallet_credited' => $result['wallet_credited'],
+                'refund_requested_amount' => $result['refund_requested_amount'],
                 'return_case' => $result['return_case'],
             ] : null,
         ], $result['success'] ? 200 : 422);
