@@ -555,7 +555,12 @@ class ReturnAndRefundService
                     $order,
                     $totalCashRefund,
                     "Manual refund for Return Case #{$preValidation['case_number']}",
-                    $case
+                    $case,
+                    null,
+                    [
+                        'type' => 'admin_approved_return',
+                        'approved_by_user_id' => (int) $case->reviewed_by_admin_id,
+                    ]
                 );
 
                 $dispatchRes = $finOpService->dispatchRefund($op);
