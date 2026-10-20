@@ -1034,7 +1034,7 @@ class AuditRemediationVerificationTest extends TestCase
 
     public function test_checkout_intent_idempotency_key_replays_same_intent_and_rejects_changed_payload(): void
     {
-        \\Laravel\\Sanctum\\Sanctum::actingAs($this->customer);
+        \Laravel\Sanctum\Sanctum::actingAs($this->customer);
         $address = CustomerAddress::create([
             'user_id' => $this->customer->id,
             'country_id' => Country::first()->id,
@@ -1062,14 +1062,14 @@ class AuditRemediationVerificationTest extends TestCase
             ->postJson('/api/v1/checkout/intent', $payload);
         $retry->assertOk();
         $this->assertSame($firstId, $retry->json('data.intent_id'));
-        $this->assertSame(1, \\App\\Models\\CheckoutIntent::where('user_id', $this->customer->id)->count());
+        $this->assertSame(1, \App\Models\CheckoutIntent::where('user_id', $this->customer->id)->count());
 
         $changed = $payload;
         $changed['items'][0]['quantity'] = 2;
         $this->withHeader('Idempotency-Key', 'checkout-retry-001')
             ->postJson('/api/v1/checkout/intent', $changed)
             ->assertStatus(409);
-        $this->assertSame(1, \\App\\Models\\CheckoutIntent::where('user_id', $this->customer->id)->count());
+        $this->assertSame(1, \App\Models\CheckoutIntent::where('user_id', $this->customer->id)->count());
     }
 
 }
