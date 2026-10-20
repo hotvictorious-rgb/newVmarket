@@ -317,7 +317,7 @@ class Order extends Model
         // New vendor-managed orders earn 90% of the delivery fee as a separate payable.
         // Legacy orders assigned to a logistics company keep their historical fleet allocation.
         if (empty($this->logistics_company_id)) {
-            $net = \\App\\Services\\BcMathService::add($net, (string) ($this->logistics_fee_retained ?? '0.00'));
+            $net = \App\Services\BcMathService::add($net, (string) ($this->logistics_fee_retained ?? '0.00'));
         }
         $allocated = (string)$this->payoutAllocations()
             ->where('status', '!=', 'reversed')
