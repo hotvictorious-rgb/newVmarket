@@ -321,9 +321,11 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonPath('status', true);
-        $response->assertJsonPath('data.accepted_amount', '30000.00');
-        $response->assertJsonPath('data.rejected_amount', '15000.00');
-        $response->assertJsonPath('data.refund_requested_amount', '15000.00');
+        // Rider response reports operational success only; money amounts stay in finance/admin views.
+        $response->assertJsonMissingPath('data.accepted_amount');
+        $response->assertJsonMissingPath('data.rejected_amount');
+        $response->assertJsonMissingPath('data.refund_requested_amount');
+        $response->assertJsonMissingPath('data.wallet_credited');
 
         $order->refresh();
         $this->assertEquals('delivered', $order->order_status);
