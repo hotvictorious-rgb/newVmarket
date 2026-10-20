@@ -48,9 +48,13 @@ jobs:
           php -l app/Services/FinancialReconciliationEngine.php
           php -l app/Services/PaystackService.php
           php -l app/Services/ReturnAndRefundService.php
+          php -l app/Services/DoorstepHandshakeService.php
+          php -l app/Http/Controllers/Api/RiderTerminalApiController.php
+          php -l app/Services/NotificationDispatchService.php
+          php -l tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php
           php -l tests/Feature/FinancialAuditRemediationProofTest.php
           php -l tests/Feature/PaystackPaymentHardeningTest.php
           php -l tests/Feature/ReturnsRefundsAndCollectionPointsTest.php
 
       - name: Run financial audit and payment hardening proof tests
-        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndCollectionPointsTest.php --display-warnings
+        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndCollectionPointsTest.php tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php --display-warnings
