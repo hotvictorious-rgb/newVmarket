@@ -10,7 +10,7 @@
 
 This policy must be read with [VICTORIOUS_MARKET_SYSTEM_RULES_V1.md](VICTORIOUS_MARKET_SYSTEM_RULES_V1.md), the single source of truth. One parent checkout can contain vendor-specific child orders; Victorious MARKET controls order/payment records, payment verification, customer refunds, vendor settlement, disputes and financial audit. Vendors manage their own riders; riders have no financial role. Merchandise allocation remains 90% vendor / 5% customer cashback / 5% platform and delivery-fee allocation 90% vendor / 10% platform, with no rider payable.
 
-The owner directed that the supplied recommendations be used, with Paystack bank transfers included alongside cards. The rules below are binding for the audit plan unless a specific item is marked **OWNER QUESTION OPEN**. These are business decisions; they do not mean implementation is complete. Do not merge to main without explicit approval.
+The owner directed that the supplied recommendations be used, with Paystack bank transfers included alongside cards. The rules below are binding for the audit plan No numeric second-approval threshold has been approved; keep any high-value second-approval threshold configurable and do not hard-code an unapproved amount. These are business decisions; they do not mean implementation is complete. Do not merge to main without explicit approval.
 
 
 ### Final owner-confirmed launch contract
