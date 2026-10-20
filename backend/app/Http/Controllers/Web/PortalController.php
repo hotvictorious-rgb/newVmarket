@@ -4638,7 +4638,7 @@ class PortalController extends Controller
             return back()->with('error', 'The order has no linked customer account; resolve the customer identity before opening a return case.');
         }
 
-        $refundHours = max(1, (int) \\App\\Models\\SystemSetting::get('refund_window_hours', 24));
+        $refundHours = max(1, (int) \App\Models\SystemSetting::get('refund_window_hours', 24));
         $windowExpiresAt = $order->refund_window_expires_at;
         if (!$windowExpiresAt && $order->received_at) {
             $windowExpiresAt = $order->received_at->copy()->addHours($refundHours);
