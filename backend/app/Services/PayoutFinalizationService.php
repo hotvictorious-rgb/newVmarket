@@ -447,6 +447,33 @@ class PayoutFinalizationService
                 ];
             }
 
+            // A transfer.reversed event is only valid if the confirmed disbursement
+            // journal exists. Without it, do not misclassify reversal as a pre-dispatch
+            // failure and release the reservation; preserve state for treasury reconciliation.
+            $hasOriginalPayoutJournal = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $lockedPayout->id)->exists();
+            if ($allowSuccessfulReversal && !$hasOriginalPayoutJournal) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'payout' => $lockedPayout,
+                    'message' => 'Transfer reversal has no confirmed payout journal; manual reconciliation required.',
+                ];
+            }
+
+            // A transfer.reversed event must have a confirmed disbursement journal.
+            // Without it, preserve the in-flight payout and route the contradiction to treasury.
+            $hasOriginalPayoutJournal = FinancialJournalEntry::where('event_id', 'EVT-FLEET-PAYOUT-' . $lockedPayout->id)->exists();
+            if ($allowSuccessfulReversal && !$hasOriginalPayoutJournal) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'payout' => $lockedPayout,
+                    'message' => 'Logistics transfer reversal has no confirmed payout journal; manual reconciliation required.',
+                ];
+            }
+
             // A stale failure/reconciliation result must not undo a confirmed payout.
             // Only an explicit transfer.reversed event may reverse a successful transfer.
             if (
@@ -494,7 +521,6 @@ class PayoutFinalizationService
             // A queued/failed transfer may never have posted the disbursement journal.
             // Only write a financial reversal when the original payout journal exists;
             // otherwise release allocations/state without fabricating a cash movement.
-            $hasOriginalPayoutJournal = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $lockedPayout->id)->exists();
             $hasRequestJournal = FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REQ-' . $lockedPayout->id)->exists();
 
             if ($hasOriginalPayoutJournal && $hasRequestJournal) {
@@ -687,7 +713,6 @@ class PayoutFinalizationService
             $lockedPayout->save();
 
             $formattedPayoutAmount = bcadd((string)$lockedPayout->amount, '0', 2);
-            $hasOriginalPayoutJournal = FinancialJournalEntry::where('event_id', 'EVT-FLEET-PAYOUT-' . $lockedPayout->id)->exists();
             $revRef = 'REV-FLEET-' . $lockedPayout->id . '-' . date('YmdHis');
             $beneficiaryId = $company ? $company->id : $lockedPayout->logistics_company_id;
 
