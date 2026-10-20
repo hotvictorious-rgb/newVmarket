@@ -325,3 +325,8 @@ DoorstepHandshakeService::processDoorstepHandover must reject an absent/blank do
 ### VM-AUD-054 — failed delivery attempt transition contract
 
 The delivery-attempt-failed API is an authoritative order writer and must use a row lock/transaction. Allowed only when the assigned rider owns the order, payment_status=paid, fulfillment_type=doorstep_delivery, and order_status=out_for_delivery. Attempt counter, evidence, audit log, optional ReturnCase and returned transition are committed atomically; repeated concurrent requests cannot race the attempt threshold. Regression test covers unpaid order rejection with no state/ReturnCase mutation. CI verification pending.
+
+
+### VM-AUD-055 — customer dispute idempotency and serialization
+
+A customer dispute may be filed only against an owned delivered order within the active 24-hour claim window, unless admin/legal workflow explicitly opens a late case. Serialize createDispute using a row lock on the order; re-check source status/window and existing active dispute while locked; create one dispute and freeze vendor settlement in the same transaction. Duplicate submissions must not create duplicate dispute records or race settlement state. Regression asserts exactly one dispute after duplicate submission. CI verification pending.
