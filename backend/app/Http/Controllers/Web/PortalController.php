@@ -1123,7 +1123,7 @@ class PortalController extends Controller
         $vendor = $this->resolveVendorProfile();
 
         $validated = $request->validate([
-            'amount' => 'required|numeric|min:1000|max:50000000',
+            'amount' => 'required|numeric|min:5000|max:500000',
         ]);
 
         if ($vendor->marketplace_status !== 'active') {
@@ -1140,6 +1140,17 @@ class PortalController extends Controller
 
         return DB::transaction(function () use ($vendor, $validated) {
             $lockedVendor = VendorProfile::where('id', $vendor->id)->lockForUpdate()->first();
+
+            // Only one unresolved payout request may reserve a vendor's earnings.
+            // Keep the reservation until an explicit terminal outcome or reconciliation.
+            $activePayout = VendorPayoutRequest::where('vendor_id', $lockedVendor->id)
+                ->whereIn('status', ['pending', 'approved', 'processing', 'in_flight', 'uncertain'])
+                ->lockForUpdate()
+                ->first();
+            if ($activePayout) {
+                return back()->with('error', "Payout request #{$activePayout->id} is still {$activePayout->status}. It must be resolved before another payout can be requested.");
+            }
+
             $withdrawable = $lockedVendor->getWithdrawableBalance();
             $amount = number_format((float)$validated['amount'], 2, '.', '');
 
@@ -2133,6 +2144,9 @@ class PortalController extends Controller
                     ->whereDoesntHave('dispute', function ($q) {
                         $q->whereIn('status', ['filed', 'under_review']);
                     })
+                    // FIFO is deterministic: oldest eligible earning first, then stable ID tie-break.
+                    ->orderBy('created_at')
+                    ->orderBy('id')
                     ->lockForUpdate()
                     ->get();
 
@@ -2148,20 +2162,36 @@ class PortalController extends Controller
                     ];
                 }
 
-                // Authoritatively reserve allocations against exact orders before transfer initiation
+                // Whole earning records only: never split an order's vendor payable.
+                // Stop at the first FIFO record that would exceed this requested amount.
+                // If the request cannot be composed exactly from whole records, require
+                // a correctly sized request or finance resolution before transfer.
                 $rem = $remainingNeeded;
+                $allocationPlan = [];
                 foreach ($eligibleOrders as $elOrder) {
                     if (bccomp($rem, '0.00', 2) <= 0) break;
-                    $avail = $elOrder->remaining_payable_to_vendor;
+                    $avail = (string) $elOrder->remaining_payable_to_vendor;
                     if (bccomp($avail, '0.00', 2) <= 0) continue;
-                    $allocAmount = (bccomp($rem, $avail, 2) >= 0) ? $avail : $rem;
-                    \App\Models\VendorPayoutAllocation::create([
+                    if (bccomp($avail, $rem, 2) > 0) break;
+                    $allocationPlan[] = ['order' => $elOrder, 'amount' => $avail];
+                    $rem = bcsub($rem, $avail, 2);
+                }
+
+                if (bccomp($rem, '0.00', 2) !== 0) {
+                    return [
+                        'valid' => false,
+                        'message' => 'Payout blocked: the requested amount does not match whole earning records in strict FIFO order. No partial order allocation was created. Request the exact eligible whole-record total or send the oldest over-cap record for finance resolution.',
+                    ];
+                }
+
+                // Reserve only after proving the full request can be allocated.
+                foreach ($allocationPlan as $planned) {
+                    \\App\\Models\\VendorPayoutAllocation::create([
                         'vendor_payout_request_id' => $payout->id,
-                        'order_id' => $elOrder->id,
-                        'allocated_amount' => $allocAmount,
+                        'order_id' => $planned['order']->id,
+                        'allocated_amount' => $planned['amount'],
                         'status' => 'allocated',
                     ]);
-                    $rem = bcsub($rem, $allocAmount, 2);
                 }
             }
 
