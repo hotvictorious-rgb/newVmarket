@@ -1406,6 +1406,53 @@ class VendorPayoutLifecycleTest extends TestCase
         $this->assertSame(2, FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $payout->id)->count());
     }
 
+    public function test_successful_payout_stops_reserving_balance_and_allows_next_request(): void
+    {
+        $this->mockPaystackTransferSuccess('TRF_TERMINAL_RESERVATION_01');
+
+        $firstOrder = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'vendor_settlement_status' => 'eligible',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+        ]);
+        $secondOrder = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'vendor_settlement_status' => 'eligible',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+        ]);
+
+        $this->assertSame('18000.00', $this->vendor->fresh()->getWithdrawableBalance());
+
+        $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
+            'amount' => '9000.00',
+        ]);
+        $firstPayout = VendorPayoutRequest::where('vendor_id', $this->vendor->id)->firstOrFail();
+
+        $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
+            'payout_id' => $firstPayout->id,
+            'notes' => 'Terminal payout reservation regression',
+        ]);
+
+        $firstPayout->refresh();
+        $this->assertSame('approved', $firstPayout->status);
+        $this->assertSame('success', $firstPayout->gateway_status);
+        $this->assertSame('settled', $firstOrder->fresh()->vendor_settlement_status);
+        $this->assertSame('eligible', $secondOrder->fresh()->vendor_settlement_status);
+        $this->assertSame('9000.00', $this->vendor->fresh()->getWithdrawableBalance());
+
+        $secondRequest = $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
+            'amount' => '9000.00',
+        ]);
+        $secondRequest->assertSessionHasNoErrors();
+        $this->assertSame(2, VendorPayoutRequest::where('vendor_id', $this->vendor->id)->count());
+    }
+
     public function test_overallocated_legacy_payout_is_quarantined_without_settling_order_or_overstating_payable(): void
     {
         $order = $this->createTestOrder([
