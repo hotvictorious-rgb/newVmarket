@@ -47,23 +47,8 @@ class FulfillmentAvailabilityService
             ->first();
 
         if ($lane) {
-            // Logistics Company Invariant: If assigned to corridor, fleet must be active and not suspended
-            if ($lane->assigned_logistics_company_id) {
-                $assignedLogistics = \App\Models\LogisticsCompanyProfile::withTrashed()->with('user')->find($lane->assigned_logistics_company_id);
-                if (!$assignedLogistics || $assignedLogistics->trashed() || $assignedLogistics->status !== 'active' || ($assignedLogistics->user && $assignedLogistics->user->status !== 'active')) {
-                    return [
-                        'is_available' => false,
-                        'lane_id' => $lane->id,
-                        'origin_lga_id' => $shop->lga_id,
-                        'destination_lga_id' => $destinationLgaId,
-                        'fee' => '0.00',
-                        'message' => 'The logistics fleet servicing this route corridor is currently deactivated or suspended.',
-                        'rate_tier' => 'logistics_deactivated',
-                        'is_collection_point' => ($shop->lga_id !== $destinationLgaId),
-                        'collection_points' => [],
-                    ];
-                }
-            }
+            // Active lane is used for delivery pricing/serviceability only. New orders are
+            // vendor-managed, so an inactive legacy fleet assignment must not block vendor delivery.
 
             $fee = BcMathService::add($lane->base_fee, '0.00');
             if ($isKekeOrBulky) {
