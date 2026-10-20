@@ -194,7 +194,7 @@ class ReturnAndRefundService
                 'return_reason' => $reason,
                 'customer_description' => $customerDescription,
                 'status' => 'requested',
-                'source' => ($windowExpiresAt && Carbon::now()->gt($windowExpiresAt) && $isAuthorizedLateOverride) ? 'admin_late_override' : null,
+                'source' => ($windowExpiresAt && Carbon::now()->gt($windowExpiresAt) && $isAuthorizedLateOverride) ? 'admin_late_override' : 'post_delivery_claim',
                 'admin_notes' => ($windowExpiresAt && Carbon::now()->gt($windowExpiresAt) && $isAuthorizedLateOverride) ? trim($adminOverrideReason) : null,
                 'resolution_type' => 'refund',
                 'total_refundable_amount' => $totalRefundableAmount,
