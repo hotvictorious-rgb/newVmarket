@@ -242,3 +242,7 @@ Code commit `b7122f99fec327ca5f4ec5344d1c633d8ca69b08` passed the focused refund
 ### Refund success/failure ordering — verified regression (20 October 2026)
 
 A new signed `refund.failed` webhook test delivers a failure signal after its financial operation is already confirmed. CI proves the operation remains `confirmed`, journal count is unchanged, and the inbox event is acknowledged without downgrading the operation. Focused workflow passed on commit `658cd1096f0e9c4861bf8dd9e9e237e60189ab76`: **165 tests / 1,053 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39499839994). The inverse ordering (failed terminal operation followed by a genuine provider success) remains fail-closed for manual reconciliation, and end-to-end stale-worker fencing remains open.
+
+### Positive payout reversal transition — verified in CI (20 October 2026)
+
+The positive-path `transfer.reversed` regression now verifies the full transition when the payout identity, amount/currency evidence, confirmed disbursement journal and original request journal all exist: payout transitions to rejected/failed, only its allocated order returns to eligible, exactly two reversal journal entries are added, and the inbox event completes. CI passed on commit `70afe769b46fda8a57aab29cda3bf8600e3afbf3`: **166 tests / 1,059 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39500051174). This is not a substitute for a real Paystack sandbox event or production database concurrency tests.
