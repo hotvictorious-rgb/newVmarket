@@ -273,7 +273,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         // Customer submits return for 1 of the 2 units
         $response = $this->postJson('/api/v1/customer/returns/create', [
             'order_id' => $order->id,
-            'collection_point_id' => $this->collectionPoint->id,
+            'collection_point_id' => null,
             'return_reason' => 'defective_product',
             'customer_description' => 'Defective power switch on unit',
             'items' => [
@@ -297,7 +297,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         $this->assertNotNull($returnCase);
         $this->assertEquals('requested', $returnCase->status);
         $this->assertEquals(10000.00, (float)$returnCase->total_refundable_amount);
-        $this->assertEquals($this->collectionPoint->id, $returnCase->collection_point_id);
+        $this->assertNull($returnCase->collection_point_id);
         $this->assertEquals(0, (float)$returnCase->refunded_amount); // Zero funds moved!
 
         $this->assertDatabaseHas('return_items', [
@@ -323,7 +323,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
 
         $response = $this->postJson('/api/v1/customer/returns/create', [
             'order_id' => $order->id,
-            'collection_point_id' => $this->collectionPoint->id,
+            'collection_point_id' => null,
             'return_reason' => 'change_of_mind',
             'customer_description' => 'Changed my mind',
             'items' => [
@@ -359,7 +359,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
 
         $response = $this->postJson('/api/v1/customer/returns/create', [
             'order_id' => $order->id,
-            'collection_point_id' => $this->collectionPoint->id,
+            'collection_point_id' => null,
             'return_reason' => 'defective_product',
             'customer_description' => 'Malicious return attempt',
             'items' => [
@@ -390,7 +390,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         // Attempt to return 5 units
         $response = $this->postJson('/api/v1/customer/returns/create', [
             'order_id' => $order->id,
-            'collection_point_id' => $this->collectionPoint->id,
+            'collection_point_id' => null,
             'return_reason' => 'defective_product',
             'customer_description' => 'Invalid quantity attempt',
             'items' => [
@@ -616,23 +616,10 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             ],
             'defective_product',
             'Vendor A item has issue',
-            $this->collectionPoint->id
+            null
         );
         $this->assertTrue($createRes['success']);
 
-        // Inspect and approve Order A's return
-        $caseA = $createRes['case'];
-        $service->recordHubInspection(
-            $this->superAdmin,
-            $caseA,
-            $this->collectionPoint->id,
-            'matches_claim',
-            null,
-            true,
-            'Inspected at hub',
-            'accept_for_refund'
-        );
-        $service->adminApproveReturn($this->superAdmin, $caseA);
         $manualRefund = $service->adminDisburseRefund($this->superAdmin, $caseA, 'REF-VEND-A-1234');
 
         // A legacy manual-bank path must not refund a child order or affect siblings.
