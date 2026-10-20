@@ -760,11 +760,12 @@ class VendorPayoutLifecycleTest extends TestCase
     }
 
     /**
-     * Audit Test A: Partial payout allocations reduce withdrawable balance and prevent double withdrawals.
+     * Approved rule: payout allocations must use whole earning records in strict FIFO order.
+     * Partial allocations against one order are prohibited.
      */
-    public function test_partial_payout_allocation_reduces_withdrawable_balance_and_prevents_double_withdrawal(): void
+    public function test_payout_does_not_split_an_earning_record_and_accepts_whole_record_total(): void
     {
-        $this->mockPaystackTransferSuccess('TRF_PARTIAL_TEST_01');
+        $this->mockPaystackTransferSuccess('TRF_WHOLE_RECORD_01');
 
         $order = $this->createTestOrder([
             'merchandise_subtotal' => '10000.00',
@@ -775,53 +776,45 @@ class VendorPayoutLifecycleTest extends TestCase
 
         $this->assertEquals('9000.00', $this->vendor->getWithdrawableBalance());
 
-        // Step 1: Vendor requests partial payout of ₦4,000
-        $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
-            'amount' => '4000.00',
-        ]);
-
-        $payout1 = VendorPayoutRequest::where('vendor_id', $this->vendor->id)->first();
-        $this->assertNotNull($payout1);
-
-        // Step 2: Admin approves partial payout of ₦4,000
-        $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
-            'payout_id' => $payout1->id,
-            'notes' => 'Partial settlement round 1',
-        ]);
-
-        // Order remains eligible because ₦5,000 is still unallocated!
-        $order->refresh();
-        $this->assertEquals('eligible', $order->vendor_settlement_status);
-        $this->assertEquals('5000.00', $order->remaining_payable_to_vendor);
-
-        // Critical Audit Finding A Invariant: Withdrawable balance must be exactly ₦5,000, NOT raw ₦9,000!
-        $this->assertEquals('5000.00', $this->vendor->fresh()->getWithdrawableBalance());
-
-        // Double-withdrawal prevention: Vendor cannot request ₦6,000
-        $overRequest = $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
-            'amount' => '6000.00',
-        ]);
-        $overRequest->assertSessionHas('error');
-
-        // Step 3: Vendor requests remaining ₦5,000
+        // A request that would split the oldest earning record must not be disbursed.
         $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
             'amount' => '5000.00',
         ]);
+        $partialRequest = VendorPayoutRequest::where('vendor_id', $this->vendor->id)->first();
+        $this->assertNotNull($partialRequest);
 
-        $payout2 = VendorPayoutRequest::where('vendor_id', $this->vendor->id)->where('id', '!=', $payout1->id)->first();
-        $this->assertNotNull($payout2);
+        $blocked = $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
+            'payout_id' => $partialRequest->id,
+            'notes' => 'Must not split an earning record',
+        ]);
+        $blocked->assertSessionHas('error');
+        $this->assertSame(0, $partialRequest->allocations()->count());
+        $this->assertEquals('eligible', $order->fresh()->vendor_settlement_status);
+        $this->assertEquals('9000.00', $this->vendor->fresh()->getWithdrawableBalance());
 
-        // Step 4: Admin approves second partial payout
+        // Finance explicitly rejects the incorrectly sized request; no funds were dispatched.
+        $partialRequest->update(['status' => 'rejected']);
+
+        // The complete earning record can now be requested and settled as one unit.
+        $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
+            'amount' => '9000.00',
+        ]);
+        $wholeRequest = VendorPayoutRequest::where('vendor_id', $this->vendor->id)
+            ->where('id', '!=', $partialRequest->id)
+            ->first();
+        $this->assertNotNull($wholeRequest);
+
         $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
-            'payout_id' => $payout2->id,
-            'notes' => 'Final settlement round 2',
+            'payout_id' => $wholeRequest->id,
+            'notes' => 'Whole earning record settlement',
         ]);
 
-        // Order is now fully settled!
         $order->refresh();
         $this->assertEquals('settled', $order->vendor_settlement_status);
         $this->assertEquals('0.00', $order->remaining_payable_to_vendor);
         $this->assertEquals('0.00', $this->vendor->fresh()->getWithdrawableBalance());
+        $this->assertSame(1, $wholeRequest->allocations()->count());
+        $this->assertEquals('9000.00', $wholeRequest->allocations()->first()->allocated_amount);
     }
 
     /**
