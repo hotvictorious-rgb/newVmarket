@@ -1058,6 +1058,13 @@ class OrderSettlementService
                 return ['success' => false, 'message' => 'Invalid customer delivery verification OTP. Please check your phone SMS or screen.'];
             }
 
+            // The customer OTP alone is not sufficient evidence of doorstep handover.
+            // Every route into this service must supply server-stored photo proof before
+            // changing order state, releasing any fulfilment transition, or enqueueing cashback.
+            if (!is_string($proofImagePath) || trim($proofImagePath) === '') {
+                return ['success' => false, 'message' => 'Doorstep photo proof is required before delivery can be confirmed.'];
+            }
+
             $lockedOrder->delivery_failed_attempts = 0;
             $lockedOrder->delivery_locked_until = null;
 
