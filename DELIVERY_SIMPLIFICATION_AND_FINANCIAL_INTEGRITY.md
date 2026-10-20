@@ -13,7 +13,17 @@ Do not rebuild the application from scratch. Do not implement only frontend chan
 
 ## Authoritative business-rule source
 
-The detailed and controlling rules are in [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md). If an older section of this implementation plan conflicts with that file, the vendor-managed rules take precedence. This document must not reintroduce platform-managed logistics, fleet allocation, rider earnings, or rider payouts.
+The detailed and controlling rules are in [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md) and [VENDOR_PAYOUT_POLICY.md](VENDOR_PAYOUT_POLICY.md). If an older section of this implementation plan conflicts with those files, the current vendor-managed and payout rules take precedence. This document must not reintroduce platform-managed logistics, fleet allocation, rider earnings, or rider payouts.
+
+## Vendor payout policy summary
+
+- Minimum request ₦5,000; maximum request ₦500,000.
+- Vendors may request whenever unreserved eligible funds meet the minimum; no automatic transfer is triggered by the balance threshold.
+- Every request requires authorized admin approval before Paystack transfer initiation.
+- Earnings remain itemized in the ledger but are normally aggregated into one payout request/transfer rather than paid per order.
+- Eligible excess remains eligible for a later request. Exact amounts must be reserved atomically, and concurrent/duplicate claims must be blocked.
+- Check provider funding and account-specific limits; reconcile uncertain, failed, successful, and reversed transfers idempotently.
+- Transfer-fee/stamp-duty allocation remains an open owner decision. Never silently deduct charges from vendor earnings.
 
 ## Operating model
 
