@@ -161,7 +161,7 @@ Because Victorious MARKET deliberately chooses simplicity over quantity tracking
 4. **If Stock Was Depleted / Vendor Marked `Out of Stock`:**
    - **Never Oversell or Force Ghost Fulfillment:** The system never forces a merchant to fulfill an item that does not exist, and never silently ignores customer funds.
    - **Order Transitions to `paid_stock_unavailable`:** The order is safely quarantined with `vendor_settlement_status = 'refund_pending'`.
-   - **100% Customer Protection:** The verified payment enters an explicit paid-stock-unavailable review/refund workflow. Do not promise or issue an immediate spendable wallet credit automatically. Any refund or optional wallet remedy must follow the authorized financial-operation process, with exact amounts, idempotency, and reconciliation.
+   - **100% Customer Protection:** The verified payment enters an explicit paid-stock-unavailable review/refund workflow. Do not promise or issue an immediate spendable wallet credit automatically. At launch, refunds return only through the original Paystack payment channel; wallet-credit refunds are deferred and disabled in UI, API and service authorization. All refunds follow the authorized financial-operation process with exact amounts, idempotency, and reconciliation.
 
 ---
 
@@ -220,7 +220,7 @@ Custody workflows must distinguish operational evidence from financial decisions
 - A rider can record which items were accepted or rejected and submit the required evidence. The rider action records the operational event only; it must not directly approve a refund, create a spendable wallet credit, post refund journals, or settle a delivery fee.
 - Return-parcel custody is recorded separately from deciding fault or approving a financial remedy. The owning vendor confirms receipt through the approved return process.
 - Return/refund review considers the affected child order/items, actual payment, discounts, applicable merchandise and delivery-fee allocation, cashback, previous refunds, and vendor settlement already made.
-- Customer wallet credit is not an automatic consequence of a rider's handover or failed-delivery event. Any wallet remedy must be explicitly authorized, idempotent, recorded through the financial engine, and reconciled.
+- Customer wallet credit is not an automatic consequence of a rider's handover or failed-delivery event. Wallet-credit refunds are disabled at launch; only original-Paystack-channel refunds are enabled. Any future wallet-refund capability requires a separate owner-approved release, explicit customer consent, timestamped consent, admin authorization, and audit logging.
 - Delivery fee refundability is reason-specific and subject to the published customer policy and applicable law. Do not assume that every failure retains or refunds the fee.
 - A failed delivery is not a successful delivery and does not itself trigger a refund, payout, or release of vendor funds.
 
