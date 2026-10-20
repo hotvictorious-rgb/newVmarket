@@ -469,3 +469,17 @@ By combining merchant verification, quality-focused product listings, secure pay
 *Fast. Safe. Reliable.*
 
 *Development vision and intended operating model — October 2026. Features, policies, and operational commitments remain subject to implementation, testing, and launch readiness.*
+
+### Independent merchandise and delivery-fee refund decisions
+
+Victorious MARKET treats merchandise and delivery fees as separate financial components. A customer may raise one case about both, but **the merchandise refund and delivery-fee refund must be approved independently**. Approval of a product refund never automatically approves delivery-fee refundability, and approval of a delivery-fee refund never automatically approves the product refund.
+
+- A merchandise refund identifies the affected vendor child order, item/order lines and quantities, applies the original discount allocation, and reverses only the corresponding 90% vendor / 5% cashback / 5% platform merchandise allocation.
+- A delivery-fee refund identifies the captured delivery fee for that vendor child order, records its own reason/evidence/approval, and reverses only the 90% vendor / 10% platform delivery-fee allocation. It never includes merchandise value or cashback.
+- Each approved component has its own decision record, amount, idempotent financial operation, reservation, gateway state and customer-facing result. Both operations return funds through the original Paystack payment channel at launch. They may reference the same original parent checkout capture but must not be collapsed into one undifferentiated approval or ledger reversal.
+- The customer can receive one component while the other remains pending, is denied, or fails and requires reconciliation. Customer communications must state each component's decision and confirmed Paystack result separately.
+- The system must enforce the component balance, child-order refund ceiling and shared parent-capture ceiling, counting active reservations and confirmed refunds across all vendors/components. A zero-fee in_shop_pickup order has no delivery fee to refund.
+- Vendor recovery and cashback recovery are separate from the customer's gateway refund. A customer refund is complete only when Paystack confirms that specific component; vendor recovery does not delay or replace that confirmation.
+- The existing 24-hour customer return/claim window and separate 24-hour cashback-maturity buffer remain unchanged.
+
+These are binding business requirements, not a statement that the current code already supports independent component approvals. See the payment/refund matrix and implementation audit for required changes and tests.
