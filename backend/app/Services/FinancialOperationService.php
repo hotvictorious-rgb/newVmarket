@@ -54,7 +54,7 @@ class FinancialOperationService
         $amountKobo = (int) bcmul($amountNormalized, '100', 0);
         $key = $idempotencyKey ?: ('REFUND-' . $order->id . '-' . ($returnCase ? $returnCase->id : 'FULL') . '-' . md5($reason . $amountNormalized));
 
-        return DB::transaction(function () use ($order, $amountNormalized, $amountKobo, $reason, $returnCase, $key) {
+        return DB::transaction(function () use ($order, $amountNormalized, $amountKobo, $reason, $returnCase, $key, $authorization) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->firstOrFail();
 
             // A caller must not attach a return case from another order to this
