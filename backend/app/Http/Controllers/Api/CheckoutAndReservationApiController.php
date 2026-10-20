@@ -274,7 +274,7 @@ class CheckoutAndReservationApiController extends Controller
             'status' => 'pending',
             'expires_at' => Carbon::now()->addHours(2),
             ]);
-        } catch (\\Illuminate\\Database\\QueryException $exception) {
+        } catch (\Illuminate\Database\QueryException $exception) {
             // The unique (user_id, idempotency_key) constraint is the concurrency
             // arbiter. If a simultaneous retry won the insert, replay that row.
             if ($idempotencyKey !== null) {
