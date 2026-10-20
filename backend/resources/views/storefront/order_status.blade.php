@@ -382,7 +382,7 @@
     <!-- ========================================== -->
     <!-- 3. SECRET HANDSHAKE PIN REFERENCE CARD -->
     <!-- ========================================== -->
-    @if($order->fulfillment_type !== 'in_shop_pickup' || ($order->payment_status === 'paid' && !in_array($order->order_status, ['picked_up', 'delivered', 'cancelled'], true)))
+    @if(($order->fulfillment_type === 'doorstep_delivery' && $order->payment_status === 'paid' && !in_array($order->order_status, ['delivered', 'cancelled'], true)) || ($order->fulfillment_type === 'in_shop_pickup' && $order->payment_status === 'paid' && !in_array($order->order_status, ['picked_up', 'delivered', 'cancelled'], true)))
     <div style="background: linear-gradient(135deg, #0F172A 0%, #1E1B4B 100%); border: 2px solid #FFD700; border-radius: 16px; padding: 24px; margin-bottom: 24px; color: #FFFFFF; text-align: center; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);">
         
         <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 215, 0, 0.15); border: 1px solid rgba(255, 215, 0, 0.35); padding: 4px 14px; border-radius: 999px; font-size: 11.5px; font-weight: 800; color: #FFD700; margin-bottom: 12px;">
