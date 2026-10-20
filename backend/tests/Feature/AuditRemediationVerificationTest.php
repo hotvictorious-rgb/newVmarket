@@ -1070,6 +1070,13 @@ class AuditRemediationVerificationTest extends TestCase
             ->postJson('/api/v1/checkout/intent', $changed)
             ->assertStatus(409);
         $this->assertSame(1, \App\Models\CheckoutIntent::where('user_id', $this->customer->id)->count());
+
+        // A different key represents an intentional distinct attempt, even for identical cart data.
+        $distinctAttempt = $this->withHeader('Idempotency-Key', 'checkout-attempt-002')
+            ->postJson('/api/v1/checkout/intent', $payload);
+        $distinctAttempt->assertCreated();
+        $this->assertNotSame($first->json('data.fingerprint'), $distinctAttempt->json('data.fingerprint'));
+        $this->assertSame(2, \App\Models\CheckoutIntent::where('user_id', $this->customer->id)->count());
     }
 
 }
