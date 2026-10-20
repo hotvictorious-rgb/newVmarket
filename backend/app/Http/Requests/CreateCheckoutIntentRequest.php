@@ -21,7 +21,7 @@ class CreateCheckoutIntentRequest extends FormRequest
             'items.*.product_id' => 'required|integer',
             'items.*.quantity' => 'required|integer|min:1|max:1000',
             'redeem_cashback' => 'nullable|boolean',
-            'redeem_wallet_credit' => 'nullable|boolean'
+            'redeem_wallet_credit' => 'prohibited',
             'rider_id' => 'prohibited',
             'logistics_company_id' => 'prohibited',
         ];
