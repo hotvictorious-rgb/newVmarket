@@ -13,6 +13,7 @@ use App\Models\LogisticsCollectionPoint;
 use App\Models\LogisticsCompanyProfile;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\PickupReservation;
 use App\Models\Product;
 use App\Models\ReturnCase;
 use App\Models\ReturnEvidence;
@@ -800,6 +801,36 @@ class AuditRemediationVerificationTest extends TestCase
 
         $prodCsp = $prodResponse->headers->get('Content-Security-Policy');
         $this->assertStringNotContainsString("'unsafe-eval'", $prodCsp);
+    }
+
+    public function test_pickup_reservation_cancellation_rechecks_state_under_lock_and_preserves_ordered_reservation(): void
+    {
+        $reservation = PickupReservation::create([
+            'reservation_code' => 'RES-CANCEL-RACE-01',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'product_id' => $this->product->id,
+            'quantity' => 1,
+            'unit_price' => '10000.00',
+            'estimated_total' => '10000.00',
+            'status' => 'order_placed',
+            'expires_at' => Carbon::now()->addMinutes(10),
+        ]);
+
+        $this->actingAs($this->customer, 'sanctum')
+            ->postJson('/api/v1/customer/pickup-reservations/RES-CANCEL-RACE-01/cancel')
+            ->assertStatus(422)
+            ->assertJson(['status' => false]);
+
+        $this->assertSame('order_placed', $reservation->fresh()->status);
+
+        $reservation->update(['status' => 'inspected_accepted']);
+        $this->actingAs($this->customer, 'sanctum')
+            ->postJson('/api/v1/customer/pickup-reservations/RES-CANCEL-RACE-01/cancel')
+            ->assertStatus(200)
+            ->assertJson(['status' => true]);
+        $this->assertSame('canceled', $reservation->fresh()->status);
     }
 
     public function test_admin_return_rejection_is_locked_and_refuses_financially_advanced_cases(): void
