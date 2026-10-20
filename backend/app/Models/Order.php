@@ -11,6 +11,7 @@ class Order extends Model
         'order_number',
         'parent_order_id',
         'customer_id',
+        'customer_address_id',
         'vendor_id',
         'shop_id',
         'collection_point_id',
@@ -219,6 +220,11 @@ class Order extends Model
     public function customer()
     {
         return $this->belongsTo(User::class, 'customer_id');
+    }
+
+    public function customerAddress()
+    {
+        return $this->belongsTo(CustomerAddress::class, 'customer_address_id');
     }
 
     public function vendor()
