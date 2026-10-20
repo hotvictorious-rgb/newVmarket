@@ -1198,7 +1198,7 @@ class PortalController extends Controller
             // Only one unresolved payout request may reserve a vendor's earnings.
             // Keep the reservation until an explicit terminal outcome or reconciliation.
             $activePayout = VendorPayoutRequest::where('vendor_id', $lockedVendor->id)
-                ->whereIn('status', ['pending', 'approved', 'processing', 'in_flight', 'uncertain'])
+                ->activeReservation()
                 ->lockForUpdate()
                 ->first();
             if ($activePayout) {
