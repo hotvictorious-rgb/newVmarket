@@ -48,12 +48,19 @@ class CheckoutAndReservationApiController extends Controller
             'items.*.product_id' => 'required|integer|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1|max:1000',
             'redeem_cashback' => 'nullable|boolean',
-            'redeem_wallet_credit' => 'nullable|boolean|declined',
+            'redeem_wallet_credit' => 'nullable|boolean',
             'rider_id' => 'nullable|integer|exists:rider_profiles,id',
             'logistics_company_id' => 'nullable|integer|exists:logistics_company_profiles,id',
         ], [
             'items.*.quantity.max' => 'Maximum allowed quantity per line item is 1,000 units.',
         ]);
+
+        if (!empty($validated['redeem_wallet_credit'])) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Wallet credit cannot be used to pay for orders at launch. Use an approved payment method.',
+            ], 422);
+        }
 
         $user = $request->user();
 
