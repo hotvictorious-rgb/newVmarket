@@ -802,6 +802,37 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertStringNotContainsString("'unsafe-eval'", $prodCsp);
     }
 
+    public function test_admin_return_rejection_is_locked_and_refuses_financially_advanced_cases(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => 'RET-REJECT-GUARD-01',
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'paystack_refund_id' => 'RFD-ALREADY-DISPATCHED',
+        ]);
+
+        $service = app(ReturnAndRefundService::class);
+        $result = $service->adminRejectReturn($this->superAdmin, $case, 'Customer claim rejected');
+        $this->assertFalse($result['success']);
+        $this->assertSame('refund_pending', $case->fresh()->status);
+        $this->assertSame('RFD-ALREADY-DISPATCHED', $case->fresh()->paystack_refund_id);
+
+        $case->status = 'under_review';
+        $case->save();
+        $accepted = $service->adminRejectReturn($this->superAdmin, $case->fresh(), 'Evidence does not support claim');
+        $this->assertTrue($accepted['success']);
+        $this->assertSame('rejected', $case->fresh()->status);
+        $this->assertSame('rejected', $case->fresh()->resolution_type);
+        $this->assertSame($this->superAdmin->id, $case->fresh()->reviewed_by_admin_id);
+    }
+
     /**
      * Test P0 (Finding 2): Concurrent refund initiation is blocked by atomic claim token.
      */
