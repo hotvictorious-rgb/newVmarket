@@ -4626,7 +4626,6 @@ class PortalController extends Controller
             return back()->with('error', $result['message']);
         }
 
-        \App\Services\NotificationDispatchService::dispatchDisputeArbitrationRuling($case, $validated['ruling'], $validated['admin_notes'] ?? null);
 
         return redirect()->route('admin.returns.show', $case->id)->with('status', $result['message']);
     }
@@ -4658,7 +4657,6 @@ class PortalController extends Controller
             return back()->with('error', $result['message']);
         }
 
-        \App\Services\NotificationDispatchService::dispatchDisputeArbitrationRuling($case, $validated['ruling'], $validated['admin_notes'] ?? null);
 
         return redirect()->route('admin.returns.show', $case->id)->with('status', $result['message']);
     }
