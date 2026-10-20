@@ -1031,4 +1031,63 @@ class SecurityHardeningAndAuditTest extends TestCase
         $ownerResponse = $this->actingAs($customer)->get(route('reservation.pass', ['code' => $reservation->reservation_code]));
         $ownerResponse->assertStatus(200);
     }
+
+    public function test_unpaid_order_cannot_transition_to_rider_custody_even_if_legacy_status_says_ready(): void
+    {
+        [$vendorUser, $vendor, $shop] = $this->createMerchantWithShop('Unpaid Pickup Guard', 'unpaid.pickup@example.com', '08099881123');
+        $lga = Lga::where('name', 'Uyo')->first();
+        $customer = User::where('user_type', 'customer')->first();
+
+        $order = Order::create([
+            'order_number' => 'VM-SEC-UNPAID-PICKUP',
+            'customer_id' => $customer->id,
+            'vendor_id' => $vendor->id,
+            'shop_id' => $shop->id,
+            'origin_lga_id' => $lga->id,
+            'destination_lga_id' => $lga->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'ready_for_pickup',
+            'payment_status' => 'pending',
+            'vendor_handover_ready_at' => Carbon::now(),
+            'pickup_verification_code' => '654321',
+            'verification_code' => '123456',
+            'merchandise_subtotal' => 20000.00,
+            'delivery_fee' => 1500.00,
+            'cashback_redeemed' => 0.00,
+            'grand_total' => 21500.00,
+            'vendor_net_90' => 18000.00,
+            'customer_cashback_5' => 1000.00,
+            'platform_margin_5' => 1000.00,
+            'logistics_fee_retained' => 1350.00,
+            'platform_delivery_fee' => 150.00,
+        ]);
+
+        $riderUser = User::create([
+            'name' => 'Unpaid Guard Rider',
+            'email' => 'unpaid.guard.rider@example.com',
+            'phone' => '08099881124',
+            'password' => bcrypt('test'),
+            'user_type' => 'rider',
+            'status' => 'active',
+        ]);
+        $rider = RiderProfile::create([
+            'user_id' => $riderUser->id,
+            'vendor_id' => $vendor->id,
+            'is_active' => true,
+            'is_online' => true,
+        ]);
+        $order->rider_id = $rider->id;
+        $order->save();
+
+        $result = app(OrderSettlementService::class)->verifyRiderPickupOtp($order, '654321', $rider);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('Unpaid orders cannot be handed to a rider.', $result['message']);
+        $order->refresh();
+        $this->assertSame('pending', $order->payment_status);
+        $this->assertSame('ready_for_pickup', $order->order_status);
+        $this->assertFalse((bool) $order->pickup_confirmed_by_rider);
+        $this->assertNull($order->picked_up_at);
+    }
+
 }
