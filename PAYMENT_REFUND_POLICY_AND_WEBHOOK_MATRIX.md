@@ -99,7 +99,7 @@ These are business states, not necessarily literal database enum values. Map exi
 | Admin approval, before gateway call | Approved/ready to execute | Persist approver, amount, currency, reason, payment reference, allocation snapshot and idempotency key |
 | refund.pending | Refund pending | Keep reservation/obligation open; store event and provider identifiers |
 | refund.processing | Refund processing | Keep obligation open; no final refund journal/closed status yet |
-| refund.needs-attention | Needs attention/manual action | Alert admin; request required details securely; preserve obligation and follow-up deadline |
+| refund.needs-attention | Needs attention/manual action | Alert authorized admin; preserve the customer obligation and follow-up deadline. Do not use wallet credit, off-platform payment, or an alternate bank destination unless a separate owner-approved exception explicitly permits it. |
 | refund.processed with matching operation, amount, currency and original transaction | Confirmed refund | Commit reservation and write idempotent balanced journals; update order/return state only after matching evidence |
 | refund.failed with matching operation | Failed attempt / obligation still open | Verify provider account credit and refund identity; alert admin; controlled retry/manual handling only |
 | Unmatched, conflicting or malformed event | Unmatched/manual reconciliation | Do not mutate financial operation/reservation/order; preserve event and alert authorized staff |
