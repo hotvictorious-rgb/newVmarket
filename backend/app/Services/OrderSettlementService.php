@@ -1139,6 +1139,7 @@ class OrderSettlementService
 
             $lockedOrder->pickup_failed_attempts = 0;
             $lockedOrder->pickup_locked_until = null;
+            $previousOrderStatus = $lockedOrder->order_status;
             $now = Carbon::now();
             $refundHours = max(1, (int) SystemSetting::get('refund_window_hours', 24));
             $lockedOrder->order_status = 'picked_up';
@@ -1159,7 +1160,7 @@ class OrderSettlementService
                 'target_type' => Order::class,
                 'target_id' => $lockedOrder->id,
                 'old_values' => [
-                    'order_status' => 'confirmed',
+                    'order_status' => $previousOrderStatus,
                     'reservation_status' => 'payment_completed',
                 ],
                 'new_values' => [
