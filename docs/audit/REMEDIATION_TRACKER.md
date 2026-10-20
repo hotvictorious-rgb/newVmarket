@@ -173,3 +173,10 @@ Added a positive-path webhook regression: a signed `transfer.reversed` with exac
 ### Refund event ordering — both directions verified in CI (20 October 2026)
 
 Added the complementary case for `refund.processed` arriving after the operation is already terminal `failed`: the operation stays failed, no journal is posted, and the event is quarantined as `unmatched` for manual reconciliation. Together with the prior late-failure-after-confirmation test, both contradictory orderings are now covered. Focused CI passed on commit `afbfd0be526cc14a1050f196f72df89c0d6500e6`: **167 tests / 1,063 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39500196677). End-to-end stale-worker fencing and actual provider sandbox payload verification remain open.
+
+### VM-AUD-036 — refund success finalization fenced by inbox generation (20 October 2026)
+
+- Added a transaction-level ownership fence to `FinancialOperationService::finalizeRefundConfirmation`: webhook-driven refund confirmation now locks the inbox row and verifies `status=processing` plus the exact claimed `attempts` generation in the same transaction as reservation commitment, operation confirmation, and journal posting.
+- A stale generation exits before any financial mutation and returns HTTP 429 without overwriting the newer worker's inbox state. Scheduled/non-webhook callers retain the optional no-inbox-fence behavior.
+- Added a regression that simulates the inbox being reclaimed to generation 2 while a generation-1 worker attempts to finalize; it asserts operation and journal remain unchanged. Focused CI passed on `94cb14368f142b66199b7868422b840d325f5802`: **168 tests / 1,069 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39500860286).
+- Scope remains partial: apply the same in-transaction inbox fence to refund failure, order settlement for `charge.success`, and payout transfer success/failure/reversal handlers. This fix does not claim all webhook paths are fenced.
