@@ -340,6 +340,40 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         $this->assertEquals(0, ReturnCase::count());
     }
 
+    public function test_super_admin_can_open_late_direct_contact_case_with_audit_without_approving_refund(): void
+    {
+        $fixture = $this->createDeliveredOrder(Carbon::now()->subHours(25), 1);
+        $order = $fixture['order'];
+        $item = $fixture['item'];
+
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.returns.open_late'), [
+            'order_id' => $order->id,
+            'return_reason' => 'defective_product',
+            'customer_description' => 'Customer contacted support after discovering a faulty power switch.',
+            'override_reason' => 'Customer contacted our support desk within the statutory remedy period; opening for evidence review.',
+            'items' => [
+                [
+                    'order_item_id' => $item->id,
+                    'quantity' => 1,
+                    'item_condition' => 'damaged_defective',
+                ],
+            ],
+        ]);
+
+        $response->assertRedirect();
+        $case = ReturnCase::where('order_id', $order->id)->firstOrFail();
+        $this->assertSame('requested', $case->status);
+        $this->assertSame('admin_late_override', $case->source);
+        $this->assertNull($case->reviewed_by_admin_id);
+        $this->assertSame('10000.00', (string) $case->total_refundable_amount);
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'user_id' => $this->superAdmin->id,
+            'action' => 'return_case_opened_after_window_by_admin',
+            'target_type' => ReturnCase::class,
+            'target_id' => $case->id,
+        ]);
+    }
+
     /**
      * 4. Zero IDOR: Customer cannot submit returns for another user's order
      */
