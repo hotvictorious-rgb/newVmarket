@@ -1218,4 +1218,30 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $this->assertDatabaseMissing('return_cases', ['order_id' => $order->id]);
     }
 
+
+    public function test_doorstep_handover_service_rejects_missing_photo_proof(): void
+    {
+        [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
+
+        $result = app(DoorstepHandshakeService::class)->processDoorstepHandover(
+            $order,
+            $this->riderProfile,
+            [
+                ['order_item_id' => $item1->id, 'accepted_quantity' => 1, 'rejected_quantity' => 0],
+                ['order_item_id' => $item2->id, 'accepted_quantity' => 1, 'rejected_quantity' => 0],
+            ],
+            '719283',
+            null
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('Doorstep photo proof is required before handover can be completed.', $result['message']);
+        $order->refresh();
+        $this->assertSame('out_for_delivery', $order->order_status);
+        $this->assertFalse((bool) $order->delivery_confirmed_by_customer);
+        $this->assertNull($order->received_at);
+        $this->assertNull($order->proof_of_delivery_image);
+        $this->assertDatabaseMissing('return_cases', ['order_id' => $order->id]);
+    }
+
 }
