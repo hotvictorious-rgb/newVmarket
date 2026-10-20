@@ -76,6 +76,7 @@ class PaystackPaymentController extends Controller
         }
 
         if (($settlement['status'] ?? '') === 'REFUND_PENDING' || $order->fresh()->vendor_settlement_status === 'refund_pending') {
+            $refundMessage = 'Your payment was verified after the order had been cancelled and inventory was unavailable. The refund is pending reconciliation and is not yet confirmed.';
             if (!empty($settlement['trigger_gateway_refund'])) {
                 try {
                     $finOpService = app(\App\Services\FinancialOperationService::class);
@@ -87,14 +88,20 @@ class PaystackPaymentController extends Controller
                         null,
                         ['type' => 'auto_late_payment_cancelled_before_vendor_action']
                     );
-                    $finOpService->dispatchRefund($op);
+                    $dispatchResult = $finOpService->dispatchRefund($op);
+                    if (!empty($dispatchResult['success']) && ($dispatchResult['status'] ?? '') === 'confirmed') {
+                        $refundMessage = 'Your refund has been confirmed.';
+                    } elseif (!empty($dispatchResult['success'])) {
+                        $refundMessage = 'A refund request has been submitted to Paystack and is awaiting confirmation. It is not yet completed.';
+                    } else {
+                        Log::warning("Late-payment refund was not dispatched in callback for Order #{$order->id}: " . ($dispatchResult['message'] ?? 'Unknown dispatch failure'));
+                    }
                 } catch (\Throwable $e) {
                     Log::error("Failed to automatically dispatch refund in callback for Order #{$order->id}: " . $e->getMessage());
                 }
             }
 
-            return redirect()->route('order.status', $redirectParams)
-                ->with('warning', 'Order was cancelled due to inventory depletion before payment was verified. A full refund of ₦' . number_format((float)$order->grand_total, 2) . ' has been initiated to your bank account.');
+            return redirect()->route('order.status', $redirectParams)->with('warning', $refundMessage);
         }
 
         $successMsg = ($settlement['status'] === 'ALREADY_PAID')
@@ -942,8 +949,12 @@ class PaystackPaymentController extends Controller
                     null,
                     ['type' => 'auto_late_payment_cancelled_before_vendor_action']
                 );
-                $finOpService->dispatchRefund($op);
-                Log::info("Automated refund successfully dispatched via FinancialOperationService for Order #{$order->id}.");
+                $dispatchResult = $finOpService->dispatchRefund($op);
+                if (!empty($dispatchResult['success'])) {
+                    Log::info("Late-payment refund dispatch accepted by FinancialOperationService for Order #{$order->id}; status: " . ($dispatchResult['status'] ?? 'unknown'));
+                } else {
+                    Log::warning("Late-payment refund was not dispatched for Order #{$order->id}: " . ($dispatchResult['message'] ?? 'Unknown dispatch failure'));
+                }
             } catch (\Throwable $e) {
                 Log::error("Failed to automatically dispatch refund for out-of-stock Order #{$order->id}: " . $e->getMessage());
             }
