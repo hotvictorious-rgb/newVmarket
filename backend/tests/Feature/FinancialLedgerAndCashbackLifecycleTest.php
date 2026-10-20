@@ -341,7 +341,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $riderBalanceBefore = (float)($this->rider->current_balance ?? 0);
 
         $service = app(OrderSettlementService::class);
-        $result = $service->verifyCustomerDeliveryOtp($order, '987654', $this->rider);
+        $result = $service->verifyCustomerDeliveryOtp($order, '987654', $this->rider, '/test/doorstep-proof.jpg');
 
         $this->assertTrue($result['success']);
 
@@ -465,7 +465,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         ]);
 
         $service = app(OrderSettlementService::class);
-        $result = $service->verifyCustomerDeliveryOtp($order, '445566', $this->rider);
+        $result = $service->verifyCustomerDeliveryOtp($order, '445566', $this->rider, '/test/doorstep-proof.jpg');
         $this->assertTrue($result['success']);
 
         $order->refresh();
