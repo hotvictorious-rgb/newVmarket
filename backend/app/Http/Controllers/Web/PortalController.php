@@ -2396,35 +2396,47 @@ class PortalController extends Controller
             $payout->rejection_reason = strip_tags(trim($validated['rejection_reason']));
             $payout->save();
 
-            // Self-Balancing Double-Entry Financial Journal Reversal
+            // Reverse the request-time reclassification only when that journal exists.
+            // Legacy rows without a request journal require finance reconciliation rather
+            // than fabricated liability movements.
+            $hasRequestJournal = \App\Models\FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REQ-' . $payout->id)->exists();
             $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
             $rejectRef = 'MERCHANT-REJECT-' . $payout->id . '-' . date('YmdHis');
 
-            \App\Models\FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $rejectRef,
-                'event_id' => 'EVT-MERCHANT-REJECT-' . $payout->id,
-                'beneficiary_type' => \App\Models\VendorProfile::class,
-                'beneficiary_id' => $vendor->id,
-                'account_name' => 'vendor_payable',
-                'entry_type' => 'debit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Merchant withdrawal payable discharged upon rejection: {$payout->rejection_reason}",
-            ]);
+            if ($hasRequestJournal) {
+                \App\Models\FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $rejectRef,
+                    'event_id' => 'EVT-MERCHANT-REJECT-' . $payout->id,
+                    'beneficiary_type' => \App\Models\VendorProfile::class,
+                    'beneficiary_id' => $vendor->id,
+                    'account_name' => 'vendor_payout_payable',
+                    'entry_type' => 'debit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Reserved vendor payout liability released upon rejection: {$payout->rejection_reason}",
+                ]);
 
-            \App\Models\FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $rejectRef,
-                'event_id' => 'EVT-MERCHANT-REJECT-' . $payout->id,
-                'beneficiary_type' => \App\Models\VendorProfile::class,
-                'beneficiary_id' => $vendor->id,
-                'account_name' => 'vendor_escrow_holding',
-                'entry_type' => 'credit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Merchant escrow holding restored upon withdrawal rejection for {$vendor->business_name}",
-            ]);
+                \App\Models\FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $rejectRef,
+                    'event_id' => 'EVT-MERCHANT-REJECT-' . $payout->id,
+                    'beneficiary_type' => \App\Models\VendorProfile::class,
+                    'beneficiary_id' => $vendor->id,
+                    'account_name' => 'vendor_payable',
+                    'entry_type' => 'credit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Vendor payable restored upon payout rejection for {$vendor->business_name}",
+                ]);
+            } else {
+                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'REJECTION_JOURNAL_MISSING: finance reconciliation required; no liability movement fabricated.';
+                $payout->save();
+                \Illuminate\Support\Facades\Log::critical('Vendor payout rejected without a request journal; manual accounting reconciliation required.', [
+                    'payout_id' => $payout->id,
+                    'vendor_id' => $vendor->id,
+                ]);
+            }
 
             AdminAuditLog::create([
                 'user_id' => $admin->id,
