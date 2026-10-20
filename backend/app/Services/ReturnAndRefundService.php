@@ -440,6 +440,63 @@ class ReturnAndRefundService
     }
 
     /**
+     * Reject a return case only from a reviewable, non-financially-terminal state.
+     * Lock and audit the transition so rejection cannot race an approval/refund.
+     */
+    public function adminRejectReturn(User $adminUser, ReturnCase $case, string $reason): array
+    {
+        if (!$adminUser->isSuperAdmin() && $adminUser->user_type !== 'admin_employee') {
+            return ['success' => false, 'message' => 'Unauthorized: Only administrative staff can reject return cases.'];
+        }
+
+        $reason = trim($reason);
+        if (mb_strlen($reason) < 3 || mb_strlen($reason) > 500) {
+            return ['success' => false, 'message' => 'A rejection reason between 3 and 500 characters is required.'];
+        }
+
+        return DB::transaction(function () use ($adminUser, $case, $reason) {
+            $lockedCase = ReturnCase::where('id', $case->id)->lockForUpdate()->first();
+            if (!$lockedCase) {
+                return ['success' => false, 'message' => 'Return case not found.'];
+            }
+
+            $allowedSourceStates = ['requested', 'under_review', 'received_at_hub', 'inspected', 'returned_to_vendor'];
+            if (!in_array($lockedCase->status, $allowedSourceStates, true)) {
+                return [
+                    'success' => false,
+                    'message' => "Cannot reject return case in '{$lockedCase->status}' status. Only a case still under review can be rejected.",
+                ];
+            }
+
+            $oldStatus = $lockedCase->status;
+            $lockedCase->status = 'rejected';
+            $lockedCase->resolution_type = 'rejected';
+            $lockedCase->reviewed_by_admin_id = $adminUser->id;
+            $lockedCase->admin_notes = $reason;
+            $lockedCase->refund_claim_token = null;
+            $lockedCase->refund_claimed_at = null;
+            $lockedCase->save();
+
+            ReturnItem::where('return_case_id', $lockedCase->id)
+                ->whereNotIn('status', ['refunded', 'refund_pending'])
+                ->update(['status' => 'rejected']);
+
+            AdminAuditLog::create([
+                'user_id' => $adminUser->id,
+                'action' => 'return_case_rejected',
+                'target_type' => ReturnCase::class,
+                'target_id' => $lockedCase->id,
+                'old_values' => ['status' => $oldStatus],
+                'new_values' => ['status' => 'rejected', 'admin_notes' => $reason],
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent(),
+            ]);
+
+            return ['success' => true, 'message' => "Return Case #{$lockedCase->case_number} has been rejected.", 'case' => $lockedCase];
+        });
+    }
+
+    /**
      * Authoritative Super Admin Manual Refund Disbursement.
      * Enforces strict double-entry balancing, reversals of 90/5/5 merchandise cuts,
      * cashback reward cancellation, and Paystack refunds to the verified original transaction.
