@@ -74,7 +74,8 @@ Changing one state must not silently or automatically assert that another state 
 
 The standard customer return/claim window is **24 hours from verified doorstep delivery or confirmed in-shop pickup**. This is a customer-protection window; it is **not** a promise that Paystack will process a refund within 24 hours.
 
-- The backend must use the approved 24-hour setting consistently across customer interfaces, APIs, services, jobs, and vendor settlement eligibility.
+- The backend must use the approved 24-hour setting consistently across customer interfaces, APIs, services, jobs, and vendor settlement eligibility, evaluated independently per vendor child order.
+- The 24-hour period is the standard operational claim/reporting window, not a blanket waiver of rights that cannot lawfully be excluded. It must not be presented as eliminating remedies available under the Federal Competition and Consumer Protection Act or other applicable Nigerian law, including where goods are defective, unsafe, misdescribed, or non-conforming. Applicable law and valid warranty obligations prevail where they provide a stronger remedy; obtain qualified Nigerian legal review of customer-facing Terms before launch.
 - A return request, dispute, failed delivery, unconfirmed pickup, or other blocking case must be evaluated before affected vendor earnings or cashback are released.
 - Verified duplicate successful charges, verified paid orders cancelled before any vendor action, payment exceptions, chargebacks, and applicable non-waivable legal obligations follow their own evidence and authorization rules. The fulfilment-based 24-hour clock does not erase those obligations.
 - Only verified duplicate charges and verified paid orders cancelled before any vendor action qualify for the narrow automatic-refund-approval exception. Other refunds require persisted authorized human approval before dispatch.
@@ -90,8 +91,9 @@ Cashback maturity is **not the same as the return/refund window**.
 2. After that window expires, cashback has a **separate additional 24-hour maturity buffer**.
 3. The earliest possible cashback maturity is therefore the return-window expiry plus another 24 hours, and only if fulfilment is valid and no blocking return, dispute, failed-delivery case, or unconfirmed pickup remains.
 4. The additional buffer delays cashback becoming spendable; it does not extend the customer's return window and does not delay or define Paystack's refund-processing SLA.
-5. If a refund reverses cashback that the customer has already spent, reverse any unspent cashback first and track the remaining recoverable amount separately. At maturity, future cashback offsets the recovery balance before any remainder becomes spendable. Do not silently debit a cash wallet or issue a negative spendable balance.
-6. Cashback recovery must be disclosed in the customer Terms & Conditions and reviewed for applicable Nigerian consumer-policy/legal requirements before release.
+5. Cashback cannot mature before verified fulfilment establishes the claim-window expiry. Its 365-day validity period starts at the actual `matures_at` timestamp, not checkout or payment; pre-fulfilment lots may have null `matures_at` and `expires_at`.
+6. If a refund reverses cashback that the customer has already spent, reverse any unspent cashback first and track the remaining recoverable amount separately. At maturity, future cashback offsets the recovery balance before any remainder becomes spendable. Do not silently debit a cash wallet or issue a negative spendable balance.
+7. Cashback recovery must be disclosed in the customer Terms & Conditions and reviewed for applicable Nigerian consumer-policy/legal requirements before release.
 
 ### Refund lifecycle safeguards
 
