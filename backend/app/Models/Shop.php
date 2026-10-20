@@ -10,6 +10,34 @@ class Shop extends Model
 {
     use SoftDeletes;
 
+    /**
+     * Every newly created physical shop starts with local-LGA coverage.
+     * This keeps seeders, imports, admin creation and vendor creation aligned;
+     * vendors can later narrow or expand coverage through the authorized workflow.
+     */
+    protected static function booted(): void
+    {
+        static::created(function (Shop $shop): void {
+            if (!$shop->lga_id) {
+                return;
+            }
+
+            $lga = Lga::query()->find($shop->lga_id);
+            if (!$lga) {
+                return;
+            }
+
+            ShopDeliveryCoverage::firstOrCreate(
+                [
+                    'shop_id' => $shop->id,
+                    'state_id' => $lga->state_id,
+                    'lga_id' => $lga->id,
+                ],
+                ['is_active' => true]
+            );
+        });
+    }
+
     protected $fillable = [
         'vendor_id',
         'name',
