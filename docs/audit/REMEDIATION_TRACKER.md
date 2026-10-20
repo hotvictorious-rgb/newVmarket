@@ -161,3 +161,7 @@ Changes are on the audit branch only. The workflow caught and helped correct pay
 ### Verification update — VM-AUD-032, VM-AUD-034 and VM-AUD-035 (20 October 2026)
 
 The focused refund-safety workflow passed on code commit `b7122f99fec327ca5f4ec5344d1c633d8ca69b08`: **164 tests passed / 1,049 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39499688786). This includes reversal missing/wrong amount/currency checks, logistics reversal quarantine when the original disbursement journal is absent, and ambiguous `refund.processed` reference quarantine. The latest documentation-only commits are undergoing their own workflow. Real Paystack sandbox payload compatibility, stale-worker end-to-end fencing, and multi-vendor checkout remain open.
+
+### Refund event ordering regression — verification update (20 October 2026)
+
+Added a signed-webhook regression for `refund.failed` arriving after the financial operation is already `confirmed`. The operation remains confirmed, no journal count changes, and the inbox event is completed without downgrading the refund. The focused workflow passed on commit `658cd1096f0e9c4861bf8dd9e9e237e60189ab76`: **165 tests / 1,053 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39499839994). This is targeted CI, not provider-sandbox or production-database verification.
