@@ -1153,6 +1153,27 @@ class OrderSettlementService
             $reservation->status = 'handed_over';
             $reservation->save();
 
+            AdminAuditLog::create([
+                'user_id' => $staffUser->id,
+                'action' => 'in_shop_customer_pickup_verified',
+                'target_type' => Order::class,
+                'target_id' => $lockedOrder->id,
+                'old_values' => [
+                    'order_status' => 'confirmed',
+                    'reservation_status' => 'payment_completed',
+                ],
+                'new_values' => [
+                    'order_status' => 'picked_up',
+                    'reservation_status' => 'handed_over',
+                    'reservation_id' => $reservation->id,
+                    'reservation_code_suffix' => substr((string) $reservation->reservation_code, -4),
+                    'customer_pickup_photo_path' => $proofImagePath,
+                    'customer_otp_consumed' => true,
+                ],
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent(),
+            ]);
+
             CustomerCashbackLedger::updateOrCreate([
                 'order_id' => $lockedOrder->id,
             ], [
