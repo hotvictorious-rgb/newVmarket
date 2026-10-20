@@ -650,4 +650,72 @@ class FinancialCrashRecoveryAndAdversarialTest extends TestCase
         $this->assertSame('completed', $inbox->status);
         $this->assertSame(1, (int) $inbox->attempts, 'Duplicate delivery must not reclaim or repeat a completed event.');
     }
+
+    /**
+     * Real-world S01: Paystack captures payment, the browser/network fails, and
+     * Paystack delivers the same successful transaction under a second event ID.
+     * The payment reference—not webhook delivery count—is the financial idempotency key.
+     */
+    public function test_duplicate_charge_success_with_distinct_event_ids_does_not_duplicate_financial_effects(): void
+    {
+        $order = $this->createTestOrder([
+            'order_number' => 'ORD-RETRY-PAY-001',
+            'payment_reference' => 'REF-RETRY-PAY-001',
+            'payment_status' => 'pending',
+            'order_status' => 'pending',
+            'vendor_settlement_status' => 'held',
+            'grand_total' => '10000.00',
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '500.00',
+        ]);
+
+        $sendSuccess = function (string $eventId) use ($order) {
+            $payload = [
+                'id' => $eventId,
+                'event' => 'charge.success',
+                'data' => [
+                    'id' => 8800123,
+                    'status' => 'success',
+                    'reference' => $order->payment_reference,
+                    'amount' => 1000000,
+                    'currency' => 'NGN',
+                    'channel' => 'card',
+                ],
+            ];
+            $raw = json_encode($payload);
+            $signature = hash_hmac('sha512', $raw, app(PaystackService::class)->getSecretKey());
+
+            return $this->call(
+                'POST',
+                route('payment.paystack.webhook'),
+                [],
+                [],
+                ['CONTENT_TYPE' => 'application/json', 'HTTP_X_PAYSTACK_SIGNATURE' => $signature],
+                $raw
+            );
+        };
+
+        $first = $sendSuccess('evt_charge_retry_first_001');
+        $first->assertStatus(200);
+        $order->refresh();
+        $this->assertSame('paid', $order->payment_status);
+        $this->assertSame('confirmed', $order->order_status);
+
+        $journalCountAfterFirst = FinancialJournalEntry::count();
+        $cashbackCountAfterFirst = \App\Models\CustomerCashbackLedger::count();
+
+        // Simulates browser timeout/retry followed by a second valid provider delivery.
+        $second = $sendSuccess('evt_charge_retry_duplicate_002');
+        $second->assertStatus(200);
+
+        $order->refresh();
+        $this->assertSame('paid', $order->payment_status);
+        $this->assertSame('confirmed', $order->order_status);
+        $this->assertSame($journalCountAfterFirst, FinancialJournalEntry::count(), 'A second event ID must not repost payment journals.');
+        $this->assertSame($cashbackCountAfterFirst, \App\Models\CustomerCashbackLedger::count(), 'A second event ID must not create another cashback liability.');
+        $this->assertSame('completed', ProcessedWebhookEvent::where('event_id', 'evt_charge_retry_first_001')->value('status'));
+        $this->assertSame('completed', ProcessedWebhookEvent::where('event_id', 'evt_charge_retry_duplicate_002')->value('status'));
+    }
 }
