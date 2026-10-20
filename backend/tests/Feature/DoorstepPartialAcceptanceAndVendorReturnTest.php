@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Country;
+use App\Models\CustomerCashbackLedger;
 use App\Models\CustomerWalletCredit;
 use App\Models\CustomerAddress;
 use App\Models\Lga;
