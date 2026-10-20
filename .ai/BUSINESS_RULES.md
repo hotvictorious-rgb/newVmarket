@@ -4,7 +4,7 @@
 **Last reviewed:** 20 October 2026
 **Review note:** The rules are approved requirements; Section 14 lists implementation gaps found in the audit branch, not completed fixes.  
 **Scope:** Delivery, vendor-linked riders, in-shop pickup, customer privacy, failed delivery, delivery fees, COD boundaries, and legacy logistics.  
-**Authority:** Read with [VICTORIOUS_MARKET_SYSTEM_RULES_V1.md](../VICTORIOUS_MARKET_SYSTEM_RULES_V1.md), the single source of truth. These rules supersede older descriptions of platform-managed logistics, mandatory OTP handovers, logistics-company dispatch, rider earnings, and rider payouts. Historical records must be preserved. Documentation alignment only; implementation remains unverified.
+**Authority:** Read with [VICTORIOUS_MARKET_SYSTEM_RULES_V1.md](../VICTORIOUS_MARKET_SYSTEM_RULES_V1.md), the single source of truth. These rules supersede older descriptions of platform-managed logistics, conflicting OTP/photo requirements, logistics-company dispatch, rider earnings, and rider payouts. Historical records must be preserved. Documentation alignment only; implementation remains unverified.
 
 ## Decision record from the vendor-delivery Q&A
 
@@ -22,8 +22,8 @@ The selected answers are recorded here so implementation teams do not revert to 
 | 8 | Delivery fees/zones — A | Each vendor configures supported delivery areas and destination fees; unsupported destinations fail closed. |
 | 9 | Delivery-fee split — B | Delivery fee allocation is 90% to the vendor and 10% platform delivery-fee share; it does not create a rider payable. |
 | 10 | Vendor-to-rider compensation — A | The vendor compensates its rider directly outside platform financial systems. |
-| 11 | Cash on delivery — A | COD is disabled at launch across all checkout and fulfilment paths. Riders remain operational-only and never see amount due/payment status. Any future COD release requires separate explicit owner approval and a vendor-owned collection/reconciliation design that passes privacy, authorization, accounting, and financial-control tests. |
-| 12 | Delivery proof — owner-confirmed | Required fulfilment proof is a doorstep delivery photo or an in-shop pickup photo linked to the correct child order. OTP/GPS/signature/rider-pickup photos are not mandatory proof-of-completion conditions. A RES-XXXXXX pickup pass may remain for its separate collection-security purpose. |
+| 11 | Payment paths — owner-confirmed | Only (a) pay before delivery through Victorious MARKET checkout, or (b) reserve in-shop pickup through Victorious MARKET and pay at the approved vendor shop through the platform's authorised payment workflow. Shop reservation is not doorstep COD. No vendor cash collection, personal-account transfer or off-platform payment. Launch rails are Paystack card and standard bank transfer unless separately approved. |
+| 12 | Handover evidence — owner-confirmed | Doorstep delivery requires verified customer OTP plus a linked doorstep delivery photo. In-shop pickup requires a valid RES-XXXXXX reservation pickup pass/secure pickup verification plus a linked in-shop pickup photo. GPS, signature, separate rider-pickup photo and hub inspection photo are not mandatory. |
 | 13 | Failed delivery / doorstep rejection — owner-confirmed | Record outcome and return rejected/undelivered goods directly to the owning vendor. The vendor may offer an agreed replacement/redelivery; customer agreement is required. Refund/cancellation and financial responsibility remain separately reviewed. |
 | 14 | Admin boundaries — A | Platform admin handles oversight/security/disputes, not dispatch or rider pay. |
 | 15 | Legacy logistics records — A | Preserve history for audit; disable legacy fleet paths for new assignments after safe dependency mapping. |
@@ -94,18 +94,18 @@ The selected answers are recorded here so implementation teams do not revert to 
 ### Doorstep delivery
 - The vendor prepares the goods and assigns its rider.
 - Delivery progression records vendor readiness, rider assignment, pickup/custody, delivery attempt(s), and final handover as separate states.
-- Doorstep delivery completion requires a delivery photo linked to the child order. Do not require OTP, GPS, signature or rider pickup photo as mandatory proof-of-completion.
+- Doorstep delivery completion requires secure customer OTP verification AND a delivery photo linked to the child order. GPS, signature and rider pickup photo are not mandatory.
 - A rider's delivery confirmation is an operational event. It does not grant the rider financial permissions or let the rider directly edit a ledger, approve a refund, alter prices, or request payouts. An independent, authorized financial service may consume a verified delivery event as an input to the published vendor-settlement policy; that financial action must be separately validated, idempotent, and auditable.
 
 ### In-shop pickup
 - In-shop pickup remains fully supported as a first-class fulfilment type.
 - The customer collects the order at the owning vendor's physical shop/counter.
 - Delivery fee is exactly zero. Checkout and backend enforce zero regardless of client-supplied amount or vendor delivery-zone setting.
-- A customer pickup pass in the `RES-XXXXXX` format may remain as a separate collection-security control, but the required fulfilment evidence is the in-shop pickup photo. Do not make OTP/pass verification a mandatory photo-proof substitute or expose the pass in rider views.
+- The `RES-XXXXXX` reservation pickup pass/secure pickup verification is required for customer counter pickup alongside the in-shop pickup photo; the pass is not a photo substitute. Never expose pickup secrets in ordinary order lists/history, logs, analytics or unauthorised rider views.
 - A separately generated six-digit `pickup_verification_code` must not silently replace, override, or be confused with the `RES-XXXXXX` customer pickup pass. Until a separate purpose is explicitly approved and documented, it must not be treated as an alternate customer counter-pickup credential. Preserve historical records and migrate additively; do not invalidate existing reservations without a safe customer-support path.
 - Store only a secure representation where feasible; do not expose the pickup pass in rider lists, rider history, logs, analytics, or unrelated API responses. Return it only to the authorized customer or verify it through the owning vendor's authorized counter flow.
-- The vendor verifies the pickup pass and records handover. A delivery rider is not required and no rider assignment, doorstep-delivery status, delivery fee, rider compensation, or logistics payout is created.
-- Pickup status and doorstep delivery status remain distinct. Customer counter pickup is not the same event as a rider collecting a parcel from the vendor. Require the in-shop pickup photo; do not require a rider, OTP, GPS or signature as proof-of-completion.
+- The vendor verifies the pickup pass securely, confirms payment through Victorious MARKET's authorised payment workflow, and records the in-shop pickup photo/handover. A delivery rider is not required and no rider assignment, doorstep-delivery status, delivery fee, rider compensation, or logistics payout is created.
+- Pickup status and doorstep delivery status remain distinct. Customer counter pickup is not the same event as a rider collecting a parcel from the vendor. Require pickup-pass/secure OTP verification plus the in-shop pickup photo; GPS, signature and a rider are not required.
 - Order/payment expiry must not silently invalidate a paid order or create a financial refund. Expiry, stock release, payment verification, and refund are separate auditable operations.
 
 ## 6. Vendor-defined delivery areas and fees
@@ -141,7 +141,7 @@ Operational order information such as order identifier, parcel/product descripti
 ## 8. Delivery evidence and operational status
 
 1. Record actor, timestamp, order, action, and photo reference for delivery completion or in-shop pickup. The only mandatory fulfilment evidence is the doorstep delivery photo or in-shop pickup photo.
-2. OTP, GPS, signature, rider pickup photo and hub/collection-point inspection are not mandatory proof-of-completion requirements. Keep a RES-XXXXXX pickup pass only for its separate collection-security purpose if that flow remains enabled.
+2. Doorstep delivery requires verified customer OTP plus a doorstep delivery photo. In-shop pickup requires the valid RES-XXXXXX reservation pass/secure pickup verification plus an in-shop pickup photo. GPS, customer signature, separate rider-pickup photo and hub/collection-point inspection photo are not mandatory.
 3. Failed-attempt reasons should be enumerated and auditable (for example, customer unreachable, recipient unavailable, wrong address, access blocked, or customer rescheduled).
 4. A failed attempt or photo is operational evidence, not a financial decision. It must not automatically create wallet credit, mark a refund paid, create a rider payable, or release vendor funds.
 5. After doorstep rejection or failed delivery, record the outcome and return the item directly to its owning vendor. The vendor may offer a corrected item or replacement redelivery only with customer agreement. Record return custody and any agreed redelivery. Refund/compensation is separately reviewed.
@@ -159,9 +159,9 @@ Operational order information such as order identifier, parcel/product descripti
 
 ## 10. Cash on delivery (COD) boundary
 
-**COD is disabled at launch for the entire marketplace**, not merely for rider-assigned orders. Checkout, APIs, payment-method flags, legacy payment methods, vendor settings, and direct requests must all reject COD. Launch payments are Paystack card and standard bank transfer only; in-shop pickup remains a zero-delivery-fee fulfilment choice, not a cash-payment method.
+**COD is disabled at launch for the entire marketplace**, not merely for rider-assigned orders. Checkout, APIs, payment-method flags, legacy payment methods, vendor settings, and direct requests must all reject COD. Only two payment paths are allowed: pay before delivery through Victorious MARKET checkout, or reserve in-shop pickup through Victorious MARKET and pay at the approved vendor shop through the platform's authorised payment workflow. Shop pickup has zero delivery fee and is not doorstep COD. No off-platform cash/private-account transfer is permitted; launch rails are Paystack card and standard bank transfer unless separately approved.
 
-Riders are operational-only and must never see payment status, amount due, collect or reconcile customer money through platform rider accounts, or gain a financial entitlement. Any future COD launch requires a separate explicit owner decision and a vendor-owned collection/reconciliation design, threat model, accounting controls, and passing privacy/security/regression tests. Until then, COD stays disabled.
+All payments must be processed/recorded through Victorious MARKET's authorised payment workflow. Vendors may not accept cash, private bank transfers or other off-platform payment for marketplace orders, and must not release goods until the platform verifies successful payment. Launch rails are Paystack card and standard bank transfer only unless separately approved. Riders remain operational-only and must never see payment status/amount due or collect/reconcile customer money through platform rider accounts.
 
 ## 11. Financial separation
 
@@ -242,7 +242,7 @@ Implementation of this policy must be proved by code review and tests; this text
 - Rider API and UI do not expose raw customer phone, payment status, delivery fee, total/amount due, card data, commission, cashback, vendor settlement, or payouts.
 - Call Customer works without revealing the raw number in API/UI/logs.
 - In-shop pickup costs zero, requires an in-shop pickup photo and creates no rider assignment or delivery payout. RES-XXXXXX may remain as a separate collection-security pass.
-- Doorstep delivery requires a linked delivery photo. OTP/GPS/signature/rider pickup photo are not mandatory proof-of-completion requirements.
+- Doorstep delivery requires verified customer OTP plus a linked delivery photo. GPS/signature/separate rider-pickup photo are not mandatory.
 - Failed attempts create operational records only; no automatic wallet credit, rider/logistics payable, refund, or vendor settlement release.
 - Repeated delivery callbacks, failed attempts, assignment requests, and pickup confirmation cannot duplicate state transitions or financial entries.
 - Vendor settlement cannot become eligible before verified doorstep delivery or verified customer in-shop pickup; a disputed/return-pending order remains blocked under the applicable hold policy.
