@@ -984,7 +984,7 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
                 'event_id' => 'EVT-MERCHANT-REQ-' . $payout->id,
                 'beneficiary_type' => VendorProfile::class,
                 'beneficiary_id' => $lockedVendor->id,
-                'account_name' => 'vendor_escrow_holding',
+                'account_name' => 'vendor_payable',
                 'entry_type' => 'debit',
                 'amount' => $amount,
                 'currency' => 'NGN',
