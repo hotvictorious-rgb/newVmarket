@@ -422,8 +422,14 @@ class DoorstepHandshakeService
                 ]);
             }
 
-            // B. Delivery Fee Payout (Credited to Vendor for vendor-managed delivery, or Fleet for legacy)
-            if (BcMathService::comp($deliveryFee, '0.00') > 0) {
+            // A fully rejected doorstep handover must not release delivery-fee revenue/payable.
+            // Keep the delivery fee in escrow for the separately authorized admin remedy/refund.
+            $deliveryFeeForSettlement = BcMathService::comp($totalAcceptedMerchandise, '0.00') > 0
+                ? $deliveryFee
+                : '0.00';
+
+            // B. Delivery Fee Payout (only after at least one item is accepted)
+            if (BcMathService::comp($deliveryFeeForSettlement, '0.00') > 0) {
                 if ($lockedOrder->logistics_company_id && empty($rider->vendor_id)) {
                     // Legacy 3rd party logistics fleet
                     FinancialJournalEntry::create([
@@ -472,22 +478,25 @@ class DoorstepHandshakeService
             // C. Debit Escrow Holding Account to Balance Credits
             $totalOrderCredits = bcadd(
                 $totalAcceptedMerchandise,
-                $deliveryFee,
+                $deliveryFeeForSettlement,
                 2
             );
 
-            FinancialJournalEntry::create([
-                'order_id' => $lockedOrder->id,
-                'transaction_reference' => $lockedOrder->payment_reference ?? $lockedOrder->order_number,
-                'event_id' => $eventRef . '-ESCROW-DEBIT',
-                'beneficiary_type' => User::class,
-                'beneficiary_id' => null,
-                'account_name' => 'customer_escrow_holding',
-                'entry_type' => 'debit',
-                'amount' => $totalOrderCredits,
-                'currency' => 'NGN',
-                'description' => "Escrow release for accepted items & shipping on Order #{$lockedOrder->order_number}",
-            ]);
+            // Do not create zero-value journal entries when every item was rejected.
+            if (BcMathService::comp($totalOrderCredits, '0.00') > 0) {
+                FinancialJournalEntry::create([
+                    'order_id' => $lockedOrder->id,
+                    'transaction_reference' => $lockedOrder->payment_reference ?? $lockedOrder->order_number,
+                    'event_id' => $eventRef . '-ESCROW-DEBIT',
+                    'beneficiary_type' => User::class,
+                    'beneficiary_id' => null,
+                    'account_name' => 'customer_escrow_holding',
+                    'entry_type' => 'debit',
+                    'amount' => $totalOrderCredits,
+                    'currency' => 'NGN',
+                    'description' => "Escrow release for accepted items & shipping on Order #{$lockedOrder->order_number}",
+                ]);
+            }
 
             // 8. Update Order Lifecycle
             $orderStatus = BcMathService::comp($totalAcceptedMerchandise, '0.00') > 0 ? 'delivered' : 'returned';
