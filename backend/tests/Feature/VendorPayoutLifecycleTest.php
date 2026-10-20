@@ -1453,6 +1453,83 @@ class VendorPayoutLifecycleTest extends TestCase
         $this->assertSame(2, VendorPayoutRequest::where('vendor_id', $this->vendor->id)->count());
     }
 
+    public function test_vendor_payout_finalization_quarantines_cross_vendor_allocation_and_holds_balance(): void
+    {
+        $ownOrder = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'vendor_settlement_status' => 'eligible',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+        ]);
+
+        $otherUser = User::factory()->create([
+            'user_type' => 'vendor',
+            'status' => 'active',
+        ]);
+        $otherVendor = VendorProfile::create([
+            'user_id' => $otherUser->id,
+            'business_name' => 'Foreign Allocation Vendor',
+            'kyc_status' => 'verified',
+            'marketplace_status' => 'active',
+            'bank_name' => 'Access Bank',
+            'bank_code' => '044',
+            'account_number' => '0123456789',
+            'account_name' => 'Foreign Allocation Vendor',
+            'bank_updated_at' => Carbon::now()->subDays(5),
+        ]);
+        $foreignOrder = $this->createTestOrder([
+            'vendor_id' => $otherVendor->id,
+            'order_status' => 'delivered',
+            'vendor_settlement_status' => 'eligible',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '9000.00',
+            'status' => 'pending',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Test Vendor',
+        ]);
+
+        \App\Models\VendorPayoutAllocation::create([
+            'vendor_payout_request_id' => $payout->id,
+            'order_id' => $foreignOrder->id,
+            'allocated_amount' => '9000.00',
+            'status' => 'allocated',
+        ]);
+
+        $result = app(PayoutFinalizationService::class)->finalizeVendorPayout($payout, [
+            'status' => 'success',
+            'reference' => 'VND-CROSS-VENDOR-FINALIZE-01',
+            'transfer_code' => 'TRF_CROSS_VENDOR_FINALIZE_01',
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('approved', $payout->fresh()->status);
+        $this->assertSame('success', $payout->fresh()->gateway_status);
+        $this->assertStringContainsString('ALLOCATION_INVARIANT_FAILED', (string) $payout->fresh()->admin_notes);
+        $this->assertSame('eligible', $ownOrder->fresh()->vendor_settlement_status);
+        $this->assertSame('eligible', $foreignOrder->fresh()->vendor_settlement_status);
+        $this->assertSame('9000.00', $foreignOrder->fresh()->remaining_payable_to_vendor);
+        $this->assertSame('0.00', $this->vendor->fresh()->getWithdrawableBalance());
+
+        $entries = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $payout->id)->get();
+        $this->assertCount(2, $entries);
+        $this->assertTrue($entries->contains(fn ($entry) => $entry->account_name === 'treasury_reconciliation_suspense'
+            && $entry->entry_type === 'debit'
+            && bccomp((string) $entry->amount, '9000.00', 2) === 0));
+        $this->assertTrue($entries->contains(fn ($entry) => $entry->account_name === 'cash_in_escrow'
+            && $entry->entry_type === 'credit'
+            && bccomp((string) $entry->amount, '9000.00', 2) === 0));
+    }
+
     public function test_vendor_payout_reversal_quarantines_cross_vendor_allocation_without_mutation(): void
     {
         $otherUser = User::factory()->create([
