@@ -139,7 +139,7 @@ Required aggregate states: parent checkout/payment attempt and per-vendor child-
 - Parent capture ceiling is shared across child refund operations; each child and each item/component also has its own remaining refundable ceiling.
 - Parent status is derived from child states under a documented aggregation rule, not blindly copied from one child.
 - Duplicate checkout submission/payment initialization must be idempotent or return the existing checkout result; unique checkout idempotency key and unique provider reference are required.
-- **OPEN / CRITICAL:** checkout service currently creates a single shop-scoped order; full parent/child architecture and its constraints are not implemented/verified.
+- **OPEN / CRITICAL (verified 2026-10-20):** `CheckoutExecutionService::execute()` and `CheckoutAndReservationApiController::createIntent()` require one `shop_id`, reject items outside that shop, and persist one shop-scoped order/intent. `OrderSettlementService` has a branch that allocates a paid parent to existing children, but the active checkout path does not create those parent/child rows. The orders migration also makes `vendor_id` and `shop_id` non-null for every order, including any proposed parent, while `payment_reference` is indexed but not declared unique in that migration. Before implementation, decide parent identity/reference uniqueness, child reference mapping, single Paystack capture ceiling, allocation idempotency, per-child delivery pricing/fulfilment, partial refunds and reconciliation. No parent/child implementation should be considered complete until DB migrations and end-to-end concurrent acceptance tests prove these invariants.
 
 ## 11. Webhook inbox and idempotency coverage
 
