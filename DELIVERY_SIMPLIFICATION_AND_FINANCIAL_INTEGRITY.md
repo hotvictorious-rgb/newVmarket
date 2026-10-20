@@ -1,5 +1,8 @@
 # VMARKET DELIVERY SIMPLIFICATION AND FINANCIAL-INTEGRITY IMPLEMENTATION
 
+> **Binding owner decisions (20 October 2026):** Victorious MARKET executes approved customer refunds and recovers from the vendor where appropriate. Vendor settlement eligibility begins only after successful delivery or confirmed customer pickup, subject to the configured refund/dispute and payout-security controls. `.ai/BUSINESS_RULES.md` remains authoritative.
+
+
 **Repository:** `hotvictorious-rgb/newVmarket`
 
 ## Mission
@@ -188,6 +191,7 @@ If a vendor sells an item offline and forgets to update their VMARKET status, a 
 4. Record timestamps, actor identity, relevant evidence, and transition history.
 5. Remove obsolete platform dispatch dependencies from critical paths.
 6. Keep the rider app as an operational tool for vendor-linked riders, but remove platform-managed dispatch, fleet affiliation for new orders, and every rider financial/payout workflow. Enforce that each active rider belongs to one vendor and only receives that vendor's manually assigned orders. Preserve legacy logistics dependencies for historical records until dependency mapping supports safe retirement.
+7. **Settlement trigger:** do not make vendor proceeds eligible before verified successful doorstep delivery or confirmed customer in-shop pickup. Keep the configured refund window, active return/dispute holds, vendor eligibility, bank-security cooldown, authorization, and transfer-proof controls. Evaluate eligibility per vendor child order; a rider operational event is evidence, not a payout instruction.
 7. Preserve existing order data and avoid destructive migrations.
 ## Current-code findings that must be addressed
 
@@ -219,6 +223,8 @@ The initial source inspection found direct mismatches with the adopted rules. Th
 10. Keep approval, financial reservation, provider execution, ledger posting, and reconciliation as distinct auditable steps.
 11. Do not grant spendable wallet credit merely because a complaint or return has been opened or approved.
 12. Do not use hardcoded refund splits that conflict with the order's actual financial allocations.
+13. **Refund responsibility:** Victorious MARKET executes the approved customer refund through the authorized financial-operation/Paystack workflow. The customer must not be redirected to collect the marketplace refund from the vendor.
+14. **Vendor recovery:** where the approved reason and actual allocation make the vendor responsible, recover separately from that vendor. Offset held/unpaid vendor proceeds where authorized; if already disbursed, create an auditable recovery receivable/liability and use an approved future settlement offset or recovery process. Do not debit an exhausted payable as though funds were still held, and do not make customer refund completion depend on vendor recovery completion.
 
 ### Phase 6: Financial integrity
 
@@ -230,6 +236,7 @@ The initial source inspection found direct mismatches with the adopted rules. Th
 6. Use database transactions, appropriate locking, uniqueness constraints, and safe money arithmetic.
 7. Preserve uncertain provider states until reconciled.
 8. Record the actor, reason, amount, decision, provider reference, and state transitions for every sensitive financial operation.
+9. Keep customer refund execution and vendor recovery as separate linked operations: the refund closes only on verified provider confirmation; the recovery tracks its own responsible vendor, amount, offset/receivable, and outstanding balance.
 
 ### Phase 7: Security and regression testing
 
