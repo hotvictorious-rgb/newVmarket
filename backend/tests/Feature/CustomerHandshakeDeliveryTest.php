@@ -256,6 +256,30 @@ class CustomerHandshakeDeliveryTest extends TestCase
     }
 
     /**
+     * Shared delivery service must not complete handover from OTP alone.
+     */
+    public function test_valid_customer_otp_without_doorstep_photo_does_not_deliver_order(): void
+    {
+        $order = Order::where('fulfillment_type', 'doorstep_delivery')->first();
+        $this->assertNotNull($order);
+        $order->order_status = 'out_for_delivery';
+        $order->payment_status = 'paid';
+        $order->verification_code = '443322';
+        $order->delivery_confirmed_by_customer = false;
+        $order->proof_of_delivery_image = null;
+        $order->save();
+
+        $result = app(OrderSettlementService::class)->verifyCustomerDeliveryOtp($order, '443322');
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('Doorstep photo proof is required before delivery can be confirmed.', $result['message']);
+        $this->assertSame('out_for_delivery', $order->fresh()->order_status);
+        $this->assertFalse((bool) $order->fresh()->delivery_confirmed_by_customer);
+        $this->assertNull($order->fresh()->proof_of_delivery_image);
+        $this->assertDatabaseMissing('customer_cashback_ledgers', ['order_id' => $order->id]);
+    }
+
+    /**
      * Test Unique OTP Generation ensures active collision elimination.
      */
     public function test_order_otp_uniqueness_guarantee_eliminates_active_collisions(): void
