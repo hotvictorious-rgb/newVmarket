@@ -178,7 +178,7 @@ class CustomerOrderApiController extends Controller
                 'paystack' => $result['paystack'],
                 'order' => $this->formatOrderFull($order),
             ],
-        ], 201);
+        ], $result['http_status'] ?? 201);
     }
 
     /**
