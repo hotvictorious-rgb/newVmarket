@@ -170,9 +170,9 @@ The following products cannot be returned once unsealed, due to health, hygiene,
 
 ### 5. Return Process & Collection Point Handover
 1. **Submit Request:** File a return request through the Customer Portal within 24 hours of delivery, attaching clear photo/video evidence.
-2. **Select Collection Point:** Choose your nearest Victorious Market Collection Point / Hub in Uyo or designated LGA hub.
-3. **Physical Inspection:** Hand over the package to the hub inspection officer. The officer conducts a physical check against the order serial numbers.
-4. **Arbitration & Approval:** Once inspection passes, the Super Admin approves the case for refund disbursement.
+2. **Return coordination:** Contact support through the order record for the authorised return/inspection steps. A platform collection-point or hub drop-off is not mandatory.
+3. **Review & decision:** An authorised admin reviews the evidence and applicable remedy, including vendor inspection where appropriate, and records the decision. Any replacement/redelivery requires customer agreement.
+4. **Refund execution:** Approved refunds are initiated through the verified original Paystack payment route where supported; completion is confirmed only after provider reconciliation.
 
 ---
 
@@ -189,7 +189,7 @@ MARKDOWN;
                 'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
-                'summary' => 'Comprehensive guidelines covering item-level partial rejection, 24-hour return eligibility, collection point inspections, and refund disbursement.',
+                'summary' => 'Guidelines covering item-level partial rejection, the standard 24-hour claim window, admin-reviewed exceptions, and original-payment-route refunds.',
             ]
         );
 
