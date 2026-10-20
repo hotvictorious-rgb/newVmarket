@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Country;
 use App\Models\FinancialJournalEntry;
 use App\Models\Lga;
+use App\Models\LogisticsCompanyProfile;
+use App\Models\LogisticsPayoutRequest;
 use App\Models\Order;
 use App\Models\Shop;
 use App\Models\State;
