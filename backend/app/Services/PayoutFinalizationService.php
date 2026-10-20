@@ -170,6 +170,11 @@ class PayoutFinalizationService
             $unallocatedDiscrepancy = bcsub($formattedPayoutAmount, $grandTotalAllocated, 2);
 
             if ($hasRequestJournal) {
+                if (bccomp($unallocatedDiscrepancy, '0.00', 2) > 0) {
+                    Log::emergency("Treasury Discrepancy: payout #{$lockedPayout->id} has an allocation shortfall of ₦{$unallocatedDiscrepancy}; the confirmed transfer is journaled against payout payable and requires manual finance reconciliation.");
+                    $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . "ALLOCATION_DISCREPANCY: confirmed payout exceeds recorded allocations by ₦{$unallocatedDiscrepancy}; no vendor receivable inferred, manual finance reconciliation required.";
+                    $lockedPayout->save();
+                }
                 // New lifecycle: the request already reclassified the vendor liability
                 // from vendor_payable to vendor_payout_payable. Clear that exact reserved
                 // liability when the gateway confirms the transfer, regardless of whether
