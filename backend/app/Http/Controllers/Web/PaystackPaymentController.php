@@ -1005,8 +1005,18 @@ class PaystackPaymentController extends Controller
             $order,
             $data,
             null,
-            'paystack_webhook'
+            'paystack_webhook',
+            (int) $processedEvent->id,
+            (int) $processedEvent->attempts
         );
+
+        if (($settlement['status'] ?? null) === 'STALE_WEBHOOK_CLAIM') {
+            // A newer attempt owns the inbox row. Do not overwrite its status.
+            return response()->json([
+                'status' => false,
+                'message' => 'Webhook claim expired before order settlement; retry/reconciliation required.',
+            ], 429);
+        }
 
         if (!$settlement['success']) {
             $this->updateProcessedEvent($processedEvent, [
