@@ -502,6 +502,19 @@ class ReturnAndRefundService
                 ];
             }
 
+            // Once a Paystack refund has been recorded, its component scope must
+            // remain immutable until reconciliation; changing this flag could make
+            // settlement accounting allocate a component the gateway did not refund.
+            $requestedDeliveryFeeAuthorization = $refundDeliveryFee
+                && bccomp((string) $order->delivery_fee, '0.00', 2) > 0;
+            if (!empty($lockedCase->paystack_refund_id)
+                && (bool) $lockedCase->refund_delivery_fee !== $requestedDeliveryFeeAuthorization) {
+                return [
+                    'valid' => false,
+                    'message' => 'Refund component scope is locked after Paystack dispatch. Reconcile the existing refund before changing merchandise or delivery-fee treatment.',
+                ];
+            }
+
             // Calculate and persist the separate component authorization before
             // creating the FinancialOperation. The delivery fee is not marked as
             // refunded until verified gateway settlement is finalized.
