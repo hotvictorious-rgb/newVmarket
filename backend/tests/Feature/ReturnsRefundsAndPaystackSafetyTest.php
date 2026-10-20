@@ -605,6 +605,12 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         $this->assertSame('998877', $order->fresh()->pickup_verification_code);
         $this->assertSame('storage/customer_pickup_proofs/verified-pickup.jpg', $order->fresh()->customer_pickup_photo_path);
         $this->assertSame('handed_over', $reservation->fresh()->status);
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'user_id' => $this->vendorUserA->id,
+            'action' => 'in_shop_customer_pickup_verified',
+            'target_type' => \\App\\Models\\Order::class,
+            'target_id' => $order->id,
+        ]);
 
         // The customer OTP is one-time and cannot be replayed after handover.
         $replay = $service->verifyPickupHandoverOtp(
