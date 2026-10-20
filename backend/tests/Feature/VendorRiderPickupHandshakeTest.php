@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Lga;
-use App\Models\LogisticsCompanyProfile;
 use App\Models\Order;
 use App\Models\RiderProfile;
 use App\Models\Shop;
@@ -130,10 +129,10 @@ class VendorRiderPickupHandshakeTest extends TestCase
         $orderA = $this->createOrder($vendorA, $shopA, 'VM-ORDER-ALPHA', 'ready_for_pickup', true);
         $orderB = $this->createOrder($vendorB, $shopB, 'VM-ORDER-BETA', 'ready_for_pickup', true);
 
-        $riderUser = User::where('user_type', 'rider')->first() ?? User::factory()->create(['user_type' => 'rider']);
-        $rider = RiderProfile::where('user_id', $riderUser->id)->first() ?? RiderProfile::create([
+        $riderUser = User::factory()->create(['user_type' => 'rider', 'status' => 'active']);
+        $rider = RiderProfile::create([
             'user_id' => $riderUser->id,
-            'logistics_company_id' => 1,
+            'vendor_id' => $vendorB->id,
             'assigned_lga_id' => $orderA->origin_lga_id,
             'is_active' => true,
             'is_online' => true,
@@ -201,7 +200,7 @@ class VendorRiderPickupHandshakeTest extends TestCase
         $riderUser = User::where('user_type', 'rider')->first() ?? User::factory()->create(['user_type' => 'rider']);
         $rider = RiderProfile::where('user_id', $riderUser->id)->first() ?? RiderProfile::create([
             'user_id' => $riderUser->id,
-            'logistics_company_id' => 1,
+            'vendor_id' => $vendor->id,
             'assigned_lga_id' => $order->origin_lga_id,
             'is_active' => true,
             'is_online' => true,
@@ -244,7 +243,7 @@ class VendorRiderPickupHandshakeTest extends TestCase
         $riderUser = User::where('user_type', 'rider')->first() ?? User::factory()->create(['user_type' => 'rider']);
         $rider = RiderProfile::where('user_id', $riderUser->id)->first() ?? RiderProfile::create([
             'user_id' => $riderUser->id,
-            'logistics_company_id' => 1,
+            'vendor_id' => $vendor->id,
             'assigned_lga_id' => $order->origin_lga_id,
             'is_active' => true,
             'is_online' => true,
@@ -276,7 +275,7 @@ class VendorRiderPickupHandshakeTest extends TestCase
         $riderUser = User::where('user_type', 'rider')->first() ?? User::factory()->create(['user_type' => 'rider']);
         $rider = RiderProfile::where('user_id', $riderUser->id)->first() ?? RiderProfile::create([
             'user_id' => $riderUser->id,
-            'logistics_company_id' => 1,
+            'vendor_id' => $vendor->id,
             'assigned_lga_id' => $order->origin_lga_id,
             'is_active' => true,
             'is_online' => true,
@@ -313,7 +312,7 @@ class VendorRiderPickupHandshakeTest extends TestCase
         $riderUser = User::where('user_type', 'rider')->first() ?? User::factory()->create(['user_type' => 'rider']);
         $rider = RiderProfile::where('user_id', $riderUser->id)->first() ?? RiderProfile::create([
             'user_id' => $riderUser->id,
-            'logistics_company_id' => 1,
+            'vendor_id' => $vendor->id,
             'assigned_lga_id' => $order->origin_lga_id,
             'is_active' => true,
             'is_online' => true,
@@ -357,7 +356,7 @@ class VendorRiderPickupHandshakeTest extends TestCase
         $riderUser = User::where('user_type', 'rider')->first() ?? User::factory()->create(['user_type' => 'rider']);
         $rider = RiderProfile::where('user_id', $riderUser->id)->first() ?? RiderProfile::create([
             'user_id' => $riderUser->id,
-            'logistics_company_id' => 1,
+            'vendor_id' => $vendor->id,
             'assigned_lga_id' => $order->origin_lga_id,
             'is_active' => true,
             'is_online' => true,
