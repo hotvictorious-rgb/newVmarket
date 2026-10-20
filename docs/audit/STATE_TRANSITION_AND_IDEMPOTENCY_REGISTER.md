@@ -296,3 +296,7 @@ Before any Paystack transfer request, every pre-existing allocated row must refe
 ### VM-AUD-048 — existing allocation must equal one eligible whole earning
 
 Before dispatching a payout, every existing allocation must represent exactly one complete earning record for that payout: existing row references an eligible delivered/paid order for the payout vendor; the row is positive; there is one allocation row for that order in this payout; the amount equals the order's full vendor payable (including vendor-retained delivery where applicable); no blocking return/dispute exists; and no other unresolved payout reserves the same order. Partial, duplicate, cross-vendor, over-cap, or no-longer-eligible allocation rows block transfer dispatch for finance reconciliation. CI passed on `726d72c57d53efe7bc5d1ae0d97226588a11df5d`: **186 tests / 1,181 assertions** (https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39505931861).
+
+### VM-AUD-049 — handover readiness transition guard
+
+**Transition rule:** The vendor API may move an order to \`ready_for_pickup\` only when the order is paid, has \`fulfillment_type=doorstep_delivery\`, and its current status is in the explicit pre-dispatch allowlist. Unpaid, in-shop pickup, delivered, cancelled, returned, and other unlisted states must be rejected with no order-state or handover-timestamp mutation. Regression tests cover unpaid doorstep and paid in-shop pickup rejection. CI for the regression commit remains pending.
