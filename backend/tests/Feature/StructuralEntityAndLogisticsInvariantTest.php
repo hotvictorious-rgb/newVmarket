@@ -7,7 +7,6 @@ use App\Models\CustomerAddress;
 use App\Models\DeliveryLane;
 use App\Models\FinancialJournalEntry;
 use App\Models\Lga;
-use App\Models\LogisticsCompanyProfile;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -35,8 +34,6 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
     protected State $state;
     protected Lga $lga;
     protected User $customer;
-    protected User $fleetUser;
-    protected LogisticsCompanyProfile $company;
     protected User $riderUser;
     protected RiderProfile $rider;
 
@@ -106,22 +103,6 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
             'status' => 'active',
         ]);
 
-        // Logistics Company
-        $this->fleetUser = User::create([
-            'name' => 'Fleet Operator',
-            'email' => 'fleet@speedlogistics.ng',
-            'phone' => '+2348022334455',
-            'password' => bcrypt('Pass123!'),
-            'user_type' => 'logistics_company',
-            'status' => 'active',
-        ]);
-        $this->company = LogisticsCompanyProfile::create([
-            'user_id' => $this->fleetUser->id,
-            'company_name' => 'Speed Logistics Fleet Ltd',
-            'registration_number' => 'RC-998811',
-            'status' => 'active',
-        ]);
-
         // Delivery Courier (Rider)
         $this->riderUser = User::create([
             'name' => 'Rider Dispatcher',
@@ -133,7 +114,7 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
         ]);
         $this->rider = RiderProfile::create([
             'user_id' => $this->riderUser->id,
-            'logistics_company_id' => $this->company->id,
+            'vendor_id' => $this->vendor->id,
             'assigned_lga_id' => $this->lga->id,
             'vehicle_type' => 'motorcycle',
             'is_active' => true,
@@ -312,7 +293,6 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
             'vendor_id' => $this->vendor->id,
             'shop_id' => $this->shop->id,
             'rider_id' => $this->rider->id,
-            'logistics_company_id' => $this->company->id,
             'origin_lga_id' => $this->lga->id,
             'destination_lga_id' => $this->lga->id,
             'fulfillment_type' => 'doorstep_delivery',
@@ -352,7 +332,6 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
             'vendor_id' => $this->vendor->id,
             'shop_id' => $this->shop->id,
             'rider_id' => $this->rider->id,
-            'logistics_company_id' => $this->company->id,
             'origin_lga_id' => $this->lga->id,
             'destination_lga_id' => $this->lga->id,
             'fulfillment_type' => 'doorstep_delivery',
@@ -392,7 +371,6 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
             'vendor_id' => $this->vendor->id,
             'shop_id' => $this->shop->id,
             'rider_id' => $this->rider->id,
-            'logistics_company_id' => $this->company->id,
             'origin_lga_id' => $this->lga->id,
             'destination_lga_id' => $this->lga->id,
             'fulfillment_type' => 'doorstep_delivery',
@@ -682,7 +660,6 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
             'vendor_id' => $this->vendor->id,
             'shop_id' => $this->shop->id,
             'rider_id' => $this->rider->id,
-            'logistics_company_id' => $this->company->id,
             'origin_lga_id' => $this->lga->id,
             'destination_lga_id' => $this->lga->id,
             'fulfillment_type' => 'doorstep_delivery',
@@ -722,7 +699,6 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
             'vendor_id' => $this->vendor->id,
             'shop_id' => $this->shop->id,
             'rider_id' => $this->rider->id,
-            'logistics_company_id' => $this->company->id,
             'origin_lga_id' => $this->lga->id,
             'destination_lga_id' => $this->lga->id,
             'fulfillment_type' => 'doorstep_delivery',
