@@ -530,7 +530,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
 
         $this->assertTrue($result['success']);
         $this->assertSame('refunded', $case->fresh()->status);
-        $this->assertSame(0, VendorRecoveryLedger::where('return_case_id', $case->id)->count());
+        $this->assertSame(0, \App\Models\VendorRecoveryLedger::where('return_case_id', $case->id)->count());
         $this->assertSame(0, FinancialJournalEntry::where('order_id', $order->id)
             ->where('account_name', 'vendor_recovery_receivable')->count());
         $this->assertDatabaseHas('financial_journal_entries', [
@@ -588,7 +588,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertSame('refunded', $case->fresh()->status);
 
-        $recovery = VendorRecoveryLedger::where('return_case_id', $case->id)->firstOrFail();
+        $recovery = \App\Models\VendorRecoveryLedger::where('return_case_id', $case->id)->firstOrFail();
         $this->assertSame("return-case-{$case->id}-merchandise-recovery", $recovery->idempotency_key);
         $this->assertEquals(9000.00, (float) $recovery->amount);
         $this->assertSame('pending_recovery', $recovery->status);
@@ -605,7 +605,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
 
         $retry = app(ReturnAndRefundService::class)->adminDisburseRefund($this->superAdmin, $case->fresh());
         $this->assertFalse($retry['success']);
-        $this->assertSame(1, VendorRecoveryLedger::where('return_case_id', $case->id)->count());
+        $this->assertSame(1, \App\Models\VendorRecoveryLedger::where('return_case_id', $case->id)->count());
     }
 
     public function test_retry_of_pending_paystack_refund_does_not_post_settlement_journals(): void
