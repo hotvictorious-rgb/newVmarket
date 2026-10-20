@@ -309,10 +309,18 @@ class VendorTerminalApiController extends Controller
 
         $order = $query->findOrFail($id);
 
-        if ($order->order_status === 'delivered' || $order->order_status === 'cancelled') {
+        // This endpoint is for vendor-to-courier handover on paid doorstep orders.
+        // Do not allow an unpaid, pickup, returned, disputed, or otherwise out-of-sequence
+        // order to jump directly into a dispatch-ready state.
+        $allowedSourceStates = ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'];
+        if (
+            $order->fulfillment_type !== 'doorstep_delivery'
+            || $order->payment_status !== 'paid'
+            || !in_array($order->order_status, $allowedSourceStates, true)
+        ) {
             return response()->json([
                 'status' => false,
-                'message' => "Order cannot be marked ready because it is already {$order->order_status}.",
+                'message' => 'Only paid doorstep-delivery orders in an allowed pre-dispatch state can be marked ready for handover.',
             ], 422);
         }
 
