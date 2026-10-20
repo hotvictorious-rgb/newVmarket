@@ -507,7 +507,7 @@ class ReturnAndRefundService
             // settlement accounting allocate a component the gateway did not refund.
             $requestedDeliveryFeeAuthorization = $refundDeliveryFee
                 && bccomp((string) $order->delivery_fee, '0.00', 2) > 0;
-            $refundOperationExists = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+            $refundOperationExists = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
                 ->where('metadata->return_case_id', $lockedCase->id)
                 ->exists();
 
