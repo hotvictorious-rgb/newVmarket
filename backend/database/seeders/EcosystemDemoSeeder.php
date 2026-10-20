@@ -232,7 +232,7 @@ class EcosystemDemoSeeder extends Seeder
             // explicitly establish the same safe local coverage as runtime shop creation.
             $shopLga = Lga::query()->find($shop->lga_id);
             if ($shopLga) {
-                \\App\\Models\\ShopDeliveryCoverage::firstOrCreate(
+                \App\Models\ShopDeliveryCoverage::firstOrCreate(
                     [
                         'shop_id' => $shop->id,
                         'state_id' => $shopLga->state_id,
