@@ -301,6 +301,17 @@ class FinancialOperationService
                 ];
             }
 
+            // An initiated operation may have reached Paystack even if our HTTP call timed out
+            // or the worker crashed. Never submit another refund blindly; reconcile the existing
+            // attempt first to avoid issuing a duplicate customer refund.
+            if ($lockedOp->status === 'initiated') {
+                return [
+                    'terminal' => true,
+                    'operation' => $lockedOp,
+                    'message' => 'Refund dispatch already attempted; duplicate dispatch suppressed pending gateway reconciliation.',
+                ];
+            }
+
             // Every refund dispatch needs persisted authorization. A return-case authorization
             // must match the case's recorded human reviewer; the only automatic exception is a
             // verified payment that arrived after cancellation and depleted inventory.
@@ -311,17 +322,6 @@ class FinancialOperationService
                     'terminal' => true,
                     'operation' => $lockedOp,
                     'message' => 'Refund dispatch blocked: persisted human approval or an approved automatic-refund exception is required.',
-                ];
-            }
-
-            // An initiated operation may have reached Paystack even if our HTTP call timed out
-            // or the worker crashed. Never submit another refund blindly; reconcile the existing
-            // attempt first to avoid issuing a duplicate customer refund.
-            if ($lockedOp->status === 'initiated') {
-                return [
-                    'terminal' => true,
-                    'operation' => $lockedOp,
-                    'message' => 'Refund dispatch already attempted; duplicate dispatch suppressed pending gateway reconciliation.',
                 ];
             }
 
