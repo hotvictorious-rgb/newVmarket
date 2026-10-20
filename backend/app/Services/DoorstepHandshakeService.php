@@ -314,9 +314,11 @@ class DoorstepHandshakeService
                     $customerRefundWalletAmount = $totalRejectedMerchandise;
                     $returnCase->cost_allocation = 'customer_100';
                 } elseif ($predominantRejectionCategory === 'transit_damage') {
-                    // Transit damage: Vendor 90% payout protected; Courier fleet absorbs liability
+                    // Under vendor-managed delivery, the owning vendor is responsible for
+                    // its rider's transit handling. Any vendor recovery is separately reviewed;
+                    // the platform creates no fleet/rider payable.
                     $customerRefundWalletAmount = $totalRejectedMerchandise;
-                    $returnCase->cost_allocation = 'logistics_fleet_100';
+                    $returnCase->cost_allocation = 'vendor_100';
                 } else {
                     // Vendor issue: Vendor penalized, Customer gets full refund
                     $customerRefundWalletAmount = $totalRejectedMerchandise;
