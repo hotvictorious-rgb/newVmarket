@@ -268,6 +268,48 @@ class TwoStatusInventoryAndPaymentSafetyTest extends TestCase
         $this->assertEquals('canceled', $reservation->fresh()->status);
     }
 
+    public function test_expiration_worker_does_not_cancel_order_whose_expiry_was_extended_before_lock(): void
+    {
+        $order = Order::create([
+            'order_number' => 'VM-ORD-EXPIRY-EXTENDED',
+            'customer_id' => $this->customer1->id,
+            'vendor_id' => $this->vendorProfile->id,
+            'shop_id' => $this->shop->id,
+            'origin_lga_id' => $this->shop->lga_id,
+            'destination_lga_id' => $this->shop->lga_id,
+            'fulfillment_type' => 'in_shop_pickup',
+            'order_status' => 'pending',
+            'payment_status' => 'pending',
+            'merchandise_subtotal' => '5000.00',
+            'delivery_fee' => '0.00',
+            'grand_total' => '5000.00',
+            'vendor_net_90' => '4500.00',
+            'customer_cashback_5' => '250.00',
+            'platform_margin_5' => '250.00',
+            'expires_at' => Carbon::now()->subMinutes(5),
+            'pickup_verification_code' => '654321',
+            'verification_code' => Order::generateUniqueDeliveryOtp(),
+        ]);
+
+        $renewedDuringCandidateRead = false;
+        Order::retrieved(function (Order $retrieved) use ($order, &$renewedDuringCandidateRead): void {
+            if (!$renewedDuringCandidateRead && (int) $retrieved->id === (int) $order->id) {
+                $renewedDuringCandidateRead = true;
+                Order::whereKey($order->id)->update(['expires_at' => Carbon::now()->addMinutes(30)]);
+            }
+        });
+
+        try {
+            app(OrderSettlementService::class)->expireAbandonedPendingOrders();
+        } finally {
+            Order::getEventDispatcher()->forget('eloquent.retrieved: ' . Order::class);
+        }
+
+        $this->assertTrue($renewedDuringCandidateRead, 'The regression did not simulate an expiry extension after candidate selection.');
+        $this->assertSame('pending', $order->fresh()->order_status);
+        $this->assertTrue($order->fresh()->expires_at->gt(Carbon::now()));
+    }
+
     /**
      * Test 7: Delayed Paystack payment when vendor marked product Out of Stock triggers safe refund pipeline.
      */
