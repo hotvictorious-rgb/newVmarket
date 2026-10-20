@@ -270,3 +270,7 @@ Vendor/logistics payout finalization and reversal transactions now lock the proc
 ### VM-AUD-040 — logistics reversal stale-generation transition
 
 Regression verifies that a stale `transfer.reversed` attempt cannot change a logistics payout from approved/success, cannot credit the company wallet, cannot post journal entries, and cannot overwrite the inbox generation owned by a newer worker. CI passed on `90284b14489de17430dbe144a2373a9ddb143128`: **171 tests / 1,091 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39501881418). Logistics success and refund-failure stale-generation regressions remain outstanding.
+
+### VM-AUD-041 — logistics success stale-generation transition
+
+A stale `transfer.success` generation is now tested against logistics payout finalization. It cannot change payout status/gateway status, credit/debit the company wallet, post journal entries, or overwrite the newer inbox attempt. CI passed on `43c4f3cf5f43edc8c7fb770d8953de710da57593`: **172 tests / 1,099 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39502030887). Dedicated stale `refund.failed` and production-engine concurrent reclaim verification remain open.
