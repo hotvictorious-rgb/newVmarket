@@ -479,6 +479,11 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             $order->refund_window_expires_at->copy()->addHours(24)->toIso8601String(),
             $cashback->matures_at->toIso8601String()
         );
+        $this->assertEquals(
+            $cashback->matures_at->copy()->addDays(365)->toIso8601String(),
+            $cashback->expires_at->toIso8601String(),
+            'The 365-day cashback validity period begins at maturity.'
+        );
 
         Carbon::setTestNow($baseTime->copy()->addHours(24));
         $service->evaluateMaturation($order);
@@ -526,8 +531,8 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'order_id' => $order->id,
             'amount' => '500.00',
             'status' => 'pending_maturation',
-            'matures_at' => $order->refund_window_expires_at,
-            'expires_at' => Carbon::now()->addDays(365),
+            'matures_at' => $order->refund_window_expires_at->copy()->addHours(24),
+            'expires_at' => $order->refund_window_expires_at->copy()->addHours(24)->addDays(365),
         ]);
 
         // File active dispute
