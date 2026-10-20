@@ -169,3 +169,7 @@ Added a signed-webhook regression for `refund.failed` arriving after the financi
 ### Valid reversal path — verification update (20 October 2026)
 
 Added a positive-path webhook regression: a signed `transfer.reversed` with exact integer-kobo amount and NGN currency, matching transfer identity, and both original payout/request journals reverses the payout, restores only its allocated order to eligible, posts the expected two reversal journal entries, and marks the inbox event completed. Focused CI passed on commit `70afe769b46fda8a57aab29cda3bf8600e3afbf3`: **166 tests / 1,059 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39500051174). Sandbox confirmation of Paystack's actual reversal payload and broader stale-worker fencing remain open.
+
+### Refund event ordering — both directions verified in CI (20 October 2026)
+
+Added the complementary case for `refund.processed` arriving after the operation is already terminal `failed`: the operation stays failed, no journal is posted, and the event is quarantined as `unmatched` for manual reconciliation. Together with the prior late-failure-after-confirmation test, both contradictory orderings are now covered. Focused CI passed on commit `afbfd0be526cc14a1050f196f72df89c0d6500e6`: **167 tests / 1,063 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39500196677). End-to-end stale-worker fencing and actual provider sandbox payload verification remain open.
