@@ -134,6 +134,7 @@ The vendor compensates its own rider directly outside Victorious MARKET and its 
 - Refunds reverse only the relevant approved merchandise and/or delivery-fee allocations from the immutable checkout snapshot.
 - Vendor payout eligibility is per vendor earning/child order and requires verified payment, qualifying fulfilment, expiry of the 24-hour customer protection window, no blocking return/dispute/payment exception, vendor/KYC eligibility, bank-security checks, and reconciliation. Fulfilment is necessary but not sufficient.
 - Vendor payout requests have a ₦5,000 minimum and ₦500,000 maximum. Vendors may request whenever unreserved eligible balance reaches ₦5,000; no automatic transfer occurs just because the threshold is reached.
+- The detailed canonical policy, review workflow, fee decision status, and acceptance criteria are documented in [VENDOR_PAYOUT_POLICY.md](VENDOR_PAYOUT_POLICY.md).
 - Every payout request requires authorized admin approval before transfer. Earnings are tracked per source but normally aggregated into one payout; excess eligible balance carries forward. Exact reservation, duplicate/concurrent-request protection, provider reconciliation and exact-once ledger posting are required.
 - Outbound transfer-fee/stamp-duty allocation remains an open owner decision; charges must not be silently deducted from vendor earnings. Only verified Paystack transfer success/reconciliation can mark a payout paid.
 
