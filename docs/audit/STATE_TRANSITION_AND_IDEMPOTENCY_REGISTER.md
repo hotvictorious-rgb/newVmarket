@@ -366,3 +366,8 @@ Allowed: `requested | under_review | received_at_hub | inspected | returned_to_v
 ### VM-AUD-061 — pickup reservation cancellation
 
 Allowed: eligible unplaced reservation -> `canceled`, only after locking and rechecking the reservation row in a transaction shared with the payment path. Forbidden from `order_placed`, `payment_completed`, `canceled`, `cancelled`, or `expired`. The same locked row must serialize cancellation against order creation/payment; no read-then-write cancellation route is permitted. Regression: VM-AUD-061.
+
+
+### VM-AUD-060/061 verification update (21 October 2026)
+
+CI for the guarded admin return-rejection transition and serialized pickup-reservation cancellation has passed, including regression coverage and latest branch-head validation ([run 39512965854](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39512965854)). This does not certify the entire state-transition inventory; PostgreSQL concurrent execution, Paystack sandbox payload compatibility, and remaining direct-writer inventory are still open.
