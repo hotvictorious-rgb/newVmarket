@@ -324,6 +324,8 @@ The platform must verify the amount due, account for discounts and previously is
 
 A refund should not be presented to the customer as completed merely because a request was submitted to a payment gateway.
 
+**Refund responsibility:** Victorious MARKET owns the approved customer refund process and executes refunds through the authorized financial workflow, ordinarily to the original payment channel. The customer must not be redirected to collect a marketplace refund from the vendor. Where the approved reason and actual order allocation make the vendor responsible, vendor recovery is tracked separately. If vendor proceeds remain held, an authorized offset may be applied; if already paid, record a recovery receivable/liability and use an approved future-settlement offset or recovery process. Customer refund completion depends on verified refund execution, not on whether vendor recovery has completed.
+
 ### Dispute resolution
 
 Where parties disagree, VICTORIOUS MARKET should maintain an evidence-based review process.
@@ -339,6 +341,8 @@ The objective is not to automatically favor the customer or the merchant.
 ## 11. Vendor Settlements and Financial Controls
 
 Vendors must be paid accurately and predictably. Riders are not marketplace financial beneficiaries, and the platform does not maintain rider earnings, rider wallets, rider payout requests, or logistics-company payouts for new vendor-managed orders.
+
+Vendor proceeds are not eligible for release before verified successful doorstep delivery or confirmed customer in-shop pickup. This fulfilment event is the earliest eligibility trigger, not an override of the configured refund/return window, active disputes/returns, vendor account restrictions, bank-security cooldown, authorization, or required transfer proof. Evaluate eligibility per vendor child order; a rider's operational status alone is not a payout instruction.
 
 VICTORIOUS MARKET is developing controlled withdrawal and payout workflows using Paystack bank-transfer capabilities.
 
