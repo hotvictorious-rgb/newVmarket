@@ -21,11 +21,20 @@ class PayoutFinalizationService
      * Guaranteed to produce identical, balanced accounting whether triggered
      * by Admin Disburse, Gateway Webhook (transfer.success), Manual Reconcile, or Scheduled Reconciler.
      */
-    public function finalizeVendorPayout(VendorPayoutRequest $payout, array $gatewayData = [], ?User $admin = null, ?string $expectedProcessingToken = null): array
+    public function finalizeVendorPayout(VendorPayoutRequest $payout, array $gatewayData = [], ?User $admin = null, ?string $expectedProcessingToken = null, ?int $webhookEventId = null, ?int $webhookAttempt = null): array
     {
         $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
 
-        $result = DB::transaction(function () use ($payout, $gatewayData, $admin, $formattedPayoutAmount, $expectedProcessingToken) {
+        $result = DB::transaction(function () use ($payout, $gatewayData, $admin, $formattedPayoutAmount, $expectedProcessingToken, $webhookEventId, $webhookAttempt) {
+            if (!$this->isCurrentWebhookClaim($webhookEventId, $webhookAttempt)) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'stale_webhook_claim' => true,
+                    'message' => 'Webhook claim generation is no longer current; payout mutation blocked.',
+                ];
+            }
+
             $lockedPayout = VendorPayoutRequest::with(['vendor', 'allocations'])
                 ->where('id', $payout->id)
                 ->lockForUpdate()
@@ -310,9 +319,18 @@ class PayoutFinalizationService
     /**
      * Authoritative idempotent finalization of a Logistics Payout.
      */
-    public function finalizeLogisticsPayout(LogisticsPayoutRequest $payout, array $gatewayData = [], ?User $admin = null, ?string $expectedProcessingToken = null): array
+    public function finalizeLogisticsPayout(LogisticsPayoutRequest $payout, array $gatewayData = [], ?User $admin = null, ?string $expectedProcessingToken = null, ?int $webhookEventId = null, ?int $webhookAttempt = null): array
     {
-        $result = DB::transaction(function () use ($payout, $gatewayData, $admin, $expectedProcessingToken) {
+        $result = DB::transaction(function () use ($payout, $gatewayData, $admin, $expectedProcessingToken, $webhookEventId, $webhookAttempt) {
+            if (!$this->isCurrentWebhookClaim($webhookEventId, $webhookAttempt)) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'stale_webhook_claim' => true,
+                    'message' => 'Webhook claim generation is no longer current; payout mutation blocked.',
+                ];
+            }
+
             $lockedPayout = LogisticsPayoutRequest::with('company')
                 ->where('id', $payout->id)
                 ->lockForUpdate()
@@ -424,9 +442,18 @@ class PayoutFinalizationService
     /**
      * Authoritative safe reversal of a failed/reversed Vendor Payout.
      */
-    public function revertVendorPayout(VendorPayoutRequest $payout, string $reason, ?User $admin = null, bool $allowSuccessfulReversal = false, ?string $expectedProcessingToken = null): array
+    public function revertVendorPayout(VendorPayoutRequest $payout, string $reason, ?User $admin = null, bool $allowSuccessfulReversal = false, ?string $expectedProcessingToken = null, ?int $webhookEventId = null, ?int $webhookAttempt = null): array
     {
-        $result = DB::transaction(function () use ($payout, $reason, $admin, $allowSuccessfulReversal, $expectedProcessingToken) {
+        $result = DB::transaction(function () use ($payout, $reason, $admin, $allowSuccessfulReversal, $expectedProcessingToken, $webhookEventId, $webhookAttempt) {
+            if (!$this->isCurrentWebhookClaim($webhookEventId, $webhookAttempt)) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'stale_webhook_claim' => true,
+                    'message' => 'Webhook claim generation is no longer current; payout mutation blocked.',
+                ];
+            }
+
             $lockedPayout = VendorPayoutRequest::with(['allocations.order', 'vendor'])
                 ->where('id', $payout->id)
                 ->lockForUpdate()
@@ -646,8 +673,17 @@ class PayoutFinalizationService
     /**
      * Authoritative safe reversal of a failed/reversed Logistics Payout.
      */
-    public function revertLogisticsPayout(LogisticsPayoutRequest $payout, string $reason, ?User $admin = null, bool $allowSuccessfulReversal = false, ?string $expectedProcessingToken = null): array
+    public function revertLogisticsPayout(LogisticsPayoutRequest $payout, string $reason, ?User $admin = null, bool $allowSuccessfulReversal = false, ?string $expectedProcessingToken = null, ?int $webhookEventId = null, ?int $webhookAttempt = null): array
     {
+            if (!$this->isCurrentWebhookClaim($webhookEventId, $webhookAttempt)) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'stale_webhook_claim' => true,
+                    'message' => 'Webhook claim generation is no longer current; payout mutation blocked.',
+                ];
+            }
+
         $result = DB::transaction(function () use ($payout, $reason, $admin, $allowSuccessfulReversal, $expectedProcessingToken) {
             $lockedPayout = LogisticsPayoutRequest::with('company')
                 ->where('id', $payout->id)
@@ -815,5 +851,28 @@ class PayoutFinalizationService
         }
 
         return $result;
+    
+    /**
+     * Verify the inbox lease inside the caller's financial transaction.
+     * Locking the inbox row here serializes stale workers against reclaims.
+     */
+    private function isCurrentWebhookClaim(?int $eventId, ?int $attempt): bool
+    {
+        if ($eventId === null && $attempt === null) {
+            return true;
+        }
+        if ($eventId === null || $attempt === null) {
+            return false;
+        }
+
+        $event = \\App\\Models\\ProcessedWebhookEvent::where('id', $eventId)
+            ->lockForUpdate()
+            ->first();
+
+        return $event
+            && $event->status === 'processing'
+            && (int) $event->attempts === $attempt;
     }
+
+}
 }
