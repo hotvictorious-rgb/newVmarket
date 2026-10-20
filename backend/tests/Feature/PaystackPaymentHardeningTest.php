@@ -380,11 +380,14 @@ class PaystackPaymentHardeningTest extends TestCase
         $this->assertEquals('card', $order->payment_channel);
         $this->assertEquals('998877', $order->paystack_transaction_id);
 
-        // Assert 5% Cashback was awarded with 24h maturation lock
+        // Cashback liability is recorded at payment, but no maturity/expiry clock
+        // starts until verified fulfilment establishes the customer claim-window expiry.
         $cashback = CustomerCashbackLedger::where('order_id', $order->id)->first();
         $this->assertNotNull($cashback);
         $this->assertEquals(0, bccomp((string)$cashback->amount, '500.00', 2));
         $this->assertEquals('pending_maturation', $cashback->status);
+        $this->assertNull($cashback->matures_at);
+        $this->assertNull($cashback->expires_at);
 
         // Assert Immutable Audit Log entry recorded
         $auditLog = AdminAuditLog::where('target_id', $order->id)
