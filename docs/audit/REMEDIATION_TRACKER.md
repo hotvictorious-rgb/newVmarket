@@ -205,3 +205,7 @@ Added the complementary case for `refund.processed` arriving after the operation
 ### VM-AUD-040 — logistics payout reversal stale-generation regression (20 October 2026)
 
 Added a direct regression for a stale `transfer.reversed` generation against a logistics payout. The old generation is rejected before payout status, company wallet, or journal changes; the newer inbox attempt remains processing. Focused CI passed on `90284b14489de17430dbe144a2373a9ddb143128`: **171 tests / 1,091 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39501881418). A logistics `transfer.success` stale-generation test and a dedicated stale `refund.failed` test remain open.
+
+### VM-AUD-041 — logistics payout success stale-generation regression (20 October 2026)
+
+Added the complementary logistics `transfer.success` stale-generation regression. A generation-1 success cannot finalize a payout after the inbox is reclaimed as generation 2: payout state, company wallet, journal count, and current inbox state remain unchanged. CI passed on `43c4f3cf5f43edc8c7fb770d8953de710da57593`: **172 tests / 1,099 assertions** (run https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39502030887). Remaining coverage gaps: dedicated stale `refund.failed` test, concurrent reclaim tests on PostgreSQL/production DB, and live Paystack sandbox payload verification.
