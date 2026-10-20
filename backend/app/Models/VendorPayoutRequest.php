@@ -42,7 +42,8 @@ class VendorPayoutRequest extends Model
             ->whereIn('status', ['pending', 'approved', 'processing', 'in_flight', 'uncertain'])
             ->where(function ($gateway) {
                 $gateway->whereNull('gateway_status')
-                    ->orWhereNotIn('gateway_status', ['success', 'failed', 'reversed']);
+                    ->orWhereNotIn('gateway_status', ['success', 'failed', 'reversed'])
+                    ->orWhere('admin_notes', 'like', '%ALLOCATION_INVARIANT_FAILED%');
             });
     }
 
