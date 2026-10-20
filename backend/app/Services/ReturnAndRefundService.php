@@ -42,9 +42,11 @@ class ReturnAndRefundService
         string $reason,
         ?string $customerDescription = null,
         ?int $collectionPointId = null,
-        array $evidencePaths = []
+        array $evidencePaths = [],
+        ?User $adminOverrideActor = null,
+        ?string $adminOverrideReason = null
     ): array {
-        return DB::transaction(function () use ($customer, $order, $itemsData, $reason, $customerDescription, $collectionPointId, $evidencePaths) {
+        return DB::transaction(function () use ($customer, $order, $itemsData, $reason, $customerDescription, $collectionPointId, $evidencePaths, $adminOverrideActor, $adminOverrideReason) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
             if (!$lockedOrder) {
@@ -74,11 +76,16 @@ class ReturnAndRefundService
                 $windowExpiresAt = $lockedOrder->updated_at->copy()->addHours($refundHours);
             }
 
-            if ($windowExpiresAt && Carbon::now()->gt($windowExpiresAt)) {
+            $isAuthorizedLateOverride = $adminOverrideActor
+                && ($adminOverrideActor->isSuperAdmin() || $adminOverrideActor->user_type === 'admin_employee')
+                && is_string($adminOverrideReason)
+                && mb_strlen(trim($adminOverrideReason)) >= 10;
+
+            if ($windowExpiresAt && Carbon::now()->gt($windowExpiresAt) && !$isAuthorizedLateOverride) {
                 return [
                     'success' => false,
                     'code' => 'RETURN_WINDOW_EXPIRED',
-                    'message' => "The {$refundHours}-hour return and refund window for this order has expired.",
+                    'message' => "The {$refundHours}-hour return and refund window for this order has expired. An authorised administrator must open late claims with a documented reason.",
                 ];
             }
 
@@ -187,6 +194,8 @@ class ReturnAndRefundService
                 'return_reason' => $reason,
                 'customer_description' => $customerDescription,
                 'status' => 'requested',
+                'source' => ($windowExpiresAt && Carbon::now()->gt($windowExpiresAt) && $isAuthorizedLateOverride) ? 'admin_late_override' : null,
+                'admin_notes' => ($windowExpiresAt && Carbon::now()->gt($windowExpiresAt) && $isAuthorizedLateOverride) ? trim($adminOverrideReason) : null,
                 'resolution_type' => 'refund',
                 'total_refundable_amount' => $totalRefundableAmount,
                 'refund_delivery_fee' => false,
@@ -255,6 +264,27 @@ class ReturnAndRefundService
                 'ip_address' => request()->ip() ?? '127.0.0.1',
                 'user_agent' => request()->userAgent(),
             ]);
+
+            if ($windowExpiresAt && Carbon::now()->gt($windowExpiresAt) && $isAuthorizedLateOverride) {
+                AdminAuditLog::create([
+                    'user_id' => $adminOverrideActor->id,
+                    'action' => 'return_case_opened_after_window_by_admin',
+                    'target_type' => ReturnCase::class,
+                    'target_id' => $returnCase->id,
+                    'old_values' => [
+                        'window_expires_at' => $windowExpiresAt->toDateTimeString(),
+                        'standard_window_hours' => $refundHours,
+                    ],
+                    'new_values' => [
+                        'case_number' => $returnCase->case_number,
+                        'order_id' => $lockedOrder->id,
+                        'override_reason' => trim($adminOverrideReason),
+                        'status' => 'requested',
+                    ],
+                    'ip_address' => request()->ip() ?? '127.0.0.1',
+                    'user_agent' => request()->userAgent(),
+                ]);
+            }
 
             return [
                 'success' => true,
