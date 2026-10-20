@@ -365,7 +365,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         $this->assertSame('requested', $case->status);
         $this->assertSame('admin_late_override', $case->source);
         $this->assertNull($case->reviewed_by_admin_id);
-        $this->assertSame('10000.00', (string) $case->total_refundable_amount);
+        $this->assertEquals(10000.00, (float) $case->total_refundable_amount);
         $this->assertDatabaseHas('admin_audit_logs', [
             'user_id' => $this->superAdmin->id,
             'action' => 'return_case_opened_after_window_by_admin',
