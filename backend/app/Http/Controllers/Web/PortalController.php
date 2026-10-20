@@ -4615,6 +4615,62 @@ class PortalController extends Controller
         return view('admin.return_detail', compact('case'));
     }
 
+    public function adminOpenLateReturnCaseAction(Request $request, ReturnAndRefundService $service)
+    {
+        $validated = $request->validate([
+            'order_id' => 'required|integer|exists:orders,id',
+            'return_reason' => 'required|string|max:100',
+            'customer_description' => 'required|string|min:10|max:2000',
+            'override_reason' => 'required|string|min:10|max:1000',
+            'items' => 'required|array|min:1|max:10',
+            'items.*.order_item_id' => 'required|integer|distinct|exists:order_items,id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.item_condition' => 'nullable|string|max:40',
+        ]);
+
+        $admin = Auth::user();
+        if (!$admin || !$admin->isSuperAdmin()) {
+            return back()->with('error', 'Only an authorised Super Admin may open a late/direct-contact return case.');
+        }
+
+        $order = Order::with('customer')->findOrFail($validated['order_id']);
+        if (!$order->customer) {
+            return back()->with('error', 'The order has no linked customer account; resolve the customer identity before opening a return case.');
+        }
+
+        $refundHours = max(1, (int) \\App\\Models\\SystemSetting::get('refund_window_hours', 24));
+        $windowExpiresAt = $order->refund_window_expires_at;
+        if (!$windowExpiresAt && $order->received_at) {
+            $windowExpiresAt = $order->received_at->copy()->addHours($refundHours);
+        } elseif (!$windowExpiresAt && $order->delivered_at) {
+            $windowExpiresAt = $order->delivered_at->copy()->addHours($refundHours);
+        } elseif (!$windowExpiresAt && $order->updated_at) {
+            $windowExpiresAt = $order->updated_at->copy()->addHours($refundHours);
+        }
+        if (!$windowExpiresAt || !now()->gt($windowExpiresAt)) {
+            return back()->with('error', 'This administrative route is for claims outside the standard return window. Use the normal customer return flow for in-window requests.');
+        }
+
+        $result = $service->createReturnCase(
+            $order->customer,
+            $order,
+            $validated['items'],
+            $validated['return_reason'],
+            $validated['customer_description'],
+            null,
+            [],
+            $admin,
+            $validated['override_reason']
+        );
+
+        if (empty($result['success'])) {
+            return back()->with('error', $result['message'] ?? 'Late return case could not be opened.');
+        }
+
+        return redirect()->route('admin.returns.show', $result['case']->id)
+            ->with('status', 'Late/direct-contact return case opened for review. It remains unapproved; statutory rights and normal refund approval controls still apply.');
+    }
+
     public function adminApproveReturnAction(Request $request, int $id, ReturnAndRefundService $service)
     {
         $case = ReturnCase::findOrFail($id);
