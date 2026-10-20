@@ -1192,4 +1192,30 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $response->assertJsonValidationErrors(['proof_photo']);
         $this->assertStringContainsString('strictly mandatory', $response->json('message'));
     }
+
+    public function test_unpaid_order_cannot_enter_partial_doorstep_handover(): void
+    {
+        [$order] = $this->createOutForDeliveryOrder();
+        $order->payment_status = 'pending';
+        $order->save();
+
+        $result = app(DoorstepHandshakeService::class)->processDoorstepHandover(
+            $order,
+            $this->riderProfile,
+            [],
+            '719283',
+            null
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('Unpaid orders cannot undergo doorstep handover.', $result['message']);
+        $order->refresh();
+        $this->assertSame('pending', $order->payment_status);
+        $this->assertSame('out_for_delivery', $order->order_status);
+        $this->assertFalse((bool) $order->delivery_confirmed_by_customer);
+        $this->assertNull($order->received_at);
+        $this->assertDatabaseMissing('customer_cashback_ledgers', ['order_id' => $order->id]);
+        $this->assertDatabaseMissing('return_cases', ['order_id' => $order->id]);
+    }
+
 }
