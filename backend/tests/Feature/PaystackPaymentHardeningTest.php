@@ -6,6 +6,8 @@ use App\Models\AdminAuditLog;
 use App\Models\CustomerCashbackLedger;
 use App\Models\Lga;
 use App\Models\Order;
+use App\Models\ProcessedWebhookEvent;
+use App\Models\FinancialJournalEntry;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Shop;
@@ -559,4 +561,43 @@ class PaystackPaymentHardeningTest extends TestCase
         $response->assertStatus(404);
         $this->assertEquals('pending', $order->fresh()->payment_status);
     }
+    public function test_stale_charge_success_generation_cannot_settle_order_or_post_journals(): void
+    {
+        $order = $this->createTestOrder([
+            'order_number' => 'VM-STALE-WEBHOOK-SETTLEMENT-01',
+            'payment_reference' => 'VM-STALE-WEBHOOK-SETTLEMENT-REF-01',
+        ]);
+        $event = ProcessedWebhookEvent::create([
+            'event_id' => 'evt_charge_stale_generation_01',
+            'event_type' => 'charge.success',
+            'payload_hash' => hash('sha256', '{"event":"charge.success"}'),
+            'payload' => '{"event":"charge.success"}',
+            'status' => 'processing',
+            'attempts' => 2,
+        ]);
+        $journalCountBefore = FinancialJournalEntry::count();
+
+        $result = app(OrderSettlementService::class)->settlePaystackOrder(
+            $order,
+            [
+                'reference' => 'VM-STALE-WEBHOOK-SETTLEMENT-REF-01',
+                'status' => 'success',
+                'amount' => 1250050,
+                'currency' => 'NGN',
+            ],
+            null,
+            'paystack_webhook',
+            (int) $event->id,
+            1
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('STALE_WEBHOOK_CLAIM', $result['status']);
+        $this->assertSame('pending', $order->fresh()->payment_status);
+        $this->assertSame('held', $order->fresh()->vendor_settlement_status);
+        $this->assertSame(2, (int) $event->fresh()->attempts);
+        $this->assertSame('processing', $event->fresh()->status);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
+    }
+
 }
