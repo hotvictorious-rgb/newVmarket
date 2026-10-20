@@ -1057,7 +1057,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             ],
         ]);
 
-        $reservation = \\App\\Models\\FinancialReservation::create([
+        $reservation = \App\Models\FinancialReservation::create([
             'financial_operation_id' => $operation->id,
             'source_type' => Order::class,
             'source_id' => 999999,
