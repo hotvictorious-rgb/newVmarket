@@ -29,13 +29,13 @@ class LegalDocumentSeeder extends Seeder
 Welcome to **VICTORIOUS MARKET** ("Victorious Market", "the Platform", "we", "us", or "our"). Victorious Market is an institutional digital commerce and fulfillment platform designed and managed on the fundamental philosophy:  
 **Trust First. Quality Always. Accountability at Every Stage.**
 
-By creating an account, browsing listings, placing orders, fulfilling deliveries, or registering as a merchant or logistics fleet provider, you agree to be bound by these Terms and Conditions. If you do not agree to these terms, you must discontinue use of the platform immediately.
+By creating an account, browsing listings, placing orders, fulfilling deliveries, or applying to become an approved vendor, you agree to the applicable Terms and Conditions. Legacy logistics-fleet terms are inactive for new orders and do not authorize a fleet, hub, rider payout, or logistics-company payable for the current vendor-managed model.
 
 ---
 
 ### 2. The Governed Marketplace Model
 Victorious Market is an intentionally **controlled, centrally governed marketplace**, not an open unmoderated classifieds board:
-* **Central Transaction Authority:** All transactions, product listings, escrow funds, dispatch waybills, doorstep handshakes, customer returns, and vendor settlements are coordinated and enforced directly by Victorious Market.
+* **Central Transaction Authority:** Victorious MARKET governs marketplace listings, order/payment records, payment verification, customer support, approved refunds, vendor settlement controls, disputes, and audit records. Vendors fulfil their own orders and manage their own approved riders. Do not describe funds as regulated or segregated escrow unless that arrangement is independently verified.
 * **Prohibition of Off-Platform Dealing:** Buyers, merchants, and riders must not bypass Victorious MARKET for marketplace transactions. The only permitted customer payment paths are (1) pay before delivery through Victorious MARKET checkout, or (2) reserve an in-shop pickup through Victorious MARKET and pay at the approved vendor shop through Victorious MARKET's authorised payment workflow. Vendors must not collect cash or private-account transfers outside the platform. In-shop reserve-and-pay is counter pickup only, not doorstep COD.
 
 ---
@@ -51,12 +51,12 @@ Victorious Market is an intentionally **controlled, centrally governed marketpla
 
 ### 4. Payments, Escrow & Revenue Allocation
 * **Cryptographic Gateway Verification:** Payments are processed via Paystack. An order is marked as paid only after server-to-server cryptographic verification (HMAC-SHA512).
-* **Controlled Escrow Custody:** 100% of customer funds are placed into segregated internal escrow accounts (`cash_in_escrow`). Merchant earnings become eligible for withdrawal only after physical handover, inspection, and expiration of the return window.
+* **Payment and settlement controls:** Customer payments are processed through the authorised Paystack workflow and reconciled to the parent checkout and vendor child orders. Do not promise that funds are held in a regulated or segregated escrow account unless that arrangement is independently verified. Vendor earnings become eligible only after confirmed fulfilment, expiry of the child's standard 24-hour claim window, and clearance of applicable holds and checks; eligibility is not an automatic transfer.
 * **Merchandise Revenue Allocation:**
-  * **90%** Vendor Net Payout (disbursable post-fulfillment).
+  * **90%** vendor merchandise allocation, recorded as earnings subject to fulfilment, the claim window, applicable holds, reconciliation, and manual payout approval.
   * **5%** Victorious Customer Cashback / Loyalty Allocation.
   * **5%** Victorious Market Platform Margin.
-* **Delivery-fee Allocation:** 90% of the delivery-fee allocation belongs to the owning vendor and 10% to Victorious MARKET. Vendors separately arrange and pay their own riders outside the platform's financial systems; new orders create no platform rider or logistics-company payable.
+* **Delivery-fee allocation:** 90% of the configured delivery fee is allocated to the owning vendor and 10% to Victorious MARKET. Vendors arrange and pay their own riders outside platform financial systems; new orders create no platform rider or logistics-company payable.
 
 ---
 
@@ -89,7 +89,7 @@ Victorious Market is an intentionally **controlled, centrally governed marketpla
 
 ### 9. 5% Victorious Customer Cashback Program
 * **Maturity and validity:** Eligible 5% merchandise cashback matures after confirmed fulfilment, the standard 24-hour customer claim window, and a separate additional 24-hour maturity buffer, provided no blocking case remains. Its 365-day validity period starts at actual `matures_at`, not at checkout or delivery.
-* **Non-Transferable:** Cashback is non-transferable, cannot be withdrawn to external bank accounts, and is automatically cancelled if the associated order is refunded or returned.
+* **Non-Transferable:** Cashback is non-transferable and cannot be withdrawn to an external bank account. If the associated order is cancelled or refunded, reverse unspent cashback. If already-spent cashback is recoverable, track it separately and offset only against future cashback as it matures; never silently debit a cash balance.
 
 ---
 
@@ -100,7 +100,7 @@ Victorious Market is an intentionally **controlled, centrally governed marketpla
 ---
 
 ### 11. Governing Law & Arbitration
-These Terms are governed by and construed in accordance with the laws of Akwa Ibom State and the Federal Republic of Nigeria. Any dispute arising out of or in connection with these Terms shall first be submitted to the Victorious Market Administrative Arbitration Desk before recourse to the High Court of Akwa Ibom State.
+These Terms are governed by applicable laws of the Federal Republic of Nigeria and, where applicable, Akwa Ibom State. Customers may contact Victorious MARKET support to seek resolution. Nothing in this clause removes any mandatory right to approach a regulator, court, or other forum available under applicable law.
 MARKDOWN;
 
         $doc1 = LegalDocument::updateOrCreate(
@@ -111,7 +111,7 @@ MARKDOWN;
                 'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
-                'summary' => 'Foundational operating contract governing marketplace transactions, escrow protections, merchant accreditation, delivery handshakes, and dispute resolution.',
+                'summary' => 'Foundational operating charter covering approved-vendor marketplace transactions, payment verification, vendor-managed fulfilment, handover evidence, customer remedies, and financial controls.',
             ]
         );
 
@@ -146,12 +146,12 @@ The standard operational request window for eligible ordinary returns/refunds is
 ### 2. Doorstep Inspection & Partial Rejection
 * **Inspect Before Releasing Rider:** When a delivery package arrives, the customer is invited to verify external package seals and contents in the presence of the delivery rider.
 * **Item-Level Decisions:** If your order contains multiple items (e.g., a phone and a charger), you may accept the phone and reject the incorrect charger right at the doorstep.
-* **Immediate Documentation:** The rider documents the partial rejection in the rider terminal app with photographic evidence and marks the item as returned.
+* **Documentation:** The rider records the affected item, quantity, reason, timestamp and return-to-vendor outcome in the authorised workflow. The required doorstep delivery photo remains handover evidence; no separate rider-pickup or rejection photo is mandatory. Additional evidence may be attached where available.
 
 ---
 
 ### 3. Eligible Grounds for Return
-Returns are accepted strictly under the following verifiable conditions:
+Common grounds for review include the following examples; this list is not exhaustive and does not exclude applicable statutory rights, valid warranties, or remedies for non-conforming goods:
 1. **Wrong Item Delivered:** Product delivered differs in model, specifications, color, or variant from what was ordered.
 2. **Defective or Inoperable:** Electronic or mechanical product fails to operate upon initial testing.
 3. **Condition Misrepresentation:** A pre-owned / UK-used item exhibits undisclosed damage or defects not stated in the listing.
@@ -159,8 +159,8 @@ Returns are accepted strictly under the following verifiable conditions:
 
 ---
 
-### 4. Non-Returnable Categories
-The following products cannot be returned once unsealed, due to health, hygiene, and copyright protections:
+### 4. Product categories with possible seal/hygiene restrictions
+Where lawful and clearly disclosed, seal or hygiene restrictions may apply to the following categories. These restrictions do not bar remedies for wrong, defective, unsafe, misdescribed, or otherwise non-conforming goods, or any rights that cannot lawfully be excluded:
 * Personal grooming, health, and cosmetic goods with broken factory seals.
 * Underwear, swimwear, and intimate apparel.
 * Consumable goods, groceries, and perishables.
@@ -169,7 +169,7 @@ The following products cannot be returned once unsealed, due to health, hygiene,
 ---
 
 ### 5. Return Process & Collection Point Handover
-1. **Submit Request:** File a return request through the Customer Portal within 24 hours of delivery, attaching clear photo/video evidence.
+1. **Submit Request:** Report the issue through the Customer Portal or support within the standard 24-hour claim window where practicable. Describe the affected item and reason; attach available photos/video or other evidence when available. Lack of a particular photo alone must not extinguish a non-waivable legal right.
 2. **Return coordination:** Contact support through the order record for the authorised return/inspection steps. A platform collection-point or hub drop-off is not mandatory.
 3. **Review & decision:** An authorised admin reviews the evidence and applicable remedy, including vendor inspection where appropriate, and records the decision. Any replacement/redelivery requires customer agreement.
 4. **Refund execution:** Approved refunds are initiated through the verified original Paystack payment route where supported; completion is confirmed only after provider reconciliation.
@@ -177,7 +177,7 @@ The following products cannot be returned once unsealed, due to health, hygiene,
 ---
 
 ### 6. Refund Disbursement & Timelines
-* **Gateway Reversals:** Approved card/bank payments made through Paystack are credited back to the original funding account within 3 to 7 business banking days.
+* **Gateway processing:** Approved refunds are submitted through the verified original Paystack route where supported. Actual processing and posting times depend on Paystack, the payment method, and the receiving financial institution; no fixed completion time is guaranteed. Submission is not confirmation of completion.
 * **Refund destination:** At launch, approved refunds are initiated through the verified original Paystack payment route where supported. Wallet-credit refunds and off-platform refunds are disabled.
 MARKDOWN;
 
@@ -313,9 +313,9 @@ By completing vendor onboarding, submitting KYB documents, or listing products o
 ---
 
 ### 5. Financial Settlement, Escrow Custody & 90% Allocation
-* **90% Net Merchandise Allocation:** For every fulfilled, non-returned transaction, the Merchant earns exactly **ninety percent (90%)** of the product merchandise subtotal.
+* **Merchandise allocation:** Eligible post-discount merchandise collected is allocated 90% to vendor earnings, 5% to customer cashback liability, and 5% to Victorious MARKET. Cashback is not calculated on delivery fees. The vendor allocation is subject to item-level refunds/reversals and applicable earning holds; it is not an unconditional promise of net payout.
 * **Vendor earnings eligibility:** Vendor earnings become eligible 24 hours after confirmed doorstep delivery or confirmed in-shop pickup, provided no applicable return/dispute/payment hold or security/reconciliation check blocks them. Eligibility is not automatic transfer.
-* **48-Hour Bank Cooldown Security:** Any change to the Merchant's registered settlement bank account invokes a mandatory **forty-eight (48) hour withdrawal freeze** to protect against unauthorized account takeover.
+* **Bank-change security:** A 48-hour payout cooldown applies after a change to the vendor's registered payout bank details, subject to the platform's verified security controls.
 * **Vendor payout batch:** Each payout batch has a ₦5,000 minimum and ₦500,000 maximum. The platform calculates strict FIFO from the oldest eligible, unreserved whole earning records, adding each full record while the total remains at or below ₦500,000. Stop before a record that would exceed the cap; never split or skip. If the oldest record alone exceeds the cap, flag it for authorised finance resolution. Every request requires admin approval before transfer.
 * **Payout reservation and fees:** Reserve the exact selected whole earning records atomically. One active request per vendor is allowed while pending, approved-unsent, in-flight or uncertain. An approved request is not completed until authoritative provider success and reconciliation. Reconcile timeouts before retry. Victorious MARKET bears payout transfer fees/stamp duty as platform expense; the vendor receives the exact approved amount.
 
@@ -337,14 +337,14 @@ By completing vendor onboarding, submitting KYB documents, or listing products o
 ---
 
 ### 8. Debt Recovery, Deficit Balances & Right of Offset
-* **Post-Payout Liabilities:** If an order is refunded, cancelled, or chargebacked *after* settlement funds have already been withdrawn by the Merchant, the Merchant incurs an immediate, legally enforceable debt liability to Victorious Market.
+* **Post-payout recovery:** If an approved refund, chargeback, or adjustment creates a potential vendor recovery after payout, record the case and evidence. Vendor liability becomes a confirmed debt only after an authorised, documented decision under the vendor agreement and applicable law. A complaint or pending investigation alone is not a debt.
 * **Authorised recovery:** A confirmed vendor debt may be repaid by verified bank transfer or offset against held/future vendor earnings only with authorised admin approval and contractual basis. A complaint alone is not a confirmed debt; record the debt/recovery separately and allow a vendor challenge.
 
 ---
 
 ### 9. Prohibition of Off-Platform Dealing & WhatsApp Bypass
-* **Non-Circumvention:** Merchants are strictly forbidden from contacting platform customers privately (via personal WhatsApp, phone calls, or flyers inserted in packages) to solicit direct off-platform sales, cash-on-delivery, or private bank transfers.
-* **Enforcement:** Any attempt to bypass the platform's escrow and governance mechanisms results in immediate shop termination, permanent merchant blacklisting, and liquidated damages equal to the value of the diverted transactions.
+* **Non-Circumvention:** Merchants must not divert marketplace orders into private cash collection, personal-account transfers, or other off-platform payment. Ordinary customer support or fulfilment communications are not, by themselves, prohibited; the restriction is on bypassing the marketplace transaction and payment controls. Doorstep cash-on-delivery is disabled at launch.
+* **Enforcement:** Suspected bypass is investigated and may lead to proportionate suspension or termination under the vendor agreement, with evidence, notice and any required review. Any contractual damages or recovery must have a valid contractual and legal basis; it is not imposed automatically by this statement.
 
 ---
 
@@ -362,7 +362,7 @@ MARKDOWN;
                 'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
-                'summary' => 'Legally binding commercial covenants governing vendor accreditation, catalog condition honesty, 90% escrow payouts, anti-counterfeit indemnity, and debt recovery set-off.',
+                'summary' => 'Commercial covenants governing approved-vendor accreditation, accurate product condition, the 90/5/5 merchandise allocation, controlled payouts, anti-counterfeit obligations, and authorised debt recovery.',
             ]
         );
 
@@ -532,12 +532,12 @@ Participation in Victorious Market is subject to verification and accreditation:
 * **90% Merchant Settlement:** Legitimate merchants receive 90% net earnings upon confirmed delivery.
 * **5% Customer Cashback:** Eligible merchandise cashback matures after fulfilment, the 24-hour standard customer claim window, and a separate additional 24-hour buffer when no blocking case remains. Its 365-day validity period starts at actual maturity, not checkout or delivery.
 * **5% Platform Sustainability Margin:** Powering platform engineering, customer support, and dispute arbitration.
-* **Logistics Split:** 90% retained by the accredited Logistics Fleet, 10% platform routing fee.
+* **Delivery-fee allocation:** For new vendor-managed orders, 90% of the configured delivery fee is allocated to the owning vendor and 10% to Victorious MARKET. Vendors arrange and pay their own riders outside platform financial systems. The legacy fleet split is inactive for new orders.
 
 ---
 
 ### 5. Geographic Discipline & Expansion
-Our commercial beachhead is centered in **Uyo, Akwa Ibom State**, expanding across verified transit corridors into Ikot Ekpene, Eket, and subsequent regional centers. Rather than promising unfulfilled nationwide deliveries, Victorious Market expands through verified physical collection hubs, trusted local couriers, and guaranteed fulfillment corridors.
+Our launch focus is **Uyo, Akwa Ibom State**, with service to other destinations only where an approved vendor confirms coverage and a delivery fee. Vendors manage their own riders and fulfilment. Delivery estimates are not guarantees unless explicitly confirmed for the particular order; no central fleet or collection hub is required for new orders.
 MARKDOWN;
 
         $doc6 = LegalDocument::updateOrCreate(
@@ -580,10 +580,10 @@ Victorious Market operates an escrow-protected, deterministic cancellation workf
 
 ---
 
-### 2. Pre-Dispatch Customer Cancellation (100% Instant Refund)
-* **Permitted Window:** A customer may cancel an order for any reason **prior to merchant packaging and rider dispatch** (while order status is `pending` or `confirmed`).
-* **Refund:** A verified, approved cancellation refund is initiated through the original verified Paystack payment route where supported. Wallet-credit refunds are disabled. The approved amount and delivery-fee treatment depend on the actual transaction, reason, applicable terms and law; provider completion must be reconciled.
-* **Zero Cancellation Fees:** No penalty or administrative surcharge is deducted for pre-dispatch cancellations.
+### 2. Pre-Fulfilment Cancellation and Refund Review
+* **Permitted window:** Ordinary cancellation is generally available before the vendor accepts or begins preparing the order, subject to the persisted order state. Once the vendor accepts or prepares it, ordinary cancellation may be restricted, but this does not remove remedies for failed fulfilment, duplicate payment, wrong/defective goods, or rights that cannot lawfully be excluded.
+* **Refund:** A verified refund request is processed under the applicable approval rule. Automatic approval is limited to a verified duplicate successful capture and a verified payment for an order cancelled before any vendor action. Other refunds require persisted authorised human approval before gateway dispatch. Refunds use the original verified Paystack route where supported; wallet-credit refunds are disabled at launch. Delivery-fee refundability is assessed separately. A submitted request is not a completed refund.
+* **No invented fee:** Do not invent a cancellation penalty. The refundable amount and any delivery-fee reversal depend on what was actually captured, the reason, the applicable policy, and law.
 
 ---
 
@@ -595,21 +595,21 @@ Victorious Market operates an escrow-protected, deterministic cancellation workf
 ---
 
 ### 4. Post-Dispatch In-Transit Policy
-* **No Mid-Transit Cancellations:** Once an order status progresses to `out_for_delivery` and is with the courier rider, the order cannot be cancelled in transit because logistics resources and transit costs are already committed.
+* **Ordinary cancellation after dispatch:** Once an order is out for delivery, an ordinary change-of-mind cancellation may be restricted because fulfilment costs may be committed. This does not bar a customer from rejecting wrong, damaged, defective, or non-conforming goods, reporting failed fulfilment, or seeking any remedy required by applicable law.
 * **Doorstep Decision:** The customer must await the rider's arrival and exercise their **Doorstep Acceptance & Partial Rejection** rights at physical handover.
-* **Refusal Without Cause:** Repeated arbitrary refusals of conforming orders at doorstep delivery without valid defect grounds may lead to customer account review and suspension of cash-on-delivery or delivery privileges.
+* **Repeated unjustified refusals:** Repeated refusals of conforming goods without a valid reason may be reviewed under a fair customer-account policy. Cash-on-delivery is disabled at launch, so no COD privilege is offered or suspended.
 
 ---
 
 ### 5. Merchant Stockout Cancellations
-* **Immediate Customer Remedy:** If an accredited merchant cannot fulfill an order due to sudden stockout or inventory discrepancy, the platform automatically cancels the order, initiates an immediate 100% refund to the customer, and notifies the customer via SMS/Email.
+* **Customer remedy:** If a vendor cannot fulfil a paid child order because of a stockout or inventory error, stop fulfilment, record the reason, notify the customer, and open a controlled refund/cancellation case. Automatic refund approval is permitted only where the transaction meets the narrow approved exception (including cancellation before any vendor action); otherwise an authorised admin must approve before gateway dispatch. Refund only the amount due under the captured transaction and applicable policy, assess delivery separately, and reconcile provider completion. Other vendors' child orders remain independent.
 * **Merchant Accountability:** Preventable merchant stockouts are logged against the vendor's fulfillment rating. Repeated stockouts trigger temporary catalog delisting.
 
 ---
 
 ### 6. Cashback Treatment on Cancelled Orders
-* Any 5% cashback reward queued for maturation on an order is instantly voided and revoked if the order is cancelled.
-* Any previously earned cashback applied as a discount on a cancelled order is refunded back to the customer's cashback ledger balance.
+* Any pending cashback associated with a cancelled or refunded order is reversed through an auditable ledger entry.
+* If cashback from the order has already been spent and is recoverable under the policy, track the amount separately and offset it only against future cashback as that cashback matures. Never silently debit a cash balance or recreate cashback merely by refunding an order.
 MARKDOWN;
 
         $doc7 = LegalDocument::updateOrCreate(
@@ -620,7 +620,7 @@ MARKDOWN;
                 'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
-                'summary' => 'Comprehensive guidelines covering pre-dispatch 100% refunds, in-shop 24-hour reservation expiries, and mid-transit doorstep rules.',
+                'summary' => 'Guidelines covering ordinary cancellation stages, the 24-hour in-shop reservation hold, controlled refund approval, and customer remedies during fulfilment.',
             ]
         );
 
@@ -649,12 +649,12 @@ MARKDOWN;
 ### General & Platform Trust
 
 #### What is Victorious Market?
-Victorious Market is a managed, centrally governed online marketplace and fulfillment network in Nigeria. We connect customers with accredited plaza merchants, provide escrow payment protection, ensure verified courier deliveries with OTP handshakes, and guarantee a 24-hour return window.
+Victorious MARKET is a managed online marketplace in Nigeria. We connect customers with approved vendors, process marketplace payments through the authorised workflow, coordinate customer support and refund decisions, and require recorded handover evidence. The standard operational claim window is 24 hours from confirmed delivery or pickup, subject to applicable consumer rights and valid warranty obligations; it is not a guarantee that every return will be approved.
 
 #### How is Victorious Market different from open classifieds or social media sellers?
-On open social media platforms (like Instagram or WhatsApp), you send money to unknown sellers with zero delivery guarantee and no return recourse. On Victorious Market, **we govern the transaction**:
+On open social media platforms (like Instagram or WhatsApp), buyers may have limited transaction records. On Victorious MARKET, **we govern the marketplace transaction** through approved vendors, payment verification, documented handover, refund review and reconciliation:
 * Merchants are vetted and physically inspected.
-* Your payment is held in safe internal escrow until you verify the package.
+* Payments are processed through the authorised provider workflow and reconciled to order and financial records. We do not represent the service as a regulated or segregated escrow account unless that arrangement is independently verified.
 * Riders must exchange an OTP before delivery is valid.
 * You can partially reject defective items at your doorstep.
 
@@ -665,8 +665,8 @@ We are headquartered in **Uyo, Akwa Ibom State**. Our delivery coverage spans Uy
 
 ### Shopping, Payments & Cashback
 
-#### How does Escrow Protection work?
-When you pay for an order, 100% of your funds are placed in our secured internal escrow vault (`cash_in_escrow`). The seller **cannot** withdraw this money until twenty-four (24) hours after you have physically received and inspected the item via your delivery OTP.
+#### How are payment and vendor settlement controlled?
+Payments are processed through Victorious MARKET's authorised Paystack workflow and reconciled to the parent checkout and vendor-specific child orders. Vendor earnings do not become payout-eligible until confirmed delivery or pickup, expiry of the applicable 24-hour claim window, and clearance of holds and reconciliation checks. Eligible earnings still require a vendor request and authorised admin approval. This is not a promise of regulated or segregated escrow custody.
 
 #### Can I reserve an item and pay at the vendor shop?
 Yes. Create an in-shop pickup reservation through Victorious MARKET. The reservation holds the item for 24 hours. At the approved vendor shop, inspect the item and complete payment through Victorious MARKET's authorised payment workflow before the item is released. Vendors may not collect cash or private-account transfers outside the platform.
@@ -675,23 +675,23 @@ Yes. Create an in-shop pickup reservation through Victorious MARKET. The reserva
 Launch payment rails are Paystack card and standard bank transfer through Victorious MARKET. Customers may pay before delivery or reserve in-shop pickup and pay at the vendor shop through the platform's authorised workflow. USSD, DVA, mobile money and other rails are not enabled unless separately approved.
 
 #### What is the 5% Customer Cashback Program?
-On every non-returned merchandise order, you automatically earn 5% cashback credited to your account. This matures into spendable customer balance and can be redeemed on future platform purchases.
+Eligible post-discount merchandise may accrue 5% cashback; delivery fees are excluded. Cashback remains pending until verified fulfilment, expiry of the 24-hour claim window, and a separate 24-hour maturity buffer, provided no blocking case remains. Its 365-day validity starts at actual maturity. It is non-transferable and not withdrawable to a bank. Redemption is capped at 50% of merchandise subtotal per checkout. If the order is refunded, unspent cashback is reversed; any recoverable spent cashback is tracked separately and offset only against future cashback as it matures.
 
 ---
 
 ### Delivery, Logistics & Doorstep Handover
 
-#### How fast is delivery within Uyo?
-Standard intra-Uyo deliveries arrive within 1 to 3 hours from merchant handover. Directional LGA deliveries are completed on the same business day along verified corridors.
+#### How long does delivery take?
+Delivery availability and estimates depend on the vendor, destination, stock, rider availability, and the specific order confirmation. The platform does not guarantee a universal 1–3 hour or same-day delivery time.
 
-#### What is the Delivery OTP Handshake?
-When your order is dispatched, a secret 6-digit One-Time Password (OTP) is sent to your phone and email. When the rider arrives, you inspect the parcel and only give the rider the OTP once you are satisfied. Possession of the package legally transfers only when the rider enters your valid OTP.
+#### What is the delivery handover check?
+Doorstep delivery requires server-side verification of the one-time customer delivery OTP and a linked doorstep delivery photo. Keep the OTP private and share it only for the intended handover. OTP/photo evidence records the handover process; it does not prove that the item is correct, defect-free, or free from a later warranty issue.
 
 #### What is "Doorstep Partial Rejection"?
 If you order 3 items (e.g. a phone, a case, and a charger) and the charger is wrong or damaged, you do **not** have to reject the whole package! You can accept the phone and case, and reject only the charger right at your doorstep. You will be refunded for the rejected item while keeping the rest.
 
-#### What vehicles are used for fragile goods?
-Electronics such as television sets, desktop computers, and large home appliances are strictly transported using covered Keke tricycles or logistics vans with padded securing, never on motorbikes.
+#### How are fragile goods transported?
+The owning vendor is responsible for selecting an appropriate and safe delivery method for the product. Any vehicle or handling promise must be confirmed for the specific order; the platform does not guarantee a universal vehicle type.
 
 ---
 
@@ -726,7 +726,7 @@ MARKDOWN;
                 'current_version' => '1.1.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
-                'summary' => 'Comprehensive answers covering escrow protection, in-shop pickup, doorstep partial rejection, 24-hour returns, and merchant accreditation.',
+                'summary' => 'Customer answers covering payment verification, in-shop pickup, doorstep handover, the standard 24-hour claim window, cashback and approved-vendor policies.',
             ]
         );
 
