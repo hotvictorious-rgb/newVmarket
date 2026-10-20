@@ -267,16 +267,16 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
     }
 
     /**
-     * Test 1: Customer partially accepts order at doorstep (accepts blender, rejects kettle).
+     * Test 1: Customer partially accepts order at doorstep (accepts blender, rejects kettle) without an instant wallet refund.
      * Verifies:
      * - Item 1 accepted, Item 2 rejected.
      * - Order status becomes partially_delivered.
      * - 90/5/5 accounting calculated ONLY on accepted merchandise (₦30,000).
-     * - Logistics company receives full 90% delivery fee (₦1,350).
-     * - Customer receives instant 100% wallet credit (₦15,000) with zero delay.
+     * - Delivery-fee allocation remains vendor/platform only; no fleet payable is created.
+     * - Rejected merchandise creates a reviewable return case and reservation, not a wallet credit.
      * - ReturnCase auto-generated with 6-digit vendor_return_otp and in_transit_back_to_vendor status.
      */
-    public function test_partial_doorstep_acceptance_and_instant_wallet_credit(): void
+    public function test_partial_doorstep_acceptance_creates_return_request_without_wallet_credit(): void
     {
         [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
 
@@ -307,7 +307,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $response->assertJsonPath('status', true);
         $response->assertJsonPath('data.accepted_amount', '30000.00');
         $response->assertJsonPath('data.rejected_amount', '15000.00');
-        $response->assertJsonPath('data.wallet_credited', '15000.00');
+        $response->assertJsonPath('data.refund_requested_amount', '15000.00');
 
         $order->refresh();
         $this->assertEquals('delivered', $order->order_status);
@@ -325,11 +325,9 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $this->assertEquals('rejected_in_transit', $item2->item_delivery_status);
         $this->assertEquals('vendor_issue', $item2->rejection_category);
 
-        // Check Provisional Customer Wallet Credit (Pending merchant custody receipt)
-        $credit = CustomerWalletCredit::where('customer_id', $this->customer->id)->first();
-        $this->assertNotNull($credit);
-        $this->assertEquals(15000.00, (float)$credit->amount);
-        $this->assertEquals('pending_approval', $credit->status);
+        // No wallet refund is issued at doorstep; the customer refund remains subject
+        // to return review and an authorized original-Paystack refund.
+        $this->assertSame(0, CustomerWalletCredit::where('customer_id', $this->customer->id)->count());
         $this->assertEquals('0.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
 
         // Check Financial Reservation placed on order ceiling
@@ -497,9 +495,9 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
     }
 
     /**
-     * Test 5: Customer Instant Re-Order with 100% spendable Wallet Credit.
+     * Launch policy: a doorstep return cannot be refunded into the customer wallet.
      */
-    public function test_customer_wallet_balance_and_instant_reorder(): void
+    public function test_wallet_refund_is_disabled_at_launch_for_doorstep_return(): void
     {
         [$order, $item1, $item2] = $this->createOutForDeliveryOrder();
 
@@ -523,27 +521,18 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'proof_photo' => UploadedFile::fake()->image('vendor_return.jpg'),
         ])->assertStatus(200);
 
-        // Super Admin reviews and disburses refund to customer wallet
+        // Approval of the return case does not authorize a wallet refund at launch.
         $returnService = app(\App\Services\ReturnAndRefundService::class);
         $returnService->adminApproveReturn($this->adminUser, $returnCase->fresh());
-        $returnService->adminDisburseRefund($this->adminUser, $returnCase->fresh(), 'wallet');
+        $refundResult = $returnService->adminDisburseRefund($this->adminUser, $returnCase->fresh(), 'wallet');
+        $this->assertFalse($refundResult['success']);
+        $this->assertSame('disabled', $refundResult['status']);
 
         Sanctum::actingAs($this->customer);
-
-        // 1. Check wallet API summary
         $summaryResp = $this->getJson('/api/v1/customer/wallet');
         $summaryResp->assertStatus(200);
-        $summaryResp->assertJsonPath('data.available_wallet_credit', '15000.00');
-
-        // 2. Customer 1-click re-orders rejected items using wallet balance
-        $reorderResp = $this->postJson('/api/v1/customer/orders/reorder-rejected-items', [
-            'case_number' => $returnCase->case_number,
-        ]);
-
-        $reorderResp->assertStatus(200);
-        $reorderResp->assertJsonPath('status', true);
-        $reorderResp->assertJsonPath('data.wallet_credit_applied', '15000.00');
-        $reorderResp->assertJsonPath('data.net_payable_cash', '0.00');
+        $summaryResp->assertJsonPath('data.available_wallet_credit', '0.00');
+        $this->assertSame(0, CustomerWalletCredit::where('return_case_id', $returnCase->id)->count());
     }
 
     /**
@@ -569,11 +558,8 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $this->assertEquals('customer_change_of_mind', $returnCase->rejection_category);
         $this->assertEquals('customer_100', $returnCase->cost_allocation);
 
-        // Verify customer wallet credit: ₦15,000 rejected item (delivery fee paid at checkout retained by courier; NOT deducted twice)
-        $credit = CustomerWalletCredit::where('customer_id', $this->customer->id)->first();
-        $this->assertNotNull($credit);
-        $this->assertEquals(15000.00, (float)$credit->amount);
-        $this->assertEquals('pending_approval', $credit->status);
+        // Customer change-of-mind rejection opens a reviewable return case only.
+        $this->assertSame(0, CustomerWalletCredit::where('customer_id', $this->customer->id)->count());
     }
 
     /**
@@ -752,17 +738,12 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $this->assertEquals('in_transit_back_to_vendor', $returnCase->status);
         $this->assertNotNull($returnCase->vendor_return_otp);
 
-        // Verify Customer Wallet Refund Credit created for merchandise (₦45,000)
-        $credit = CustomerWalletCredit::where('order_id', $order->id)->firstOrFail();
-        $this->assertEquals(0, bccomp('45000.00', (string)$credit->amount, 2));
-        $this->assertEquals('available', $credit->status);
-
-        // Verify Logistics Courier delivery fee credited (90% of ₦1,500 = ₦1,350)
-        $this->assertDatabaseHas('financial_journal_entries', [
+        // Failed delivery records the return-to-vendor operation only. It must not
+        // issue a wallet refund or create a legacy logistics payable.
+        $this->assertSame(0, CustomerWalletCredit::where('order_id', $order->id)->count());
+        $this->assertDatabaseMissing('financial_journal_entries', [
             'order_id' => $order->id,
             'account_name' => 'logistics_payable',
-            'amount' => '1350.00',
-            'entry_type' => 'credit',
         ]);
     }
 
