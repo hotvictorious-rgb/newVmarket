@@ -783,8 +783,18 @@ class OrderSettlementService
         return DB::transaction(function () use ($order, $otp, $rider, $proofImagePath, $pickupNotes) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
+            if (!$lockedOrder) {
+                return ['success' => false, 'message' => 'Order record not found under lock.'];
+            }
+
             if ($lockedOrder->fulfillment_type !== 'doorstep_delivery') {
                 return ['success' => false, 'message' => 'Rider courier pickup is only applicable to doorstep delivery orders. In-shop pickup orders are collected directly at the shop counter.'];
+            }
+
+            // Payment is a prerequisite for physical custody. Never let legacy status
+            // aliases or stale handover fields authorize dispatch of an unpaid order.
+            if ($lockedOrder->payment_status !== 'paid') {
+                return ['success' => false, 'message' => 'Unpaid orders cannot be handed to a rider.'];
             }
 
             if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'])) {
