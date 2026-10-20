@@ -550,6 +550,72 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
     /**
      * 7. Multi-vendor cart: Returns on Vendor A do not affect Vendor B
      */
+    public function test_in_shop_handover_requires_reservation_pass_customer_otp_and_photo_once()
+    {
+        $fixture = $this->createDeliveredOrder(Carbon::now()->subHours(2), 1);
+        $order = $fixture['order'];
+        $order->update([
+            'fulfillment_type' => 'in_shop_pickup',
+            'order_status' => 'confirmed',
+            'payment_status' => 'paid',
+            'verification_code' => '112233', // customer-facing pickup OTP
+            'pickup_verification_code' => '998877', // vendor-to-rider custody OTP
+        ]);
+
+        $reservationCode = 'RES-' . strtoupper(bin2hex(random_bytes(4)));
+        $reservation = \App\Models\PickupReservation::create([
+            'reservation_code' => $reservationCode,
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendorA->id,
+            'shop_id' => $this->shopA->id,
+            'product_id' => $this->productA->id,
+            'quantity' => 1,
+            'unit_price' => '10000.00',
+            'estimated_total' => '10000.00',
+            'status' => 'payment_completed',
+            'order_id' => $order->id,
+        ]);
+
+        $service = app(\App\Services\OrderSettlementService::class);
+
+        // Vendor-to-rider custody OTP must never authorize release to the customer.
+        $wrongOtp = $service->verifyPickupHandoverOtp(
+            $order,
+            '998877',
+            $this->vendorUserA,
+            $reservationCode,
+            'storage/customer_pickup_proofs/wrong-attempt.jpg'
+        );
+        $this->assertFalse($wrongOtp['success']);
+        $this->assertSame('confirmed', $order->fresh()->order_status);
+        $this->assertSame('payment_completed', $reservation->fresh()->status);
+
+        // Customer OTP succeeds only with the matching reservation pass and photo evidence.
+        $result = $service->verifyPickupHandoverOtp(
+            $order->fresh(),
+            '112233',
+            $this->vendorUserA,
+            $reservationCode,
+            'storage/customer_pickup_proofs/verified-pickup.jpg'
+        );
+        $this->assertTrue($result['success']);
+        $this->assertSame('picked_up', $order->fresh()->order_status);
+        $this->assertNull($order->fresh()->verification_code);
+        $this->assertSame('998877', $order->fresh()->pickup_verification_code);
+        $this->assertSame('storage/customer_pickup_proofs/verified-pickup.jpg', $order->fresh()->customer_pickup_photo_path);
+        $this->assertSame('handed_over', $reservation->fresh()->status);
+
+        // The customer OTP is one-time and cannot be replayed after handover.
+        $replay = $service->verifyPickupHandoverOtp(
+            $order->fresh(),
+            '112233',
+            $this->vendorUserA,
+            $reservationCode,
+            'storage/customer_pickup_proofs/replay.jpg'
+        );
+        $this->assertFalse($replay['success']);
+    }
+
     public function test_multi_vendor_child_order_returns_are_strictly_isolated()
     {
         $deliveredAt = Carbon::now()->subHours(2);
