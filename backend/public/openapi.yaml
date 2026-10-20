@@ -178,6 +178,13 @@ paths:
   /api/v1/checkout/intent:
     post:
       summary: Generate frozen two-phase checkout intent with BCMath subtotal and cashback deduction
+      description: Send the same Idempotency-Key header for retries of one logical checkout attempt. Reusing a key with changed checkout details returns 409. The key is currently optional for backward compatibility; clients that omit it do not receive retry deduplication.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Client-generated stable key reused for retries of this checkout attempt (1–100 characters).
+          schema: { type: string, minLength: 1, maxLength: 100 }
       security:
         - BearerAuth: []
       requestBody:
@@ -201,8 +208,12 @@ paths:
                       quantity: { type: integer }
                 redeem_cashback: { type: boolean }
       responses:
+        '200':
+          description: Existing intent replayed for an idempotent retry
         '201':
           description: Intent created with cryptographic fingerprint
+        '409':
+          description: Idempotency key reused with different request details, or the original intent expired
 
   /api/v1/pickup-reservations/create:
     post:
