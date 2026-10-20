@@ -83,6 +83,54 @@
         </div>
     </div>
 
+    <!-- Authorised late/direct-contact claim intake: opening a case does not approve a refund. -->
+    <div class="dash-card" style="margin-bottom: 24px; border-left: 4px solid #D97706;">
+        <div style="margin-bottom: 14px;">
+            <h2 style="font-size: 16px; font-weight: 700; margin: 0 0 6px;">Open Late / Direct-Contact Return Case</h2>
+            <p style="font-size: 12px; color: var(--adm-muted); margin: 0;">
+                Super Admin only. Use when a customer contacted Victorious MARKET directly or the standard 24-hour request window has passed.
+                A case is opened for review only; this form does not approve or dispatch a refund. Statutory rights and warranties still apply.
+            </p>
+        </div>
+        <form method="POST" action="{{ route('admin.returns.open_late') }}" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+            @csrf
+            <div>
+                <label for="late_order_id" style="display:block;font-size:12px;font-weight:600;margin-bottom:5px;">Order ID</label>
+                <input id="late_order_id" name="order_id" type="number" min="1" required class="form-control" placeholder="Internal order ID">
+            </div>
+            <div>
+                <label for="late_order_item_id" style="display:block;font-size:12px;font-weight:600;margin-bottom:5px;">Order Item ID</label>
+                <input id="late_order_item_id" name="items[0][order_item_id]" type="number" min="1" required class="form-control" placeholder="Internal order item ID">
+            </div>
+            <div>
+                <label for="late_item_quantity" style="display:block;font-size:12px;font-weight:600;margin-bottom:5px;">Quantity</label>
+                <input id="late_item_quantity" name="items[0][quantity]" type="number" min="1" value="1" required class="form-control">
+            </div>
+            <div>
+                <label for="late_return_reason" style="display:block;font-size:12px;font-weight:600;margin-bottom:5px;">Claim Reason</label>
+                <select id="late_return_reason" name="return_reason" required class="form-control">
+                    <option value="">Select reason</option>
+                    <option value="defective">Defective / not working</option>
+                    <option value="wrong_item">Wrong item supplied</option>
+                    <option value="not_as_described">Not as described</option>
+                    <option value="missing_parts">Missing parts / accessories</option>
+                    <option value="other">Other / direct-contact claim</option>
+                </select>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label for="late_customer_description" style="display:block;font-size:12px;font-weight:600;margin-bottom:5px;">Customer's Report / Evidence Summary</label>
+                <textarea id="late_customer_description" name="customer_description" required minlength="10" maxlength="2000" rows="2" class="form-control" placeholder="Record what the customer reported, when they contacted Victorious MARKET, and any known evidence."></textarea>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <label for="late_override_reason" style="display:block;font-size:12px;font-weight:600;margin-bottom:5px;">Why Is Admin Opening This Late Case?</label>
+                <textarea id="late_override_reason" name="override_reason" required minlength="10" maxlength="1000" rows="2" class="form-control" placeholder="Required audit reason for overriding the standard request window."></textarea>
+            </div>
+            <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end;">
+                <button type="submit" class="btn-dash btn-dash-primary">Open Case for Review</button>
+            </div>
+        </form>
+    </div>
+
     <!-- Returns Table & Filter Card -->
     <div class="dash-card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
