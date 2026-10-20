@@ -9,8 +9,6 @@ use App\Models\CustomerCashbackLedger;
 use App\Models\DeliveryLane;
 use App\Models\FinancialJournalEntry;
 use App\Models\Lga;
-use App\Models\LogisticsCompanyProfile;
-use App\Models\LogisticsPayoutRequest;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -42,8 +40,6 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
     protected Shop $shopB;
     protected Product $productA;
     protected Product $productB;
-    protected User $fleetUser;
-    protected LogisticsCompanyProfile $company;
     protected User $riderUserA;
     protected User $riderUserB;
     protected RiderProfile $riderA;
@@ -185,25 +181,6 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'is_vmarket_flagship' => true,
         ]);
 
-        // Fleet Company & 2 Couriers
-        $this->fleetUser = User::create([
-            'name' => 'Fleet Director Okon',
-            'email' => 'fleet@speedcargo.ng',
-            'password' => bcrypt('FleetSecret123!'),
-            'user_type' => 'logistics_company',
-            'status' => 'active',
-        ]);
-        $this->company = LogisticsCompanyProfile::create([
-            'user_id' => $this->fleetUser->id,
-            'company_name' => 'Speed Cargo Logistics Fleet',
-            'registration_number' => 'RC-998877',
-            'bank_name' => 'First Bank of Nigeria',
-            'account_number' => '3012345678',
-            'account_name' => 'Speed Cargo Logistics Fleet Ltd',
-            'bank_updated_at' => Carbon::now()->subDays(10),
-            'status' => 'active',
-        ]);
-
         $this->riderUserA = User::create([
             'name' => 'Rider Edet Alpha',
             'email' => 'rider.a@speedcargo.ng',
@@ -213,7 +190,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         ]);
         $this->riderA = RiderProfile::create([
             'user_id' => $this->riderUserA->id,
-            'logistics_company_id' => $this->company->id,
+            'vendor_id' => $this->vendorA->id,
             'assigned_lga_id' => $this->originLga->id,
             'vehicle_type' => 'motorcycle',
             'license_plate' => 'UY-01-RDR',
@@ -565,14 +542,14 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'origin_lga_id' => $this->originLga->id,
             'destination_lga_id' => $this->destLga->id,
             'merchandise_subtotal' => '10000.00',
-            'delivery_fee' => '0.00',
+            'delivery_fee' => '500.00',
             'cashback_redeemed' => '0.00',
-            'grand_total' => '10000.00',
+            'grand_total' => '10500.00',
             'vendor_net_90' => '9000.00',
             'customer_cashback_5' => '500.00',
             'platform_margin_5' => '500.00',
-            'logistics_fee_retained' => '0.00',
-            'platform_delivery_fee' => '0.00',
+            'logistics_fee_retained' => '450.00',
+            'platform_delivery_fee' => '50.00',
             'vendor_settlement_status' => 'held',
         ]);
         OrderItem::create([
@@ -651,13 +628,21 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         $this->assertEquals(0, bccomp((string)$vendorBEntry->amount, '18000.00', 2));
         $this->assertEquals('credit', $vendorBEntry->entry_type);
 
-        // 3. Verify Logistics Company is credited strictly ₦1,350 (90% of ₦1,500 delivery fee)
-        $fleetEntry = FinancialJournalEntry::where('beneficiary_type', LogisticsCompanyProfile::class)
-            ->where('beneficiary_id', $this->company->id)
+        // 3. Delivery fees are allocated to each vendor's child order; no fleet/rider payout is created.
+        $vendorADeliveryEntry = FinancialJournalEntry::where('order_id', $childOrderA->id)
+            ->where('account_name', 'vendor_payable')
+            ->where('amount', '450.00')
+            ->where('entry_type', 'credit')
             ->first();
-        $this->assertNotNull($fleetEntry);
-        $this->assertEquals(0, bccomp((string)$fleetEntry->amount, '1350.00', 2));
-        $this->assertEquals('logistics_payable', $fleetEntry->account_name);
+        $vendorBDeliveryEntry = FinancialJournalEntry::where('order_id', $childOrderB->id)
+            ->where('account_name', 'vendor_payable')
+            ->where('amount', '900.00')
+            ->where('entry_type', 'credit')
+            ->first();
+        $this->assertNotNull($vendorADeliveryEntry);
+        $this->assertNotNull($vendorBDeliveryEntry);
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $parentOrder->id)
+            ->where('account_name', 'logistics_payable')->count());
 
         // 4. Verify Double-Entry Balance
         $this->assertTrue(FinancialJournalEntry::assertOrderBalanced($parentOrder->id));
