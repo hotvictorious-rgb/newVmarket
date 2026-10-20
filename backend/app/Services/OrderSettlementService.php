@@ -417,8 +417,8 @@ class OrderSettlementService
                             'customer_id' => $child->customer_id,
                             'amount' => $child->customer_cashback_5,
                             'status' => 'pending_maturation',
-                            'matures_at' => Carbon::now(), // Placeholder only; verified fulfilment replaces this with refund-window expiry + 24 hours.
-                            'expires_at' => Carbon::now()->addDays(730),
+                            'matures_at' => null, // No maturity clock before verified fulfilment.
+                            'expires_at' => null, // Validity starts only after maturity.
                         ]);
                     }
 
@@ -548,8 +548,8 @@ class OrderSettlementService
                         'customer_id' => $lockedOrder->customer_id,
                         'amount' => $lockedOrder->customer_cashback_5,
                         'status' => 'pending_maturation',
-                        'matures_at' => Carbon::now(), // Placeholder only; verified fulfilment replaces this with refund-window expiry + 24 hours. // Locked until confirmed delivery/pickup!
-                        'expires_at' => Carbon::now()->addDays(730),
+                        'matures_at' => null, // No maturity clock before verified fulfilment.
+                        'expires_at' => null, // Validity starts only after maturity.
                     ]);
                 }
             }
@@ -986,7 +986,7 @@ class OrderSettlementService
                 'amount' => $lockedOrder->customer_cashback_5,
                 'status' => 'pending_maturation',
                 'matures_at' => $lockedOrder->refund_window_expires_at->copy()->addHours(24),
-                'expires_at' => $lockedOrder->refund_window_expires_at->copy()->addDays(365),
+                'expires_at' => $lockedOrder->refund_window_expires_at->copy()->addHours(24)->addDays(365),
             ]);
 
             // Multi-channel notifications to Logistics Fleet, Customer, and Vendor
@@ -1127,7 +1127,7 @@ class OrderSettlementService
                 'amount' => $lockedOrder->customer_cashback_5,
                 'status' => 'pending_maturation',
                 'matures_at' => $lockedOrder->refund_window_expires_at->copy()->addHours(24),
-                'expires_at' => $lockedOrder->refund_window_expires_at->copy()->addDays(365),
+                'expires_at' => $lockedOrder->refund_window_expires_at->copy()->addHours(24)->addDays(365),
             ]);
 
             return [
