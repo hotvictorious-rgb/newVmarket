@@ -1453,6 +1453,49 @@ class VendorPayoutLifecycleTest extends TestCase
         $this->assertSame(2, VendorPayoutRequest::where('vendor_id', $this->vendor->id)->count());
     }
 
+    public function test_admin_disbursement_blocks_partial_same_vendor_earning_before_gateway_dispatch(): void
+    {
+        $this->mockPaystackTransferSuccess('TRF_BLOCK_PARTIAL_EARNING_BEFORE_DISPATCH');
+
+        $order = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'vendor_settlement_status' => 'eligible',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '5000.00',
+            'status' => 'pending',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Test Vendor',
+        ]);
+        $allocation = \App\Models\VendorPayoutAllocation::create([
+            'vendor_payout_request_id' => $payout->id,
+            'order_id' => $order->id,
+            'allocated_amount' => '5000.00',
+            'status' => 'allocated',
+        ]);
+        $journalCountBefore = FinancialJournalEntry::count();
+
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
+            'payout_id' => $payout->id,
+            'notes' => 'Partial earning allocation must stop before dispatch',
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertSame('pending', $payout->fresh()->status);
+        $this->assertNull($payout->fresh()->gateway_status);
+        $this->assertSame('allocated', $allocation->fresh()->status);
+        $this->assertSame('eligible', $order->fresh()->vendor_settlement_status);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
+        $this->assertFalse(FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $payout->id)->exists());
+    }
+
     public function test_admin_disbursement_blocks_cross_vendor_allocation_before_gateway_dispatch(): void
     {
         $this->mockPaystackTransferSuccess('TRF_BLOCK_CROSS_VENDOR_BEFORE_DISPATCH');
