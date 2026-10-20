@@ -1158,6 +1158,37 @@ class PortalController extends Controller
                 return back()->with('error', "Insufficient withdrawable balance. Your available cleared balance is ₦" . number_format((float)$withdrawable, 2) . ". In-transit or pending orders are held in platform escrow.");
             }
 
+            // Reject incorrectly sized requests before they reserve any earnings.
+            // This mirrors the transfer-side FIFO rule and avoids leaving a pending
+            // request holding funds when the amount cannot be made from whole records.
+            $remainingToMatch = $amount;
+            $fifoOrders = Order::where('vendor_id', $lockedVendor->id)
+                ->where('vendor_settlement_status', 'eligible')
+                ->where('payment_status', 'paid')
+                ->where('order_status', 'delivered')
+                ->whereDoesntHave('returnCases', function ($q) {
+                    $q->whereNotIn('status', ['resolved', 'rejected']);
+                })
+                ->whereDoesntHave('dispute', function ($q) {
+                    $q->whereIn('status', ['filed', 'under_review']);
+                })
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($fifoOrders as $earningOrder) {
+                if (bccomp($remainingToMatch, '0.00', 2) <= 0) break;
+                $earningAmount = (string) $earningOrder->remaining_payable_to_vendor;
+                if (bccomp($earningAmount, '0.00', 2) <= 0) continue;
+                if (bccomp($earningAmount, $remainingToMatch, 2) > 0) break;
+                $remainingToMatch = bcsub($remainingToMatch, $earningAmount, 2);
+            }
+
+            if (bccomp($remainingToMatch, '0.00', 2) !== 0) {
+                return back()->with('error', 'Payout request rejected: amount must match whole eligible earning records in strict FIFO order. No payout request or reservation was created. If the oldest earning record exceeds the ₦500,000 cap, finance resolution is required.');
+            }
+
             $payout = VendorPayoutRequest::create([
                 'vendor_id' => $lockedVendor->id,
                 'amount' => $amount,
