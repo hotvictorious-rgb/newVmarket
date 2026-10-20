@@ -154,6 +154,7 @@ Route::middleware(['role:vendor_employee'])->prefix('counter')->group(function (
     Route::get('/records', [PortalController::class, 'counterRecordsPage'])->name('counter.records.index');
 
     Route::post('/verify-handover-otp', [PortalController::class, 'counterVerifyHandoverOtp'])->name('counter.verify.handover.otp');
+    Route::post('/verify-customer-pickup', [PortalController::class, 'counterVerifyCustomerPickup'])->name('counter.verify.customer_pickup');
     Route::post('/orders/{id}/ready-for-handover', [PortalController::class, 'counterMarkHandoverReady'])->name('counter.orders.handover_ready');
 });
 
