@@ -1054,8 +1054,16 @@ class OrderSettlementService
      * Handshake 4: In-Shop Counter Handover OTP Verification.
      * Goods released to customer after verified digital payment.
      */
-    public function verifyPickupHandoverOtp(Order $order, string $otp, User $staffUser): array
-    {
+    public function verifyPickupHandoverOtp(
+        Order $order,
+        string $otp,
+        User $staffUser,
+        string $reservationCode,
+        string $proofImagePath
+    ): array {
+        if ($staffUser->status !== 'active') {
+            return ['success' => false, 'message' => 'Unauthorized: User account is inactive.'];
+        }
         if ($staffUser->isVendorEmployee()) {
             $employee = $staffUser->vendorEmployeeProfile;
             if (!$employee || !$employee->canAccessBranch($order->shop_id)) {
@@ -1066,25 +1074,45 @@ class OrderSettlementService
             if (!$vendor || (int)$vendor->id !== (int)$order->vendor_id) {
                 return ['success' => false, 'message' => 'Unauthorized: Merchant ownership barrier prevents access to this order.'];
             }
+        } else {
+            return ['success' => false, 'message' => 'Unauthorized: Only this shop’s active merchant or branch staff can release in-shop pickup orders.'];
         }
 
-        // Strict 6-Digit Format Validation
         if (!preg_match('/^[0-9]{6}$/', trim($otp))) {
             return ['success' => false, 'message' => 'Handover verification code must be exactly 6 digits.'];
         }
+        if (trim($reservationCode) === '' || trim($proofImagePath) === '') {
+            return ['success' => false, 'message' => 'The customer reservation pass and pickup photo evidence are required.'];
+        }
 
-        return DB::transaction(function () use ($order, $otp, $staffUser) {
-            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+        return DB::transaction(function () use ($order, $otp, $staffUser, $reservationCode, $proofImagePath) {
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->firstOrFail();
 
             if ($lockedOrder->fulfillment_type !== 'in_shop_pickup') {
                 return ['success' => false, 'message' => 'This is not an in-shop pickup order.'];
             }
-
             if ($lockedOrder->payment_status !== 'paid') {
                 return ['success' => false, 'message' => 'Goods cannot be handed over before verified payment.'];
             }
+            if (in_array($lockedOrder->order_status, ['picked_up', 'delivered', 'cancelled'], true)
+                || !empty($lockedOrder->picked_up_at)) {
+                return ['success' => false, 'message' => 'This pickup has already been completed or cancelled; the customer OTP cannot be reused.'];
+            }
 
-            // Timed Lockout Protection: Check if handover verification is locked
+            $reservation = PickupReservation::where('order_id', $lockedOrder->id)
+                ->where('customer_id', $lockedOrder->customer_id)
+                ->where('vendor_id', $lockedOrder->vendor_id)
+                ->where('shop_id', $lockedOrder->shop_id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$reservation || !hash_equals((string) $reservation->reservation_code, strtoupper(trim($reservationCode)))) {
+                return ['success' => false, 'message' => 'Reservation pass does not match this order and branch.'];
+            }
+            if ($reservation->status !== 'payment_completed') {
+                return ['success' => false, 'message' => 'Reservation is not in a paid, eligible handover state.'];
+            }
+
             if ($lockedOrder->isPickupLocked()) {
                 $minutesRemaining = max(1, Carbon::now()->diffInMinutes($lockedOrder->pickup_locked_until));
                 return [
@@ -1093,7 +1121,10 @@ class OrderSettlementService
                 ];
             }
 
-            if (!hash_equals((string)$lockedOrder->verification_code, trim($otp))) {
+            // verification_code is the customer-facing pickup OTP; pickup_verification_code is
+            // the separate vendor-to-rider custody OTP and is never accepted for customer pickup.
+            if (empty($lockedOrder->verification_code)
+                || !hash_equals((string) $lockedOrder->verification_code, trim($otp))) {
                 $lockedOrder->increment('pickup_failed_attempts');
                 if ($lockedOrder->pickup_failed_attempts >= 5) {
                     $lockedOrder->pickup_locked_until = Carbon::now()->addMinutes(15);
@@ -1103,26 +1134,25 @@ class OrderSettlementService
                         'message' => 'Handover verification temporarily locked for 15 minutes due to 5 consecutive incorrect attempts.',
                     ];
                 }
-                return ['success' => false, 'message' => 'Invalid pickup handover OTP.'];
+                return ['success' => false, 'message' => 'Invalid customer pickup OTP.'];
             }
 
             $lockedOrder->pickup_failed_attempts = 0;
             $lockedOrder->pickup_locked_until = null;
-
             $now = Carbon::now();
             $refundHours = max(1, (int) SystemSetting::get('refund_window_hours', 24));
             $lockedOrder->order_status = 'picked_up';
             $lockedOrder->received_at = $now;
+            $lockedOrder->picked_up_at = $now;
+            $lockedOrder->customer_pickup_photo_path = $proofImagePath;
+            $lockedOrder->verification_code = null; // one-time customer pickup OTP
             $lockedOrder->refund_window_expires_at = $now->copy()->addHours($refundHours);
             $lockedOrder->vendor_settlement_status = 'held';
             $lockedOrder->save();
 
-            // Mark associated reservation handed over
-            PickupReservation::where('order_id', $lockedOrder->id)->update([
-                'status' => 'handed_over',
-            ]);
+            $reservation->status = 'handed_over';
+            $reservation->save();
 
-            // Update/Enqueue 5% Customer Cashback reward with exact refund window maturation lock
             CustomerCashbackLedger::updateOrCreate([
                 'order_id' => $lockedOrder->id,
             ], [
