@@ -320,7 +320,7 @@ class VendorApiTerminalTest extends TestCase
         ]);
         $partial->assertStatus(422)
             ->assertJsonPath('status', false);
-        $this->assertSame(0, \\App\\Models\\VendorPayoutRequest::where('vendor_id', $vendor->id)->count());
+        $this->assertSame(0, \App\Models\VendorPayoutRequest::where('vendor_id', $vendor->id)->count());
         $this->assertEquals('18000.00', $vendor->fresh()->getWithdrawableBalance());
 
         // Whole earning record in FIFO order is accepted.
@@ -341,7 +341,7 @@ class VendorApiTerminalTest extends TestCase
 
         $second = $this->postJson('/api/v1/vendor/payouts', ['amount' => 5000.00]);
         $second->assertStatus(409)->assertJsonPath('status', false);
-        $this->assertSame(1, \\App\\Models\\VendorPayoutRequest::where('vendor_id', $vendor->id)->count());
+        $this->assertSame(1, \App\Models\VendorPayoutRequest::where('vendor_id', $vendor->id)->count());
 
         // Financial journal double entry recorded
         $this->assertDatabaseHas('financial_journal_entries', [
@@ -354,7 +354,7 @@ class VendorApiTerminalTest extends TestCase
             'beneficiary_id' => $vendor->id,
             'account_name' => 'vendor_payout_payable',
             'entry_type' => 'credit',
-            'amount' => 5000.00,
+            'amount' => 18000.00,
         ]);
     }
 
