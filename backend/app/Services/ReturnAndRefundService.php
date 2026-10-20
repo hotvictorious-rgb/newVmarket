@@ -507,11 +507,15 @@ class ReturnAndRefundService
             // settlement accounting allocate a component the gateway did not refund.
             $requestedDeliveryFeeAuthorization = $refundDeliveryFee
                 && bccomp((string) $order->delivery_fee, '0.00', 2) > 0;
-            if (!empty($lockedCase->paystack_refund_id)
+            $refundOperationExists = \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+                ->where('metadata->return_case_id', $lockedCase->id)
+                ->exists();
+
+            if ((!empty($lockedCase->paystack_refund_id) || $refundOperationExists)
                 && (bool) $lockedCase->refund_delivery_fee !== $requestedDeliveryFeeAuthorization) {
                 return [
                     'valid' => false,
-                    'message' => 'Refund component scope is locked after Paystack dispatch. Reconcile the existing refund before changing merchandise or delivery-fee treatment.',
+                    'message' => 'Refund component scope is immutable once a financial refund operation exists. Reconcile the existing operation or use an audited finance resolution before changing component treatment.',
                 ];
             }
 
