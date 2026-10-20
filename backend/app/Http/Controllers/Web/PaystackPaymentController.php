@@ -83,7 +83,9 @@ class PaystackPaymentController extends Controller
                         $order,
                         $settlement['refund_amount'] ?? (string)$order->grand_total,
                         "Automated refund for late payment on depleted inventory for Order #{$order->order_number}",
-                        null
+                        null,
+                        null,
+                        ['type' => 'auto_late_payment_cancelled_before_vendor_action']
                     );
                     $finOpService->dispatchRefund($op);
                 } catch (\Throwable $e) {
@@ -936,7 +938,9 @@ class PaystackPaymentController extends Controller
                     $order,
                     $settlement['refund_amount'] ?? (string)$order->grand_total,
                     "Automated refund for late payment on depleted inventory for Order #{$order->order_number}",
-                    null
+                    null,
+                    null,
+                    ['type' => 'auto_late_payment_cancelled_before_vendor_action']
                 );
                 $finOpService->dispatchRefund($op);
                 Log::info("Automated refund successfully dispatched via FinancialOperationService for Order #{$order->id}.");
