@@ -244,9 +244,14 @@ The shared rider pickup OTP service accepted several pre-dispatch statuses and v
 
 ### VM-AUD-051 — customer delivery confirmation requires verified payment (20 October 2026)
 
-The shared verifyCustomerDeliveryOtp service checked fulfilment type, source status, OTP and rider/vendor assignment, but did not independently require payment_status=paid before marking the order delivered and enqueueing cashback. Added a row-locked service guard that rejects unpaid orders before OTP processing or any delivery/cashback mutation, plus a regression verifying status, received_at, confirmation flag and cashback ledger remain unchanged. Service commit: 80d88c91e9288e605238bf410081a9e57db17744; test commit: d6e7a385ef5e572c7ea8cc1c03322a4df2a4caf7. Status: FIXED — CI verification pending.
+The shared verifyCustomerDeliveryOtp service checked fulfilment type, source status, OTP and rider/vendor assignment, but did not independently require payment_status=paid before marking the order delivered and enqueueing cashback. Added a row-locked service guard that rejects unpaid orders before OTP processing or any delivery/cashback mutation, plus a regression verifying status, received_at, confirmation flag and cashback ledger remain unchanged. Service commit: 80d88c91e9288e605238bf410081a9e57db17744; test commit: d6e7a385ef5e572c7ea8cc1c03322a4df2a4caf7. Status: FIXED — service syntax/proof CI and regression-test CI passed (runs 39509482454 and 39509493984).
 
 
 ### VM-AUD-052 — partial doorstep handover alternate path payment/state bypass (20 October 2026)
 
 DoorstepHandshakeService::processDoorstepHandover was an alternate terminal delivery writer. It blocked some terminal statuses but did not independently require payment_status=paid or exact source status out_for_delivery, leaving a path to item acceptance/rejection, ReturnCase/refund reservation, delivered/returned state, and cashback processing from an invalid order state. Added row-locked payment and source-state guards before item or financial side effects, plus regression coverage asserting no delivery, cashback, or return-case mutations for an unpaid order. Service commit: 02ae3b0d92f2dfe06673b987e0b4af532c2d783a; test commit: b6f47072665e88220f892ecd8781222c1d8f7347. Status: FIXED — CI verification pending.
+
+
+### VM-AUD-053 — service-level doorstep photo proof bypass (20 October 2026)
+
+The rider API already required a doorstep photo, but DoorstepHandshakeService::processDoorstepHandover accepted a null photo when invoked directly. That meant callers outside the HTTP controller could complete handover without the owner-required evidence. Added a service-boundary non-empty proof-path guard before OTP processing or fulfilment/financial mutations, plus a regression asserting the order remains out_for_delivery with no receipt/photo/return-case mutation. Service commit: ef6c4deb5dd6e7af3b935ab1840e72d87339a4ca; regression commit: 8bfeeff2e3078a59304ff7ee2b3f2a85b33cb0d7. Status: FIXED — CI verification pending.
