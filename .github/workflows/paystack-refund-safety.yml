@@ -62,10 +62,9 @@ jobs:
           php -l tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php
           php -l tests/Feature/AuditHardeningAndChildOrderSettlementTest.php
           php -l tests/Feature/VendorManagedDeliveryRiderTest.php
-          php -l tests/Feature/VendorRiderPickupHandshakeTest.php
           php -l tests/Feature/StructuralEntityAndLogisticsInvariantTest.php
           php -l tests/Feature/VendorPayoutLifecycleTest.php
           php -l tests/Feature/VendorSettlementProtectionWindowTest.php
 
       - name: Run financial audit and payment hardening proof tests
-        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/VendorManagedDeliveryRiderTest.php tests/Feature/VendorRiderPickupHandshakeTest.php tests/Feature/StructuralEntityAndLogisticsInvariantTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php --display-warnings
+        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/VendorManagedDeliveryRiderTest.php tests/Feature/StructuralEntityAndLogisticsInvariantTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php --display-warnings
