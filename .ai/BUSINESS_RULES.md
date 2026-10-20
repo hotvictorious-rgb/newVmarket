@@ -61,7 +61,7 @@ The selected answers are recorded here so implementation teams do not revert to 
 - Can see only the minimum customer information needed to complete the assigned delivery (see Customer Privacy).
 - Can update allowed operational states, record failed attempts, submit required proof, and complete authorised handover verification.
 - Cannot assign orders to themselves, browse unassigned orders, transfer orders to another vendor, change product or delivery prices, see payment status/amounts/commissions, issue wallet credit, initiate refunds, access payouts, or perform financial actions.
-- Cannot fulfil in-shop pickup as a delivery task. The customer pickup pass is verified at the vendor shop.
+- Cannot fulfil in-shop pickup as a delivery task. At the vendor counter, the customer must present the RES-XXXXXX reservation pass AND complete the separate one-time customer pickup OTP; the vendor records the required in-shop pickup photo.
 
 ### Platform administrator
 - May verify or suspend vendors/riders, review safety incidents and disputes, inspect audit trails, and enforce security/policy requirements.
