@@ -660,6 +660,15 @@ class PayoutFinalizationService
             }
 
             // Terminal Guard (P0): Idempotent if already rejected/failed (prevents duplicate wallet balance credits)
+            if ($lockedPayout->status === 'rejected' && $lockedPayout->gateway_status === 'failed') {
+                return [
+                    'success' => true,
+                    'idempotent' => true,
+                    'payout' => $lockedPayout,
+                    'message' => 'Logistics payout already marked failed/reverted.',
+                ];
+            }
+
             // A transfer.reversed event must have a confirmed disbursement journal.
             // Without it, preserve the in-flight payout and route the contradiction to treasury.
             $hasOriginalPayoutJournal = FinancialJournalEntry::where('event_id', 'EVT-FLEET-PAYOUT-' . $lockedPayout->id)->exists();
@@ -670,15 +679,6 @@ class PayoutFinalizationService
                     'idempotent' => true,
                     'payout' => $lockedPayout,
                     'message' => 'Logistics transfer reversal has no confirmed payout journal; manual reconciliation required.',
-                ];
-            }
-
-            if ($lockedPayout->status === 'rejected' && $lockedPayout->gateway_status === 'failed') {
-                return [
-                    'success' => true,
-                    'idempotent' => true,
-                    'payout' => $lockedPayout,
-                    'message' => 'Logistics payout already marked failed/reverted.',
                 ];
             }
 
