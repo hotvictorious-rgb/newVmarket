@@ -59,7 +59,39 @@ class PayoutFinalizationService
                 ];
             }
 
-            $existingAllocationsSum = (string)$lockedPayout->allocations()->where('status', 'allocated')->sum('allocated_amount');
+            $existingAllocationRows = $lockedPayout->allocations()
+                ->where('status', 'allocated')
+                ->with('order')
+                ->get();
+            $allocationOwnershipViolation = $existingAllocationRows->contains(function ($allocation) use ($lockedPayout) {
+                return !$allocation->order
+                    || (int) $allocation->order->vendor_id !== (int) $lockedPayout->vendor_id;
+            });
+            if ($allocationOwnershipViolation) {
+                $marker = 'ALLOCATION_INVARIANT_FAILED: payout contains a missing or cross-vendor order allocation; funds held for finance reconciliation.';
+                Log::emergency("Vendor payout allocation ownership invariant failed.", [
+                    'payout_id' => $lockedPayout->id,
+                    'payout_vendor_id' => $lockedPayout->vendor_id,
+                    'allocation_ids' => $existingAllocationRows
+                        ->filter(fn ($allocation) => !$allocation->order || (int) $allocation->order->vendor_id !== (int) $lockedPayout->vendor_id)
+                        ->pluck('id')
+                        ->all(),
+                ]);
+                if (!str_contains((string) $lockedPayout->admin_notes, 'ALLOCATION_INVARIANT_FAILED')) {
+                    $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . $marker;
+                    $lockedPayout->save();
+                }
+            }
+
+            // Do not trust the amount of any allocation batch containing a missing or
+            // cross-vendor order. The cash transfer still must be journaled, but its
+            // order mapping is quarantined instead of discharging another vendor's payable.
+            $existingAllocationsSum = $allocationOwnershipViolation
+                ? '0.00'
+                : $existingAllocationRows->reduce(
+                    fn (string $sum, $allocation) => bcadd($sum, (string) $allocation->allocated_amount, 2),
+                    '0.00'
+                );
             $hasJournalEntry = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $lockedPayout->id)->exists();
             $hasRequestJournal = FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REQ-' . $lockedPayout->id)->exists();
 
@@ -119,7 +151,7 @@ class PayoutFinalizationService
 
             $totalNewlyAllocated = '0.00';
 
-            if (bccomp($remainingToSettle, '0.00', 2) > 0) {
+            if (!$allocationOwnershipViolation && bccomp($remainingToSettle, '0.00', 2) > 0) {
                 $eligibleOrders = Order::where('vendor_id', $lockedPayout->vendor_id)
                     ->where('vendor_settlement_status', 'eligible')
                     ->where('payment_status', 'paid')
@@ -189,7 +221,7 @@ class PayoutFinalizationService
             // Existing allocation records that exceed the confirmed transfer amount
             // are untrusted until finance reconciles them. Never mark their orders settled
             // merely because corrupted/duplicate allocation rows sum to the order payable.
-            if (bccomp($existingAllocationsSum, $formattedPayoutAmount, 2) <= 0) {
+            if (!$allocationOwnershipViolation && bccomp($existingAllocationsSum, $formattedPayoutAmount, 2) <= 0) {
                 $allAllocations = $lockedPayout->allocations()->where('status', 'allocated')->get();
                 foreach ($allAllocations as $alloc) {
                     $ord = $alloc->order;
