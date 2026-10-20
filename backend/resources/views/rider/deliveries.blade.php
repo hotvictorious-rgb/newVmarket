@@ -49,7 +49,7 @@
                         <th>Order Tracking #</th>
                         <th>Origin Branch Plaza</th>
                         <th>Customer Recipient</th>
-                        <th>Delivery Fee Cut</th>
+                        <th>Destination LGA</th>
                         <th>Current Stage</th>
                         <th>Actions</th>
                     </tr>
@@ -67,10 +67,10 @@
                             </td>
                             <td>
                                 <div style="font-weight: 600; color: var(--adm-text);">{{ $order->customer->name ?? 'Emeka Okonkwo' }}</div>
-                                <span style="font-size: 11.5px; color: var(--adm-text-muted);">{{ $order->customer->phone ?? '08012345678' }}</span>
+                                <span style="font-size: 11.5px; color: var(--adm-text-muted);">{{ substr($order->customer->phone ?? '08012345678', 0, 4) . '****' . substr($order->customer->phone ?? '08012345678', -4) }}</span>
                             </td>
-                            <td style="font-weight: 800; color: #059669;">
-                                ₦{{ number_format($order->delivery_fee ?? 1500, 2) }}
+                            <td style="font-weight: 700; color: #4338CA;">
+                                {{ $order->destinationLga->name ?? ($order->shop->lga->name ?? 'Transit Zone') }}
                             </td>
                             <td>
                                 @if($order->order_status === 'processing' || $order->order_status === 'ready_for_pickup')

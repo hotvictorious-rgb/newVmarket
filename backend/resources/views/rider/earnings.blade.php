@@ -39,9 +39,9 @@
         <div style="display: flex; align-items: center; gap: 12px;">
             <span style="font-size: 28px;">🏢</span>
             <div>
-                <div style="font-size: 11px; text-transform: uppercase; font-weight: 800; color: var(--adm-primary); letter-spacing: 0.5px;">Parent Logistics Fleet</div>
-                <div style="font-size: 15px; font-weight: 800; color: var(--adm-text);">{{ $rider->logisticsCompany->company_name ?? 'Logistics Fleet Partner' }}</div>
-                <div style="font-size: 12px; color: var(--adm-text-muted);">All salary, trip allowances, and fuel disbursements are administered directly by your parent fleet headquarters.</div>
+                <div style="font-size: 11px; text-transform: uppercase; font-weight: 800; color: var(--adm-primary); letter-spacing: 0.5px;">Owning Merchant</div>
+                <div style="font-size: 15px; font-weight: 800; color: var(--adm-text);">{{ $rider->vendor->business_name ?? ($rider->logisticsCompany->company_name ?? 'Merchant Partner') }}</div>
+                <div style="font-size: 12px; color: var(--adm-text-muted);">All compensation, trip allowances, and delivery disbursements are arranged directly by your merchant outside platform systems.</div>
             </div>
         </div>
         <span class="dash-badge dash-badge-success" style="padding: 6px 12px; font-size: 12px; font-weight: 700;">

@@ -1573,14 +1573,14 @@ class PortalController extends Controller
     {
         $rider = $this->resolveRiderProfile();
         
-        $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
+        $activeDeliveries = Order::where('rider_id', $rider->id)
+            ->where('fulfillment_type', 'doorstep_delivery')
             ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
             ->with(['shop', 'customer'])
             ->get();
 
-
-
-        $completedDrops = Order::where('fulfillment_type', 'doorstep_delivery')
+        $completedDrops = Order::where('rider_id', $rider->id)
+            ->where('fulfillment_type', 'doorstep_delivery')
             ->where('order_status', 'delivered')
             ->with(['shop', 'customer'])
             ->latest()
@@ -1603,12 +1603,11 @@ class PortalController extends Controller
     public function riderDeliveriesPage()
     {
         $rider = $this->resolveRiderProfile();
-        $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
+        $activeDeliveries = Order::where('rider_id', $rider->id)
+            ->where('fulfillment_type', 'doorstep_delivery')
             ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
             ->with(['shop', 'customer'])
             ->get();
-
-
 
         return view('rider.deliveries', compact('rider', 'activeDeliveries'));
     }
@@ -1619,12 +1618,11 @@ class PortalController extends Controller
     public function riderPickupPage()
     {
         $rider = $this->resolveRiderProfile();
-        $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
+        $activeDeliveries = Order::where('rider_id', $rider->id)
+            ->where('fulfillment_type', 'doorstep_delivery')
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup'])
             ->with(['shop', 'customer'])
             ->get();
-
-
 
         return view('rider.pickup', compact('rider', 'activeDeliveries'));
     }
@@ -1635,12 +1633,11 @@ class PortalController extends Controller
     public function riderDropoffPage()
     {
         $rider = $this->resolveRiderProfile();
-        $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
+        $activeDeliveries = Order::where('rider_id', $rider->id)
+            ->where('fulfillment_type', 'doorstep_delivery')
             ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
             ->with(['shop', 'customer'])
             ->get();
-
-
 
         return view('rider.dropoff', compact('rider', 'activeDeliveries'));
     }
@@ -1651,7 +1648,8 @@ class PortalController extends Controller
     public function riderEarningsPage()
     {
         $rider = $this->resolveRiderProfile();
-        $completedDrops = Order::where('fulfillment_type', 'doorstep_delivery')
+        $completedDrops = Order::where('rider_id', $rider->id)
+            ->where('fulfillment_type', 'doorstep_delivery')
             ->where('order_status', 'delivered')
             ->with(['shop', 'customer'])
             ->latest()

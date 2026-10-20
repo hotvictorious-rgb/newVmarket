@@ -54,7 +54,7 @@
             <div class="dash-card-header">
                 <div>
                     <div class="dash-card-title">Recipient Doorstep Details &amp; Custody Handshake</div>
-                    <span class="dash-card-subtitle">Order #{{ $currentOrder->order_number }} &bull; Delivery Fee Cut: ₦{{ number_format((float)$currentOrder->delivery_fee, 2) }}</span>
+                    <span class="dash-card-subtitle">Order #{{ $currentOrder->order_number }} &bull; Fulfillment: Doorstep Delivery Handshake</span>
                 </div>
                 <div>
                     <span class="dash-badge {{ $currentOrder->order_status === 'delivered' ? 'dash-badge-success' : ($currentOrder->hasRiderArrived() ? 'dash-badge-gold' : 'dash-badge-info') }}">
@@ -70,7 +70,7 @@
                     <div style="margin-bottom: 20px;">
                         <span style="font-size: 11px; font-weight: 800; color: var(--adm-text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Recipient Customer</span>
                         <h3 style="font-size: 19px; font-weight: 800; color: var(--adm-text); margin: 4px 0 2px;">{{ $currentOrder->customer->name ?? 'Emeka Okonkwo' }}</h3>
-                        <p style="font-size: 14px; font-weight: 700; color: var(--adm-primary); margin: 0 0 6px;">📞 {{ $currentOrder->customer->phone ?? '08012345678' }}</p>
+                        <p style="font-size: 14px; font-weight: 700; color: var(--adm-primary); margin: 0 0 6px;">📞 {{ substr($currentOrder->customer->phone ?? '08012345678', 0, 4) . '****' . substr($currentOrder->customer->phone ?? '08012345678', -4) }}</p>
                         <p style="font-size: 13.5px; color: #475569; margin: 0;">📍 {{ $currentOrder->delivery_address ?? '14 Oron Road, Uyo, Akwa Ibom State' }}</p>
                     </div>
 
@@ -97,8 +97,7 @@
                                     Customer verified parcel receipt on their own phone.
                                 </p>
                                 <div style="display: inline-block; background: #FFFFFF; border: 1.5px solid #10B981; border-radius: 10px; padding: 10px 18px; margin-bottom: 12px;">
-                                    <span style="font-size: 11px; font-weight: 700; color: #065F46; display: block;">EARNINGS CREDITED TO YOUR WALLET</span>
-                                    <strong style="font-size: 18px; color: #059669;">+₦{{ number_format((float)$currentOrder->delivery_fee, 2) }}</strong>
+                                    <span style="font-size: 12px; font-weight: 700; color: #065F46; display: block;">✓ DELIVERY HANDSHAKE VERIFIED &amp; COMPLETED</span>
                                 </div>
                                 @if($currentOrder->proof_of_delivery_image)
                                     <div style="margin-top: 8px;">

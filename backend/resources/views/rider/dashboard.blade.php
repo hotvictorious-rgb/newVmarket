@@ -64,7 +64,7 @@
             <div class="stat-card-info">
                 <span class="stat-card-label">Duty Shift</span>
                 <span class="stat-card-value">{{ $riderMetrics['shift_status'] }}</span>
-                <span class="stat-card-subtext" style="color: var(--adm-warning);">{{ $rider->logisticsCompany->company_name ?? 'Fleet Headquarters' }}</span>
+                <span class="stat-card-subtext" style="color: var(--adm-warning);">{{ $rider->vendor->business_name ?? ($rider->logisticsCompany->company_name ?? 'Merchant Fleet') }}</span>
             </div>
             <div class="stat-card-icon-box icon-box-amber">⚡</div>
         </div>
