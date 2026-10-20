@@ -903,32 +903,31 @@ class OrderSettlementService
                 ];
             }
 
-            // 1. Courier & Logistics Fleet Hardening: Validate active status at point of delivery
-            $activeRider = $rider ?? ($lockedOrder->rider_id ? RiderProfile::with(['user', 'logisticsCompany'])->find($lockedOrder->rider_id) : null);
+            // 1. Vendor-owned rider hardening: riders are operational agents of one vendor,
+            // never platform fleet beneficiaries. A delivery action requires exact assignment.
+            $activeRider = $rider ?? ($lockedOrder->rider_id
+                ? RiderProfile::with(['user', 'vendor.user'])->find($lockedOrder->rider_id)
+                : null);
             $haltReason = null;
-            if ($activeRider) {
-                if (!$activeRider->is_active) {
-                    $haltReason = 'Unauthorized: Dispatch courier profile is suspended or inactive. Delivery halted.';
-                } elseif ($activeRider->user && $activeRider->user->status !== 'active') {
-                    $haltReason = 'Unauthorized: Courier user account is inactive. Delivery halted.';
-                } elseif (!$activeRider->logistics_company_id || ($activeRider->logisticsCompany && $activeRider->logisticsCompany->status !== 'active')) {
-                    $haltReason = 'Unauthorized: Parent logistics fleet account is inactive or suspended. Delivery halted.';
-                } elseif ($lockedOrder->rider_id && (int)$lockedOrder->rider_id !== (int)$activeRider->id) {
-                    $haltReason = 'Unauthorized: This order is assigned to another delivery courier.';
-                }
+            if (!$activeRider) {
+                $haltReason = 'Unauthorized: No assigned vendor rider is available for delivery confirmation.';
+            } elseif (!$activeRider->is_active) {
+                $haltReason = 'Unauthorized: Vendor rider profile is inactive. Delivery halted.';
+            } elseif ($activeRider->user && $activeRider->user->status !== 'active') {
+                $haltReason = 'Unauthorized: Vendor rider user account is inactive. Delivery halted.';
+            } elseif (!$activeRider->vendor_id || $activeRider->logistics_company_id) {
+                $haltReason = 'Unauthorized: Delivery actions require a rider linked exclusively to one vendor.';
+            } elseif ((int) $activeRider->vendor_id !== (int) $lockedOrder->vendor_id) {
+                $haltReason = 'Unauthorized: Rider does not belong to the vendor that owns this order.';
+            } elseif (!$activeRider->vendor || $activeRider->vendor->marketplace_status !== 'active'
+                || ($activeRider->vendor->user && $activeRider->vendor->user->status !== 'active')) {
+                $haltReason = 'Unauthorized: Owning vendor account is inactive or suspended.';
+            } elseif ((int) $lockedOrder->rider_id !== (int) $activeRider->id) {
+                $haltReason = 'Unauthorized: This order is not assigned to the authenticated vendor rider.';
             }
 
-            // 2. Logistics Company Direct Check
-            if (!$haltReason) {
-                $orderFleet = null;
-                if ($lockedOrder->logistics_company_id) {
-                    $orderFleet = LogisticsCompanyProfile::find($lockedOrder->logistics_company_id);
-                } elseif ($activeRider && $activeRider->logistics_company_id) {
-                    $orderFleet = $activeRider->logisticsCompany;
-                }
-                if ($orderFleet && $orderFleet->status !== 'active') {
-                    $haltReason = 'Assigned logistics fleet company is suspended or inactive. Delivery halted.';
-                }
+            if (!$haltReason && $lockedOrder->logistics_company_id) {
+                $haltReason = 'Legacy fleet-linked orders must be safely migrated before vendor-managed delivery can complete.';
             }
 
             // 3. Merchant / Vendor Hardening: Validate merchant active status
@@ -1005,85 +1004,10 @@ class OrderSettlementService
 
             $lockedOrder->save();
 
-            // Corporate B2B Settlement: Credit 90% of delivery fee to accredited Logistics Company Corporate Wallet
-            // Victorious Market retains 10% platform delivery fee cut
-            $targetRider = $rider ?? ($lockedOrder->rider_id ? RiderProfile::with('logisticsCompany')->find($lockedOrder->rider_id) : null);
-            $logisticsCompany = null;
-            if ($lockedOrder->logistics_company_id) {
-                $logisticsCompany = LogisticsCompanyProfile::find($lockedOrder->logistics_company_id);
-            }
-            if (!$logisticsCompany) {
-                if ($lockedOrder->collection_point_id) {
-                    $collectionPoint = \App\Models\LogisticsCollectionPoint::find($lockedOrder->collection_point_id);
-                    $logisticsCompany = $collectionPoint ? $collectionPoint->company : null;
-                }
-                if (!$logisticsCompany && $targetRider && $targetRider->logistics_company_id) {
-                    $logisticsCompany = $targetRider->logisticsCompany;
-                }
-                if (!$logisticsCompany && $lockedOrder->delivery_lane_id) {
-                    $lane = \App\Models\DeliveryLane::find($lockedOrder->delivery_lane_id);
-                    $logisticsCompany = $lane ? $lane->assignedLogisticsCompany : null;
-                }
-                if ($logisticsCompany) {
-                    $lockedOrder->logistics_company_id = $logisticsCompany->id;
-                    $lockedOrder->save();
-                }
-            }
-            // Authoritative 90% Logistics Net Calculation via BCMath
-            $logisticsNetCut = $lockedOrder->logistics_fee_retained;
-            if (empty($logisticsNetCut) || bccomp((string)$logisticsNetCut, '0.00', 2) === 0) {
-                $logisticsNetCut = bcmul((string)($lockedOrder->delivery_fee ?? '0.00'), '0.90', 2);
-            }
-
-            // Closed-Loop Platform Settlement:
-            // 100% of the delivery proceeds (90% logistics cut) are credited exclusively to the accredited Corporate Fleet Wallet of the Logistics Company.
-            // Under NO circumstance is an unrelated active logistics company credited.
-            // If no authorized company is resolvable, funds remain safely held in platform escrow pending administrative assignment.
-            if ($logisticsCompany && $logisticsCompany->status === 'active' && bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
-                $logisticsCompany->creditWallet((string)$logisticsNetCut);
-
-                // Authoritative Double-Entry Journal Entry: Transfer from logistics_payable to corporate fleet wallet
-                FinancialJournalEntry::create([
-                    'order_id' => $lockedOrder->id,
-                    'transaction_reference' => 'FLEET-EARN-' . $lockedOrder->order_number,
-                    'event_id' => 'EVT-FLEET-EARN-' . $lockedOrder->order_number,
-                    'beneficiary_type' => LogisticsCompanyProfile::class,
-                    'beneficiary_id' => $logisticsCompany->id,
-                    'account_name' => 'logistics_payable',
-                    'entry_type' => 'debit',
-                    'amount' => (string)$logisticsNetCut,
-                    'currency' => 'NGN',
-                    'description' => "Delivery fee released to {$logisticsCompany->company_name} corporate wallet for Order #{$lockedOrder->order_number}",
-                ]);
-
-                FinancialJournalEntry::create([
-                    'order_id' => $lockedOrder->id,
-                    'transaction_reference' => 'FLEET-EARN-' . $lockedOrder->order_number,
-                    'event_id' => 'EVT-FLEET-EARN-' . $lockedOrder->order_number,
-                    'beneficiary_type' => LogisticsCompanyProfile::class,
-                    'beneficiary_id' => $logisticsCompany->id,
-                    'account_name' => 'logistics_company_wallet',
-                    'entry_type' => 'credit',
-                    'amount' => (string)$logisticsNetCut,
-                    'currency' => 'NGN',
-                    'description' => "Corporate fleet earnings credited from delivery escrow for Order #{$lockedOrder->order_number}",
-                ]);
-            } elseif (bccomp((string)$logisticsNetCut, '0.00', 2) > 0) {
-                // Operational Exception Audit: Retain in platform escrow
-                AdminAuditLog::create([
-                    'user_id' => $targetRider ? $targetRider->user_id : null,
-                    'action' => 'unassigned_logistics_fee_held_in_escrow',
-                    'target_type' => Order::class,
-                    'target_id' => $lockedOrder->id,
-                    'old_values' => ['logistics_net_cut' => (string)$logisticsNetCut],
-                    'new_values' => [
-                        'status' => 'held_in_platform_escrow',
-                        'reason' => 'No active accredited logistics company affiliated with order, collection point, rider, or lane.',
-                    ],
-                    'ip_address' => request()->ip() ?? '127.0.0.1',
-                    'user_agent' => request()->userAgent(),
-                ]);
-            }
+            // Do not credit a logistics-company or rider wallet from a delivery event.
+            // Vendor delivery earnings and the 90/10 fee split must be sourced from the
+            // immutable parent/child allocation ledger and released only by vendor settlement
+            // after the protection window, dispute/return checks, and payout-security gates.
 
             // Update/Enqueue 5% Customer Cashback reward with exact refund window maturation lock
             CustomerCashbackLedger::updateOrCreate([
