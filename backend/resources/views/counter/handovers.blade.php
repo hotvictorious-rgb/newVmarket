@@ -183,6 +183,41 @@
         </div>
     </div>
 
+    <!-- Separate customer handover flow for in-shop pickup; not the rider custody OTP above. -->
+    <div class="dash-card" style="border-top: 3.5px solid #0D9488; max-width: 760px; margin-top: 24px;">
+        <div class="dash-card-header">
+            <div>
+                <div class="dash-card-title">In-Shop Customer Pickup Release</div>
+                <span class="dash-card-subtitle">Verify the customer's reservation pass and separate customer OTP; a pickup photo is mandatory.</span>
+            </div>
+        </div>
+        <div class="dash-card-body">
+            <form method="POST" action="{{ route('counter.verify.customer_pickup') }}" enctype="multipart/form-data">
+                @csrf
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;">
+                    <div>
+                        <label style="display:block;font-size:12.5px;font-weight:700;color:var(--adm-text);margin-bottom:6px;">Order Tracking Number</label>
+                        <input type="text" name="order_number" required class="form-control" placeholder="e.g. VM-20261020-AB12">
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:12.5px;font-weight:700;color:var(--adm-text);margin-bottom:6px;">Customer Reservation Pass</label>
+                        <input type="text" name="reservation_code" required maxlength="50" class="form-control" placeholder="RES-XXXXXXXX">
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:12.5px;font-weight:700;color:var(--adm-text);margin-bottom:6px;">Customer Pickup OTP</label>
+                        <input type="text" name="customer_pickup_otp" required maxlength="6" pattern="[0-9]{6}" inputmode="numeric" class="form-control" placeholder="••••••">
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:12.5px;font-weight:700;color:var(--adm-text);margin-bottom:6px;">Pickup Photo Evidence</label>
+                        <input type="file" name="proof_photo" required accept="image/*" class="form-control">
+                    </div>
+                </div>
+                <p style="font-size:11.5px;color:var(--adm-text-muted);margin:12px 0;">Do not use the courier custody OTP in this form. The customer OTP is consumed after successful handover.</p>
+                <button type="submit" class="btn-dash btn-dash-primary" style="padding:10px 20px;font-size:13.5px;font-weight:700;">Verify Pass + OTP and Record Pickup</button>
+            </form>
+        </div>
+    </div>
+
     <script>
         // Live Auto-Polling for Counter Handover
         const stagedOrderNumbers = [
