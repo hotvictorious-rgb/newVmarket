@@ -314,27 +314,41 @@ class VendorApiTerminalTest extends TestCase
 
         $this->assertEquals('18000.00', $vendor->getWithdrawableBalance());
 
-        $res = $this->postJson('/api/v1/vendor/payouts', [
+        // Partial allocation of an earning record is rejected before a payout request reserves funds.
+        $partial = $this->postJson('/api/v1/vendor/payouts', [
             'amount' => 5000.00,
+        ]);
+        $partial->assertStatus(422)
+            ->assertJsonPath('status', false);
+        $this->assertSame(0, \\App\\Models\\VendorPayoutRequest::where('vendor_id', $vendor->id)->count());
+        $this->assertEquals('18000.00', $vendor->fresh()->getWithdrawableBalance());
+
+        // Whole earning record in FIFO order is accepted.
+        $res = $this->postJson('/api/v1/vendor/payouts', [
+            'amount' => 18000.00,
         ]);
 
         $res->assertStatus(201)
             ->assertJsonPath('status', true)
-            ->assertJsonPath('data.amount', '5000.00')
+            ->assertJsonPath('data.amount', '18000.00')
             ->assertJsonPath('data.status', 'pending');
 
         $this->assertDatabaseHas('vendor_payout_requests', [
             'vendor_id' => $vendor->id,
-            'amount' => 5000.00,
+            'amount' => 18000.00,
             'status' => 'pending',
         ]);
+
+        $second = $this->postJson('/api/v1/vendor/payouts', ['amount' => 5000.00]);
+        $second->assertStatus(409)->assertJsonPath('status', false);
+        $this->assertSame(1, \\App\\Models\\VendorPayoutRequest::where('vendor_id', $vendor->id)->count());
 
         // Financial journal double entry recorded
         $this->assertDatabaseHas('financial_journal_entries', [
             'beneficiary_id' => $vendor->id,
             'account_name' => 'vendor_escrow_holding',
             'entry_type' => 'debit',
-            'amount' => 5000.00,
+            'amount' => 18000.00,
         ]);
         $this->assertDatabaseHas('financial_journal_entries', [
             'beneficiary_id' => $vendor->id,
