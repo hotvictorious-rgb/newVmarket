@@ -490,7 +490,33 @@ class PayoutFinalizationService
             // Only write a financial reversal when the original payout journal exists;
             // otherwise release allocations/state without fabricating a cash movement.
             $hasOriginalPayoutJournal = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $lockedPayout->id)->exists();
-            if ($hasOriginalPayoutJournal) {
+            $hasRequestJournal = FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REQ-' . $lockedPayout->id)->exists();
+
+            if ($hasOriginalPayoutJournal && $hasRequestJournal) {
+                // A confirmed transfer was reversed. Undo cash movement and restore
+                // the vendor liability reclassified when the payout was requested.
+                $formattedPayoutAmount = bcadd((string)$lockedPayout->amount, '0', 2);
+                $revRef = 'REV-VND-' . $lockedPayout->id . '-' . date('YmdHis');
+                $vendor = $lockedPayout->vendor;
+                FinancialJournalEntry::create([
+                    'order_id' => null, 'transaction_reference' => $revRef,
+                    'event_id' => 'EVT-REV-VND-' . $lockedPayout->id,
+                    'beneficiary_type' => VendorProfile::class,
+                    'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                    'account_name' => 'cash_in_escrow', 'entry_type' => 'debit',
+                    'amount' => $formattedPayoutAmount, 'currency' => 'NGN',
+                    'description' => "Escrow cash restored after confirmed Paystack transfer reversal: " . ($vendor?->business_name ?? 'Merchant'),
+                ]);
+                FinancialJournalEntry::create([
+                    'order_id' => null, 'transaction_reference' => $revRef,
+                    'event_id' => 'EVT-REV-VND-' . $lockedPayout->id,
+                    'beneficiary_type' => VendorProfile::class,
+                    'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                    'account_name' => 'vendor_payable', 'entry_type' => 'credit',
+                    'amount' => $formattedPayoutAmount, 'currency' => 'NGN',
+                    'description' => "Merchant payable liability restored after confirmed Paystack transfer reversal: " . ($vendor?->business_name ?? 'Merchant'),
+                ]);
+            } elseif ($hasOriginalPayoutJournal) {
                 $formattedPayoutAmount = bcadd((string)$lockedPayout->amount, '0', 2);
                 $revRef = 'REV-VND-' . $lockedPayout->id . '-' . date('YmdHis');
                 $vendor = $lockedPayout->vendor;
@@ -557,7 +583,32 @@ class PayoutFinalizationService
                 ]);
     
     
+            } elseif ($hasRequestJournal) {
+                // Failure before successful disbursement: reverse only the request-time
+                // reclassification; do not invent a cash movement.
+                $formattedPayoutAmount = bcadd((string)$lockedPayout->amount, '0', 2);
+                $revRef = 'REV-VND-REQUEST-' . $lockedPayout->id . '-' . date('YmdHis');
+                $vendor = $lockedPayout->vendor;
+                FinancialJournalEntry::create([
+                    'order_id' => null, 'transaction_reference' => $revRef,
+                    'event_id' => 'EVT-REV-VND-' . $lockedPayout->id,
+                    'beneficiary_type' => VendorProfile::class,
+                    'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                    'account_name' => 'vendor_payout_payable', 'entry_type' => 'debit',
+                    'amount' => $formattedPayoutAmount, 'currency' => 'NGN',
+                    'description' => "Reserved payout liability released after failed transfer on Payout #{$lockedPayout->id}",
+                ]);
+                FinancialJournalEntry::create([
+                    'order_id' => null, 'transaction_reference' => $revRef,
+                    'event_id' => 'EVT-REV-VND-' . $lockedPayout->id,
+                    'beneficiary_type' => VendorProfile::class,
+                    'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                    'account_name' => 'vendor_payable', 'entry_type' => 'credit',
+                    'amount' => $formattedPayoutAmount, 'currency' => 'NGN',
+                    'description' => "Vendor payable restored after failed payout request #{$lockedPayout->id}",
+                ]);
             }
+
 
             return ['success' => true, 'idempotent' => false, 'payout' => $lockedPayout];
         });
