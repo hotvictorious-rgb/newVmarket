@@ -52,6 +52,7 @@ class PayoutFinalizationService
 
             $existingAllocationsSum = (string)$lockedPayout->allocations()->where('status', 'allocated')->sum('allocated_amount');
             $hasJournalEntry = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $lockedPayout->id)->exists();
+            $hasRequestJournal = FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REQ-' . $lockedPayout->id)->exists();
 
             // 1. Idempotency Guard: If already allocated and journaled, ensure terminal state without duplicating ledger/allocations
             if ($lockedPayout->status === 'approved' && $lockedPayout->gateway_status === 'success' && $hasJournalEntry) {
@@ -168,7 +169,38 @@ class PayoutFinalizationService
             $grandTotalAllocated = bcadd($existingAllocationsSum, $totalNewlyAllocated, 2);
             $unallocatedDiscrepancy = bcsub($formattedPayoutAmount, $grandTotalAllocated, 2);
 
-            if (bccomp($unallocatedDiscrepancy, '0.00', 2) > 0) {
+            if ($hasRequestJournal) {
+                // New lifecycle: the request already reclassified the vendor liability
+                // from vendor_payable to vendor_payout_payable. Clear that exact reserved
+                // liability when the gateway confirms the transfer, regardless of whether
+                // allocation metadata requires a separate manual reconciliation.
+                if (!$hasJournalEntry) {
+                    FinancialJournalEntry::create([
+                        'order_id' => null,
+                        'transaction_reference' => $transferRef,
+                        'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                        'account_name' => 'vendor_payout_payable',
+                        'entry_type' => 'debit',
+                        'amount' => $formattedPayoutAmount,
+                        'currency' => 'NGN',
+                        'description' => "Reserved merchant payout liability discharged via Paystack ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
+                    ]);
+                    FinancialJournalEntry::create([
+                        'order_id' => null,
+                        'transaction_reference' => $transferRef,
+                        'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                        'account_name' => 'cash_in_escrow',
+                        'entry_type' => 'credit',
+                        'amount' => $formattedPayoutAmount,
+                        'currency' => 'NGN',
+                        'description' => "Escrow cash disbursed via Paystack automated transfer ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
+                    ]);
+                }
+            } elseif (bccomp($unallocatedDiscrepancy, '0.00', 2) > 0) {
                 // Audit Finding P0: Payout amount exceeded eligible allocated orders.
                 // Log critical alert and route unexplained difference to treasury suspense
                 Log::emergency("Treasury Discrepancy: Payout #{$lockedPayout->id} amount (₦{$formattedPayoutAmount}) exceeds eligible order allocations (₦{$grandTotalAllocated}) by ₦{$unallocatedDiscrepancy}. Booking difference to reconciliation suspense.");
