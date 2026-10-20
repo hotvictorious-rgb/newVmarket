@@ -379,6 +379,7 @@ class CheckoutExecutionService
             $order = Order::create([
                 'order_number' => $orderNumber,
                 'customer_id' => $user->id,
+                'customer_address_id' => $validated['customer_address_id'] ?? null,
                 'vendor_id' => $shop->vendor_id,
                 'shop_id' => $shop->id,
                 'collection_point_id' => $collectionPointId,
