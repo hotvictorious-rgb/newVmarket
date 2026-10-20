@@ -551,6 +551,66 @@ class VendorPayoutLifecycleTest extends TestCase
         ]);
     }
 
+    public function test_stale_transfer_reversed_generation_cannot_mutate_logistics_payout(): void
+    {
+        $logisticsUser = User::factory()->create([
+            'user_type' => 'logistics_company',
+            'status' => 'active',
+        ]);
+        $company = LogisticsCompanyProfile::create([
+            'user_id' => $logisticsUser->id,
+            'company_name' => 'Stale Generation Fleet Ltd',
+            'lga_id' => $this->uyoLga->id,
+            'status' => 'active',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Stale Generation Fleet Ltd',
+        ]);
+        $company->wallet_balance = '25000.00';
+        $company->save();
+
+        $payout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $company->id,
+            'amount' => '5000.00',
+            'status' => 'approved',
+            'gateway_status' => 'success',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Stale Generation Fleet Ltd',
+            'transfer_reference' => 'FLEET-PAYOUT-STALE-GENERATION-01',
+            'paystack_transfer_code' => 'TRF_FLEET_STALE_GENERATION_01',
+        ]);
+        $event = ProcessedWebhookEvent::create([
+            'event_id' => 'evt_fleet_stale_generation_01',
+            'event_type' => 'transfer.reversed',
+            'payload_hash' => hash('sha256', '{"event":"transfer.reversed"}'),
+            'payload' => '{"event":"transfer.reversed"}',
+            'status' => 'processing',
+            'attempts' => 2,
+        ]);
+        $journalCountBefore = FinancialJournalEntry::count();
+        $walletBefore = (string) $company->fresh()->wallet_balance;
+
+        $result = app(PayoutFinalizationService::class)->revertLogisticsPayout(
+            $payout,
+            'Stale webhook generation regression',
+            null,
+            true,
+            null,
+            (int) $event->id,
+            1
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['stale_webhook_claim'] ?? false);
+        $this->assertSame('approved', $payout->fresh()->status);
+        $this->assertSame('success', $payout->fresh()->gateway_status);
+        $this->assertSame($walletBefore, (string) $company->fresh()->wallet_balance);
+        $this->assertSame('processing', $event->fresh()->status);
+        $this->assertSame(2, (int) $event->fresh()->attempts);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
+    }
+
     public function test_stale_transfer_success_generation_cannot_finalize_vendor_payout(): void
     {
         $payout = VendorPayoutRequest::create([
