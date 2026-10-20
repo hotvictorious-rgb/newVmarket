@@ -115,7 +115,59 @@ class OrderSettlementService
                 ];
             }
 
-            // 8. Atomic State Transition & Expiry Race Defense
+            // 8. Parent/child financial reconciliation must complete before any
+            // payment-state mutation, cashback consumption, or journal posting.
+            $childOrders = Order::where('parent_order_id', $lockedOrder->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($childOrders->isNotEmpty()) {
+                $aggregateFields = [
+                    'merchandise_subtotal',
+                    'delivery_fee',
+                    'cashback_redeemed',
+                    'grand_total',
+                    'vendor_net_90',
+                    'customer_cashback_5',
+                    'platform_margin_5',
+                    'logistics_fee_retained',
+                    'platform_delivery_fee',
+                ];
+                $aggregates = array_fill_keys($aggregateFields, '0.00');
+
+                foreach ($childOrders as $child) {
+                    if ((int) $child->parent_order_id !== (int) $lockedOrder->id
+                        || (int) $child->customer_id !== (int) $lockedOrder->customer_id
+                        || empty($child->vendor_id)
+                        || empty($child->shop_id)
+                        || empty($child->payment_reference)
+                        || !hash_equals((string) $lockedOrder->payment_reference, (string) $child->payment_reference)
+                        || $child->children()->exists()) {
+                        return [
+                            'success' => false,
+                            'status' => 'CHILD_ORDER_INVARIANT_FAILED',
+                            'message' => 'Parent/child ownership, payment reference, or hierarchy invariant failed; settlement was not applied.',
+                        ];
+                    }
+
+                    foreach ($aggregateFields as $field) {
+                        $aggregates[$field] = bcadd($aggregates[$field], (string) ($child->{$field} ?? '0.00'), 2);
+                    }
+                }
+
+                foreach ($aggregateFields as $field) {
+                    if (bccomp($aggregates[$field], (string) ($lockedOrder->{$field} ?? '0.00'), 2) !== 0) {
+                        return [
+                            'success' => false,
+                            'status' => 'CHILD_ORDER_ALLOCATION_MISMATCH',
+                            'message' => "Parent/child aggregate mismatch for {$field}; settlement was not applied.",
+                        ];
+                    }
+                }
+            }
+
+            // 9. Atomic State Transition & Expiry Race Defense
             $now = Carbon::now();
             $oldPaymentStatus = $lockedOrder->payment_status;
             $lockedOrder->payment_status = 'paid';
