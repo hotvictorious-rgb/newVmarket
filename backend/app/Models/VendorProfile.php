@@ -191,7 +191,7 @@ class VendorProfile extends Model
             ->whereNotIn('vendor_settlement_status', ['refunded']);
         $merchandise = (string) (clone $orders)->sum('vendor_net_90');
         $delivery = (string) (clone $orders)->whereNull('logistics_company_id')->sum('logistics_fee_retained');
-        return \\App\\Services\\BcMathService::add($merchandise, $delivery);
+        return \App\Services\BcMathService::add($merchandise, $delivery);
     }
 
     public function getEscrowHeldBalance(): string
@@ -201,7 +201,7 @@ class VendorProfile extends Model
             ->whereIn('vendor_settlement_status', ['held', 'disputed']);
         $merchandise = (string) (clone $orders)->sum('vendor_net_90');
         $delivery = (string) (clone $orders)->whereNull('logistics_company_id')->sum('logistics_fee_retained');
-        return \\App\\Services\\BcMathService::add($merchandise, $delivery);
+        return \App\Services\BcMathService::add($merchandise, $delivery);
     }
 
     public function getPendingPayoutBalance(): string
@@ -218,7 +218,7 @@ class VendorProfile extends Model
             ->where('vendor_settlement_status', 'settled');
         $merchandise = (string) (clone $orders)->sum('vendor_net_90');
         $delivery = (string) (clone $orders)->whereNull('logistics_company_id')->sum('logistics_fee_retained');
-        return \\App\\Services\\BcMathService::add($merchandise, $delivery);
+        return \App\Services\BcMathService::add($merchandise, $delivery);
     }
 
     public function getWithdrawableBalance(): string
