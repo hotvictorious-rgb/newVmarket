@@ -53,7 +53,7 @@ Victorious MARKET enforces security and accounting invariants at the database tr
 - **Vendor:** manages its catalog, orders, delivery areas/fees, and riders. The vendor manually assigns only its own child orders to its own linked riders.
 - **Vendor-linked rider:** operational-only; acts only on assigned orders for the owning vendor. The rider receives no platform wallet, earnings balance, payout, commission, or financial data.
 - **Counter staff:** may perform authorized vendor-shop pickup verification within their shop boundary.
-- **Customer:** shops through a parent checkout with separate vendor child orders and chooses eligible doorstep delivery or zero-fee in-shop pickup.
+- **Customer:** shops through one parent checkout with separate vendor child orders, pays through Paystack card or standard bank transfer at launch, and chooses eligible doorstep delivery or zero-fee in-shop pickup. COD is disabled at launch.
 
 Historical logistics-company/fleet records and routes may remain for audit and migration compatibility, but they are not an active delivery option for new orders.
 
