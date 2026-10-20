@@ -2396,7 +2396,7 @@ class PortalController extends Controller
             // A payout may remain in the legacy "pending" status after Paystack accepts
             // the transfer. Never release its reservation while the gateway outcome is
             // processing, uncertain, or already associated with a transfer code/reference.
-            if (in_array((string) $payout->gateway_status, ['processing', 'pending', 'otp', 'received', 'unknown'], true)
+            if (in_array((string) $payout->gateway_status, ['processing', 'otp', 'received', 'unknown'], true)
                 || !empty($payout->paystack_transfer_code)
                 || !empty($payout->transfer_reference)
                 || $payout->processing_token === 'HOLD_TIMEOUT_RECONCILIATION'
