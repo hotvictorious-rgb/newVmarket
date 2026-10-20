@@ -87,6 +87,7 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     // Returns, Refunds & Inspection Desk
     Route::get('/returns', [PortalController::class, 'adminReturnsPage'])->name('admin.returns.index');
     Route::get('/returns/{id}', [PortalController::class, 'adminShowReturnCase'])->name('admin.returns.show');
+    Route::post('/returns/open-late', [PortalController::class, 'adminOpenLateReturnCaseAction'])->name('admin.returns.open_late');
     Route::post('/returns/{id}/approve', [PortalController::class, 'adminApproveReturnAction'])->name('admin.returns.approve');
     Route::post('/returns/{id}/disburse', [PortalController::class, 'adminDisburseRefundAction'])->name('admin.returns.disburse');
     Route::post('/returns/{id}/reject', [PortalController::class, 'adminRejectReturnAction'])->name('admin.returns.reject');
