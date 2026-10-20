@@ -174,66 +174,30 @@ class FinancialAuditRemediationProofTest extends TestCase
     }
 
     /**
-     * Audit Finding 2 (P0): Refund reconciliation authoritatively queries Paystack gateway and never fabricates references.
+     * Reconciliation must not treat a generic cancelled order as refund approval.
      */
-    public function test_refund_reconciliation_verifies_against_gateway_and_does_not_manufacture_synthetic_ids(): void
+    public function test_refund_reconciliation_does_not_dispatch_unapproved_cancelled_order(): void
     {
         $order = $this->createTestOrder([
             'order_status' => 'cancelled',
             'payment_status' => 'paid',
             'vendor_settlement_status' => 'held',
             'grand_total' => '15000.00',
-            'payment_reference' => 'REF-APPROVED-RETURN-RECON',
+            'payment_reference' => 'REF-UNAPPROVED-RECON',
             'paystack_refund_reference' => null,
             'paystack_refund_status' => 'pending',
         ]);
-        ReturnCase::create([
-            'case_number' => 'RET-APPROVED-' . strtoupper(uniqid()),
-            'customer_id' => $this->customer->id,
-            'order_id' => $order->id,
-            'vendor_id' => $this->vendor->id,
-            'return_reason' => 'other',
-            'status' => 'refund_pending',
-            'resolution_type' => 'refund',
-            'total_refundable_amount' => '15000.00',
-            'reviewed_by_admin_id' => $this->superAdmin->id,
-        ]);
 
         $mock = Mockery::mock(PaystackService::class);
-        // Gateway accepts refund with authentic reference and status pending
-        $mock->shouldReceive('initiateRefund')->once()->andReturn([
-            'success' => true,
-            'refund_reference' => 'rf_official_gateway_999',
-            'status' => 'pending',
-            'message' => 'Refund initiated with bank',
-        ]);
+        $mock->shouldNotReceive('initiateRefund');
         $this->app->instance(PaystackService::class, $mock);
 
-        $engine = app(FinancialReconciliationEngine::class);
-        $reconciled = $engine->reconcileRefunds();
+        $reconciled = app(FinancialReconciliationEngine::class)->reconcileRefunds();
 
-        // Initiation did not falsely mark completed because gateway status is pending
-        $this->assertEquals(0, $reconciled);
-        $order->refresh();
-        $this->assertEquals('rf_official_gateway_999', $order->paystack_refund_reference);
-        $this->assertEquals('pending', $order->paystack_refund_status);
-
-        // Second pass: Now mock gateway refund verification confirming 'processed'
-        $mock2 = Mockery::mock(PaystackService::class);
-        $mock2->shouldReceive('verifyRefund')->with('rf_official_gateway_999')->once()->andReturn([
-            'success' => true,
-            'refund_reference' => 'rf_official_gateway_999',
-            'status' => 'processed',
-            'message' => 'Refund verified processed by bank',
-        ]);
-        $this->app->instance(PaystackService::class, $mock2);
-
-        $engine2 = app(FinancialReconciliationEngine::class);
-        $reconciled2 = $engine2->reconcileRefunds();
-
-        $this->assertEquals(1, $reconciled2);
-        $order->refresh();
-        $this->assertEquals('completed', $order->paystack_refund_status);
+        $this->assertSame(0, $reconciled);
+        $this->assertNull($order->fresh()->paystack_refund_reference);
+        $this->assertSame('pending', $order->fresh()->paystack_refund_status);
+        $this->assertSame(0, FinancialOperation::where('metadata->order_id', $order->id)->count());
     }
 
     /**
