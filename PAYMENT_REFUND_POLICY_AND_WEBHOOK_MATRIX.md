@@ -206,7 +206,24 @@ These are requirements to verify against code; listing them does not mean they a
 - [ ] Alerts/monitoring for unmatched/conflicting events and prolonged financial states.
 - [ ] Test exact Paystack payload shapes for every subscribed event, including amount units and reference fields.
 
-## 10. Official Paystack references
+## 10. Source-code observations from this review
+
+These are observed gaps in the current audit branch, not assumptions that documentation equals implementation.
+
+1. **Refund lifecycle events are not all handled explicitly.** The current PaystackPaymentController handles refund.processed and refund.failed, then treats other event names as ignored. Explicit state tracking/notification is still needed for refund.pending, refund.processing and refund.needs-attention.
+2. **Dispute webhooks are not handled explicitly.** The current controller has no charge.dispute.create, charge.dispute.remind or charge.dispute.resolve branch. Add a dispute case, response deadline/evidence tracking and a hold on the affected unsettled vendor child order.
+3. **Late-payment stock exception can dispatch a refund from the charge.success webhook.** The current handler calls createRefundOperation() and dispatchRefund() when settlePaystackOrder() returns trigger_gateway_refund. This appears to bypass the proposed admin-approval rule in Q10. Change the path to create a refund-review case and dispatch only after the required authorization, unless the owner explicitly approves a narrowly scoped automatic-refund exception.
+4. **Refund reconciliation selects return cases in refund_pending as well as refund_approved.** Confirm the exact lifecycle meaning of refund_pending. If it can represent a customer request awaiting admin approval, it must not authorize gateway dispatch. Only a persisted approved decision should permit execution.
+5. **Refund state and retry obligations need a distinct customer-obligation status.** The existing reconciler skips orders whose order-level paystack_refund_status is failed, while a failed Paystack refund attempt can leave the customer still owed money. Ensure order summary state does not suppress retries/manual review for an outstanding failed operation.
+6. **No duplicate-payment case is evident in the inspected webhook path.** A charge.success reference not matching an order is marked failed/unmatched, but a second verified successful reference for an already-paid parent checkout needs a dedicated duplicate-charge record and controlled refund path. Never attach it to the original payment as if it were the same charge.
+7. **Payment mismatch review needs operational visibility.** The settlement service rejects invalid amount/currency/reference/payer evidence, but ensure the original transaction, received kobo amount, expected kobo amount, event and reason are retained in a reconciliation case without marking the order paid or leaking details to riders.
+8. **Payment-channel launch policy is not yet explicit in this code review.** Do not claim card-only launch until configuration/dashboard settings and allowed channel list are confirmed. If bank transfer is enabled, implement and test bank.transfer.rejected; otherwise do not depend on it.
+9. **The draft refund policy requires approval provenance.** Verify that admin actor, approval timestamp, reason, approved amount, delivery-fee decision, destination (gateway vs wallet), and allocation snapshot are stored before dispatch. A status name alone is not sufficient evidence of authorization.
+10. **Partial refund delivery-fee policy needs a first-class snapshot.** The inspected ReturnAndRefundService initializes refund_delivery_fee as false. Ensure the authorized reviewer can set and audit the decision, and that vendor/platform delivery-fee allocation is reversed only for the approved refundable amount.
+11. **Cashback maturation/recovery requires a dedicated policy audit.** Confirm that cashback matures only after qualifying fulfilment and the configured protection window, and that a refund after cashback has been spent cannot silently create a negative wallet or bypass an approved recovery rule.
+12. **Dispute outcome must be linked to the actual charge.** A dispute event should be matched using the provider transaction identity/reference and validated against the affected parent/child payment. Do not freeze or release unrelated child-order proceeds just because a parent checkout includes multiple vendors.
+
+## 11. Official Paystack references
 
 - Webhooks and supported event names: https://paystack.com/docs/payments/webhooks/
 - Refund lifecycle and refund events: https://paystack.com/docs/payments/refunds/
