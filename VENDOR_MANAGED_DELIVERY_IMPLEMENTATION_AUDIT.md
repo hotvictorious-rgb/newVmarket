@@ -62,12 +62,12 @@ Implement the protected contact action without placing the phone number in rider
 #### C. Rider-triggered failed delivery creates financial outcomes
 **File:** `backend/app/Http/Controllers/Api/RiderTerminalApiController.php`, `recordDeliveryAttemptFailed()`
 
-The current handler increments attempts and, at the threshold, marks the order returned, creates a return case, creates an immediately available `CustomerWalletCredit`, and may credit a `logistics_payable` journal entry. This violates the operational-only rule. The endpoint should record the attempt, evidence, and custody/return transition only. Refunds/credits and vendor recovery must go through an independently authorized, idempotent financial workflow after policy review.
+**Partial remediation (audit branch):** the handler now records the attempt and return case without creating a `CustomerWalletCredit` or `logistics_payable` entry; regression coverage is being added to CI. Still open: the threshold and return-case transition are not yet proven atomic under concurrent requests, and rider ownership/privacy guards remain open. Refunds and vendor recovery must go through the independently authorized, idempotent financial workflow after policy review.
 
 #### D. Rider-triggered handover mixes operational evidence with money movement
 **File:** `backend/app/Services/DoorstepHandshakeService.php`; response in `RiderTerminalApiController::doorstepHandover()`
 
-The handover service currently creates a return case, pending wallet credit and provisional financial reservation, writes merchandise/cashback/platform/delivery-fee journal entries, and returns financial amounts to the rider. Separate operational proof/item acceptance from financial approval/posting. The rider action must not itself create a spendable credit or make financial decisions. A separately authorized financial engine may consume the verified event after approved policy checks, idempotency, refund-ceiling checks, and audit recording.
+**Partial remediation (audit branch):** the handover service no longer creates a `CustomerWalletCredit`; it creates a return case and provisional refund reservation for rejected merchandise, and the rider response labels the amount as a refund request rather than a wallet credit. Still open: the rider-triggered service writes merchandise/cashback/platform/delivery-fee journal entries and returns accepted/rejected monetary amounts to the rider. Separate operational proof/item acceptance from financial approval/posting and remove financial amounts from rider payloads. A separately authorized financial engine may consume verified events after policy checks, idempotency, refund-ceiling checks, and audit recording.
 
 #### E. Rider actions can act on unassigned orders
 **File:** `backend/app/Http/Controllers/Api/RiderTerminalApiController.php`
