@@ -252,6 +252,9 @@ class CheckoutAndReservationApiController extends Controller
             'wallet_credit_applied' => $walletCreditApplied,
             'total_payable' => $totalPayable,
             'timestamp' => Carbon::now()->timestamp,
+            // Keep the globally unique fingerprint distinct for intentional separate attempts
+            // created within the same second with different idempotency keys.
+            'intent_nonce' => (string) Str::uuid(),
         ];
 
         $fingerprint = CheckoutIntent::generateFingerprint($payload);
