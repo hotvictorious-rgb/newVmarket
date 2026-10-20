@@ -2237,4 +2237,53 @@ class FinancialAuditRemediationProofTest extends TestCase
             ->where('status', 'active')->count());
     }
 
+
+    public function test_delivery_fee_refund_requires_persisted_component_authorization_and_extends_case_ceiling(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '1000.00',
+            'grand_total' => '1150.00',
+            'delivery_fee' => '150.00',
+            'vendor_net_90' => '900.00',
+            'payment_reference' => 'REF-CASE-DELIVERY-' . uniqid(),
+            'paystack_refund_status' => 'pending',
+        ]);
+
+        $returnCase = ReturnCase::create([
+            'case_number' => 'RET-CASE-DELIVERY-' . strtoupper(uniqid()),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'other',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '1000.00',
+            'refund_delivery_fee' => true,
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+        ]);
+
+        $service = app(FinancialOperationService::class);
+        $operation = $service->createRefundOperation(
+            $order,
+            '1150.00',
+            'Approved merchandise and delivery fee refund',
+            $returnCase,
+            'IDEMPOTENCY-CASE-DELIVERY-' . uniqid(),
+            [
+                'type' => 'admin_approved_return',
+                'approved_by_user_id' => $this->superAdmin->id,
+                'refund_delivery_fee' => true,
+            ]
+        );
+
+        $this->assertSame(115000, (int) $operation->amount_kobo);
+        $this->assertTrue((bool) $operation->metadata['refund_authorization']['refund_delivery_fee']);
+        $this->assertSame(1, FinancialReservation::where('financial_operation_id', $operation->id)
+            ->where('purpose', 'customer_refund_hold')
+            ->where('status', 'active')
+            ->count());
+    }
+
 }
