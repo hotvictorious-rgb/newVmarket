@@ -760,8 +760,7 @@ class VendorPayoutLifecycleTest extends TestCase
     }
 
     /**
-     * Approved rule: payout allocations must use whole earning records in strict FIFO order.
-     * Partial allocations against one order are prohibited.
+     * Approved rule: payout requests and allocations must use whole earning records in strict FIFO order.
      */
     public function test_payout_does_not_split_an_earning_record_and_accepts_whole_record_total(): void
     {
@@ -776,34 +775,28 @@ class VendorPayoutLifecycleTest extends TestCase
 
         $this->assertEquals('9000.00', $this->vendor->getWithdrawableBalance());
 
-        // A request that would split the oldest earning record must not be disbursed.
-        $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
+        // A request that would split the oldest earning record is rejected before reserving funds.
+        $partial = $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
             'amount' => '5000.00',
         ]);
-        $partialRequest = VendorPayoutRequest::where('vendor_id', $this->vendor->id)->first();
-        $this->assertNotNull($partialRequest);
-
-        $blocked = $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
-            'payout_id' => $partialRequest->id,
-            'notes' => 'Must not split an earning record',
-        ]);
-        $blocked->assertSessionHas('error');
-        $this->assertSame(0, $partialRequest->allocations()->count());
-        $this->assertEquals('eligible', $order->fresh()->vendor_settlement_status);
-        $this->assertEquals('4000.00', $this->vendor->fresh()->getWithdrawableBalance()); // pending request reserves its amount
-
-        // Finance explicitly rejects the incorrectly sized request; no funds were dispatched.
-        $partialRequest->update(['status' => 'rejected']);
+        $partial->assertSessionHas('error');
+        $this->assertSame(0, VendorPayoutRequest::where('vendor_id', $this->vendor->id)->count());
         $this->assertEquals('9000.00', $this->vendor->fresh()->getWithdrawableBalance());
+        $this->assertEquals('eligible', $order->fresh()->vendor_settlement_status);
 
-        // The complete earning record can now be requested and settled as one unit.
+        // A whole-record request is accepted.
         $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
             'amount' => '9000.00',
         ]);
-        $wholeRequest = VendorPayoutRequest::where('vendor_id', $this->vendor->id)
-            ->where('id', '!=', $partialRequest->id)
-            ->first();
+        $wholeRequest = VendorPayoutRequest::where('vendor_id', $this->vendor->id)->first();
         $this->assertNotNull($wholeRequest);
+
+        // One active request prevents a second request while the first is unresolved.
+        $secondRequest = $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
+            'amount' => '5000.00',
+        ]);
+        $secondRequest->assertSessionHas('error');
+        $this->assertSame(1, VendorPayoutRequest::where('vendor_id', $this->vendor->id)->count());
 
         $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
             'payout_id' => $wholeRequest->id,
