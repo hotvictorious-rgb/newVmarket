@@ -1001,6 +1001,13 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $caseData = $doorstepRes->json('data.return_case');
         $returnCase = ReturnCase::findOrFail($caseData['id']);
 
+        // Full rejection leaves the delivery fee in escrow for admin-authorized remedy/refund.
+        // It must not be released as vendor/platform revenue or debited from escrow here.
+        $handoverEvent = 'EVT-HANDOVER-' . $order->order_number . '-' . $order->id;
+        $this->assertDatabaseMissing('financial_journal_entries', ['event_id' => $handoverEvent . '-VEND-DELIVERY']);
+        $this->assertDatabaseMissing('financial_journal_entries', ['event_id' => $handoverEvent . '-PLAT-D']);
+        $this->assertDatabaseMissing('financial_journal_entries', ['event_id' => $handoverEvent . '-ESCROW-DEBIT']);
+
         $counterReturnPhoto = UploadedFile::fake()->image('vendor_counter_return.jpg');
 
         $returnRes = $this->postJson('/api/v1/rider/orders/verify-vendor-return-otp', [
