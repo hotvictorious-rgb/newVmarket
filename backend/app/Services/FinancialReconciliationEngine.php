@@ -329,13 +329,33 @@ class FinancialReconciliationEngine
                     ->whereIn('status', ['refund_pending', 'refund_approved'])
                     ->first();
                 $refundAmount = $returnCase ? $returnCase->total_refundable_amount : (string)$claimedOrder->grand_total;
+                $refundAuthorization = null;
+                if ($returnCase && !empty($returnCase->reviewed_by_admin_id)
+                    && in_array($returnCase->status, ['refund_pending', 'refund_approved'], true)) {
+                    $refundAuthorization = [
+                        'type' => 'admin_approved_return',
+                        'approved_by_user_id' => (int) $returnCase->reviewed_by_admin_id,
+                    ];
+                } elseif ($claimedOrder->order_status === 'paid_stock_unavailable'
+                    && $claimedOrder->vendor_settlement_status === 'refund_pending'
+                    && $claimedOrder->payment_status === 'paid') {
+                    $refundAuthorization = ['type' => 'auto_late_payment_cancelled_before_vendor_action'];
+                }
+
+                if ($refundAuthorization === null) {
+                    Log::warning("Refund reconciliation skipped: no persisted approval or approved automatic exception for order #{$claimedOrder->id}.");
+                    $releaseClaim('pending');
+                    continue;
+                }
 
                 try {
                     $op = $finOpService->createRefundOperation(
                         $claimedOrder,
                         $refundAmount,
                         "Automated reconciliation refund for authorized Order #{$claimedOrder->order_number}",
-                        $returnCase
+                        $returnCase,
+                        null,
+                        $refundAuthorization
                     );
                     $dispatchRes = $finOpService->dispatchRefund($op);
 
