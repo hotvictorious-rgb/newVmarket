@@ -127,7 +127,7 @@ class PaystackPaymentController extends Controller
             ->update($attributes);
 
         if (!$updated) {
-            Log::warning("Fencing Guard: Stale worker for webhook event #{\->id} fenced out (attempts bumped by newer worker).");
+            Log::warning("Fencing Guard: Stale worker for webhook event #{$event->id} fenced out (attempts bumped by newer worker).", ['event_id' => $event->event_id, 'claimed_attempts' => $event->attempts]);
         }
 
         return (bool)$updated;
