@@ -45,6 +45,27 @@ class CheckoutExecutionService
             ];
         }
 
+        // Durable checkout retry guard. The unique DB key is the concurrency arbiter.
+        $idempotencyKey = $validated['_checkout_idempotency_key'] ?? null;
+        $requestHash = $validated['_checkout_request_hash'] ?? null;
+        if ($idempotencyKey !== null) {
+            $existingOrder = Order::where('customer_id', $user->id)
+                ->where('checkout_idempotency_key', $idempotencyKey)
+                ->first();
+
+            if ($existingOrder) {
+                if (!hash_equals((string) $existingOrder->checkout_request_hash, (string) $requestHash)) {
+                    return [
+                        'success' => false,
+                        'status_code' => 409,
+                        'message' => 'This Idempotency-Key was already used for different order checkout details.',
+                    ];
+                }
+
+                return $this->replayExistingOrder($existingOrder);
+            }
+        }
+
         // Guard 0: Customer Account Invariant
         if ($user && $user->status !== 'active') {
             return [
@@ -111,7 +132,7 @@ class CheckoutExecutionService
             ];
         }
 
-        $result = DB::transaction(function () use ($validated, $user, $shop) {
+        try {\n            $result = DB::transaction(function () use ($validated, $user, $shop, $idempotencyKey, $requestHash) {
             $merchandiseSubtotal = '0.00';
             $itemsToCreate = [];
 
@@ -273,7 +294,7 @@ class CheckoutExecutionService
             $paymentRef = Order::generateUniquePaymentReference();
 
             $order = Order::create([
-                'order_number' => $orderNumber,
+                'order_number' => $orderNumber,\n                'checkout_idempotency_key' => $idempotencyKey,\n                'checkout_request_hash' => $requestHash,\n                'paystack_initialization_status' => 'not_started',
                 'customer_id' => $user->id,
                 'customer_address_id' => $validated['customer_address_id'] ?? null,
                 'vendor_id' => $shop->vendor_id,
@@ -454,7 +475,22 @@ class CheckoutExecutionService
             }
 
             return ['error' => false, 'order' => $order];
-        });
+            });
+        } catch (\\Illuminate\\Database\\QueryException $exception) {
+            // If another request with this key won the unique insert, return its order.
+            if ($idempotencyKey !== null) {
+                $existingOrder = Order::where('customer_id', $user->id)
+                    ->where('checkout_idempotency_key', $idempotencyKey)
+                    ->first();
+                if ($existingOrder) {
+                    if (!hash_equals((string) $existingOrder->checkout_request_hash, (string) $requestHash)) {
+                        return ['success' => false, 'status_code' => 409, 'message' => 'This Idempotency-Key was already used for different order checkout details.'];
+                    }
+                    return $this->replayExistingOrder($existingOrder);
+                }
+            }
+            throw $exception;
+        }
 
         if (!empty($result['error'])) {
             return [
@@ -470,8 +506,29 @@ class CheckoutExecutionService
         // Initialize Paystack Checkout Transaction OUTSIDE the DB transaction (only if cash payable > ₦0.00)
         $paystackInit = null;
         if ($order->payment_method === 'paystack' && bccomp((string)$order->grand_total, '0.00', 2) > 0) {
+            // Persist "initializing" before the network call. A process crash or timeout
+            // must not cause a retry to blindly create a second provider transaction.
+            if ($idempotencyKey !== null) {
+                $order->forceFill(['paystack_initialization_status' => 'initializing'])->save();
+            }
+
             $callbackUrl = route('storefront') . '?order_success=' . $order->order_number;
             $paystackInit = $this->paystackService->initializeTransaction($order, $callbackUrl, $user->email);
+
+            if ($idempotencyKey !== null) {
+                if (!empty($paystackInit['success']) && !empty($paystackInit['authorization_url'])) {
+                    $order->forceFill([
+                        'paystack_initialization_status' => 'initialized',
+                        'paystack_authorization_url' => $paystackInit['authorization_url'],
+                        'paystack_access_code' => $paystackInit['access_code'] ?? null,
+                    ])->save();
+                } else {
+                    // Only missing configuration proves no request was sent. Other errors
+                    // may be ambiguous, so preserve the key and require reconciliation.
+                    $status = (($paystackInit['code'] ?? null) === 'CONFIG_MISSING') ? 'failed' : 'uncertain';
+                    $order->forceFill(['paystack_initialization_status' => $status])->save();
+                }
+            }
         }
 
         $message = ($order->payment_status === 'paid')
@@ -485,4 +542,41 @@ class CheckoutExecutionService
             'paystack' => $paystackInit,
         ];
     }
+
+    /**
+     * Replays an existing checkout without creating another order or calling Paystack again.
+     * An in-flight/uncertain initialization is surfaced for reconciliation, never retried blindly.
+     */
+    private function replayExistingOrder(Order $order): array
+    {
+        $paystack = null;
+        if ($order->payment_method === 'paystack' && bccomp((string) $order->grand_total, '0.00', 2) > 0) {
+            if ($order->paystack_initialization_status === 'initialized' && $order->paystack_authorization_url) {
+                $paystack = [
+                    'success' => true,
+                    'authorization_url' => $order->paystack_authorization_url,
+                    'access_code' => $order->paystack_access_code,
+                    'reference' => $order->payment_reference,
+                ];
+            } else {
+                $paystack = [
+                    'success' => false,
+                    'code' => in_array($order->paystack_initialization_status, ['initializing', 'uncertain'], true)
+                        ? 'INITIALIZATION_UNCERTAIN'
+                        : 'INITIALIZATION_NOT_AVAILABLE',
+                    'message' => 'This order already exists. Payment initialization will not be repeated automatically; reconcile its provider state before retrying.',
+                ];
+            }
+        }
+
+        return [
+            'success' => true,
+            'replayed' => true,
+            'http_status' => 200,
+            'message' => 'Existing order returned for idempotent checkout retry.',
+            'order' => $order,
+            'paystack' => $paystack,
+        ];
+    }
+
 }
