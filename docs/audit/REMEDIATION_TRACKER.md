@@ -240,3 +240,8 @@ The vendor API previously allowed any non-terminal order to be marked ready for 
 ### VM-AUD-050 — rider pickup transition must independently require verified payment (20 October 2026)
 
 The shared rider pickup OTP service accepted several pre-dispatch statuses and validated rider ownership/OTP, but did not independently require payment_status=paid. A stale ready_for_pickup status or legacy handover fields could therefore authorize physical custody of an unpaid order. Added a service-level payment gate before OTP validation and state mutation, plus a regression asserting an unpaid order remains pending and in its original status with no pickup timestamp/confirmation. Code commit: cff530d7549f45563db731903cf0f2d3a780223a; test commit: 4135c3461bf0cae500ca066124ee8688d27e0a6c. Status: FIXED — CI verification pending. The broader audit of every transition writer remains open.
+
+
+### VM-AUD-051 — customer delivery confirmation requires verified payment (20 October 2026)
+
+The shared verifyCustomerDeliveryOtp service checked fulfilment type, source status, OTP and rider/vendor assignment, but did not independently require payment_status=paid before marking the order delivered and enqueueing cashback. Added a row-locked service guard that rejects unpaid orders before OTP processing or any delivery/cashback mutation, plus a regression verifying status, received_at, confirmation flag and cashback ledger remain unchanged. Service commit: 80d88c91e9288e605238bf410081a9e57db17744; test commit: d6e7a385ef5e572c7ea8cc1c03322a4df2a4caf7. Status: FIXED — CI verification pending.
