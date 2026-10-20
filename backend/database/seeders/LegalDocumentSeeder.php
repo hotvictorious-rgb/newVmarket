@@ -116,7 +116,7 @@ MARKDOWN;
             ]
         );
 
-        LegalDocumentVersion::updateOrCreate(
+        LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc1->id,
                 'version' => '1.2.0',
@@ -194,7 +194,7 @@ MARKDOWN;
             ]
         );
 
-        LegalDocumentVersion::updateOrCreate(
+        LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc2->id,
                 'version' => '1.2.0',
@@ -258,7 +258,7 @@ MARKDOWN;
             ]
         );
 
-        LegalDocumentVersion::updateOrCreate(
+        LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc3->id,
                 'version' => '1.1.0',
@@ -367,7 +367,7 @@ MARKDOWN;
             ]
         );
 
-        LegalDocumentVersion::updateOrCreate(
+        LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc4->id,
                 'version' => '1.2.0',
@@ -472,7 +472,7 @@ MARKDOWN;
             ]
         );
 
-        LegalDocumentVersion::updateOrCreate(
+        LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc5->id,
                 'version' => '1.1.0',
@@ -554,7 +554,7 @@ MARKDOWN;
             ]
         );
 
-        LegalDocumentVersion::updateOrCreate(
+        LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc6->id,
                 'version' => '1.2.0',
@@ -626,7 +626,7 @@ MARKDOWN;
             ]
         );
 
-        LegalDocumentVersion::updateOrCreate(
+        LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc7->id,
                 'version' => '1.2.0',
@@ -732,7 +732,7 @@ MARKDOWN;
             ]
         );
 
-        LegalDocumentVersion::updateOrCreate(
+        LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc8->id,
                 'version' => '1.2.0',
@@ -795,7 +795,7 @@ MARKDOWN;
             ]
         );
 
-        LegalDocumentVersion::updateOrCreate(
+        LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc9->id,
                 'version' => '1.2.0',
