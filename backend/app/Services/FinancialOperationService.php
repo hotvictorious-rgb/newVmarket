@@ -539,9 +539,41 @@ class FinancialOperationService
      * Confirm verified refund execution (called from Webhook or Scheduled Reconciler with terminal evidence).
      * Enforces double-entry ledger symmetry and updates return cases/orders.
      */
-    public function finalizeRefundConfirmation(FinancialOperation $operation, array $gatewayEvidence, ?string $expectedRefundClaimToken = null): array
-    {
-        return DB::transaction(function () use ($operation, $gatewayEvidence, $expectedRefundClaimToken) {
+    public function finalizeRefundConfirmation(
+        FinancialOperation $operation,
+        array $gatewayEvidence,
+        ?string $expectedRefundClaimToken = null,
+        ?int $webhookEventId = null,
+        ?int $webhookAttempt = null
+    ): array {
+        return DB::transaction(function () use ($operation, $gatewayEvidence, $expectedRefundClaimToken, $webhookEventId, $webhookAttempt) {
+            // When invoked by a webhook, fence the financial side effect in the SAME
+            // transaction as the inbox ownership check. A preflight check alone races
+            // with lease expiry and a newer worker reclaiming the event.
+            if ($webhookEventId !== null || $webhookAttempt !== null) {
+                if ($webhookEventId === null || $webhookAttempt === null) {
+                    throw new \\InvalidArgumentException('Webhook fencing requires both event ID and attempt generation.');
+                }
+
+                $claimedEvent = \\App\\Models\\ProcessedWebhookEvent::where('id', $webhookEventId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$claimedEvent
+                    || $claimedEvent->status !== 'processing'
+                    || (int) $claimedEvent->attempts !== $webhookAttempt) {
+                    return [
+                        'success' => false,
+                        'protected' => true,
+                        'idempotent' => true,
+                        'stale_webhook_claim' => true,
+                        'operation' => $operation->fresh(),
+                        'message' => 'Webhook claim generation is no longer current; financial side effect blocked.',
+                        'code' => 'STALE_WEBHOOK_CLAIM',
+                    ];
+                }
+            }
+
             $lockedOp = FinancialOperation::where('id', $operation->id)->lockForUpdate()->firstOrFail();
 
             if ($lockedOp->status === 'confirmed') {
