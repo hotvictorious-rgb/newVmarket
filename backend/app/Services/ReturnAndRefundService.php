@@ -502,18 +502,21 @@ class ReturnAndRefundService
                 ];
             }
 
-            // Atomically acquire claim token under lock to block concurrent threads
+            // Calculate and persist the separate component authorization before
+            // creating the FinancialOperation. The delivery fee is not marked as
+            // refunded until verified gateway settlement is finalized.
+            $merchandiseRefund = (string) $lockedCase->total_refundable_amount;
+            $deliveryFeeAuthorized = $refundDeliveryFee
+                && bccomp((string) $order->delivery_fee, '0.00', 2) > 0;
+            $deliveryFeeRefund = $deliveryFeeAuthorized ? (string) $order->delivery_fee : '0.00';
+
+            // Atomically acquire claim token and persist the approved component
+            // under the same lock so the final gateway authorization gate can
+            // verify it independently of the caller's request.
             $lockedCase->refund_claim_token = $claimToken;
             $lockedCase->refund_claimed_at = Carbon::now();
+            $lockedCase->refund_delivery_fee = $deliveryFeeAuthorized;
             $lockedCase->save();
-
-            // Calculate exact refund amount
-            $merchandiseRefund = $lockedCase->total_refundable_amount;
-            $deliveryFeeRefund = '0.00';
-
-            if ($refundDeliveryFee && bccomp((string)$order->delivery_fee, '0.00', 2) > 0) {
-                $deliveryFeeRefund = (string)$order->delivery_fee;
-            }
 
             $totalCashRefund = bcadd($merchandiseRefund, $deliveryFeeRefund, 2);
 
@@ -526,6 +529,7 @@ class ReturnAndRefundService
                 'total_cash_refund' => $totalCashRefund,
                 'merchandise_refund' => $merchandiseRefund,
                 'delivery_fee_refund' => $deliveryFeeRefund,
+                'refund_delivery_fee_authorized' => $deliveryFeeAuthorized,
             ];
         });
 
@@ -590,6 +594,7 @@ class ReturnAndRefundService
                     [
                         'type' => 'admin_approved_return',
                         'approved_by_user_id' => (int) $case->reviewed_by_admin_id,
+                        'refund_delivery_fee' => (bool) $preValidation['refund_delivery_fee_authorized'],
                     ]
                 );
 
