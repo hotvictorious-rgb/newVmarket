@@ -331,6 +331,13 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
         $this->assertEquals('delivered', $order->order_status);
         $this->assertTrue((bool)$order->delivery_confirmed_by_customer);
 
+        // Cashback matures only after the 24-hour customer window plus a separate
+        // 24-hour buffer; the buffer must not extend the customer claim timestamp.
+        $cashbackLedger = CustomerCashbackLedger::where('order_id', $order->id)->firstOrFail();
+        $this->assertTrue(
+            $cashbackLedger->matures_at->equalTo($order->refund_window_expires_at->copy()->addHours(24))
+        );
+
         // Check Items status
         $item1->refresh();
         $this->assertEquals(1, $item1->accepted_quantity);
