@@ -121,6 +121,20 @@ class FinancialOperationService
             // for that case, while counting both active holds and committed refunds.
             if ($returnCase) {
                 $caseCeilingNaira = bcadd((string) ($returnCase->total_refundable_amount ?? '0.00'), '0', 2);
+
+                // Delivery is a distinct refund component. Add its ceiling only
+                // when this operation explicitly authorizes it and the decision
+                // was persisted on the return case before gateway dispatch.
+                if (($authorization['refund_delivery_fee'] ?? false) === true) {
+                    if (!(bool) $returnCase->refund_delivery_fee
+                        || bccomp((string) $lockedOrder->delivery_fee, '0.00', 2) <= 0) {
+                        throw new \\DomainException(
+                            'Delivery-fee refund is not separately authorized for this return case.'
+                        );
+                    }
+                    $caseCeilingNaira = bcadd($caseCeilingNaira, (string) $lockedOrder->delivery_fee, 2);
+                }
+
                 $caseCeilingKobo = (int) bcmul($caseCeilingNaira, '100', 0);
 
                 $caseReservationsKobo = (int) FinancialReservation::query()
@@ -268,11 +282,14 @@ class FinancialOperationService
             $caseId = $meta['return_case_id'] ?? null;
             $case = $caseId ? ReturnCase::find($caseId) : null;
             $approverId = (int) ($authorization['approved_by_user_id'] ?? 0);
+            $deliveryFeeAuthorized = ($authorization['refund_delivery_fee'] ?? false) === true;
+
             return $case
                 && (int) $case->order_id === (int) $order->id
                 && in_array($case->status, ['refund_pending', 'refund_approved'], true)
                 && !empty($case->reviewed_by_admin_id)
-                && (int) $case->reviewed_by_admin_id === $approverId;
+                && (int) $case->reviewed_by_admin_id === $approverId
+                && (!$deliveryFeeAuthorized || (bool) $case->refund_delivery_fee);
         }
 
         if (($authorization['type'] ?? null) === 'auto_late_payment_cancelled_before_vendor_action') {
