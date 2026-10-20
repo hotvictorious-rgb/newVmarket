@@ -22,8 +22,8 @@ class CreateCheckoutIntentRequest extends FormRequest
             'items.*.quantity' => 'required|integer|min:1|max:1000',
             'redeem_cashback' => 'nullable|boolean',
             'redeem_wallet_credit' => 'nullable|boolean'
-            'rider_id' => 'nullable|integer|exists:rider_profiles,id',
-            'logistics_company_id' => 'nullable|integer|exists:logistics_company_profiles,id',
+            'rider_id' => 'prohibited',
+            'logistics_company_id' => 'prohibited',
         ];
     }
 
