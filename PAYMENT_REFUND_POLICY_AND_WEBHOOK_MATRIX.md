@@ -22,7 +22,7 @@ The owner directed that the supplied recommendations be used, with Paystack bank
 | 4 | If payment succeeds after cancellation or stock is unavailable, do not reactivate or fulfil automatically; create a controlled refund case. Automatic refund is permitted only if the order was cancelled before any vendor action and every narrow exception guard passes. | Re-verify payment, lock/recheck inventory and order/vendor state, mark the payment as late/exceptional, prevent vendor settlement, and verify that no vendor accepted/prepared/dispatched/handed over goods and no prior refund covers the same capture. If any condition is uncertain, require authorized human approval. A webhook event alone never grants approval. |
 | 5 | Underpayment: keep the order unpaid/on hold; do not fulfil. | Compare exact integer kobo to the expected parent checkout amount. Record mismatch and verified transaction for manual resolution. Never round, silently mark paid, or credit cashback/vendor proceeds. |
 | 6 | Overpayment/wrong amount: do not fulfil automatically or convert excess to wallet credit. | Flag for reconciliation and refund/resolve only after payment verification. Distinguish a fully mismatched charge from a true excess where possible; do not issue an assumed difference refund without reconciling captured amount and order liability. |
-| 7 | Launch channels: Paystack card + standard bank-transfer checkout only. Dedicated Virtual Accounts (DVA), USSD, mobile money and other channels are deferred unless separately approved. | Configure checkout to expose card and standard bank transfer only. Both use `charge.success` as the authoritative successful-payment event after exact server-side verification. Handle `bank.transfer.rejected` as a reconciliation exception; verify provider/refund evidence and never initiate a duplicate refund. Do not subscribe to DVA assignment events for launch. |
+| 7 | Launch channels: Paystack card + standard bank-transfer checkout only; COD is disabled. Dedicated Virtual Accounts (DVA), USSD, mobile money and other channels are deferred unless separately approved. | Configure checkout to expose card and standard bank transfer only and reject COD across all checkout/API/legacy paths. Both enabled channels use `charge.success` as the authoritative successful-payment event after exact server-side verification. Handle `bank.transfer.rejected` as a reconciliation exception; verify provider/refund evidence and never initiate a duplicate refund. Do not subscribe to DVA assignment events for launch. |
 | 8 | Expired stock holds must not release stock while payment outcome is uncertain. | Verify/reconcile payment before releasing stock where payment may have succeeded or be in-flight. A late verified payment may be fulfilled only after an atomic stock recheck/reservation; otherwise open a controlled refund case. |
 
 ### Merchandise and delivery allocation arithmetic (binding)
@@ -176,19 +176,23 @@ Do not subscribe to subscription, invoice, payment-request, dedicated-account or
 
 These business questions are resolved. Technical implementation questions and verification gaps remain open in the checklist below.
 
+14. **COD at launch:** cash on delivery is disabled across the marketplace at launch. Checkout, APIs, vendor settings and legacy payment-method paths must reject it. Enabled launch payment channels are Paystack card and standard bank transfer only. In-shop pickup is a fulfilment method with zero delivery fee, not a COD/payment exception. Any later COD release requires a separate explicit owner decision and a vendor-owned collection/reconciliation design that passes privacy, accounting, authorization and regression tests.
+
 ## 9. Required implementation changes / audit checklist
 
 These are requirements to verify against code; listing them does not mean they are already implemented.
 
 ### Payment collection
 - [ ] Confirm one parent payment and immutable per-child allocation snapshots.
+- [ ] Reject COD across checkout, APIs, settings and legacy payment paths at launch; prove in-shop pickup is not treated as COD.
 - [ ] Ensure webhook and transaction verification use the same strict settlement service.
 - [ ] Record every verified charge/reference, including duplicate/late/mismatched charges.
 - [ ] Add a controlled duplicate-payment case/operation and tests for double charge.
 - [ ] Cover cancellation and stock loss between checkout and late payment; atomically recheck stock.
 - [ ] Distinguish underpayment, overpayment, currency mismatch, reference mismatch and invalid payer binding; keep each from fulfilling.
 - [ ] Add/verify reconciliation state for uncertain payment and safe stock-hold release.
-- [ ] Restrict enabled payment channels to card + bank transfer; implement and test `bank.transfer.rejected` without duplicate refunding.
+- [ ] Restrict enabled payment channels to Paystack card + standard bank transfer; implement and test `bank.transfer.rejected` without duplicate refunding.
+- [ ] Keep COD disabled across every launch path; no rider/customer cash collection workflow is enabled.
 - [ ] Keep DVA disabled at launch; reject or ignore DVA-only flows safely and do not subscribe to `dedicatedaccount.assign.success` / `dedicatedaccount.assign.failed` until DVA is separately approved.
 
 ### Refunds and cashback
