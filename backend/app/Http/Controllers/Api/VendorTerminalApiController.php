@@ -402,12 +402,13 @@ class VendorTerminalApiController extends Controller
             'proof_photo' => 'required|image|max:10240',
         ]);
 
-        $user = $request->user();
-        if ((!$user->isVendor() && !$user->isVendorEmployee()) || $user->status !== 'active') {
-            return response()->json(['status' => false, 'message' => 'Unauthorized: Only active vendor merchants or staff can verify handover.'], 403);
+        $ctx = $this->resolveVendorContext($request);
+        $user = $ctx['user'];
+        $orderQuery = Order::where('vendor_id', $ctx['vendor']->id);
+        if ($ctx['is_employee'] && $ctx['shop']) {
+            $orderQuery->where('shop_id', $ctx['shop']->id);
         }
-
-        $order = Order::findOrFail($validated['order_id']);
+        $order = $orderQuery->findOrFail($validated['order_id']);
 
         $proof = app(ImageOptimizationService::class)->optimizeAndStoreProof($request->file('proof_photo'), 'customer_pickup_proofs');
         $result = $this->settlementService->verifyPickupHandoverOtp(
