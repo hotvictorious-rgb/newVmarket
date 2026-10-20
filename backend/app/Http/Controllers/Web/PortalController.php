@@ -2186,7 +2186,7 @@ class PortalController extends Controller
 
                 // Reserve only after proving the full request can be allocated.
                 foreach ($allocationPlan as $planned) {
-                    \\App\\Models\\VendorPayoutAllocation::create([
+                    \App\Models\VendorPayoutAllocation::create([
                         'vendor_payout_request_id' => $payout->id,
                         'order_id' => $planned['order']->id,
                         'allocated_amount' => $planned['amount'],
