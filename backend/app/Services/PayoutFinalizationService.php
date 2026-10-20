@@ -238,72 +238,66 @@ class PayoutFinalizationService
                         'description' => "Escrow cash disbursed via Paystack automated transfer ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
                     ]);
                 }
-            } elseif (bccomp($unallocatedDiscrepancy, '0.00', 2) > 0) {
-                // Audit Finding P0: Payout amount exceeded eligible allocated orders.
-                // Log critical alert and route unexplained difference to treasury suspense
-                Log::emergency("Treasury Discrepancy: Payout #{$lockedPayout->id} amount (₦{$formattedPayoutAmount}) exceeds eligible order allocations (₦{$grandTotalAllocated}) by ₦{$unallocatedDiscrepancy}. Booking difference to reconciliation suspense.");
-                $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . "ALLOCATION_DISCREPANCY: Disbursed ₦{$formattedPayoutAmount} exceeded eligible order allocations by ₦{$unallocatedDiscrepancy}. Suspense booked.";
-                $lockedPayout->save();
-
-                if (bccomp($grandTotalAllocated, '0.00', 2) > 0 && !$hasJournalEntry) {
-                    FinancialJournalEntry::create([
-                        'order_id' => null,
-                        'transaction_reference' => $transferRef,
-                        'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
-                        'beneficiary_type' => VendorProfile::class,
-                        'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
-                        'account_name' => 'vendor_payable',
-                        'entry_type' => 'debit',
-                        'amount' => $grandTotalAllocated,
-                        'currency' => 'NGN',
-                        'description' => "Merchant withdrawal liability discharged via Paystack ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
-                    ]);
-                }
-
-                if (!$hasJournalEntry) {
-                    FinancialJournalEntry::create([
-                        'order_id' => null,
-                        'transaction_reference' => $transferRef,
-                        // Keep both sides of this disbursement under one journal event so
-                        // the event itself remains balanced; account_name identifies suspense.
-                        'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
-                        'beneficiary_type' => VendorProfile::class,
-                        'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
-                        'account_name' => 'treasury_reconciliation_suspense',
-                        'entry_type' => 'debit',
-                        'amount' => $unallocatedDiscrepancy,
-                        'currency' => 'NGN',
-                        'description' => "Treasury suspense booked for unallocated payout discrepancy on Payout #{$lockedPayout->id} to " . ($vendor?->business_name ?? 'Vendor'),
-                    ]);
-
-                    FinancialJournalEntry::create([
-                        'order_id' => null,
-                        'transaction_reference' => $transferRef,
-                        'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
-                        'beneficiary_type' => VendorProfile::class,
-                        'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
-                        'account_name' => 'cash_in_escrow',
-                        'entry_type' => 'credit',
-                        'amount' => $formattedPayoutAmount,
-                        'currency' => 'NGN',
-                        'description' => "Escrow cash disbursed via Paystack automated transfer ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
-                    ]);
-                }
             } else {
-                // Exact balanced allocation
+                // Legacy payouts may not have the request-time liability journal.
+                // Always create a balanced confirmed-disbursement event. For a shortfall,
+                // book allocated whole earnings to vendor_payable and the residual to
+                // treasury suspense. For over-allocation, do not debit vendor_payable
+                // above the cash actually transferred; quarantine the entire transfer
+                // amount in suspense pending finance reconciliation.
+                if (bccomp($unallocatedDiscrepancy, '0.00', 2) !== 0) {
+                    $direction = bccomp($unallocatedDiscrepancy, '0.00', 2) > 0 ? 'shortfall' : 'over-allocation';
+                    $absoluteDiscrepancy = ltrim($unallocatedDiscrepancy, '-');
+                    Log::emergency("Treasury Discrepancy: confirmed payout #{$lockedPayout->id} has allocation {$direction} of ₦{$absoluteDiscrepancy}; balanced disbursement journal will be posted and manual finance reconciliation is required.");
+                    $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . "ALLOCATION_DISCREPANCY: confirmed payout has allocation {$direction} of ₦{$absoluteDiscrepancy}; no vendor receivable inferred, manual finance reconciliation required.";
+                    $lockedPayout->save();
+                }
+
                 if (!$hasJournalEntry) {
-                    FinancialJournalEntry::create([
-                        'order_id' => null,
-                        'transaction_reference' => $transferRef,
-                        'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
-                        'beneficiary_type' => VendorProfile::class,
-                        'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
-                        'account_name' => 'vendor_payable',
-                        'entry_type' => 'debit',
-                        'amount' => $formattedPayoutAmount,
-                        'currency' => 'NGN',
-                        'description' => "Merchant withdrawal liability discharged via Paystack automated transfer ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
-                    ]);
+                    if (bccomp($unallocatedDiscrepancy, '0.00', 2) < 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => null,
+                            'transaction_reference' => $transferRef,
+                            'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
+                            'beneficiary_type' => VendorProfile::class,
+                            'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                            'account_name' => 'treasury_reconciliation_suspense',
+                            'entry_type' => 'debit',
+                            'amount' => $formattedPayoutAmount,
+                            'currency' => 'NGN',
+                            'description' => "Full confirmed payout quarantined in treasury suspense because existing allocations exceed payout amount #{$lockedPayout->id}",
+                        ]);
+                    } else {
+                        if (bccomp($grandTotalAllocated, '0.00', 2) > 0) {
+                            FinancialJournalEntry::create([
+                                'order_id' => null,
+                                'transaction_reference' => $transferRef,
+                                'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
+                                'beneficiary_type' => VendorProfile::class,
+                                'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                                'account_name' => 'vendor_payable',
+                                'entry_type' => 'debit',
+                                'amount' => $grandTotalAllocated,
+                                'currency' => 'NGN',
+                                'description' => "Merchant withdrawal liability discharged via Paystack ({$transferCode}) to " . ($vendor?->business_name ?? 'Vendor'),
+                            ]);
+                        }
+
+                        if (bccomp($unallocatedDiscrepancy, '0.00', 2) > 0) {
+                            FinancialJournalEntry::create([
+                                'order_id' => null,
+                                'transaction_reference' => $transferRef,
+                                'event_id' => 'EVT-VND-PAYOUT-' . $lockedPayout->id,
+                                'beneficiary_type' => VendorProfile::class,
+                                'beneficiary_id' => $vendor ? $vendor->id : $lockedPayout->vendor_id,
+                                'account_name' => 'treasury_reconciliation_suspense',
+                                'entry_type' => 'debit',
+                                'amount' => $unallocatedDiscrepancy,
+                                'currency' => 'NGN',
+                                'description' => "Treasury suspense booked for unallocated payout discrepancy on Payout #{$lockedPayout->id}",
+                            ]);
+                        }
+                    }
 
                     FinancialJournalEntry::create([
                         'order_id' => null,
