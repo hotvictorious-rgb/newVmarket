@@ -29,6 +29,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class CustomerOrderApiController extends Controller
@@ -222,6 +223,7 @@ class CustomerOrderApiController extends Controller
     {
         $validated = $request->validate([
             'delivery_otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
+            'proof_photo' => ['required', 'image', 'max:10240'],
         ]);
 
         $user = $request->user();
@@ -240,11 +242,13 @@ class CustomerOrderApiController extends Controller
             ], 404);
         }
 
+        $proofPath = '/storage/' . $request->file('proof_photo')->store('delivery_proofs', 'public');
+
         $result = $this->settlementService->verifyCustomerDeliveryOtp(
             $order,
             $validated['delivery_otp'],
             null,
-            null,
+            $proofPath,
             'Confirmed via customer mobile application.'
         );
 
