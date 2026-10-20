@@ -52,6 +52,7 @@ Implementation of this policy must be proved by code review and tests; this text
 - Root `VICTORIOUS_MARKET.md` and `README.md` already describe vendor-managed delivery, rider financial separation, the 90/5/5 merchandise allocation, the 90/10 delivery-fee allocation, customer privacy, pickup, and legacy-data preservation.
 - `DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md` already defers to `.ai/BUSINESS_RULES.md` and contains an implementation audit list.
 - `backend/VICTORIOUS_MARKET.md` was updated on this branch to remove its contradictory claims that the platform coordinates logistics companies/routes and pays logistics providers for new delivery orders. It now describes vendor-owned riders, vendor assignment, pickup, privacy, fee allocation, COD boundaries, and financial separation.
+- Cashback clock alignment is partially implemented on this branch: pre-fulfilment `matures_at`/`expires_at` are nullable; checkout/payment leave them unset; verified delivery/pickup sets maturity to `refund_window_expires_at + 24 hours` and expiry to `matures_at + 365 days`. The cashback recovery ledger, persisted-setting audit, and reopening logic after a resolved dispute/return remain open.
 
 ### Remaining consistency checks before release
 
