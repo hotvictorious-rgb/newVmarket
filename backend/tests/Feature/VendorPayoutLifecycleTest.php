@@ -1367,6 +1367,45 @@ class VendorPayoutLifecycleTest extends TestCase
         $this->assertEquals('9000.00', $wholeRequest->allocations()->first()->allocated_amount);
     }
 
+    public function test_confirmed_legacy_payout_does_not_split_earning_when_fifo_whole_record_match_is_impossible(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'vendor_settlement_status' => 'eligible',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+        ]);
+
+        // Legacy or externally reconciled transfer has no pre-transfer allocations.
+        // Its confirmed ₦5,000 transfer cannot be mapped to a whole ₦9,000 earning.
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '5000.00',
+            'status' => 'approved',
+            'gateway_status' => 'processing',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Test Vendor',
+            'transfer_reference' => 'VND-PAYOUT-LEGACY-WHOLE-RECORD-01',
+            'paystack_transfer_code' => 'TRF_LEGACY_WHOLE_RECORD_01',
+        ]);
+
+        $result = app(PayoutFinalizationService::class)->finalizeVendorPayout($payout, [
+            'status' => 'success',
+            'reference' => 'VND-PAYOUT-LEGACY-WHOLE-RECORD-01',
+            'transfer_code' => 'TRF_LEGACY_WHOLE_RECORD_01',
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame(0, $payout->allocations()->where('status', 'allocated')->count());
+        $this->assertSame('eligible', $order->fresh()->vendor_settlement_status);
+        $this->assertSame('9000.00', $order->fresh()->remaining_payable_to_vendor);
+        $this->assertStringContainsString('ALLOCATION_DISCREPANCY', (string) $payout->fresh()->admin_notes);
+        $this->assertSame(2, FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $payout->id)->count());
+    }
+
     public function test_admin_payout_allocation_accepts_closed_return_cases_consistently_with_vendor_balance(): void
     {
         $this->mockPaystackTransferSuccess('TRF_CLOSED_RETURN_ELIGIBILITY_01');
