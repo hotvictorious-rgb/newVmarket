@@ -389,7 +389,7 @@ class VendorApiTerminalTest extends TestCase
         // Financial journal double entry recorded
         $this->assertDatabaseHas('financial_journal_entries', [
             'beneficiary_id' => $vendor->id,
-            'account_name' => 'vendor_escrow_holding',
+            'account_name' => 'vendor_payable',
             'entry_type' => 'debit',
             'amount' => 18000.00,
         ]);
