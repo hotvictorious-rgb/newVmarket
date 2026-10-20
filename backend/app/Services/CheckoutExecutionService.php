@@ -35,6 +35,16 @@ class CheckoutExecutionService
      */
     public function execute(User $user, array $validated): array
     {
+        // Launch policy: legacy refund wallet credit is not checkout tender.
+        // Cashback redemption is handled separately and remains subject to its 50% cap.
+        if (!empty($validated['redeem_wallet_credit']) || (($validated['payment_method'] ?? null) === 'wallet_credit')) {
+            return [
+                'success' => false,
+                'status_code' => 422,
+                'message' => 'Wallet credit cannot be used to pay for orders at launch. Use an approved Paystack payment method or reserve for in-shop payment through the authorised workflow.',
+            ];
+        }
+
         // Guard 0: Customer Account Invariant
         if ($user && $user->status !== 'active') {
             return [
