@@ -478,6 +478,7 @@ class CustomerExperienceAndHardeningTest extends TestCase
                 'customer_description' => 'Filing again.',
             ]);
         $dupRes->assertStatus(422);
+        $this->assertSame(1, DisputeAndReturn::where('order_id', $order->id)->where('customer_id', $this->customer->id)->count(), 'Duplicate filing must not create another dispute record.');
     }
 
     public function test_auth_profile_update_and_logout(): void
