@@ -290,4 +290,27 @@ class CustomerHandshakeDeliveryTest extends TestCase
         $this->assertFalse($result['success']);
         $this->assertEquals('Order is not currently out for delivery.', $result['message']);
     }
+
+    public function test_unpaid_order_cannot_be_confirmed_delivered_even_with_valid_customer_otp(): void
+    {
+        $order = Order::where('fulfillment_type', 'doorstep_delivery')->first();
+        $order->order_status = 'out_for_delivery';
+        $order->payment_status = 'pending';
+        $order->verification_code = '654321';
+        $order->delivery_confirmed_by_customer = false;
+        $order->received_at = null;
+        $order->save();
+
+        $result = app(OrderSettlementService::class)->verifyCustomerDeliveryOtp($order, '654321');
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('Unpaid orders cannot be confirmed as delivered.', $result['message']);
+        $order->refresh();
+        $this->assertSame('pending', $order->payment_status);
+        $this->assertSame('out_for_delivery', $order->order_status);
+        $this->assertFalse((bool) $order->delivery_confirmed_by_customer);
+        $this->assertNull($order->received_at);
+        $this->assertDatabaseMissing('customer_cashback_ledgers', ['order_id' => $order->id]);
+    }
+
 }
