@@ -9,6 +9,8 @@ class CheckoutIntent extends Model
 {
     protected $fillable = [
         'user_id',
+        'idempotency_key',
+        'idempotency_request_hash',
         'fingerprint',
         'fulfillment_type',
         'customer_address_id',
