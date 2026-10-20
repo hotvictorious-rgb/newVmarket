@@ -101,37 +101,14 @@ class CheckoutExecutionService
             }
         }
 
-        // Guard 4: Explicit Designated Courier / Rider Invariant
-        if (!empty($validated['rider_id'])) {
-            $rider = RiderProfile::withTrashed()->with(['user', 'vendor.user', 'logisticsCompany.user'])->find($validated['rider_id']);
-            if (!$rider || $rider->trashed() || !$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
-                return [
-                    'success' => false,
-                    'status_code' => 422,
-                    'message' => 'The designated delivery rider is currently inactive or suspended.',
-                ];
-            }
-            if ($rider->vendor_id && (int)$rider->vendor_id !== (int)$shop->vendor_id) {
-                return [
-                    'success' => false,
-                    'status_code' => 422,
-                    'message' => 'The designated delivery rider does not belong to the merchant for this order.',
-                ];
-            }
-            if ($rider->vendor && ($rider->vendor->trashed() || $rider->vendor->marketplace_status !== 'active' || ($rider->vendor->user && $rider->vendor->user->status !== 'active'))) {
-                return [
-                    'success' => false,
-                    'status_code' => 422,
-                    'message' => 'The merchant organization for this delivery rider is currently deactivated or suspended.',
-                ];
-            }
-            if ($rider->logisticsCompany && ($rider->logisticsCompany->trashed() || $rider->logisticsCompany->status !== 'active' || ($rider->logisticsCompany->user && $rider->logisticsCompany->user->status !== 'active'))) {
-                return [
-                    'success' => false,
-                    'status_code' => 422,
-                    'message' => 'The logistics fleet for this delivery rider is currently deactivated or suspended.',
-                ];
-            }
+        // Launch policy: customers cannot choose a rider or central logistics fleet at checkout.
+        // Vendor-managed fulfilment assigns a vendor rider after order acceptance, if one is needed.
+        if (!empty($validated['rider_id']) || !empty($validated['logistics_company_id'])) {
+            return [
+                'success' => false,
+                'status_code' => 422,
+                'message' => 'Delivery is vendor-managed at launch. Rider and logistics-fleet assignment happens after checkout, not during customer checkout.',
+            ];
         }
 
         $result = DB::transaction(function () use ($validated, $user, $shop) {
@@ -226,8 +203,6 @@ class CheckoutExecutionService
                 }
 
                 $deliveryFee = $availability['fee'];
-                $laneId = $availability['lane_id'] ?? null;
-                $collectionPointId = $availability['collection_point_id'] ?? null;
             }
 
             // Cashback Redemption Check under Pessimistic Balance Reservation
@@ -259,8 +234,8 @@ class CheckoutExecutionService
             $customerCashback5 = BcMathService::mul($merchandiseSubtotal, '0.05');
             $platformMargin5 = BcMathService::mul($merchandiseSubtotal, '0.05');
 
-            // Logistics Splits (90% Rider/Fleet, 10% Platform Delivery Fee)
-            $logisticsNet90 = BcMathService::mul($deliveryFee, '0.90');
+            // Delivery fee split: 90% vendor delivery earning, 10% platform. No rider/fleet payable.
+            $vendorDeliveryNet90 = BcMathService::mul($deliveryFee, '0.90');
             $platformDelivery10 = BcMathService::mul($deliveryFee, '0.10');
 
             // Instant Refund Wallet Credit redemption (100% spendable, covers up to 100% of order payable)
@@ -290,98 +265,9 @@ class CheckoutExecutionService
             $paymentStatus = $isFullyWalletPaid ? 'paid' : 'pending';
             $paidAt = $isFullyWalletPaid ? Carbon::now() : null;
 
-            // Assign active accredited courier from fleet if collection point assigned or doorstep delivery
+            // New checkout orders are vendor-managed: do not bind central fleet, collection point, or rider.
             $rider = null;
-            $logisticsCompanyId = $validated['logistics_company_id'] ?? null;
-            $riderId = $validated['rider_id'] ?? null;
-
-            if ($riderId) {
-                $rider = RiderProfile::withTrashed()->with(['user', 'logisticsCompany.user'])->find($riderId);
-                if (!$rider || $rider->trashed() || !$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
-                    return [
-                        'error' => true,
-                        'message' => 'The designated delivery rider is currently inactive or suspended.',
-                    ];
-                }
-                if ($rider->logisticsCompany && ($rider->logisticsCompany->trashed() || $rider->logisticsCompany->status !== 'active' || ($rider->logisticsCompany->user && $rider->logisticsCompany->user->status !== 'active'))) {
-                    return [
-                        'error' => true,
-                        'message' => 'The logistics fleet for this delivery rider is currently deactivated or suspended.',
-                    ];
-                }
-                if (!$logisticsCompanyId && $rider->logistics_company_id) {
-                    $logisticsCompanyId = $rider->logistics_company_id;
-                }
-            }
-
-            if ($collectionPointId) {
-                $cp = LogisticsCollectionPoint::find($collectionPointId);
-                if ($cp && $cp->logistics_company_id) {
-                    if (!$logisticsCompanyId) {
-                        $logisticsCompanyId = $cp->logistics_company_id;
-                    }
-                    if (!$rider) {
-                        $rider = RiderProfile::where('logistics_company_id', $cp->logistics_company_id)
-                            ->where('is_active', true)
-                            ->where('is_online', true)
-                            ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                            ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'))
-                            ->first()
-                            ?? RiderProfile::where('logistics_company_id', $cp->logistics_company_id)
-                                ->where('is_active', true)
-                                ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                                ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'))
-                                ->first();
-                    }
-                }
-            }
-
-            if (!$rider && $validated['fulfillment_type'] === 'doorstep_delivery') {
-                // First priority: Assign active delivery person belonging to this merchant
-                $rider = RiderProfile::where('vendor_id', $shop->vendor_id)
-                    ->where('is_active', true)
-                    ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                    ->first();
-
-                if (!$rider) {
-                    $riderQuery = RiderProfile::where('is_active', true)
-                        ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                        ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'));
-
-                    if ($logisticsCompanyId) {
-                        $riderQuery->where('logistics_company_id', $logisticsCompanyId);
-                    }
-
-                    $rider = (clone $riderQuery)->where('is_online', true)->first() ?? $riderQuery->first();
-                    if ($rider && $rider->logistics_company_id && !$logisticsCompanyId) {
-                        $logisticsCompanyId = $rider->logistics_company_id;
-                    }
-                }
-            }
-
-            if (!$logisticsCompanyId && $laneId) {
-                $lane = DeliveryLane::find($laneId);
-                if ($lane && $lane->assigned_logistics_company_id) {
-                    $logisticsCompanyId = $lane->assigned_logistics_company_id;
-                }
-            }
-
-            // Post-resolution check on logisticsCompanyId
-            if ($logisticsCompanyId) {
-                $logistics = LogisticsCompanyProfile::withTrashed()->with('user')->find($logisticsCompanyId);
-                if (!$logistics || $logistics->trashed() || $logistics->status !== 'active') {
-                    return [
-                        'error' => true,
-                        'message' => 'The selected logistics company is currently inactive or suspended.',
-                    ];
-                }
-                if ($logistics->user && $logistics->user->status !== 'active') {
-                    return [
-                        'error' => true,
-                        'message' => 'The logistics company user account is inactive.',
-                    ];
-                }
-            }
+            $logisticsCompanyId = null;
 
             $orderNumber = 'VM-' . date('Ymd') . '-' . strtoupper(Str::random(4));
             $paymentRef = Order::generateUniquePaymentReference();
@@ -413,7 +299,7 @@ class CheckoutExecutionService
                 'vendor_net_90' => $vendorNet90,
                 'customer_cashback_5' => $customerCashback5,
                 'platform_margin_5' => $platformMargin5,
-                'logistics_fee_retained' => $logisticsNet90,
+                'logistics_fee_retained' => $vendorDeliveryNet90,
                 'platform_delivery_fee' => $platformDelivery10,
                 'pickup_verification_code' => Order::generateUniquePickupOtp(),
                 'verification_code' => Order::generateUniqueDeliveryOtp(),
