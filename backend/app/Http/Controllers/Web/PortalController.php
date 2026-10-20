@@ -2230,6 +2230,50 @@ class PortalController extends Controller
                 ];
             }
 
+            // Each pre-existing allocation must reserve exactly one whole earning
+            // record. Do not send cash for partial, duplicated, disputed, returned, or
+            // already-settled order mappings left behind by a legacy attempt.
+            foreach ($existingAllocationRows->groupBy('order_id') as $orderAllocations) {
+                $earningOrder = $orderAllocations->first()->order;
+                if (!$earningOrder
+                    || $orderAllocations->count() !== 1
+                    || $earningOrder->vendor_settlement_status !== 'eligible'
+                    || $earningOrder->payment_status !== 'paid'
+                    || $earningOrder->order_status !== 'delivered'
+                    || $earningOrder->returnCases()->whereNotIn('status', ['resolved', 'refunded', 'replacement_completed', 'rejected', 'closed'])->exists()
+                    || $earningOrder->dispute()->whereIn('status', ['filed', 'under_review'])->exists()) {
+                    return [
+                        'valid' => false,
+                        'message' => 'Disbursement blocked: an existing allocation no longer maps to one eligible, delivered, paid earning record. Finance reconciliation is required before any transfer is sent.',
+                    ];
+                }
+
+                $basePayable = (string) ($earningOrder->vendor_net_90 ?? '0.00');
+                if (empty($earningOrder->logistics_company_id)) {
+                    $basePayable = BcMathService::add($basePayable, (string) ($earningOrder->logistics_fee_retained ?? '0.00'));
+                }
+                $currentOrderAllocation = $orderAllocations->reduce(
+                    fn (string $sum, $allocation) => bcadd($sum, (string) $allocation->allocated_amount, 2),
+                    '0.00'
+                );
+                $otherActiveAllocation = $earningOrder->payoutAllocations()
+                    ->where('status', '!=', 'reversed')
+                    ->whereHas('payoutRequest', function ($query) use ($payout) {
+                        $query->where('status', '!=', 'rejected')
+                            ->where('id', '!=', $payout->id);
+                    })
+                    ->exists();
+
+                if (bccomp($basePayable, '0.00', 2) <= 0
+                    || bccomp($currentOrderAllocation, $basePayable, 2) !== 0
+                    || $otherActiveAllocation) {
+                    return [
+                        'valid' => false,
+                        'message' => 'Disbursement blocked: existing allocations do not represent one complete, exclusively reserved earning record. Finance reconciliation is required before any transfer is sent.',
+                    ];
+                }
+            }
+
             $existingAllocSum = $existingAllocationRows->reduce(
                 fn (string $sum, $allocation) => bcadd($sum, (string) $allocation->allocated_amount, 2),
                 '0.00'
