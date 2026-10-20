@@ -371,3 +371,8 @@ Allowed: eligible unplaced reservation -> `canceled`, only after locking and rec
 ### VM-AUD-060/061 verification update (21 October 2026)
 
 CI for the guarded admin return-rejection transition and serialized pickup-reservation cancellation has passed, including regression coverage and latest branch-head validation ([run 39512965854](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39512965854)). This does not certify the entire state-transition inventory; PostgreSQL concurrent execution, Paystack sandbox payload compatibility, and remaining direct-writer inventory are still open.
+
+
+### VM-AUD-062 — pickup inspection transition serialization
+
+Allowed: `reserved` and not expired -> `inspected_accepted`, or `reserved` and expired -> `expired`, after reloading the reservation under a row lock and rechecking staff/vendor/branch authorization. Forbidden: inspection from `order_placed`, `payment_completed`, `canceled`, `cancelled`, `expired`, `handed_over`, or any other non-`reserved` state. Concurrent cancellation/order creation must serialize against this same reservation row. Regression: VM-AUD-062.
