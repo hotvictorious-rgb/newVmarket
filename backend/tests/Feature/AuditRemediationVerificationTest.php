@@ -833,6 +833,32 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertSame('canceled', $reservation->fresh()->status);
     }
 
+    public function test_pickup_inspection_rechecks_reservation_state_under_row_lock(): void
+    {
+        $reservation = PickupReservation::create([
+            'reservation_code' => 'RES-INSPECT-RACE-01',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'product_id' => $this->product->id,
+            'quantity' => 1,
+            'unit_price' => '10000.00',
+            'estimated_total' => '10000.00',
+            'status' => 'reserved',
+            'expires_at' => Carbon::now()->addMinutes(10),
+        ]);
+
+        $service = app(\\App\\Services\\OrderSettlementService::class);
+        $result = $service->approvePickupInspection($reservation, $this->vendorUser);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('inspected_accepted', $reservation->fresh()->status);
+
+        $result = $service->approvePickupInspection($reservation->fresh(), $this->vendorUser);
+        $this->assertFalse($result['success']);
+        $this->assertSame('inspected_accepted', $reservation->fresh()->status);
+    }
+
     public function test_admin_return_rejection_is_locked_and_refuses_financially_advanced_cases(): void
     {
         $fixture = $this->createOrder('delivered', 1);
