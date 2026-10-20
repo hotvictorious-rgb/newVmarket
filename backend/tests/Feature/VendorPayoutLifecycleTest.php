@@ -249,25 +249,32 @@ class VendorPayoutLifecycleTest extends TestCase
 
         $this->assertEquals('20000.00', $this->vendor->getWithdrawableBalance());
 
-        // Vendor requests ₦12,000
-        $response = $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
+        // The payout must match the whole eligible earning record, not a partial ₦12,000 slice.
+        $partialResponse = $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
             'amount' => '12000.00',
         ]);
+        $partialResponse->assertSessionHas('error');
+        $this->assertEquals(0, VendorPayoutRequest::where('vendor_id', $this->vendor->id)->count());
+        $this->assertEquals('20000.00', $this->vendor->fresh()->getWithdrawableBalance());
 
+        // The full ₦20,000 earning record is an acceptable request.
+        $response = $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
+            'amount' => '20000.00',
+        ]);
         $response->assertSessionHas('status');
 
         $payout = VendorPayoutRequest::where('vendor_id', $this->vendor->id)->first();
         $this->assertNotNull($payout);
-        $this->assertEquals('12000.00', number_format((float)$payout->amount, 2, '.', ''));
+        $this->assertEquals('20000.00', number_format((float)$payout->amount, 2, '.', ''));
         $this->assertEquals('pending', $payout->status);
         $this->assertEquals('1012345678', $payout->account_number);
 
-        // Funds are locked: Withdrawable balance is now ₦8,000!
-        $this->assertEquals('8000.00', $this->vendor->fresh()->getWithdrawableBalance());
+        // Funds are locked in full while the payout request is unresolved.
+        $this->assertEquals('0.00', $this->vendor->fresh()->getWithdrawableBalance());
 
-        // A second request for ₦10,000 must be rejected
+        // A second request is rejected while the first request remains active.
         $secondResponse = $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
-            'amount' => '10000.00',
+            'amount' => '5000.00',
         ]);
         $secondResponse->assertSessionHas('error');
         $this->assertEquals(1, VendorPayoutRequest::where('vendor_id', $this->vendor->id)->count());
