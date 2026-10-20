@@ -2214,7 +2214,32 @@ class PortalController extends Controller
             }
 
             // Allocation Conservation Pre-check & Pre-Allocation Hold (Audit Findings P0 & P1):
-            $existingAllocSum = (string)$payout->allocations()->where('status', 'allocated')->sum('allocated_amount');
+            $existingAllocationRows = $payout->allocations()
+                ->where('status', 'allocated')
+                ->with('order')
+                ->get();
+            $invalidAllocation = $existingAllocationRows->first(function ($allocation) use ($vendor) {
+                return !$allocation->order
+                    || (int) $allocation->order->vendor_id !== (int) $vendor->id
+                    || bccomp((string) $allocation->allocated_amount, '0.00', 2) <= 0;
+            });
+            if ($invalidAllocation) {
+                return [
+                    'valid' => false,
+                    'message' => 'Disbursement blocked: existing payout allocations contain a missing, non-positive, or cross-vendor order mapping. Finance reconciliation is required before any transfer is sent.',
+                ];
+            }
+
+            $existingAllocSum = $existingAllocationRows->reduce(
+                fn (string $sum, $allocation) => bcadd($sum, (string) $allocation->allocated_amount, 2),
+                '0.00'
+            );
+            if (bccomp($existingAllocSum, (string) $payout->amount, 2) > 0) {
+                return [
+                    'valid' => false,
+                    'message' => 'Disbursement blocked: existing allocated earnings exceed the payout amount. Finance reconciliation is required before any transfer is sent.',
+                ];
+            }
             $remainingNeeded = bcsub((string)$payout->amount, $existingAllocSum, 2);
 
             if (bccomp($remainingNeeded, '0.00', 2) > 0) {
