@@ -1082,7 +1082,7 @@ class AuditRemediationVerificationTest extends TestCase
 
     public function test_order_checkout_retry_reuses_order_and_never_reinitializes_paystack(): void
     {
-        \Laravel\\Sanctum\\Sanctum::actingAs($this->customer);
+        \Laravel\Sanctum\Sanctum::actingAs($this->customer);
         $this->product->update([
             'is_approved' => true,
             'listing_status' => 'listed',
