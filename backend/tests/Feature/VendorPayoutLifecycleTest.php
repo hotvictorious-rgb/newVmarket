@@ -12,6 +12,8 @@ use App\Models\Shop;
 use App\Models\State;
 use App\Models\User;
 use App\Models\VendorPayoutRequest;
+use App\Models\ProcessedWebhookEvent;
+use App\Services\PayoutFinalizationService;
 use App\Models\VendorProfile;
 use App\Services\PaystackService;
 use Carbon\Carbon;
@@ -547,6 +549,53 @@ class VendorPayoutLifecycleTest extends TestCase
             'event_id' => 'evt_valid_transfer_reversed_01',
             'status' => 'completed',
         ]);
+    }
+
+    public function test_stale_transfer_success_generation_cannot_finalize_vendor_payout(): void
+    {
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '5000.00',
+            'status' => 'approved',
+            'gateway_status' => 'pending',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Test Vendor',
+            'transfer_reference' => 'VND-PAYOUT-STALE-GENERATION-01',
+            'paystack_transfer_code' => 'TRF_STALE_GENERATION_01',
+        ]);
+        $event = ProcessedWebhookEvent::create([
+            'event_id' => 'evt_transfer_stale_generation_01',
+            'event_type' => 'transfer.success',
+            'payload_hash' => hash('sha256', '{"event":"transfer.success"}'),
+            'payload' => '{"event":"transfer.success"}',
+            'status' => 'processing',
+            'attempts' => 2,
+        ]);
+        $journalCountBefore = FinancialJournalEntry::count();
+
+        $result = app(PayoutFinalizationService::class)->finalizeVendorPayout(
+            $payout,
+            [
+                'reference' => 'VND-PAYOUT-STALE-GENERATION-01',
+                'transfer_code' => 'TRF_STALE_GENERATION_01',
+                'status' => 'success',
+                'amount' => 500000,
+                'currency' => 'NGN',
+            ],
+            null,
+            null,
+            (int) $event->id,
+            1
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['stale_webhook_claim'] ?? false);
+        $this->assertSame('approved', $payout->fresh()->status);
+        $this->assertSame('pending', $payout->fresh()->gateway_status);
+        $this->assertSame('processing', $event->fresh()->status);
+        $this->assertSame(2, (int) $event->fresh()->attempts);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
     }
 
     public function test_transfer_reversed_without_confirmed_disbursement_journal_is_quarantined(): void
