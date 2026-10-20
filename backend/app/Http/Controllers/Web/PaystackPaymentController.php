@@ -612,7 +612,7 @@ class PaystackPaymentController extends Controller
             $transRef = (string)($rData['transaction_reference'] ?? '');
             Log::info("Paystack Webhook: Automated refund.processed for ref: {$rRef}, trans: {$transRef}");
 
-            $finOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+            $finOpMatches = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
                 ->where(function ($q) use ($rRef) {
                     if (!empty($rRef)) {
                         $q->where('operation_reference', $rRef)
@@ -626,8 +626,13 @@ class PaystackPaymentController extends Controller
                         $q->whereRaw('1 = 0');
                     }
                 })
-                ->where('status', '!=', 'confirmed')
-                ->first();
+                ->get();
+
+            // A gateway refund reference must resolve to exactly one operation.
+            // Include confirmed operations so a duplicate success can be idempotent;
+            // never pick an arbitrary pending operation if corrupted metadata or
+            // gateway-attempt records make the reference ambiguous.
+            $finOp = $finOpMatches->count() === 1 ? $finOpMatches->first() : null;
 
             if ($finOp) {
                 // A signed webhook proves origin, not that this refund matches our ledger.
@@ -729,16 +734,20 @@ class PaystackPaymentController extends Controller
                 // payment reference. Without a matching FinancialOperation, we cannot
                 // safely reconcile the refund against its reservation and journal entries.
                 // Keep the event visible for reconciliation/manual review instead.
+                $reason = $finOpMatches->isEmpty()
+                    ? 'REFUND_OPERATION_NOT_FOUND: No matching customer refund operation for gateway event.'
+                    : 'REFUND_OPERATION_AMBIGUOUS: Gateway refund reference matches multiple customer refund operations.';
                 $this->updateProcessedEvent($processedEvent, [
                     'status' => 'unmatched',
-                    'error_reason' => 'REFUND_OPERATION_NOT_FOUND: No matching customer refund operation for gateway event.',
+                    'error_reason' => $reason,
                     'processed_at' => Carbon::now(),
                 ]);
 
-                Log::warning('Paystack refund.processed event has no matching FinancialOperation.', [
+                Log::warning('Paystack refund.processed event did not resolve to exactly one FinancialOperation.', [
                     'event_id' => $processedEvent->event_id,
                     'refund_reference' => $rRef,
                     'transaction_reference' => $transRef,
+                    'matches' => $finOpMatches->count(),
                 ]);
 
                 return response()->json([
