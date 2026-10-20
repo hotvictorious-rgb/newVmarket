@@ -400,36 +400,38 @@ class CustomerOrderApiController extends Controller
             ], 404);
         }
 
-        if ($order->order_status !== 'delivered') {
-            return response()->json([
-                'status' => false,
-                'message' => 'Disputes can only be filed on delivered orders.',
-            ], 422);
-        }
+        // Serialize dispute creation on the order row. The duplicate check, source-state
+        // validation, dispute insert and settlement hold must be one atomic transition.
+        $result = DB::transaction(function () use ($order, $user, $validated) {
+            $lockedOrder = Order::whereKey($order->id)
+                ->where('customer_id', $user->id)
+                ->lockForUpdate()
+                ->first();
 
-        if (!$order->isRefundWindowActive()) {
-            return response()->json([
-                'status' => false,
-                'message' => 'The return and dispute window for this order has expired.',
-            ], 422);
-        }
+            if (!$lockedOrder) {
+                return ['error' => 'Order not found or unauthorized access.', 'code' => 404];
+            }
 
-        // Prevent duplicate disputes
-        $existingDispute = DisputeAndReturn::where('order_id', $order->id)
-            ->where('customer_id', $user->id)
-            ->whereIn('status', ['filed', 'under_review', 'approved_refund'])
-            ->first();
+            if ($lockedOrder->order_status !== 'delivered') {
+                return ['error' => 'Disputes can only be filed on delivered orders.', 'code' => 422];
+            }
 
-        if ($existingDispute) {
-            return response()->json([
-                'status' => false,
-                'message' => 'A dispute has already been filed for this order.',
-            ], 422);
-        }
+            if (!$lockedOrder->isRefundWindowActive()) {
+                return ['error' => 'The return and dispute window for this order has expired.', 'code' => 422];
+            }
 
-        $dispute = DB::transaction(function () use ($order, $user, $validated) {
+            $existingDispute = DisputeAndReturn::where('order_id', $lockedOrder->id)
+                ->where('customer_id', $user->id)
+                ->whereIn('status', ['filed', 'under_review', 'approved_refund'])
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingDispute) {
+                return ['error' => 'A dispute has already been filed for this order.', 'code' => 422];
+            }
+
             $dispute = DisputeAndReturn::create([
-                'order_id' => $order->id,
+                'order_id' => $lockedOrder->id,
                 'customer_id' => $user->id,
                 'reason' => $validated['reason'],
                 'customer_description' => strip_tags(trim($validated['customer_description'])),
@@ -437,19 +439,29 @@ class CustomerOrderApiController extends Controller
                 'status' => 'filed',
             ]);
 
-            // Freeze vendor escrow release under dispute
-            $order->vendor_settlement_status = 'disputed';
-            $order->save();
+            // Freeze vendor escrow release in the same transaction as dispute creation.
+            $lockedOrder->vendor_settlement_status = 'disputed';
+            $lockedOrder->save();
 
-            return $dispute;
+            return ['dispute' => $dispute, 'order' => $lockedOrder];
         });
+
+        if (isset($result['error'])) {
+            return response()->json([
+                'status' => false,
+                'message' => $result['error'],
+            ], $result['code']);
+        }
+
+        $dispute = $result['dispute'];
+        $lockedOrder = $result['order'];
 
         return response()->json([
             'status' => true,
             'message' => 'Dispute filed successfully. Vendor escrow has been frozen pending marketplace arbitration.',
             'data' => [
                 'dispute_id' => $dispute->id,
-                'order_number' => $order->order_number,
+                'order_number' => $lockedOrder->order_number,
                 'reason' => $dispute->reason,
                 'status' => $dispute->status,
                 'created_at' => $dispute->created_at->toIso8601String(),
