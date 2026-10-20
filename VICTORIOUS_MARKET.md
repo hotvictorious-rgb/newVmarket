@@ -262,7 +262,7 @@ The rider may see only the customer's name, delivery address, and a protected **
 In-shop pickup remains fully supported as a separate fulfilment type and payment path: the customer reserves through Victorious MARKET, then pays at the approved vendor shop through the platform's authorised payment workflow before the item is released. The existing 24-hour reservation hold remains in force unless separately changed by the owner:
 - The customer collects the order at the owning vendor's physical shop.
 - Delivery fee is always zero, enforced server-side.
-- The customer uses the canonical pickup pass in the format **RES-XXXXXX**, verified by the owning vendor at the counter.
+- The customer presents the **RES-XXXXXX** reservation pass AND completes one-time customer pickup OTP verification; the owning vendor verifies both and records the required in-shop pickup photo.
 - A separate six-digit order pickup verification field must not silently replace or override the RES pass. Preserve historical values; if the six-digit field has another approved purpose, document and isolate that purpose rather than treating it as an alternate customer counter credential.
 - No rider assignment, delivery fee, rider compensation, or logistics payout is created.
 - Pickup status remains separate from doorstep delivery status and must not require a doorstep rider or doorstep-only verification flow. Rider parcel custody from vendor to rider is a different operational handshake.
