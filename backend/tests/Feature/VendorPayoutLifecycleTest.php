@@ -1406,6 +1406,55 @@ class VendorPayoutLifecycleTest extends TestCase
         $this->assertSame(2, FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $payout->id)->count());
     }
 
+    public function test_overallocated_legacy_payout_is_quarantined_without_settling_order_or_overstating_payable(): void
+    {
+        $order = $this->createTestOrder([
+            'order_status' => 'delivered',
+            'vendor_settlement_status' => 'eligible',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '66666.67',
+            'vendor_net_90' => '60000.00',
+            'grand_total' => '66666.67',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '50000.00',
+            'status' => 'pending',
+            'bank_name' => 'Zenith Bank',
+            'account_number' => '1012345678',
+            'account_name' => 'Test Vendor',
+        ]);
+
+        \App\Models\VendorPayoutAllocation::create([
+            'vendor_payout_request_id' => $payout->id,
+            'order_id' => $order->id,
+            'allocated_amount' => '60000.00',
+            'status' => 'allocated',
+        ]);
+
+        $result = app(PayoutFinalizationService::class)->finalizeVendorPayout($payout, [
+            'status' => 'success',
+            'reference' => 'VND-PAYOUT-OVERALLOC-01',
+            'transfer_code' => 'TRF_OVERALLOC_01',
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('eligible', $order->fresh()->vendor_settlement_status);
+        $this->assertSame(1, $payout->allocations()->where('status', 'allocated')->count());
+        $this->assertStringContainsString('over-allocation', (string) $payout->fresh()->admin_notes);
+
+        $entries = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $payout->id)->get();
+        $this->assertCount(2, $entries);
+        $this->assertTrue($entries->contains(fn ($entry) => $entry->account_name === 'treasury_reconciliation_suspense'
+            && $entry->entry_type === 'debit'
+            && bccomp((string) $entry->amount, '50000.00', 2) === 0));
+        $this->assertTrue($entries->contains(fn ($entry) => $entry->account_name === 'cash_in_escrow'
+            && $entry->entry_type === 'credit'
+            && bccomp((string) $entry->amount, '50000.00', 2) === 0));
+        $this->assertFalse($entries->contains(fn ($entry) => $entry->account_name === 'vendor_payable'));
+    }
+
     public function test_admin_payout_allocation_accepts_closed_return_cases_consistently_with_vendor_balance(): void
     {
         $this->mockPaystackTransferSuccess('TRF_CLOSED_RETURN_ELIGIBILITY_01');
