@@ -41,7 +41,7 @@ class LogisticsCompanyPayableService
                 throw new InvalidArgumentException('Verified customer payment and confirmed supplier availability are required before logistics assignment.');
             }
             if (in_array($locked->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true)
-                || $locked->received_at !== null || $locked->pickup_confirmed_by_rider === true) {
+                || $locked->received_at !== null || $locked->rider_id !== null) {
                 throw new InvalidArgumentException('The payable cannot be overridden after rider custody is confirmed, customer handover, or a terminal order outcome.');
             }
             $company = LogisticsCompanyProfile::query()
@@ -220,8 +220,8 @@ class LogisticsCompanyPayableService
                 throw new InvalidArgumentException('The customer payment must be verified before setting a logistics-company payable.');
             }
             if (in_array($locked->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true)
-                || $locked->received_at !== null || $locked->rider_id !== null) {
-                throw new InvalidArgumentException('The payable cannot be overridden after customer handover or a terminal order outcome.');
+                || $locked->received_at !== null || $locked->pickup_confirmed_by_rider === true) {
+                throw new InvalidArgumentException('The payable cannot be overridden after rider custody is confirmed, customer handover, or a terminal order outcome.');
             }
             if (!$locked->logistics_company_id) {
                 throw new InvalidArgumentException('Assign an approved logistics company before overriding its payable.');
