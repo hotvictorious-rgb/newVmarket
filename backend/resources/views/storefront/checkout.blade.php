@@ -178,7 +178,7 @@
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
                                 <span>In-Shop Counter Pickup</span>
                             </strong>
-                            <span style="font-size: 12px; color: #64748B; line-height: 1.4; display: block;">Collect &amp; inspect physically at {{ $product->shop->name }} counter. Pay &#8358;0 online upfront; hand over OTP only upon approval.</span>
+                            <span style="font-size: 12px; color: #64748B; line-height: 1.4; display: block;">Victorious MARKET coordinates doorstep delivery within Uyo. Verify the order using the delivery OTP and required handover evidence.</span>
                         </label>
 
                         <!-- Doorstep Delivery Card -->
@@ -260,7 +260,7 @@
                             <div>
                                 <strong style="font-size: 14px; color: #1E1B4B; display: block; margin-bottom: 4px;">&#8358;0.00 Online Payment Upfront &mdash; Inspect First at Merchant Counter</strong>
                                 <p style="font-size: 12px; color: #3730A3; margin: 0; line-height: 1.5;">
-                                    When picking up in person, you do not pay online upfront. Visit <strong>{{ $product->shop->name ?? 'the shop' }}</strong>, physically inspect and verify your items at the counter, and pay directly after you are 100% satisfied.
+                                    Public pickup and cash-on-delivery are not available. Pay securely through the approved Paystack checkout. after you are 100% satisfied.
                                 </p>
                             </div>
                         </div>
@@ -385,7 +385,7 @@
                         <div style="font-size: 12px; color: #64748B; margin-top: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                             <span style="display: inline-flex; align-items: center; gap: 4px;">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                                <span>{{ $product->shop->name ?? 'Verified Merchant' }}</span>
+                                <span>Victorious MARKET</span>
                             </span>
                             &bull; <span>Qty: {{ $quantity }}</span>
                             &bull;
