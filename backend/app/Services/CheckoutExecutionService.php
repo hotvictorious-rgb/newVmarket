@@ -274,10 +274,7 @@ class CheckoutExecutionService
                     }
                 }
                 $deliveryBulkySurcharge = $bulkySurcharge;
-                $deliveryFee = BcMathService::add(
-                    $deliveryBaseFee,
-                    BcMathService::mul($deliveryBulkySurcharge, (string) $deliveryBulkyQuantity)
-                );
+                $deliveryFee = $deliveryCorridor->calculateCustomerFee($deliveryBulkyQuantity);
             }
 
             // Cashback Redemption Check under Pessimistic Balance Reservation
