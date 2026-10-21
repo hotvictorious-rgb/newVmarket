@@ -8,7 +8,7 @@
 
 ## 1. Authority and change control
 
-This document is the single source of truth for launch business rules. The README, business overview, payment/refund policy, delivery rules, payout policy, implementation audit and legal-document source must agree with it. If an older document or code path conflicts, record the conflict and align it before implementation. Do not merge broad audit-branch changes into `main` without explicit owner approval.
+This document is the single source of truth for launch business rules. The README, business overview, detailed retailer model, operational business rules, payment/refund policy, delivery plan, payout policy, implementation audit and legal-document source must agree with it. Detailed documents may specify implementation acceptance criteria but cannot override this policy. Older code, tests, seeded legal text or documents that conflict are obsolete for new retailer transactions and must be corrected or explicitly isolated as legacy-only before release. Do not merge broad audit-branch changes into `main` without explicit owner approval.
 
 This specification does not override applicable Nigerian law, consumer rights, valid warranty obligations, payment-provider terms or contractual obligations that cannot lawfully be excluded. Customer-facing legal wording requires appropriate Nigerian legal review before publication.
 
