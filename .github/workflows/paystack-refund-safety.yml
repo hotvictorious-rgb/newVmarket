@@ -70,6 +70,12 @@ jobs:
           php -l app/Http/Controllers/Api/VendorTerminalApiController.php
           php -l app/Services/NotificationDispatchService.php
           php -l app/Services/CheckoutExecutionService.php
+          php -l app/Services/CustomerDeliveryPricingService.php
+          php -l app/Models/DeliveryLane.php
+          php -l app/Models/DeliveryCorridor.php
+          php -l app/Models/LogisticsCompanyCorridorRate.php
+          php -l app/Http/Controllers/Web/AdminDeliveryCorridorController.php
+          php -l database/migrations/2026_10_21_000002_create_delivery_corridors_and_company_rates.php
           php -l app/Services/SourcingAllocationService.php
           php -l app/Services/SupplierReassignmentRecoveryService.php
           php -l app/Http/Controllers/Web/AdminSupplierRecoveryController.php
@@ -124,7 +130,7 @@ jobs:
           php -l tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php
 
       - name: Run financial audit and payment hardening proof tests
-        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php tests/Feature/FinancialJournalIdempotencySchemaTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/AuditHardeningAndSecurityProofTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/AutomatedSupplierSourcingTest.php tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php --display-warnings
+        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php tests/Feature/FinancialJournalIdempotencySchemaTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/AuditHardeningAndSecurityProofTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/AutomatedSupplierSourcingTest.php tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php tests/Feature/PortalWebTest.php tests/Feature/ModularArchitectureAndMaintainabilityTest.php tests/Unit/DeliveryCorridorTariffTest.php --display-warnings
 
       - name: Run supplier bank update regression tests
         run: |
