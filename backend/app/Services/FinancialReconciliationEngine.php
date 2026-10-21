@@ -7,6 +7,7 @@ use App\Models\LogisticsPayoutRequest;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ReturnCase;
+use App\Models\RetailerSupplierPayoutAllocation;
 use App\Models\VendorProfile;
 use App\Models\ProcessedWebhookEvent;
 use App\Models\VendorPayoutRequest;
@@ -218,11 +219,15 @@ class FinancialReconciliationEngine
                 'id', 'order_id', 'quantity', 'fulfillment_supplier_vendor_id', 'fulfillment_supplier_cost_snapshot',
             ])->groupBy('order_id');
             $entriesByOrder = FinancialJournalEntry::whereIn('order_id', $orderIds)
-                ->where('account_name', 'supplier_payable')
-                ->get(['order_id', 'order_item_id', 'event_id', 'beneficiary_type', 'beneficiary_id', 'entry_type', 'amount'])
+                ->whereIn('account_name', ['supplier_payable', 'supplier_payout_payable'])
+                ->get(['order_id', 'order_item_id', 'event_id', 'account_name', 'beneficiary_type', 'beneficiary_id', 'entry_type', 'amount'])
                 ->groupBy('order_id');
 
             $itemsById = $itemsByOrder->flatten(1)->keyBy('id');
+            $payoutAllocationsByItem = RetailerSupplierPayoutAllocation::whereIn('order_item_id', $itemsById->keys()->all())
+                ->whereIn('status', ['allocated', 'settled'])
+                ->get(['order_item_id', 'supplier_vendor_id', 'amount', 'status'])
+                ->groupBy('order_item_id');
             $refundedCasesByOrder = ReturnCase::whereIn('order_id', $orderIds)
                 ->whereNotNull('refunded_at')
                 ->with('items')
@@ -263,8 +268,9 @@ class FinancialReconciliationEngine
                     $supplierId = (int) ($entry->beneficiary_id ?? 0);
                     $journalItemId = (int) ($entry->order_item_id ?? 0);
                     $journalItem = $itemsById->get($journalItemId);
-                    if ($supplierId <= 0 || $entry->beneficiary_type !== VendorProfile::class) {
-                        $orderErrors[] = 'A supplier_payable journal entry has an invalid supplier beneficiary.';
+                    if ($supplierId <= 0 || $entry->beneficiary_type !== VendorProfile::class
+                        || !in_array($entry->account_name, ['supplier_payable', 'supplier_payout_payable'], true)) {
+                        $orderErrors[] = 'A supplier payable journal entry has an invalid supplier beneficiary or account.';
                         continue;
                     }
                     if (!$journalItem || (int) $journalItem->order_id !== (int) $order->id) {
@@ -305,10 +311,26 @@ class FinancialReconciliationEngine
                             continue;
                         }
 
+                        $settledAllocations = $payoutAllocationsByItem->get($item->id, collect())
+                            ->where('status', 'settled');
+                        if ($settledAllocations->isNotEmpty()) {
+                            // A supplier already paid for this item. Refund accounting must
+                            // use supplier recovery/loss mapping, not debit payable twice.
+                            continue;
+                        }
+
+                        $activeAllocations = $payoutAllocationsByItem->get($item->id, collect())
+                            ->where('status', 'allocated');
+                        if ($activeAllocations->isNotEmpty()) {
+                            $orderErrors[] = "Refunded return item #{$returnItem->id} conflicts with an active supplier payout reservation.";
+                            continue;
+                        }
+
                         $refundSupplierCost = BcMathService::mul((string) $unitCost, (string) $returnedQuantity);
                         $expectedRefundEvent = 'EVT-RETAILER-REFUND-' . $returnCase->id . '-SUPPLIER-PAYABLE-' . $returnItem->id;
                         $hasRefundDebit = $supplierJournalEntries->contains(function ($entry) use ($expectedRefundEvent, $supplierId, $refundSupplierCost) {
                             return $entry->event_id === $expectedRefundEvent
+                                && $entry->account_name === 'supplier_payable'
                                 && (int) $entry->order_item_id === (int) $item->id
                                 && $entry->beneficiary_type === VendorProfile::class
                                 && (int) $entry->beneficiary_id === $supplierId
@@ -330,6 +352,29 @@ class FinancialReconciliationEngine
                             $expectedByItemSupplier[$itemSupplierKey]['amount'] = BcMathService::sub(
                                 $expectedByItemSupplier[$itemSupplierKey]['amount'],
                                 $refundSupplierCost
+                            );
+                        }
+                    }
+                }
+
+                // Settled supplier payout allocations are no longer outstanding liabilities.
+                foreach ($payoutAllocationsByItem as $itemId => $allocationsForItem) {
+                    $settled = $allocationsForItem->where('status', 'settled');
+                    if ($settled->isEmpty()) {
+                        continue;
+                    }
+                    foreach ($settled as $allocation) {
+                        $supplierId = (int) $allocation->supplier_vendor_id;
+                        $amount = (string) $allocation->amount;
+                        $expectedBySupplier[$supplierId] = BcMathService::sub(
+                            $expectedBySupplier[$supplierId] ?? '0.00',
+                            $amount
+                        );
+                        $itemSupplierKey = $itemId . ':' . $supplierId;
+                        if (isset($expectedByItemSupplier[$itemSupplierKey])) {
+                            $expectedByItemSupplier[$itemSupplierKey]['amount'] = BcMathService::sub(
+                                $expectedByItemSupplier[$itemSupplierKey]['amount'],
+                                $amount
                             );
                         }
                     }
