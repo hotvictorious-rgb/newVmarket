@@ -688,13 +688,16 @@ class FinancialOperationService
 
             // Reversal of instant wallet credit if return case had wallet credit
             if ($returnCase) {
-                $walletCredit = CustomerWalletCredit::where('return_case_id', $returnCase->id)
-                    ->where('status', 'available')
-                    ->first();
-                if ($walletCredit) {
+                $walletCredits = CustomerWalletCredit::where('return_case_id', $returnCase->id)
+                    ->whereIn('status', ['available', 'pending_approval', 'quarantined'])
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+                foreach ($walletCredits as $walletCredit) {
                     $walletCredit->update([
                         'status' => 'reversed_for_cash_refund',
-                        'notes' => ($walletCredit->notes ? $walletCredit->notes . ' | ' : '') . 'Reversed upon verified gateway cash refund disbursement.',
+                        'notes' => trim(($walletCredit->notes ? $walletCredit->notes . ' | ' : '')
+                            . 'Reversed upon verified gateway cash refund disbursement.'),
                     ]);
                 }
 
