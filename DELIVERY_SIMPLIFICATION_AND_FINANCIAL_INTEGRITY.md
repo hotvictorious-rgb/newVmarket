@@ -10,7 +10,7 @@
 
 ## Mission
 
-Audit and migrate the existing Laravel application from marketplace/vendor-managed fulfilment to Victorious MARKET as a centralized retailer operating from Uyo. Preserve proven payment, refund, idempotency, evidence, and financial-integrity controls. Do not rebuild from scratch, make only frontend changes, or delete legacy logistics/financial data before mapping dependencies.
+Align and migrate the existing Laravel application to Victorious MARKET's owner-confirmed retailer model: VM controls the public catalogue, retail prices, customer payment workflow, customer relationship, sourcing decisions, and fulfilment coordination from Uyo. Suppliers are private sources, not public marketplace sellers. Delivery is coordinated by VM through approved logistics companies; authorized supplier-shop pickup remains available. Preserve proven payment, refund, idempotency, evidence, and financial-integrity controls. This is a migration plan, not a statement that migration is complete.
 
 ## Authoritative business-rule source
 
@@ -37,15 +37,15 @@ The current model is defined in [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.
 - Preserve existing payment verification, webhook authentication, refund authorization, original payment route, refund ceilings, immutable journal and reconciliation controls.
 - The legacy web checkout bypass of CheckoutExecutionService remains open until fixed and tested.
 
-## 30-Minute Stock-Hold and Late-Payment Reconciliation Policy
+## 24-Hour Reservation Hold and Late-Payment Reconciliation Policy
 
-For VICTORIOUS MARKET, if a customer pays after the 30-minute stock hold expires, the system should verify the payment first, check the stock again, and then either confirm the order or initiate a controlled refund. It should never assume that payment automatically means stock is still available.
+For Victorious MARKET, the currently documented supplier-shop reservation hold is 24 hours. If a payment is confirmed after a reservation expires, the system must verify the payment first, recheck stock atomically, and then either confirm the order if stock is still available or initiate a controlled refund. Payment confirmation alone does not prove stock remains available.
 
-The important distinction is that 30 minutes is the stock-hold duration, not a deadline that makes a customer's money disappear.
+The reservation expiry is a stock-control boundary, not a deadline that makes a customer's money disappear. Payment verification and refund obligations continue after expiry.
 
 ### How it should work
 
-1. **The 30-minute hold expires**  
+1. **The 24-hour reservation expires**  
    The system marks the hold as expired or awaiting reconciliation. If Paystack confirms that payment failed or was abandoned, the system releases the reserved quantity so another customer can buy it.
 
 2. **The customer actually pays late, but stock is still available**  
@@ -75,7 +75,7 @@ In the final step, the first customer's payment cannot be used to fulfil an orde
 
 Implement these rules:
 
-- The hold expires after 30 minutes, but payment verification and refund handling continue beyond that deadline.
+- The reservation expires after 24 hours, but payment verification and refund handling continue beyond that deadline.
 - A late payment can still be fulfilled if sufficient stock remains and the backend can safely allocate it.
 - Never oversell: use a database transaction and row-level locking or an equivalent atomic inventory mechanism.
 - Never refund based only on the browser's message. Verify the payment with Paystack first.
@@ -95,7 +95,7 @@ The V1 vendor interface uses a simple **In Stock / Out of Stock** toggle. Vendor
 1. **Binary listing mode:** The vendor's status is the source of truth for whether the listing is offered for sale. The backend must lock the product/listing during checkout, reject an out-of-stock listing, and prevent conflicting concurrent changes to the same listing. The platform cannot guarantee that the physical item remains available if the vendor sells it offline and fails to update the toggle.
 2. **Quantity-tracked mode, when available:** If the product has an authoritative physical count, the backend maintains physical, allocated, and held quantities. Available quantity is physical minus allocated minus active holds, clamped at zero. The invariant is allocated + held less than or equal to physical. The vendor UI may remain simple even if the backend maintains a verified quantity.
 3. **No invented quantities:** Do not infer a physical stock count from an In Stock toggle. Do not show customers a numeric quantity unless it comes from authoritative inventory.
-4. **30-minute payment hold:** A checkout hold is a temporary reservation for the capacity the backend can actually enforce. The hold expires after 30 minutes, but payment verification continues beyond that deadline. Do not release a reservation while payment is pending or uncertain until the authoritative gateway outcome is reconciled.
+4. **24-hour reservation hold:** A reservation is temporary and must be enforced atomically. The documented supplier-shop reservation expires after 24 hours. Do not release stock while payment is pending or uncertain until the authoritative gateway outcome is reconciled. Any different checkout inventory hold must be separately specified and approved; do not conflate it with the supplier-shop reservation.
 5. **Verified successful payment:** Convert the relevant active reservation into the order's allocation atomically. If the listing uses quantity-tracked inventory, decrement/allocate exactly once under database locks. If the vendor's offline sale made the item unavailable and the vendor's binary status was stale, do not silently cancel or pretend the item was delivered; move the paid order into an explicit paid-stock-unavailable review/refund workflow.
 6. **Failed payment:** Release the reservation only after the gateway result is authoritatively failed/abandoned or reconciliation establishes that no payment succeeded. Repeated callbacks must not release or allocate stock twice.
 7. **Concurrency:** Use database transactions, row locks, unique/idempotency constraints, and explicit reservation state. These controls prevent conflicting updates for tracked inventory. They do not reveal unreported offline sales or magically create a physical stock count.
@@ -220,14 +220,14 @@ Work in small, reviewable commits on a dedicated feature branch. Never silently 
 
 ## Independent merchandise and delivery-fee refund approval (binding)
 
-Merchandise and delivery are different captured components and must not be mixed in a single approval decision. One customer case may contain both, but the backend must create and audit two independent component decisions.
+Merchandise and delivery are different customer-charge components and must not be mixed in a single approval decision. One customer case may contain both, but the backend must create and audit two independent component decisions. For new retailer-model transactions, refunds are based on the original VM capture, item/discount snapshots, actual delivery fee and prior refund reservations—not marketplace commission shares or public vendor child orders. The former 90/5/5 and 90/10 allocations below are legacy-only and are not current retailer accounting.
 
-- Merchandise refund approval covers only identified item/order-line quantities and the merchandise amount after original discount allocation. It reverses only the actual merchandise vendor/cashback/platform allocation (90/5/5).
-- Delivery-fee refund approval covers only the delivery fee captured for the specific vendor child order and must have its own reason, evidence, approved amount, actor/time and decision. It reverses only the actual delivery vendor/platform allocation (90/10). Delivery approval is not implied by item approval, and item approval is not implied by delivery approval.
-- Each approved component creates its own idempotent refund operation and reservation, linked to the same original parent Paystack capture and the correct child vendor order. At launch, initiate refunds through Paystack against the verified original transaction; wallet refunds remain disabled. If Paystack emits `refund.needs-attention`, leave the component unresolved for authorized review; do not route to a wallet, make an off-platform payment, or use an alternate bank destination unless a separate owner-approved policy explicitly permits it.
+- Merchandise refund approval covers only identified VM order items, quantities and the refundable merchandise amount after the original discount allocation. Do not apply a 90/5/5 allocation to new retailer-model transactions. Cashback adjustments, if applicable to an existing obligation, are a separate ledger operation and not an additional gateway refund.
+- Delivery-fee refund approval covers only the actual VM delivery fee captured for the fulfilment/order and must have its own reason, evidence, approved amount, actor/time and decision. Do not apply a 90/10 vendor/platform allocation to new retailer-model transactions. Delivery approval is not implied by item approval, and item approval is not implied by delivery approval.
+- Each approved component creates its own idempotent refund operation and reservation, linked to the verified original VM Paystack capture and exact affected order/item or delivery component. Do not require a public vendor child order for the retailer model. At launch, initiate refunds through Paystack against the verified original transaction; wallet refunds remain disabled. If Paystack emits `refund.needs-attention`, leave the component unresolved for authorized review; do not route to a wallet, make an off-platform payment, or use an alternate bank destination unless a separate owner-approved policy explicitly permits it.
 - A component may be approved, rejected, pending, or confirmed independently of its sibling. Webhook events, failures, timeouts and reconciliation update only the exact matching component operation.
-- Enforce component and child-order ceilings plus the shared parent-capture ceiling under locks, counting confirmed refunds and active reservations across all child orders/components. A in_shop_pickup order has zero delivery fee and therefore no delivery-fee refund.
-- Do not calculate a refund using current product prices or current vendor delivery settings. Use immutable checkout allocation snapshots and previously refunded/reserved amounts.
+- Enforce item/component and shared original-capture ceilings under locks, counting confirmed refunds and active reservations. Supplier offers are internal sourcing records, not public seller accounts. An `in_shop_pickup` order has zero delivery fee and therefore no delivery-fee refund.
+- Do not calculate a refund using current product prices or current delivery settings. Use immutable checkout, captured-amount, discount and delivery-fee snapshots and previously refunded/reserved amounts.
 - Vendor recovery and cashback recovery are separate accounting operations. They do not authorize a refund and do not make customer refund completion dependent on vendor recovery.
 - The 24-hour return/claim window starts at verified delivery or confirmed in-shop pickup. Cashback's earliest maturity is `refund_window_expires_at + 24 hours` (equivalent to `+ 1 day`), provided no blocking return/dispute or fulfilment exception remains. This extra buffer affects cashback maturity only; it does not extend the customer claim window or promise Paystack refund completion within 24 hours.
 
@@ -239,5 +239,5 @@ Approval is not completion: each component is reported as refunded only after th
 - Both components approved through two separate decision/operation records.
 - One component remains pending/failed while the other confirms.
 - Zero-fee in-shop pickup rejects a delivery-fee refund.
-- Discounts, partial quantities, multiple vendors, concurrent reservations and aggregate parent-capture limits remain correct.
-- Each webhook and idempotency key is bound to the exact component, amount, child order and original capture.
+- Discounts, partial quantities, multiple supplier sources, concurrent reservations and aggregate original-capture limits remain correct without public vendor child-order commission accounting.
+- Each webhook and idempotency key is bound to the exact component, amount, VM order/item and original capture.
