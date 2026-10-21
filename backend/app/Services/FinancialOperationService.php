@@ -699,6 +699,24 @@ class FinancialOperationService
                 $merchandiseRefund = $returnCase->total_refundable_amount;
                 $deliveryFeeRefund = $returnCase->refund_delivery_fee && $order ? (string)$order->delivery_fee : '0.00';
 
+                if ($order && $order->retailer_model_order) {
+                    if (!$returnCase) {
+                        throw new \\RuntimeException('Retailer-model refunds require an associated return case for item-level accounting.');
+                    }
+                    $hasAuthorizedSupplierFault = $returnCase->admin_ruling === 'uphold_customer_claim'
+                        && $returnCase->cost_allocation === 'vendor_100'
+                        && !empty($returnCase->reviewed_by_admin_id)
+                        && !empty($returnCase->admin_ruled_at);
+                    app(\\App\\Services\\RetailerRefundAccountingService::class)->reverse(
+                        $order,
+                        $returnCase,
+                        (string) $merchandiseRefund,
+                        (string) $deliveryFeeRefund,
+                        (string) $disburseRef,
+                        (int) $lockedOp->id,
+                        $hasAuthorizedSupplierFault
+                    );
+                } else {
                 // 90/5/5 Reversal Splits
                 $vendorNetDebit = bcmul($merchandiseRefund, '0.9000', 2);
                 $customerCashbackDebit = bcmul($merchandiseRefund, '0.0500', 2);
@@ -757,6 +775,9 @@ class FinancialOperationService
                     'currency' => 'NGN',
                     'description' => "Platform 5% margin reversed for return Case #{$returnCase->case_number}",
                 ]);
+
+
+                }
 
                 // Credit Cash Escrow Outflow
                 FinancialJournalEntry::create([
