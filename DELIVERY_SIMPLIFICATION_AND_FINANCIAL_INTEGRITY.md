@@ -33,16 +33,7 @@ The current model is defined in [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.
   4. Once availability is confirmed, Admin assigns the order to an accredited Logistics Company (onboarded strictly by Admin).
   5. The Logistics Company dispatches its active fleet rider to collect the item from the supplier's shop and deliver to the customer.
   6. Delivery completion strictly requires customer verification OTP (`delivery_otp`) plus doorstep photo proof.
-- **In-Shop Pickup Flow (Inspect First, Pay at Shop via Paystack):**
-  1. Customer reserves online for free (₦0 upfront).
-  2. System automatically assigns the reservation to the supplier shop with the cheapest wholesale cost and available stock, issuing a unique reservation pass (`RES-XXXXXX`) and customer pickup OTP (`verification_code`).
-  3. Admin can override the assigned reservation pickup location if necessary.
-  4. Customer journeys to the designated shop and can call or chat Victorious MARKET customer support for assistance or directions.
-  5. Customer arrives at the supplier shop, presents the reservation code, and the supplier confirms the reservation.
-  6. Customer **physically inspects the item at the counter first** to ensure complete satisfaction.
-  7. Upon satisfaction, customer pays **directly to Victorious MARKET via Paystack** (mobile payment link, counter QR, or online counter checkout). Strictly NO cash or private vendor bank transfer.
-  8. Once Paystack confirms payment, supplier verifies the customer's pickup OTP (`verification_code`), records mandatory photo proof, and hands over the item.
-  9. If customer is dissatisfied upon inspection, they walk away without paying; the reservation is cancelled cleanly with zero refund overhead.
+- **Pickup requests (support-managed exception only):** Customers cannot create a new online pickup reservation or receive an automatically assigned supplier branch. They must contact Victorious MARKET support. Support verifies the complete order, availability of every item, physical readiness at one approved collection point, payment arrangements and customer agreement before confirming pickup or disclosing instructions. Do not direct customers to multiple suppliers by default. Existing reservation records and handlers remain legacy-only until safe retirement.
 - **Operating Base:** Uyo, Akwa Ibom State is the central operating base. Delivery is offered only where local supplier sourcing and accredited logistics partner coverage are confirmed.
 - **Delivery Riders:** Every rider assigned to new VM delivery must be active and linked to exactly one approved logistics company. Supplier-owned/vendor-linked riders are not eligible for new delivery assignments.
 - **Supplier Payment Eligibility:** Suppliers are paid their agreed wholesale cost strictly after verified successful customer delivery or confirmed in-shop pickup. Order placement, customer payment, or rider collection alone never unlocks supplier payment.
