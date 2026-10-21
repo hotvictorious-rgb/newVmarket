@@ -214,25 +214,11 @@ class PortalController extends Controller
             'customer_lga_id' => $lgaId,
         ]);
 
-        // Calculate coverage info
-        $hasLocalShops = Shop::where('lga_id', $lgaId)->where('pickup_enabled', true)->exists();
-        $activeLanes = DeliveryLane::where('destination_lga_id', $lgaId)->where('is_active', true)->get();
-
-        if ($hasLocalShops) {
-            $coverageStatus = 'pickup_and_delivery';
-            $statusBadge = '⚡ In-Shop Pickup & Same-Day Delivery Active';
-            $previewStatus = 'Pickup and delivery available in this local government';
-        } elseif ($activeLanes->isNotEmpty()) {
-            $minHours = $activeLanes->min('estimated_delivery_hours_min') ?? 12;
-            $maxHours = $activeLanes->max('estimated_delivery_hours_max') ?? 24;
-            $coverageStatus = 'transit_delivery';
-            $statusBadge = "🚚 Transit Delivery Corridor Active ({$minHours}-{$maxHours} hrs)";
-            $previewStatus = "Delivery corridor active ({$minHours}-{$maxHours} hrs delivery speed)";
-        } else {
-            $coverageStatus = 'regional';
-            $statusBadge = '📦 Nationwide Park Dispatch';
-            $previewStatus = 'Delivery options and speeds vary by regional dispatch';
-        }
+        // The location selector never promises pickup or out-of-Uyo dispatch.
+        // Product availability and the final customer fee are confirmed at checkout.
+        $coverageStatus = 'uyo_only';
+        $statusBadge = 'Uyo Local Delivery';
+        $previewStatus = 'Delivery is limited to Uyo. Eligible supplier availability and a recognised delivery corridor are confirmed at checkout.';
 
         return response()->json([
             'success' => true,
