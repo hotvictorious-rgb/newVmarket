@@ -192,8 +192,18 @@ class CheckoutExecutionService
                 }
                 $sourceLga = strtolower(trim((string) ($sourceShop->lga->name ?? '')));
                 $sourceState = strtolower(trim((string) ($sourceShop->lga->state->name ?? '')));
-                if ($sourceLga !== 'uyo' || $sourceState !== 'akwa ibom') {
-                    return ['error' => true, 'status_code' => 422, 'message' => 'Every selected supplier must have an active shop in Uyo, Akwa Ibom State.'];
+                $sourceVendor = VendorProfile::withTrashed()->with('user')->find($offer['vendor_id']);
+                if (
+                    $sourceLga !== 'uyo'
+                    || $sourceState !== 'akwa ibom'
+                    || (int) $sourceShop->vendor_id !== (int) $offer['vendor_id']
+                    || !$sourceVendor
+                    || $sourceVendor->trashed()
+                    || $sourceVendor->marketplace_status !== 'active'
+                    || !$sourceVendor->user
+                    || $sourceVendor->user->status !== 'active'
+                ) {
+                    return ['error' => true, 'status_code' => 422, 'message' => 'Every selected supplier must have an active supplier account and shop in Uyo, Akwa Ibom State.'];
                 }
             }
 
