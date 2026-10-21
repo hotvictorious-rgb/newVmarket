@@ -425,7 +425,7 @@
     <div class="vm-section-block" id="merchants" style="margin-bottom: 34px;">
         <div class="vm-section-header" style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px;">
             <div style="border-left: 4px solid var(--vm-info); padding-left: 12px;">
-                <h2 class="vm-section-title" style="font-size: 19px; font-weight: 800; color: #0F172A; margin: 0; line-height: 1.2;">Top Verified Merchants</h2>
+                <h2 class="vm-section-title" style="font-size: 19px; font-weight: 800; color: #0F172A; margin: 0; line-height: 1.2;">Victorious MARKET — Local Fulfillment</h2>
                 <p class="vm-section-desc" style="font-size: 13px; color: #64748B; margin-top: 3px;">One trusted local retailer sourcing from approved Uyo suppliers.</p>
             </div>
             <a href="#merchants" class="vm-section-link" style="font-size: 13px; font-weight: 700; color: var(--vm-info); text-decoration: none;">Browse Products &rarr;</a>
@@ -490,7 +490,7 @@
                     @if(request('scope') === 'all')
                         <span style="background: #EFF6FF; border: 1px solid #BFDBFE; color: #1D4ED8; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                            <span>Scope: All Delivering (Local + Transit)</span>
+                            <span>Uyo-only sourcing & delivery</span>
                             <a href="{{ route('storefront', array_filter(['category' => request('category'), 'search' => request('search'), 'condition' => request('condition')])) }}#catalog" style="color: #1D4ED8; text-decoration: none; font-weight: 900; margin-left: 2px; font-size: 14px;" title="Reset to local shops only">&times;</a>
                         </span>
                     @endif
