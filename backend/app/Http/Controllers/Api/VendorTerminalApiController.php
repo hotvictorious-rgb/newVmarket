@@ -409,8 +409,10 @@ class VendorTerminalApiController extends Controller
             if (!$assignment) {
                 return ['success' => false, 'status_code' => 404, 'message' => 'This order has no supplier assignment for your account or shop.'];
             }
-            if ($order->payment_status !== 'paid' || $order->order_status !== 'confirmed') {
-                return ['success' => false, 'status_code' => 422, 'message' => 'Supplier availability can only be confirmed after payment is verified and the order is confirmed.'];
+            if (!$order->retailer_model_order
+                || $order->payment_status !== 'paid'
+                || $order->order_status !== 'confirmed') {
+                return ['success' => false, 'status_code' => 422, 'message' => 'Supplier-assignment confirmation is only available for verified-paid retailer orders in confirmed state.'];
             }
             // A rejection is an order-wide sourcing hold. Do not let another supplier's
             // later confirmation overwrite the hold and accidentally reopen dispatch.
