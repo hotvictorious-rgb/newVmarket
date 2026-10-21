@@ -199,10 +199,10 @@
                     <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;">
                         <div style="display: flex; align-items: center; gap: 6px; color: #B45309; font-weight: 700; font-size: 13px; margin-bottom: 2px;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                            <span>Route Suspended: {{ $product->shop->lga->name ?? 'Origin' }} &rarr; {{ $activeCity }}</span>
+                            <span>Route Suspended: Uyo &rarr; {{ $activeCity }}</span>
                         </div>
                         <p style="font-size: 11.5px; color: #92400E; margin: 0; line-height: 1.4;">
-                            Doorstep delivery along this corridor is temporarily offline. You can still order for <strong>guaranteed free In-Store Counter Pickup</strong>!
+                            Delivery is available only within Uyo. If an exceptional pickup arrangement is possible, contact Victorious MARKET support before paying.
                         </p>
                     </div>
                 @endif
@@ -229,8 +229,8 @@
                             data-name="{{ $product->name }}" 
                             data-price="{{ $product->unit_price }}" 
                             data-image="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}"
-                            data-shop="{{ $product->shop->name ?? 'Verified Merchant' }}" 
-                            data-lga="{{ $product->shop->lga->name ?? 'Uyo' }}" 
+                            data-shop="Victorious MARKET" 
+                            data-lga="Uyo" 
                             data-slug="{{ $product->slug }}"
                             style="background: #5E17EB; color: #FFFFFF; border: none; font-weight: 800; font-size: 14px; padding: 14px 18px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(94, 23, 235, 0.35); transition: transform 0.15s ease;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
@@ -278,40 +278,10 @@
                 @endif
             </div>
 
-            <!-- Action 3: Inspect First, Pay Later (Pickup Reservation with Auth Shield) -->
-            <form method="POST" action="{{ route('reservation.create') }}" id="vmReservationForm" style="margin: 0 0 20px;"
-                  onsubmit="
-                      if (!window.vmIsCustomerAuth) {
-                          event.preventDefault();
-                          if (window.vmOpenAuthModal) {
-                              window.vmOpenAuthModal({
-                                  action: 'reservation',
-                                  title: 'Sign In to Reserve Item',
-                                  message: 'Sign in or create an account so your 24-hour physical shop inspection pass is officially tied to your phone number.'
-                              });
-                          } else {
-                              window.location.href = '/login';
-                          }
-                          return false;
-                      }
-                  ">
-                @csrf
-                <input type="hidden" name="product_id" value="{{ $product->id }}">
-                <input type="hidden" name="shop_id" value="{{ $product->shop_id }}">
-                <input type="hidden" name="customer_name" value="{{ Auth::user()->name ?? '' }}">
-                <input type="hidden" name="customer_phone" value="{{ Auth::user()->phone ?? '' }}">
-                @if($isProductInStock)
-                    <button type="submit" style="width: 100%; background: #F8FAFC; color: #0F172A; border: 1.5px solid #CBD5E1; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.15s ease;">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                        <span>Reserve for Free In-Shop Inspection (&#8358;0.00 Upfront)</span>
-                    </button>
-                @else
-                    <button type="button" disabled style="width: 100%; background: #F1F5F9; color: #94A3B8; border: 1.5px solid #E2E8F0; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 10px; cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                        <span>Unavailable for Reservation (Out of Stock)</span>
-                    </button>
-                @endif
-            </form>
+            <!-- Supplier pickup is not a public self-service flow. Exceptions are centrally approved. -->
+            <div style="margin: 0 0 20px; padding: 12px 14px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; color: #475569; font-size: 12.5px; line-height: 1.5;">
+                Victorious MARKET sources from approved suppliers in Uyo. Standard orders are paid through the platform and delivered within Uyo. Any pickup exception must be arranged directly with Victorious MARKET support; supplier shop details are not published here.
+            </div>
 
             <!-- Description -->
             <div style="border-top: 1px solid var(--vm-border); padding-top: 18px;">
