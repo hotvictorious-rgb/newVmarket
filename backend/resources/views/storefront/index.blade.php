@@ -167,23 +167,24 @@
             </div>
 
             <!-- Omnichannel Proximity Status Bar -->
+            <!-- Omnichannel Proximity Status Bar -->
             <div class="vm-proximity-strip" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; padding: 10px 18px; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--vm-shadow-xs);">
                 <div class="vm-proximity-info" style="display: flex; align-items: center; gap: 10px; font-size: 13.5px;">
                     <span class="vm-proximity-icon" style="color: var(--vm-primary); display: inline-flex; align-items: center;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                     </span>
                     <div class="vm-proximity-text" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                        <span class="vm-proximity-label" style="color: #64748B;">Your Location:</span>
+                        <span class="vm-proximity-label" style="color: #64748B;">Delivering to:</span>
                         <strong class="vm-proximity-highlight" id="vmProximityCityText" style="color: #0F172A; font-weight: 700;">{{ $activeCity ?? 'Uyo' }}, {{ $activeState ?? 'Akwa Ibom' }}</strong>
                         <span class="vm-proximity-dot" style="color: #CBD5E1;">•</span>
                         <span class="vm-proximity-mode-tag" id="vmProximityStatusTag" style="background: rgba(94, 23, 235, 0.08); color: var(--vm-primary); font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px;">
                             <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--vm-primary);"></span>
-                            <span>{{ $statusBadge ?? 'Pickup & Delivery Active' }}</span>
+                            <span>{{ $statusBadge ?? 'Door-to-Door Delivery in Uyo' }}</span>
                         </span>
                     </div>
                 </div>
                 <button type="button" class="vm-proximity-switch-btn" onclick="if(window.vmOpenLocationModal) window.vmOpenLocationModal(); else document.getElementById('vmLocationModal').classList.add('active');" style="background: #F8FAFC; border: 1px solid var(--vm-border); border-radius: 8px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; color: #334155; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;">
-                    <span>Change Location</span>
+                    <span>Change Destination</span>
                     <span class="vm-caret">&#9662;</span>
                 </button>
             </div>
@@ -195,14 +196,14 @@
     <!-- 2. Amazon-Inspired Quad Discovery & Recommendation Grid -->
     <div class="vm-amazon-discovery-grid">
 
-        <!-- Card 1: Victorious MARKET Uyo Fulfillment -->
+        <!-- Card 1: Central Fulfilment from Uyo Hub -->
         <div class="vm-discovery-card" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: var(--vm-shadow-xs);">
             <div class="vm-discovery-card-header" style="margin-bottom: 14px;">
                 <div class="vm-discovery-badge-pill" style="display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 999px; background: rgba(94, 23, 235, 0.08); color: var(--vm-primary); margin-bottom: 6px;">
                     <span class="vm-badge-dot" style="width: 5px; height: 5px; border-radius: 50%; background: var(--vm-primary);"></span>
-                    <span>VERIFIED LOCAL HUBS</span>
+                    <span>CENTRAL RETAIL FULFILLMENT</span>
                 </div>
-                <h3 class="vm-discovery-card-title" style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0;">Victorious MARKET in <span class="vm-dynamic-city-label">{{ $activeCity ?? 'Uyo' }}</span></h3>
+                <h3 class="vm-discovery-card-title" style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0;">Fulfilling to <span class="vm-dynamic-city-label">{{ $activeCity ?? 'Uyo' }}</span> from Uyo Hub</h3>
             </div>
             
             <div class="vm-discovery-quad-grid" id="vmShopsGridContainer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
@@ -211,7 +212,7 @@
 
             <div class="vm-discovery-card-footer">
                 <a href="#merchants" class="vm-discovery-card-link" style="font-size: 12.5px; font-weight: 700; color: var(--vm-primary); text-decoration: none;">
-                    Browse Products →
+                    Explore Sourcing Hubs in Uyo →
                 </a>
             </div>
         </div>

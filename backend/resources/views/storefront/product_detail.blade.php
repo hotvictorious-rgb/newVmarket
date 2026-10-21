@@ -93,11 +93,23 @@
                 {{ $product->name }}
             </h1>
 
-            <!-- Central retailer identity; private supplier identity is never displayed. -->
+            <!-- Authoritative Retailer Entity & Central Dispatch Hub -->
             <div style="font-size: 13px; color: #64748B; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 8px 12px;">
-                <span style="font-weight: 700; color: #0F172A;">Sold by Victorious MARKET</span>
+                <span style="display: inline-flex; align-items: center; gap: 5px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/></svg>
+                    <span>Retailer: <strong style="color: var(--vm-primary);">Victorious MARKET</strong></span>
+                </span>
                 <span style="opacity: 0.4;">•</span>
-                <span>Locally sourced from approved Uyo suppliers</span>
+                <span style="display: inline-flex; align-items: center; gap: 5px; color: #334155;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284C7" stroke-width="2.2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <span>Dispatch Origin: <strong style="color: #0284C7;">Uyo Central Hub, Akwa Ibom</strong></span>
+                </span>
+                @if($product->shop && $product->shop->slug)
+                    <span style="opacity: 0.4;">•</span>
+                    <span style="display: inline-flex; align-items: center; gap: 5px; color: #64748B;">
+                        <span>Sourcing Partner: <a href="{{ route('shop.storefront', $product->shop->slug) }}" style="color: #64748B; text-decoration: none; font-weight: 600;">{{ $product->shop->name }}</a></span>
+                    </span>
+                @endif
             </div>
 
             <!-- Price & Cashback Banner -->
@@ -155,7 +167,7 @@
                     @if($isProductInStock)
                         <span style="width: 8px; height: 8px; border-radius: 50%; background: #10B981; display: inline-block;"></span>
                         <strong style="color: #0F172A; font-size: 13.5px;">In Stock</strong>
-                        <span style="font-size: 12px; color: #64748B;">(Availability confirmed with an approved Uyo supplier)</span>
+                        <span style="font-size: 12px; color: #64748B;">(Verified Central Stock)</span>
                     @else
                         <span style="width: 8px; height: 8px; border-radius: 50%; background: #EF4444; display: inline-block;"></span>
                         <strong style="color: #DC2626; font-size: 13.5px;">Out of Stock</strong>
@@ -177,10 +189,10 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <span style="font-size: 11.5px; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 5px;">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                        <span>Fulfillment to Your Location:</span>
+                        <span>Delivering to:</span>
                     </span>
                     <button type="button" onclick="if(window.vmOpenLocationModal) window.vmOpenLocationModal();" style="background: none; border: none; color: var(--vm-primary); font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline; padding: 0;">
-                        Change ({{ $activeCity }})
+                        Change Destination ({{ $activeCity }})
                     </button>
                 </div>
 
@@ -188,7 +200,7 @@
                     <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
                         <div style="display: flex; align-items: center; gap: 8px; color: #1D4ED8; font-weight: 700; font-size: 13.5px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                            <span>Doorstep to {{ $activeCity }}: &#8358;{{ number_format((float)$deliveryCheck['fee'], 2) }}</span>
+                            <span>{{ strtolower($activeCity) === 'uyo' ? 'Doorstep to' : 'Regional Delivery to' }} {{ $activeCity }}: &#8358;{{ number_format((float)$deliveryCheck['fee'], 2) }}</span>
                         </div>
                         <span style="background: #DBEAFE; color: #1E40AF; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -199,25 +211,21 @@
                     <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;">
                         <div style="display: flex; align-items: center; gap: 6px; color: #B45309; font-weight: 700; font-size: 13px; margin-bottom: 2px;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                            <span>Route Suspended: Uyo &rarr; {{ $activeCity }}</span>
+                            <span>Route Opening Soon: Uyo Central Hub &rarr; {{ $activeCity }}</span>
                         </div>
                         <p style="font-size: 11.5px; color: #92400E; margin: 0; line-height: 1.4;">
-                            Delivery is available only within Uyo. If an exceptional pickup arrangement is possible, contact Victorious MARKET support before paying.
+                            Delivery to this destination is currently being onboarded. Prefer pickup? Contact Victorious MARKET support to coordinate verified collection at our Uyo Central Hub.
                         </p>
                     </div>
                 @endif
 
-                @if($pickupCheck['is_available'])
-                    <div style="background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-                        <div style="display: flex; align-items: center; gap: 8px; color: #065F46; font-size: 12.5px; font-weight: 600;">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                            <span>Pickup exceptions are arranged only through Victorious MARKET support</span>
-                        </div>
-                        <span style="background: #D1FAE5; color: #047857; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px;">
-                            Zero Risk
-                        </span>
+                <div style="background: #F1F5F9; border: 1px solid #E2E8F0; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #475569; line-height: 1.4;">
+                    <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; color: #1E293B; margin-bottom: 3px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                        <span>Support-Assisted Pickup Policy</span>
                     </div>
-                @endif
+                    <span>Prefer pickup? Please call or WhatsApp Victorious MARKET support to ask whether pickup can be arranged for your complete order at our Uyo Central Hub.</span>
+                </div>
             </div>
 
             <!-- THE 3 PRIMARY CALL TO ACTION BUTTONS -->

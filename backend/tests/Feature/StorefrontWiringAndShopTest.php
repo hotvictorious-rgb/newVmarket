@@ -39,57 +39,25 @@ class StorefrontWiringAndShopTest extends TestCase
         $response->assertSee('/shop/');
     }
 
-    public function test_dedicated_shop_storefront_loads_with_profile_and_catalog()
+    public function test_dedicated_shop_storefront_redirects_to_central_storefront()
     {
         $shop = Shop::where('pickup_enabled', true)->first();
         $this->assertNotNull($shop, 'A shop should exist from seeder');
 
         $response = $this->get('/shop/' . $shop->slug);
 
-        $response->assertStatus(200);
-        $response->assertSee($shop->name);
-        $response->assertSee($shop->address);
-        $response->assertSee('ACCREDITED MERCHANT');
-        $response->assertSee('Store Operating Hours');
-
-        // Strict Platform Anti-Disintermediation Rules: Never expose vendor direct phone or WhatsApp
-        if (!empty($shop->phone)) {
-            $response->assertDontSee($shop->phone);
-        }
-        $response->assertDontSee('Call Store');
-        $response->assertDontSee('WhatsApp Merchant');
-
-        // Shop's products should appear in the catalog
-        $shopProduct = Product::where('shop_id', $shop->id)->first();
-        if ($shopProduct) {
-            $response->assertSee($shopProduct->name);
-        }
+        // Supplier shop pages expose private sourcing relationships and are retired
+        // under the single-retailer Victorious MARKET model.
+        $response->assertStatus(302);
+        $response->assertRedirect(route('storefront'));
+        $response->assertSessionHas('info');
     }
 
-    public function test_shop_storefront_supports_in_store_search_and_category_filtering()
-    {
-        $shop = Shop::where('pickup_enabled', true)->first();
-        $product = Product::where('shop_id', $shop->id)->first();
-
-        if ($product) {
-            // Search filter
-            $searchResponse = $this->get('/shop/' . $shop->slug . '?search=' . urlencode(substr($product->name, 0, 5)));
-            $searchResponse->assertStatus(200);
-            $searchResponse->assertSee($product->name);
-
-            // Category filter
-            if ($product->category) {
-                $catResponse = $this->get('/shop/' . $shop->slug . '?category=' . $product->category->slug);
-                $catResponse->assertStatus(200);
-                $catResponse->assertSee($product->name);
-            }
-        }
-    }
-
-    public function test_shop_storefront_returns_404_for_unknown_slug()
+    public function test_shop_storefront_redirects_for_any_slug()
     {
         $response = $this->get('/shop/nonexistent-store-slug-xyz');
-        $response->assertStatus(404);
+        $response->assertStatus(302);
+        $response->assertRedirect(route('storefront'));
     }
 
     public function test_product_detail_page_links_to_vendor_storefront()
@@ -143,7 +111,7 @@ class StorefrontWiringAndShopTest extends TestCase
         $response->assertSessionHas('error');
     }
 
-    public function test_unauthenticated_user_cannot_create_in_shop_reservation_without_account()
+    public function test_in_shop_reservation_creation_is_disabled_under_retailer_model()
     {
         $product = Product::firstOrFail();
         $response = $this->post(route('reservation.create'), [
@@ -155,8 +123,8 @@ class StorefrontWiringAndShopTest extends TestCase
         ]);
 
         $response->assertStatus(302);
-        $this->assertTrue(str_contains($response->headers->get('Location'), '/customer/login') || str_contains($response->headers->get('Location'), '/login'));
-        $response->assertSessionHas('info');
+        $response->assertRedirect(route('storefront'));
+        $response->assertSessionHas('error');
     }
 
     public function test_authenticated_customer_can_access_checkout_successfully()
@@ -181,19 +149,14 @@ class StorefrontWiringAndShopTest extends TestCase
         $response->assertSee('vmOpenAuthModal');
     }
 
-    public function test_storefront_filters_products_by_vendor_shop_lga()
+    public function test_storefront_delivering_to_destination_central_fulfilment()
     {
-        // When user chooses Eket, it should prioritize products where vendor shop is in Eket
+        // When customer selects delivery destination Eket, storefront confirms delivery destination and Uyo hub dispatch
         $response = $this->get('/?city=Eket');
         $response->assertStatus(200);
-        $response->assertSee('Stores Closer to You in');
+        $response->assertSee('Delivering to:');
         $response->assertSee('Eket');
-
-        // Check Ibom Fresh Eket Coldroom & Depot exists in Eket
-        $eketShop = Shop::whereHas('lga', fn($q) => $q->where('name', 'Eket'))->first();
-        if ($eketShop) {
-            $response->assertSee($eketShop->name);
-        }
+        $response->assertSee('from Uyo Hub');
     }
 
     public function test_storefront_supports_condition_filtering()

@@ -5,25 +5,19 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
             </div>
             <div>
-                <strong style="font-size: 13.5px; color: #1E3A8A; display: block; margin-bottom: 2px;">Victorious MARKET Uyo Delivery</strong>
+                <strong style="font-size: 13.5px; color: #1E3A8A; display: block; margin-bottom: 2px;">Delivering from Uyo Central to {{ $activeCity }}</strong>
                 <div style="font-size: 11.5px; color: #3B82F6; line-height: 1.4;">
-                    Approved suppliers are based in Uyo. Victorious MARKET coordinates collection and local delivery.
+                    Orders are centrally fulfilled from Uyo, Akwa Ibom State via verified regional logistics delivery.
                 </div>
             </div>
         </div>
-        <a href="{{ route('storefront', ['scope' => 'all']) }}#catalog" style="background: #FFFFFF; border: 1px solid #93C5FD; color: #1D4ED8; font-size: 11.5px; font-weight: 700; padding: 7px 14px; border-radius: 6px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
-            <span>View All Transit Options</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-        </a>
     </div>
 @endif
 
 @forelse($products as $product)
     @php
-        // Product cards represent the central retailer, not the private catalog contributor.
-        $shopLgaId = $selectedLgaId;
-        $isLocalShop = true;
-        $lane = null;
+        $isLocalUyo = strcasecmp($activeCity ?? 'Uyo', 'Uyo') === 0;
+        $lane = $activeLanes ? $activeLanes->firstWhere('destination_lga_id', $selectedLgaId) : null;
     @endphp
     <div class="vm-product-card">
         
@@ -54,22 +48,22 @@
 
                 <!-- Dynamic Proximity Tag -->
                 <span style="position: absolute; bottom: 8px; left: 8px; font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px;
-                    @if($isLocalShop)
+                    @if($isLocalUyo)
                         background: #ECFDF5; color: #059669; border: 1px solid rgba(5, 150, 105, 0.2);
                     @elseif($lane)
                         background: #EFF6FF; color: #1D4ED8; border: 1px solid rgba(29, 78, 216, 0.2);
                     @else
                         background: #F1F5F9; color: #475569; border: 1px solid #E2E8F0;
                     @endif">
-                    @if($isLocalShop)
+                    @if($isLocalUyo)
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                        <span>Uyo local delivery</span>
+                        <span>Doorstep Uyo &bull; Same-Day</span>
                     @elseif($lane)
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                        <span>Uyo local delivery</span>
+                        <span>Delivering to {{ $activeCity }} (&#8358;{{ number_format((float)$lane->base_fee) }})</span>
                     @else
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                        <span>Uyo local delivery</span>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <span>Route Opening Soon</span>
                     @endif
                 </span>
             </div>
@@ -77,12 +71,12 @@
             <!-- Product Information -->
             <div class="vm-product-info" style="padding: 12px 14px 10px;">
                 <div class="vm-product-shop" style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #64748B; margin-bottom: 5px;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                    <a href="{{ route('storefront') }}" style="color: #475569; text-decoration: none; font-weight: 600;">
-                        Victorious MARKET
-                    </a>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                    <span style="color: #475569; font-weight: 600;">
+                        Victorious MARKET Central
+                    </span>
                     <span style="opacity: 0.5;">•</span>
-                    <span style="color: #94A3B8;">Uyo</span>
+                    <span style="color: #94A3B8;">Uyo Hub</span>
                 </div>
 
                 <h3 class="vm-product-name" style="font-size: 14px; font-weight: 700; color: #0F172A; margin: 0 0 8px; line-height: 1.35; min-height: 36px;">

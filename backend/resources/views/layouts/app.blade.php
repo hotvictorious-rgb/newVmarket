@@ -934,8 +934,8 @@
                 </div>
             </a>
 
-            <!-- Your Location Selector Pill (Desktop) -->
-            <button type="button" class="vm-header-location-pill" id="vmHeaderLocationBtn" aria-label="Change Your Location">
+            <!-- Delivering to Selector Pill (Desktop) -->
+            <button type="button" class="vm-header-location-pill" id="vmHeaderLocationBtn" aria-label="Delivering to: {{ session('customer_city', 'Uyo') }}">
                 <span class="vm-location-pin-icon" style="color: var(--vm-primary);">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
@@ -943,9 +943,9 @@
                     </svg>
                 </span>
                 <div class="vm-location-labels">
-                    <span class="vm-location-sub">Your Location</span>
+                    <span class="vm-location-sub">Delivering to</span>
                     <span class="vm-location-main">
-                        <strong class="vm-active-city-label">{{ session('customer_city', 'Choose your location') }}</strong>
+                        <strong class="vm-active-city-label">{{ session('customer_city', 'Uyo') }}</strong>
                         <span class="vm-caret">▾</span>
                     </span>
                 </div>
@@ -1280,8 +1280,8 @@
                     </svg>
                 </div>
                 <div>
-                    <h3 class="vm-modal-title" id="vmLocationModalTitle">Choose your location</h3>
-                    <p class="vm-modal-subtitle">Delivery options and delivery speeds may vary for different locations</p>
+                    <h3 class="vm-modal-title" id="vmLocationModalTitle">Delivering to</h3>
+                    <p class="vm-modal-subtitle">Centrally fulfilled from Uyo. Door-to-door delivery in Uyo and verified regional delivery to active destinations.</p>
                 </div>
             </div>
 
@@ -1291,12 +1291,12 @@
                     <span class="vm-flag-tag">NG</span>
                     <span class="vm-country-name">Nigeria</span>
                 </div>
-                <span class="vm-country-sub">Nationwide Local Governments</span>
+                <span class="vm-country-sub">Uyo & Active Regional Routes</span>
             </div>
 
             <!-- Search Input with Autocomplete -->
             <div class="vm-form-group vm-lga-search-group">
-                <label for="vmLgaSearchInput" class="vm-form-label">Type your residential lga</label>
+                <label for="vmLgaSearchInput" class="vm-form-label">Search delivery destination LGA or city</label>
                 <div class="vm-input-icon-wrap">
                     <span class="vm-input-lead-icon">
                         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -1304,7 +1304,7 @@
                             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
                     </span>
-                    <input type="text" id="vmLgaSearchInput" class="vm-modal-input vm-lga-search-input" placeholder="Type your residential lga" value="{{ session('customer_city', 'Uyo') }}" autocomplete="off">
+                    <input type="text" id="vmLgaSearchInput" class="vm-modal-input vm-lga-search-input" placeholder="Search delivery LGA (e.g. Uyo, Eket, Ikot Ekpene, Aba)..." value="{{ session('customer_city', 'Uyo') }}" autocomplete="off">
                     <button type="button" class="vm-input-clear-btn" id="vmLgaClearBtn" aria-label="Clear">×</button>
                 </div>
 
@@ -1312,20 +1312,20 @@
                 <div class="vm-lga-dropdown-list" id="vmLgaDropdownList" style="display: none;"></div>
             </div>
 
-            <!-- Popular Local Governments Chips -->
+            <!-- Popular Delivery Destinations Chips -->
             <div class="vm-form-group" style="margin-bottom: 16px;">
-                <span class="vm-chips-heading">POPULAR LOCAL GOVERNMENTS:</span>
+                <span class="vm-chips-heading">ACTIVE DELIVERY DESTINATIONS:</span>
                 <div class="vm-city-chips-grid">
                     @php
-                        $popularCities = ['Abak', 'Eket', 'Ikot Abasi', 'Ikot Ekpene', 'Oron', 'Uyo'];
+                        $popularCities = ['Uyo', 'Eket', 'Ikot Ekpene', 'Oron', 'Abak', 'Ikot Abasi', 'Aba', 'Calabar', 'Port Harcourt'];
                         $currentActiveCity = session('customer_city', 'Uyo');
                         $popularLgas = \App\Models\Lga::whereIn('name', $popularCities)->pluck('id', 'name')->toArray();
                     @endphp
                     @foreach($popularCities as $pCity)
-                        <button type="button" class="vm-city-chip {{ $currentActiveCity === $pCity ? 'active' : '' }}" 
+                        <button type="button" class="vm-city-chip {{ strcasecmp($currentActiveCity, $pCity) === 0 ? 'active' : '' }}" 
                                 data-city="{{ $pCity }}" 
                                 data-id="{{ $popularLgas[$pCity] ?? '' }}"
-                                data-state="Akwa Ibom">
+                                data-state="{{ in_array($pCity, ['Aba']) ? 'Abia' : (in_array($pCity, ['Calabar']) ? 'Cross River' : (in_array($pCity, ['Port Harcourt']) ? 'Rivers' : 'Akwa Ibom')) }}">
                             <span class="vm-chip-dot"></span>
                             <span class="vm-chip-name">{{ $pCity }}</span>
                         </button>
@@ -1344,7 +1344,13 @@
                     </span>
                     <div>
                         <strong class="vm-selected-city-text" id="vmPreviewCity">{{ session('customer_city', 'Uyo') }}, {{ session('customer_state', 'Akwa Ibom') }}</strong>
-                        <small class="vm-selected-status-text" id="vmPreviewStatus">Pickup and delivery available in this local government</small>
+                        <small class="vm-selected-status-text" id="vmPreviewStatus">
+                            @if(strcasecmp(session('customer_city', 'Uyo'), 'Uyo') === 0)
+                                Door-to-door delivery within Uyo
+                            @else
+                                Logistics-managed regional delivery from Uyo
+                            @endif
+                        </small>
                     </div>
                 </div>
             </div>
@@ -1735,14 +1741,14 @@
                     if (statusText) {
                         previewStatus.textContent = statusText;
                     } else if (selectedCity.toLowerCase() === 'uyo') {
-                        previewStatus.textContent = 'Pickup and delivery available in this local government';
+                        previewStatus.textContent = 'Door-to-door delivery within Uyo';
                         previewStatus.style.color = '#16A34A';
-                    } else if (['eket', 'ikot ekpene', 'oron'].includes(selectedCity.toLowerCase())) {
-                        previewStatus.textContent = 'Delivery corridor active (12-24 hrs delivery speed)';
+                    } else if (['eket', 'ikot ekpene', 'oron', 'abak', 'ikot abasi', 'aba', 'calabar', 'port harcourt'].includes(selectedCity.toLowerCase())) {
+                        previewStatus.textContent = 'Logistics-managed regional delivery from Uyo (12–24 hrs)';
                         previewStatus.style.color = '#16A34A';
                     } else {
-                        previewStatus.textContent = 'Delivery options and speeds vary by regional dispatch';
-                        previewStatus.style.color = '#0284C7';
+                        previewStatus.textContent = 'Regional route being scheduled from Uyo';
+                        previewStatus.style.color = '#D97706';
                     }
                 }
             }

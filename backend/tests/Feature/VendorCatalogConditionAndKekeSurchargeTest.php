@@ -1426,7 +1426,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'availability_expires_at' => Carbon::now()->addDay(),
         ]);
 
-        $this->vendor->update(['kyc_status' => 'pending']);
+        $this->vendor->update(['kyc_status' => 'submitted']);
 
         $this->assertNull(Product::marketplaceEligible()->find($product->id));
         $this->assertNull(
