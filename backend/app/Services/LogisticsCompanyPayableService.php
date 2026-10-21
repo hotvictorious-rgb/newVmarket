@@ -49,9 +49,10 @@ class LogisticsCompanyPayableService
                 ->whereKey($companyId)
                 ->where('status', 'active')
                 ->whereNull('deleted_at')
+                ->with('user')
                 ->first();
-            if (!$company) {
-                throw new InvalidArgumentException('The selected logistics company must be active and approved.');
+            if (!$company || !$company->user || $company->user->status !== 'active') {
+                throw new InvalidArgumentException('The selected logistics company and its user account must be active and approved.');
             }
             $companyHqLga = $company->hqLga()->with('state')->first();
             if (strtolower(trim((string) ($companyHqLga->name ?? ''))) !== 'uyo'
@@ -187,10 +188,11 @@ class LogisticsCompanyPayableService
                 ->whereKey($locked->logistics_company_id)
                 ->where('status', 'active')
                 ->whereNull('deleted_at')
+                ->with('user')
                 ->lockForUpdate()
                 ->first();
-            if (!$company) {
-                throw new InvalidArgumentException('The assigned logistics company must remain active at delivery release.');
+            if (!$company || !$company->user || $company->user->status !== 'active') {
+                throw new InvalidArgumentException('The assigned logistics company and its user account must remain active at delivery release.');
             }
 
             $amount = $locked->logistics_company_payable_amount ?? $locked->logistics_company_payable_default_amount;
