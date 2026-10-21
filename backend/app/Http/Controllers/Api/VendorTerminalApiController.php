@@ -1417,6 +1417,16 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
 
         $vendor = $ctx['vendor'];
 
+        if (RetailerSupplierPayoutRequest::where('supplier_vendor_id', $vendor->id)
+            ->whereIn('status', ['pending', 'processing', 'uncertain'])
+            ->exists()) {
+            return response()->json([
+                'status' => false,
+                'code' => 'SUPPLIER_PAYOUT_IN_FLIGHT',
+                'message' => 'Bank details cannot be changed while a supplier payout is pending or awaiting gateway reconciliation.',
+            ], 409);
+        }
+
         $validated = $request->validate([
             'bank_name' => 'required|string|max:100',
             'bank_code' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9_-]+$/'],
