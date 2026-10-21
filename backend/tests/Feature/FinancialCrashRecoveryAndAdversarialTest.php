@@ -295,15 +295,17 @@ class FinancialCrashRecoveryAndAdversarialTest extends TestCase
     }
 
     /**
-     * P0/P1 Test: Gateway reconciliation safely unlocks payout when Paystack confirms transfer was not executed.
+     * P0 regression: an unsuccessful verification response is not proof that a transfer did not execute.
+     * The payout must remain fenced until Paystack provides an authoritative outcome.
      */
-    public function test_admin_reconcile_vendor_payout_safely_unlocks_on_gateway_not_found(): void
+    public function test_admin_reconcile_vendor_payout_keeps_hold_when_gateway_verification_is_inconclusive(): void
     {
         $payout = VendorPayoutRequest::create([
             'vendor_id' => $this->vendor->id,
             'amount' => '9000.00',
             'status' => 'pending',
             'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
+            'gateway_status' => 'processing',
             'transfer_reference' => 'VND-TIMEOUT-FAIL-00',
             'bank_name' => 'Zenith Bank',
             'account_number' => '1012345678',
@@ -311,7 +313,7 @@ class FinancialCrashRecoveryAndAdversarialTest extends TestCase
             'admin_notes' => 'GATEWAY_TIMEOUT: Transfer outcome uncertain.',
         ]);
 
-        // Mock Paystack returning failed / not found
+        // "Not found" in an unsuccessful API response is not authoritative proof of non-execution.
         $mock = Mockery::mock(PaystackService::class);
         $mock->shouldReceive('verifyTransfer')
             ->with('VND-TIMEOUT-FAIL-00')
@@ -326,13 +328,13 @@ class FinancialCrashRecoveryAndAdversarialTest extends TestCase
             'payout_id' => $payout->id,
         ]);
 
-        $response->assertSessionHas('status');
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('remains on hold', session('error'));
 
         $payout->refresh();
         $this->assertEquals('pending', $payout->status);
-        $this->assertNull($payout->processing_token);
-        $this->assertEquals('failed', $payout->gateway_status);
-        $this->assertStringContainsString('was not executed at Paystack. Safely unlocked for review', session('status'));
+        $this->assertEquals('HOLD_TIMEOUT_RECONCILIATION', $payout->processing_token);
+        $this->assertEquals('processing', $payout->gateway_status);
     }
 
     /**
