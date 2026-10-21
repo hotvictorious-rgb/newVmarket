@@ -383,7 +383,7 @@ Required controls:
 - **Route regression coverage added:** `SupplierOfferSelectionServiceTest` now exercises customer denial, super-admin success, and expired-input rejection without an availability/audit write.
 - **CI updated:** the workflow syntax-check now explicitly includes the new controller and `SupplierOfferAvailabilityService`; the sourcing feature test file already runs in the selected suite.
 - **Important operational limit:** this endpoint records a human-reported supplier confirmation. It does not contact the supplier or independently prove stock. The admin must use the approved supplier-check process and enter a truthful expiry; the service does not invent a confirmation lifetime.
-- **Verification status:** code and tests have been committed to this working branch, but no result is claimed until the new workflow run completes and its logs are inspected.
+- **Verification status:** see Section 28 for the completed CI run tied to the controller import fix; the two earlier failures and their causes are preserved in workflow history.
 - **Still open / launch blockers:** the selector and snapshot fields remain unwired into the web checkout, API checkout, and pickup-payment writer; canonical catalogue eligibility remains coupled to legacy supplier/shop ownership; order-level legacy vendor/shop constraints and legacy split accounting remain unresolved.
 - **Release rule:** no merge to `main` and no deployment without explicit owner approval.
 
@@ -397,3 +397,13 @@ Required controls:
 - **Required next implementation sequence:** first establish the canonical product and fulfilment allocation schema without deleting historical vendor/shop references; then create a shared transactional selection-and-snapshot writer that selects eligible supplier offers server-side and persists immutable offer/vendor/shop/cost/currency snapshots; integrate web checkout and API checkout/intent with the same semantics; separately refactor reservation creation and pickup payment to bind a selected private offer while preserving inspect-before-pay and no upfront reservation charge. Map order-level constraints and all settlement/refund/report consumers before making the new fields financially authoritative.
 - **Safety note:** do not make an in-place broad checkout rewrite based only on this trace. The new snapshot fields exist, but the runtime writers and downstream financial consumers are not yet migrated. Keep all associated launch blockers OPEN until targeted regression tests prove both delivery and pickup paths, retries/concurrency, supplier changes, and historical compatibility.
 - **Status:** TRACE UPDATED; NO CHECKOUT OR PICKUP RUNTIME BEHAVIOR CHANGED IN THIS STEP.
+
+
+## 28. Supplier availability admin route regression suite passed — 21 October 2026
+
+- **Workflow:** [run 39572869961](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39572869961), commit `05f2d025bb6e0c7004b83cc722b6ac9f655b129b`.
+- **Observed result:** changed-file PHP syntax checks passed, including the new availability controller and service. The selected feature suite completed successfully: **156 passed, 1,028 assertions**.
+- **What was caught and corrected before this pass:** first, PHP namespace escaping in the new controller failed syntax validation; after that fix, route tests revealed the controller import was missing from `backend/routes/web.php`. Both issues were corrected. The passing run includes the route authorization/expiry tests and the service's audit/idempotency tests.
+- **Verification scope:** this proves the selected CI suite passed at the recorded commit, not that every repository test passes or that checkout/pickup sourcing is integrated. No production database or deployment was changed.
+- **Next blocker:** use the refreshed Section 27 writer map to plan a narrow, tested shared selection-and-snapshot integration. First address schema constraints and historical dependencies; do not switch order economics to supplier snapshots until both checkout writers, pickup payment, settlement, refunds and reports are mapped and covered.
+- **Release status:** not launch-ready; no merge to `main` and no deployment.
