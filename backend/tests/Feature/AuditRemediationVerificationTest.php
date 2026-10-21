@@ -1670,4 +1670,53 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertNull($case->fresh()->refund_claim_token);
         $this->assertTrue(\App\Models\FinancialOperation::where('metadata->return_case_id', $case->id)->doesntExist());
     }
+
+    public function test_refund_dispatch_releases_reservation_if_reviewer_becomes_inactive_before_gateway_call(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $reviewer = User::create([
+            'name' => 'Active Refund Reviewer',
+            'email' => 'active-refund-reviewer@vmarket.ng',
+            'password' => bcrypt('AdminPass123!'),
+            'user_type' => 'admin_employee',
+            'status' => 'active',
+        ]);
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $reviewer->id,
+        ]);
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldNotReceive('initiateRefund');
+        $service = new \App\Services\FinancialOperationService($gateway);
+        $operation = $service->createRefundOperation(
+            $order,
+            '10000.00',
+            'Refund test for reviewer deactivation',
+            $case,
+            'REFUND-REVIEWER-DEACTIVATION-TEST',
+            [
+                'type' => 'admin_approved_return',
+                'approved_by_user_id' => $reviewer->id,
+                'refund_delivery_fee' => false,
+            ]
+        );
+
+        $reviewer->update(['status' => 'inactive']);
+        $result = $service->dispatchRefund($operation);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('failed', $result['status']);
+        $this->assertStringContainsString('reservation was released', $result['message']);
+        $this->assertSame('failed', $operation->fresh()->status);
+        $this->assertSame(0, \App\Models\FinancialReservation::where('financial_operation_id', $operation->id)->where('status', 'active')->count());
+        $this->assertGreaterThan(0, \App\Models\FinancialReservation::where('financial_operation_id', $operation->id)->where('status', 'released')->count());
+    }
 }
