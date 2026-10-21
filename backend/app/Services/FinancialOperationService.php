@@ -1020,13 +1020,6 @@ class FinancialOperationService
             if ($lockedOp->operation_type !== 'customer_refund') {
                 return ['success' => false, 'protected' => true, 'message' => 'Only customer-refund operations can use refund failure finalization.'];
             }
-            if (in_array($lockedOp->status, ['failed', 'reversed'], true)) {
-                return ['success' => true, 'idempotent' => true, 'status' => $lockedOp->status, 'operation' => $lockedOp];
-            }
-            if ($lockedOp->status === 'confirmed') {
-                return ['success' => false, 'protected' => true, 'message' => 'A confirmed refund cannot be downgraded to failed/reversed without a separate audited reversal workflow.'];
-            }
-
             $attempt = GatewayAttempt::where('financial_operation_id', $lockedOp->id)
                 ->where('gateway_reference', $expectedReference)
                 ->orderByDesc('id')
@@ -1052,6 +1045,16 @@ class FinancialOperationService
             if ($evidenceCurrency !== null
                 && strtoupper(trim((string) $evidenceCurrency)) !== strtoupper((string) $lockedOp->currency)) {
                 return ['success' => false, 'protected' => true, 'message' => 'Gateway failure currency conflicts with the persisted refund operation.'];
+            }
+
+            if (in_array($lockedOp->status, ['failed', 'reversed'], true)) {
+                if ($lockedOp->status !== $gatewayStatus) {
+                    return ['success' => false, 'protected' => true, 'message' => 'Terminal refund state conflicts with the authoritative gateway failure outcome.'];
+                }
+                return ['success' => true, 'idempotent' => true, 'status' => $lockedOp->status, 'operation' => $lockedOp];
+            }
+            if ($lockedOp->status === 'confirmed') {
+                return ['success' => false, 'protected' => true, 'message' => 'A confirmed refund cannot be downgraded to failed/reversed without a separate audited reversal workflow.'];
             }
 
             $orderId = (int) ($lockedOp->metadata['order_id'] ?? 0);
