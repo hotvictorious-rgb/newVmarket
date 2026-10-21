@@ -54,16 +54,27 @@ class AdminRetailerSupplierPayoutController extends Controller
         }
 
         if (empty($recipient['is_simulated'])) {
-            $verifiedAccountName = trim((string) data_get($recipient, 'data.details.account_name', ''));
+            $details = is_array(data_get($recipient, 'data.details')) ? data_get($recipient, 'data.details') : [];
+            $verifiedAccountName = trim((string) ($details['account_name'] ?? ''));
+            $verifiedAccountNumber = preg_replace('/[^0-9]/', '', (string) ($details['account_number'] ?? ''));
+            $verifiedBankCode = trim((string) ($details['bank_code'] ?? ''));
             $normalizeName = static fn (string $name): string => preg_replace('/[^A-Z0-9]/', '', strtoupper($name));
-            if ($verifiedAccountName === ''
-                || $normalizeName($verifiedAccountName) !== $normalizeName((string) $payout->account_name)) {
-                $reason = 'Paystack bank-account name verification is missing or does not match the supplier payout snapshot.';
-                $this->audit($request, 'retailer_supplier_payout_recipient_name_mismatch', $payout, [
+            $accountNameMatches = $verifiedAccountName !== ''
+                && $normalizeName($verifiedAccountName) === $normalizeName((string) $payout->account_name);
+            $accountNumberMatches = $verifiedAccountNumber !== ''
+                && $verifiedAccountNumber === preg_replace('/[^0-9]/', '', (string) $payout->account_number);
+            $bankCodeMatches = $verifiedBankCode !== ''
+                && $verifiedBankCode === (string) $payout->bank_code;
+            if (!$accountNameMatches || !$accountNumberMatches || !$bankCodeMatches) {
+                $reason = 'Paystack recipient details are missing or do not match the supplier payout bank snapshot.';
+                $this->audit($request, 'retailer_supplier_payout_recipient_details_mismatch', $payout, [
                     'account_name' => $payout->account_name,
                     'account_number_last4' => substr((string) $payout->account_number, -4),
+                    'bank_code' => $payout->bank_code,
                 ], [
                     'verified_account_name' => $verifiedAccountName ?: null,
+                    'verified_account_number_last4' => $verifiedAccountNumber !== '' ? substr($verifiedAccountNumber, -4) : null,
+                    'verified_bank_code' => $verifiedBankCode ?: null,
                     'action' => 'transfer_blocked_before_submission',
                 ]);
                 $released = app(RetailerSupplierPayoutService::class)->reverse($payout->id, 'not_submitted', $reason);
