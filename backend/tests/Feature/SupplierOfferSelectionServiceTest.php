@@ -1,20 +1,20 @@
 <?php
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\Category;
-use App\\Models\\Country;
-use App\\Models\\Lga;
-use App\\Models\\Product;
-use App\\Models\\Shop;
-use App\\Models\\State;
-use App\\Models\\SupplierOffer;
-use App\\Models\\User;
-use App\\Models\\VendorProfile;
-use App\\Services\\SupplierOfferSelectionService;
-use Carbon\\Carbon;
-use Illuminate\\Foundation\\Testing\\RefreshDatabase;
-use Tests\\TestCase;
+use App\Models\Category;
+use App\Models\Country;
+use App\Models\Lga;
+use App\Models\Product;
+use App\Models\Shop;
+use App\Models\State;
+use App\Models\SupplierOffer;
+use App\Models\User;
+use App\Models\VendorProfile;
+use App\Services\SupplierOfferSelectionService;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class SupplierOfferSelectionServiceTest extends TestCase
 {
@@ -228,7 +228,7 @@ class SupplierOfferSelectionServiceTest extends TestCase
         $service = app(SupplierOfferSelectionService::class);
         $this->assertNull($service->selectLowestCost($this->product, 'doorstep_delivery'));
 
-        $this->expectException(\\InvalidArgumentException::class);
+        $this->expectException(\InvalidArgumentException::class);
         $service->selectLowestCost($this->product, 'customer_chooses_supplier');
     }
 
