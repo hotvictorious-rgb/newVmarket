@@ -3747,6 +3747,29 @@ class PortalController extends Controller
 
         $originLgaId = (int)$validated['origin_lga_id'];
 
+        // New state-wide corridors are forbidden under the Uyo-only retailer policy.
+        if (!empty($validated['destination_state_id'])) {
+            return back()->withErrors([
+                'destination_state_id' => 'Victorious MARKET does not offer out-of-Uyo or interstate delivery corridors.',
+            ]);
+        }
+
+        $originPolicyLga = Lga::with('state')->find($originLgaId);
+        $destinationPolicyLga = !empty($validated['destination_lga_id'])
+            ? Lga::with('state')->find((int) $validated['destination_lga_id'])
+            : null;
+        $isUyoPolicyLga = static function ($lga): bool {
+            return $lga
+                && strcasecmp(trim((string) $lga->name), 'Uyo') === 0
+                && $lga->state
+                && strcasecmp(trim((string) $lga->state->name), 'Akwa Ibom') === 0;
+        };
+        if (!$isUyoPolicyLga($originPolicyLga) || !$isUyoPolicyLga($destinationPolicyLga)) {
+            return back()->withErrors([
+                'destination_lga_id' => 'Only Uyo-to-Uyo delivery configuration is allowed.',
+            ]);
+        }
+
         // Case A: State-Level Corridor Toggle (Out-of-State)
         if (!empty($validated['destination_state_id'])) {
             $stateId = (int)$validated['destination_state_id'];
