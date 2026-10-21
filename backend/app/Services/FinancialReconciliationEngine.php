@@ -358,11 +358,8 @@ class FinancialReconciliationEngine
                 }
 
                 // Settled supplier payout allocations are no longer outstanding liabilities.
-                foreach ($payoutAllocationsByItem as $itemId => $allocationsForItem) {
-                    $settled = $allocationsForItem->where('status', 'settled');
-                    if ($settled->isEmpty()) {
-                        continue;
-                    }
+                foreach ($items as $item) {
+                    $settled = $payoutAllocationsByItem->get($item->id, collect())->where('status', 'settled');
                     foreach ($settled as $allocation) {
                         $supplierId = (int) $allocation->supplier_vendor_id;
                         $amount = (string) $allocation->amount;
@@ -370,7 +367,7 @@ class FinancialReconciliationEngine
                             $expectedBySupplier[$supplierId] ?? '0.00',
                             $amount
                         );
-                        $itemSupplierKey = $itemId . ':' . $supplierId;
+                        $itemSupplierKey = $item->id . ':' . $supplierId;
                         if (isset($expectedByItemSupplier[$itemSupplierKey])) {
                             $expectedByItemSupplier[$itemSupplierKey]['amount'] = BcMathService::sub(
                                 $expectedByItemSupplier[$itemSupplierKey]['amount'],
