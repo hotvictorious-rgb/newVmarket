@@ -220,10 +220,6 @@ class AdminDeliveryCorridorController extends Controller
 
         return DB::transaction(function () use ($request, $id, $data) {
             $corridor = DeliveryCorridor::whereKey($id)->lockForUpdate()->firstOrFail();
-            if (!$corridor->is_active) {
-                throw new InvalidArgumentException('Activate the corridor before configuring an active company tariff.');
-            }
-
             $company = LogisticsCompanyProfile::query()
                 ->whereKey($data['logistics_company_id'])
                 ->where('status', 'active')
