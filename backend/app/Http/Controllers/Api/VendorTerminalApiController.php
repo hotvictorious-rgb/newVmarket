@@ -480,22 +480,33 @@ class VendorTerminalApiController extends Controller
                 return ['success' => false, 'status_code' => 404, 'message' => 'This order has no supplier assignment for your account or shop.'];
             }
             if (!$order->retailer_model_order || $order->payment_status !== 'paid'
-                || $order->order_status !== 'confirmed') {
-                return ['success' => false, 'status_code' => 422, 'message' => 'Only paid retailer orders awaiting supplier confirmation can be rejected through this workflow.'];
+                || !in_array($order->order_status, ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'], true)) {
+                return ['success' => false, 'status_code' => 422, 'message' => 'A supplier may report inability to fulfil only while the paid retailer order remains before dispatch.'];
             }
             if ($assignment->status === 'supplier_rejected') {
                 return ['success' => true, 'message' => 'This supplier assignment has already been rejected and remains on administrative hold.'];
             }
-            if ($assignment->status !== 'awaiting_supplier_confirmation') {
-                return ['success' => false, 'status_code' => 422, 'message' => 'Only assignments awaiting supplier confirmation can be rejected.'];
+            if (!in_array($assignment->status, ['awaiting_supplier_confirmation', 'supplier_confirmed', 'ready_for_collection'], true)
+                || $assignment->collected_at !== null || $assignment->status === 'collected') {
+                return ['success' => false, 'status_code' => 422, 'message' => 'Only an uncollected supplier assignment can be rejected.'];
             }
 
+            $previousAssignmentStatus = $assignment->status;
+            $previousSourcingStatus = $order->sourcing_status;
             $reason = trim($validated['reason']);
             $assignment->status = 'supplier_rejected';
             $assignment->supplier_rejected_at = Carbon::now();
             $assignment->supplier_response_notes = $reason;
+            // Invalidate any package OTP issued before the rejection.
+            $assignment->supplier_pickup_code = null;
+            $assignment->handover_ready_at = null;
             $assignment->save();
 
+            // If the order was waiting for rider collection, move it back to a
+            // non-dispatchable pre-dispatch state. The order-wide hold is checked
+            // again inside the custody service, so stale OTPs cannot bypass it.
+            $order->order_status = 'confirmed';
+            $order->vendor_handover_ready_at = null;
             $order->sourcing_status = 'supplier_rejected';
             $order->save();
 
@@ -506,8 +517,8 @@ class VendorTerminalApiController extends Controller
                 'target_id' => $order->id,
                 'old_values' => [
                     'assignment_id' => $assignment->id,
-                    'assignment_status' => 'awaiting_supplier_confirmation',
-                    'sourcing_status' => 'awaiting_supplier_confirmation',
+                    'assignment_status' => $previousAssignmentStatus,
+                    'sourcing_status' => $previousSourcingStatus,
                 ],
                 'new_values' => [
                     'assignment_id' => $assignment->id,
