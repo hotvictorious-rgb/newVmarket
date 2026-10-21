@@ -30,34 +30,30 @@ class LegalDocumentSeeder extends Seeder
 Welcome to **VICTORIOUS MARKET** ("Victorious Market", "the Platform", "we", "us", or "our"). Victorious Market is an institutional digital commerce and fulfillment platform designed and managed on the fundamental philosophy:  
 **Trust First. Quality Always. Accountability at Every Stage.**
 
-By creating an account, browsing listings, placing orders, fulfilling deliveries, or applying to become an approved vendor, you agree to the applicable Terms and Conditions. Legacy logistics-fleet terms are inactive for new orders and do not authorize a fleet, hub, rider payout, or logistics-company payable for the current vendor-managed model.
+By browsing listings or placing orders, you agree to these Terms. Victorious MARKET is the customer-facing retailer. Suppliers are private sourcing partners and are not public marketplace sellers. VM controls customer-facing listings, prices, customer payments, refunds, support and fulfilment coordination. This policy does not prove that every application workflow has already been migrated.
 
 ---
 
-### 2. The Governed Marketplace Model
-Victorious Market is an intentionally **controlled, centrally governed marketplace**, not an open unmoderated classifieds board:
-* **Central Transaction Authority:** Victorious MARKET governs marketplace listings, order/payment records, payment verification, customer support, approved refunds, vendor settlement controls, disputes, and audit records. Vendors fulfil their own orders and manage their own approved riders. Do not describe funds as regulated or segregated escrow unless that arrangement is independently verified.
-* **Prohibition of Off-Platform Dealing:** Buyers, merchants, and riders must not bypass Victorious MARKET for marketplace transactions. The only permitted customer payment paths are (1) pay before delivery through Victorious MARKET checkout, or (2) reserve an in-shop pickup through Victorious MARKET and pay at the approved vendor shop through Victorious MARKET's authorised payment workflow. Vendors must not collect cash or private-account transfers outside the platform. In-shop reserve-and-pay is counter pickup only, not doorstep COD.
+### 2. Retailer and Customer Payment Model
+Victorious MARKET is a centrally managed retailer, not a public multi-vendor marketplace. Customers buy from VM. Suppliers remain private product sources whose offers must be approved and linked internally to VM product/order records.
+* **Central transaction authority:** VM controls public listings, retail prices, order/payment records, payment verification, customer support, authorized refunds and fulfilment coordination. Delivery is coordinated through approved logistics companies; each assigned rider must be linked to exactly one active logistics company.
+* **Authorized payment only:** Customers may pay before delivery through VM's authorized workflow or use an explicitly authorized supplier-shop reservation/payment-at-location flow where payment is processed and recorded through VM. Suppliers may not collect off-platform cash or private-account transfers. Doorstep COD is disabled at launch. Do not describe funds as regulated or segregated escrow unless independently verified.
 
 ---
 
-### 3. Merchant Accreditation & Catalog Integrity
-* **Verification Prerequisite:** No merchant is authorized to list products or receive orders without completing identity verification, physical shop verification, and Know-Your-Business (KYB) checks.
-* **Mandatory condition transparency:** Listings must accurately state product condition and any warranty/packaging/accessory limitations:
-  * **Brand New:** Accurately described new products. Factory-sealed/OEM status and any manufacturer warranty must be stated only where true and verified; do not imply a warranty that the supplier/manufacturer has not confirmed.
-  * **UK Used / Pre-Owned:** Thoroughly tested, functional pre-owned items with all cosmetic blemishes, battery health indicators, and missing accessories explicitly disclosed.
-* **Zero Counterfeit Tolerance:** Presenting used goods as new or listing replica/counterfeit items results in immediate merchant suspension, listing deletion, forfeiture of platform privileges, and referral to commercial law enforcement.
+### 3. Supplier Offers and Catalogue Integrity
+* Suppliers submit product information, condition, warranty/packaging/accessory limitations, wholesale price, availability and sourcing location for VM review. A submission does not automatically publish a listing or guarantee a purchase.
+* VM creates one canonical public listing for a new product or maps an approved supplier offer to an existing matching listing. Suppliers cannot publish listings, set VM's retail price, or contact customers outside authorized fulfilment/support procedures.
+* Listings must accurately state product condition and warranty/accessory limitations. Factory-sealed/OEM status and manufacturer warranty may be claimed only where true and verified. Pre-owned products must disclose cosmetic condition, battery health where relevant, and missing accessories.
+* Counterfeit or misrepresented goods are prohibited. VM may suspend an offer/supplier and pursue remedies consistent with contract and applicable law.
 
 ---
 
 ### 4. Payments, Refunds & Revenue Allocation
 * **Cryptographic Gateway Verification:** Payments are processed via Paystack. An order is marked as paid only after server-to-server cryptographic verification (HMAC-SHA512).
-* **Payment and settlement controls:** Customer payments are processed through the authorised Paystack workflow and reconciled to the parent checkout and vendor child orders. Do not promise that funds are held in a regulated or segregated escrow account unless that arrangement is independently verified. Vendor earnings become eligible only after confirmed fulfilment, expiry of the child's standard 24-hour claim window, and clearance of applicable holds and checks; eligibility is not an automatic transfer.
-* **Merchandise Revenue Allocation:**
-  * **90%** vendor merchandise allocation, recorded as earnings subject to fulfilment, the claim window, applicable holds, reconciliation, and manual payout approval.
-  * **5%** Victorious Customer Cashback / Loyalty Allocation.
-  * **5%** Victorious Market Platform Margin.
-* **Delivery-fee allocation:** 90% of the configured delivery fee is allocated to the owning vendor and 10% to Victorious MARKET. Vendors arrange and pay their own riders outside platform financial systems; new orders create no platform rider or logistics-company payable.
+* **Payment and reconciliation controls:** Customer payments must be verified server-side against the exact reference, amount, currency and order/customer binding. Refund approval, gateway submission, provider confirmation and reconciliation are distinct states. Do not promise regulated/segregated escrow unless independently verified.
+* **Retail accounting:** Supplier purchase cost is a VM cost/payable, not a vendor commission. Record customer revenue/receipts, supplier purchase costs/payables, delivery charges, approved logistics-company charges/payables, gateway fees, discounts, refunds and any separately approved cashback as distinct entries.
+* **No inherited split:** Former 90/5/5 merchandise and 90/10 delivery marketplace allocations do not apply to new retailer transactions. No new cashback accrual or logistics-company fee percentage may be inferred without explicit approval. Supplier payment eligibility begins only after verified successful customer delivery or confirmed pickup and required reconciliation; eligibility is not automatic transfer.
 
 ---
 
@@ -70,8 +66,8 @@ Victorious Market is an intentionally **controlled, centrally governed marketpla
 ---
 
 ### 6. Doorstep Acceptance & Partial Rejection Rights
-* **Item-Level Decisions:** In multi-item deliveries, customers maintain the right at the moment of doorstep delivery to inspect items and reject non-conforming, damaged, or incorrect items individually while accepting the valid remainder.
-* **Vendor return handling:** A rejected item is documented and returned to its owning vendor. The vendor may offer a suitable replacement/redelivery only with customer agreement. If the customer declines, no suitable replacement is available, or a refund/remedy is otherwise required, an authorised admin reviews the case. No mandatory platform hub inspection is imposed.
+* **Item-level decisions:** Where an order contains multiple items, VM records each affected item and quantity. Customers may report non-conforming, damaged or incorrect goods under the published return policy and applicable law.
+* **Return handling:** VM authorizes the return/inspection route and coordinates with the supplier as needed. A supplier cannot unilaterally decide the customer's remedy or make a customer refund dependent on supplier recovery. Any replacement requires customer agreement; no silent substitution is permitted.
 
 ---
 
@@ -88,15 +84,14 @@ Victorious Market is an intentionally **controlled, centrally governed marketpla
 
 ---
 
-### 9. 5% Victorious Customer Cashback Program
-* **Maturity and validity:** Eligible 5% merchandise cashback matures after confirmed fulfilment, the standard 24-hour customer claim window, and a separate additional 24-hour maturity buffer, provided no blocking case remains. Its 365-day validity period starts at actual `matures_at`, not at checkout or delivery.
-* **Non-Transferable:** Cashback is non-transferable and cannot be withdrawn to an external bank account. If the associated order is cancelled or refunded, reverse unspent cashback. If already-spent cashback is recoverable, track it separately and offset only against future cashback as it matures; never silently debit a cash balance.
+### 9. Cashback
+Existing cashback balances and obligations must be handled according to their recorded terms and applicable policy. The former 5% marketplace allocation does not authorize new cashback accrual on retailer-model sales. New cashback accrual, funding, maturity and expiry rules require explicit owner/accountant approval before enablement. Any approved cashback adjustment is separate from a gateway cash refund and must not create a silent debit to a customer's cash balance.
 
 ---
 
 ### 10. Platform Suspension & Financial Recovery
-* **Suspension Powers:** Victorious Market reserves the right to suspend or permanently ban any merchant, rider, or customer engaging in abusive returns, chargeback fraud, off-platform solicitation, or harassment.
-* **Debt recovery:** Vendor liability must be supported by a documented, authorised decision; a complaint alone is not a debt. A confirmed debt may be repaid by verified bank transfer or offset against held/future vendor earnings only with authorised admin approval and contractual basis. Record recovery as a separate receivable; do not pretend a completed transfer has been reversed.
+* **Safety and suspension:** VM may restrict access or suspend a supplier, logistics partner or customer for fraud, unsafe conduct, counterfeit goods, off-platform payment requests or abuse, subject to applicable law and fair review.
+* **Supplier recovery:** Any supplier recovery requires evidence of supplier responsibility, contractual recoverability and an authorized decision. A complaint alone is not a debt. Supplier recovery is separate from customer refunds and must never delay a valid customer remedy.
 
 ---
 
@@ -272,110 +267,69 @@ MARKDOWN;
             ]
         );
 
-        // 4. MERCHANT ACCREDITATION & COMMERCIAL SELLER AGREEMENT
+        // 4. PRIVATE SUPPLIER SOURCING & FULFILMENT AGREEMENT
+        // Kept under the legacy slug for route compatibility; this is not a public seller/vendor agreement.
         $merchantContent = <<<'MARKDOWN'
-# VICTORIOUS MARKET — MERCHANT ACCREDITATION & COMMERCIAL SELLER AGREEMENT
-**Effective Date:** October 20, 2026  
-**Version:** 1.2.0  
-**Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
-**Contract Type:** Commercial Vendor Agreement (B2B)  
+# VICTORIOUS MARKET — PRIVATE SUPPLIER SOURCING & FULFILMENT AGREEMENT
+**Effective Date:** October 21, 2026  
+**Version:** 2.0.0  
+**Governing Territory:** Federal Republic of Nigeria  
+**Contract Type:** Private supplier sourcing agreement (B2B)
 
 ---
 
-### 1. Preamble & Scope
-This Merchant Accreditation & Commercial Seller Agreement ("Agreement") constitutes a legally binding commercial contract between **Victorious Market** ("the Platform", "we", "us") and the verified merchant entity ("Merchant", "Vendor", "you"). This Agreement governs your participation as an approved seller within our managed, centrally coordinated digital commerce ecosystem.
+### 1. Relationship and scope
+Victorious MARKET ("VM") operates as the customer-facing retailer. The supplier is a private product source, not a public marketplace seller, and does not own the customer relationship. This agreement governs approved product offers, supply, collection, condition/warranty disclosure, confidentiality, fulfilment cooperation and evidence-based remedies. It does not make the supplier an independent seller on VM's public storefront.
 
-By completing vendor onboarding, submitting KYB documents, or listing products on Victorious Market, you agree to be bound by the covenants, warranties, and obligations set forth herein.
+### 2. Supplier verification and offers
+The supplier must provide accurate identity/business details, contact information, source location, bank details for authorized supplier payments, and any required compliance information. Each offer must identify the product/model/variant, condition, included accessories, warranty/return terms, wholesale purchase price and validity, current availability, readiness estimate and collection location. Submission is not automatic approval or a promise to purchase.
 
----
+### 3. Catalogue and customer-facing price
+VM approves supplier offers, creates one canonical public listing for a new product or links an offer to an existing matching listing, and controls the public title, description, retail price, publication status and customer-facing terms. The supplier must not publish/alter VM listings, change VM's retail price, misrepresent condition or warranty, or create duplicate listings to bypass VM review. Supplier identity and wholesale price remain private except where disclosure is required for fulfilment, consumer rights or law.
 
-### 2. Merchant Vetting, KYB & Physical Shop Accreditation
-* **Prerequisite to Listing:** Registration alone does not authorize commercial selling. Every vendor must submit verified identity documentation, Corporate Affairs Commission (CAC) registration proof where applicable, and evidence of a physical shop or warehousing location within an approved Local Government Area (commencing in Uyo LGA).
-* **On-Site Inspection Right:** Victorious Market compliance inspectors reserve the irrevocable right to conduct physical inspections of the merchant's declared premises, inventory handling procedures, and storage conditions prior to granting or renewing accreditation.
-* **Ongoing Accreditation:** Accreditation is not a permanent badge. The platform conducts continuous monitoring of fulfillment rates, cancellation frequencies, customer ratings, and return metrics.
+### 4. Order-specific supply commitment
+For each accepted order item, VM records the selected supplier offer, product/variant, quantity, agreed purchase-cost snapshot, relevant condition/warranty terms and source location. Later offer edits do not change an accepted order's cost or terms. If the supplier cannot fulfil, it must notify VM promptly. VM decides whether to use another approved offer, cancel/refund, or seek customer consent for a permitted substitution. No silent substitution or customer price increase is allowed.
 
----
+### 5. Collection, delivery and customer pickup
+The supplier makes goods available to VM or VM's authorized collector at the agreed location and records handover evidence. Customer delivery is coordinated by VM through an approved logistics company; every assigned rider must be active and linked to exactly one active logistics company. The supplier may not dispatch its own rider as VM's delivery carrier or mark customer delivery complete. Supplier-shop customer pickup is permitted only when VM authorizes it and the reservation pass, separate one-time customer pickup verification and in-shop photo are recorded. The supplier must not release goods on an unverified credential or mark pickup complete without the required evidence.
 
-### 3. Catalog Integrity & Mandatory Condition Disclosure
-* **Absolute Warranty of Authenticity:** The Merchant explicitly warrants that every product listed as **Brand New** is a genuine, factory-sealed OEM unit possessing valid manufacturer warranties where applicable.
-* **Pre-Owned / UK-Used Transparency:** For products listed as **UK Used / Pre-Owned**, the Merchant is legally obligated to disclose:
-  * Cosmetic condition (Grade A, B, or C).
-  * Battery health indicators and operational wear.
-  * Any missing original accessories, manuals, or packaging.
-* **Zero Counterfeit Tolerance:** Offering or selling replica, counterfeit, cloned, or illegally refurbished items represented as new constitutes a material breach of this Agreement. Violations trigger immediate shop delisting, forfeiture of marketplace privileges, freezing of withdrawable balances, and criminal referral to the Federal Competition and Consumer Protection Commission (FCCPC) and the Standards Organisation of Nigeria (SON).
+### 6. Payment and financial separation
+Supplier payment eligibility begins only after verified successful customer delivery or confirmed customer pickup and required order/amount reconciliation. Eligibility is not an automatic transfer; payment still requires authorization, supplier terms, a verified destination account and idempotent provider confirmation/reconciliation. Supplier purchase cost is not a marketplace commission. The former 90/5/5 and 90/10 marketplace allocations, vendor payout thresholds and vendor debt rules do not apply to new retailer transactions. No new cashback accrual or logistics-company percentage is inferred by this agreement.
 
----
+### 7. Product quality, condition and warranty
+The supplier must disclose genuine product condition, known defects, included accessories, packaging and warranty limits. Claims of factory-sealed status or manufacturer warranty must be true and verifiable. Counterfeit goods, used goods represented as new, and materially misleading specifications are prohibited. VM retains authority over customer support and customer remedies, subject to applicable law and valid warranties.
 
-### 4. Order Acceptance, Stock Accuracy & Readiness
-* **Inventory Synchronization:** The Merchant must maintain real-time inventory records. Confirming an order that cannot be fulfilled due to preventable stockouts attracts administrative penalties.
-* **Order readiness:** Upon receiving an order notification, the vendor must promptly accept or reject the order in the platform, keep stock accurate, and provide a realistic readiness estimate. No fixed two-hour readiness guarantee applies unless a separately approved vendor SLA is configured and disclosed for the order.
-* **Handover verification:** For doorstep delivery, the vendor must hand the parcel only to the active rider assigned to that order and linked to the same vendor, after the approved rider-to-vendor custody verification. This custody credential is distinct from the customer's doorstep delivery OTP and the customer's in-shop pickup OTP. In-shop pickup is a separate customer-counter process and requires no rider.
+### 8. Refunds, responsibility and recovery
+VM remains responsible for approved customer refunds under its customer policy, even if a supplier has already been paid. A supplier recovery is a separate receivable and requires evidence of supplier responsibility, contractual recoverability and an authorized decision. A complaint alone does not establish a debt. Recovery must not delay a customer refund. Any offset must be lawful, contractually permitted, documented and open to challenge.
 
----
+### 9. Confidentiality and no off-platform dealing
+The supplier must protect customer and VM commercial information, including wholesale prices, and may contact a customer only through an authorized fulfilment/support process. The supplier must not solicit private payment, collect customer cash or private-account transfers, divert a VM order, or claim to be the retailer. All customer payments must use VM's authorized payment workflow.
 
-### 5. Vendor Earnings, Payout & 90/5/5 Allocation
-* **Merchandise allocation:** Eligible post-discount merchandise collected is allocated 90% to vendor earnings, 5% to customer cashback liability, and 5% to Victorious MARKET. Cashback is not calculated on delivery fees. The vendor allocation is subject to item-level refunds/reversals and applicable earning holds; it is not an unconditional promise of net payout.
-* **Vendor earnings eligibility:** Vendor earnings become eligible 24 hours after confirmed doorstep delivery or confirmed in-shop pickup, provided no applicable return/dispute/payment hold or security/reconciliation check blocks them. Eligibility is not automatic transfer.
-* **Bank-change security:** A 48-hour payout cooldown applies after a change to the vendor's registered payout bank details, subject to the platform's verified security controls.
-* **Vendor payout batch:** Each payout batch has a ₦5,000 minimum and ₦500,000 maximum. The platform calculates strict FIFO from the oldest eligible, unreserved whole earning records, adding each full record while the total remains at or below ₦500,000. Stop before a record that would exceed the cap; never split or skip. If the oldest record alone exceeds the cap, flag it for authorised finance resolution. Every request requires admin approval before transfer.
-* **Payout reservation and fees:** Reserve the exact selected whole earning records atomically. One active request per vendor is allowed while pending, approved-unsent, in-flight or uncertain. An approved request is not completed until authoritative provider success and reconciliation. Reconcile timeouts before retry. Victorious MARKET bears payout transfer fees/stamp duty as platform expense; the vendor receives the exact approved amount.
-
----
-
-### 6. Doorstep Partial Rejection & Customer Return Obligations
-* **Item-Level Rejection:** In multi-item deliveries, the Merchant agrees to accept item-level partial rejections where a customer accepts conforming goods and rejects defective or non-conforming items at doorstep delivery.
-* **Vendor return handling:** Rejected items return to the owning vendor. The vendor may offer a suitable replacement/redelivery only with customer agreement. No platform hub handover is mandatory.
-* **Replacement / Restock:** Conforming returned items may be retrieved by the merchant; non-conforming items must be removed from the catalog.
-
----
-
-### 7. Indemnity & Commercial Product Liability
-* **Merchant Indemnity:** The Merchant agrees to defend, indemnify, and hold harmless Victorious Market, its directors, officers, employees, and agents against any claims, losses, liabilities, regulatory fines, legal costs, or damages arising out of:
-  * Product defects, personal injury, or property damage caused by products sold by the Merchant.
-  * Intellectual property infringement, counterfeit goods, or unauthorized brand use.
-  * Deceptive, false, or misleading listing descriptions.
-
----
-
-### 8. Debt Recovery, Deficit Balances & Right of Offset
-* **Post-payout recovery:** If an approved refund, chargeback, or adjustment creates a potential vendor recovery after payout, record the case and evidence. Vendor liability becomes a confirmed debt only after an authorised, documented decision under the vendor agreement and applicable law. A complaint or pending investigation alone is not a debt.
-* **Authorised recovery:** A confirmed vendor debt may be repaid by verified bank transfer or offset against held/future vendor earnings only with authorised admin approval and contractual basis. A complaint alone is not a confirmed debt; record the debt/recovery separately and allow a vendor challenge.
-
----
-
-### 9. Prohibition of Off-Platform Dealing & WhatsApp Bypass
-* **Non-Circumvention:** Merchants must not divert marketplace orders into private cash collection, personal-account transfers, or other off-platform payment. Ordinary customer support or fulfilment communications are not, by themselves, prohibited; the restriction is on bypassing the marketplace transaction and payment controls. Doorstep cash-on-delivery is disabled at launch.
-* **Enforcement:** Suspected bypass is investigated and may lead to proportionate suspension or termination under the vendor agreement, with evidence, notice and any required review. Any contractual damages or recovery must have a valid contractual and legal basis; it is not imposed automatically by this statement.
-
----
-
-### 10. Term, Suspension & Dispute Arbitration
-* **Termination for Convenience:** Either party may terminate with 30 days written notice, subject to full settlement of existing orders and outstanding liabilities.
-* **Immediate Termination for Cause:** Victorious Market may suspend or terminate this Agreement instantly upon fraud, counterfeit sales, abusive conduct, or failure of KYB standards.
-* **Governing Law:** This Agreement is governed by the laws of Akwa Ibom State and the Federal Republic of Nigeria, with exclusive arbitration jurisdiction situated in Uyo, Akwa Ibom State.
+### 10. Termination and governing law
+VM may suspend an offer or supplier relationship for fraud, counterfeit goods, repeated preventable stockouts, unsafe conduct, privacy violations or off-platform payment requests, subject to applicable law and contractual process. Either party may terminate according to the agreed written terms, without extinguishing already accrued obligations or customer remedies. This agreement is governed by applicable laws of the Federal Republic of Nigeria.
 MARKDOWN;
 
         $doc4 = LegalDocument::updateOrCreate(
             ['slug' => 'merchant-agreement'],
             [
-                'title' => 'Merchant Accreditation & Commercial Seller Agreement',
-                'category' => 'merchant',
-                'current_version' => '1.2.0',
+                'title' => 'Private Supplier Sourcing & Fulfilment Agreement',
+                'category' => 'supplier',
+                'current_version' => '2.0.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
-                'summary' => 'Commercial covenants governing approved-vendor accreditation, accurate product condition, the 90/5/5 merchandise allocation, controlled payouts, anti-counterfeit obligations, and authorised debt recovery.',
+                'summary' => 'Private supplier offer, product quality, sourcing, confidentiality, fulfilment evidence, supplier payment eligibility, and evidence-based recovery terms. Not a public seller agreement.',
             ]
         );
 
         LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc4->id,
-                'version' => '1.2.0',
+                'version' => '2.0.0',
             ],
             [
-                'title' => 'Merchant Accreditation & Commercial Seller Agreement',
+                'title' => 'Private Supplier Sourcing & Fulfilment Agreement',
                 'content' => $merchantContent,
-                'summary_of_changes' => 'Alignment release: corrected payout eligibility, vendor debt confirmation, and vendor-managed fulfilment rules; previous version retained.',
+                'summary_of_changes' => 'Replaced the obsolete public-vendor marketplace agreement with the owner-confirmed private supplier/retailer relationship; legacy version retained for audit.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -767,7 +721,7 @@ Include your order number and the affected vendor child order/item where relevan
 
 ### 2. Vendor-Managed Fulfilment and Pickup
 
-New orders are fulfilled by the owning approved vendor, which manages its own riders. Victorious MARKET does not require a central fleet, central collection hub, or hub drop-off for new orders. In-shop pickup takes place only at the vendor shop identified in the order or reservation. Contact support for authorised return/inspection instructions; do not send goods to an unverified address.
+Victorious MARKET coordinates customer delivery through approved logistics companies. Every rider assigned to a new VM delivery must be active and linked to exactly one active logistics company; a supplier may not dispatch its own rider as the VM carrier or mark delivery complete. Authorized supplier-shop pickup is available only when VM approves it and the reservation pass, separate one-time customer pickup verification and in-shop photo are recorded. Contact VM support for return/inspection instructions; do not send goods to an unverified address.
 
 ---
 
@@ -791,7 +745,7 @@ MARKDOWN;
                 'current_version' => '1.2.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
-                'summary' => 'Official customer contact channel, vendor-managed fulfilment explanation, and order-support escalation steps.',
+                'summary' => 'Official customer contact channel, VM-coordinated logistics, authorized supplier-shop pickup and support escalation steps.',
             ]
         );
 
@@ -803,7 +757,7 @@ MARKDOWN;
             [
                 'title' => 'Contact & Customer Care Center',
                 'content' => $contactContent,
-                'summary_of_changes' => 'Alignment release: replaced unverified contact/address/hub claims with official contact details and vendor-managed support instructions; previous version retained.',
+                'summary_of_changes' => 'Aligned fulfilment and pickup instructions with the central retailer model; previous version retained.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
