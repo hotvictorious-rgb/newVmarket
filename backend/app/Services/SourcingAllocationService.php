@@ -273,9 +273,10 @@ class SourcingAllocationService
         User $adminUser,
         string $reason
     ): OrderSupplierAssignment {
-        $isAdmin = $adminUser->isSuperAdmin()
-            || $adminUser->isAdminEmployee()
-            || in_array($adminUser->user_type, ['super_admin', 'admin_employee', 'admin'], true);
+        $isAdmin = $adminUser->status === 'active'
+            && ($adminUser->isSuperAdmin()
+                || $adminUser->isAdminEmployee()
+                || in_array($adminUser->user_type, ['super_admin', 'admin_employee', 'admin'], true));
         if (!$isAdmin) {
             throw new InvalidArgumentException('Unauthorized: only administrators can override supplier sourcing.');
         }
