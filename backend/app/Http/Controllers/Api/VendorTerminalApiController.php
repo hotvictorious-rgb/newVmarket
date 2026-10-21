@@ -21,6 +21,8 @@ use App\Services\ImageOptimizationService;
 use App\Services\BcMathService;
 use App\Models\VendorRecoveryLedger;
 use App\Models\VendorPayoutRequest;
+use App\Models\RetailerSupplierPayoutRequest;
+use App\Services\RetailerSupplierPayoutService;
 use App\Models\FinancialJournalEntry;
 use App\Models\RiderProfile;
 use App\Models\User;
@@ -1131,6 +1133,44 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
      * GET /api/v1/vendor/payouts
      * Financial Ledger of settlements and 48-Hour Cooldown Guard
      */
+    public function retailerSupplierPayouts(Request $request): JsonResponse
+    {
+        $context = $this->resolveVendorContext($request);
+        if ($context['is_employee']) {
+            return response()->json(['success' => false, 'message' => 'Only the supplier account owner can access supplier payout records.'], 403);
+        }
+
+        $payouts = RetailerSupplierPayoutRequest::where('supplier_vendor_id', $context['vendor']->id)
+            ->with('allocations:id,retailer_supplier_payout_request_id,order_id,order_item_id,amount,status')
+            ->latest('id')
+            ->paginate(20);
+
+        return response()->json(['success' => true, 'data' => $payouts]);
+    }
+
+    public function requestRetailerSupplierPayout(Request $request): JsonResponse
+    {
+        $context = $this->resolveVendorContext($request);
+        if ($context['is_employee']) {
+            return response()->json(['success' => false, 'message' => 'Only the supplier account owner can request supplier payouts.'], 403);
+        }
+
+        $result = app(RetailerSupplierPayoutService::class)->requestPayout($context['vendor']);
+        if (!$result['success']) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['message'] ?? 'Supplier payout request could not be created.',
+                'protected' => (bool) ($result['protected'] ?? false),
+            ], !empty($result['protected']) ? 409 : 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $result['message'],
+            'data' => $result['payout'],
+        ], 201);
+    }
+
     public function payouts(Request $request): JsonResponse
     {
         $ctx = $this->resolveVendorContext($request);
