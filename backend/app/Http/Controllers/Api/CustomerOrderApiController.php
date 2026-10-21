@@ -680,7 +680,7 @@ class CustomerOrderApiController extends Controller
 
         return response()->json([
             'status' => true,
-            'data' => $cases->items(),
+            'data' => collect($cases->items())->map(fn (ReturnCase $case) => $this->formatCustomerReturnCase($case))->values(),
             'meta' => [
                 'current_page' => $cases->currentPage(),
                 'last_page' => $cases->lastPage(),
@@ -714,11 +714,9 @@ class CustomerOrderApiController extends Controller
             ], 404);
         }
 
-        $case->unsetRelation('vendor');
-
         return response()->json([
             'status' => true,
-            'data' => $case,
+            'data' => $this->formatCustomerReturnCase($case),
         ]);
     }
 
@@ -732,7 +730,18 @@ class CustomerOrderApiController extends Controller
         $credits = \App\Models\CustomerWalletCredit::where('customer_id', $user->id)
             ->latest()
             ->take(20)
-            ->get();
+            ->get()
+            ->map(fn (\App\Models\CustomerWalletCredit $credit) => [
+                'id' => $credit->id,
+                'amount' => $credit->amount,
+                'credit_type' => $credit->credit_type,
+                'status' => $credit->status === 'quarantined' ? 'refund_pending' : $credit->status,
+                'order_id' => $credit->order_id,
+                'return_case_id' => $credit->return_case_id,
+                'spent_on_order_id' => $credit->spent_on_order_id,
+                'created_at' => $credit->created_at?->toIso8601String(),
+            ])
+            ->values();
 
         return response()->json([
             'status' => true,
@@ -811,4 +820,69 @@ class CustomerOrderApiController extends Controller
             ],
         ]);
     }
+    /**
+     * Customer-safe return case representation. Do not serialize the Eloquent
+     * model directly: it contains internal claim tokens, gateway/bank references,
+     * reviewer IDs, arbitration notes, supplier fields and inspection metadata.
+     */
+    protected function formatCustomerReturnCase(ReturnCase $case): array
+    {
+        return [
+            'id' => $case->id,
+            'case_number' => $case->case_number,
+            'order_number' => $case->order?->order_number,
+            'return_reason' => $case->return_reason,
+            'customer_description' => $case->customer_description,
+            'source' => $case->source,
+            'rejection_category' => $case->rejection_category,
+            'status' => $case->status,
+            'resolution_type' => $case->resolution_type,
+            'total_refundable_amount' => $case->total_refundable_amount,
+            'refund_delivery_fee' => (bool) $case->refund_delivery_fee,
+            'delivery_fee_refunded' => $case->delivery_fee_refunded,
+            'refunded_amount' => $case->refunded_amount,
+            'refunded_at' => $case->refunded_at?->toIso8601String(),
+            'created_at' => $case->created_at?->toIso8601String(),
+            'updated_at' => $case->updated_at?->toIso8601String(),
+            'collection_point' => $case->collectionPoint ? [
+                'id' => $case->collectionPoint->id,
+                'name' => $case->collectionPoint->name,
+                'address' => $case->collectionPoint->address,
+                'landmark' => $case->collectionPoint->landmark,
+                'operating_hours' => $case->collectionPoint->operating_hours,
+                'contact_phone' => $case->collectionPoint->contact_phone,
+            ] : null,
+            'items' => $case->items->map(fn (\App\Models\ReturnItem $item) => [
+                'id' => $item->id,
+                'product_id' => $item->product_id,
+                'product_name' => $item->product?->name ?? $item->orderItem?->product_name,
+                'product_thumbnail' => $item->product?->thumbnail ? url($item->product->thumbnail) : null,
+                'quantity' => (int) $item->quantity,
+                'unit_price' => $item->unit_price,
+                'line_total' => $item->line_total,
+                'refundable_amount' => $item->refundable_amount,
+                'item_condition' => $item->item_condition,
+                'status' => $item->status,
+            ])->values(),
+            'evidence' => $case->evidence->map(fn (\App\Models\ReturnEvidence $evidence) => [
+                'id' => $evidence->id,
+                'file_url' => $evidence->file_path ? url($evidence->file_path) : null,
+                'evidence_type' => $evidence->evidence_type,
+                'caption' => $evidence->caption,
+                'created_at' => $evidence->created_at?->toIso8601String(),
+            ])->values(),
+            'inspections' => $case->inspections->map(fn (\App\Models\ReturnInspection $inspection) => [
+                'id' => $inspection->id,
+                'condition_rating' => $inspection->condition_rating,
+                'packaging_intact' => $inspection->packaging_intact,
+                'inspection_decision' => $inspection->inspection_decision,
+                'inspected_at' => $inspection->inspected_at?->toIso8601String(),
+                'collection_point' => $inspection->collectionPoint ? [
+                    'name' => $inspection->collectionPoint->name,
+                    'address' => $inspection->collectionPoint->address,
+                ] : null,
+            ])->values(),
+        ];
+    }
+
 }
