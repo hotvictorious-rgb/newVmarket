@@ -2566,38 +2566,48 @@ class PortalController extends Controller
             $payout->rejection_reason = strip_tags(trim($validated['rejection_reason']));
             $payout->save();
 
-            // Atomic Wallet Refund
-            $company->creditWallet($payout->amount);
-
-            // Double-entry journal reversal (Balanced debit/credit pair)
             $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
-            $rejectRef = 'FLEET-REJECT-' . $payout->id . '-' . date('YmdHis');
+            $hasRequestJournal = \App\Models\FinancialJournalEntry::where('event_id', 'EVT-FLEET-REQ-' . $payout->id)->exists();
 
-            \App\Models\FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $rejectRef,
-                'event_id' => 'EVT-FLEET-REJECT-' . $payout->id,
-                'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
-                'beneficiary_id' => $company->id,
-                'account_name' => 'logistics_payout_payable',
-                'entry_type' => 'debit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Corporate withdrawal liability discharged upon rejection for {$company->company_name}: {$payout->rejection_reason}",
-            ]);
+            if ($hasRequestJournal) {
+                // Only restore wallet funds when the original request-time debit/
+                // payable journal proves that this amount was reserved.
+                $company->creditWallet($payout->amount);
 
-            \App\Models\FinancialJournalEntry::create([
-                'order_id' => null,
-                'transaction_reference' => $rejectRef,
-                'event_id' => 'EVT-FLEET-REJECT-' . $payout->id,
-                'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
-                'beneficiary_id' => $company->id,
-                'account_name' => 'logistics_company_wallet',
-                'entry_type' => 'credit',
-                'amount' => $formattedPayoutAmount,
-                'currency' => 'NGN',
-                'description' => "Corporate wallet balance restored upon withdrawal rejection for {$company->company_name}",
-            ]);
+                $rejectRef = 'FLEET-REJECT-' . $payout->id . '-' . date('YmdHis');
+                \App\Models\FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $rejectRef,
+                    'event_id' => 'EVT-FLEET-REJECT-' . $payout->id,
+                    'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $company->id,
+                    'account_name' => 'logistics_payout_payable',
+                    'entry_type' => 'debit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Corporate withdrawal liability discharged upon rejection for {$company->company_name}: {$payout->rejection_reason}",
+                ]);
+
+                \App\Models\FinancialJournalEntry::create([
+                    'order_id' => null,
+                    'transaction_reference' => $rejectRef,
+                    'event_id' => 'EVT-FLEET-REJECT-' . $payout->id,
+                    'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $company->id,
+                    'account_name' => 'logistics_company_wallet',
+                    'entry_type' => 'credit',
+                    'amount' => $formattedPayoutAmount,
+                    'currency' => 'NGN',
+                    'description' => "Corporate wallet balance restored upon withdrawal rejection for {$company->company_name}",
+                ]);
+            } else {
+                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'REJECTION_JOURNAL_MISSING: finance reconciliation required; wallet was not credited automatically.';
+                $payout->save();
+                \Illuminate\Support\Facades\Log::critical('Logistics payout rejected without a request journal; wallet restoration requires finance reconciliation.', [
+                    'payout_id' => $payout->id,
+                    'logistics_company_id' => $company->id,
+                ]);
+            }
 
             AdminAuditLog::create([
                 'user_id' => $admin->id,
