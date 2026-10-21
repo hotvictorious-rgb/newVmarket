@@ -443,3 +443,8 @@ Allowed: `reserved` and not expired -> `inspected_accepted`, or `reserved` and e
 - **Regression coverage added:** offer with a missing confirming actor and offer with a future-dated confirmation timestamp must both return no selection.
 - **Verification status:** Tests are authored but have not been executed in this session; do not treat this as CI-verified.
 - **Not covered by this fix:** paid-order supplier replacement, balanced supplier-payable reclassification, and dedicated supplier payout authorization remain open.
+
+
+## VM-AUD-082 — supplier terminal requires active organization state (21 October 2026)
+
+Supplier terminal authentication now requires both the supplier user and supplier organization to be active. Pending, inactive, suspended, missing, or otherwise non-active supplier organizations fail closed for owner and employee terminal access. Regression coverage was added for pending, active, and suspended owner-account states. Test execution is pending; this is not a CI verification or deployment claim.
