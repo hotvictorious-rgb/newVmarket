@@ -9,6 +9,7 @@ use App\Models\DeliveryLane;
 use App\Models\Lga;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderSupplierAssignment;
 use App\Models\Product;
 use App\Models\Shop;
 use App\Models\State;
@@ -396,6 +397,36 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertEquals($shopB->id, $orderItems[1]->supplier_shop_id);
         $this->assertNull($orderTwoBulky->selected_supplier_id);
         $this->assertNull($orderTwoBulky->selected_shop_id);
+
+        $assignments = OrderSupplierAssignment::where('order_id', $orderTwoBulky->id)->orderBy('supplier_vendor_id')->get();
+        $this->assertCount(2, $assignments);
+        $this->assertSame(['awaiting_payment', 'awaiting_payment'], $assignments->pluck('status')->all());
+
+        // Simulate authoritative payment settlement, then verify each supplier can
+        // confirm only its own assignment and the order unlocks only after both respond.
+        $orderTwoBulky->forceFill([
+            'payment_status' => 'paid',
+            'order_status' => 'confirmed',
+            'sourcing_status' => 'awaiting_supplier_confirmation',
+        ])->save();
+        OrderSupplierAssignment::where('order_id', $orderTwoBulky->id)->update([
+            'status' => 'awaiting_supplier_confirmation',
+            'assigned_at' => Carbon::now(),
+        ]);
+
+        Sanctum::actingAs($supplierUserB, ['*']);
+        $responseB = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
+            'notes' => 'Confirmed the fan stock.',
+        ]);
+        $responseB->assertOk();
+        $this->assertEquals('partially_supplier_confirmed', $orderTwoBulky->fresh()->sourcing_status);
+
+        Sanctum::actingAs($this->vendorUser, ['*']);
+        $responseA = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
+            'notes' => 'Confirmed the screen protector stock.',
+        ]);
+        $responseA->assertOk();
+        $this->assertEquals('supplier_confirmed', $orderTwoBulky->fresh()->sourcing_status);
     }
 
     public function test_public_product_api_filters_by_condition_and_package_tier(): void
