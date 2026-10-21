@@ -732,3 +732,16 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Prevents wallet credit from being stranded or incorrectly restored/spent while retrying a cash refund. Unknown historical states are held for manual reconciliation rather than guessed.
 
 **Verification boundary:** Source and regression test committed; tests/CI pending. No merge or deployment.
+
+
+### VM-AUD-129 — Protect return custody OTP and fail closed on multi-supplier returns (21 October 2026)
+
+**Finding:** The rider API exposed the supplier return OTP directly in its response, so the courier could self-confirm vendor custody without the supplier. The rider assignment check was missing, and one write/query path used RiderProfile ID even though `returned_by_rider_id` references `users.id`. A retailer-model order with several suppliers was represented as one vendor handoff, which cannot prove that every supplier received its own rejected items.
+
+**Fixes committed:** Removed OTP from rider responses and raw ReturnCase responses; routed OTP only to an active supplier account/counter over enabled private channels; bypassed editable templates for this security-sensitive OTP message; removed the placeholder-phone fallback; required the authenticated rider to match `returned_by_rider_id`; corrected writes/queries to use the rider's user ID; and set retailer-model returns with zero/multiple supplier destinations to `pending_supplier_assignment`. Such cases receive no shared OTP and cannot be marked returned using the legacy single-vendor handshake.
+
+**Business impact:** Prevents the rider from self-verifying custody, prevents the wrong rider from closing another rider's return, and prevents a single supplier OTP from falsely proving custody of items sourced from multiple suppliers.
+
+**Remaining work — not claimed complete:** The safe hold is in place, but an administrator-facing workflow to split/assign a multi-supplier return case into per-supplier handoffs is not yet implemented. Those cases must remain on hold; do not mark them returned or refund them until that assignment workflow exists.
+
+**Verification boundary:** Source and regression tests committed; tests/CI pending. No merge or deployment.
