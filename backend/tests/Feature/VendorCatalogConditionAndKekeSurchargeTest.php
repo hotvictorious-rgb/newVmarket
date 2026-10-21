@@ -418,12 +418,11 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
 
     /**
      * Deep Check Verification:
-     * Legacy cart-availability calculation groups by vendor for display compatibility.
-     * New retailer checkout instead charges one order-level base route fee plus a bulky
-     * surcharge for every bulky physical unit; this legacy cart endpoint is not the
-     * authority for retailer checkout totals.
+     * Cart availability uses one order-level base route fee plus a bulky surcharge for every
+     * physical unit that does not fit on a bike. Supplier groups are checked for route
+     * eligibility, but their base fees are not added together.
      */
-    public function test_cart_fulfillment_calculates_delivery_per_vendor_child_lane_with_isolated_keke_surcharge(): void
+    public function test_cart_fulfillment_charges_one_base_fee_plus_each_bulky_unit_across_suppliers(): void
     {
         // Vendor A (Shop A) - Sells only bike items
         $productA1 = Product::create([
@@ -541,18 +540,21 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $vendorLanes = collect($deliveryOptions['vendor_lanes'])->keyBy('shop_id');
         $this->assertCount(2, $vendorLanes);
 
-        // Verification 1: Vendor A has only bike items -> Standard baseline delivery fee (₦500.00)
+        // Per-supplier lane shows only its bulky surcharge component; base route fee is order-level.
         $laneA = $vendorLanes->get($this->shop->id);
         $this->assertNotNull($laneA);
-        $this->assertEquals('500.00', $laneA['delivery_fee'], 'Vendor A with only bike items must have baseline delivery fee without bulky surcharge');
+        $this->assertEquals('0.00', $laneA['delivery_fee'], 'Bike-only supplier group has no bulky surcharge component');
 
-        // Verification 2: Vendor B has a keke item -> Bulky cargo surcharge applied (₦500.00 + ₦1000.00 = ₦1,500.00)
+        // Vendor B has one bulky unit -> one configured surcharge (₦1,000.00).
         $laneB = $vendorLanes->get($shopB->id);
         $this->assertNotNull($laneB);
-        $this->assertEquals('1500.00', $laneB['delivery_fee'], 'Vendor B with a keke item must have bulk cargo surcharge applied to its child order');
+        $this->assertEquals('1000.00', $laneB['delivery_fee'], 'Vendor B contributes one bulky surcharge, not another base route fee');
 
-        // Verification 3: Total cart shipping fee is the exact sum of both vendor child delivery fees (₦500 + ₦1500 = ₦2000)
-        $this->assertEquals('2000.00', $deliveryOptions['total_shipping_fee']);
+        // Total is one base fee plus one bulky surcharge, not one fee per supplier.
+        $this->assertEquals('500.00', $deliveryOptions['base_route_fee']);
+        $this->assertEquals(1, $deliveryOptions['bulky_quantity']);
+        $this->assertEquals('1000.00', $deliveryOptions['bulky_surcharge_total']);
+        $this->assertEquals('1500.00', $deliveryOptions['total_shipping_fee']);
     }
 
     /**
@@ -562,7 +564,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
      * - Branch A (Uyo -> Uyo, Intra-LGA, Bike) = ₦500.00
      * - Branch B (Eket -> Uyo, Inter-LGA, Keke Bulky) = ₦1,500 + ₦1,000 = ₦2,500.00
      */
-    public function test_same_vendor_with_multiple_shops_in_different_locations_charges_different_delivery_fees(): void
+    public function test_cart_rejects_non_uyo_supplier_origin_even_when_other_source_is_uyo(): void
     {
         $fleetUser = User::create([
             'name' => 'Fleet Operator',
@@ -656,27 +658,17 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
 
         $availability = $service->checkCartFulfillmentAvailability($this->uyoLga->id, $cartItems);
 
-        $this->assertTrue($availability['available']);
+        $this->assertFalse($availability['fulfillment_options']['delivery']['available']);
         $deliveryOptions = $availability['fulfillment_options']['delivery'];
         $vendorLanes = collect($deliveryOptions['vendor_lanes'])->keyBy('shop_id');
 
-        // Both shops from the same vendor are present
+        // The Eket source is invalid under the Uyo-only supplier-origin rule; do not
+        // advertise a partial order or price it as if all items were fulfillable.
         $this->assertCount(2, $vendorLanes);
-
-        // Branch 1 (Uyo -> Uyo, Intra-LGA, Bike): Base ₦500.00, 0 Surcharge
-        $laneUyo = $vendorLanes->get($this->shop->id);
-        $this->assertNotNull($laneUyo);
-        $this->assertEquals($this->vendor->id, $laneUyo['seller_id']);
-        $this->assertEquals('500.00', $laneUyo['delivery_fee']);
-
-        // Branch 2 (Eket -> Uyo, Inter-LGA, Keke): Base ₦1,500.00 + ₦1,000.00 Keke Surcharge = ₦2,500.00
         $laneEket = $vendorLanes->get($shopEket->id);
         $this->assertNotNull($laneEket);
-        $this->assertEquals($this->vendor->id, $laneEket['seller_id']); // Same vendor!
-        $this->assertEquals('2500.00', $laneEket['delivery_fee']);
-
-        // Total delivery fee for this multi-branch cart: ₦500 + ₦2,500 = ₦3,000.00
-        $this->assertEquals('3000.00', $deliveryOptions['total_shipping_fee']);
+        $this->assertFalse($laneEket['is_available']);
+        $this->assertEquals('0.00', $deliveryOptions['total_shipping_fee']);
     }
 
     public function test_vendor_portal_creates_product_with_multi_photo_gallery(): void
