@@ -180,3 +180,13 @@ Manual rejection previously trusted the payout request's status column as the so
 - Added a regression test for both payout types confirming that an existing terminal payout journal prevents a second rejection and prevents wallet/journal changes.
 - Commits: controller a16a4e8d73c84412e571b77898142cf45a3a72fc; test 87bba3870f255243fe621e82ab5c80af1cd5f313.
 - Verification status: changes committed; tests have not been executed in PHP or CI.
+
+## 20. Verify both legs of payout request journals before treating them as proof (21 October 2026)
+
+A further audit found that payout paths treated any journal row with a request event ID as proof that the original payout reservation had been posted. A partial/corrupt event containing only one leg, a wrong beneficiary, or a mismatched amount could therefore authorize a wallet credit or liability reversal that did not match the actual reservation.
+
+- Added shared evidence checks in PayoutFinalizationService for vendor and logistics request journals. Each requires both expected account/entry legs, the correct beneficiary type and ID, and the exact payout amount.
+- Vendor and logistics finalization/reversal now use these stronger checks; manual rejection endpoints call the same evidence methods instead of a loose event-ID existence check.
+- Added regression coverage for single-leg, mismatched-amount and complete two-leg request journal evidence for both payout types.
+- Commits: service helper 7a (see repository history); controller call sites 11fd47cb2234df5917a3f2dce6f756985699aae2; regression test 6f6b0f1610121d3bf75177aa8c796c9c7be02c76.
+- Verification status: changes committed but tests/CI have not run. Ensure the test fixtures satisfy all schema constraints and execute the relevant payout suite before release.
