@@ -630,10 +630,16 @@ class VendorTerminalApiController extends Controller
             $legacyOrder = $legacyQuery->findOrFail($id);
             $result = $this->settlementService->markVendorHandoverReady($legacyOrder, $ctx['user']);
 
+            $legacyOrder = $result['order'] ?? null;
             return response()->json([
                 'status' => (bool) ($result['success'] ?? false),
                 'message' => $result['message'] ?? 'Unable to authorize handover.',
-                'data' => $result['order'] ?? null,
+                'data' => $legacyOrder instanceof Order ? [
+                    'id' => $legacyOrder->id,
+                    'order_number' => $legacyOrder->order_number,
+                    'order_status' => $legacyOrder->order_status,
+                    'vendor_handover_ready_at' => $legacyOrder->vendor_handover_ready_at?->toIso8601String(),
+                ] : null,
             ], ($result['success'] ?? false) ? 200 : 422);
         }
 
