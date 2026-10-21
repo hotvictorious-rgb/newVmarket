@@ -104,7 +104,8 @@ class CustomerOrderApiController extends Controller
     {
         $validated = $request->validate([
             'intent_id' => 'nullable|integer|exists:checkout_intents,id',
-            'shop_id' => 'required|integer|exists:shops,id',
+            // Legacy clients may still send shop_id; it is ignored for supplier assignment.
+            'shop_id' => 'nullable|integer|exists:shops,id',
             'fulfillment_type' => 'required|in:doorstep_delivery,in_shop_pickup',
             'customer_address_id' => 'nullable|required_if:fulfillment_type,doorstep_delivery|integer|exists:customer_addresses,id',
             'items' => 'required|array|min:1|max:100',
@@ -139,7 +140,6 @@ class CustomerOrderApiController extends Controller
 
             $canonical = [
                 'intent_id' => isset($validated['intent_id']) ? (int) $validated['intent_id'] : null,
-                'shop_id' => (int) $validated['shop_id'],
                 'fulfillment_type' => $validated['fulfillment_type'],
                 'customer_address_id' => isset($validated['customer_address_id']) ? (int) $validated['customer_address_id'] : null,
                 'items' => array_map(static fn (array $item): array => [
