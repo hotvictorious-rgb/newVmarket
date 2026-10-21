@@ -48,6 +48,11 @@ class LogisticsCompanyProfile extends Model
         return $this->hasMany(LogisticsCollectionPoint::class, 'logistics_company_id');
     }
 
+    public function corridorRates()
+    {
+        return $this->hasMany(LogisticsCompanyCorridorRate::class, 'logistics_company_id');
+    }
+
     public function payoutRequests()
     {
         return $this->hasMany(LogisticsPayoutRequest::class, 'logistics_company_id');
