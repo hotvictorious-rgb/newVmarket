@@ -331,6 +331,12 @@ class CheckoutAndReservationApiController extends Controller
      */
     public function createPickupReservation(Request $request): JsonResponse
     {
+        return response()->json([
+            'status' => false,
+            'code' => 'SUPPORT_MANAGED_PICKUP_ONLY',
+            'message' => 'Public pickup reservations are disabled. Please call or WhatsApp Victorious MARKET support to ask whether pickup can be arranged for your complete order.',
+        ], 410);
+
         $validated = $request->validate([
             'shop_id' => 'required|integer|exists:shops,id',
             'product_id' => 'required|integer|exists:products,id',
