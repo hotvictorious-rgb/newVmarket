@@ -181,6 +181,21 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'is_vmarket_flagship' => true,
         ]);
 
+        $logisticsUser = User::create([
+            'name' => 'Speed Cargo Ltd',
+            'email' => 'admin@speedcargo.ng',
+            'password' => bcrypt('CompanySecret123!'),
+            'user_type' => 'logistics_company',
+            'status' => 'active',
+        ]);
+        $this->logisticsCompany = \App\Models\LogisticsCompanyProfile::create([
+            'user_id' => $logisticsUser->id,
+            'company_name' => 'Speed Cargo Ltd',
+            'lga_id' => $this->originLga->id,
+            'fleet_size' => 10,
+            'status' => 'active',
+        ]);
+
         $this->riderUserA = User::create([
             'name' => 'Rider Edet Alpha',
             'email' => 'rider.a@speedcargo.ng',
@@ -190,7 +205,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         ]);
         $this->riderA = RiderProfile::create([
             'user_id' => $this->riderUserA->id,
-            'vendor_id' => $this->vendorA->id,
+            'logistics_company_id' => $this->logisticsCompany->id,
             'assigned_lga_id' => $this->originLga->id,
             'vehicle_type' => 'motorcycle',
             'license_plate' => 'UY-01-RDR',
@@ -230,6 +245,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'origin_lga_id' => $this->originLga->id,
             'destination_lga_id' => $this->destLga->id,
             'rider_id' => $this->riderA->id,
+            'logistics_company_id' => $this->logisticsCompany->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'confirmed',
             'payment_status' => 'paid',
