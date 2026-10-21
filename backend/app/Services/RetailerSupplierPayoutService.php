@@ -228,9 +228,9 @@ class RetailerSupplierPayoutService
         }, 3);
     }
 
-    public function markUncertain(int $payoutId, string $reason): array
+    public function markUncertain(int $payoutId, string $reason, string $gatewayStatus = 'uncertain'): array
     {
-        return DB::transaction(function () use ($payoutId, $reason) {
+        return DB::transaction(function () use ($payoutId, $reason, $gatewayStatus) {
             $payout = RetailerSupplierPayoutRequest::whereKey($payoutId)->lockForUpdate()->first();
             if (!$payout) {
                 return ['success' => false, 'message' => 'Supplier payout request was not found.'];
@@ -240,7 +240,7 @@ class RetailerSupplierPayoutService
             }
 
             $payout->status = 'uncertain';
-            $payout->gateway_status = 'uncertain';
+            $payout->gateway_status = strtolower($gatewayStatus) ?: 'uncertain';
             $payout->processing_token = 'HOLD_SUPPLIER_PAYOUT_RECONCILIATION';
             $payout->admin_notes = trim(($payout->admin_notes ? $payout->admin_notes . "\n" : '') . 'Finance hold: ' . $reason);
             $payout->save();
@@ -449,7 +449,13 @@ class RetailerSupplierPayoutService
         string $creditAccount,
         string $creditType
     ): bool {
+        $reference = $allocation->payoutRequest?->transfer_reference;
+        if (!$reference) {
+            return false;
+        }
+
         $event = FinancialJournalEntry::where('event_id', $eventId)
+            ->where('transaction_reference', $reference)
             ->where('order_id', $allocation->order_id)
             ->where('order_item_id', $allocation->order_item_id)
             ->where('beneficiary_type', VendorProfile::class)
