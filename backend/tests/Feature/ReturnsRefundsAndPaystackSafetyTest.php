@@ -1208,4 +1208,118 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
         $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
     }
 
+
+    public function test_retailer_refund_reverses_supplier_cost_and_active_cashback_not_legacy_vendor_split(): void
+    {
+        $fixture = $this->createDeliveredOrder(Carbon::now()->subHours(4), 1);
+        $order = $fixture['order'];
+        $order->update([
+            'retailer_model_order' => true,
+            'payment_reference' => 'RETAILER-REFUND-' . strtoupper(uniqid()),
+            'supplier_cost_total_snapshot' => '5000.00',
+            'retailer_merchandise_margin' => '4500.00',
+            'vendor_net_90' => '0.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '0.00',
+            'logistics_company_payable_default_amount' => '1350.00',
+            'logistics_company_payable_amount' => '1350.00',
+            'vendor_settlement_status' => 'held',
+        ]);
+        $fixture['item']->update([
+            'supplier_vendor_id' => $this->vendorA->id,
+            'supplier_shop_id' => $this->shopA->id,
+            'supplier_name_snapshot' => $this->vendorA->business_name,
+            'supplier_shop_name_snapshot' => $this->shopA->name,
+            'supplier_cost_snapshot' => '5000.00',
+            'supplier_cost_currency' => 'NGN',
+            'supplier_snapshot_at' => Carbon::now(),
+        ]);
+
+        $saleEntries = [
+            ['event_id' => 'TEST-RETAIL-SALE-CASH-' . $order->id, 'account_name' => 'cash_in_escrow', 'entry_type' => 'debit', 'amount' => '11500.00', 'beneficiary_type' => User::class, 'beneficiary_id' => null],
+            ['event_id' => 'TEST-RETAIL-SALE-SUPPLIER-' . $order->id, 'account_name' => 'supplier_payable', 'entry_type' => 'credit', 'amount' => '5000.00', 'beneficiary_type' => VendorProfile::class, 'beneficiary_id' => $this->vendorA->id],
+            ['event_id' => 'TEST-RETAIL-SALE-CASHBACK-' . $order->id, 'account_name' => 'cashback_liability', 'entry_type' => 'credit', 'amount' => '500.00', 'beneficiary_type' => User::class, 'beneficiary_id' => $this->customer->id],
+            ['event_id' => 'TEST-RETAIL-SALE-MARGIN-' . $order->id, 'account_name' => 'retailer_merchandise_margin', 'entry_type' => 'credit', 'amount' => '4500.00', 'beneficiary_type' => User::class, 'beneficiary_id' => null],
+            ['event_id' => 'TEST-RETAIL-SALE-LOGISTICS-' . $order->id, 'account_name' => 'logistics_company_payable', 'entry_type' => 'credit', 'amount' => '1350.00', 'beneficiary_type' => null, 'beneficiary_id' => null],
+            ['event_id' => 'TEST-RETAIL-SALE-DELIVERY-MARGIN-' . $order->id, 'account_name' => 'platform_delivery_revenue', 'entry_type' => 'credit', 'amount' => '150.00', 'beneficiary_type' => User::class, 'beneficiary_id' => null],
+        ];
+        foreach ($saleEntries as $entry) {
+            FinancialJournalEntry::create(array_merge($entry, [
+                'order_id' => $order->id,
+                'transaction_reference' => $order->payment_reference,
+                'currency' => 'NGN',
+                'description' => 'Balanced retailer refund test opening entry.',
+            ]));
+        }
+
+        $case = ReturnCase::create([
+            'case_number' => 'RET-RETAIL-' . strtoupper(uniqid()),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $order->vendor_id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'refund_delivery_fee' => false,
+            'delivery_fee_refunded' => '0.00',
+            'refunded_amount' => '0.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+        ]);
+        ReturnItem::create([
+            'return_case_id' => $case->id,
+            'order_item_id' => $fixture['item']->id,
+            'product_id' => $this->productA->id,
+            'quantity' => 1,
+            'unit_price' => '10000.00',
+            'line_total' => '10000.00',
+            'allocated_discount' => '0.00',
+            'refundable_amount' => '10000.00',
+            'item_condition' => 'defective',
+            'status' => 'approved',
+        ]);
+
+        $paystack = \\Mockery::mock(\\App\\Services\\PaystackService::class);
+        $paystack->shouldReceive('initiateRefund')
+            ->once()
+            ->withAnyArgs()
+            ->andReturn([
+                'success' => true,
+                'status' => 'completed',
+                'refund_reference' => 'rf_retailer_cost_cashback',
+                'data' => ['status' => 'completed', 'reference' => 'rf_retailer_cost_cashback'],
+            ]);
+        $this->app->instance(\\App\\Services\\PaystackService::class, $paystack);
+
+        $result = app(ReturnAndRefundService::class)->adminDisburseRefund($this->superAdmin, $case);
+        $this->assertTrue($result['success']);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'supplier_payable',
+            'entry_type' => 'debit',
+            'amount' => '5000.00',
+        ]);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'cashback_liability',
+            'entry_type' => 'debit',
+            'amount' => '500.00',
+        ]);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'retailer_merchandise_margin',
+            'entry_type' => 'debit',
+            'amount' => '4500.00',
+        ]);
+        $this->assertDatabaseMissing('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'vendor_payable',
+        ]);
+        $this->assertSame('forfeited', $fixture['cashback']->fresh()->status);
+
+        $debits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
+        $credits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
+        $this->assertSame(0, bccomp($debits, $credits, 2), 'Retailer refund reversals must balance against the original retailer sale.');
+    }
+
 }
