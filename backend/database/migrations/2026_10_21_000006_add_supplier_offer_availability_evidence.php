@@ -36,7 +36,9 @@ return new class extends Migration
         }
 
         Schema::table('supplier_offers', function (Blueprint $table) {
-            $table->dropIndex('supplier_offer_eligibility_idx');
+            if (Schema::hasIndex('supplier_offers', 'supplier_offer_eligibility_idx')) {
+                $table->dropIndex('supplier_offer_eligibility_idx');
+            }
             if (Schema::hasColumn('supplier_offers', 'availability_confirmed_by')) {
                 $table->dropConstrainedForeignId('availability_confirmed_by');
             }
