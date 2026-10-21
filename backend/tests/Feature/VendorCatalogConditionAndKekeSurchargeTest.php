@@ -734,7 +734,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $supplierAudit = app(\App\Services\FinancialReconciliationEngine::class)
             ->reconcileRetailerSupplierPayables($orderTwoBulky->id);
         $this->assertSame(1, $supplierAudit['orders_checked']);
-        $this->assertSame(0, $supplierAudit['mismatches']);
+        $this->assertSame(0, $supplierAudit['mismatches'], json_encode($supplierAudit['errors'], JSON_UNESCAPED_SLASHES));
 
         $auditedItem = OrderItem::where('order_id', $orderTwoBulky->id)->firstOrFail();
         $originalOperationalCost = (string) $auditedItem->fulfillment_supplier_cost_snapshot;
