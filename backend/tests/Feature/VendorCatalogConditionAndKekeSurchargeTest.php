@@ -481,6 +481,113 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertEquals('confirmed', $orderTwoBulky->fresh()->order_status);
         $this->assertEquals('paid', $orderTwoBulky->fresh()->payment_status);
 
+        // Recovery changes only operational supplier assignment snapshots. The
+        // capture-time supplier identity/cost and original journal remain immutable.
+        $recoveryAdmin = User::create([
+            'name' => 'Supplier Recovery Admin',
+            'email' => 'supplier-recovery-admin@example.test',
+            'password' => bcrypt('SecurePass123!'),
+            'user_type' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $recoverySupplierUser = User::create([
+            'name' => 'Replacement Supplier',
+            'email' => 'replacement-supplier@example.test',
+            'phone' => '+2348011223399',
+            'password' => bcrypt('SecurePass123!'),
+            'user_type' => 'vendor',
+            'status' => 'active',
+        ]);
+        $recoverySupplier = VendorProfile::create([
+            'user_id' => $recoverySupplierUser->id,
+            'business_name' => 'Replacement Supplier Ltd',
+            'marketplace_status' => 'active',
+            'bank_name' => 'Access Bank',
+            'account_number' => '0123456799',
+            'account_name' => 'REPLACEMENT SUPPLIER LTD',
+        ]);
+        $recoveryShop = Shop::create([
+            'vendor_id' => $recoverySupplier->id,
+            'name' => 'Replacement Supplier Uyo Shop',
+            'slug' => 'replacement-supplier-uyo-shop',
+            'address' => 'Aka Road, Uyo',
+            'country_id' => $this->shop->country_id,
+            'state_id' => $this->shop->state_id,
+            'lga_id' => $this->uyoLga->id,
+            'is_active' => true,
+            'pickup_enabled' => false,
+        ]);
+        foreach ([[$productB_Bike, '7500.00'], [$productB_Keke, '210000.00']] as [$recoveryProduct, $replacementCost]) {
+            SupplierOffer::create([
+                'product_id' => $recoveryProduct->id,
+                'vendor_id' => $recoverySupplier->id,
+                'shop_id' => $recoveryShop->id,
+                'wholesale_cost' => $replacementCost,
+                'is_available' => true,
+                'availability_confirmed_at' => Carbon::now(),
+                'availability_confirmed_by' => $recoveryAdmin->id,
+                'availability_expires_at' => Carbon::now()->addDay(),
+                'notes' => 'Fresh admin-confirmed replacement offer',
+            ]);
+        }
+
+        $rejectedAssignment = OrderSupplierAssignment::where('order_id', $orderTwoBulky->id)
+            ->where('supplier_vendor_id', $supplierB->id)
+            ->firstOrFail();
+        $rejectedItems = OrderItem::where('order_id', $orderTwoBulky->id)
+            ->where('fulfillment_supplier_vendor_id', $supplierB->id)
+            ->get();
+        $this->assertCount(2, $rejectedItems);
+        $captureSupplierIds = $rejectedItems->pluck('supplier_vendor_id')->all();
+        $captureCostTotal = $orderTwoBulky->fresh()->supplier_cost_total_snapshot;
+        $customerTotalBeforeRecovery = $orderTwoBulky->fresh()->grand_total;
+        $cashbackBeforeRecovery = $orderTwoBulky->fresh()->customer_cashback_5;
+
+        $recoveryService = app(\\App\\Services\\SupplierReassignmentRecoveryService::class);
+        $recoveryArgs = [
+            $orderTwoBulky->id,
+            $rejectedAssignment->id,
+            $recoverySupplier->id,
+            $recoveryShop->id,
+            $rejectedItems->pluck('id')->all(),
+            $recoveryAdmin,
+            'Rejected supplier could not fulfil the accepted order.',
+            'supplier-recovery-test-001',
+        ];
+        $recovery = $recoveryService->reassignRejectedItems(...$recoveryArgs);
+        $this->assertTrue($recovery['success']);
+        $this->assertFalse($recovery['replayed']);
+        $this->assertEquals('admin_reassigned', $rejectedAssignment->fresh()->status);
+        $this->assertEquals('partially_supplier_confirmed', $orderTwoBulky->fresh()->sourcing_status);
+        $this->assertEquals($captureCostTotal, $orderTwoBulky->fresh()->supplier_cost_total_snapshot);
+        $this->assertEquals($customerTotalBeforeRecovery, $orderTwoBulky->fresh()->grand_total);
+        $this->assertEquals($cashbackBeforeRecovery, $orderTwoBulky->fresh()->customer_cashback_5);
+        $this->assertEquals($captureSupplierIds, $rejectedItems->fresh()->pluck('supplier_vendor_id')->all());
+        $this->assertEquals(
+            [$recoverySupplier->id, $recoverySupplier->id],
+            OrderItem::whereIn('id', $rejectedItems->pluck('id'))->orderBy('id')->pluck('fulfillment_supplier_vendor_id')->all()
+        );
+        $this->assertTrue(\\App\\Models\\FinancialJournalEntry::assertOrderBalanced($orderTwoBulky->id));
+
+        $journalCountAfterRecovery = \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count();
+        $replay = $recoveryService->reassignRejectedItems(...$recoveryArgs);
+        $this->assertTrue($replay['replayed']);
+        $this->assertSame($journalCountAfterRecovery, \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count());
+
+        Sanctum::actingAs($recoverySupplierUser, ['*']);
+        $replacementConfirmation = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
+            'notes' => 'Replacement items confirmed in stock.',
+        ]);
+        $replacementConfirmation->assertOk()
+            ->assertJsonPath('data.sourcing_status', 'supplier_confirmed');
+        Sanctum::actingAs($recoverySupplierUser, ['*']);
+        $replacementReady = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/ready-for-handover");
+        $replacementReady->assertOk()->assertJsonPath('all_suppliers_ready', false);
+        Sanctum::actingAs($this->vendorUser, ['*']);
+        $remainingReady = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/ready-for-handover");
+        $remainingReady->assertOk()->assertJsonPath('all_suppliers_ready', true);
+        $this->assertEquals('ready_for_pickup', $orderTwoBulky->fresh()->order_status);
+
         // A supplier rejection after payment must create an administrative hold,
         // preserve the paid customer order, and never trigger an automatic refund.
         $orderBike->forceFill([
