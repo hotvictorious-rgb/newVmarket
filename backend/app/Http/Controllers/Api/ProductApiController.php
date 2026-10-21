@@ -27,6 +27,10 @@ class ProductApiController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Product::marketplaceEligible()
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->where('name', 'Uyo')
+                    ->whereHas('state', fn($stateQuery) => $stateQuery->where('name', 'Akwa Ibom'));
+            })
             ->with(['category:id,name,slug']);
 
         if ($request->filled('category_id')) {
@@ -103,6 +107,10 @@ class ProductApiController extends Controller
     public function show(int $id): JsonResponse
     {
         $product = Product::marketplaceEligible()
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->where('name', 'Uyo')
+                    ->whereHas('state', fn($stateQuery) => $stateQuery->where('name', 'Akwa Ibom'));
+            })
             ->with(['category:id,name,slug'])
             ->find($id);
 
