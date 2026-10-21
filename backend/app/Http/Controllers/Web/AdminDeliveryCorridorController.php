@@ -151,7 +151,11 @@ class AdminDeliveryCorridorController extends Controller
             return $corridor;
         });
 
-        return response()->json(['success' => true, 'corridor' => $corridor], 201);
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'corridor' => $corridor], 201);
+        }
+
+        return redirect()->route('admin.delivery_corridors.manage')->with('status', 'Delivery corridor created. Activate it after verifying its landmark aliases.');
     }
 
     public function updateCorridor(Request $request, int $id)
@@ -197,7 +201,11 @@ class AdminDeliveryCorridorController extends Controller
             return $locked->fresh();
         });
 
-        return response()->json(['success' => true, 'corridor' => $updated]);
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'corridor' => $updated]);
+        }
+
+        return redirect()->route('admin.delivery_corridors.manage')->with('status', 'Delivery corridor updated. Existing order snapshots are unchanged.');
     }
 
     public function upsertCompanyRate(Request $request, int $id)
@@ -271,7 +279,11 @@ class AdminDeliveryCorridorController extends Controller
                 ]);
             }
 
-            return response()->json(['success' => true, 'rate' => $rate->fresh()]);
+            if ($request->expectsJson()) {
+                return response()->json(['success' => true, 'rate' => $rate->fresh()]);
+            }
+
+            return redirect()->route('admin.delivery_corridors.manage')->with('status', 'Company corridor tariff saved. Existing order snapshots are unchanged.');
         });
     }
 }
