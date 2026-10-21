@@ -294,6 +294,9 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $orderBike = Order::where('customer_id', $customer->id)->latest('id')->first();
         $this->assertNotNull($orderBike);
         $this->assertEquals('500.00', $orderBike->delivery_fee);
+        $this->assertEquals('500.00', $orderBike->delivery_base_fee_snapshot);
+        $this->assertEquals('0.00', $orderBike->delivery_bulky_surcharge_per_unit_snapshot);
+        $this->assertEquals(0, $orderBike->delivery_bulky_quantity_snapshot);
 
         // Case B: One bike unit plus one bulky unit -> one base fee + one bulky surcharge (1500.00)
         $orderResKeke = $this->postJson('/api/v1/customer/orders/checkout', [
@@ -310,6 +313,9 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $orderKeke = Order::where('customer_id', $customer->id)->latest('id')->first();
         $this->assertNotNull($orderKeke);
         $this->assertEquals('1500.00', $orderKeke->delivery_fee);
+        $this->assertEquals('500.00', $orderKeke->delivery_base_fee_snapshot);
+        $this->assertEquals('1000.00', $orderKeke->delivery_bulky_surcharge_per_unit_snapshot);
+        $this->assertEquals(1, $orderKeke->delivery_bulky_quantity_snapshot);
 
         // Case C: One bike unit plus two physical bulky units -> base once + surcharge twice (2500.00).
         $orderResTwoBulky = $this->postJson('/api/v1/customer/orders/checkout', [
@@ -326,6 +332,9 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $orderTwoBulky = Order::where('customer_id', $customer->id)->latest('id')->first();
         $this->assertNotNull($orderTwoBulky);
         $this->assertEquals('2500.00', $orderTwoBulky->delivery_fee);
+        $this->assertEquals('500.00', $orderTwoBulky->delivery_base_fee_snapshot);
+        $this->assertEquals('1000.00', $orderTwoBulky->delivery_bulky_surcharge_per_unit_snapshot);
+        $this->assertEquals(2, $orderTwoBulky->delivery_bulky_quantity_snapshot);
     }
 
     public function test_public_product_api_filters_by_condition_and_package_tier(): void
