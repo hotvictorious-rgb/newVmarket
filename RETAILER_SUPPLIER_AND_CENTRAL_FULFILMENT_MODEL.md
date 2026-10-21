@@ -90,7 +90,7 @@ If coverage is unconfirmed, checkout blocks delivery. VM controls delivery cover
 
 ## 8. Retail accounting replacing marketplace splits
 
-The legacy multi-vendor marketplace commission rules (90% vendor / 5% cashback / 5% platform merchandise split; 90% vendor / 10% platform delivery split) are **retired for new retailer-model transactions**.
+The legacy multi-vendor marketplace commission rules (90% vendor / 5% cashback / 5% platform merchandise split and vendor-retained 90% / platform 10% delivery split) are **retired for new retailer-model transactions**. Separately, new doorstep delivery defaults to a 90% payable to the logistics company and 10% VM delivery margin, subject to audited admin override.
 
 In the retailer model:
 - **Merchandise accounting:** customer receipts/revenue, discounts, supplier wholesale cost/COGS, gateway fees, refunds, taxes and operating expenses must be separately recorded. VM gross margin before other costs is `Retail Price - Supplier Wholesale Cost`.
