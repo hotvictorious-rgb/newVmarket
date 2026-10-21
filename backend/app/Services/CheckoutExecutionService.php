@@ -155,19 +155,9 @@ class CheckoutExecutionService
                     ];
                 }
 
-                if ((int)$product->shop_id !== (int)$shop->id) {
-                    return [
-                        'error' => true,
-                        'message' => "Product '{$product->name}' does not belong to the selected shop branch.",
-                    ];
-                }
-
-                if ((int)$product->vendor_id !== (int)$shop->vendor_id) {
-                    return [
-                        'error' => true,
-                        'message' => "Product '{$product->name}' does not belong to the selected merchant.",
-                    ];
-                }
+                // Retailer checkout is order-centric: each product may resolve to a
+                // different private supplier. The request's legacy shop_id is not a
+                // customer-selected supplier assignment.
 
                 if (!$product->is_in_stock || !$product->isFresh()) {
                     return [
@@ -193,7 +183,14 @@ class CheckoutExecutionService
                     ];
                 }
 
-                $resolvedOffer = $this->sourcingService->resolveCheapestOffer($product, $item['quantity'], $shop->lga_id ?? null);
+                $resolvedOffer = $this->sourcingService->resolveCheapestOffer($product, (int) $item['quantity'], null, $validated['fulfillment_type']);
+                if (!$resolvedOffer) {
+                    return [
+                        'error' => true,
+                        'status_code' => 422,
+                        'message' => "{$product->name} is temporarily unavailable because no eligible Uyo supplier can fulfil it.",
+                    ];
+                }
 
                 $itemsToCreate[] = [
                     'product' => $product,
@@ -204,12 +201,31 @@ class CheckoutExecutionService
                 ];
             }
 
+            // The first selected supplier shop is retained only as a legacy order anchor.
+            // Actual supplier identity and cost are snapshotted independently per order item.
+            $primaryOffer = $itemsToCreate[0]['resolved_offer'] ?? null;
+            $primarySourceShop = $primaryOffer
+                ? Shop::withTrashed()->with(['lga.state', 'vendor.user'])->find($primaryOffer['shop_id'])
+                : null;
+            if (!$primarySourceShop || $primarySourceShop->trashed() || !$primarySourceShop->is_active) {
+                return ['error' => true, 'status_code' => 422, 'message' => 'No active Uyo supplier shop is available for this order.'];
+            }
+            foreach ($itemsToCreate as $itemData) {
+                $offer = $itemData['resolved_offer'];
+                $sourceShop = Shop::withTrashed()->with(['lga.state', 'vendor.user'])->find($offer['shop_id']);
+                $sourceLga = strtolower(trim((string) ($sourceShop->lga->name ?? '')));
+                $sourceState = strtolower(trim((string) ($sourceShop->lga->state->name ?? '')));
+                if (!$sourceShop || $sourceShop->trashed() || !$sourceShop->is_active || $sourceLga !== 'uyo' || $sourceState !== 'akwa ibom') {
+                    return ['error' => true, 'status_code' => 422, 'message' => 'Every selected supplier must have an active shop in Uyo, Akwa Ibom State.'];
+                }
+            }
+
             // Delivery Fee & Corridor Resolution
             $deliveryFee = '0.00';
             $deliveryBaseFee = '0.00';
             $deliveryBulkySurcharge = '0.00';
             $deliveryBulkyQuantity = 0;
-            $destLgaId = $shop->lga_id;
+            $destLgaId = $primarySourceShop->lga_id;
             $laneId = null;
             $collectionPointId = null;
 
@@ -220,13 +236,13 @@ class CheckoutExecutionService
                 } elseif (!empty($validated['destination_lga_id'])) {
                     $destLgaId = (int)$validated['destination_lga_id'];
                 } else {
-                    $destLgaId = $shop->lga_id;
+                    $destLgaId = $primarySourceShop->lga_id;
                 }
 
                 // One customer-facing order pays one base route fee. Each physical unit
                 // marked keke/bulky adds the configured bulky surcharge once; do not
                 // convert the whole order into one shared bulky charge.
-                $availability = $this->fulfillmentService->checkDeliveryAvailability($shop->id, $destLgaId, 'bike');
+                $availability = $this->fulfillmentService->checkDeliveryAvailability($primarySourceShop->id, $destLgaId, 'bike');
                 if (!$availability['is_available']) {
                     return [
                         'error' => true,
@@ -349,8 +365,8 @@ class CheckoutExecutionService
                 'paystack_initialization_status' => 'not_started',
                 'customer_id' => $user->id,
                 'customer_address_id' => $validated['customer_address_id'] ?? null,
-                'vendor_id' => $shop->vendor_id,
-                'shop_id' => $shop->id,
+                'vendor_id' => $primarySourceShop->vendor_id,
+                'shop_id' => $primarySourceShop->id,
                 'collection_point_id' => $collectionPointId,
                 'rider_id' => $rider ? $rider->id : null,
                 'logistics_company_id' => $logisticsCompanyId,
@@ -362,7 +378,7 @@ class CheckoutExecutionService
                 'payment_method' => $paymentMethod,
                 'payment_reference' => $paymentRef,
                 'guest_access_token' => bin2hex(random_bytes(32)),
-                'origin_lga_id' => $shop->lga_id,
+                'origin_lga_id' => $primarySourceShop->lga_id,
                 'destination_lga_id' => $destLgaId,
                 'delivery_lane_id' => $laneId,
                 'merchandise_subtotal' => $merchandiseSubtotal,
@@ -386,8 +402,8 @@ class CheckoutExecutionService
                 'verification_code' => Order::generateUniqueDeliveryOtp(),
                 'vendor_settlement_status' => 'held',
                 'sourcing_status' => 'assigned_to_supplier',
-                'selected_supplier_id' => $shop->vendor_id,
-                'selected_shop_id' => $shop->id,
+                'selected_supplier_id' => null,
+                'selected_shop_id' => null,
                 'sourced_at' => Carbon::now(),
                 'expires_at' => Carbon::now()->addMinutes(30),
             ]);
@@ -406,18 +422,6 @@ class CheckoutExecutionService
             // Order creation binds the 30-minute payment safety reservation with immutable supplier snapshots
             foreach ($itemsToCreate as $itemData) {
                 $resolvedOffer = $itemData['resolved_offer'] ?? null;
-                if (!$resolvedOffer) {
-                    $resolvedOffer = [
-                        'supplier_offer_id' => null,
-                        'vendor_id' => $itemData['product']->vendor_id,
-                        'shop_id' => $itemData['product']->shop_id,
-                        'supplier_name' => $itemData['product']->vendor->business_name ?? ($itemData['product']->vendor->user->name ?? 'Supplier'),
-                        'shop_name' => $itemData['product']->shop->name ?? 'Shop Branch',
-                        'wholesale_cost' => bcadd((string)($itemData['product']->cost_price ?? '0.00'), '0', 2),
-                        'currency' => 'NGN',
-                    ];
-                }
-
                 $snapshotData = $this->sourcingService->buildOrderItemSnapshot(
                     $resolvedOffer,
                     $itemData['product'],
@@ -470,7 +474,7 @@ class CheckoutExecutionService
                     'transaction_reference' => $paymentRef,
                     'event_id' => 'EVT-VND-ESCROW-' . $order->id . '-' . $paymentRef,
                     'beneficiary_type' => VendorProfile::class,
-                    'beneficiary_id' => $shop->vendor_id,
+                    'beneficiary_id' => $primarySourceShop->vendor_id,
                     'account_name' => 'vendor_payable',
                     'entry_type' => 'credit',
                     'amount' => $vendorNet90,
