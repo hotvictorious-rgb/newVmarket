@@ -701,13 +701,13 @@ class FinancialOperationService
 
                 if ($order && $order->retailer_model_order) {
                     if (!$returnCase) {
-                        throw new \\RuntimeException('Retailer-model refunds require an associated return case for item-level accounting.');
+                        throw new \RuntimeException('Retailer-model refunds require an associated return case for item-level accounting.');
                     }
                     $hasAuthorizedSupplierFault = $returnCase->admin_ruling === 'uphold_customer_claim'
                         && $returnCase->cost_allocation === 'vendor_100'
                         && !empty($returnCase->reviewed_by_admin_id)
                         && !empty($returnCase->admin_ruled_at);
-                    app(\\App\\Services\\RetailerRefundAccountingService::class)->reverse(
+                    app(\App\Services\RetailerRefundAccountingService::class)->reverse(
                         $order,
                         $returnCase,
                         (string) $merchandiseRefund,
