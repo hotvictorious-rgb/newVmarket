@@ -373,3 +373,16 @@ Required controls:
 - **Scope limit:** this is a selected suite, not a claim that every repository test passes. The schema test verifies the test database schema after migrations, not a production database upgrade rehearsal.
 - **Still open / launch blockers:** no authorized, audited supplier availability-confirmation endpoint or service; no supplier selector or immutable cost snapshot integration in the web/API checkout and pickup writer; canonical product eligibility remains coupled to legacy vendor/shop ownership; legacy order-level vendor/shop non-null constraints and financial split calculations remain to be migrated safely.
 - **Next action:** map the existing admin authorization and audit-event patterns, then implement the availability-confirmation workflow with explicit actor, confirmation timestamp, expiry, offer locking, and audit record. Do not accept supplier availability or supplier IDs from customer input.
+
+
+## 26. Supplier availability confirmation endpoint added; CI verification pending — 21 October 2026
+
+- **Protected route added:** `POST /admin/supplier-offers/{offerId}/confirm-availability`, named `admin.supplier_offers.confirm_availability`, registered inside the existing `role:super_admin` route group.
+- **Controller added:** `backend/app/Http/Controllers/Web/AdminSupplierOfferAvailabilityController.php`. It validates a required future expiry and optional notes (maximum 500 characters), captures request IP/user-agent for audit context, and delegates confirmation to `SupplierOfferAvailabilityService`.
+- **Service guard remains authoritative:** the service independently requires an active super-admin actor and active, correctly matched supplier/shop; it locks the offer inside a transaction, records confirmation actor/time/expiry, and writes an audit event. An identical active retry by the same actor does not create a duplicate audit event.
+- **Route regression coverage added:** `SupplierOfferSelectionServiceTest` now exercises customer denial, super-admin success, and expired-input rejection without an availability/audit write.
+- **CI updated:** the workflow syntax-check now explicitly includes the new controller and `SupplierOfferAvailabilityService`; the sourcing feature test file already runs in the selected suite.
+- **Important operational limit:** this endpoint records a human-reported supplier confirmation. It does not contact the supplier or independently prove stock. The admin must use the approved supplier-check process and enter a truthful expiry; the service does not invent a confirmation lifetime.
+- **Verification status:** code and tests have been committed to this working branch, but no result is claimed until the new workflow run completes and its logs are inspected.
+- **Still open / launch blockers:** the selector and snapshot fields remain unwired into the web checkout, API checkout, and pickup-payment writer; canonical catalogue eligibility remains coupled to legacy supplier/shop ownership; order-level legacy vendor/shop constraints and legacy split accounting remain unresolved.
+- **Release rule:** no merge to `main` and no deployment without explicit owner approval.
