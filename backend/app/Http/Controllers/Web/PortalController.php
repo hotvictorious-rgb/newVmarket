@@ -995,7 +995,7 @@ class PortalController extends Controller
                 (int) $validated['logistics_company_id'],
                 (string) $validated['reason']
             );
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return back()->withErrors(['logistics_company_assignment' => $e->getMessage()])->withInput();
         }
 
@@ -1026,7 +1026,7 @@ class PortalController extends Controller
                 (string) $validated['amount'],
                 (string) $validated['reason']
             );
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return back()->withErrors(['logistics_company_payable' => $e->getMessage()])->withInput();
         }
 
