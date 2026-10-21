@@ -22,11 +22,8 @@ class RiderTerminalApiController extends Controller
     }
 
     /**
-     * STRICT ZERO-TRUST GUARD & ROLE INVARIANT:
-     * 1. Only users with user_type === 'rider' can access this terminal.
-     *    Logistics companies, vendors, and customers are strictly prohibited.
-     * 2. New delivery work requires exactly one active owning Vendor.
-     *    Legacy fleet-only or ambiguous rider profiles cannot use this terminal.
+     * Zero-trust guard for the centrally managed retailer delivery terminal.
+     * Vendor-linked riders are legacy-only and cannot perform new VM deliveries.
      */
     protected function guardRiderWithLogistics(Request $request): ?JsonResponse
     {
@@ -34,7 +31,7 @@ class RiderTerminalApiController extends Controller
         if (!$user || !$user->isRider()) {
             return response()->json([
                 'status' => false,
-                'message' => 'Unauthorized: Only registered delivery couriers can access this terminal. Logistics companies, merchants, and customers are strictly prohibited.',
+                'message' => 'Unauthorized: Only registered delivery couriers can access this terminal.',
             ], 403);
         }
 
@@ -53,24 +50,10 @@ class RiderTerminalApiController extends Controller
             ], 404);
         }
 
-        if (!$rider->is_active) {
+        if (!$rider->isEligibleForCentralDelivery()) {
             return response()->json([
                 'status' => false,
-                'message' => 'Unauthorized: Rider dispatch account is inactive or suspended.',
-            ], 403);
-        }
-
-        if (!$rider->vendor_id || $rider->logistics_company_id) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Unauthorized: Active delivery work requires one owning vendor; legacy fleet-only or ambiguously linked riders are not eligible.',
-            ], 403);
-        }
-
-        if (!$rider->vendor || $rider->vendor->marketplace_status !== 'active' || ($rider->vendor->user && $rider->vendor->user->status !== 'active')) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Unauthorized: Owning vendor account is inactive or suspended.',
+                'message' => 'Unauthorized: New Victorious MARKET delivery work requires an active rider linked exclusively to one active logistics company.',
             ], 403);
         }
 
