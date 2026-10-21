@@ -439,3 +439,15 @@ Status: FIXED — focused regression passed. No merge or deployment.
 **Regression coverage added:** second-shop creation is rejected; moving an existing supplier shop to Eket is rejected; supplier-managed out-of-Uyo delivery coverage is not persisted.
 
 **Status:** Code and tests committed on `docs/retailer-central-fulfilment-model`; automated tests have not run in this session. No merge or deployment.
+
+
+## VM-AUD-085 — Remove public supplier directory and supplier identifiers from customer catalog surfaces (21 October 2026)
+
+**Severity:** High  
+**Finding:** The public `/api/v1/shops` endpoint returned supplier shop names, physical addresses, operating hours and pickup settings. Public product APIs serialized supplier/vendor/shop identifiers and, on detail, the shop address. The web `/shop/{slug}` page exposed the supplier's legal business name, physical shop address and branch navigation. Product details also offered a direct supplier inspection-reservation action, inconsistent with support-managed pickup exceptions.
+
+**Change:** Public supplier shop discovery now returns HTTP 410 with no shop records; public product APIs no longer eager-load or serialize supplier/vendor/shop relations and identifiers, reject private `shop_id` filtering, and reject non-Uyo LGA requests. Public supplier storefront URLs redirect to the central Victorious MARKET storefront. Product details identify Victorious MARKET as the retailer and replace direct supplier pickup reservation with a central-support explanation.
+
+**Regression coverage added:** public shop directory is retired; product list/detail responses do not expose vendor/shop IDs; existing supplier scope tests remain in the focused feature file.
+
+**Status:** Code and tests committed on `docs/retailer-central-fulfilment-model`; automated tests have not run for these latest changes. Review legacy checkout and pickup UI/API flows before release. No merge or deployment.
