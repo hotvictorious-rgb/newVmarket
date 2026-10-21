@@ -19,6 +19,11 @@ class FinancialJournalIdempotencySchemaTest extends TestCase
             'Financial journal schema must persist idempotency keys used by ledger writers.'
         );
 
+        $this->assertTrue(
+            Schema::hasColumn('financial_journal_entries', 'order_item_id'),
+            'Supplier payable journal rows must retain their order-item identity.'
+        );
+
         $base = [
             'order_id' => null,
             'transaction_reference' => 'SUPREC-SCHEMA-TEST-1',
