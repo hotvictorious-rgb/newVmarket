@@ -141,7 +141,7 @@
 
         <div class="stat-card stat-card-border-emerald" style="border: 2px solid #10B981; background: linear-gradient(135deg, rgba(16, 185, 129, 0.04) 0%, rgba(16, 185, 129, 0.12) 100%);">
             <div class="stat-card-info">
-                <span class="stat-card-label" style="font-weight: 800; color: #065F46; letter-spacing: 0.5px;">AVAILABLE TO WITHDRAW</span>
+                <span class="stat-card-label" style="font-weight: 800; color: #065F46; letter-spacing: 0.5px;">LEGACY BALANCE AVAILABLE TO WITHDRAW</span>
                 <span class="stat-card-value" style="color: #047857; font-size: 24px; font-weight: 900;">₦{{ number_format((float)($vendorMetrics['withdrawable_balance'] ?? 0), 2) }}</span>
                 <span class="stat-card-subtext" style="color: #059669; font-weight: 700;">Cleared &amp; Ready for Transfer</span>
             </div>
