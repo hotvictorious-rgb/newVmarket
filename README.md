@@ -21,7 +21,7 @@ Victorious MARKET is a centrally managed online retailer operating from Uyo, Akw
 - **Two Permitted Customer Flows:**
   - **Doorstep Delivery (Pay First Online, Sourced & Dispatched):** Customer pays upfront online via Paystack. System automatically assigns order to the cheapest available supplier in Uyo (with Admin override capability). Supplier confirms availability in portal. Admin assigns order to an accredited Logistics Company. Fleet rider picks up and delivers. Verified handover with customer OTP (`delivery_otp`) and doorstep photo proof. Strictly zero COD.
   - **In-Shop Pickup (Inspect First, Pay at Shop via Paystack):** Customer reserves online for ₦0 upfront. System automatically assigns reservation to the cheapest available supplier shop location in Uyo (with Admin override capability). Customer sees assigned branch and has direct call/chat support access. Customer arrives, presents reservation pass (`RES-XXXXXX`), and **inspects the item physically first**. Upon satisfaction, customer pays **directly to Victorious MARKET via Paystack** at the counter. Supplier verifies payment, checks pickup OTP (`verification_code`), records in-shop photo proof, and hands over goods. Zero delivery fee.
-- **Retail Accounting:** `Customer Retail Price - Supplier Wholesale Cost = VM Gross Margin`. Suppliers receive 100% of agreed wholesale cost upon verified completion. Customer 5% cashback is funded from retail margin on real money paid. Legacy 90/5/5 splits are retired.
+- **Retail Accounting:** `Retail Price - Supplier Wholesale Cost = VM Gross Margin` before other costs. Suppliers receive their agreed wholesale cost only after verified completion and reconciliation. Legacy 90/5/5 merchandise and 90/10 delivery splits do not apply to new retailer transactions. Preserve historical cashback records, but do not accrue new retailer-model cashback until a separate owner-approved policy defines funding, formula, redemption, maturity, expiry and recovery.
 - **No off-platform payment:** Suppliers may not collect cash or private-account transfers for orders. Launch payment rails are Paystack card and standard bank transfer only. Doorstep COD is completely disabled.
 - **Reservation:** In-shop reservation features a 24-hour stock hold at the assigned supplier shop.
 - **Operating base and coverage:** Uyo, Akwa Ibom State; serves destinations where VM has confirmed supplier sourcing and logistics coverage.
@@ -105,7 +105,7 @@ Cashback maturity is **not the same as the return/refund window**.
 
 ## Retail accounting and supplier payment
 
-The former marketplace allocations (90% vendor / 5% cashback / 5% platform on merchandise and 90% vendor / 10% platform on delivery) are **retired for the retailer model**.
+The former marketplace allocations (90% vendor / 5% cashback / 5% platform on merchandise and 90% vendor / 10% platform on delivery) are **retired for new retailer-model transactions**. Historical records must remain auditable. New cashback accrual is not enabled until its separate owner-approved policy is consistent across the authoritative system rules, payment/refund matrix, implementation and customer terms.
 
 Record separately, using immutable linked financial entries:
 - customer merchandise revenue and verified customer payment;
@@ -290,7 +290,7 @@ These documents serve different purposes and should remain consistent:
 1. [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md) — current owner-confirmed retailer, supplier, coverage, logistics and payment-eligibility model.
 2. [VICTORIOUS_MARKET.md](VICTORIOUS_MARKET.md) — broader product vision and operating model.
 3. [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md) — binding vendor-managed delivery, rider, privacy, pickup and COD rules.
-4. [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) — payment channels, refund/cashback policy, settlement and Paystack event matrix.
+4. [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) — payment channels, refund policy, legacy financial history and Paystack event matrix; the retailer-model supersession notice controls new transactions.
 5. [VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md](VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md) — code observations, implementation gaps and verification checklist.
 6. [DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md](DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md) — delivery and accounting implementation plan.
 7. [SHARED_HOSTING_DEPLOYMENT_GUIDE.md](SHARED_HOSTING_DEPLOYMENT_GUIDE.md) — deployment instructions.
