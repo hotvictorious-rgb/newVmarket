@@ -407,3 +407,29 @@ Required controls:
 - **Verification scope:** this proves the selected CI suite passed at the recorded commit, not that every repository test passes or that checkout/pickup sourcing is integrated. No production database or deployment was changed.
 - **Next blocker:** use the refreshed Section 27 writer map to plan a narrow, tested shared selection-and-snapshot integration. First address schema constraints and historical dependencies; do not switch order economics to supplier snapshots until both checkout writers, pickup payment, settlement, refunds and reports are mapped and covered.
 - **Release status:** not launch-ready; no merge to `main` and no deployment.
+
+
+## Section 28 — Order ownership, supplier snapshots, and rollback safety (21 October 2026)
+
+### Confirmed from current branch source
+
+1. The original order/fulfilment migration makes `orders.vendor_id` and `orders.shop_id` required, while `pickup_reservations` also requires one vendor and one shop. These are historical schema assumptions and cannot be safely removed by editing an already-applied migration. A forward migration and an explicit legacy-data strategy are required.
+2. The supplier-offer migration adds nullable `orders.selected_supplier_id` and `orders.selected_shop_id`, but does not by itself make the order independent of those legacy required ownership columns. This is not yet multi-supplier-per-order support.
+3. `CheckoutExecutionService` still requires a customer-supplied `shop_id`, checks each product against that shop/vendor, writes legacy `orders.vendor_id`/`shop_id`, and copies product-level `cost_price` into `order_items`. The new selected-offer supplier snapshot columns are not populated by this checkout writer.
+4. `CheckoutAndReservationApiController::createPickupReservation()` requires `shop_id` and stores one vendor/shop on the reservation. `payPickupReservation()` creates an order and order item using legacy ownership and product cost. This path also needs sourcing integration; changing doorstep checkout alone would leave pickup inconsistent.
+5. `OrderSettlementService` and `ReturnAndRefundService` still rely on order-level vendor ownership for settlement/refund decisions. A schema change must map those consumers and preserve historical orders before introducing item-level supplier payable calculations.
+6. The supplier availability evidence migration's `up()` checks whether its index exists before creating it, but its `down()` previously attempted to drop the index unconditionally. The rollback was hardened to check for the named index before dropping it, avoiding a needless rollback failure when the index is absent.
+
+### Required next implementation sequence
+
+- Inventory every order creation path, order-item writer, pickup reservation transition, payment-intent creator, webhook settlement, refund, reporting query, and payout/settlement consumer before modifying ownership constraints.
+- Add forward-only, production-safe schema changes; do not rewrite historical migrations. Decide whether new orders retain nullable legacy ownership for compatibility or use an explicit order/fulfilment-group structure, and prove every old consumer handles the new representation.
+- At item creation, persist immutable selected offer ID, supplier/vendor/shop IDs, display-name snapshots, agreed wholesale cost, currency, and snapshot timestamp. Never infer the agreed cost later from mutable product or offer rows.
+- Keep customer input limited to product/quantity/fulfilment details. Supplier selection must use eligible, unexpired availability evidence; any authorised override must be separately permissioned and audited.
+- Keep pickup as its own flow: reservation creation remains unpaid, counter payment is verified by the server, and pickup pass, customer handover OTP, and proof remain distinct from rider custody credentials.
+- Replace new-order financial split assumptions only after all producers/consumers and refund/reconciliation paths are mapped. No new percentage allocation is approved by this audit.
+- Add migration tests for fresh install and upgrade from representative legacy schemas, plus regression tests for mixed supplier items, unavailable suppliers, immutable cost snapshots, duplicate/concurrent requests, refunds, and historical order reads.
+
+### Status
+
+This section records source-level findings and one rollback-safety fix. It does **not** claim that checkout, pickup, order ownership, financial accounting, or production migration has been completed. CI must be run against the latest branch head after these changes; no production migration, merge to `main`, or deployment is authorised by this work.
