@@ -6,6 +6,7 @@ use App\Models\AdminAuditLog;
 use App\Models\Category;
 use App\Models\CustomerAddress;
 use App\Models\CustomerCashbackLedger;
+use App\Models\CashbackRecoveryLedger;
 use App\Models\DeliveryLane;
 use App\Models\DisputeAndReturn;
 use App\Models\FinancialJournalEntry;
@@ -15,6 +16,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\RiderProfile;
+use App\Models\ReturnCase;
 use App\Models\Shop;
 use App\Models\State;
 use App\Models\SystemSetting;
@@ -849,6 +851,94 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $debits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
         $credits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
         $this->assertSame(0, bccomp($debits, $credits, 2), 'Retailer settlement and company override adjustments must remain balanced.');
+    }
+
+
+    public function test_cashback_maturity_offsets_spent_cashback_recovery_and_starts_365_day_validity_at_actual_maturity(): void
+    {
+        $now = Carbon::create(2026, 10, 21, 10, 0, 0);
+        Carbon::setTestNow($now);
+
+        $order = Order::create([
+            'order_number' => 'VM-CB-MATURE-' . strtoupper(substr(sha1((string) microtime(true)), 0, 8)),
+            'customer_id' => $this->customerUser->id,
+            'vendor_id' => $this->vendorProfile->id,
+            'shop_id' => $this->shop->id,
+            'origin_lga_id' => $this->shop->lga_id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'retailer_model_order' => true,
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'payment_method' => 'paystack',
+            'payment_reference' => Order::generateUniquePaymentReference(),
+            'merchandise_subtotal' => '10000.00',
+            'delivery_fee' => '1000.00',
+            'grand_total' => '11000.00',
+            'supplier_cost_total_snapshot' => '6000.00',
+            'retailer_merchandise_margin' => '3500.00',
+            'vendor_net_90' => '0.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '0.00',
+            'logistics_fee_retained' => '900.00',
+            'platform_delivery_fee' => '100.00',
+            'logistics_company_payable_default_amount' => '900.00',
+            'logistics_company_payable_amount' => '900.00',
+            'received_at' => $now->copy()->subHours(50),
+            'refund_window_expires_at' => $now->copy()->subHours(1),
+            'vendor_settlement_status' => 'held',
+            'verification_code' => '123456',
+            'pickup_verification_code' => '654321',
+        ]);
+
+        $returnCase = ReturnCase::create([
+            'case_number' => 'RET-CB-' . strtoupper(substr(sha1((string) microtime(true)), 0, 8)),
+            'customer_id' => $this->customerUser->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendorProfile->id,
+            'return_reason' => 'prior partial merchandise refund',
+            'status' => 'refunded',
+            'total_refundable_amount' => '2000.00',
+            'refund_delivery_fee' => false,
+            'delivery_fee_refunded' => '0.00',
+            'refunded_amount' => '2000.00',
+        ]);
+
+        $lot = CustomerCashbackLedger::create([
+            'customer_id' => $this->customerUser->id,
+            'order_id' => $order->id,
+            'amount' => '500.00',
+            'status' => 'pending_maturation',
+            'matures_at' => $now->copy()->subHour(),
+            'expires_at' => null,
+        ]);
+
+        $recovery = CashbackRecoveryLedger::create([
+            'customer_id' => $this->customerUser->id,
+            'order_id' => $order->id,
+            'return_case_id' => $returnCase->id,
+            'amount' => '100.00',
+            'recovered_amount' => '0.00',
+            'status' => 'pending_recovery',
+            'idempotency_key' => 'test-cashback-recovery-' . $returnCase->id,
+            'notes' => 'Fixture for future cashback offset.',
+        ]);
+
+        $result = app(\\App\\Services\\CashbackMaturityService::class)->matureOrder($order);
+        $this->assertTrue($result['matured']);
+        $this->assertSame('available', $lot->fresh()->status);
+        $this->assertSame('400.00', $lot->fresh()->amount);
+        $this->assertEquals($now->copy()->addDays(365)->toIso8601String(), $lot->fresh()->expires_at->toIso8601String());
+        $this->assertSame('recovered', $recovery->fresh()->status);
+        $this->assertSame('100.00', $recovery->fresh()->recovered_amount);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'cashback_recovery_receivable',
+            'entry_type' => 'credit',
+            'amount' => '100.00',
+        ]);
+
+        Carbon::setTestNow();
     }
 
 }
