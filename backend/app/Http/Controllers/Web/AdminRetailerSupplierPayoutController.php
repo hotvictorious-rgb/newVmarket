@@ -258,8 +258,8 @@ class AdminRetailerSupplierPayoutController extends Controller
     private function authorizeSuperAdmin(Request $request): void
     {
         $user = $request->user();
-        if (!$user || !$user->isSuperAdmin()) {
-            abort(403, 'Super Admin approval is required for supplier payouts.');
+        if (!$user || !$user->isSuperAdmin() || $user->status !== 'active') {
+            abort(403, 'An active Super Admin account is required for supplier payout operations.');
         }
     }
 }
