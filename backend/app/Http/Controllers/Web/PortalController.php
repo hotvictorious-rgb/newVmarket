@@ -4714,8 +4714,12 @@ class PortalController extends Controller
             elseif (in_array($user->user_type, ['super_admin', 'admin_employee'])) {
                 $isAuthorized = true;
             }
-            // Merchant owning the shop
-            elseif ($user->vendorProfile && (int)$user->vendorProfile->id === (int)$order->vendor_id) {
+            // Legacy marketplace merchants may view only their own legacy orders.
+            // Retailer-model supplier assignments are private and do not grant customer
+            // tracking access through the compatibility order.vendor_id field.
+            elseif (!$order->retailer_model_order
+                && $user->vendorProfile
+                && (int) $user->vendorProfile->id === (int) $order->vendor_id) {
                 $isAuthorized = true;
             }
             // Assigned Courier
