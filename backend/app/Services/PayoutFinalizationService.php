@@ -65,6 +65,7 @@ class PayoutFinalizationService
                 ->get();
             $allocationOwnershipViolation = $existingAllocationRows->contains(function ($allocation) use ($lockedPayout) {
                 return !$allocation->order
+                    || $allocation->order->retailer_model_order
                     || (int) $allocation->order->vendor_id !== (int) $lockedPayout->vendor_id;
             });
             if ($allocationOwnershipViolation) {
@@ -153,6 +154,7 @@ class PayoutFinalizationService
 
             if (!$allocationOwnershipViolation && bccomp($remainingToSettle, '0.00', 2) > 0) {
                 $eligibleOrders = Order::where('vendor_id', $lockedPayout->vendor_id)
+                    ->where('retailer_model_order', false)
                     ->where('vendor_settlement_status', 'eligible')
                     ->where('payment_status', 'paid')
                     ->where('order_status', 'delivered')
