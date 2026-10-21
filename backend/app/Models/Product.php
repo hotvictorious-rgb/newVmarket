@@ -199,6 +199,7 @@ class Product extends Model
             ->whereHas('supplierOffers', function ($offers) use ($now) {
                 $offers->where('is_available', true)
                     ->whereNotNull('availability_confirmed_at')
+                    ->whereNotNull('availability_confirmed_by')
                     ->where('availability_confirmed_at', '<=', $now)
                     ->whereNotNull('availability_expires_at')
                     ->where('availability_expires_at', '>', $now)
