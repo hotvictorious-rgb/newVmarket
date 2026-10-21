@@ -103,7 +103,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $fleetCompany = LogisticsCompanyProfile::create([
             'user_id' => $fleetUser->id,
             'company_name' => 'Vendor Catalog Test Logistics Ltd',
-            'hq_lga_id' => $this->uyoLga->id,
+            'lga_id' => $this->uyoLga->id,
             'wallet_balance' => '0.00',
             'status' => 'active',
         ]);
