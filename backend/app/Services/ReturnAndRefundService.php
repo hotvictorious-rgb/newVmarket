@@ -666,27 +666,6 @@ class ReturnAndRefundService
             ];
         }
 
-        // A previously accepted Paystack refund is not proof of settlement. In
-        // particular, retries after the claim is cleared must not fall through to
-        // manual journal posting while the gateway operation is still pending.
-        // Only verified terminal confirmation may post the refund ledger entries.
-        if (empty($bankReference) && !empty($paystackRefundId)) {
-            // Pre-validation acquired a fresh claim token. Release it before
-            // returning so a safe pending retry cannot block future reconciliation.
-            ReturnCase::where('id', $caseId)->where('refund_claim_token', $claimToken)->update([
-                'refund_claim_token' => null,
-                'refund_claimed_at' => null,
-            ]);
-
-            return [
-                'success' => true,
-                'status' => 'initiated',
-                'message' => 'A Paystack refund is already recorded for this return case. It remains pending reconciliation; no settlement journal entries were posted.',
-                'case' => ReturnCase::find($caseId),
-                'total_refunded' => $totalCashRefund,
-            ];
-        }
-
         $gatewayJournalAlreadyPosted = false;
 
         // Reuse a live operation for reconciliation, never issue a second gateway
@@ -721,6 +700,30 @@ class ReturnAndRefundService
                 'total_refunded' => $totalCashRefund,
             ];
         }
+
+        // A persisted refund reference with no matching operation is an orphan and
+        // cannot be safely retried. If all linked operations are definitively failed,
+        // clear only the stale reference so a new attempt can be created.
+        if (!empty($paystackRefundId)) {
+            if ($priorOperations->isEmpty() || $priorOperations->contains(fn ($operation) => $operation->status !== 'failed')) {
+                ReturnCase::where('id', $caseId)->where('refund_claim_token', $claimToken)->update([
+                    'refund_claim_token' => null,
+                    'refund_claimed_at' => null,
+                ]);
+                return [
+                    'success' => true,
+                    'status' => 'initiated',
+                    'message' => 'A Paystack refund reference remains without a definitively failed linked operation. It is held for reconciliation; no second request was sent.',
+                    'case' => ReturnCase::find($caseId),
+                    'total_refunded' => $totalCashRefund,
+                ];
+            }
+            ReturnCase::where('id', $caseId)->where('refund_claim_token', $claimToken)->update([
+                'paystack_refund_id' => null,
+            ]);
+            $paystackRefundId = null;
+        }
+
         $retryIdempotencyKey = $priorOperations->isNotEmpty()
             ? 'REFUND-CASE-' . $caseId . '-ATTEMPT-' . ($priorOperations->count() + 1)
             : null;
