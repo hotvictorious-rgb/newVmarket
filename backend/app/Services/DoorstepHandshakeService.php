@@ -699,7 +699,7 @@ class DoorstepHandshakeService
         string $ruling,
         ?string $adminNotes = null
     ): array {
-        if (!$adminUser->isSuperAdmin() && !$adminUser->isAdminEmployee()) {
+        if ($adminUser->status !== 'active' || (!$adminUser->isSuperAdmin() && !$adminUser->isAdminEmployee())) {
             return ['success' => false, 'message' => 'Unauthorized: Only administrative staff can arbitrate return disputes.'];
         }
 
