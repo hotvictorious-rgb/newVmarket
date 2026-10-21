@@ -448,6 +448,59 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertEquals('15000.00', number_format((float)$creditEntry->amount, 2, '.', ''));
     }
 
+    public function test_logistics_payout_rejection_is_blocked_while_gateway_outcome_is_uncertain(): void
+    {
+        $payout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '15000.00',
+            'status' => 'pending',
+            'gateway_status' => 'processing',
+            'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
+            'transfer_reference' => 'FLEET-PAYOUT-UNCERTAIN-001',
+            'bank_name' => $this->company->bank_name,
+            'bank_code' => $this->company->bank_code,
+            'account_number' => $this->company->account_number,
+            'account_name' => $this->company->account_name,
+        ]);
+        $walletBefore = (string) $this->company->fresh()->wallet_balance;
+        $journalCountBefore = FinancialJournalEntry::where('event_id', 'EVT-FLEET-REJECT-' . $payout->id)->count();
+
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.reject.logistics_payout'), [
+            'payout_id' => $payout->id,
+            'rejection_reason' => 'Gateway result requires reconciliation.',
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertEquals('pending', $payout->fresh()->status);
+        $this->assertEquals($walletBefore, (string) $this->company->fresh()->wallet_balance);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::where('event_id', 'EVT-FLEET-REJECT-' . $payout->id)->count());
+    }
+
+    public function test_vendor_payout_rejection_is_blocked_while_processing_claim_exists(): void
+    {
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '15000.00',
+            'status' => 'pending',
+            'processing_token' => 'CLAIM-VND-UNCERTAIN-001',
+            'transfer_reference' => 'VND-PAYOUT-UNCERTAIN-001',
+            'bank_name' => $this->vendor->bank_name,
+            'bank_code' => $this->vendor->bank_code,
+            'account_number' => $this->vendor->account_number,
+            'account_name' => $this->vendor->account_name,
+        ]);
+        $journalCountBefore = FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REJECT-' . $payout->id)->count();
+
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.reject.vendor_payout'), [
+            'payout_id' => $payout->id,
+            'rejection_reason' => 'Gateway result requires reconciliation.',
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertEquals('pending', $payout->fresh()->status);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REJECT-' . $payout->id)->count());
+    }
+
     public function test_high_value_vendor_payout_strictly_requires_super_admin()
     {
         $this->createTestOrder([
