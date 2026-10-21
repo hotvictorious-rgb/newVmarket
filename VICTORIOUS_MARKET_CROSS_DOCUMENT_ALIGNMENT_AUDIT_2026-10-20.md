@@ -177,3 +177,15 @@ The following core sources were aligned to that model on branch `docs/retailer-c
 - If the fresh deployment has no legacy transactions, obsolete marketplace routes, screens, tables and jobs should be retired through a reviewed migration rather than left active. If legacy records exist, preserve them as history until dependencies and accounting treatment are established.
 - Do not merge or deploy this branch without explicit owner approval and verification against the exact intended commit.
 
+
+
+## 8. Incremental runtime remediation log — 21 October 2026
+
+### R-001 — Central rider eligibility allowed a legacy shop-linked profile through the model guard
+
+- **Finding:** `RiderProfile::isEligibleForCentralDelivery()` rejected vendor-linked riders and required a logistics-company link, but did not explicitly reject a profile with `shop_id` populated while `vendor_id` was null. That left an ambiguous legacy ownership combination at the model eligibility boundary.
+- **Resolution applied:** `backend/app/Models/RiderProfile.php` now rejects a rider from central delivery eligibility if either `vendor_id` or `shop_id` is populated, or if `logistics_company_id` is absent. The existing active rider, active logistics company and active associated user checks remain in force.
+- **Commit:** `e84180140f75ec5d1bcc398ddeaafdce63b7a52c`.
+- **Verification status:** Source change committed to this branch. Automated tests and PHP lint have **not** been run in this environment, so this is a code change, not a test-verified or production-verified fix. Add regression coverage for a shop-linked profile with no vendor link and for a properly linked active logistics-company rider before treating this guard as verified.
+- **Scope limit:** This closes only the model-level eligibility gap. It does not prove every dispatch, assignment, terminal, or delivery-completion path calls this guard. Those call sites remain to be traced and tested.
+
