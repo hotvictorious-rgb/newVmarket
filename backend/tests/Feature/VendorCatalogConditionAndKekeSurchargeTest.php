@@ -100,7 +100,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
     {
         Sanctum::actingAs($this->vendorUser, ['*']);
 
-        $this->vendor->update(['marketplace_status' => 'pending']);
+        $this->vendor->update(['marketplace_status' => 'probation']);
 
         $this->getJson('/api/v1/vendor/orders')
             ->assertForbidden();
