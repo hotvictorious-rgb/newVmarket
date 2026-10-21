@@ -309,15 +309,12 @@ class CheckoutExecutionService
                 );
             }
 
-            // Cashback is 5% of eligible merchandise funded by real money through
-            // Paystack after cashback redemption. Delivery is excluded.
-            $customerCashback5 = BcMathService::mul($subtotalAfterCashback, '0.05');
+            // Cashback is finalized after wallet-credit allocation below so only
+            // real money applied to merchandise earns the 5% benefit. Delivery is excluded.
+            $customerCashback5 = '0.00';
             $vendorNet90 = '0.00'; // no new 90% marketplace merchandise commission
-            $platformMargin5 = '0.00'; // retailer margin is computed from price - supplier cost - cashback
-            $retailerMerchandiseMargin = BcMathService::sub(
-                BcMathService::sub($merchandiseSubtotal, $supplierCostTotal),
-                $customerCashback5
-            );
+            $platformMargin5 = '0.00'; // retailer margin is computed from net real-money merchandise less cost and cashback
+            $retailerMerchandiseMargin = '0.00';
 
             // Default logistics-company payable is 90% of the snapshotted customer
             // delivery fee. Admin may override the final company amount with audit.
@@ -331,6 +328,23 @@ class CheckoutExecutionService
                     ? $totalBeforeWallet
                     : $availableWallet;
             }
+
+            // Allocate wallet credit to net merchandise first, then delivery. This
+            // conservative, deterministic order prevents redeemed cashback or wallet
+            // credit from earning new cashback and keeps delivery outside the 5% base.
+            $walletCreditMerchandiseApplied = BcMathService::comp(
+                $walletCreditApplied,
+                $subtotalAfterCashback
+            ) > 0 ? $subtotalAfterCashback : $walletCreditApplied;
+            $realMoneyMerchandiseBase = BcMathService::sub(
+                $subtotalAfterCashback,
+                $walletCreditMerchandiseApplied
+            );
+            $customerCashback5 = BcMathService::mul($realMoneyMerchandiseBase, '0.05');
+            $retailerMerchandiseMargin = BcMathService::sub(
+                BcMathService::sub($realMoneyMerchandiseBase, $supplierCostTotal),
+                $customerCashback5
+            );
 
             $grandTotal = BcMathService::sub($totalBeforeWallet, $walletCreditApplied);
 
