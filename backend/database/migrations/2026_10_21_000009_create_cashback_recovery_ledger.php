@@ -10,9 +10,9 @@ return new class extends Migration
     {
         Schema::create('cashback_recovery_ledgers', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('customer_id')->constrained('users')->cascadeOnDelete();
-            $table->foreignId('order_id')->constrained('orders')->cascadeOnDelete();
-            $table->foreignId('return_case_id')->constrained('return_cases')->cascadeOnDelete();
+            $table->foreignId('customer_id')->constrained('users')->restrictOnDelete();
+            $table->foreignId('order_id')->constrained('orders')->restrictOnDelete();
+            $table->foreignId('return_case_id')->constrained('return_cases')->restrictOnDelete();
             $table->decimal('amount', 24, 2);
             $table->decimal('recovered_amount', 24, 2)->default('0.00');
             $table->string('status', 32)->default('pending_recovery');
