@@ -331,7 +331,7 @@
                     </span>
                 </div>
                 <p style="font-size: 13px; color: #475569; margin: 0 0 14px; line-height: 1.5;">
-                    Package received and verified on your device. Vendor payout (₦{{ number_format((float)$order->vendor_net_90, 2) }}) remains safely locked in Escrow until the 24-hour return window elapses without dispute.
+                    Package received and verified on your device. Victorious MARKET reviews fulfillment and supplier settlement privately after the applicable return and dispute checks.
                 </p>
 
                 @if($order->proof_of_delivery_image)
@@ -402,7 +402,7 @@
 
         <p style="font-size: 13px; color: #E2E8F0; max-width: 480px; margin: 0 auto 18px; line-height: 1.5;">
             @if($order->fulfillment_type === 'in_shop_pickup')
-                Show this code to the cashier at <strong>{{ $order->shop->name }} ({{ $order->shop->lga->name ?? 'Uyo' }} LGA)</strong> after physically inspecting your items.
+                Contact Victorious MARKET support to arrange any approved pickup exception; supplier shop details are not shown on customer tracking.
             @else
                 Only input this code on <strong>your own phone</strong> after physically inspecting your items outside. The rider does not have this code.
             @endif
@@ -445,7 +445,7 @@
             $steps = [
                 ['key' => 'placed', 'title' => 'Order Placed', 'desc' => 'Order created in system', 'done' => true, 'time' => $order->created_at->format('h:i A')],
                 ['key' => 'paid', 'title' => 'Payment Confirmed', 'desc' => 'Escrow locked via Paystack', 'done' => true, 'time' => $order->created_at->addMinutes(2)->format('h:i A')],
-                ['key' => 'preparing', 'title' => 'Merchant Preparing', 'desc' => "Verified at {$order->shop->name} ({$order->shop->lga->name} LGA)", 'done' => in_array($status, ['processing', 'ready_for_pickup', 'out_for_delivery', 'delivered']), 'time' => '11:15 AM'],
+                ['key' => 'preparing', 'title' => 'Victorious MARKET Preparing', 'desc' => $order->retailer_model_order ? 'Supplier sourcing and collection are coordinated privately by Victorious MARKET' : "Verified at {$order->shop->name} ({$order->shop->lga->name} LGA)", 'done' => in_array($status, ['processing', 'ready_for_pickup', 'out_for_delivery', 'delivered']), 'time' => '11:15 AM'],
                 ['key' => 'dispatch', 'title' => $order->fulfillment_type === 'in_shop_pickup' ? 'Ready for Counter Pickup' : 'Out for Delivery', 'desc' => $order->fulfillment_type === 'in_shop_pickup' ? 'Waiting at branch counter' : ($order->hasRiderArrived() ? 'Rider arrived at doorstep' : 'Courier in transit'), 'done' => in_array($status, ['out_for_delivery', 'delivered']), 'time' => $order->rider_arrived_at ? $order->rider_arrived_at->format('h:i A') : '12:30 PM (ETA)'],
                 ['key' => 'delivered', 'title' => 'Delivered & Received', 'desc' => 'Customer phone PIN verified', 'done' => ($status === 'delivered'), 'time' => $order->received_at ? $order->received_at->format('h:i A') : 'Pending Confirmation'],
             ];
@@ -496,7 +496,7 @@
                 Order Items &amp; Settlement Details
             </h2>
             <span style="font-size: 12px; color: #64748B;">
-                Branch: <strong>{{ $order->shop->name }}</strong> ({{ $order->shop->lga->name ?? 'Uyo' }} LGA)
+                Fulfilled by: <strong>{{ $order->retailer_model_order ? 'Victorious MARKET' : $order->shop->name }}</strong>{{ $order->retailer_model_order ? ' — Uyo local delivery' : ' (' . ($order->shop->lga->name ?? 'Uyo') . ' LGA)' }}
             </span>
         </div>
 
