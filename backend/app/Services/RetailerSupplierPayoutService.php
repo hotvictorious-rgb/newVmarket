@@ -387,12 +387,24 @@ class RetailerSupplierPayoutService
 
     public function finalizeSuccess(int $payoutId, string $transferReference, ?string $transferCode, string $verifiedAmount): array
     {
+        $transferReference = trim($transferReference);
+        $verifiedAmount = trim($verifiedAmount);
+        if ($transferReference === '' || mb_strlen($transferReference) > 200
+            || !preg_match('/^\\d+(?:\\.\\d{1,2})?$/', $verifiedAmount)
+            || BcMathService::comp($verifiedAmount, '0.00') <= 0) {
+            return ['success' => false, 'protected' => true, 'message' => 'A valid transfer reference and positive, two-decimal-or-less verified amount are required.'];
+        }
+
         return DB::transaction(function () use ($payoutId, $transferReference, $transferCode, $verifiedAmount) {
             $payout = RetailerSupplierPayoutRequest::whereKey($payoutId)->lockForUpdate()->first();
             if (!$payout) {
                 return ['success' => false, 'message' => 'Supplier payout request was not found.'];
             }
             if ($payout->status === 'paid' && $this->payoutJournalComplete($payout)) {
+                if ($payout->transfer_reference !== $transferReference
+                    || BcMathService::comp((string) $payout->amount, $verifiedAmount) !== 0) {
+                    return ['success' => false, 'protected' => true, 'message' => 'A completed payout cannot be acknowledged as idempotent for a different transfer reference or amount.'];
+                }
                 return ['success' => true, 'idempotent' => true, 'payout' => $payout];
             }
             if (!in_array($payout->status, ['processing', 'uncertain'], true)
