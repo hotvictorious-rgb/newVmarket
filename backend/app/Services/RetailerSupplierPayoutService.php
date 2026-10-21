@@ -9,6 +9,7 @@ use App\Models\OrderItem;
 use App\Models\RetailerSupplierPayoutAllocation;
 use App\Models\RetailerSupplierPayoutRequest;
 use App\Models\VendorProfile;
+use App\Models\VendorRecoveryLedger;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -31,6 +32,9 @@ class RetailerSupplierPayoutService
             }
             if (!$lockedSupplier->isKycVerified()) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout is held until the supplier KYC status is verified.'];
+            }
+            if ($this->hasOpenSupplierRecovery((int) $lockedSupplier->id)) {
+                return ['success' => false, 'protected' => true, 'message' => 'Supplier payout is held because an unresolved supplier recovery debt requires finance review.'];
             }
 
             if ($lockedSupplier->shops()->where('is_active', true)->count() !== 1) {
@@ -251,6 +255,9 @@ class RetailerSupplierPayoutService
             }
             if ($supplier->marketplace_status !== 'active' || !$supplier->isKycVerified()) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier is inactive or KYC is no longer verified; payout remains reserved for review.'];
+            }
+            if ($this->hasOpenSupplierRecovery((int) $supplier->id)) {
+                return ['success' => false, 'protected' => true, 'message' => 'An unresolved supplier recovery debt appeared after request creation; payout remains reserved for finance review.'];
             }
             if (!$supplier->bank_updated_at || $supplier->bank_updated_at->gt(now()->subHours(48))) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier bank-detail cooldown is active; payout remains reserved.'];
@@ -503,6 +510,14 @@ class RetailerSupplierPayoutService
 
             return ['success' => true, 'payout' => $payout->fresh('allocations')];
         }, 3);
+    }
+
+    private function hasOpenSupplierRecovery(int $supplierId): bool
+    {
+        return VendorRecoveryLedger::where('vendor_id', $supplierId)
+            ->where('status', 'pending_recovery')
+            ->where('amount', '>', 0)
+            ->exists();
     }
 
     public function requestJournalComplete(RetailerSupplierPayoutRequest $payout): bool
