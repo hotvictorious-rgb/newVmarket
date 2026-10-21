@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AdminAuditLog;
 use App\Models\CustomerCashbackLedger;
+use App\Models\CashbackRecoveryLedger;
 use App\Models\CustomerWalletCredit;
 use App\Models\FinancialJournalEntry;
 use App\Models\LogisticsCollectionPoint;
@@ -830,6 +831,196 @@ class ReturnAndRefundService
                     'committed_at' => Carbon::now(),
                 ]);
 
+            if ($order->retailer_model_order) {
+                // Retailer refunds reverse the immutable supplier-cost snapshot and active
+                // cashback liability. No 90/5/5 merchandise commission is used for new orders.
+                $supplierCostRefund = '0.00';
+                $returnItems = $lockedCase->items()->with('orderItem')->orderBy('id')->lockForUpdate()->get();
+
+                foreach ($returnItems as $returnItem) {
+                    $item = $returnItem->orderItem;
+                    if (!$item || $item->order_id !== $order->id
+                        || empty($item->supplier_vendor_id)
+                        || $item->supplier_cost_snapshot === null) {
+                        throw new \RuntimeException('Retailer refund is missing the order item supplier/cost snapshot.');
+                    }
+
+                    $lineCost = BcMathService::mul((string) $item->supplier_cost_snapshot, (string) $returnItem->quantity);
+                    $supplierCostRefund = BcMathService::add($supplierCostRefund, $lineCost);
+                    if (BcMathService::comp($lineCost, '0.00') <= 0) {
+                        continue;
+                    }
+
+                    if ($order->vendor_settlement_status === 'settled' && $hasAuthorisedVendorFault) {
+                        $recovery = VendorRecoveryLedger::firstOrCreate(
+                            ['idempotency_key' => "return-case-{$lockedCase->id}-supplier-cost-recovery-item-{$returnItem->id}"],
+                            [
+                                'vendor_id' => $item->supplier_vendor_id,
+                                'return_case_id' => $lockedCase->id,
+                                'order_id' => $order->id,
+                                'amount' => $lineCost,
+                                'status' => 'pending_recovery',
+                                'notes' => "Authorized supplier-cost recovery for retailer refund Return #{$lockedCase->case_number}, item #{$item->id}",
+                            ]
+                        );
+                        if ($recovery->wasRecentlyCreated) {
+                            FinancialJournalEntry::create([
+                                'order_id' => $order->id,
+                                'transaction_reference' => $refToStore,
+                                'event_id' => 'EVT-REFUND-SUPPLIER-RECOVERY-' . $disburseRef . '-ITEM-' . $returnItem->id,
+                                'beneficiary_type' => VendorProfile::class,
+                                'beneficiary_id' => $item->supplier_vendor_id,
+                                'account_name' => 'supplier_recovery_receivable',
+                                'entry_type' => 'debit',
+                                'amount' => $lineCost,
+                                'currency' => 'NGN',
+                                'description' => "Authorized recovery of settled supplier cost for Return #{$lockedCase->case_number}",
+                            ]);
+                        }
+                    } elseif ($order->vendor_settlement_status === 'settled') {
+                        FinancialJournalEntry::create([
+                            'order_id' => $order->id,
+                            'transaction_reference' => $refToStore,
+                            'event_id' => 'EVT-REFUND-SUPPLIER-LOSS-' . $disburseRef . '-ITEM-' . $returnItem->id,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => null,
+                            'account_name' => 'retailer_supplier_refund_loss_pending_mapping',
+                            'entry_type' => 'debit',
+                            'amount' => $lineCost,
+                            'currency' => 'NGN',
+                            'description' => "Settled supplier cost absorbed pending accounting/fault mapping for Return #{$lockedCase->case_number}",
+                        ]);
+                    } else {
+                        FinancialJournalEntry::create([
+                            'order_id' => $order->id,
+                            'transaction_reference' => $refToStore,
+                            'event_id' => 'EVT-REFUND-SUPPLIER-PAYABLE-' . $disburseRef . '-ITEM-' . $returnItem->id,
+                            'beneficiary_type' => VendorProfile::class,
+                            'beneficiary_id' => $item->supplier_vendor_id,
+                            'account_name' => 'supplier_payable',
+                            'entry_type' => 'debit',
+                            'amount' => $lineCost,
+                            'currency' => 'NGN',
+                            'description' => "Reverse agreed supplier cost for returned retailer order item #{$item->id}",
+                        ]);
+                    }
+                }
+
+                $cashbackReversal = BcMathService::mul($merchandiseRefund, '0.05');
+                $cashbackLot = CustomerCashbackLedger::where('order_id', $order->id)->lockForUpdate()->first();
+                $unspentCashback = '0.00';
+                if ($cashbackLot && in_array($cashbackLot->status, ['pending_maturation', 'available'], true)) {
+                    $unspentCashback = BcMathService::comp((string) $cashbackLot->amount, $cashbackReversal) <= 0
+                        ? (string) $cashbackLot->amount
+                        : $cashbackReversal;
+                }
+                $spentCashbackRecovery = BcMathService::sub($cashbackReversal, $unspentCashback);
+
+                if (BcMathService::comp($unspentCashback, '0.00') > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $refToStore,
+                        'event_id' => 'EVT-REFUND-CB-REV-' . $disburseRef,
+                        'beneficiary_type' => User::class,
+                        'beneficiary_id' => $order->customer_id,
+                        'account_name' => 'cashback_liability',
+                        'entry_type' => 'debit',
+                        'amount' => $unspentCashback,
+                        'currency' => 'NGN',
+                        'description' => "Reverse unspent retailer cashback for Return #{$lockedCase->case_number}",
+                    ]);
+
+                    $remainingLot = BcMathService::sub((string) $cashbackLot->amount, $unspentCashback);
+                    $cashbackLot->amount = $remainingLot;
+                    if (BcMathService::comp($remainingLot, '0.00') <= 0) {
+                        $cashbackLot->status = 'forfeited';
+                        $cashbackLot->expires_at = null;
+                    }
+                    $cashbackLot->save();
+                }
+
+                if (BcMathService::comp($spentCashbackRecovery, '0.00') > 0) {
+                    $recovery = CashbackRecoveryLedger::firstOrCreate(
+                        ['idempotency_key' => "return-case-{$lockedCase->id}-cashback-recovery"],
+                        [
+                            'customer_id' => $order->customer_id,
+                            'order_id' => $order->id,
+                            'return_case_id' => $lockedCase->id,
+                            'amount' => $spentCashbackRecovery,
+                            'recovered_amount' => '0.00',
+                            'status' => 'pending_recovery',
+                            'notes' => "Spent cashback recovery from refunded retailer merchandise for Return #{$lockedCase->case_number}",
+                        ]
+                    );
+                    if ($recovery->wasRecentlyCreated) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $order->id,
+                            'transaction_reference' => $refToStore,
+                            'event_id' => 'EVT-REFUND-CB-RECOVERY-' . $disburseRef,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => $order->customer_id,
+                            'account_name' => 'cashback_recovery_receivable',
+                            'entry_type' => 'debit',
+                            'amount' => $spentCashbackRecovery,
+                            'currency' => 'NGN',
+                            'description' => "Track spent cashback for offset against future matured cashback on Return #{$lockedCase->case_number}",
+                        ]);
+                    }
+                }
+
+                // The refund is balanced against supplier cost, cashback reversal and the
+                // actual retailer margin (or reversal of a previously booked retailer loss).
+                $marginReversal = BcMathService::sub(
+                    BcMathService::sub($merchandiseRefund, $supplierCostRefund),
+                    $cashbackReversal
+                );
+                if (BcMathService::comp($marginReversal, '0.00') > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $refToStore,
+                        'event_id' => 'EVT-REFUND-RETAIL-MARGIN-' . $disburseRef,
+                        'beneficiary_type' => User::class,
+                        'beneficiary_id' => null,
+                        'account_name' => 'retailer_merchandise_margin',
+                        'entry_type' => 'debit',
+                        'amount' => $marginReversal,
+                        'currency' => 'NGN',
+                        'description' => "Reverse retailer merchandise margin for Return #{$lockedCase->case_number}",
+                    ]);
+                } elseif (BcMathService::comp($marginReversal, '0.00') < 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $refToStore,
+                        'event_id' => 'EVT-REFUND-RETAIL-LOSS-REV-' . $disburseRef,
+                        'beneficiary_type' => User::class,
+                        'beneficiary_id' => null,
+                        'account_name' => 'retailer_merchandise_loss',
+                        'entry_type' => 'credit',
+                        'amount' => BcMathService::sub('0.00', $marginReversal),
+                        'currency' => 'NGN',
+                        'description' => "Reverse the portion of a retailer merchandise loss related to Return #{$lockedCase->case_number}",
+                    ]);
+                }
+
+                if (BcMathService::comp($deliveryFeeRefund, '0.00') > 0) {
+                    // A customer delivery refund is independent of supplier/logistics recovery.
+                    // The new retailer flow has not linked company bank transfers to order lines,
+                    // so record the full refund as VM expense rather than guessing that the company
+                    // has not already been paid. Any company recovery is a separate audited action.
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $refToStore,
+                        'event_id' => 'EVT-REFUND-DELIVERY-EXPENSE-' . $disburseRef,
+                        'beneficiary_type' => User::class,
+                        'beneficiary_id' => null,
+                        'account_name' => 'delivery_refund_expense',
+                        'entry_type' => 'debit',
+                        'amount' => $deliveryFeeRefund,
+                        'currency' => 'NGN',
+                        'description' => "VM-funded customer delivery-fee refund for Return #{$lockedCase->case_number}; logistics recovery remains separate.",
+                    ]);
+                }
+            } else {
             // Reverse the vendor's merchandise share. A settled vendor becomes a receivable
             // only when a persisted admin ruling explicitly confirms vendor fault; otherwise the
             // platform absorbs the share as a tracked loss and does not create vendor debt.
@@ -1034,6 +1225,9 @@ class ReturnAndRefundService
             }
 
 
+
+
+            }
 
             // 3. Update Return Case State
             $lockedCase->status = 'refunded';
