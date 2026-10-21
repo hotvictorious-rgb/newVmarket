@@ -821,9 +821,18 @@ class PayoutFinalizationService
             }
 
             $company = $lockedPayout->company;
-            if ($company) {
-                $company->wallet_balance = bcadd((string)$company->wallet_balance, (string)$payout->amount, 2);
+            $hasRequestJournal = FinancialJournalEntry::where('event_id', 'EVT-FLEET-REQ-' . $lockedPayout->id)->exists();
+            if ($hasRequestJournal && $company) {
+                $company->wallet_balance = bcadd((string)$company->wallet_balance, (string)$lockedPayout->amount, 2);
                 $company->save();
+            } elseif (!$hasRequestJournal) {
+                $marker = 'REQUEST_JOURNAL_MISSING: payout reversal closed without automatic wallet credit; finance reconciliation required.';
+                $lockedPayout->admin_notes = ($lockedPayout->admin_notes ? $lockedPayout->admin_notes . ' | ' : '') . $marker;
+                Log::critical('Logistics payout reversal has no request-time journal; automatic wallet restoration suppressed.', [
+                    'payout_id' => $lockedPayout->id,
+                    'logistics_company_id' => $lockedPayout->logistics_company_id,
+                    'has_original_payout_journal' => $hasOriginalPayoutJournal,
+                ]);
             }
 
             $lockedPayout->status = 'rejected';
@@ -866,37 +875,38 @@ class PayoutFinalizationService
                     'description' => "Escrow cash restored after Paystack transfer reversal: " . ($company?->company_name ?? 'Logistics'),
                 ]);
 
-                // The original request journal debited the company's wallet and
-                // credited payout payable. Restore that request-side liability too,
-                // so the wallet subledger and payable balance are not left stranded.
-                FinancialJournalEntry::create([
-                    'order_id' => null,
-                    'transaction_reference' => $revRef,
-                    'event_id' => 'EVT-REV-FLEET-REQUEST-' . $lockedPayout->id,
-                    'beneficiary_type' => LogisticsCompanyProfile::class,
-                    'beneficiary_id' => $beneficiaryId,
-                    'account_name' => 'logistics_payout_payable',
-                    'entry_type' => 'debit',
-                    'amount' => $formattedPayoutAmount,
-                    'currency' => 'NGN',
-                    'description' => "Unwound corporate withdrawal request after transfer reversal: " . ($company?->company_name ?? 'Logistics'),
-                ]);
+                if ($hasRequestJournal) {
+                    // Reverse the request-side reservation only when its original
+                    // journal exists; otherwise leave the missing leg for finance review.
+                    FinancialJournalEntry::create([
+                        'order_id' => null,
+                        'transaction_reference' => $revRef,
+                        'event_id' => 'EVT-REV-FLEET-REQUEST-' . $lockedPayout->id,
+                        'beneficiary_type' => LogisticsCompanyProfile::class,
+                        'beneficiary_id' => $beneficiaryId,
+                        'account_name' => 'logistics_payout_payable',
+                        'entry_type' => 'debit',
+                        'amount' => $formattedPayoutAmount,
+                        'currency' => 'NGN',
+                        'description' => "Unwound corporate withdrawal request after transfer reversal: " . ($company?->company_name ?? 'Logistics'),
+                    ]);
 
-                FinancialJournalEntry::create([
-                    'order_id' => null,
-                    'transaction_reference' => $revRef,
-                    'event_id' => 'EVT-REV-FLEET-REQUEST-' . $lockedPayout->id,
-                    'beneficiary_type' => LogisticsCompanyProfile::class,
-                    'beneficiary_id' => $beneficiaryId,
-                    'account_name' => 'logistics_company_wallet',
-                    'entry_type' => 'credit',
-                    'amount' => $formattedPayoutAmount,
-                    'currency' => 'NGN',
-                    'description' => "Corporate wallet ledger restored after transfer reversal: " . ($company?->company_name ?? 'Logistics'),
-                ]);
-            } else {
-                // Transfer failed before finalization: reverse the withdrawal request journal,
-                // not a disbursement that never posted.
+                    FinancialJournalEntry::create([
+                        'order_id' => null,
+                        'transaction_reference' => $revRef,
+                        'event_id' => 'EVT-REV-FLEET-REQUEST-' . $lockedPayout->id,
+                        'beneficiary_type' => LogisticsCompanyProfile::class,
+                        'beneficiary_id' => $beneficiaryId,
+                        'account_name' => 'logistics_company_wallet',
+                        'entry_type' => 'credit',
+                        'amount' => $formattedPayoutAmount,
+                        'currency' => 'NGN',
+                        'description' => "Corporate wallet ledger restored after transfer reversal: " . ($company?->company_name ?? 'Logistics'),
+                    ]);
+                }
+            } elseif ($hasRequestJournal) {
+                // Transfer failed before finalization: reverse the proven request
+                // reservation, not a disbursement that never posted.
                 FinancialJournalEntry::create([
                     'order_id' => null,
                     'transaction_reference' => $revRef,
