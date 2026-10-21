@@ -662,9 +662,20 @@ class CheckoutAndReservationApiController extends Controller
                 ];
             }
 
-            $vendorNet90 = BcMathService::mul($merchandiseSubtotal, '0.90');
-            $customerCashback5 = BcMathService::mul($merchandiseSubtotal, '0.05');
-            $platformMargin5 = BcMathService::mul($merchandiseSubtotal, '0.05');
+            $supplierUnitCost = (string) ($product->cost_price ?? '0.00');
+            if (BcMathService::comp($supplierUnitCost, '0.00') < 0) {
+                return ['error' => true, 'code' => 422, 'message' => 'The supplier cost snapshot is invalid.'];
+            }
+            $supplierCostTotal = BcMathService::mul($supplierUnitCost, (string) $reservation->quantity);
+            // Earn cashback only on the eligible merchandise amount actually funded
+            // by real Paystack money after the redeemed cashback discount.
+            $customerCashback5 = BcMathService::mul($totalPayable, '0.05');
+            $vendorNet90 = '0.00'; // no new marketplace merchandise commission
+            $platformMargin5 = '0.00';
+            $retailerMerchandiseMargin = BcMathService::sub(
+                BcMathService::sub($merchandiseSubtotal, $supplierCostTotal),
+                $customerCashback5
+            );
 
             $orderNumber = 'VM-' . date('Ymd') . '-' . strtoupper(Str::random(4));
             $paymentRef = Order::generateUniquePaymentReference();
@@ -676,6 +687,7 @@ class CheckoutAndReservationApiController extends Controller
                 'vendor_id' => $shop->vendor_id,
                 'shop_id' => $shop->id,
                 'fulfillment_type' => 'in_shop_pickup',
+                'retailer_model_order' => true,
                 'order_status' => 'confirmed',
                 'payment_status' => 'pending',
                 'payment_method' => 'paystack',
@@ -685,6 +697,10 @@ class CheckoutAndReservationApiController extends Controller
                 'destination_lga_id' => $shop->lga_id,
                 'merchandise_subtotal' => $merchandiseSubtotal,
                 'delivery_fee' => '0.00',
+                'supplier_cost_total_snapshot' => $supplierCostTotal,
+                'retailer_merchandise_margin' => $retailerMerchandiseMargin,
+                'logistics_company_payable_default_amount' => '0.00',
+                'logistics_company_payable_amount' => '0.00',
                 'cashback_redeemed' => $cashbackApplied,
                 'grand_total' => $totalPayable,
                 'vendor_net_90' => $vendorNet90,
@@ -719,6 +735,14 @@ class CheckoutAndReservationApiController extends Controller
                 'quantity' => $reservation->quantity,
                 'unit_price' => $reservation->unit_price,
                 'line_total' => $reservation->estimated_total,
+                'supplier_offer_id' => null,
+                'supplier_vendor_id' => $shop->vendor_id,
+                'supplier_shop_id' => $shop->id,
+                'supplier_name_snapshot' => $shop->vendor->business_name ?? ($shop->vendor->user->name ?? 'Supplier'),
+                'supplier_shop_name_snapshot' => $shop->name,
+                'supplier_cost_snapshot' => $supplierUnitCost,
+                'supplier_cost_currency' => 'NGN',
+                'supplier_snapshot_at' => Carbon::now(),
             ]);
 
             // Mark reservation as payment completed and bind order
