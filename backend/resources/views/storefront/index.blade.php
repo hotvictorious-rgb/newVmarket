@@ -421,7 +421,7 @@
         </div>
     </div>
 
-    <!-- 4. Top Verified Merchants -->
+    <!-- 4. Victorious MARKET — Local Fulfillment -->
     <div class="vm-section-block" id="merchants" style="margin-bottom: 34px;">
         <div class="vm-section-header" style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px;">
             <div style="border-left: 4px solid var(--vm-info); padding-left: 12px;">
@@ -465,10 +465,7 @@
                     <span style="display: block; font-size: 12.5px; color: #64748B; max-width: 460px; margin: 0 auto 12px; line-height: 1.4;">
                         All products are sold by Victorious MARKET. Supplier locations remain private; any pickup exception must be arranged through central support.
                     </span>
-                    <button type="button" onclick="if(window.vmOpenLocationModal) window.vmOpenLocationModal();" style="background: #F8FAFC; border: 1px solid #CBD5E1; color: #334155; font-size: 11.5px; font-weight: 700; padding: 6px 14px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                        <span>Change LGA</span>
-                    </button>
+                    <a href="{{ route('storefront') }}#catalog" style="background: #F8FAFC; border: 1px solid #CBD5E1; color: #334155; font-size: 11.5px; font-weight: 700; padding: 6px 14px; border-radius: 6px; text-decoration: none;">Browse Uyo Products</a>
                 </div>
             @endforelse
         </div>
