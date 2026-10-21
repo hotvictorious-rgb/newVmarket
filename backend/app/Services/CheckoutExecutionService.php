@@ -7,6 +7,7 @@ use App\Models\CustomerAddress;
 use App\Models\CustomerCashbackLedger;
 use App\Models\CustomerWalletCredit;
 use App\Models\DeliveryLane;
+use App\Models\DeliveryCorridor;
 use App\Models\FinancialJournalEntry;
 use App\Models\LogisticsCollectionPoint;
 use App\Models\LogisticsCompanyProfile;
@@ -222,6 +223,8 @@ class CheckoutExecutionService
             $deliveryBulkySurcharge = '0.00';
             $deliveryBulkyQuantity = 0;
             $destLgaId = $primarySourceShop->lga_id;
+            $address = null;
+            $deliveryCorridorId = null;
             $laneId = null;
             $collectionPointId = null;
 
@@ -246,9 +249,24 @@ class CheckoutExecutionService
                     ];
                 }
 
-                $deliveryBaseFee = (string) $availability['fee'];
+                // Customer delivery prices are a separate admin-managed tariff,
+                // never a percentage or derivative of a logistics company's payable.
+                $deliveryCorridor = DeliveryCorridor::resolveForAddress(
+                    (int) $destLgaId,
+                    $address?->address_line,
+                    $address?->landmark
+                );
+                if (!$deliveryCorridor) {
+                    return [
+                        'error' => true,
+                        'status_code' => 422,
+                        'message' => 'We could not match this address to one active Uyo delivery corridor. Please confirm a recognised landmark before checkout.',
+                    ];
+                }
+                $deliveryCorridorId = (int) $deliveryCorridor->id;
+                $deliveryBaseFee = (string) $deliveryCorridor->customer_base_fee;
                 $laneId = $availability['lane_id'] ?? null;
-                $bulkySurcharge = (string) ($availability['bulky_surcharge'] ?? '0.00');
+                $bulkySurcharge = (string) $deliveryCorridor->customer_bulky_surcharge_per_unit;
                 foreach ($itemsToCreate as $it) {
                     $tier = strtolower((string) ($it['product']->package_tier ?? 'bike'));
                     if (in_array($tier, ['keke', 'bulky'], true)) {
@@ -318,8 +336,9 @@ class CheckoutExecutionService
 
             // Default logistics-company payable is 90% of the snapshotted customer
             // delivery fee. Admin may override the final company amount with audit.
-            $vendorDeliveryNet90 = BcMathService::mul($deliveryFee, '0.90');
-            $platformDelivery10 = BcMathService::sub($deliveryFee, $vendorDeliveryNet90);
+            // Company payable is set only from the selected company's corridor tariff after supplier confirmation.
+            $vendorDeliveryNet90 = '0.00';
+            $platformDelivery10 = '0.00';
 
             $walletCreditApplied = '0.00';
             if (!empty($validated['redeem_wallet_credit'])) {
@@ -395,6 +414,7 @@ class CheckoutExecutionService
                 'origin_lga_id' => $primarySourceShop->lga_id,
                 'destination_lga_id' => $destLgaId,
                 'delivery_lane_id' => $laneId,
+                'delivery_corridor_id' => $deliveryCorridorId,
                 'merchandise_subtotal' => $merchandiseSubtotal,
                 'delivery_fee' => $deliveryFee,
                 'delivery_base_fee_snapshot' => $deliveryBaseFee,
@@ -403,8 +423,8 @@ class CheckoutExecutionService
                 'supplier_cost_total_snapshot' => $supplierCostTotal,
                 'fulfillment_supplier_cost_total_snapshot' => $supplierCostTotal,
                 'retailer_merchandise_margin' => $retailerMerchandiseMargin,
-                'logistics_company_payable_default_amount' => $vendorDeliveryNet90,
-                'logistics_company_payable_amount' => $vendorDeliveryNet90,
+                'logistics_company_payable_default_amount' => null,
+                'logistics_company_payable_amount' => null,
                 'cashback_redeemed' => $cashbackApplied,
                 'wallet_credit_applied' => $walletCreditApplied,
                 'grand_total' => $grandTotal,
@@ -593,9 +613,9 @@ class CheckoutExecutionService
 
                 $deliveryFeeSnapshot = (string) $order->delivery_fee;
                 $companyPayable = (string) ($order->logistics_company_payable_amount
-                    ?? BcMathService::mul($deliveryFeeSnapshot, '0.90'));
+                    ?? '0.00');
                 $order->logistics_company_payable_default_amount = $order->logistics_company_payable_default_amount
-                    ?? BcMathService::mul($deliveryFeeSnapshot, '0.90');
+                    ?? null;
                 $order->logistics_company_payable_amount = $companyPayable;
                 $order->logistics_company_payable_ledger_company_id = $order->logistics_company_id;
                 $order->save();
