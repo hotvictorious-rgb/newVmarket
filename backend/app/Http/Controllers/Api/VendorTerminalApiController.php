@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\AdminAuditLog;
 use App\Models\Order;
 use App\Models\OrderSupplierAssignment;
 use App\Models\PickupReservation;
@@ -1404,6 +1405,7 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
 
         $validated = $request->validate([
             'bank_name' => 'required|string|max:100',
+            'bank_code' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9_-]+$/'],
             'account_number' => ['required', 'string', 'size:10', 'regex:/^[0-9]{10}$/'],
             'account_name' => 'required|string|max:150',
         ], [
@@ -1411,11 +1413,34 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             'account_number.regex' => 'Account number must contain only numbers.',
         ]);
 
+        $oldBankSnapshot = [
+            'bank_name' => $vendor->bank_name,
+            'bank_code' => $vendor->bank_code,
+            'account_name' => $vendor->account_name,
+            'account_number_last4' => $vendor->account_number ? substr((string) $vendor->account_number, -4) : null,
+        ];
         $vendor->update([
             'bank_name' => strip_tags(trim($validated['bank_name'])),
+            'bank_code' => strtoupper(trim($validated['bank_code'])),
             'account_number' => trim($validated['account_number']),
             'account_name' => strtoupper(strip_tags(trim($validated['account_name']))),
             'bank_updated_at' => Carbon::now(),
+        ]);
+        AdminAuditLog::create([
+            'user_id' => $ctx['user']->id,
+            'action' => 'supplier_bank_details_updated',
+            'target_type' => VendorProfile::class,
+            'target_id' => $vendor->id,
+            'old_values' => $oldBankSnapshot,
+            'new_values' => [
+                'bank_name' => $vendor->bank_name,
+                'bank_code' => $vendor->bank_code,
+                'account_name' => $vendor->account_name,
+                'account_number_last4' => substr((string) $vendor->account_number, -4),
+                'cooldown_expires_at' => $vendor->bank_updated_at->copy()->addHours(48)->toIso8601String(),
+            ],
+            'ip_address' => $request->ip(),
+            'user_agent' => substr((string) $request->userAgent(), 0, 1000),
         ]);
 
         return response()->json([
