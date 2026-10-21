@@ -18,6 +18,7 @@ use App\Models\Lga;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Shop;
+use App\Models\SystemSetting;
 use App\Models\State;
 use App\Models\User;
 use App\Models\VendorProfile;
@@ -129,12 +130,12 @@ class ModularArchitectureAndMaintainabilityTest extends TestCase
             'name' => 'Uyo Oron Road Test Corridor',
             'lga_id' => $this->lga->id,
             'landmark_aliases' => ['Oron Road'],
-            'customer_base_fee' => '500.00',
-            'customer_bulky_surcharge_per_unit' => '250.00',
             'estimated_delivery_hours_min' => 2,
             'estimated_delivery_hours_max' => 4,
             'is_active' => true,
         ]);
+        SystemSetting::set('zone_intra_lga_fee', '500.00', 'delivery');
+        SystemSetting::set('zone_bulky_cargo_surcharge', '250.00', 'delivery');
 
         $this->lane = DeliveryLane::create([
             'origin_lga_id' => $this->lga->id,
