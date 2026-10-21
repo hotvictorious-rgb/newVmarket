@@ -158,6 +158,7 @@ Route::prefix('v1')->group(function () {
             Route::get('orders', [VendorTerminalApiController::class, 'orders']);
             Route::get('orders/{id}', [VendorTerminalApiController::class, 'showOrder']);
             Route::post('orders/{id}/confirm-availability', [VendorTerminalApiController::class, 'confirmOrderAvailability']);
+            Route::post('orders/{id}/reject-availability', [VendorTerminalApiController::class, 'rejectOrderAvailability']);
             Route::post('orders/{id}/ready-for-handover', [VendorTerminalApiController::class, 'markHandoverReady']);
             Route::post('orders/verify-handover-otp', [VendorTerminalApiController::class, 'verifyHandoverOtp']);
 
