@@ -538,7 +538,7 @@ class DoorstepHandshakeService
             $lockedOrder->save();
 
             if ($lockedOrder->retailer_model_order && $orderStatus === 'delivered') {
-                app(\\App\\Services\\LogisticsCompanyPayableService::class)->releaseAfterVerifiedDelivery($lockedOrder);
+                app(\App\Services\LogisticsCompanyPayableService::class)->releaseAfterVerifiedDelivery($lockedOrder);
             }
 
             // 9. Admin Audit Log
