@@ -212,7 +212,8 @@ class VendorTerminalApiController extends Controller
         $vendor = $ctx['vendor'];
         $shop = $ctx['shop'];
 
-        $query = Order::whereHas('supplierAssignments', function ($assignmentQuery) use ($vendor, $shop, $ctx) {
+        $query = Order::where('payment_status', 'paid')
+            ->whereHas('supplierAssignments', function ($assignmentQuery) use ($vendor, $shop, $ctx) {
                 $assignmentQuery->where('supplier_vendor_id', $vendor->id);
                 if ($ctx['is_employee'] && $shop) {
                     $assignmentQuery->where('supplier_shop_id', $shop->id);
@@ -277,7 +278,8 @@ class VendorTerminalApiController extends Controller
         $vendor = $ctx['vendor'];
         $shop = $ctx['shop'];
 
-        $query = Order::whereHas('supplierAssignments', function ($assignmentQuery) use ($vendor, $shop, $ctx) {
+        $query = Order::where('payment_status', 'paid')
+            ->whereHas('supplierAssignments', function ($assignmentQuery) use ($vendor, $shop, $ctx) {
                 $assignmentQuery->where('supplier_vendor_id', $vendor->id);
                 if ($ctx['is_employee'] && $shop) {
                     $assignmentQuery->where('supplier_shop_id', $shop->id);
