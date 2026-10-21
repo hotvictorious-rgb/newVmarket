@@ -168,6 +168,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         // Logistics Company & Rider
         $fleetCompany = LogisticsCompanyProfile::where('status', 'active')
             ->where('lga_id', $this->uyoLga->id)
+            ->whereHas('user', fn ($user) => $user->where('status', 'active'))
             ->first();
         if (!$fleetCompany) {
             $logisticsUser = User::create([
