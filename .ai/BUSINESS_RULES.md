@@ -131,24 +131,24 @@ Operational order information such as order identifier, parcel/product descripti
 2. Doorstep delivery requires verified customer OTP plus a doorstep delivery photo. In-shop pickup requires the valid RES-XXXXXX reservation pass AND one-time customer pickup OTP verification plus an in-shop pickup photo. GPS, customer signature, separate rider-pickup photo and hub/collection-point inspection photo are not mandatory.
 3. Failed-attempt reasons should be enumerated and auditable (for example, customer unreachable, recipient unavailable, wrong address, access blocked, or customer rescheduled).
 4. A failed attempt or photo is operational evidence, not a financial decision. It must not automatically create wallet credit, mark a refund paid, create a rider payable, or release vendor funds.
-5. After doorstep rejection or failed delivery, record the outcome and return the item directly to its owning vendor. The vendor may offer a corrected item or replacement redelivery only with customer agreement. Record return custody and any agreed redelivery. Refund/compensation is separately reviewed.
+5. After doorstep rejection or failed delivery, record the outcome and follow VM's authorized return-to-origin/custody process. Return the item to a VM-designated return point or supplier only where that route is authorized and recorded. VM coordinates any correction or replacement, which requires customer agreement. Refund/compensation is separately reviewed.
 6. Delivery proof supports an investigation but is not, by itself, proof that the item was genuine, defect-free, or that a refund is owed.
 
 ## 9. Failed delivery and customer remedies
 
 1. Failed delivery does not automatically mean the customer receives an immediate wallet credit or cash refund.
 2. The system records each attempt and reason, preserves parcel custody history, and applies the configured attempt limit consistently.
-3. When the limit is reached, the rider returns the parcel to the owning vendor and the vendor confirms receipt. The order enters an explicit failed/returned/review state; it must not be marked successfully delivered.
+3. When the limit is reached, the logistics company/rider returns the parcel to the VM-designated return point or authorized supplier location under an auditable custody handover. The order enters an explicit failed/returned/review state; it must not be marked successfully delivered.
 4. Any rescheduling, redelivery fee, cancellation, refund, or vendor recovery is decided under the applicable published customer policy and platform review. It must be linked to the order and use the existing financial-operation/refund engine.
-5. A customer refund is based on the verified original payment and approved refund amount, with exact allocation of merchandise, delivery fee, discounts, commission, cashback, previous refunds, and vendor amounts already paid.
+5. A customer refund is based on the verified original payment and approved refund amount, with separate merchandise/delivery components, discounts, previous refunds, supplier amounts already paid, logistics charges and any separately approved cashback adjustment.
 6. No failed-delivery handler may directly create spendable wallet credit or a logistics/rider journal entry. Financial actions require the authorized financial service and an auditable decision.
 7. Delivery fees and return-transport costs are separate concepts. Do not assume the original delivery fee is always retained or refunded; apply the published reason-specific policy and applicable law.
 
 ## 10. Cash on delivery (COD) boundary
 
-**COD is disabled at launch for the entire marketplace**, not merely for rider-assigned orders. Checkout, APIs, payment-method flags, legacy payment methods, vendor settings, and direct requests must all reject COD. Only two payment paths are allowed: pay before delivery through Victorious MARKET checkout, or reserve in-shop pickup through Victorious MARKET and pay at the approved vendor shop through the platform's authorised payment workflow. Shop pickup has zero delivery fee and is not doorstep COD. No off-platform cash/private-account transfer is permitted; launch rails are Paystack card and standard bank transfer unless separately approved.
+**Doorstep COD is disabled at launch.** Checkout, APIs, payment-method flags, legacy payment methods and direct requests must reject it. Customer payment must use VM's authorized payment workflow. The existing supplier-shop reservation/payment-at-location option may remain only when payment is processed/recorded through VM's workflow. Supplier shops are pickup locations, not public sellers or independent payment channels. No off-platform cash/private-account transfer is permitted; launch rails are Paystack card and standard bank transfer unless separately approved.
 
-All payments must be processed/recorded through Victorious MARKET's authorised payment workflow. Vendors may not accept cash, private bank transfers or other off-platform payment for marketplace orders, and must not release goods until the platform verifies successful payment. Launch rails are Paystack card and standard bank transfer only unless separately approved. Riders remain operational-only and must never see payment status/amount due or collect/reconcile customer money through platform rider accounts.
+All payments must be processed/recorded through Victorious MARKET's authorized payment workflow. Suppliers may not accept customer cash, private bank transfers or other off-platform payment for VM orders, and must not release goods until the platform verifies successful payment. Launch rails are Paystack card and standard bank transfer only unless separately approved. Riders remain operational-only and must never see payment status/amount due or collect/reconcile customer money through platform rider accounts.
 
 ## 11. Financial separation
 
