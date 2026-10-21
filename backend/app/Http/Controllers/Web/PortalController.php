@@ -4428,12 +4428,23 @@ class PortalController extends Controller
         }
 
         $fulfillmentService = app(\App\Services\FulfillmentAvailabilityService::class);
-        $deliveryCheck = $fulfillmentService->checkDeliveryAvailability((int) $sourceOffer['shop_id'], $destLga->id, $product->package_tier ?? 'standard');
+        // Preview the order-level base fee without applying a one-time bulky charge;
+        // each bulky physical unit is charged the configured surcharge, matching checkout execution.
+        $deliveryCheck = $fulfillmentService->checkDeliveryAvailability((int) $sourceOffer['shop_id'], $destLga->id, 'bike');
         $pickupCheck = ['is_available' => false];
 
         $merchandiseSubtotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
-        // If doorstep route is not available/suspended, default to free In-Store Pickup
-        $deliveryFee = $deliveryCheck['is_available'] ? $deliveryCheck['fee'] : '0.00';
+        $deliveryFee = '0.00';
+        if ($deliveryCheck['is_available']) {
+            $deliveryFee = (string) $deliveryCheck['fee'];
+            if (in_array(strtolower((string) ($product->package_tier ?? 'bike')), ['keke', 'bulky'], true)) {
+                $surchargePerUnit = (string) ($deliveryCheck['bulky_surcharge'] ?? '0.00');
+                $deliveryFee = \App\Services\BcMathService::add(
+                    $deliveryFee,
+                    \App\Services\BcMathService::mul($surchargePerUnit, (string) $quantity)
+                );
+            }
+        }
         $totalPayable = \App\Services\BcMathService::add($merchandiseSubtotal, $deliveryFee);
 
         $lgas = collect([$destLga]);
