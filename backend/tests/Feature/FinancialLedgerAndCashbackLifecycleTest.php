@@ -6,6 +6,7 @@ use App\Models\AdminAuditLog;
 use App\Models\Category;
 use App\Models\CustomerAddress;
 use App\Models\CustomerCashbackLedger;
+use App\Models\CustomerWalletCredit;
 use App\Models\CashbackRecoveryLedger;
 use App\Models\DeliveryLane;
 use App\Models\DisputeAndReturn;
@@ -998,6 +999,60 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         ]);
 
         Carbon::setTestNow();
+    }
+
+    public function test_wallet_only_retailer_checkout_posts_cost_based_supplier_and_company_ledgers_balanced(): void
+    {
+        $this->product->update(['unit_price' => '10000.00', 'package_tier' => 'standard']);
+        CustomerWalletCredit::create([
+            'customer_id' => $this->customerUser->id,
+            'amount' => '10500.00',
+            'credit_type' => 'refund',
+            'status' => 'available',
+            'notes' => 'Wallet-only retailer checkout regression test',
+        ]);
+
+        $result = app(\\App\\Services\\CheckoutExecutionService::class)->execute($this->customerUser, [
+            'fulfillment_type' => 'doorstep_delivery',
+            'destination_lga_id' => $this->uyoLga->id,
+            'items' => [[
+                'product_id' => $this->product->id,
+                'quantity' => 1,
+                'unit_price' => '10000.00',
+            ]],
+            'redeem_wallet_credit' => true,
+        ]);
+
+        $this->assertTrue($result['success'], $result['message'] ?? 'Wallet checkout failed.');
+        $order = $result['order']->fresh();
+        $this->assertSame('paid', $order->payment_status);
+        $this->assertSame('0.00', (string) $order->customer_cashback_5);
+
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'supplier_payable',
+            'entry_type' => 'credit',
+            'amount' => '5000.00',
+        ]);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'logistics_company_payable',
+            'entry_type' => 'credit',
+            'amount' => '450.00',
+            'beneficiary_id' => null,
+        ]);
+        $this->assertDatabaseMissing('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'vendor_payable',
+        ]);
+        $this->assertDatabaseMissing('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'logistics_payable',
+        ]);
+
+        $debits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
+        $credits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
+        $this->assertSame(0, bccomp($debits, $credits, 2), 'Fully wallet-funded retailer journals must balance.');
     }
 
 }
