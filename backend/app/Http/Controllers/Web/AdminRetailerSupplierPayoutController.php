@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Models\AdminAuditLog;
 use App\Models\RetailerSupplierPayoutRequest;
 use App\Services\BcMathService;
 use App\Services\PaystackService;
@@ -26,6 +27,11 @@ class AdminRetailerSupplierPayoutController extends Controller
     {
         $this->authorizeSuperAdmin($request);
         $payout = RetailerSupplierPayoutRequest::whereKey($id)->firstOrFail();
+        $this->audit($request, 'retailer_supplier_payout_disburse_attempted', $payout, [
+            'status' => $payout->status,
+            'amount' => (string) $payout->amount,
+            'transfer_reference' => $payout->transfer_reference,
+        ], ['action' => 'disburse_attempted']);
         if ($payout->status !== 'pending') {
             return back()->with('error', 'Only a pending supplier payout can be submitted.');
         }
@@ -96,6 +102,11 @@ class AdminRetailerSupplierPayoutController extends Controller
     {
         $this->authorizeSuperAdmin($request);
         $payout = RetailerSupplierPayoutRequest::whereKey($id)->firstOrFail();
+        $this->audit($request, 'retailer_supplier_payout_reconciliation_attempted', $payout, [
+            'status' => $payout->status,
+            'gateway_status' => $payout->gateway_status,
+            'transfer_reference' => $payout->transfer_reference,
+        ], ['action' => 'reconciliation_attempted']);
         if (!in_array($payout->status, ['processing', 'uncertain'], true)) {
             return back()->with('error', 'Only a processing or uncertain supplier payout can be reconciled.');
         }
@@ -108,6 +119,11 @@ class AdminRetailerSupplierPayoutController extends Controller
         $this->authorizeSuperAdmin($request);
         $validated = $request->validate(['rejection_reason' => ['required', 'string', 'min:5', 'max:1000']]);
         $payout = RetailerSupplierPayoutRequest::whereKey($id)->firstOrFail();
+        $this->audit($request, 'retailer_supplier_payout_rejection_attempted', $payout, [
+            'status' => $payout->status,
+            'gateway_status' => $payout->gateway_status,
+            'transfer_reference' => $payout->transfer_reference,
+        ], ['action' => 'rejection_attempted', 'reason' => $validated['rejection_reason']]);
         if ($payout->status !== 'pending' || $payout->processing_token || $payout->gateway_status !== 'not_submitted') {
             return back()->with('error', 'This supplier payout may have reached the gateway. Reconcile it instead of rejecting it.');
         }
@@ -173,6 +189,20 @@ class AdminRetailerSupplierPayoutController extends Controller
             $gatewayStatus ?: 'unknown'
         );
         return back()->with('error', $prefix . 'status remains ' . ($gatewayStatus ?: 'unknown') . '; do not retry.');
+    }
+
+    private function audit(Request $request, string $action, RetailerSupplierPayoutRequest $payout, array $oldValues, array $newValues): void
+    {
+        AdminAuditLog::create([
+            'user_id' => $request->user()->id,
+            'action' => $action,
+            'target_type' => RetailerSupplierPayoutRequest::class,
+            'target_id' => $payout->id,
+            'old_values' => $oldValues,
+            'new_values' => $newValues,
+            'ip_address' => $request->ip(),
+            'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+        ]);
     }
 
     private function authorizeAdmin(Request $request): void
