@@ -40,6 +40,14 @@ class CheckoutExecutionService
      */
     public function execute(User $user, array $validated): array
     {
+        if (($validated['fulfillment_type'] ?? null) !== 'doorstep_delivery') {
+            return [
+                'success' => false,
+                'status_code' => 422,
+                'message' => 'Standard online checkout supports delivery only. Contact Victorious MARKET support to ask whether a pickup exception can be arranged.',
+            ];
+        }
+
         // Launch policy: legacy refund wallet credit is not checkout tender.
         // Cashback redemption is handled separately and remains subject to its 50% cap.
         if (!empty($validated['redeem_wallet_credit']) || (($validated['payment_method'] ?? null) === 'wallet_credit')) {
