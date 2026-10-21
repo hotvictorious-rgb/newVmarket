@@ -557,3 +557,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Prevents the customer from spending a return wallet credit while also receiving a cash refund, and prevents only-one-of-many credit lots from remaining spendable after a confirmed cash refund settles. It reduces duplicate customer benefit and protects Victorious MARKET's refund ledger.
 
 **Verification boundary:** Source and tests committed; test execution and CI remain pending. Ambiguous gateway outcomes intentionally keep credits unavailable until reconciliation. No merge or deployment.
+
+
+### VM-AUD-113 — Require active admin account for supplier assignment override (21 October 2026)
+
+**Finding:** `SourcingAllocationService::overrideSupplierAssignmentGroup()` accepted administrator roles without checking persisted account activity. This was inconsistent with the active-account gates in supplier recovery and payout actions.
+
+**Fix:** The service now requires `status === active` as well as an allowed administrator role before any override work begins. Added a feature regression test that calls the service with an inactive admin employee and asserts the request is denied before database assignment work.
+
+**Business impact:** Prevents disabled admin accounts from changing supplier assignment during checkout, reducing the risk of unauthorized sourcing or supplier cost manipulation.
+
+**Verification boundary:** Source and test committed; CI/test execution pending. No merge or deployment.
