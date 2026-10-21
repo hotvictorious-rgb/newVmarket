@@ -1,122 +1,109 @@
 # VICTORIOUS MARKET — Authoritative Business Rules
 
+> **Superseding owner decision (21 October 2026):** Victorious MARKET is a retailer operating centrally from Uyo, Akwa Ibom State. Suppliers are private product sources, not public marketplace sellers. They submit offers for VM approval or map offers to existing canonical listings. VM controls customer-facing prices and delivery, uses approved logistics companies, and requires every rider to be linked to exactly one active logistics company. Authorized supplier-shop pickup remains supported using the existing customer verification and photo flow. Supplier payment eligibility begins only after verified successful customer delivery or confirmed pickup and reconciliation. Earlier multi-vendor, vendor-managed delivery, vendor commission/payout and vendor-linked rider rules in this document are legacy assumptions and are superseded for new retailer-model work. Do not infer that code has been migrated. See [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](../RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md).
+
 **Status:** Authoritative business-rule baseline for vendor-managed fulfilment
 **Last reviewed:** 20 October 2026
 **Review note:** The rules are approved requirements; Section 14 lists implementation gaps found in the audit branch, not completed fixes.  
 **Scope:** Delivery, vendor-linked riders, in-shop pickup, customer privacy, failed delivery, delivery fees, COD boundaries, and legacy logistics.  
 **Authority:** Read with [VICTORIOUS_MARKET_SYSTEM_RULES_V1.md](../VICTORIOUS_MARKET_SYSTEM_RULES_V1.md), the single source of truth. These rules supersede older descriptions of platform-managed logistics, conflicting OTP/photo requirements, logistics-company dispatch, rider earnings, and rider payouts. Historical records must be preserved. Documentation alignment only; implementation remains unverified.
 
-## Decision record from the vendor-delivery Q&A
+## Decision record — retailer and central fulfilment model
 
-The selected answers are recorded here so implementation teams do not revert to the older fleet model:
-
-| Q | Topic / selected answer | Adopted rule |
-|---:|---|---|
-| 1 | Logistics company role — A | No platform-managed logistics company, central fleet, hub, or dispatch operation for new orders. |
-| 2 | Rider/vendor relationship — A | Each active rider belongs to one owning vendor. |
-| 3 | Rider registration — A | The vendor adds/manages its riders through vendor-authenticated workflows. |
-| 4 | Rider approval — A | Rider onboarding is vendor-led; account safety controls remain available to the platform. Do not add a central dispatch approval step unless a separately approved safety requirement calls for it. |
-| 5 | Order assignment — B | The vendor manually assigns each of its orders to one of its linked riders. |
-| 6 | Reassignment — A | Vendor-managed reassignment is allowed before custody; after pickup, use an audited custody-transfer/return flow. |
-| 7 | Multi-vendor checkout — A | Keep one parent checkout with separate child vendor orders, fulfilment choices, fees, and rider assignments. |
-| 8 | Delivery fees/zones — A | Admin sets standard delivery fees (corridors and zonal rates); vendors configure the individual LGAs and states they can cover from their physical shop. Unsupported destinations fail closed to in-shop pickup. |
-| 9 | Delivery-fee split — B | Delivery fee allocation is 90% to the vendor and 10% platform delivery-fee share; it does not create a rider payable. |
-| 10 | Vendor-to-rider compensation — A | The vendor compensates its rider directly outside platform financial systems. |
-| 11 | Payment paths — owner-confirmed | Only (a) pay before delivery through Victorious MARKET checkout, or (b) reserve in-shop pickup through Victorious MARKET and pay at the approved vendor shop through the platform's authorised payment workflow. Shop reservation is not doorstep COD. No vendor cash collection, personal-account transfer or off-platform payment. Launch rails are Paystack card and standard bank transfer unless separately approved. Legacy wallet-credit checkout tender is disabled; capped cashback redemption is a separate discount, not a payment rail. |
-| 12 | Handover evidence — owner-confirmed | Doorstep delivery requires verified customer OTP plus a linked doorstep delivery photo. In-shop pickup requires the RES-XXXXXX reservation pass AND one-time customer pickup OTP verification plus a linked in-shop pickup photo. GPS, signature, separate rider-pickup photo and hub inspection photo are not mandatory. |
-| 13 | Failed delivery / doorstep rejection — owner-confirmed | Record outcome and return rejected/undelivered goods directly to the owning vendor. The vendor may offer an agreed replacement/redelivery; customer agreement is required. Refund/cancellation and financial responsibility remain separately reviewed. |
-| 14 | Admin boundaries — A | Platform admin handles oversight/security/disputes, not dispatch or rider pay. |
-| 15 | Legacy logistics records — A | Preserve history for audit; disable legacy fleet paths for new assignments after safe dependency mapping. |
-| 16 | Refund responsibility — A | Victorious MARKET owns the customer refund process and executes approved refunds through the authorized financial workflow; recover from the vendor where policy, fault, and actual allocation justify it. | 
-| 17 | Vendor settlement timing — B | Vendor proceeds are not eligible for release until successful doorstep delivery or confirmed in-shop pickup; configured refund/dispute, vendor eligibility, and payout-security controls still apply. |
-| 18 | Vendor earnings and payouts — owner-confirmed | After confirmed delivery/pickup and 24 hours with no applicable hold, earnings may become available. System-calculated payout uses oldest eligible whole earning records FIFO, minimum ₦5,000, maximum ₦500,000; stop if the next full record exceeds the cap, with no splitting or skipping. One active request; admin approval required. Victorious MARKET bears payout transfer charges. No rider payout. |
-
+This decision record supersedes older vendor-delivery Q&A decisions for new work.
 
 ## 1. Non-negotiable operating model
 
-1. VICTORIOUS MARKET is a marketplace and financial-control platform. It does **not** operate a central logistics fleet, logistics company, dispatch hub, rider payroll, route-dispatch service, or rider-payout programme.
-2. Each vendor manages delivery for that vendor's own orders.
-3. Every active rider must be registered through a vendor and linked to exactly one owning vendor. A rider is that vendor's delivery worker, not a platform courier or shared marketplace resource.
-4. The vendor adds/manages riders and manually assigns its orders to them.
-5. Riders are operational actors only. They may view and update permitted delivery workflow data and submit delivery evidence. They have no platform wallet, earnings balance, financial ledger beneficiary account, payout request, settlement entitlement, commission view, or authority to approve refunds.
-6. Vendor-to-rider pay, wages, per-delivery compensation, reimbursements, and any other compensation are arranged and paid directly by the vendor outside Victorious MARKET's rider financial systems. The platform must not calculate, reserve, collect, disburse, or reconcile rider compensation.
-7. The platform may provide oversight and controls: vendor/rider account status, safety checks, abuse review, complaint/dispute review, audit logs, and suspension for safety or policy violations. Oversight is not dispatch management.
-8. Legacy logistics-company, hub, fleet, route, and rider-payout records are historical data only. Preserve them for audit and existing financial reconciliation; disable them as active dependencies for new fulfilment. Do not delete history or run destructive migrations merely to simplify the workflow.
+1. VM is the retailer and the only customer-facing seller in the product/order experience.
+2. Suppliers remain private behind-the-scenes sources. A supplier may propose a new product or submit an offer for an existing canonical product. VM reviews and approves; supplier submission never auto-publishes.
+3. VM owns public descriptions, retail prices, publication, customer payments, fulfilment coordination, delivery coverage, customer support and refunds.
+4. VM operates from Uyo and serves only destinations supported by current product sourcing and approved logistics coverage. Uyo is the central operating base, not a promise of nationwide service.
+5. Delivery is coordinated by VM and carried out through approved logistics companies. Every rider assigned to new VM work must be active and linked to exactly one active logistics company. Supplier-owned/vendor-linked riders cannot be used as delivery riders for new VM orders.
+6. Authorized supplier-shop pickup remains supported through the existing reservation pass, one-time customer pickup verification, and in-shop photo evidence.
+7. Supplier payment eligibility requires verified successful customer delivery or confirmed customer pickup and reconciliation. Supplier readiness, order placement, customer payment, dispatch assignment or rider collection alone is insufficient.
+8. The former 90/5/5 merchandise split, 90/10 delivery split, vendor earnings and vendor payout workflow are not default retailer rules. Supplier purchase costs, logistics charges, customer revenue, fees, refunds and any approved cashback must be separately accounted for. Unresolved accounting policy must not be guessed.
+9. Existing payment verification, webhook authentication, idempotency, refund ceilings, immutable journals, audit trails, consumer-rights safeguards and reconciliation remain mandatory.
+10. Existing schema names may be retained during migration. Do not globally rename vendor tables or delete history before dependency and ledger mapping.
+
+
 
 ## 2. Actors and permissions
 
-### Vendor
-- Creates/invites a rider account through the vendor's authenticated account.
-- Links the rider to its own vendor profile; the vendor must not attach riders to another vendor.
-- Activates/deactivates its own riders subject to platform account/safety restrictions.
-- Sees its own riders and vendor orders only.
-- Assigns and, within the allowed custody boundary, reassigns its own delivery orders.
-- Selects its own supported delivery coverage areas (individual LGAs and states); delivery fees are determined by the admin-configured platform fee schedule.
-- Coordinates delivery directly with its rider and handles compensation outside the platform.
-- Handles its fulfilment work, including preparing goods, handing over parcels, receiving returned parcels, and communicating with customers.
+### Victorious MARKET administrator/operations
+
+- Approves suppliers and their offers; controls canonical listings, descriptions, retail prices and publication.
+- Confirms order sourcing and product availability.
+- Defines customer-facing delivery coverage and fees, authorizes logistics companies and assignments, and coordinates fulfilment.
+- Handles customer support, claims, refund authorization, supplier payable authorization and financial reconciliation through separate audited workflows.
+- May not treat a supplier or logistics-company statement as proof of customer handover or payment success.
+
+### Supplier
+
+- Submits product data, photos, wholesale price, availability, condition/warranty information and source location.
+- May propose a new listing or offer against an existing canonical product; cannot publish directly or change VM's public retail price.
+- Supplies the product under the accepted offer and makes it available for VM collection or authorized customer pickup.
+- Is privately linked to selected order items and agreed purchase-cost snapshots.
+- Cannot independently dispatch its own rider for VM delivery, access customer financial details beyond operational need, approve refunds, or collect off-platform customer payment.
+
+### Logistics company
+
+- Must be approved/active for VM work and accepts authorized delivery assignments under its commercial agreement with VM.
+- Links every assigned rider to its company, maintains rider eligibility, and records custody and delivery events.
+- Cannot change product prices, supplier purchase costs, customer payment state, refund approval or supplier payable.
 
 ### Rider
-- Must have an active user account, an active rider profile, and exactly one active vendor relationship to be eligible for new assignments.
-- Can access only orders explicitly assigned to that rider and belonging to the rider's linked vendor.
-- Can see only the minimum customer information needed to complete the assigned delivery (see Customer Privacy).
-- Can update allowed operational states, record failed attempts, submit required proof, and complete authorised handover verification.
-- Cannot assign orders to themselves, browse unassigned orders, transfer orders to another vendor, change product or delivery prices, see payment status/amounts/commissions, issue wallet credit, initiate refunds, access payouts, or perform financial actions.
-- Cannot fulfil in-shop pickup as a delivery task. At the vendor counter, the customer must present the RES-XXXXXX reservation pass AND complete the separate one-time customer pickup OTP; the vendor records the required in-shop pickup photo.
 
-### Platform administrator
-- May verify or suspend vendors/riders, review safety incidents and disputes, inspect audit trails, and enforce security/policy requirements.
-- Does not operate dispatch, choose which rider receives each order, manage rider shifts/routes, calculate rider pay, or pay riders.
-- May intervene in a complaint or exception through an audited administrative workflow without becoming the delivery operator.
-- Must not expose customer financial details to riders or grant rider financial permissions.
+- Performs only assigned logistics work for the linked logistics company.
+- Receives only the customer/order details needed for the assigned delivery.
+- Records custody, delivery attempts and customer handover evidence through authorized server-side transitions.
+- Cannot approve refunds, alter prices, mark a payment successful, create financial entries or see supplier wholesale prices.
+
+### Customer
+
+- Purchases from Victorious MARKET and uses VM's authorized payment, delivery, pickup and claims processes.
 
 ## 3. Rider registration, ownership, and lifecycle
 
-1. The vendor initiates rider registration and is the rider's owning business.
-2. The vendor link is mandatory for every active rider. A vendor rider must not simultaneously be linked to a logistics company or another vendor. Legacy fleet-linked profiles may remain for history but cannot receive new orders under this model.
-3. A rider's account status and profile status must both be active before assignment or delivery actions are permitted.
-4. A suspended/inactive vendor cannot assign orders, and its riders cannot act on that vendor's orders.
-5. Vendor reassignment of a rider to a different vendor is not an ordinary edit. It requires a controlled ownership-transfer process, must not transfer active custody, and must preserve historical assignments. Until such a process exists, reject cross-vendor reassignment.
-6. Deactivation must be blocked while the rider holds a parcel in custody. Historical assignments and evidence are retained; rider profiles with history are deactivated/soft-deleted rather than destructively erased.
-7. Prevent duplicate rider profiles for the same user and prevent client-supplied vendor IDs from overriding the authenticated vendor's identity.
+1. Every rider eligible for new VM delivery work must be active and linked to exactly one active, approved logistics company.
+2. Reject a rider with no company, multiple company links, only a supplier/vendor link, or a link to an inactive/unapproved company.
+3. Check company/rider status at registration, assignment and relevant custody transitions; authorization cannot rely only on hidden UI controls.
+4. Company changes require an audited reassignment process. Preserve historical assignments and evidence; do not rewrite prior custody records.
+5. Existing vendor-linked and legacy fleet-linked rider profiles may remain for history/migration, but cannot receive new VM work until explicitly migrated and validated.
+6. Do not create rider wallets, rider earnings, rider payout requests or rider financial beneficiaries for new retailer-model deliveries unless the owner approves a separate logistics compensation architecture.
 
 ## 4. Order assignment and reassignment
 
-1. Assignment is vendor-driven and manual. There is no platform auto-dispatch queue or logistics-company allocation.
-2. A vendor can assign only an eligible rider linked to that same vendor and only an order belonging to that vendor.
-3. The backend must verify ownership and order state on every assign, reassign, pickup, arrival, failed-attempt, and delivery-confirmation request. UI filtering alone is not authorization.
-4. An order may be reassigned before the rider takes physical custody. Assignment/reassignment records must capture actor, old rider, new rider, timestamp, reason, and order state.
-5. Once the parcel is picked up / marked in the rider's custody, normal reassignment is blocked. The vendor must use an audited return-to-vendor or custody-transfer process so two riders cannot both claim the same parcel.
-6. A rider cannot assign or reassign their own order, and cannot access another rider's assignment even if the order ID is guessed.
-7. Multi-vendor carts are split into vendor-specific child orders. Each child order has one owning vendor, one fulfilment choice, one applicable vendor delivery fee, and at most one active rider assignment. One vendor's rider never receives another vendor's child order.
+1. VM or its authorized operations actor assigns a deliverable order/fulfilment unit to an active approved logistics company and one eligible rider linked to that company.
+2. Validate order identity, destination coverage, fulfilment state, payment/order eligibility, company status, rider status, existing assignment and custody state within a transaction/locking strategy.
+3. A supplier cannot assign a supplier-owned rider or directly change VM's logistics assignment.
+4. Reassignment before custody must be audited. After custody begins, require an explicit custody-transfer or return-to-origin workflow with actor, timestamp and evidence.
+5. No assignment or custody scan marks the customer order fulfilled or makes supplier payment eligible. Only verified customer handover does that.
+6. Orders with multiple supplier items must preserve each item's selected supplier offer and purchase cost; sourcing groups may be tracked separately, but customer checkout is with VM, not separate public vendor child orders.
 
 ## 5. Fulfilment types
 
 ### Doorstep delivery
-- The vendor prepares the goods and assigns its rider.
-- Delivery progression records vendor readiness, rider assignment, pickup/custody, delivery attempt(s), and final handover as separate states.
-- Doorstep delivery completion requires secure customer OTP verification AND a delivery photo linked to the child order. GPS, signature and rider pickup photo are not mandatory.
-- A rider's delivery confirmation is an operational event. It does not grant the rider financial permissions or let the rider directly edit a ledger, approve a refund, alter prices, or request payouts. An independent, authorized financial service may consume a verified delivery event as an input to the published vendor-settlement policy; that financial action must be separately validated, idempotent, and auditable.
 
-### In-shop pickup
-- In-shop pickup remains fully supported as a first-class fulfilment type.
-- The customer collects the order at the owning vendor's physical shop/counter.
-- Delivery fee is exactly zero. Checkout and backend enforce zero regardless of client-supplied amount or vendor delivery-zone setting.
-- The `RES-XXXXXX` reservation pass AND one-time customer pickup OTP verification are required for customer counter pickup alongside the in-shop pickup photo; neither credential is a photo substitute. Never expose pickup secrets in ordinary order lists/history, logs, analytics or unauthorised rider views.
-- The six-digit `pickup_verification_code` is the required one-time customer pickup OTP and is used IN ADDITION TO the `RES-XXXXXX` reservation pass; it must never replace or override the reservation pass. Keep this customer counter OTP distinct from any rider-to-vendor parcel-custody OTP. Preserve historical records and migrate additively; do not invalidate existing reservations without a safe customer-support path.
-- Store only a secure representation where feasible; do not expose the pickup pass in rider lists, rider history, logs, analytics, or unrelated API responses. Return it only to the authorized customer or verify it through the owning vendor's authorized counter flow.
-- The vendor verifies the pickup pass securely, confirms payment through Victorious MARKET's authorised payment workflow, and records the in-shop pickup photo/handover. A delivery rider is not required and no rider assignment, doorstep-delivery status, delivery fee, rider compensation, or logistics payout is created.
-- Pickup status and doorstep delivery status remain distinct. Customer counter pickup is not the same event as a rider collecting a parcel from the vendor. Require reservation pass plus one-time customer pickup OTP verification plus the in-shop pickup photo; GPS, signature and a rider are not required.
-- Order/payment expiry must not silently invalidate a paid order or create a financial refund. Expiry, stock release, payment verification, and refund are separate auditable operations.
+- VM confirms the destination is within active coverage from its Uyo operating base, the product can be sourced, a logistics company can serve the route, and the customer-facing delivery fee is known.
+- VM coordinates sourcing and logistics assignment. Supplier readiness and rider collection are custody events, not successful customer fulfilment.
+- Customer handover requires server-verified one-time customer OTP and doorstep photo. Preserve failed attempts and return/custody outcomes separately.
+- No delivery promise where coverage, fee, product availability or carrier capacity is missing or uncertain.
 
-## 6. Vendor-defined delivery areas and fees
+### Supplier-shop pickup
 
-1. Vendors configure destinations they serve and the delivery fee for each supported destination. State-level fallback may be supported; an explicit LGA fee takes precedence over a state-level fee.
-2. A doorstep-delivery destination without a valid vendor-configured fee is unavailable. Fees must be server-validated and cannot be trusted from the client.
-3. If the existing commercial rule requires a positive fee for doorstep delivery, enforce a fee greater than zero for that enabled destination. This rule does not apply to in-shop pickup, whose fee is always zero.
-4. The chosen fulfilment type, destination, quoted fee, and relevant fee-rule version are snapshotted to the vendor child order at checkout. Later vendor settings changes do not rewrite existing orders.
-5. Each child vendor order calculates its own products, discounts, delivery fee, commission, cashback eligibility, and vendor allocation. One Paystack charge collects the parent checkout amount; the verified captured amount is allocated internally using immutable per-child snapshots. The parent payment amount/reference remains authoritative for collection, and child allocations must sum exactly to the captured parent total. The parent checkout must not collapse multiple vendors' delivery fees into an untraceable shared amount.
-6. The delivery fee is a vendor-order charge, not a logistics-company fare. No rider share/payable is created by the platform. The vendor is responsible for rider compensation outside the platform.
-7. The existing merchandise allocation is 90% vendor, 5% customer cashback, and 5% platform share on eligible merchandise value. The delivery-fee allocation is 90% vendor and 10% platform share. Cashback applies to eligible product value only and never to delivery fees. For example, with ₦90,000 eligible products and ₦10,000 delivery, the merchandise allocation is ₦81,000 vendor / ₦4,500 cashback / ₦4,500 platform, and the delivery allocation is ₦9,000 vendor / ₦1,000 platform. The owning vendor separately pays its rider outside the platform. Refunds must reverse the correct merchandise split and/or delivery-fee split according to the actual approved refundable components. Any future change must be an explicit business decision updated consistently across documents and code.
+- Pickup at an authorized supplier shop remains supported as a pickup/collection exception in the existing flow.
+- VM authorizes the order and location; customer uses the reservation pass/reference and separate one-time customer pickup verification; record the required in-shop photo and actor/timestamp.
+- Supplier readiness, reservation creation or arrival at the shop alone is not fulfilment.
+- The supplier shop is not a public seller storefront or independent payment channel. Customer payment remains in VM's authorized workflow.
+- A verified customer handover is the earliest supplier-payment eligibility trigger, subject to reconciliation and authorized payment processing.
+
+## 6. VM-defined delivery coverage and fees
+
+1. VM controls customer-facing service coverage and delivery-fee quotes; suppliers do not configure marketplace delivery prices.
+2. Uyo, Akwa Ibom State is the central operating base. VM serves any destination it can currently cover through sourcing and approved logistics arrangements, not every location by default.
+3. Checkout must validate a current coverage rule, carrier availability, applicable customer fee and order snapshot. Missing, expired or contradictory coverage data means delivery is unavailable until resolved.
+4. Snapshot destination, fulfilment choice, quoted customer fee and applicable fee-rule version on the accepted order.
+5. Logistics-company charges and payment terms must follow an approved VM/company agreement. Do not infer the old 90/10 vendor delivery allocation or create rider payables.
 
 ## 7. Customer privacy and rider data minimisation
 
@@ -165,64 +152,17 @@ All payments must be processed/recorded through Victorious MARKET's authorised p
 
 ## 11. Financial separation
 
-- Rider assignment, availability, location, pickup, delivery, failed attempts, and proof are operational records.
-- Riders are not financial beneficiaries in the marketplace ledger.
-- Do not create rider payout requests, rider wallets, rider earnings, logistics-company payable entries, or delivery-fee split journals for new vendor-managed deliveries.
-- Rider endpoints must not directly mutate financial ledgers, approve refunds, or issue credits. The authorized financial engine may use a verified operational event as an input only where the published settlement/refund policy explicitly requires it.
-- Existing vendor settlement, platform commission, cashback, payment verification, refund, and payout controls remain in their established financial services.
-- If historical orders contain logistics-company financial entries, preserve and reconcile them under legacy rules. Do not reclassify historical amounts as vendor income or delete journal entries.
-- All new financial movements must remain idempotent, balanced, authorized, and reconcilable.
-
-### Vendor settlement timing and eligibility
-- Vendor proceeds must remain held before fulfilment. The qualifying fulfilment event is verified successful customer handover for `doorstep_delivery` or verified customer handover at the owning vendor's counter for `in_shop_pickup`.
-- A rider's operational delivery event alone is not a payout instruction. The backend must verify the correct child order, vendor, fulfilment type, customer handover proof, and final state before the financial engine can consider settlement.
-- Successful delivery or confirmed customer pickup is the earliest settlement-eligibility trigger, not permission to bypass an applicable published refund window, an open return/dispute, vendor account restrictions, bank-account security cooldown, payout authorization, or required transfer proof. Once the applicable hold has expired and no blocking case exists, the order may become eligible under the existing settlement controls. Do not invent additional delay periods or settle before fulfilment.
-- For multi-vendor checkout, settlement eligibility is evaluated per vendor child order. One vendor's delivery/pickup or dispute must not release or block another child order's funds except where a documented parent-level financial risk requires it.
-
-### Vendor earning records, withdrawal requests, and admin-paid payouts
-
-- **Earning provenance is mandatory.** Create a separately identifiable merchandise earning record for each order item/line and owning vendor. It must point to the parent payment, vendor child order, order-item/line ID, product snapshot, quantity, post-discount merchandise amount allocated to that line, the exact 90% vendor share in integer kobo, and the source settlement/allocation event. Never store only one unexplained vendor earnings total on the whole order.
-- **Delivery earnings are separate.** Record the vendor's 90% delivery-fee earning as a distinct record tied to the specific vendor child order and its captured delivery fee. It must not be attached to a merchandise line, parent total without child attribution, rider, or logistics company. For in_shop_pickup, delivery fee and delivery earning are exactly zero.
-- **Independent lifecycle per earning.** Each earning record tracks its own eligibility and lifecycle (for example held, withdrawable, reserved in a payout request, paid, reversed, or under recovery) and retains its order/item or vendor-child-order source. A child order can have several item earnings and one separate delivery earning. Refunds, partial item returns, discounts, chargebacks, and recovery reverse/hold only the affected earning components using the immutable checkout allocation.
-- **Earning checks precede withdrawal.** An earning becomes withdrawable only after verified payment allocation, verified qualifying fulfilment, expiry of the 24-hour return/refund window, no blocking return/dispute/payment exception, valid vendor/KYC/account status, completed bank-account security cooldown, and all applicable reconciliation/recovery checks. Cashback and platform share are never vendor earnings. A rider event alone does not release funds.
-- **System-calculated capped FIFO request.** The vendor does not choose an amount. The server selects the oldest eligible, unreserved whole earning records in strict FIFO order, adding each full record while the total remains at or below ₦500,000. If the next full record would exceed the cap, stop; do not split it and do not skip it to include newer records. Minimum is ₦5,000. If the batch is below minimum, wait until more eligible whole records can be included. If the oldest record itself exceeds the cap, flag for authorised finance review rather than split/skip.
-- **One active request.** Only one request per vendor may remain pending review, approved but unsent, processing/in-flight or uncertain/awaiting reconciliation. Reserve selected whole earning records atomically; never reserve them twice.
-- **Admin approval and payment are distinct.** An authorized admin records approve/reject actor, timestamp, decision and reason. Only an approved request may be sent to Paystack. A timeout remains reserved for reconciliation and must not be blindly retried. A failed/reversed transfer restores the exact reserved records only after safe provider-state reconciliation.
-- **Payout snapshot and fees.** Persist selected earning-record IDs and amounts, bank snapshot, request identity, approver, transfer reference/status, payment confirmation and balanced journal references. Victorious MARKET bears payout transfer charges; the vendor receives the exact approved amount.
-- **No rider or legacy fleet beneficiary.** New vendor-managed orders never create rider earnings, rider payout requests, logistics-company payables, or logistics payout allocations. Vendor-to-rider compensation is a private vendor responsibility outside platform financial systems. Preserve old fleet payout history as legacy-only data.
-
-### Customer refunds and vendor recovery
-- Victorious MARKET is responsible for processing the customer's approved refund. The customer should not be redirected to negotiate or collect the marketplace refund from the vendor. At launch, refund execution must be initiated through Paystack against the verified original transaction/reference and the authorized financial-operation workflow. Do not use a wallet, off-platform payment, or alternate bank destination unless a separate owner-approved policy explicitly permits that exception.
-- Refund approval, Paystack execution, confirmation, journal posting, order/return-case updates, and vendor recovery are separate auditable stages. A request, rider event, complaint, or return opening is not proof that money was refunded.
-- Automatic refund approval is permitted only for a verified duplicate successful charge or a verified paid order cancelled before any vendor action, under the narrow documented controls. Support may open a case, but authorised admin approves other refunds. Admin may manually open/review/approve a legitimate late refund after the 24-hour standard window; record the reason, evidence, amount and decision. A webhook is evidence, never approval.
-- Paystack processing fees are borne by the platform from its own share. Do not reduce the vendor's 90% merchandise share, customer's 5% cashback allocation, or vendor's 90% delivery-fee share to pay gateway fees. Do not hard-code tax treatment before qualified Nigerian tax advice.
-- Chargeback loss and vendor recovery are evidence- and fault-based. Recover from a vendor only where documented vendor fault or an approved allocation justifies it. If responsibility is ambiguous or the platform loses despite supplying required evidence, do not automatically debit the vendor; the platform bears the loss unless an authorized case decision establishes a justified recovery.
-- Recover from the vendor only where the documented responsibility decision and actual allocation make the vendor responsible. If already paid, record a separate recovery receivable. The vendor may repay by verified direct bank transfer, or an authorised admin may approve an offset against held/future earnings where the vendor agreement permits it. No offset without recorded admin approval. Notify the vendor and allow a challenge; a complaint is not confirmed debt.
-- Do not charge a rider, create a rider payable, or deduct rider compensation. Rider-to-vendor compensation remains outside platform financial systems.
-- Refund and recovery amounts must use the immutable child-order payment/allocation, approved refundable merchandise and delivery components, prior refunds, cashback already accrued/used, discounts, and whether vendor proceeds were already disbursed. Enforce both a per-child refund ceiling (no more than that child's captured allocation) and an aggregate parent-payment ceiling (all refunds against the same Paystack capture cannot exceed the verified parent amount), under database locks and idempotency. Delivery-fee refunds are decided under the published reason-specific customer policy and applicable law; do not automatically refund or retain delivery fees for every reason.
-- At launch, customer refunds must be initiated through Paystack against the verified original transaction; wallet-credit refunds remain disabled in UI, API, and service-level authorization. If Paystack emits `refund.needs-attention`, keep the customer refund obligation open and route it to authorized review. Do not send funds to a platform wallet, make an off-platform bank transfer, or use Paystack's alternate-account retry flow unless a separate owner-approved policy explicitly permits that exception. A later wallet-credit release would require a separate owner decision, explicit customer consent, a consent timestamp, admin authorization, and an audit log.
-- The standard return/refund request window is **24 hours** from confirmed doorstep delivery or confirmed in-shop pickup. This is not a blanket waiver of legal rights or warranties. Admin may approve legitimate late cases. After vendor acceptance of an order, ordinary cancellation is restricted; it is not an absolute bar to remedies for non-fulfilment, non-conforming goods or non-waivable rights. Cashback maturity is a separate clock: the earliest eligible maturity is `refund_window_expires_at + 24 hours` (equivalent to `refund_window_expires_at + 1 day`), provided fulfilment is valid and no blocking return, dispute, failed-delivery case, or unconfirmed pickup remains. This additional 24-hour buffer applies only to cashback maturity; it does not extend the customer return/refund window. The 24-hour window is the standard customer return/claim window after fulfilment, not a promise that Paystack will complete a refund within 24 hours. Verified duplicate-charge corrections, pre-vendor-action cancellations, payment exceptions, chargebacks, and any non-waivable legal obligations follow their separate authorization and evidence rules and do not depend on the fulfilment-based clock.
-- If a refund reverses cashback that has already been spent, reverse any unspent cashback first and track the remaining recoverable amount in a separate customer cashback-recovery ledger. At maturity, future cashback offsets this balance before any remainder becomes spendable. Do not debit the customer's cash wallet or silently create a negative spendable balance. This policy must be disclosed in the customer Terms & Conditions and reviewed for applicable consumer-policy/legal requirements before release.
-- For new checkout, enable Paystack card and standard bank-transfer checkout only. Dedicated Virtual Accounts (DVA), USSD, mobile money, and other channels are deferred unless separately approved.
-- The platform must complete the customer refund even when vendor recovery is disputed or delayed, subject to verified payment and approved refund controls. Track recovery separately so vendor collection failure does not leave the customer refund falsely marked pending or completed based on the wrong event.
-
-
-### Binding distinction: claim window, refund processing, settlement, and cashback maturity
-
-### Binding distinction: claim window, refund processing, settlement, and cashback maturity
-
-These are separate clocks and state machines. Never use one as a substitute for another.
-
-1. **Customer claim/return window — 24 hours.** For ordinary post-fulfilment claims, start the standard 24-hour window from the verified delivery or confirmed vendor-counter pickup timestamp for each vendor child order. Use that child's persisted `refund_window_expires_at`; do not calculate from checkout creation, payment time, a parent order's timestamp, or the time a job happens to run. An open return, dispute, delivery exception, or unverified pickup must be handled under the relevant hold/review rule.
-2. **Consumer-rights safeguard.** The 24-hour standard is an operational claim/reporting window, not a blanket waiver of rights that cannot lawfully be excluded. It must not be represented as eliminating remedies available under the Federal Competition and Consumer Protection Act or other applicable Nigerian law, including remedies that may apply to defective, unsafe, misdescribed, or non-conforming goods. Applicable law and any valid warranty/guarantee obligations prevail where they provide a stronger remedy. Have the customer-facing Terms and Conditions reviewed by qualified Nigerian counsel before launch.
-3. **Gateway refund lifecycle — independent of the claim window.** A request, approval, Paystack submission, provider processing, and provider-confirmed refund are distinct states. The 24-hour claim window is not a promise that Paystack will complete a refund in 24 hours. A timeout, `refund.failed`, or `refund.needs-attention` does not satisfy the customer refund obligation; keep it open for reconciliation/review. At launch, refund through the verified original Paystack transaction only; wallet-credit refunds are disabled. Automatic approval is limited to a verified duplicate successful capture and a verified payment for an order cancelled before any vendor action. All other refunds require recorded authorized human approval before dispatch.
-4. **Vendor settlement eligibility.** The owning vendor child order may become eligible only after verified fulfilment and expiry of that child's 24-hour standard window, with no blocking return/dispute/payment exception and after vendor, bank-security, authorization, and reconciliation checks. This is eligibility, not a guarantee of immediate disbursement. The additional cashback buffer below does not automatically extend the vendor's settlement hold.
-5. **Cashback maturity and expiry.** Cashback stays `pending_maturation` until verified fulfilment establishes `refund_window_expires_at`. Its earliest maturity is `refund_window_expires_at + 24 hours` (the separate cashback buffer), and it can become spendable only if no blocking case remains. Thus, with no exceptions, cashback is normally available no earlier than about 48 hours after fulfilment. Its 365-day validity period starts at `matures_at`, not at checkout or payment. A pre-fulfilment cashback record may have null `matures_at` and `expires_at`; null means the clock has not started, never “mature now”.
-6. **Spent cashback recovery.** Reverse unspent cashback first. Any recoverable amount already spent must be recorded in a separate customer cashback-recovery ledger and offset against future cashback only as that future cashback matures. Never silently debit the customer's cash wallet or create a negative spendable balance. Disclose this rule in customer Terms and Conditions and complete consumer-policy/legal review before enabling recovery.
-7. **Exceptions and multi-vendor isolation.** Verified duplicate captures, qualifying pre-vendor-action cancellations, payment exceptions, chargebacks, and non-waivable legal rights use their own evidence and authorization paths and do not depend on a normal fulfilment clock. For a multi-vendor parent checkout, evaluate fulfilment, claims, refunds, settlement, and cashback independently per child order while enforcing the aggregate parent-capture refund ceiling across all child orders.
-
-Implementation of this policy must be proved by code review and tests; this text is not evidence that every path already complies.
-
+- Customer payment, supplier payable, logistics-company charge/payable, delivery/pickup status, refund status and any customer cashback liability are distinct state machines.
+- A supplier payable represents the agreed purchase cost for goods supplied to VM, not a marketplace commission or vendor earning.
+- Supplier payment eligibility begins only after verified successful customer delivery or confirmed customer pickup and the required order/amount reconciliation. Eligibility is not an automatic transfer.
+- Order placement, customer payment, supplier acceptance/readiness, VM collection, rider assignment, rider collection, delivery attempt or unverified completion does not independently make the supplier payable eligible.
+- Supplier payable, authorization, payment attempt, provider confirmation, reversal and reconciliation must be separately linked and idempotent. Timeout means uncertain and requires reconciliation before retry.
+- VM remains responsible for a valid customer refund even if a supplier was already paid. Supplier recovery requires evidence-backed responsibility and contractual recoverability; a complaint alone is not debt, and recovery must not delay a customer refund.
+- Do not create rider wallets, rider earnings, rider payout requests or logistics-company payables based on the old vendor delivery split. Logistics-company charges and payment terms must be separately approved and recorded under the retailer model.
+- The old 90% vendor / 5% cashback / 5% platform merchandise allocation, 90% vendor / 10% platform delivery allocation, vendor earning records, vendor withdrawal thresholds, and vendor debt-recovery rules are superseded as defaults for new retailer-model transactions. Do not invent replacement percentages or assume cashback remains active without owner/accountant approval.
+- Preserve old vendor settlements, cashback, logistics payouts and financial history as legacy records. Do not reclassify or delete historical journal entries without a documented migration and accounting approval.
+- All new financial movements remain idempotent, balanced, authorized, immutable and reconcilable. Balanced books do not prove cash availability; recognize loss/liquidity shortfall honestly.
+- Customer payment/refund security rules remain: verify Paystack status, exact amount, currency, reference and order identity; refunds require applicable authorization and original-route handling; refund approval is distinct from gateway completion; enforce component and aggregate ceilings.
 
 ## 12. Legacy migration and compatibility
 
