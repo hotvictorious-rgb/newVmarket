@@ -736,6 +736,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertSame(1, $supplierAudit['orders_checked']);
         $this->assertSame(0, $supplierAudit['mismatches'], json_encode($supplierAudit['errors'], JSON_UNESCAPED_SLASHES));
 
+        $journalCountBeforeAudit = \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count();
         $auditedItem = OrderItem::where('order_id', $orderTwoBulky->id)->firstOrFail();
         $originalOperationalCost = (string) $auditedItem->fulfillment_supplier_cost_snapshot;
         $auditedItem->fulfillment_supplier_cost_snapshot = \App\Services\BcMathService::add($originalOperationalCost, '1.00');
@@ -744,6 +745,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ->reconcileRetailerSupplierPayables($orderTwoBulky->id);
         $this->assertSame(1, $mismatchAudit['mismatches']);
         $this->assertNotEmpty($mismatchAudit['errors']);
+        $this->assertSame($journalCountBeforeAudit, \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count());
 
         $auditedItem->fulfillment_supplier_cost_snapshot = $originalOperationalCost;
         $auditedItem->save();
