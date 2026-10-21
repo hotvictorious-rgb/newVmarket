@@ -662,7 +662,7 @@ class CustomerOrderApiController extends Controller
         return response()->json([
             'status' => true,
             'message' => $result['message'],
-            'data' => $result['case'],
+            'data' => ($result['case'] instanceof ReturnCase ? $result['case']->unsetRelation('vendor') : $result['case']),
         ], 201);
     }
 
@@ -674,7 +674,7 @@ class CustomerOrderApiController extends Controller
         $user = $request->user();
 
         $cases = ReturnCase::where('customer_id', $user->id)
-            ->with(['order:id,order_number', 'vendor:id,business_name', 'collectionPoint:id,name,address', 'items.product'])
+            ->with(['order:id,order_number', 'collectionPoint:id,name,address', 'items.product'])
             ->latest()
             ->paginate(15);
 
@@ -700,7 +700,6 @@ class CustomerOrderApiController extends Controller
             ->where('case_number', trim($caseNumber))
             ->with([
                 'order:id,order_number',
-                'vendor:id,business_name',
                 'collectionPoint',
                 'items.product',
                 'evidence',
@@ -714,6 +713,8 @@ class CustomerOrderApiController extends Controller
                 'message' => 'Return case not found or unauthorized access.',
             ], 404);
         }
+
+        $case->unsetRelation('vendor');
 
         return response()->json([
             'status' => true,
