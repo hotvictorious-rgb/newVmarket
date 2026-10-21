@@ -530,6 +530,8 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             ]);
         $this->app->instance(\App\Services\PaystackService::class, $paystack);
 
+        $this->assertTrue((bool) $order->fresh()->retailer_model_order, 'The refund fixture must exercise the retailer accounting branch.');
+        $this->assertDatabaseMissing('financial_journal_entries', ['order_id' => $order->id, 'account_name' => 'vendor_payable']);
         $result = app(ReturnAndRefundService::class)->adminDisburseRefund($this->superAdmin, $case);
 
         $this->assertTrue($result['success']);
