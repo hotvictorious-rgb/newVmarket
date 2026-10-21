@@ -848,6 +848,23 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'amount' => '100.00',
         ]);
 
+        $deliveredOrder = $overridden['order'];
+        $deliveredOrder->order_status = 'delivered';
+        $deliveredOrder->received_at = Carbon::now();
+        $deliveredOrder->delivery_confirmed_by_customer = true;
+        $deliveredOrder->proof_of_delivery_image = 'proof/retailer-delivery.jpg';
+        $deliveredOrder->save();
+
+        $released = $service->releaseAfterVerifiedDelivery($deliveredOrder->fresh());
+        $this->assertTrue($released['success']);
+        $this->assertFalse($released['replayed']);
+        $this->assertSame('1100.00', (string) $this->fleetCompany->fresh()->wallet_balance);
+        $this->assertSame('1100.00', $released['order']->logistics_company_wallet_credited_amount);
+
+        $replayedRelease = $service->releaseAfterVerifiedDelivery($released['order']->fresh());
+        $this->assertTrue($replayedRelease['replayed']);
+        $this->assertSame('1100.00', (string) $this->fleetCompany->fresh()->wallet_balance);
+
         $debits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
         $credits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
         $this->assertSame(0, bccomp($debits, $credits, 2), 'Retailer settlement and company override adjustments must remain balanced.');
