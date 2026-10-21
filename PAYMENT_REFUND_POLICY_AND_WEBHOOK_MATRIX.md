@@ -24,7 +24,7 @@ The owner has confirmed the following final choices. These are binding and super
   1. **Doorstep Delivery (Pay First Online):** Customer must pay the full retail selling price plus delivery fee upfront online via Paystack (card or bank transfer). Cash on delivery is completely disabled.
   2. **In-Shop Pickup (Inspect First, Pay at Shop):** Customer reserves online for free (₦0 upfront, `RES-XXXXXX` reservation pass). The customer visits the designated supplier shop in Uyo, **physically inspects the item first**, and pays at the shop counter through Victorious MARKET's authorised workflow upon satisfaction before goods release. Shop pickup has zero delivery fee and is not doorstep COD. All payments must be processed/recorded through Victorious MARKET; suppliers may not accept cash or off-platform private transfers. Launch rails are Paystack card and standard bank transfer.
 - **Fulfilment:** VM coordinates delivery through approved logistics companies. Every active rider must be active and linked to exactly one approved logistics company. Customer in-shop pickup remains supported as `in_shop_pickup`, has zero delivery fee, uses the `RES-XXXXXX` reservation pass plus customer pickup OTP verification (`pickup_verification_code`) plus a mandatory in-shop pickup photo. Doorstep delivery requires customer Handshake OTP (`delivery_otp`) plus a mandatory doorstep delivery photo.
-- **Retail Accounting & 5% Cashback Retention:** The legacy 90/5/5 merchandise split is superseded, but the **5% customer cashback feature is actively retained** as VM's primary customer loyalty engine. Transactions follow retail margin accounting: `Customer Retail Price - Supplier Wholesale Cost = VM Gross Margin`. The 5% customer cashback liability is funded directly out of VM's retail gross margin (never deducted from the supplier's wholesale cost). Suppliers receive 100% of their agreed wholesale cost (`cost_price * quantity`) strictly after verified customer delivery or verified counter pickup.
+- **Retail accounting:** `Retail Price - Supplier Wholesale Cost = VM Gross Margin` before other costs. Supplier payables use the immutable agreed wholesale cost (`cost_price * quantity`) and become eligible only after verified customer delivery or pickup plus reconciliation. New cashback accrual is disabled pending a separate owner-approved policy. Preserve historical cashback lots and obligations; the legacy 90/5/5 and 90/10 allocations do not govern new retailer transactions.
 - **Refund and tender boundary:** customer refunds use the verified original Paystack transaction/channel only at launch. Do not issue wallet-credit refunds and do not accept legacy wallet credits as checkout tender at launch; preserve historical credit records for separately approved treatment. Cashback redemption is a distinct loyalty discount and remains subject to the 50% merchandise-subtotal cap.
 - **Refund approval:** automatic approval is limited to a verified duplicate successful capture and a verified payment for an order cancelled before any supplier action. All other refunds require persisted authorized human approval before gateway dispatch.
 - **Protection/cashback:** 24-hour return/refund/protection window plus a separate further 24-hour cashback-maturity buffer after qualifying fulfilment; no maturity while a blocking return/dispute remains. The cashback buffer does not extend the customer return/refund window.
@@ -217,6 +217,8 @@ Do not subscribe to subscription, invoice, payment-request, dedicated-account or
 
 ## 9. Required implementation changes / audit checklist
 
+**Legacy boundary:** checklist items below that describe vendor earning records, vendor payout requests, FIFO payout batches, vendor balances, or 90/5/5 and 90/10 splits apply only to preserving and safely reconciling historical marketplace transactions. They are not requirements for new retailer-model supplier payables or logistics-company charges. New transactions follow the supersession rules near the top of this document.
+
 These are requirements to verify against code; listing them does not mean they are already implemented.
 
 ### Payment collection
@@ -349,7 +351,7 @@ This matrix contains historical marketplace payout/allocation requirements as we
 
 ## 14. Binding rule: merchandise and delivery refunds are approved independently
 
-The owner has confirmed that **delivery is never mixed with merchandise, and merchandise refunds and delivery-fee refunds must be approved independently**. This rule applies to a single-vendor order and to every child order inside a multi-vendor parent checkout.
+The owner has confirmed that **delivery is never mixed with merchandise, and merchandise refunds and delivery-fee refunds must be approved independently**. This rule applies to historical multi-vendor parent/child orders and to new retailer orders wherever a delivery-fee component was actually captured. For new retailer transactions, reverse the actual captured component amounts and retailer accounting entries; do not use the legacy vendor percentage allocations below as new-order policy.
 
 ### Component decision matrix
 
