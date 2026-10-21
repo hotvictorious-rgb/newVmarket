@@ -591,12 +591,12 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         // exercising recovery's reconciliation guard.
         $simulatedCaptureSupplierTotal = '0.00';
         foreach (OrderItem::where('order_id', $orderTwoBulky->id)->orderBy('id')->get() as $captureItem) {
-            $captureLineCost = \App\Services\\BcMathService::mul(
+            $captureLineCost = \App\Services\BcMathService::mul(
                 (string) $captureItem->supplier_cost_snapshot,
                 (string) $captureItem->quantity
             );
-            $simulatedCaptureSupplierTotal = \App\Services\\BcMathService::add($simulatedCaptureSupplierTotal, $captureLineCost);
-            \App\Models\\FinancialJournalEntry::create([
+            $simulatedCaptureSupplierTotal = \App\Services\BcMathService::add($simulatedCaptureSupplierTotal, $captureLineCost);
+            \App\Models\FinancialJournalEntry::create([
                 'order_id' => $orderTwoBulky->id,
                 'transaction_reference' => 'TEST-CAPTURE-' . $orderTwoBulky->id,
                 'event_id' => 'TEST-CAPTURE-SUPPLIER-' . $orderTwoBulky->id . '-' . $captureItem->id,
@@ -610,7 +610,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
                 'description' => 'Test capture supplier payable for recovery regression.',
             ]);
         }
-        \App\Models\\FinancialJournalEntry::create([
+        \App\Models\FinancialJournalEntry::create([
             'order_id' => $orderTwoBulky->id,
             'transaction_reference' => 'TEST-CAPTURE-' . $orderTwoBulky->id,
             'event_id' => 'TEST-CAPTURE-CASH-' . $orderTwoBulky->id,
@@ -622,8 +622,8 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'description' => 'Test escrow funding leg for supplier payable recovery regression.',
         ]);
 
-        $recoveryService = app(\App\Services\\SupplierReassignmentRecoveryService::class);
-        $journalCountBeforeStaleOffer = \App\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count();
+        $recoveryService = app(\App\Services\SupplierReassignmentRecoveryService::class);
+        $journalCountBeforeStaleOffer = \App\Models\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count();
         $replacementOffers[$kekeProduct->id]->availability_expires_at = Carbon::now()->subMinute();
         $replacementOffers[$kekeProduct->id]->save();
         try {
@@ -641,7 +641,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         } catch (\InvalidArgumentException $exception) {
             $this->assertStringContainsString('fresh confirmed offer', $exception->getMessage());
         }
-        $this->assertSame($journalCountBeforeStaleOffer, \App\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count());
+        $this->assertSame($journalCountBeforeStaleOffer, \App\Models\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count());
         $this->assertEquals('supplier_rejected', $orderTwoBulky->fresh()->sourcing_status);
         $replacementOffers[$kekeProduct->id]->availability_expires_at = Carbon::now()->addDay();
         $replacementOffers[$kekeProduct->id]->save();
@@ -664,10 +664,10 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertEquals('supplier_rejected', $rejectedAssignment->fresh()->status);
         $this->assertEquals('supplier_rejected', $orderTwoBulky->fresh()->sourcing_status);
 
-        $journalCountAfterFirstRecovery = \App\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count();
+        $journalCountAfterFirstRecovery = \App\Models\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count();
         $replay = $recoveryService->reassignRejectedItems(...$firstRecoveryArgs);
         $this->assertTrue($replay['replayed']);
-        $this->assertSame($journalCountAfterFirstRecovery, \App\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count());
+        $this->assertSame($journalCountAfterFirstRecovery, \App\Models\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count());
 
         $conflictingArgs = $firstRecoveryArgs;
         $conflictingArgs[6] = 'Different instruction with the same idempotency key.';
@@ -700,7 +700,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             [$recoverySupplier->id, $recoverySupplier->id],
             OrderItem::whereIn('id', $rejectedItems->pluck('id'))->orderBy('id')->pluck('fulfillment_supplier_vendor_id')->all()
         );
-        $this->assertTrue(\App\Models\\FinancialJournalEntry::assertOrderBalanced($orderTwoBulky->id));
+        $this->assertTrue(\App\Models\FinancialJournalEntry::assertOrderBalanced($orderTwoBulky->id));
 
         Sanctum::actingAs($recoverySupplierUser, ['*']);
         $replacementConfirmation = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
@@ -810,7 +810,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         // The legacy order-level helper must not bypass the retailer assignment workflow.
         $blocked = false;
         try {
-            app('App\\Services\\SourcingAllocationService')->confirmSupplierAvailability($orderBike->fresh(), (int) $this->vendor->id, 'late legacy confirmation');
+            app('App\\Services\SourcingAllocationService')->confirmSupplierAvailability($orderBike->fresh(), (int) $this->vendor->id, 'late legacy confirmation');
         } catch (\InvalidArgumentException $exception) {
             $blocked = str_contains($exception->getMessage(), 'supplier-assignment confirmation workflow');
         }
