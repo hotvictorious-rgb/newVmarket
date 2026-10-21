@@ -32,6 +32,80 @@
         </div>
     </div>
 
+    @if(isset($supplierRecoveryOrders) && $supplierRecoveryOrders->isNotEmpty())
+        <div class="dash-card" style="margin-bottom: 24px; border: 1px solid #f59e0b;">
+            <div class="dash-card-header">
+                <div class="dash-card-title">
+                    <span>⚠️</span>
+                    <div>
+                        <div>Paid Orders on Supplier-Rejection Hold</div>
+                        <span class="dash-card-subtitle">Reassign only the selected items to a fresh-confirmed Uyo supplier. Original capture records and customer totals remain unchanged.</span>
+                    </div>
+                </div>
+                <span class="dash-badge dash-badge-gold">{{ $supplierRecoveryOrders->count() }} held order(s)</span>
+            </div>
+
+            <div style="padding: 16px;">
+                @foreach($supplierRecoveryOrders as $recoveryOrder)
+                    <div style="border: 1px solid var(--adm-border, #e2e8f0); border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                        <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+                            <div>
+                                <strong style="font-family:monospace;">{{ $recoveryOrder->order_number }}</strong>
+                                <div style="font-size:12px;color:var(--adm-text-muted);">Paid total: ₦{{ number_format((float) $recoveryOrder->grand_total, 2) }} · Cashback: ₦{{ number_format((float) $recoveryOrder->customer_cashback_5, 2) }}</div>
+                            </div>
+                            <span class="dash-badge dash-badge-gold">Sourcing hold</span>
+                        </div>
+
+                        @foreach($recoveryOrder->supplierAssignments->where('status', 'supplier_rejected') as $rejectedAssignment)
+                            @php
+                                $assignmentItems = $recoveryOrder->items->filter(function ($item) use ($rejectedAssignment) {
+                                    return (int) $item->fulfillment_supplier_vendor_id === (int) $rejectedAssignment->supplier_vendor_id
+                                        && (int) $item->fulfillment_supplier_shop_id === (int) $rejectedAssignment->supplier_shop_id;
+                                });
+                            @endphp
+
+                            @if($assignmentItems->isNotEmpty())
+                                <div style="background:var(--adm-surface, #f8fafc); border-radius:8px; padding:12px; margin:12px 0;">
+                                    <div style="font-weight:700; margin-bottom:4px;">Rejected source: {{ $rejectedAssignment->supplier->business_name ?? 'Supplier' }} — {{ $rejectedAssignment->shop->name ?? 'Uyo shop' }}</div>
+                                    <div style="font-size:12px;color:var(--adm-text-muted);margin-bottom:10px;">Select the items to move. If some rejected items remain, the order stays held and cannot be dispatched.</div>
+
+                                    <form method="POST" action="{{ route('admin.orders.supplier_assignments.recover', ['id' => $recoveryOrder->id, 'assignmentId' => $rejectedAssignment->id]) }}">
+                                        @csrf
+                                        <div style="display:grid; gap:8px; margin-bottom:14px;">
+                                            @foreach($assignmentItems as $assignmentItem)
+                                                <label style="display:flex; align-items:flex-start; gap:8px; padding:8px; border:1px solid var(--adm-border, #e2e8f0); border-radius:6px; background:#fff;">
+                                                    <input type="checkbox" name="order_item_ids[]" value="{{ $assignmentItem->id }}" {{ in_array($assignmentItem->id, (array) old('order_item_ids', [])) ? 'checked' : '' }}>
+                                                    <span><strong>{{ $assignmentItem->product_name }}</strong><span style="display:block;font-size:12px;color:#64748b;">Quantity: {{ $assignmentItem->quantity }} · Current agreed supplier cost: ₦{{ number_format((float) $assignmentItem->fulfillment_supplier_cost_snapshot, 2) }} per unit</span></span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+
+                                        <label for="replacement_source_{{ $recoveryOrder->id }}_{{ $rejectedAssignment->id }}" style="display:block;font-weight:600;margin-bottom:5px;">Replacement supplier (one active Uyo shop)</label>
+                                        <select id="replacement_source_{{ $recoveryOrder->id }}_{{ $rejectedAssignment->id }}" name="replacement_source" required style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:12px;">
+                                            <option value="">Choose supplier and shop</option>
+                                            @foreach($activeUyoSupplierShops as $supplierShop)
+                                                <option value="{{ $supplierShop->vendor_id }}:{{ $supplierShop->id }}" {{ old('replacement_source') === ($supplierShop->vendor_id . ':' . $supplierShop->id) ? 'selected' : '' }}>
+                                                    {{ $supplierShop->vendor->business_name ?? $supplierShop->vendor->user->name ?? 'Supplier' }} — {{ $supplierShop->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+
+                                        <label for="recovery_reason_{{ $recoveryOrder->id }}_{{ $rejectedAssignment->id }}" style="display:block;font-weight:600;margin-bottom:5px;">Reason for recovery</label>
+                                        <textarea id="recovery_reason_{{ $recoveryOrder->id }}_{{ $rejectedAssignment->id }}" name="reason" required minlength="5" maxlength="2000" rows="2" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:12px;" placeholder="Record the decision and evidence for the supplier change.">{{ old('reason') }}</textarea>
+
+                                        <input type="hidden" name="idempotency_key" value="{{ old('idempotency_key', $supplierRecoveryKeys[$recoveryOrder->id][$rejectedAssignment->id] ?? (string) \Illuminate\Support\Str::uuid()) }}">
+                                        <div style="font-size:12px;color:#92400e;margin-bottom:10px;">The system checks fresh offer evidence and supplier-payable reconciliation. A mismatch blocks the operation without changing the order.</div>
+                                        <button type="submit" class="btn-dash btn-dash-primary">Recover selected items</button>
+                                    </form>
+                                </div>
+                            @endif
+                        @endforeach
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
     <!-- 4 Order Metric Cards -->
     <div class="stat-grid-4" style="margin-bottom: 24px;">
         <div class="stat-card stat-card-border-purple">
