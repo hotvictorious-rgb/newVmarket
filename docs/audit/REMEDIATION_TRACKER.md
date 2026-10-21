@@ -427,3 +427,15 @@ Status: FIXED — focused regression passed. No merge or deployment.
 **Change:** Delivery availability now rejects every destination outside Uyo, Akwa Ibom before consulting legacy route lanes or collection points. The admin lane editor refuses to create or update lanes unless both origin and destination resolve to Uyo, Akwa Ibom. Added regression coverage proving an active legacy Uyo-to-Eket lane does not make Eket serviceable. Existing out-of-scope lanes may remain in the database but are ineffective at runtime.
 
 **Status:** Source and regression test committed on `docs/retailer-central-fulfilment-model`; automated tests have not been executed for this change. Review admin route validation and all checkout entry points, then run branch-head CI. No merge or deployment.
+
+
+## VM-AUD-084 — Enforce single Uyo supplier pickup point and retire supplier-controlled delivery coverage (21 October 2026)
+
+**Severity:** High  
+**Finding:** The supplier web portal could create additional shop branches in any LGA and could configure delivery coverage by LGA/state, contradicting the one-shop-per-supplier, Uyo-only sourcing model and central Victorious MARKET dispatch policy.
+
+**Change:** Supplier shop creation now rejects a second non-deleted shop and requires the first shop to be located in Uyo, Akwa Ibom. Shop updates cannot move the supplier's pickup point outside Uyo. The legacy supplier delivery-coverage endpoint is retired without writing coverage records; central dispatch remains responsible for delivery.
+
+**Regression coverage added:** second-shop creation is rejected; moving an existing supplier shop to Eket is rejected; supplier-managed out-of-Uyo delivery coverage is not persisted.
+
+**Status:** Code and tests committed on `docs/retailer-central-fulfilment-model`; automated tests have not run in this session. No merge or deployment.
