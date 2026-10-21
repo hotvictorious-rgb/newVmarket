@@ -22,12 +22,14 @@
         @endif
     </a>
 </li>
+@if (auth()->user()?->isSuperAdmin())
 <li class="sidebar-nav-item">
     <a href="{{ route('admin.retailer-supplier-payouts.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.retailer-supplier-payouts.*') ? 'active' : '' }}">
         <span class="nav-link-icon">🏦</span>
         <span>Retailer Supplier Payables</span>
     </a>
 </li>
+@endif
 <li class="sidebar-nav-item">
     <a href="{{ route('admin.announcements.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.announcements.*') ? 'active' : '' }}">
         <span class="nav-link-icon">📢</span>
