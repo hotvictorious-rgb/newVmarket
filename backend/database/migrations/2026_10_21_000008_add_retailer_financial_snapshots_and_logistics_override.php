@@ -23,6 +23,8 @@ return new class extends Migration
             $table->foreignId('logistics_company_payable_override_by')->nullable()->after('logistics_company_payable_override_reason')->constrained('users')->nullOnDelete();
             $table->timestamp('logistics_company_payable_override_at')->nullable()->after('logistics_company_payable_override_by');
             $table->unsignedInteger('logistics_company_payable_override_revision')->default(0)->after('logistics_company_payable_override_at');
+            $table->timestamp('logistics_company_wallet_credited_at')->nullable()->after('logistics_company_payable_override_revision');
+            $table->decimal('logistics_company_wallet_credited_amount', 24, 2)->nullable()->after('logistics_company_wallet_credited_at');
         });
     }
 
@@ -42,6 +44,8 @@ return new class extends Migration
                 'logistics_company_payable_override_by',
                 'logistics_company_payable_override_at',
                 'logistics_company_payable_override_revision',
+                'logistics_company_wallet_credited_at',
+                'logistics_company_wallet_credited_amount',
             ]);
         });
     }
