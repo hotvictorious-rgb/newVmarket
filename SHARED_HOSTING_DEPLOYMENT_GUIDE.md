@@ -1,6 +1,6 @@
 # 👑 Victorious MARKET - Shared Hosting & cPanel Deployment Blueprint
 
-This document is the definitive production deployment guide for hosting **Victorious MARKET (`newVmarket`)** on shared hosting environments (cPanel, DirectAdmin, Whogohost, Namecheap, Hostinger, etc.).
+This document is the production deployment guide for hosting **Victorious MARKET (`newVmarket`)** on shared hosting environments (cPanel, DirectAdmin, Whogohost, Namecheap, Hostinger, etc.). Business-model policy is maintained separately in [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md). This guide does not certify that the retailer-model migration is complete.
 
 ---
 
@@ -43,7 +43,7 @@ In cPanel, open **Select PHP Version** (or **MultiPHP Manager**):
 2. **Extensions Checklist:** Ensure the following extensions are enabled:
    - `opcache` *(Essential for 5x faster execution)*
    - `pdo_mysql`
-   - `bcmath` *(Required for financial splits: 90% vendor / 5% logistics / 5% platform)*
+   - `bcmath` *(Required for decimal-safe financial calculations; do not assume legacy marketplace allocation percentages apply to retailer transactions)*
    - `mbstring`
    - `openssl`
    - `fileinfo`
