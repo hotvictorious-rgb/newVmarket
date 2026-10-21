@@ -820,7 +820,10 @@ class PayoutFinalizationService
                 ];
             }
 
-            $company = $lockedPayout->company;
+            $company = LogisticsCompanyProfile::whereKey($lockedPayout->logistics_company_id)
+                ->whereNull('deleted_at')
+                ->lockForUpdate()
+                ->first();
             if (!$company || $company->trashed()) {
                 $message = 'Logistics company profile is missing or archived; payout reversal held for finance reconciliation.';
                 Log::critical($message, [
