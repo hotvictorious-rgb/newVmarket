@@ -1261,63 +1261,11 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
      */
     public function assignRiderToOrder(Request $request, int $id): JsonResponse
     {
-        $ctx = $this->resolveVendorContext($request);
-        $vendor = $ctx['vendor'];
-
-        $validated = $request->validate([
-            'rider_id' => 'required|integer|exists:rider_profiles,id',
-        ]);
-
-        $order = Order::where('id', $id)->where('vendor_id', $vendor->id)->firstOrFail();
-        $rider = RiderProfile::where('id', $validated['rider_id'])->where('vendor_id', $vendor->id)->first();
-
-        if (!$rider) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Unauthorized: This delivery rider does not belong to your merchant account.',
-            ], 403);
-        }
-
-        if (!$rider->is_active) {
-            return response()->json([
-                'status' => false,
-                'message' => 'This delivery rider is currently inactive.',
-            ], 422);
-        }
-
-        if (!empty($rider->logistics_company_id)) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Unauthorized: Legacy or fleet-linked riders cannot receive new vendor deliveries.',
-            ], 403);
-        }
-
-        if ($order->fulfillment_type !== 'doorstep_delivery') {
-            return response()->json([
-                'status' => false,
-                'message' => 'Cannot assign delivery rider: this order is configured for in-shop pickup.',
-            ], 422);
-        }
-
-        if (in_array($order->order_status, ['out_for_delivery', 'delivered', 'cancelled', 'returned', 'disputed'])) {
-            return response()->json([
-                'status' => false,
-                'message' => "Cannot reassign rider: order is in '{$order->order_status}' status. Reassignment is blocked once physical custody is taken.",
-            ], 422);
-        }
-
-        $order->rider_id = $rider->id;
-        $order->save();
-
+        // Vendor-managed rider assignment is a retired marketplace workflow.
+        // New retailer orders must be dispatched centrally through an approved logistics company.
         return response()->json([
-            'status' => true,
-            'message' => "Order #{$order->order_number} assigned to delivery person {$rider->user->name}.",
-            'data' => [
-                'order_id' => $order->id,
-                'order_number' => $order->order_number,
-                'rider_id' => $rider->id,
-                'rider_name' => $rider->user->name,
-            ],
-        ]);
+            'status' => false,
+            'message' => 'Vendor-managed rider assignment is retired. Victorious MARKET deliveries must be assigned through central dispatch.',
+        ], 410);
     }
 }
