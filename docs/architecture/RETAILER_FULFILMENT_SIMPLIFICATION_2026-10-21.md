@@ -299,3 +299,11 @@ Additional lifecycle review found that eligibility could change between a suppli
 - Regression coverage now includes KYC and owner-account changes after request, changed bank snapshots, uncertain gateway holds, successful finalization after timeout, partial payout journals, unresolved recovery debts, and legacy payout blocking.
 - Latest verified CI: **225 financial-hardening tests passed (1,536 assertions)** plus **3 targeted bank-update tests passed (17 assertions)**; PHP syntax checks passed. This is the configured financial-hardening workflow, not a claim that every test in the repository passes.
 - Release gates still outstanding: run the new migrations against a representative existing database; perform a safe Paystack sandbox/controlled verification of recipient detail fields and real transfer statuses; add a dedicated concurrency test for payout-request versus return/dispute creation; and provide a finance-approved workflow to resolve/write off pending supplier recovery debts. No merge or production deployment has occurred.
+## 31. Scope supplier-recovery journal idempotency keys across orders (21 October 2026)
+
+A final schema-level review found that the recovery service's request idempotency contract was order-scoped, while the financial_journal_entries.idempotency_key column is unique across the whole table. Hashing only the caller key and item ID could therefore collide if the same otherwise-valid caller key were reused on a different order, aborting recovery despite the two instructions being independent.
+
+- Recovery journal idempotency keys now hash the order ID together with the caller/item suffix. Keys remain deterministic and below the database column limit, while distinct orders receive distinct keys for the same caller-supplied key.
+- Added a regression test for deterministic retries, cross-order separation, and the 100-character schema limit.
+- Commits: service 63d12fc78b841fb269fff59dca7e362fa0dc28e4; test d725847725b046598c9c88f5f8c528f4fb9bdfcd.
+- Verification status: the branch-head CI run is in progress. Do not treat this finding as verified until the run completes successfully. Existing release gates remain: representative-database migration validation, safe Paystack sandbox verification, and dedicated concurrency coverage for supplier payout versus return/dispute creation.
