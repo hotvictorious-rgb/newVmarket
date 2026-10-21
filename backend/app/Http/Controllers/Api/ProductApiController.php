@@ -119,4 +119,5 @@ class ProductApiController extends Controller
             'message' => 'Victorious MARKET is a single retailer. Supplier shop details are private. Service area: Uyo LGA, Akwa Ibom State only.',
             'data' => [],
         ]);
-    }}
+    }
+}
