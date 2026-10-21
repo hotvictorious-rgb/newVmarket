@@ -64,7 +64,10 @@ class PortalController extends Controller
         $selectedLga = Lga::where('name', 'Uyo')
             ->whereHas('state', fn($q) => $q->where('name', 'Akwa Ibom'))
             ->first();
-        $selectedLgaId = $selectedLga?->id ?? 69;
+        if (!$selectedLga) {
+            abort(503, 'Victorious MARKET Uyo service area is not configured.');
+        }
+        $selectedLgaId = (int) $selectedLga->id;
 
         // Only the Uyo-to-Uyo lane is relevant. Legacy corridor rows are ignored.
         $eligibleOriginLgaIds = collect([$selectedLgaId]);
