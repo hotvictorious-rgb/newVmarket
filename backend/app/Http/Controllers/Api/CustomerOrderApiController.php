@@ -662,7 +662,7 @@ class CustomerOrderApiController extends Controller
         return response()->json([
             'status' => true,
             'message' => $result['message'],
-            'data' => ($result['case'] instanceof ReturnCase ? $result['case']->unsetRelation('vendor') : $result['case']),
+            'data' => ($result['case'] instanceof ReturnCase ? $this->formatCustomerReturnCase($result['case'], true) : $result['case']),
         ], 201);
     }
 
