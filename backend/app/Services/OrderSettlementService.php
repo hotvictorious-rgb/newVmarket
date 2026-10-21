@@ -1201,6 +1201,10 @@ class OrderSettlementService
 
             $lockedOrder->save();
 
+            if ($lockedOrder->retailer_model_order) {
+                app(\\App\\Services\\LogisticsCompanyPayableService::class)->releaseAfterVerifiedDelivery($lockedOrder);
+            }
+
             // Do not credit a logistics-company or rider wallet from a delivery event.
             // Vendor delivery earnings and the 90/10 fee split must be sourced from the
             // immutable parent/child allocation ledger and released only by vendor settlement
