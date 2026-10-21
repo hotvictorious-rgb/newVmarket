@@ -97,6 +97,7 @@ class PaystackPaymentHardeningTest extends TestCase
             ->firstOrFail();
         $company = LogisticsCompanyProfile::where('status', 'active')
             ->where('lga_id', $uyoLga->id)
+            ->whereHas('user', fn ($user) => $user->where('status', 'active'))
             ->first();
         if (!$company) {
             $fleetUser = User::create([
