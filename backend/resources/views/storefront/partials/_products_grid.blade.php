@@ -77,7 +77,7 @@
             <div class="vm-product-info" style="padding: 12px 14px 10px;">
                 <div class="vm-product-shop" style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #64748B; margin-bottom: 5px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                    <a href="{{ route('shop.storefront', $product->shop->slug ?? $product->shop_id) }}" style="color: #475569; text-decoration: none; font-weight: 600;">
+                    <a href="{{ route('storefront') }}" style="color: #475569; text-decoration: none; font-weight: 600;">
                         Victorious MARKET
                     </a>
                     <span style="opacity: 0.5;">•</span>
