@@ -359,6 +359,7 @@ class AuditHardeningAndSecurityProofTest extends TestCase
         $order = $this->buildBaseOrder([
             'order_status' => 'partially_delivered',
             'status' => 'partially_delivered',
+            'payment_status' => 'paid',
             'payment_reference' => 'ref_paystack_test_123',
         ]);
 
@@ -371,6 +372,7 @@ class AuditHardeningAndSecurityProofTest extends TestCase
             'status' => 'refund_pending',
             'resolution_type' => 'refund',
             'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
         ]);
 
         // Customer was granted doorstep instant wallet credit
@@ -385,13 +387,21 @@ class AuditHardeningAndSecurityProofTest extends TestCase
 
         $this->assertEquals('10000.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
 
-        // Admin disburses manual cash refund
-        $result = $this->returnService->adminDisburseRefund(
+        $paystack = \Mockery::mock(\App\Services\PaystackService::class);
+        $paystack->shouldReceive('initiateRefund')
+            ->once()
+            ->andReturn([
+                'success' => true,
+                'status' => 'completed',
+                'refund_reference' => 'rf_test_wallet_rev',
+                'data' => ['status' => 'completed', 'reference' => 'rf_test_wallet_rev'],
+            ]);
+        $this->app->instance(\App\Services\PaystackService::class, $paystack);
+
+        $service = app(ReturnAndRefundService::class);
+        $result = $service->adminDisburseRefund(
             $this->superAdmin,
-            $returnCase,
-            'BANK-TX-999',
-            'proofs/refund.pdf',
-            false
+            $returnCase
         );
 
         $this->assertTrue($result['success']);
