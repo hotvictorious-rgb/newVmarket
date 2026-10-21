@@ -15,13 +15,23 @@ class SupplierOffer extends Model
         'shop_id',
         'wholesale_cost',
         'is_available',
+        'availability_confirmed_at',
+        'availability_confirmed_by',
+        'availability_expires_at',
         'notes',
     ];
 
     protected $casts = [
         'wholesale_cost' => 'string',
         'is_available' => 'boolean',
+        'availability_confirmed_at' => 'datetime',
+        'availability_expires_at' => 'datetime',
     ];
+
+    public function availabilityConfirmer()
+    {
+        return $this->belongsTo(User::class, 'availability_confirmed_by');
+    }
 
     public function product()
     {
