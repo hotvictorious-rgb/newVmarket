@@ -110,7 +110,7 @@ The former marketplace allocations (90% vendor / 5% cashback / 5% platform on me
 Record separately, using immutable linked financial entries:
 - customer merchandise revenue and verified customer payment;
 - the agreed supplier purchase cost for each order item (`cost_price * quantity`);
-- **customer 5% cashback liability** (confirmed active by owner decision: 5% earned strictly on real money paid through Paystack for merchandise, excluding amounts covered by redeemed cashback or discounts; funded from VM gross margin, maturing 24h after return window closes, capped at 50% redemption on future checkouts);
+- **cashback policy gate:** historical cashback balances and customer obligations remain preserved; new retailer-model accrual is disabled until a separate owner-approved policy specifies formula, funding, redemption, maturity, expiry and recovery;
 - delivery charges collected from the customer;
 - logistics-company charges and amounts payable under the applicable logistics agreement;
 - payment-processing fees, discounts, approved refunds, and other authorized expenses;
@@ -195,7 +195,7 @@ Webhooks are not a substitute for authoritative API verification or scheduled re
 - **Delivery and financial-integrity plan:** DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md
 - **Product and business overview:** VICTORIOUS_MARKET.md
 - **Deployment guide:** SHARED_HOSTING_DEPLOYMENT_GUIDE.md
-- **Business-rule source for vendor-managed delivery:** .ai/BUSINESS_RULES.md
+- **Legacy source-audit rules:** `.ai/BUSINESS_RULES.md` contains historical vendor-managed requirements for migration traceability; the retailer-model supersession notice at its top controls new transactions.
 - **Focused financial-safety CI workflow:** .github/workflows/paystack-refund-safety.yml
 
 The codebase uses Laravel 12, PHP 8.2+, Composer, a relational database (SQLite for local testing or a supported production database), and BCMath for money arithmetic. Node.js is needed if the frontend assets must be built.
@@ -264,7 +264,7 @@ Before release, verify at minimum:
 - Cashback reversal/recovery without silent wallet debit.
 - Vendor-only rider assignments, protected Call Customer action and rider response privacy.
 - Zero-fee in-shop pickup with RES-XXXXXX, no rider assignment, and no ambiguity with rider parcel codes.
-- Vendor settlement eligibility, strict FIFO whole-record payout batches, admin approval, transfer verification and balanced journals.
+- Supplier payable eligibility after verified customer handover and reconciliation; approved logistics-company charges; provider transfer verification and balanced journals. Legacy vendor FIFO payout batching is not a new supplier-payment rule.
 - Legacy logistics paths blocked for new work while historical records remain auditable.
 
 ## Known implementation gaps
@@ -289,7 +289,7 @@ These documents serve different purposes and should remain consistent:
 
 1. [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md) — current owner-confirmed retailer, supplier, coverage, logistics and payment-eligibility model.
 2. [VICTORIOUS_MARKET.md](VICTORIOUS_MARKET.md) — broader product vision and operating model.
-3. [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md) — binding vendor-managed delivery, rider, privacy, pickup and COD rules.
+3. [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md) — legacy source-audit findings plus the binding retailer-model supersession notice at the top.
 4. [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) — payment channels, refund policy, legacy financial history and Paystack event matrix; the retailer-model supersession notice controls new transactions.
 5. [VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md](VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md) — code observations, implementation gaps and verification checklist.
 6. [DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md](DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md) — delivery and accounting implementation plan.
