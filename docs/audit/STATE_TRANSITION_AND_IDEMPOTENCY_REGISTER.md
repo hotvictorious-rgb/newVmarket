@@ -666,3 +666,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Prevents a rejected pre-dispatch attempt from trapping customer refund capacity and makes the reason visible for audit. The guard is safe because these branches occur before a gateway attempt is created.
 
 **Verification boundary:** Source and test committed; CI/test execution pending. No merge or deployment.
+
+
+### VM-AUD-123 — Match supplier payout terminal state to the replayed gateway outcome (21 October 2026)
+
+**Finding:** `RetailerSupplierPayoutService::reverse()` returned idempotent success for any terminal `rejected`, `failed`, or `reversed` payout with released allocations, without comparing the new requested outcome with the stored terminal gateway outcome. A mismatched gateway event could be acknowledged as a valid duplicate.
+
+**Fix:** Terminal replay now succeeds idempotently only when payout state and stored gateway status map to the same requested outcome (`rejected/not_submitted`, `failed/failed`, or `reversed/reversed`). Mismatches fail closed without changing the payout. Added a feature regression test for a failed payout receiving a reversed replay.
+
+**Business impact:** Prevents conflicting transfer callbacks from being falsely accepted and improves treasury reconciliation accuracy.
+
+**Verification boundary:** Source and regression test committed; tests/CI remain pending. No merge or deployment.
