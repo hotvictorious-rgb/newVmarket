@@ -1307,10 +1307,12 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             ], 409);
         }
 
-        if (empty($vendor->account_number) || empty($vendor->bank_name)) {
+        if (empty($vendor->account_number) || empty($vendor->bank_name)
+            || empty($vendor->bank_code) || empty($vendor->account_name)) {
             return response()->json([
                 'status' => false,
-                'message' => 'Please configure your verified commercial bank account before requesting withdrawal.',
+                'code' => 'BANK_DETAILS_INCOMPLETE',
+                'message' => 'Please configure a complete verified NUBAN account name, number, bank name, and bank code before requesting withdrawal.',
             ], 422);
         }
 
