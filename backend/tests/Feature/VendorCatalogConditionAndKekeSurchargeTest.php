@@ -348,7 +348,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertNotNull($orderBike);
         $this->assertEquals('500.00', $orderBike->delivery_fee);
         $this->assertEquals('500.00', $orderBike->delivery_base_fee_snapshot);
-        $this->assertEquals('0.00', $orderBike->delivery_bulky_surcharge_per_unit_snapshot);
+        $this->assertEquals('1000.00', $orderBike->delivery_bulky_surcharge_per_unit_snapshot);
         $this->assertEquals(0, $orderBike->delivery_bulky_quantity_snapshot);
 
         // Case B: One bike unit plus one bulky unit -> one base fee + one bulky surcharge (1500.00)
@@ -492,7 +492,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
 
     public function test_public_product_api_filters_by_condition_and_package_tier(): void
     {
-        Product::create([
+        $productNew = Product::create([
             'vendor_id' => $this->vendor->id,
             'shop_id' => $this->shop->id,
             'category_id' => $this->category->id,
@@ -508,7 +508,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'listing_confirmed_at' => Carbon::now(),
         ]);
 
-        Product::create([
+        $productUsed = Product::create([
             'vendor_id' => $this->vendor->id,
             'shop_id' => $this->shop->id,
             'category_id' => $this->category->id,
@@ -523,6 +523,20 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'is_approved' => true,
             'listing_confirmed_at' => Carbon::now(),
         ]);
+
+        foreach ([$productNew, $productUsed] as $prod) {
+            SupplierOffer::create([
+                'product_id' => $prod->id,
+                'vendor_id' => $this->vendor->id,
+                'shop_id' => $this->shop->id,
+                'wholesale_cost' => bcmul((string) $prod->unit_price, '0.85', 2),
+                'is_available' => true,
+                'availability_confirmed_at' => Carbon::now(),
+                'availability_confirmed_by' => $this->vendorUser->id,
+                'availability_expires_at' => Carbon::now()->addDays(7),
+                'notes' => 'Storefront verified test offer',
+            ]);
+        }
 
         // Filter condition=uk_used
         $resUsed = $this->getJson('/api/v1/products?condition=uk_used');

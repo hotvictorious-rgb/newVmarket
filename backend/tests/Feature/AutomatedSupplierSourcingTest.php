@@ -8,6 +8,7 @@ use App\Models\Country;
 use App\Models\Lga;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderSupplierAssignment;
 use App\Models\Product;
 use App\Models\Shop;
 use App\Models\State;
@@ -122,6 +123,16 @@ class AutomatedSupplierSourcingTest extends TestCase
         return [$user, $vendor, $shop];
     }
 
+    protected function createConfirmedOffer(array $attributes): SupplierOffer
+    {
+        return SupplierOffer::create(array_merge([
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now(),
+            'availability_confirmed_by' => $this->adminUser->id,
+            'availability_expires_at' => Carbon::now()->addHours(24),
+        ], $attributes));
+    }
+
     public function test_cheapest_available_supplier_offer_is_selected_when_multiple_offers_exist(): void
     {
         [$userA, $vendorA, $shopA] = $this->createSupplier('Supplier Alpha', 'alpha@supplier.ng', '08011111111');
@@ -142,21 +153,19 @@ class AutomatedSupplierSourcingTest extends TestCase
         ]);
 
         // Supplier A offers wholesale at ₦64,000
-        SupplierOffer::create([
+        $this->createConfirmedOffer([
             'product_id' => $product->id,
             'vendor_id' => $vendorA->id,
             'shop_id' => $shopA->id,
             'wholesale_cost' => '64000.00',
-            'is_available' => true,
         ]);
 
         // Supplier B offers wholesale cheaper at ₦61,500
-        $cheaperOffer = SupplierOffer::create([
+        $cheaperOffer = $this->createConfirmedOffer([
             'product_id' => $product->id,
             'vendor_id' => $vendorB->id,
             'shop_id' => $shopB->id,
             'wholesale_cost' => '61500.00',
-            'is_available' => true,
         ]);
 
         $resolved = $this->sourcingService->resolveCheapestOffer($product);
@@ -190,7 +199,7 @@ class AutomatedSupplierSourcingTest extends TestCase
         ]);
 
         // Supplier A is cheapest (₦35,000) but currently marked unavailable (out of stock)
-        SupplierOffer::create([
+        $this->createConfirmedOffer([
             'product_id' => $product->id,
             'vendor_id' => $vendorA->id,
             'shop_id' => $shopA->id,
@@ -202,21 +211,19 @@ class AutomatedSupplierSourcingTest extends TestCase
         $userB->status = 'suspended';
         $userB->save();
 
-        SupplierOffer::create([
+        $this->createConfirmedOffer([
             'product_id' => $product->id,
             'vendor_id' => $vendorB->id,
             'shop_id' => $shopB->id,
             'wholesale_cost' => '37000.00',
-            'is_available' => true,
         ]);
 
         // Supplier C offers at ₦39,000 and is fully active and available
-        $validOffer = SupplierOffer::create([
+        $validOffer = $this->createConfirmedOffer([
             'product_id' => $product->id,
             'vendor_id' => $vendorC->id,
             'shop_id' => $shopC->id,
             'wholesale_cost' => '39000.00',
-            'is_available' => true,
         ]);
 
         $resolved = $this->sourcingService->resolveCheapestOffer($product);
@@ -258,8 +265,9 @@ class AutomatedSupplierSourcingTest extends TestCase
 
     public function test_tie_breaking_prioritizes_preferred_lga_deterministically(): void
     {
-        [$userA, $vendorA, $shopA] = $this->createSupplier('Supplier Uyo', 'uyo@supplier.ng', '08077777771', $this->uyoLga);
-        [$userB, $vendorB, $shopB] = $this->createSupplier('Supplier Eket', 'eket@supplier.ng', '08077777772', $this->eketLga);
+        [$userA, $vendorA, $shopA] = $this->createSupplier('Supplier Uyo A', 'uyo-a@supplier.ng', '08077777771', $this->uyoLga);
+        [$userB, $vendorB, $shopB] = $this->createSupplier('Supplier Uyo B', 'uyo-b@supplier.ng', '08077777772', $this->uyoLga);
+        [$userEket, $vendorEket, $shopEket] = $this->createSupplier('Supplier Eket', 'eket@supplier.ng', '08077777773', $this->eketLga);
 
         $product = Product::create([
             'vendor_id' => $vendorA->id,
@@ -275,32 +283,40 @@ class AutomatedSupplierSourcingTest extends TestCase
             'freshness_confirmed_at' => Carbon::now(),
         ]);
 
-        // Both offer identical wholesale price of ₦16,000
-        $offerA = SupplierOffer::create([
+        // Offers A and B in Uyo offer identical wholesale price of ₦16,000
+        $offerA = $this->createConfirmedOffer([
             'product_id' => $product->id,
             'vendor_id' => $vendorA->id,
             'shop_id' => $shopA->id,
             'wholesale_cost' => '16000.00',
-            'is_available' => true,
         ]);
 
-        $offerB = SupplierOffer::create([
+        $offerB = $this->createConfirmedOffer([
             'product_id' => $product->id,
             'vendor_id' => $vendorB->id,
             'shop_id' => $shopB->id,
             'wholesale_cost' => '16000.00',
-            'is_available' => true,
         ]);
 
-        // Customer in Eket prefers Eket LGA
-        $resolvedEket = $this->sourcingService->resolveCheapestOffer($product, 1, $this->eketLga->id);
-        $this->assertEquals($offerB->id, $resolvedEket['supplier_offer_id']);
-        $this->assertEquals($shopB->id, $resolvedEket['shop_id']);
+        // Offer from shop outside Uyo is also confirmed
+        $offerEket = $this->createConfirmedOffer([
+            'product_id' => $product->id,
+            'vendor_id' => $vendorEket->id,
+            'shop_id' => $shopEket->id,
+            'wholesale_cost' => '15000.00', // Cheaper, but shop is outside Uyo!
+        ]);
 
-        // Customer in Uyo prefers Uyo LGA
+        // 1. Sourcing strictly excludes shops outside Uyo, Akwa Ibom State
         $resolvedUyo = $this->sourcingService->resolveCheapestOffer($product, 1, $this->uyoLga->id);
+        $this->assertNotEquals($offerEket->id, $resolvedUyo['supplier_offer_id'], 'Non-Uyo shop offer must not be selected');
+
+        // 2. Tie-breaking between identical-cost active Uyo offers deterministically resolves by offer ID
         $this->assertEquals($offerA->id, $resolvedUyo['supplier_offer_id']);
         $this->assertEquals($shopA->id, $resolvedUyo['shop_id']);
+
+        $resolvedEket = $this->sourcingService->resolveCheapestOffer($product, 1, $this->eketLga->id);
+        $this->assertEquals($offerA->id, $resolvedEket['supplier_offer_id']);
+        $this->assertEquals($shopA->id, $resolvedEket['shop_id']);
     }
 
     protected function createOrderFixture(array $attributes = []): Order
@@ -350,12 +366,11 @@ class AutomatedSupplierSourcingTest extends TestCase
             'freshness_confirmed_at' => Carbon::now(),
         ]);
 
-        $offer = SupplierOffer::create([
+        $offer = $this->createConfirmedOffer([
             'product_id' => $product->id,
             'vendor_id' => $vendorA->id,
             'shop_id' => $shopA->id,
             'wholesale_cost' => '5800.00',
-            'is_available' => true,
         ]);
 
         $order = $this->createOrderFixture([
@@ -509,8 +524,8 @@ class AutomatedSupplierSourcingTest extends TestCase
 
         $result = $checkoutService->execute($this->customerUser, [
             'shop_id' => $shopA->id,
-            'fulfillment_type' => 'in_shop_pickup',
-            'payment_method' => 'in_shop_counter',
+            'fulfillment_type' => 'doorstep_delivery',
+            'destination_lga_id' => $this->uyoLga->id,
             '_checkout_idempotency_key' => 'IDEMP-TEST-' . uniqid(),
             '_checkout_request_hash' => hash('sha256', 'test-payload'),
             'items' => [
@@ -525,11 +540,18 @@ class AutomatedSupplierSourcingTest extends TestCase
         $order = $result['order'];
         $this->assertNotNull($order);
 
-        // Assert Order sourcing fields
-        $this->assertEquals('assigned_to_supplier', $order->sourcing_status);
-        $this->assertEquals($vendorA->id, $order->selected_supplier_id);
-        $this->assertEquals($shopA->id, $order->selected_shop_id);
+        // Assert Order sourcing fields for retailer multi-supplier model
+        $this->assertEquals('awaiting_payment', $order->sourcing_status);
+        $this->assertNull($order->selected_supplier_id);
+        $this->assertNull($order->selected_shop_id);
         $this->assertNotNull($order->sourced_at);
+
+        // Assert per-supplier assignment is created
+        $assignment = OrderSupplierAssignment::where('order_id', $order->id)->first();
+        $this->assertNotNull($assignment);
+        $this->assertEquals($vendorA->id, $assignment->supplier_vendor_id);
+        $this->assertEquals($shopA->id, $assignment->supplier_shop_id);
+        $this->assertEquals('awaiting_payment', $assignment->status);
 
         // Assert OrderItem snapshot fields
         $orderItem = $order->items()->first();

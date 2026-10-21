@@ -356,11 +356,34 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
 
         $token = $this->customer->createToken('cust')->plainTextToken;
 
+        $address = CustomerAddress::create([
+            'user_id' => $this->customer->id,
+            'country_id' => $this->originLga->state->country_id ?? 1,
+            'state_id' => $this->originLga->state_id,
+            'lga_id' => $this->originLga->id,
+            'address_line' => '12 Oron Road, Uyo',
+            'contact_name' => $this->customer->name,
+            'phone' => '08012345678',
+            'is_default' => true,
+        ]);
+
+        DeliveryLane::firstOrCreate([
+            'origin_lga_id' => $this->originLga->id,
+            'destination_lga_id' => $this->originLga->id,
+        ], [
+            'base_fee' => '0.00',
+            'bulky_surcharge' => '0.00',
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+
         // Customer initiates Order 1 checkout redeeming cashback
         $res1 = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson('/api/v1/customer/orders/checkout', [
                 'shop_id' => $this->shopA->id,
-                'fulfillment_type' => 'in_shop_pickup',
+                'customer_address_id' => $address->id,
+                'fulfillment_type' => 'doorstep_delivery',
                 'redeem_cashback' => true,
                 'items' => [
                     ['product_id' => $this->productA->id, 'quantity' => 1],
@@ -382,7 +405,8 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         $res2 = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson('/api/v1/customer/orders/checkout', [
                 'shop_id' => $this->shopA->id,
-                'fulfillment_type' => 'in_shop_pickup',
+                'customer_address_id' => $address->id,
+                'fulfillment_type' => 'doorstep_delivery',
                 'redeem_cashback' => true,
                 'items' => [
                     ['product_id' => $this->productA->id, 'quantity' => 1],

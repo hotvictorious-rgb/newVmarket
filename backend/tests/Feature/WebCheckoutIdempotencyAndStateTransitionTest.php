@@ -219,16 +219,11 @@ class WebCheckoutIdempotencyAndStateTransitionTest extends TestCase
     }
 
     /**
-     * PROOF VM-AUD-067: Web checkout for In-Shop Pickup sets in_shop_counter,
-     * skips online Paystack call, and replaying the key returns the existing reservation.
+     * PROOF VM-AUD-067: Standard online checkout enforces the delivery-only policy,
+     * rejecting public in-shop pickup attempts with validation/session errors without creating an order.
      */
-    public function test_web_checkout_in_shop_pickup_does_not_initialize_paystack_and_replays_cleanly(): void
+    public function test_web_checkout_in_shop_pickup_is_rejected_under_delivery_only_policy(): void
     {
-        $mockPaystack = Mockery::mock(PaystackService::class);
-        // Paystack must NOT be called for in-shop pickup
-        $mockPaystack->shouldNotReceive('initializeTransaction');
-        $this->app->instance(PaystackService::class, $mockPaystack);
-
         $idemKey = 'web-pickup-' . uniqid();
         $payload = [
             '_checkout_idempotency_key' => $idemKey,
@@ -241,15 +236,7 @@ class WebCheckoutIdempotencyAndStateTransitionTest extends TestCase
         ];
 
         $res1 = $this->actingAs($this->customer)->post(route('checkout.process'), $payload);
-        $res1->assertRedirect();
-        $order = Order::where('checkout_idempotency_key', $idemKey)->firstOrFail();
-        $this->assertEquals('ready_for_pickup', $order->order_status);
-        $this->assertEquals('in_shop_counter', $order->payment_method);
-        $this->assertEquals('not_started', $order->paystack_initialization_status);
-
-        // Replay
-        $res2 = $this->actingAs($this->customer)->post(route('checkout.process'), $payload);
-        $res2->assertRedirect();
-        $this->assertEquals(1, Order::where('checkout_idempotency_key', $idemKey)->count());
+        $res1->assertSessionHasErrors();
+        $this->assertNull(Order::where('checkout_idempotency_key', $idemKey)->first());
     }
 }

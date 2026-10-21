@@ -721,15 +721,17 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         ]);
 
         $checkoutService = app(\App\Services\CheckoutExecutionService::class);
+        $this->product->update(['unit_price' => '1450000.00']);
 
         $payload = [
             'shop_id' => $this->shop->id,
-            'fulfillment_type' => 'in_shop_pickup',
+            'fulfillment_type' => 'doorstep_delivery',
+            'destination_lga_id' => $this->shop->lga_id,
             'items' => [
                 [
-                    'product_id' => $this->product->id, // unit_price = 10000.00
+                    'product_id' => $this->product->id,
                     'quantity' => 1,
-                    'unit_price' => 10000.00,
+                    'unit_price' => 1450000.00,
                 ],
             ],
             'redeem_cashback' => true, // Redeem available cashback
@@ -827,6 +829,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'account_name' => 'vendor_payable',
         ]);
 
+        Order::where('id', $order->id)->update(['sourcing_status' => 'supplier_confirmed']);
         $service = app(\App\Services\LogisticsCompanyPayableService::class);
         $assigned = $service->assignCompany($order->fresh(), $this->superAdmin, $this->fleetCompany->id, 'Uyo route covered by approved fleet');
         $this->assertTrue($assigned['success']);
