@@ -253,49 +253,31 @@ class PortalController extends Controller
             'lga_id' => 'nullable|integer',
         ]);
 
-        $city = trim((string)$request->input('city'));
-        $state = $request->input('state', 'Akwa Ibom');
-
-        // Prioritize finding LGA by city name so a stale or mismatched lga_id never overrides user selection
-        $lga = Lga::where('name', $city)->first();
-        if (!$lga && $request->filled('lga_id')) {
-            $candidate = Lga::find($request->input('lga_id'));
-            if ($candidate && (empty($city) || strcasecmp($candidate->name, $city) === 0)) {
-                $lga = $candidate;
-            }
-        }
-        if (!$lga) {
-            $lga = Lga::where('name', 'like', "%{$city}%")->first();
+        $city = trim((string) $request->input('city'));
+        $lga = Lga::with('state')->whereRaw('LOWER(TRIM(name)) = ?', [strtolower($city)])->first();
+        if (
+            !$lga
+            || strtolower(trim((string) $lga->name)) !== 'uyo'
+            || strtolower(trim((string) ($lga->state->name ?? ''))) !== 'akwa ibom'
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Victorious MARKET currently sources and delivers only within Uyo LGA, Akwa Ibom State.',
+            ], 422);
         }
 
-        $lgaId = $lga ? $lga->id : 69;
-        $cityName = $lga ? $lga->name : $city;
-
+        $state = 'Akwa Ibom';
+        $lgaId = (int) $lga->id;
+        $cityName = 'Uyo';
         session([
             'customer_city' => $cityName,
             'customer_state' => $state,
             'customer_lga_id' => $lgaId,
         ]);
 
-        // Calculate coverage info
-        $hasLocalShops = Shop::where('lga_id', $lgaId)->where('pickup_enabled', true)->exists();
-        $activeLanes = DeliveryLane::where('destination_lga_id', $lgaId)->where('is_active', true)->get();
-
-        if ($hasLocalShops) {
-            $coverageStatus = 'pickup_and_delivery';
-            $statusBadge = '⚡ In-Shop Pickup & Same-Day Delivery Active';
-            $previewStatus = 'Pickup and delivery available in this local government';
-        } elseif ($activeLanes->isNotEmpty()) {
-            $minHours = $activeLanes->min('estimated_delivery_hours_min') ?? 12;
-            $maxHours = $activeLanes->max('estimated_delivery_hours_max') ?? 24;
-            $coverageStatus = 'transit_delivery';
-            $statusBadge = "🚚 Transit Delivery Corridor Active ({$minHours}-{$maxHours} hrs)";
-            $previewStatus = "Delivery corridor active ({$minHours}-{$maxHours} hrs delivery speed)";
-        } else {
-            $coverageStatus = 'regional';
-            $statusBadge = '📦 Nationwide Park Dispatch';
-            $previewStatus = 'Delivery options and speeds vary by regional dispatch';
-        }
+        $coverageStatus = 'uyo_local_delivery';
+        $statusBadge = 'Uyo Doorstep Delivery Only';
+        $previewStatus = 'Service area: Uyo LGA only. Delivery availability is confirmed at checkout.';
 
         return response()->json([
             'success' => true,
@@ -3701,6 +3683,18 @@ class PortalController extends Controller
     {
         $lane = DeliveryLane::findOrFail($id);
         $oldState = (bool)$lane->is_active;
+        if (!$oldState) {
+            $origin = Lga::with('state')->find($lane->origin_lga_id);
+            $destination = Lga::with('state')->find($lane->destination_lga_id);
+            $isUyo = static fn ($lga): bool => $lga
+                && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
+                && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
+            if (!$isUyo($origin) || !$isUyo($destination)) {
+                return back()->withErrors([
+                    'delivery_lane' => 'Out-of-Uyo delivery lanes cannot be activated under the current retailer policy.',
+                ]);
+            }
+        }
         $lane->is_active = !$lane->is_active;
         $lane->save();
 
@@ -3732,6 +3726,24 @@ class PortalController extends Controller
         ]);
 
         $originLgaId = (int)$validated['origin_lga_id'];
+
+        if (!empty($validated['destination_state_id'])) {
+            return back()->withErrors([
+                'destination_state_id' => 'Victorious MARKET does not offer out-of-Uyo or interstate delivery corridors.',
+            ]);
+        }
+        $originPolicyLga = Lga::with('state')->find($originLgaId);
+        $destinationPolicyLga = !empty($validated['destination_lga_id'])
+            ? Lga::with('state')->find((int) $validated['destination_lga_id'])
+            : null;
+        $isUyoPolicyLga = static fn ($lga): bool => $lga
+            && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
+            && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
+        if (!$isUyoPolicyLga($originPolicyLga) || !$isUyoPolicyLga($destinationPolicyLga)) {
+            return back()->withErrors([
+                'destination_lga_id' => 'Only Uyo-to-Uyo delivery configuration is allowed.',
+            ]);
+        }
 
         // Case A: State-Level Corridor Toggle (Out-of-State)
         if (!empty($validated['destination_state_id'])) {
@@ -4672,61 +4684,10 @@ class PortalController extends Controller
 
     public function createReservation(Request $request)
     {
-        if (!Auth::check() || Auth::user()->user_type !== 'customer') {
-            return redirect()->route('customer.login')
-                ->with('info', 'Please sign in or create an account to reserve items for in-shop inspection.');
-        }
-
-        $validated = $request->validate([
-            'product_id' => 'required|integer|exists:products,id',
-            'quantity' => 'nullable|integer|min:1',
-            'shop_id' => 'required|integer|exists:shops,id',
-            'customer_name' => 'nullable|string|max:150',
-            'customer_phone' => 'nullable|string|max:30',
-        ]);
-
-        $product = Product::marketplaceEligible()->with('vendor')->where('id', $validated['product_id'])->first();
-        if (!$product) {
-            return back()->withErrors([
-                'product_id' => 'This product listing has expired or is no longer eligible for in-shop reservation.'
-            ])->withInput();
-        }
-
-        if ($product->vendor && $product->vendor->marketplace_status !== 'active') {
-            return back()->withErrors(['product_id' => 'Merchant is not currently active on the marketplace.']);
-        }
-
-        // Multi-Tenant Alignment Guard: Shop must belong to product's vendor AND be active
-        $shop = Shop::where('vendor_id', $product->vendor_id)
-            ->where('is_active', true)
-            ->findOrFail($validated['shop_id']);
-
-        if (!$shop->pickup_enabled) {
-            return back()->withErrors(['shop_id' => 'In-store pickup is not enabled for this branch location.']);
-        }
-
-        $quantity = $validated['quantity'] ?? 1;
-        $estimatedTotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
-
-        $user = Auth::user();
-
-        $code = PickupReservation::generateCode();
-        $reservation = PickupReservation::create([
-            'reservation_code' => $code,
-            'customer_id' => $user->id,
-            'vendor_id' => $product->vendor_id,
-            'shop_id' => $shop->id,
-            'product_id' => $product->id,
-            'quantity' => $quantity,
-            'unit_price' => $product->unit_price,
-            'estimated_total' => $estimatedTotal,
-            'status' => 'reserved',
-            'expires_at' => Carbon::now()->addHours(24),
-        ]);
-
-        session(['reservation_code_' . $reservation->reservation_code => true]);
-
-        return redirect()->route('reservation.pass', ['code' => $reservation->reservation_code])->with('status', 'In-Shop Pickup reservation confirmed! Present this code at the shop counter.');
+        return redirect()->route('storefront')->with(
+            'error',
+            'Public pickup reservations and cash-on-delivery are not available. Victorious MARKET delivers only within Uyo; contact support if you need assistance.'
+        );
     }
 
     public function showReservationPass(string $code)
