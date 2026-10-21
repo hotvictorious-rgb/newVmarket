@@ -242,3 +242,13 @@ The GitHub Actions Composer install emitted PSR-4 warnings and skipped both Supp
 - Added both files to the workflow's PHP syntax checks.
 - Commits: service f671a579ee6f9c230dc56effce70753aefca00a0; controller 6d9917a7f754e88c7704f93873539b6cf3449adb; CI syntax coverage 1343894516cd929ffd72c5fc9087db37948b85ab.
 - Verification status: changes committed; next branch-head workflow must confirm syntax and Composer no longer emits PSR-4 skip warnings.
+
+## 26. CI-discovered migration syntax and test-contract corrections (21 October 2026)
+
+The expanded workflow exposed additional pre-existing inconsistencies that were blocking the financial suite: two October 21 migrations had doubled namespace separators and could not be loaded by Laravel; a supplier terminal test used an invalid marketplace-status enum value; a checkout branch test used a stale product without a fresh confirmed supplier offer; a retailer return test expected central ownership that the model did not enforce; and a high-value payout test contradicted the enforced ₦500,000 launch cap.
+
+- Corrected namespace separators in migrations 000009 and 000010 and added both migrations to PHP syntax checks.
+- Enforced central ownership in ReturnCase: retailer-model return cases clear private vendor and collection-point ownership even if a caller supplies those IDs.
+- Updated fixtures to use the valid non-active supplier status (probation), a fresh eligible product with a confirmed offer, and the actual vendor payout hard cap.
+- CI result for branch head aff8acbe65d4652f3e322799ca8fbd395b170b5e: **success**. The financial audit/payment hardening workflow completed with 210 tests passing and 1,433 assertions; earlier failures were resolved.
+- Commits: migration 000009 7402842c1ba3332b6926e4781da4e1f8ad387382; migration 000010 65c0d52dab0e59dc6a8a743b31c2050425d1e3b4; workflow migration checks a9c97265d088e8424fd0fb4cb77b2572f6e6203a and c88dfc563fb569be5029382b120789939f534cff; ReturnCase model 32385951ce0a4df5dcbc18ef802d213634579c51; supplier test state cac4f87bd949746286ccf36f666c331264cdb793; payout cap test 36fa9894ce95e85ee13583192e1556313bb569b2; checkout fixture 764ed89304c22fd31455bcb8c068929a508b2eea; CI syntax coverage aff8acbe65d4652f3e322799ca8fbd395b170b5e.
