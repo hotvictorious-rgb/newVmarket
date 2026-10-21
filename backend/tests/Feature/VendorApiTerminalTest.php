@@ -274,6 +274,7 @@ class VendorApiTerminalTest extends TestCase
 
         $response = $this->postJson('/api/v1/vendor/bank/update', [
             'bank_name' => 'Access Bank',
+            'bank_code' => '044',
             'account_number' => '0123456789',
             'account_name' => 'SHIELD STORE ENTERPRISES',
         ]);
@@ -490,6 +491,7 @@ class VendorApiTerminalTest extends TestCase
         // Update bank to trigger cooldown
         $this->postJson('/api/v1/vendor/bank/update', [
             'bank_name' => 'GTBank',
+            'bank_code' => '058',
             'account_number' => '0987654321',
             'account_name' => 'COOLDOWN ENTERPRISES',
         ]);
