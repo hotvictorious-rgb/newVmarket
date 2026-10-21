@@ -823,7 +823,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'account_name' => 'vendor_payable',
         ]);
 
-        $service = app(\\App\\Services\\LogisticsCompanyPayableService::class);
+        $service = app(\App\Services\LogisticsCompanyPayableService::class);
         $assigned = $service->assignCompany($order->fresh(), $this->superAdmin, $this->fleetCompany->id, 'Uyo route covered by approved fleet');
         $this->assertTrue($assigned['success']);
         $this->assertSame($this->fleetCompany->id, (int) $assigned['order']->logistics_company_id);
