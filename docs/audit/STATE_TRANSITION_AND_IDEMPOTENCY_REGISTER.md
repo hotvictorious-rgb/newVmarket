@@ -460,3 +460,12 @@ Supplier terminal authentication now requires both the supplier user and supplie
 - Added unit regression tests for invalid transition inputs in `backend/tests/Unit/RetailerSupplierPayoutInputGuardTest.php`.
 
 **Verification:** Source and regression tests are committed on `docs/retailer-central-fulfilment-model`; automated tests have not been executed in this session. These guards do not replace the remaining full integration tests for uncertain gateway outcomes, payout reconciliation, supplier recovery/refund interaction, or concurrent state changes. No merge or deployment.
+
+
+### VM-AUD-104 — Central retailer return cases must not require a supplier beneficiary (21 October 2026)
+
+**Finding:** `ReturnCase::booted()` explicitly clears `vendor_id` for retailer-model orders because returns are owned by Victorious MARKET centrally. The original `return_cases.vendor_id` migration declared that foreign key non-nullable, so central return-case inserts could fail with a database constraint violation.
+
+**Change:** Added `2026_10_21_000002_make_return_case_vendor_optional_for_retailer_orders.php`, which makes `vendor_id` nullable while preserving its foreign-key relationship. Rollback refuses to restore NOT NULL when central return cases with null supplier IDs exist, preventing a destructive/failed rollback.
+
+**Verification boundary:** The migration source was reviewed against the model and original schema. Migration execution, database-driver compatibility, and a feature test creating a retailer-model return case have not yet been run. This is a code-level fix, not a claim of runtime verification. No merge or deployment is authorized.
