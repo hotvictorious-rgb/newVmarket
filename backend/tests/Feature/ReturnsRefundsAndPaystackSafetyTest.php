@@ -1275,7 +1275,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'line_total' => '10000.00',
             'allocated_discount' => '0.00',
             'refundable_amount' => '10000.00',
-            'item_condition' => 'defective',
+            'item_condition' => 'opened_tested',
             'status' => 'approved',
         ]);
 
