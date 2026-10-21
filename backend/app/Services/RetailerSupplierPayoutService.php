@@ -449,6 +449,13 @@ class RetailerSupplierPayoutService
             if ($allocations->isEmpty() || !$this->requestJournalComplete($payout)) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout reservation evidence is incomplete; no money or status was changed.'];
             }
+            foreach ($allocations as $allocation) {
+                if ((int) $allocation->supplier_vendor_id !== (int) $payout->supplier_vendor_id
+                    || !in_array($allocation->status, ['allocated', 'settled'], true)
+                    || ($allocation->status === 'settled' && $outcome !== 'reversed')) {
+                    return ['success' => false, 'protected' => true, 'message' => 'Supplier payout allocation state conflicts with the requested reversal; finance reconciliation is required.'];
+                }
+            }
 
             $payoutJournalCount = 0;
             $completePayoutJournalCount = 0;
