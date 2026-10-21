@@ -537,7 +537,14 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
 
         // Even a manually/stale-marked eligible status must not let a retailer
         // order use the legacy single-vendor payout path or create payout journals.
-        $orderBike->forceFill(['vendor_settlement_status' => 'eligible'])->save();
+        $orderBike->forceFill([
+            'vendor_settlement_status' => 'eligible',
+            'order_status' => 'delivered',
+        ])->save();
+        // A retailer order's primary vendor_id is only a compatibility anchor,
+        // not a legacy vendor earning. It must not inflate supplier withdrawable funds.
+        $this->assertEquals('0.00', $this->vendor->fresh()->getWithdrawableBalance());
+        $orderBike->forceFill(['order_status' => 'confirmed'])->save();
         $adminUser = User::create([
             'name' => 'Finance Super Admin',
             'email' => 'finance-super-admin@victoriousmarket.ng',
