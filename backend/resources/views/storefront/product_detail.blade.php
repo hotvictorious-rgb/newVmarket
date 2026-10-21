@@ -97,12 +97,12 @@
             <div style="font-size: 13px; color: #64748B; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 8px 12px;">
                 <span style="display: inline-flex; align-items: center; gap: 5px;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/></svg>
-                    <span>Merchant: <a href="{{ route('shop.storefront', $product->shop->slug ?? $product->shop_id) }}" style="color: var(--vm-primary); text-decoration: none; font-weight: 700;">Victorious MARKET</a></span>
+                    <span>Merchant: <a href="{{ route('storefront') }}" style="color: var(--vm-primary); text-decoration: none; font-weight: 700;">Victorious MARKET</a></span>
                 </span>
                 <span style="opacity: 0.4;">•</span>
                 <span style="display: inline-flex; align-items: center; gap: 5px; color: #334155;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284C7" stroke-width="2.2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    <span>Fulfillment Branch: <a href="{{ route('shop.storefront', $product->shop->slug ?? $product->shop_id) }}" style="color: #0F172A; text-decoration: none; font-weight: 700;">Victorious MARKET</a> (<strong style="color: #0284C7;">{{ $product->shop->lga->name ?? 'Uyo' }} LGA</strong>)</span>
+                    <span>Fulfillment Branch: <a href="{{ route('storefront') }}" style="color: #0F172A; text-decoration: none; font-weight: 700;">Victorious MARKET</a> (<strong style="color: #0284C7;">{{ $product->shop->lga->name ?? 'Uyo' }} LGA</strong>)</span>
                 </span>
             </div>
 
