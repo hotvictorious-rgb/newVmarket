@@ -51,6 +51,7 @@ class DeliveryCorridor extends Model
                     ->whereHas('logisticsCompany', function ($companies) {
                         $companies->where('status', 'active')
                             ->whereNull('deleted_at')
+                            ->whereHas('user', fn ($user) => $user->where('status', 'active'))
                             ->whereHas('hqLga', function ($lga) {
                                 $lga->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
                                     ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']));
