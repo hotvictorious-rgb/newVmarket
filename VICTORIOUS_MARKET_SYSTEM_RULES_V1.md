@@ -81,7 +81,7 @@ OTP/pass and photo evidence support the handover process; they do not prove prod
 - A supplier payable represents the agreed purchase cost from the selected offer/order-item snapshot, not a marketplace vendor earning or commission.
 - Eligibility is not an automatic bank transfer. The approved payment process must separately record payable creation, authorization, payment attempt, provider confirmation, reversal and reconciliation.
 - Payment instructions and callbacks must be idempotent. A timeout is uncertain; reconcile the existing provider attempt before retrying. Repeated events must not create a second payable or transfer.
-- The former vendor payout minimum/maximum, FIFO batches, one-active-vendor-request rule and platform-paid vendor transfer fees do not govern supplier payables. No replacement payout threshold, payment rail, payment SLA or approval threshold is approved by this rule set.
+- The former vendor payout minimum/maximum, FIFO batches, one-active-vendor-request rule and platform-paid vendor transfer fees do not govern supplier payables. No replacement supplier-payment threshold, payment rail, payment SLA or approval threshold is approved by this rule set.
 - Supplier agreements must define commercial terms. VM must not assume every supplier accepts payment after fulfilment without agreement.
 - VM remains responsible for an approved customer refund even if the supplier has already been paid. Supplier recovery is separate, evidence-backed and contract-dependent; it must not delay a valid customer refund.
 
@@ -99,16 +99,17 @@ OTP/pass and photo evidence support the handover process; they do not prove prod
 
 - Cashback is not a refund method, supplier payable or withdrawable cash balance.
 - Preserve historical cashback lots, customer balances, redemption/reversal history and obligations during the retailer-model migration. Do not delete or silently reclassify existing balances.
-- The former 5% marketplace cashback allocation was funded as part of the 90/5/5 merchandise split. That split is not a default retailer rule. The owner/accountant must explicitly decide whether new retailer-model sales continue to accrue cashback and how it is funded before new accrual logic is enabled.
-- Until an approved migration decision is made, do not infer new cashback accrual from the old marketplace percentages. Any continuing redemption of existing lots must follow the documented existing customer rules and legal review.
-- If a refund reverses cashback already spent, track any recoverable amount separately and do not silently debit a cash wallet or create a negative spendable balance. Any new maturity/recovery policy must be explicitly approved and disclosed.
+- **Cashback remains active at 5% for eligible completed retailer orders.** It is funded from VM's gross retail margin, never deducted from the supplier's agreed wholesale cost. Calculate it only on eligible post-discount merchandise value actually funded with real customer money through VM's verified Paystack payment flow, after subtracting cashback redeemed; exclude delivery fees and any amount covered by discounts or redeemed cashback. Use the immutable checkout/payment snapshot and decimal-safe rounding. No cashback is earned on an unfulfilled/cancelled order or on a value not paid with real money.
+- Existing maturity terms remain: after verified customer handover, the 24-hour operational claim window runs, followed by a separate 24-hour maturity buffer; cashback becomes available only when no blocking case remains. The 365-day validity period starts at actual maturity. Redemption is capped at 50% of the cart's merchandise subtotal. Existing lots, balances, redemption/reversal history and customer obligations must be preserved.
+- Refunds reverse the appropriate unspent cashback through a linked ledger entry. Cashback already spent is tracked separately as a potential recovery and may be offset only against future cashback as it matures, under the existing approved terms; never silently debit cash or create a negative spendable balance. Cashback adjustments are not additional gateway refunds.
 
 ## 10. Retail accounting and financial integrity
 
 - Use immutable order/payment snapshots and integer-kobo/decimal-safe arithmetic.
-- Record customer receipts/revenue, supplier purchase cost/payable, delivery charges, logistics-company charges/payables, gateway fees, discounts, approved refunds, any explicitly approved cashback liability, and operating expenses separately.
-- The former 90% vendor / 5% cashback / 5% platform merchandise split and 90% vendor / 10% platform delivery split are not default rules for retailer-model transactions.
-- Supplier purchase cost is a cost/payable, not marketplace commission. Logistics-company charges and customer delivery-fee margin must follow an approved agreement/rate card; do not invent a split or percentage.
+- Record customer receipts/revenue, supplier purchase cost/payable, delivery charges, logistics-company charges/payables, gateway fees, discounts, approved refunds, the active 5% cashback liability, and operating expenses separately.
+- The former 90% vendor / 5% cashback / 5% platform merchandise split is retired. Cashback is now a separate retailer loyalty liability calculated on eligible real-money-funded merchandise as defined in Section 9; it is not a commission split.
+- **Logistics company default:** for a new retailer doorstep order, the default logistics-company payable is 90% of the customer's snapshotted delivery fee. The 10% remainder is VM's delivery margin only when the default applies. The payable belongs to the logistics company, not directly to the rider. An authorized admin may approve a higher or lower company amount to reflect actual Nigerian route, distance, package size, fuel, traffic, weather, urgency, return risk or negotiated company terms. Every override must be recorded with previous/default amount, approved amount, reason, admin identity and timestamp. If the amount exceeds the delivery fee, record the excess as an explicit VM delivery subsidy/expense rather than hiding a negative margin.
+- Snapshot the default and approved final logistics-company payable on the order. Do not mutate a completed financial entry; post a linked, balanced adjustment with authorization if a change is approved after financial posting. Rider operations do not create a separate rider payable under this rule.
 - Customer refunds reverse the approved captured amount under the independent merchandise/delivery component policy and original payment-route controls. Refund execution and supplier recovery are separate processes.
 - Every payment, refund, supplier payment, repayment, offset, cashback adjustment and journal correction must be idempotent, authorized, balanced and reconcilable. Never edit/delete a completed financial entry; post a linked reversal or adjustment.
 - Balanced journals do not prove cash is available. Record real liquidity shortfalls, losses, receivables and approved write-offs honestly. Do not claim internal holds/ledgers are regulated escrow without establishing that legal status.
@@ -126,7 +127,7 @@ OTP/pass and photo evidence support the handover process; they do not prove prod
 Do not begin a broad code migration until the following are documented and the affected source paths are audited:
 
 1. Supplier-offer schema/linkage, canonical product matching, listing approval and immutable order-item purchase-cost snapshots.
-2. Retailer accounting: supplier purchase cost/payable, customer receipts/revenue, delivery charges, logistics-company charges, fees, discounts, refunds and whether cashback continues.
+2. Retailer accounting: supplier purchase cost/payable, customer receipts/revenue, delivery charges, logistics-company charges, fees, discounts, refunds and cashback calculation, funding, maturity, redemption, expiry and refund/recovery treatment.
 3. VM-controlled coverage from Uyo, delivery-fee rules, logistics-company commercial agreements and the mandatory rider-to-company linkage.
 4. Existing checkout, reservation and pickup compatibility, including the legacy web checkout bypass of CheckoutExecutionService.
 5. Supplier payment eligibility only after verified successful customer delivery/pickup, idempotent payment attempts and provider reconciliation.
