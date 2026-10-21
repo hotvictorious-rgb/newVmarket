@@ -52,7 +52,7 @@
                     <label>Maximum hours<input required type="number" min="1" max="168" name="estimated_delivery_hours_max" value="{{ $corridor->estimated_delivery_hours_max }}" style="display:block;width:100%;padding:9px;"></label>
                 </div>
                 <label style="display:block;margin-top:12px;">Landmark aliases<textarea required name="landmark_aliases_text" rows="3" style="display:block;width:100%;padding:9px;">{{ implode("\n", (array)$corridor->landmark_aliases) }}</textarea></label>
-                <label style="display:block;margin:12px 0;"><input type="checkbox" name="is_active" value="1" {{ $corridor->is_active ? 'checked' : '' }}> Active</label>
+                <label style="display:block;margin:12px 0;"><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" {{ $corridor->is_active ? 'checked' : '' }}> Active</label>
                 <button type="submit" style="padding:9px 14px;background:#1d4ed8;color:#fff;border:0;border-radius:8px;">Save customer corridor</button>
             </form>
 
@@ -66,7 +66,7 @@
                     <div><strong>{{ $company->company_name }}</strong><div style="color:#64748b;font-size:12px;">{{ $rate ? 'Tariff version '.$rate->tariff_version : 'No tariff configured' }}</div></div>
                     <label>Company base payable (₦)<input required type="number" min="0" step="0.01" name="base_payable" value="{{ $rate?->base_payable ?? '' }}" style="display:block;width:100%;padding:9px;"></label>
                     <label>Company bulky surcharge per unit (₦)<input required type="number" min="0" step="0.01" name="bulky_surcharge_per_unit" value="{{ $rate?->bulky_surcharge_per_unit ?? '0.00' }}" style="display:block;width:100%;padding:9px;"></label>
-                    <label><input type="checkbox" name="is_active" value="1" {{ !$rate || $rate->is_active ? 'checked' : '' }}> Active rate</label>
+                    <label><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" {{ !$rate || $rate->is_active ? 'checked' : '' }}> Active rate</label>
                     <button type="submit" style="padding:9px 12px;background:#0f766e;color:#fff;border:0;border-radius:8px;">Save company tariff</button>
                 </form>
             @endforeach
