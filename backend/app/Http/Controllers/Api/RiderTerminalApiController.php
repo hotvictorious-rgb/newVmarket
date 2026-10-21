@@ -427,7 +427,9 @@ class RiderTerminalApiController extends Controller
             return response()->json([
                 'status' => true,
                 'message' => $maxAttemptsReached
-                    ? "Maximum delivery attempts reached ({$order->delivery_attempt_count}). Order converted to return-to-vendor. Please return parcel to merchant shop."
+                    ? ($requiresSupplierAssignment
+                        ? "Maximum delivery attempts reached ({$order->delivery_attempt_count}). Return case created, but supplier destination requires admin assignment. Do not return the parcel to an unverified shop."
+                        : "Maximum delivery attempts reached ({$order->delivery_attempt_count}). Return to the assigned supplier shop and obtain the return OTP from its counter staff.")
                     : "Delivery attempt #{$order->delivery_attempt_count} failure recorded. Dispatch can be re-attempted.",
                 'data' => [
                     'order_id' => $order->id,
