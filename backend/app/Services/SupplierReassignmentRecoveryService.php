@@ -141,6 +141,7 @@ class SupplierReassignmentRecoveryService
             }
 
             $offers = [];
+            $offerCheckAt = Carbon::now();
             foreach ($items as $item) {
                 $offer = SupplierOffer::where('product_id', $item->product_id)
                     ->where('vendor_id', $newVendor->id)
@@ -148,10 +149,10 @@ class SupplierReassignmentRecoveryService
                     ->where('is_available', true)
                     ->where('wholesale_cost', '>', 0)
                     ->whereNotNull('availability_confirmed_at')
-                    ->where('availability_confirmed_at', '<=', Carbon::now())
+                    ->where('availability_confirmed_at', '<=', $offerCheckAt)
                     ->whereNotNull('availability_confirmed_by')
                     ->whereNotNull('availability_expires_at')
-                    ->where('availability_expires_at', '>', Carbon::now())
+                    ->where('availability_expires_at', '>', $offerCheckAt)
                     ->lockForUpdate()
                     ->first();
 
@@ -169,6 +170,7 @@ class SupplierReassignmentRecoveryService
             $requestSuffix = substr($requestHash, 0, 16);
             $transactionReference = 'SUPREC-' . $order->id . '-' . $requestSuffix;
             $oldValues = [];
+            $newValues = [];
             foreach ($items as $item) {
                 $offer = $offers[$item->id];
                 $oldVendorId = (int) $item->fulfillment_supplier_vendor_id;
@@ -190,6 +192,14 @@ class SupplierReassignmentRecoveryService
                     'old_fulfillment_supplier_shop_id' => $oldShopId,
                     'old_fulfillment_supplier_cost_snapshot' => $oldUnitCost,
                     'old_fulfillment_line_cost' => $oldLineCost,
+                ];
+                $newValues[] = [
+                    'order_item_id' => $item->id,
+                    'replacement_offer_id' => $offer->id,
+                    'replacement_supplier_vendor_id' => $newVendor->id,
+                    'replacement_supplier_shop_id' => $newShop->id,
+                    'replacement_unit_cost' => $newUnitCost,
+                    'replacement_line_cost' => $newLineCost,
                 ];
 
                 $itemSuffix = $idempotencyKey . '-ITEM-' . $item->id;
@@ -331,6 +341,7 @@ class SupplierReassignmentRecoveryService
                     'idempotency_key' => $idempotencyKey,
                     'request_hash' => $requestHash,
                     'replacement_assignment_id' => $replacementAssignment->id,
+                    'items' => $newValues,
                     'supplier_vendor_id' => $newVendor->id,
                     'supplier_shop_id' => $newShop->id,
                     'order_item_ids' => $itemIds,
