@@ -1239,6 +1239,29 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
     }
 
 
+    public function test_delivery_rejects_outside_uyo_even_if_legacy_lane_is_active(): void
+    {
+        DeliveryLane::create([
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->eketLga->id,
+            'base_fee' => '1500.00',
+            'bulky_surcharge' => '1000.00',
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 6,
+            'is_active' => true,
+        ]);
+
+        $result = (new FulfillmentAvailabilityService())->checkDeliveryAvailability(
+            $this->shop->id,
+            $this->eketLga->id
+        );
+
+        $this->assertFalse($result['is_available']);
+        $this->assertSame('0.00', $result['fee']);
+        $this->assertSame('outside_uyo_launch_boundary', $result['rate_tier']);
+        $this->assertSame([], $result['collection_points']);
+    }
+
     public function test_supplier_offer_with_future_confirmation_timestamp_is_not_selectable(): void
     {
         $product = Product::create([
