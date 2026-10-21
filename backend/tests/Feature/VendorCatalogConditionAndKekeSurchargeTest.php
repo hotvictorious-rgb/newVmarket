@@ -1238,6 +1238,22 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
     }
 
 
+    public function test_legacy_public_pickup_reservation_endpoints_are_disabled(): void
+    {
+        $this->getJson('/api/v1/pickup-reservations/RES-LEGACY-01')
+            ->assertStatus(410)
+            ->assertJsonPath('code', 'SUPPORT_MANAGED_PICKUP_ONLY')
+            ->assertJsonMissingPath('data.shop');
+
+        $this->post('/reservation/create', [
+            'product_id' => 1,
+            'shop_id' => $this->shop->id,
+            'quantity' => 1,
+        ])->assertRedirect(route('storefront'));
+
+        $this->assertDatabaseCount('pickup_reservations', 0);
+    }
+
     public function test_public_shop_directory_is_retired_to_protect_supplier_identity(): void
     {
         $this->getJson('/api/v1/shops')
