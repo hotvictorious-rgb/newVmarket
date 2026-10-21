@@ -111,6 +111,84 @@ class LogisticsCompanyPayableService
     }
 
     /**
+     * Release the approved company payable to the company wallet exactly once after
+     * server-verified customer handover and proof. This does not pay the rider.
+     */
+    public function releaseAfterVerifiedDelivery(Order $order): array
+    {
+        return DB::transaction(function () use ($order) {
+            $locked = Order::whereKey($order->id)->lockForUpdate()->first();
+            if (!$locked) {
+                throw new RuntimeException('Order not found.');
+            }
+            if (!$locked->retailer_model_order) {
+                return ['success' => true, 'skipped' => true, 'replayed' => false];
+            }
+            if ($locked->order_status !== 'delivered'
+                || $locked->received_at === null
+                || !$locked->delivery_confirmed_by_customer
+                || empty($locked->proof_of_delivery_image)) {
+                throw new InvalidArgumentException('Verified delivery OTP, completion state and photo proof are required before company wallet release.');
+            }
+            if ($locked->logistics_company_wallet_credited_at !== null) {
+                return ['success' => true, 'skipped' => false, 'replayed' => true, 'order' => $locked];
+            }
+            if (!$locked->logistics_company_id
+                || (int) ($locked->logistics_company_payable_ledger_company_id ?? 0) !== (int) $locked->logistics_company_id) {
+                throw new InvalidArgumentException('The logistics payable must be assigned to the active company ledger before release.');
+            }
+
+            $company = LogisticsCompanyProfile::query()
+                ->whereKey($locked->logistics_company_id)
+                ->where('status', 'active')
+                ->whereNull('deleted_at')
+                ->lockForUpdate()
+                ->first();
+            if (!$company) {
+                throw new InvalidArgumentException('The assigned logistics company must remain active at delivery release.');
+            }
+
+            $amount = (string) ($locked->logistics_company_payable_amount
+                ?? $locked->logistics_company_payable_default_amount
+                ?? BcMathService::mul((string) $locked->delivery_fee, '0.90'));
+
+            if (BcMathService::comp($amount, '0.00') > 0) {
+                $company->creditWallet($amount);
+                FinancialJournalEntry::create([
+                    'order_id' => $locked->id,
+                    'transaction_reference' => $locked->payment_reference ?? $locked->order_number,
+                    'event_id' => 'EVT-LOG-COMPANY-RELEASE-' . $locked->id . '-PAYABLE',
+                    'beneficiary_type' => LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $company->id,
+                    'account_name' => 'logistics_company_payable',
+                    'entry_type' => 'debit',
+                    'amount' => $amount,
+                    'currency' => 'NGN',
+                    'description' => 'Release approved retailer logistics payable to the company wallet after verified delivery.',
+                ]);
+                FinancialJournalEntry::create([
+                    'order_id' => $locked->id,
+                    'transaction_reference' => $locked->payment_reference ?? $locked->order_number,
+                    'event_id' => 'EVT-LOG-COMPANY-RELEASE-' . $locked->id . '-WALLET',
+                    'beneficiary_type' => LogisticsCompanyProfile::class,
+                    'beneficiary_id' => $company->id,
+                    'account_name' => 'logistics_company_wallet',
+                    'entry_type' => 'credit',
+                    'amount' => $amount,
+                    'currency' => 'NGN',
+                    'description' => 'Company wallet credited for verified retailer delivery; this is not a rider payout.',
+                ]);
+            }
+
+            $locked->logistics_company_wallet_credited_at = now();
+            $locked->logistics_company_wallet_credited_amount = $amount;
+            $locked->save();
+
+            return ['success' => true, 'skipped' => false, 'replayed' => false, 'order' => $locked];
+        });
+    }
+
+    /**
      * Admin-only commercial override. Runs under an order lock, records the
      * original/default and final amount, and posts balanced journal adjustments.
      * It is deliberately blocked after verified customer handover: post-handover
