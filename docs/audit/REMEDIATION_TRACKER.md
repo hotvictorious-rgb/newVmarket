@@ -365,3 +365,15 @@ Status: FIXED — focused regression passed. No merge or deployment.
 **Regression coverage added:** The supplier-rejection feature test forces a rejected paid retailer order to the legacy `eligible` state, attempts disbursement, and asserts rejection, unchanged settlement status and unchanged journal-entry count. It also directly invokes rider pickup OTP verification on a supplier-rejection hold and asserts custody remains blocked without order-state mutation.
 
 **Status:** Code and regression assertions committed on `docs/retailer-central-fulfilment-model`; test suite not run in this session. No CI pass, merge, or deployment is claimed. Post-payment supplier recovery, balanced supplier-payable reclassification and dedicated supplier payout remain open.
+
+
+## Newly discovered finding — VM-AUD-069 (21 October 2026)
+
+**Severity:** High  
+**Finding:** `SupplierOfferSelectionService::selectLowestCost()` required an availability confirmation timestamp and an unexpired offer, but did not require `availability_confirmed_by` or reject a future-dated `availability_confirmed_at`. Because `SourcingAllocationService` tries this selector before its stricter fallback query, an offer without a confirming actor could be selected through the preferred path when the supplier/shop passed its other checks.
+
+**Approved rule:** Supplier assignment must rely on explicit, attributable, current availability evidence. Missing actor evidence or a confirmation timestamp in the future must fail closed.
+
+**Change:** The selector now requires `availability_confirmed_at <= now` and non-null `availability_confirmed_by`. Added a feature regression that creates an otherwise eligible offer without a confirming actor and asserts the selector returns no offer.
+
+**Status:** FIXED — CI/test execution still pending. The regression was added but has not been run in this environment. This does not close the separate post-payment supplier-recovery, balanced payable reclassification, or supplier-specific payout implementation gaps.
