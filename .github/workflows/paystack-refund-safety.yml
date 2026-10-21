@@ -56,6 +56,11 @@ jobs:
           php -l app/Services/CheckoutExecutionService.php
           php -l app/Services/OrderSettlementService.php
           php -l app/Models/Order.php
+          php -l app/Models/OrderItem.php
+          php -l app/Models/SupplierOffer.php
+          php -l app/Services/SupplierOfferSelectionService.php
+          php -l database/migrations/2026_10_21_000005_add_supplier_snapshots_to_order_items.php
+          php -l database/migrations/2026_10_21_000006_add_supplier_offer_availability_evidence.php
           php -l database/migrations/2026_10_20_000046_add_customer_address_id_to_orders.php
           php -l database/migrations/2026_10_20_000001_allow_cashback_maturity_to_start_after_fulfilment.php
           php -l tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php
