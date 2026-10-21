@@ -222,7 +222,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ->assertJsonValidationErrors(['slash_price']);
     }
 
-    public function test_multi_item_order_applies_keke_surcharge_if_any_item_is_keke(): void
+    public function test_multi_item_order_adds_bulky_surcharge_for_each_bulky_unit(): void
     {
         $customer = User::create([
             'name' => 'Uyo Shopper',
@@ -295,7 +295,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertNotNull($orderBike);
         $this->assertEquals('500.00', $orderBike->delivery_fee);
 
-        // Case B: Order with both bike item AND keke item -> Keke cargo surcharge applies (1500.00)
+        // Case B: One bike unit plus one bulky unit -> one base fee + one bulky surcharge (1500.00)
         $orderResKeke = $this->postJson('/api/v1/customer/orders/checkout', [
             'shop_id' => $this->shop->id,
             'customer_address_id' => $address->id,
@@ -310,6 +310,22 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $orderKeke = Order::where('customer_id', $customer->id)->latest('id')->first();
         $this->assertNotNull($orderKeke);
         $this->assertEquals('1500.00', $orderKeke->delivery_fee);
+
+        // Case C: One bike unit plus two physical bulky units -> base once + surcharge twice (2500.00).
+        $orderResTwoBulky = $this->postJson('/api/v1/customer/orders/checkout', [
+            'shop_id' => $this->shop->id,
+            'customer_address_id' => $address->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'items' => [
+                ['product_id' => $bikeProduct->id, 'quantity' => 1],
+                ['product_id' => $kekeProduct->id, 'quantity' => 2],
+            ],
+        ]);
+
+        $orderResTwoBulky->assertStatus(201);
+        $orderTwoBulky = Order::where('customer_id', $customer->id)->latest('id')->first();
+        $this->assertNotNull($orderTwoBulky);
+        $this->assertEquals('2500.00', $orderTwoBulky->delivery_fee);
     }
 
     public function test_public_product_api_filters_by_condition_and_package_tier(): void
@@ -393,10 +409,10 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
 
     /**
      * Deep Check Verification:
-     * Delivery fee is calculated strictly PER VENDOR child group.
-     * If Vendor B has even one item requiring keke, Vendor B's delivery fee becomes the bulk delivery charge (₦1,500),
-     * while Vendor A (with only bike items) remains at standard baseline delivery fee (₦500).
-     * Total shipping fee is the exact sum of both independent vendor child fees (₦2,000).
+     * Legacy cart-availability calculation groups by vendor for display compatibility.
+     * New retailer checkout instead charges one order-level base route fee plus a bulky
+     * surcharge for every bulky physical unit; this legacy cart endpoint is not the
+     * authority for retailer checkout totals.
      */
     public function test_cart_fulfillment_calculates_delivery_per_vendor_child_lane_with_isolated_keke_surcharge(): void
     {
