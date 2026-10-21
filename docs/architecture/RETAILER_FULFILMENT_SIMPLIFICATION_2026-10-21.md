@@ -233,3 +233,12 @@ The first supplier liability audit compared the full operational item cost with 
 - No journal, return case, supplier assignment, or payout state is modified by the audit.
 - Commit: 9af7c1209e5de49e0e19146534741a628b98d354.
 - Verification status: committed source; latest syntax/test workflow is pending after the previously discovered namespace errors were corrected.
+
+## 25. Restore PSR-4 autoloading for supplier recovery (21 October 2026)
+
+The GitHub Actions Composer install emitted PSR-4 warnings and skipped both SupplierReassignmentRecoveryService and AdminSupplierRecoveryController because their namespace/import separators were doubled. This meant the supplier reassignment recovery route could fail at runtime before its financial safeguards executed, so the earlier source-level fixes were not operationally reachable.
+
+- Normalized namespace/import separators throughout both PHP files so the class namespaces match their PSR-4 paths.
+- Added both files to the workflow's PHP syntax checks.
+- Commits: service f671a579ee6f9c230dc56effce70753aefca00a0; controller 6d9917a7f754e88c7704f93873539b6cf3449adb; CI syntax coverage 1343894516cd929ffd72c5fc9087db37948b85ab.
+- Verification status: changes committed; next branch-head workflow must confirm syntax and Composer no longer emits PSR-4 skip warnings.
