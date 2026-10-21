@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\CheckoutIntent;
 use App\Models\CustomerAddress;
+use App\Models\DeliveryCorridor;
 use App\Models\CustomerCashbackLedger;
 use App\Models\CustomerWalletCredit;
 use App\Models\DeliveryLane;
@@ -16,6 +17,7 @@ use App\Models\Shop;
 use App\Models\SupplierOffer;
 use App\Services\BcMathService;
 use App\Services\FulfillmentAvailabilityService;
+use App\Services\CustomerDeliveryPricingService;
 use App\Services\PaystackService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -206,12 +208,22 @@ class CheckoutAndReservationApiController extends Controller
         if (!$availability['is_available']) {
             return response()->json(['status' => false, 'message' => $availability['message']], 422);
         }
-        $deliveryBaseFee = (string) $availability['fee'];
-        $deliveryBulkySurchargePerUnit = (string) ($availability['bulky_surcharge'] ?? '0.00');
-        $deliveryFee = BcMathService::add(
-            $deliveryBaseFee,
-            BcMathService::mul($deliveryBulkySurchargePerUnit, (string) $deliveryBulkyQuantity)
+        $deliveryCorridor = DeliveryCorridor::resolveForAddress(
+            (int) $address->lga_id,
+            $address->address_line,
+            $address->landmark
         );
+        if (!$deliveryCorridor) {
+            return response()->json([
+                'status' => false,
+                'message' => 'We could not match this address to one active Uyo delivery corridor. Please confirm a recognised landmark before checkout.',
+            ], 422);
+        }
+
+        $customerPricing = app(CustomerDeliveryPricingService::class)->quote($deliveryBulkyQuantity);
+        $deliveryBaseFee = $customerPricing['base_fee'];
+        $deliveryBulkySurchargePerUnit = $customerPricing['bulky_surcharge_per_unit'];
+        $deliveryFee = $customerPricing['total_fee'];
 
         // Customer Cashback Redemption check (50% merchandise cap, 24h maturation)
         $cashbackApplied = '0.00';
@@ -250,6 +262,8 @@ class CheckoutAndReservationApiController extends Controller
             'merchandise_subtotal' => $merchandiseSubtotal,
             'delivery_fee' => $deliveryFee,
             'delivery_base_fee' => $deliveryBaseFee,
+            'delivery_corridor_id' => $deliveryCorridor->id,
+            'delivery_corridor_code' => $deliveryCorridor->code,
             'delivery_bulky_surcharge_per_unit' => $deliveryBulkySurchargePerUnit,
             'delivery_bulky_quantity' => $deliveryBulkyQuantity,
             'cashback_applied' => $cashbackApplied,
