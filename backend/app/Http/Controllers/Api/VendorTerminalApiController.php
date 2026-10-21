@@ -1224,7 +1224,12 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             ->select('id', 'amount', 'status', 'bank_name', 'account_number', 'account_name', 'created_at', 'disbursed_at', 'rejection_reason')
             ->latest()
             ->take(20)
-            ->get();
+            ->get()
+            ->map(function (VendorPayoutRequest $payout) {
+                $payout->setAttribute('account_number_masked', '******' . substr((string) $payout->account_number, -4));
+                $payout->makeHidden(['account_number']);
+                return $payout;
+            });
 
         $isCooldown = $vendor->isWithinBankCooldown();
         $cooldownExpiresAt = $vendor->bank_updated_at ? $vendor->bank_updated_at->copy()->addHours(48) : null;
