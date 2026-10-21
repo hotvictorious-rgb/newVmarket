@@ -90,7 +90,33 @@ class CustomerHandshakeDeliveryTest extends TestCase
             'is_active' => true,
         ]);
 
-        $rider = RiderProfile::first();
+        $riderUser1 = User::create([
+            'name' => 'Rider Alpha',
+            'email' => 'rider.alpha@example.com',
+            'phone' => '08055551111',
+            'password' => bcrypt('Password123!'),
+            'user_type' => 'rider',
+            'status' => 'active',
+        ]);
+        $rider1 = RiderProfile::create([
+            'user_id' => $riderUser1->id,
+            'vendor_id' => $vendorProfile1->id,
+            'is_active' => true,
+        ]);
+
+        $riderUser2 = User::create([
+            'name' => 'Rider Beta',
+            'email' => 'rider.beta@example.com',
+            'phone' => '08055552222',
+            'password' => bcrypt('Password123!'),
+            'user_type' => 'rider',
+            'status' => 'active',
+        ]);
+        $rider2 = RiderProfile::create([
+            'user_id' => $riderUser2->id,
+            'vendor_id' => $vendorProfile2->id,
+            'is_active' => true,
+        ]);
 
         // Create Order 1 for Vendor Alpha
         $order1 = Order::create([
@@ -98,7 +124,7 @@ class CustomerHandshakeDeliveryTest extends TestCase
             'customer_id' => $customer->id,
             'vendor_id' => $vendorProfile1->id,
             'shop_id' => $shop1->id,
-            'rider_id' => $rider->id,
+            'rider_id' => $rider1->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'out_for_delivery',
             'payment_status' => 'paid',
@@ -123,7 +149,7 @@ class CustomerHandshakeDeliveryTest extends TestCase
             'customer_id' => $customer->id,
             'vendor_id' => $vendorProfile2->id,
             'shop_id' => $shop2->id,
-            'rider_id' => $rider->id,
+            'rider_id' => $rider2->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'out_for_delivery',
             'payment_status' => 'paid',
@@ -143,8 +169,10 @@ class CustomerHandshakeDeliveryTest extends TestCase
         ]);
 
         // PROOF 1: Attempt to confirm Order 2 (Vendor Beta) using Order 1's OTP (111111)
+        Storage::fake('public');
         $responseWrongOtp = $this->actingAs($customer)->post(route('order.customer_confirm_delivery', $order2->order_number), [
             'delivery_otp' => '111111', // WRONG OTP FOR ORDER 2
+            'proof_photo' => UploadedFile::fake()->image('proof.jpg'),
         ]);
 
         // Assert failure: Order 2 must NOT be marked delivered
@@ -161,6 +189,7 @@ class CustomerHandshakeDeliveryTest extends TestCase
         // PROOF 2: Now submit the correct OTP (222222) for Order 2
         $responseCorrectOtp = $this->actingAs($customer)->post(route('order.customer_confirm_delivery', $order2->order_number), [
             'delivery_otp' => '222222', // CORRECT OTP
+            'proof_photo' => UploadedFile::fake()->image('proof.jpg'),
         ]);
 
         $order2->refresh();
@@ -180,9 +209,23 @@ class CustomerHandshakeDeliveryTest extends TestCase
      */
     public function test_rider_arrival_triggers_customer_handshake_state(): void
     {
-        $riderUser = User::where('user_type', 'rider')->first();
         $order = Order::where('fulfillment_type', 'doorstep_delivery')->first();
+        $riderUser = User::create([
+            'name' => 'Assigned Arriving Rider',
+            'email' => 'rider.arriving@example.com',
+            'phone' => '08099887711',
+            'password' => bcrypt('Password123!'),
+            'user_type' => 'rider',
+            'status' => 'active',
+        ]);
+        $rider = RiderProfile::create([
+            'user_id' => $riderUser->id,
+            'vendor_id' => $order->vendor_id,
+            'is_active' => true,
+        ]);
         $order->order_status = 'out_for_delivery';
+        $order->logistics_company_id = null;
+        $order->rider_id = $rider->id;
         $order->rider_arrived_at = null;
         $order->save();
 
@@ -213,17 +256,25 @@ class CustomerHandshakeDeliveryTest extends TestCase
         Storage::fake('public');
 
         $customer = User::where('user_type', 'customer')->first();
-        $rider = RiderProfile::with('logisticsCompany')->first();
-        $logisticsCompany = $rider->logisticsCompany ?? \App\Models\LogisticsCompanyProfile::first();
-        $initialCompanyBalance = (float)($logisticsCompany->wallet_balance ?? 0);
-
         $order = Order::where('fulfillment_type', 'doorstep_delivery')->first();
+        $riderUser = User::create([
+            'name' => 'Vendor Assigned Rider',
+            'email' => 'rider.assigned2@example.com',
+            'phone' => '08099887755',
+            'password' => bcrypt('Password123!'),
+            'user_type' => 'rider',
+            'status' => 'active',
+        ]);
+        $rider = RiderProfile::create([
+            'user_id' => $riderUser->id,
+            'vendor_id' => $order->vendor_id,
+            'is_active' => true,
+        ]);
         $order->order_status = 'out_for_delivery';
+        $order->payment_status = 'paid';
         $order->rider_id = $rider->id;
         $order->verification_code = '554433';
         $order->delivery_fee = '1500.00';
-        $order->logistics_fee_retained = '1350.00';
-        $order->platform_delivery_fee = '150.00';
         $order->rider_arrived_at = Carbon::now();
         $order->save();
 
@@ -242,13 +293,6 @@ class CustomerHandshakeDeliveryTest extends TestCase
         $this->assertNotNull($order->received_at);
         $this->assertNotNull($order->proof_of_delivery_image);
 
-        // Verify logistics company corporate wallet was credited with 90% net delivery_fee (₦1,350.00)
-        // Couriers have NO wallet balance and cannot receive direct payouts
-        $logisticsCompany->refresh();
-        $this->assertEquals($initialCompanyBalance + 1350.00, (float)$logisticsCompany->wallet_balance);
-        $rider->refresh();
-        $this->assertEquals(0.00, (float)($rider->current_balance ?? 0));
-
         // Verify 5% customer cashback reward enqueued with 24h maturation lock
         $cashback = CustomerCashbackLedger::where('order_id', $order->id)->first();
         $this->assertNotNull($cashback);
@@ -262,12 +306,29 @@ class CustomerHandshakeDeliveryTest extends TestCase
     {
         $order = Order::where('fulfillment_type', 'doorstep_delivery')->first();
         $this->assertNotNull($order);
+        $riderUser = User::create([
+            'name' => 'Assigned Rider 3',
+            'email' => 'rider.assigned3@example.com',
+            'phone' => '08099887744',
+            'password' => bcrypt('Password123!'),
+            'user_type' => 'rider',
+            'status' => 'active',
+        ]);
+        $rider = RiderProfile::create([
+            'user_id' => $riderUser->id,
+            'vendor_id' => $order->vendor_id,
+            'is_active' => true,
+        ]);
         $order->order_status = 'out_for_delivery';
         $order->payment_status = 'paid';
+        $order->logistics_company_id = null;
+        $order->rider_id = $rider->id;
         $order->verification_code = '443322';
         $order->delivery_confirmed_by_customer = false;
         $order->proof_of_delivery_image = null;
         $order->save();
+
+        CustomerCashbackLedger::where('order_id', $order->id)->delete();
 
         $result = app(OrderSettlementService::class)->verifyCustomerDeliveryOtp($order, '443322');
 
@@ -324,6 +385,8 @@ class CustomerHandshakeDeliveryTest extends TestCase
         $order->delivery_confirmed_by_customer = false;
         $order->received_at = null;
         $order->save();
+
+        CustomerCashbackLedger::where('order_id', $order->id)->delete();
 
         $result = app(OrderSettlementService::class)->verifyCustomerDeliveryOtp($order, '654321');
 

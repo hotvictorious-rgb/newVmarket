@@ -583,9 +583,15 @@
                         <div style="font-size: 26px; font-weight: 800; color: #78350F; margin: 4px 0;">
                             &#8358;{{ number_format((float)$customerMetrics['cashback_available'], 2) }}
                         </div>
-                        <button type="button" class="btn-accent" style="width: 100%; justify-content: center; font-size: 12px; padding: 7px;" onclick="alert('Promo code VM-REWARD-5 copied! Paste at checkout to apply ₦{{ number_format((float)$customerMetrics['cashback_available'], 2) }} reward.')">
-                            🎟️ Apply at Checkout
-                        </button>
+                        @if((float)$customerMetrics['cashback_available'] > 0)
+                            <a href="{{ route('storefront') }}" class="btn-accent" style="width: 100%; justify-content: center; font-size: 12px; padding: 7px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+                                <span>🛍️ Spend Balance at Storefront</span>
+                            </a>
+                        @else
+                            <a href="{{ route('storefront') }}" class="btn-outline-primary" style="width: 100%; justify-content: center; font-size: 12px; padding: 7px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--vm-primary); color: var(--vm-primary); border-radius: var(--vm-radius-sm); font-weight: 700;">
+                                <span>🛍️ Earn 5% Cashback on Next Order</span>
+                            </a>
+                        @endif
                     </div>
 
                     <div style="background: var(--vm-bg); border: 1px solid var(--vm-border); border-radius: var(--vm-radius-md); padding: 18px;">

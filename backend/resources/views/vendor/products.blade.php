@@ -52,6 +52,8 @@
         </div>
     @endif
 
+    @include('vendor.partials._shop_switcher')
+
     <!-- Catalog KPI Quick Stats -->
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
         <div class="dash-card" style="padding: 18px; margin-bottom: 0;">
@@ -116,8 +118,13 @@
                                     @endif
                                     <div>
                                         <div style="font-weight: 700; color: var(--adm-text); font-size: 14px;">{{ $product->name }}</div>
-                                        <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+                                        <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px; flex-wrap: wrap;">
                                             <span style="font-size: 11.5px; color: var(--adm-text-muted);">{{ $product->category->name ?? 'General' }}</span>
+                                            @if($product->shop)
+                                                <span style="font-size: 11px; background: #E0F2FE; color: #0369A1; padding: 1px 6px; border-radius: 4px; font-weight: 600;">
+                                                    🏬 {{ $product->shop->name }} (📍 {{ $product->shop->lga->name ?? 'LGA' }})
+                                                </span>
+                                            @endif
                                             @if($product->youtube_video_id)
                                                 <span style="font-size: 11px; background: #FEE2E2; color: #DC2626; padding: 1px 6px; border-radius: 4px; font-weight: 700;">▶ Video Review</span>
                                             @endif

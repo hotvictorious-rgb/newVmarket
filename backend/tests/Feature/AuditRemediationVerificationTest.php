@@ -848,7 +848,7 @@ class AuditRemediationVerificationTest extends TestCase
             'expires_at' => Carbon::now()->addMinutes(10),
         ]);
 
-        $service = app(\App\\Services\\OrderSettlementService::class);
+        $service = app(\App\Services\OrderSettlementService::class);
         $result = $service->approvePickupInspection($reservation, $this->vendorUser);
 
         $this->assertTrue($result['success']);

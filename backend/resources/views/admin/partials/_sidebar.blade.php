@@ -73,6 +73,12 @@
     </a>
 </li>
 <li class="sidebar-nav-item">
+    <a href="{{ route('admin.logistics_companies.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.logistics_companies.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">🚚</span>
+        <span>Logistics Companies Desk</span>
+    </a>
+</li>
+<li class="sidebar-nav-item">
     <a href="{{ route('admin.products.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.products.*') ? 'active' : '' }}">
         <span class="nav-link-icon">⭐</span>
         <span>Flagship Products Catalog</span>
@@ -86,8 +92,8 @@
 </li>
 <li class="sidebar-nav-item">
     <a href="{{ route('logistics.dashboard') }}" class="sidebar-nav-link">
-        <span class="nav-link-icon">🚚</span>
-        <span>Logistics Fleet (Historical)</span>
+        <span class="nav-link-icon">🏍️</span>
+        <span>Inspect Fleet Portal</span>
     </a>
 </li>
 <li class="sidebar-nav-item">

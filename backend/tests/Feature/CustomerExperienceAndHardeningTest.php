@@ -13,6 +13,7 @@ use App\Models\Order;
 use App\Models\PickupReservation;
 use App\Models\Product;
 use App\Models\Shop;
+use App\Models\ShopDeliveryCoverage;
 use App\Models\State;
 use App\Models\User;
 use App\Models\VendorProfile;
@@ -154,6 +155,13 @@ class CustomerExperienceAndHardeningTest extends TestCase
             'bulky_surcharge' => '500.00',
             'estimated_delivery_hours_min' => 2,
             'estimated_delivery_hours_max' => 6,
+            'is_active' => true,
+        ]);
+
+        ShopDeliveryCoverage::create([
+            'shop_id' => $this->shop->id,
+            'state_id' => $this->state->id,
+            'lga_id' => $this->destLga->id,
             'is_active' => true,
         ]);
     }
@@ -396,8 +404,10 @@ class CustomerExperienceAndHardeningTest extends TestCase
             ->assertJsonPath('status', true)
             ->assertJsonPath('data.reservation_code', $code);
 
-        $this->assertNotNull($payRes->json('data.pickup_otp'));
         $this->assertNotNull($payRes->json('data.order_number'));
+        $createdOrder = Order::where('order_number', $payRes->json('data.order_number'))->first();
+        $this->assertNotNull($createdOrder);
+        $this->assertNotNull($createdOrder->pickup_verification_code);
 
         // Binary Stock Model Invariant: Stock quantity is NOT decremented at payment initiation
         $this->assertTrue($this->product->fresh()->is_in_stock);

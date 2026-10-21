@@ -134,6 +134,15 @@ class CustomerApiContractTest extends TestCase
             'verification_code' => '987654',
         ]);
 
+        $riderUser = User::factory()->create(['user_type' => 'rider', 'status' => 'active']);
+        $rider = \App\Models\RiderProfile::create([
+            'user_id' => $riderUser->id,
+            'vendor_id' => $shop->vendor_id,
+            'is_active' => true,
+        ]);
+        $order->rider_id = $rider->id;
+        $order->save();
+
         // Wrong OTP fails
         $failRes = $this->actingAs($customer, 'sanctum')->postJson("/api/v1/customer/orders/{$order->order_number}/confirm-delivery", [
             'delivery_otp' => '000000',

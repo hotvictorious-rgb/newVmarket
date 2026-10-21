@@ -200,7 +200,7 @@
                         Your courier <strong>{{ $order->rider->user->name ?? 'Dispatch Rider' }}</strong> is waiting outside. Only you (the recipient) can confirm this delivery on your phone.
                     </p>
 
-                    <form method="POST" action="{{ route('order.customer_confirm_delivery', $order->order_number) }}" enctype="multipart/form-data" style="background: rgba(0, 0, 0, 0.2); border: 1.5px solid rgba(255, 255, 255, 0.15); border-radius: 14px; padding: 20px;">
+                    <form method="POST" action="{{ route('order.customer_confirm_delivery', $order->order_number) }}" enctype="multipart/form-data" onsubmit="return validateCustomerConfirmForm()" style="background: rgba(0, 0, 0, 0.2); border: 1.5px solid rgba(255, 255, 255, 0.15); border-radius: 14px; padding: 20px;">
                         @csrf
 
                         <!-- Step 1: Inspection Note -->
@@ -211,18 +211,18 @@
                             </p>
                         </div>
 
-                        <!-- Step 2: Optional Photo Snapping -->
+                        <!-- Step 2: Mandatory Photo Snapping -->
                         <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.15);">
                             <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
-                                <span style="font-size: 11px; font-weight: 800; color: #A7F3D0; text-transform: uppercase; letter-spacing: 0.5px;">STEP 2: SNAP CONDITION (OPTIONAL)</span>
-                                <span style="font-size: 11.5px; color: #FCD34D; font-weight: 700;">OPTIONAL</span>
+                                <span style="font-size: 11px; font-weight: 800; color: #A7F3D0; text-transform: uppercase; letter-spacing: 0.5px;">STEP 2: SNAP CONDITION PHOTO (MANDATORY)</span>
+                                <span style="font-size: 10.5px; background: rgba(245, 158, 11, 0.25); border: 1px solid #F59E0B; color: #FCD34D; font-weight: 800; padding: 2px 8px; border-radius: 999px;">REQUIRED FOR ESCROW RELEASE</span>
                             </div>
                             <p style="font-size: 12.5px; color: #E2E8F0; margin: 0 0 10px;">
-                                Snap a quick photo of the parcel condition. Snapping is strictly optional, but protects your return rights.
+                                Snap a quick photo of the delivered parcel condition before entering your PIN. Required for mutual delivery integrity and to safeguard return rights.
                             </p>
                             
-                            <!-- Hidden Camera/File Input -->
-                            <input type="file" id="proof_photo" name="proof_photo" accept="image/*" capture="environment" style="display: none;" onchange="previewProofImage(this)">
+                            <!-- Camera/File Input with Required Attribute -->
+                            <input type="file" id="proof_photo" name="proof_photo" accept="image/*" capture="environment" required style="display: none;" onchange="previewProofImage(this)">
                             
                             <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                                 <button type="button" onclick="document.getElementById('proof_photo').click()" style="background: rgba(255, 255, 255, 0.15); border: 1.5px dashed rgba(255, 255, 255, 0.4); color: #FFFFFF; padding: 10px 18px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;">
@@ -230,9 +230,9 @@
                                         <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
                                         <circle cx="12" cy="13" r="4"></circle>
                                     </svg>
-                                    <span id="snapButtonText">Tap to Snap / Upload Photo</span>
+                                    <span id="snapButtonText">Tap to Snap / Upload Photo *</span>
                                 </button>
-                                <span style="font-size: 11.5px; color: #93C5FD;">No photo required to proceed</span>
+                                <span style="font-size: 11.5px; color: #FCD34D; font-weight: 600;">* Photo proof required</span>
                             </div>
 
                             <!-- Preview Thumbnail (revealed on selection) -->
@@ -637,7 +637,17 @@
         document.getElementById('proofPhotoPreviewContainer').style.display = 'none';
         const optBadge = document.getElementById('customerProofOptBadge');
         if (optBadge) optBadge.style.display = 'none';
-        document.getElementById('snapButtonText').innerText = 'Tap to Snap / Upload Photo';
+        document.getElementById('snapButtonText').innerText = 'Tap to Snap / Upload Photo *';
+    }
+
+    function validateCustomerConfirmForm() {
+        const input = document.getElementById('proof_photo');
+        if (!input || !input.files || input.files.length === 0) {
+            alert('Please snap or upload a photo of the delivered parcel before completing confirmation. Photo proof is required to ensure mutual delivery integrity.');
+            if (input) input.click();
+            return false;
+        }
+        return true;
     }
 
     // Auto-poll if order is out_for_delivery and rider has not yet marked arrived

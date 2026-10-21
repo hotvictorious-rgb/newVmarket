@@ -74,6 +74,9 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/banners/{id}/toggle', [PortalController::class, 'adminToggleBanner'])->name('admin.banners.toggle');
     Route::delete('/banners/{id}', [PortalController::class, 'adminDeleteBanner'])->name('admin.banners.destroy');
     Route::get('/merchants', [PortalController::class, 'adminMerchantsPage'])->name('admin.merchants.index');
+    Route::get('/logistics-companies', [PortalController::class, 'adminLogisticsCompaniesPage'])->name('admin.logistics_companies.index');
+    Route::post('/logistics-companies', [PortalController::class, 'adminStoreLogisticsCompany'])->name('admin.logistics_companies.store');
+    Route::post('/logistics-companies/{id}/toggle-status', [PortalController::class, 'adminToggleLogisticsCompanyStatus'])->name('admin.logistics_companies.toggle_status');
     Route::get('/orders', [PortalController::class, 'adminOrdersPage'])->name('admin.orders.index');
     Route::get('/products', [PortalController::class, 'adminProductsPage'])->name('admin.products.index');
     Route::post('/products/{id}/toggle-flagship', [PortalController::class, 'adminToggleProductFlagship'])->name('admin.products.toggle_flagship');
@@ -164,6 +167,8 @@ Route::middleware(['role:vendor_employee'])->prefix('counter')->group(function (
 Route::middleware(['role:logistics_company'])->prefix('logistics')->group(function () {
     Route::get('/', [PortalController::class, 'logisticsDashboard'])->name('logistics.dashboard');
     Route::get('/riders', [PortalController::class, 'logisticsRidersPage'])->name('logistics.riders.index');
+    Route::post('/riders', [PortalController::class, 'logisticsStoreRider'])->name('logistics.riders.store');
+    Route::post('/riders/{id}/toggle-active', [PortalController::class, 'logisticsToggleRiderActive'])->name('logistics.riders.toggle_active');
     Route::get('/waybills', [PortalController::class, 'logisticsWaybillsPage'])->name('logistics.waybills.index');
     Route::get('/wallet', [PortalController::class, 'logisticsWalletPage'])->name('logistics.wallet.index');
     Route::get('/collection-points', [PortalController::class, 'logisticsCollectionPointsPage'])->name('logistics.collection_points.index');
@@ -212,6 +217,7 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/delivery-lanes/{id}/toggle', [PortalController::class, 'adminToggleDeliveryLane'])->name('admin.delivery_lanes.toggle');
     Route::post('/delivery-lanes/toggle-corridor', [PortalController::class, 'adminToggleHubCorridor'])->name('admin.delivery_lanes.toggle_corridor');
     Route::post('/vendors/{id}/accredit', [PortalController::class, 'adminAccreditVendor'])->name('admin.vendors.accredit');
+    Route::post('/merchants', [PortalController::class, 'adminStoreSupplier'])->name('admin.merchants.store');
 });
 
 // Stage 2: Vendor Commerce Desk Routes

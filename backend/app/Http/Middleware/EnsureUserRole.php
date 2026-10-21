@@ -74,11 +74,11 @@ class EnsureUserRole
             }
         } elseif ($user->user_type === 'rider') {
             $rider = $user->riderProfile;
-            if (!$rider || !$rider->logistics_company_id || !$rider->logisticsCompany) {
+            if (!$rider || (!$rider->logistics_company_id && !$rider->vendor_id)) {
                 Auth::logout();
                 $request->session()->invalidate();
                 $request->session()->regenerateToken();
-                return redirect()->route('rider.login')->with('error', 'Access terminated: Rider is not affiliated with any logistics company. All riders must belong to an active logistics company.');
+                return redirect()->route('rider.login')->with('error', 'Access terminated: Rider is not affiliated with any vendor or logistics company.');
             }
             if (!$rider->is_active) {
                 Auth::logout();
@@ -86,13 +86,20 @@ class EnsureUserRole
                 $request->session()->regenerateToken();
                 return redirect()->route('rider.login')->with('error', 'Access terminated: Your courier dispatch profile has been deactivated.');
             }
-            if ($rider->logisticsCompany->status !== 'active') {
+            if ($rider->vendor_id && $rider->vendor && $rider->vendor->marketplace_status !== 'active') {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+                return redirect()->route('rider.login')->with('error', 'Access terminated: Parent merchant organization is suspended or inactive.');
+            }
+            if ($rider->logistics_company_id && $rider->logisticsCompany && $rider->logisticsCompany->status !== 'active') {
                 Auth::logout();
                 $request->session()->invalidate();
                 $request->session()->regenerateToken();
                 return redirect()->route('rider.login')->with('error', 'Access terminated: Parent logistics fleet is suspended or inactive.');
             }
-        } elseif ($user->user_type === 'logistics_company') {
+        }
+ elseif ($user->user_type === 'logistics_company') {
             $company = $user->logisticsCompanyProfile;
             if ($company && $company->status !== 'active') {
                 Auth::logout();

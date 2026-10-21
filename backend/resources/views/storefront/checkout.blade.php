@@ -69,6 +69,7 @@
         <div style="display: flex; flex-direction: column; gap: 20px;">
             <form method="POST" action="{{ route('checkout.process') }}" id="vmCheckoutForm">
                 @csrf
+                <input type="hidden" name="_checkout_idempotency_key" id="vmCheckoutIdempotencyKey" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
                 <input type="hidden" name="product_id" value="{{ $product->id }}">
                 <input type="hidden" name="quantity" value="{{ $quantity }}">
 
@@ -424,7 +425,7 @@
                     <span style="font-size: 14px; font-weight: 800;">+&#8358;{{ number_format($cashbackReward, 2) }}</span>
                 </div>
                 <div style="font-size: 11px; color: #059669; margin-top: -4px; padding-left: 2px;">
-                    &#10003; 5% calculated on eligible merchandise (excl. delivery) &bull; Rewarded to customer wallet on delivery OTP confirmation
+                    &#10003; 5% earned strictly on real money paid through Paystack (excl. delivery &amp; redeemed cashback) &bull; Rewarded to customer wallet on delivery OTP confirmation
                 </div>
 
                 <div style="border-top: 2px dashed #E2E8F0; padding-top: 14px; margin-top: 4px; display: flex; justify-content: space-between; font-size: 18px; font-weight: 900; color: #5E17EB;">
@@ -552,33 +553,23 @@ function vmHandleDestLgaChange(destLgaId) {
     const statusBadge = document.getElementById('vmCorridorStatusBadge');
     const cpFields = document.getElementById('vmCollectionPointFields');
 
-    let isServiced = true;
-    let fee = 1000.0;
-    let eta = 'Same-day 2-4 hrs';
+    let isServiced = false;
+    let fee = 0.0;
+    let eta = 'Standard dispatch';
 
-    if (activeLanesMap[destLgaId] !== undefined) {
-        if (!activeLanesMap[destLgaId].is_active) {
-            isServiced = false;
-        } else {
-            isServiced = true;
-            fee = activeLanesMap[destLgaId].base_fee;
-            eta = activeLanesMap[destLgaId].eta_text || 'Standard dispatch';
-        }
+    if (activeLanesMap[destLgaId] !== undefined && activeLanesMap[destLgaId].is_active) {
+        isServiced = true;
+        fee = parseFloat(activeLanesMap[destLgaId].base_fee) || 0.0;
+        eta = activeLanesMap[destLgaId].eta_text || 'Standard dispatch';
     } else {
-        // Fallback zonal distance
-        if (destLgaId === shopOriginLgaId) {
-            fee = 500.0;
-            eta = '2-4 hours';
-        } else {
-            fee = 1000.0;
-            eta = '24-48 hours';
-        }
+        isServiced = false;
+        fee = 0.0;
     }
 
     if (!isServiced) {
         // Corridor is turned off / suspended
         if (suspendedAlert) suspendedAlert.style.display = 'flex';
-        if (statusBadge) statusBadge.innerHTML = `<span style="background: #FEF3C7; color: #D97706; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Route Suspended (${selectedOptionText})</span>`;
+        if (statusBadge) statusBadge.innerHTML = `<span style="background: #FEF3C7; color: #D97706; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Outside Delivery Zone (${selectedOptionText})</span>`;
         if (radioDelivery) {
             radioDelivery.disabled = true;
             radioDelivery.checked = false;
@@ -595,7 +586,7 @@ function vmHandleDestLgaChange(destLgaId) {
             feeBadge.style.color = '#94A3B8';
         }
         if (deliveryTitle) deliveryTitle.style.color = '#64748B';
-        if (deliveryDesc) deliveryDesc.textContent = 'Doorstep route currently suspended. In-Store Pickup active.';
+        if (deliveryDesc) deliveryDesc.textContent = 'Merchant does not service doorstep deliveries to this LGA. In-Store Counter Pickup is active at ₦0.00.';
         if (cpFields) cpFields.style.display = 'none';
 
         // Seamless auto-switch to guaranteed free in-shop pickup
@@ -684,10 +675,18 @@ try {
     console.error('Error synchronizing multi-item cart to checkout', e);
 }
 
-// Clear cart on successful checkout form submission
+// Clear cart on successful checkout form submission and prevent browser double-click
 const checkoutForm = document.getElementById('vmCheckoutForm');
 if (checkoutForm) {
     checkoutForm.addEventListener('submit', function() {
+        const btn = document.getElementById('vmPayNowBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+            btn.style.cursor = 'wait';
+            const span = btn.querySelector('span');
+            if (span) span.textContent = 'Securing Order & Initializing Payment...';
+        }
         if (window.vmCart) window.vmCart.clear();
     });
 }

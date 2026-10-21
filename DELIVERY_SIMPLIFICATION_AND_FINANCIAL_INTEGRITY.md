@@ -1,88 +1,40 @@
 # VMARKET DELIVERY SIMPLIFICATION AND FINANCIAL-INTEGRITY IMPLEMENTATION
 
-> **Owner-confirmed payment and handover rule (20 October 2026):** Only pay-before-delivery through Victorious MARKET or reserve in-shop pickup and pay at the vendor shop through Victorious MARKET's authorised payment workflow are permitted. No off-platform payment. Doorstep handover requires customer OTP verification plus a doorstep photo; in-shop pickup requires the RES-XXXXXX reservation pass plus one-time customer pickup OTP verification plus an in-shop photo. GPS, signature, separate rider-pickup photo and hub inspection photo are not mandatory. Payouts use server-calculated strict FIFO batches of whole earning records, with ₦5,000 minimum and ₦500,000 maximum; never split or skip an over-cap record.
+> **Superseding owner decision (21 October 2026):** VM is a retailer based in Uyo; suppliers are private sources linked to product offers/order items, not public marketplace sellers. VM coordinates delivery through approved logistics companies, and every assigned rider must be linked to exactly one active logistics company. Authorized supplier-shop pickup remains supported. Supplier payment eligibility begins only after verified successful customer delivery or pickup and reconciliation. Legacy vendor commission, payout and vendor-managed delivery rules are not default retailer rules.
 
 
-> **Binding owner decisions (20 October 2026):** Victorious MARKET executes approved customer refunds and recovers from the vendor where appropriate. Vendor settlement eligibility begins only after successful delivery or confirmed customer pickup, subject to the configured refund/dispute and payout-security controls. `.ai/BUSINESS_RULES.md` remains authoritative.
+> **Binding financial safeguard:** Victorious MARKET executes approved customer refunds. Supplier recovery is separate, evidence-backed and contract-dependent. A customer refund must not wait for supplier recovery. `.ai/BUSINESS_RULES.md`, `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md`, and `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md` govern current policy.
 
 
 **Repository:** `hotvictorious-rgb/newVmarket`
 
 ## Mission
 
-Modify the existing VICTORIOUS MARKET application to support vendor-managed delivery and customer pickup while retaining secure multi-vendor checkout, Paystack payments, item-level returns/refunds, vendor settlements, cashback/discount accounting, and auditability.
-
-Do not rebuild the application from scratch. Do not implement only frontend changes. Do not delete old logistics code until its dependencies, data, API consumers, jobs, and tests have been mapped.
+Audit and migrate the existing Laravel application from marketplace/vendor-managed fulfilment to Victorious MARKET as a centralized retailer operating from Uyo. Preserve proven payment, refund, idempotency, evidence, and financial-integrity controls. Do not rebuild from scratch, make only frontend changes, or delete legacy logistics/financial data before mapping dependencies.
 
 ## Authoritative business-rule source
 
-The detailed and controlling rules are in [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md) and [VENDOR_PAYOUT_POLICY.md](VENDOR_PAYOUT_POLICY.md). If an older section of this implementation plan conflicts with those files, the current vendor-managed and payout rules take precedence. This document must not reintroduce platform-managed logistics, fleet allocation, rider earnings, or rider payouts.
-
-## Vendor payout policy summary
-
-- Minimum request ₦5,000; maximum request ₦500,000.
-- The platform calculates a strict FIFO batch of oldest eligible, unreserved whole earning records; the minimum is ₦5,000 and maximum is ₦500,000. Stop before the next record would exceed the cap; never split or skip. If the oldest record itself exceeds the cap, flag it for authorised finance resolution.
-- Every request requires authorized admin approval before Paystack transfer initiation.
-- Earnings remain itemized in the ledger and are grouped into each system-calculated strict FIFO payout batch.
-- Records not included in the batch remain eligible for a later batch. Reserve the exact selected whole records atomically; block duplicate/concurrent requests. One active request per vendor remains active through pending, approved-unsent, in-flight or uncertain states.
-- Check provider funding and account-specific limits; reconcile uncertain, failed, successful, and reversed transfers idempotently.
-- Victorious MARKET bears vendor payout transfer fees/stamp duty as platform expense; the vendor receives the exact approved amount.
+The current model is defined in [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md), [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md), and [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md). This plan is subordinate to the current owner-confirmed retailer model. Legacy vendor payout and delivery rules below must not be reused as retailer rules without an explicit decision.
 
 ## Operating model
 
-- Each vendor manages its own delivery and registers/links its own riders.
-- Every active rider must belong to exactly one vendor; the vendor manually assigns its own child vendor orders to its own riders.
-- Riders are operational-only. The platform does not manage rider dispatch, pay riders, or maintain rider wallets/earnings/payouts.
-- Admin sets standardized delivery fees across corridors and zonal tiers; vendors configure the individual LGAs and states their physical shop's riders can physically cover. Explicit LGA or state coverage allows delivery at the admin-mandated fee; unsupported destinations fail closed (in-shop pickup remains available).
-- Each vendor's products, fulfilment choice, delivery fee, commission, cashback eligibility, and financial outcome are tracked independently within the parent checkout / child vendor-order structure.
-- In-shop pickup remains supported as a zero-delivery-fee option. The customer reserves through Victorious MARKET, pays at the approved vendor shop through Victorious MARKET's authorised payment workflow, presents the RES-XXXXXX reservation pass plus one-time customer pickup OTP verification, and the vendor records the mandatory in-shop pickup photo. The existing 24-hour reservation hold remains supported.
-- VMARKET retains payment verification, vendor verification, safety oversight, dispute review, authorized refund controls, ledger integrity, vendor settlement controls, and audit logs; it does not run delivery operations.
-- Preserve customer addresses, destination validation, fulfilment events, evidence, and historical logistics records. Retire legacy logistics paths from new fulfilment only after their dependencies are mapped.
-- Rider/delivery confirmation is an operational event and grants no financial permissions to the rider. An independent authorized financial service may consume a verified event under the published settlement policy; the rider cannot directly edit ledgers, approve refunds, change prices, or request payouts.
-- Rider interfaces may expose the customer's name, delivery address, and a protected Call Customer action only. No raw phone number, payment state, amount due, delivery fee, card details, commission, cashback, or payout data.
+- **Private Wholesale Sourcing:** Suppliers provide physical products, inventory availability in Uyo, and wholesale cost prices. VM adds its profit margin and publishes the canonical public retail selling price (`Retail Price = Wholesale Cost + VM Profit Margin`).
+- **Cheapest & Available Sourcing:** When multiple suppliers offer the same product, VM maps them to the canonical listing and fulfills from the supplier that is available and cheapest in Uyo.
+- **Doorstep Delivery — Pay First Online:** Customer must pay the full retail selling price plus delivery fee upfront online via Paystack. Cash on delivery is completely disabled. Handover requires customer OTP (`delivery_otp`) and doorstep photo.
+- **In-Shop Pickup — Inspect First, Pay at Shop:** Customer reserves online for free (₦0 upfront, `RES-XXXXXX` pass). Customer visits the supplier's physical shop in Uyo, **inspects the physical item first**, and only pays at the shop counter through VM's authorized workflow upon satisfaction before goods release. Handover requires customer pickup OTP (`pickup_verification_code`) and in-shop photo.
+- **Operating Base:** Uyo, Akwa Ibom State is the central operating base. Delivery is offered only where local supplier sourcing and accredited logistics partner coverage are confirmed.
+- **Delivery Riders:** Every rider assigned to new VM delivery must be active and linked to exactly one approved logistics company. Supplier-owned/vendor-linked riders are not eligible for new delivery assignments.
+- **Supplier Payment Eligibility:** Suppliers are paid their agreed wholesale cost strictly after verified successful customer delivery or confirmed in-shop pickup. Order placement, customer payment, or rider collection alone never unlocks supplier payment.
+- **Retail Accounting & Customer 5% Cashback Retention:** The legacy 90/5/5 marketplace split is superseded, but the **5% customer cashback feature is actively retained** as VM's core customer loyalty engine. Accounting follows retail margin: `Customer Retail Price - Supplier Wholesale Cost = VM Gross Margin`. The 5% customer cashback liability is funded directly out of VM's gross retail margin (never deducted from the supplier's wholesale cost). Suppliers receive 100% of agreed wholesale cost upon verified completion. **Non-Compounding Rule:** Cashback CANNOT be earned on amounts covered by redeemed cashback or discounts; it is earned strictly on real money paid through Paystack on eligible merchandise (`(Merchandise Subtotal - Cashback Redeemed) * 5%`). Cashback matures 24 hours after the return window closes and is redeemable on future checkouts up to 50% of the cart value.
 
-## Merchandise and Delivery Fee Allocation / Refund Accounting
+## Retail accounting and refund safeguards
 
-The marketplace uses separate allocation bases for merchandise and delivery. Do not combine them into one blanket commission percentage.
-
-### Merchandise allocation
-For eligible merchandise value, the current allocation is:
-- 90% vendor allocation
-- 5% customer cashback
-- 5% platform merchandise share
-
-### Delivery-fee allocation
-For the admin-standardized delivery fee, the current allocation is:
-- 90% vendor allocation
-- 10% platform delivery-fee share
-
-The vendor separately pays its rider outside Victorious MARKET. No part of the delivery-fee allocation is a rider payout, and no rider payable is created by the platform.
-
-### Example
-
-For a vendor order with ₦90,000 eligible merchandise and ₦10,000 delivery:
-
-| Component | Calculation | Amount |
-| :--- | :--- | ---: |
-| Vendor merchandise allocation | 90% × ₦90,000 | ₦81,000 |
-| Customer cashback | 5% × ₦90,000 | ₦4,500 |
-| Platform merchandise share | 5% × ₦90,000 | ₦4,500 |
-| Vendor delivery-fee allocation | 90% × ₦10,000 | ₦9,000 |
-| Platform delivery-fee share | 10% × ₦10,000 | ₦1,000 |
-| Customer payment | Merchandise + delivery | ₦100,000 |
-
-These are gross allocation examples before discounts, gateway fees, taxes, approved adjustments, or special product rules. Apply the actual stored order allocations and do not infer a flat 10% platform commission on the entire order.
-
-### Refund rules
-
-1. Calculate each allocation per vendor child order, not as one shared cart-level split.
-2. A merchandise refund reverses the applicable vendor merchandise allocation, platform merchandise share, and cashback associated with the refunded eligible product amount.
-3. A delivery-fee refund reverses the corresponding vendor delivery allocation and platform delivery-fee share. Delivery fee refundability depends on the published reason-specific customer policy and applicable law.
-4. Never reverse the same commission, cashback, vendor payable, or refund twice. Use unique idempotency keys and immutable reversal journal entries.
-5. If vendor proceeds have already been paid, record the recovery/liability through the authorized financial engine rather than pretending the funds remain available.
-6. Approval is not completion: reconcile the actual Paystack result before showing a refund as completed.
-7. The amount refunded to the customer is the approved refund amount; internal allocation reversals are not additional customer refunds.
-8. All amounts must be calculated server-side, auditable, idempotent, and reconciled against the payment provider.
+- Supplier purchase cost is a cost/payable (`cost_price * quantity`), not a marketplace commission.
+- Reconcile the exact order-item, selected supplier offer, quantity, agreed cost and verified fulfilment before supplier payment eligibility.
+- Keep payable, authorization, payment attempt, provider confirmation, reversal and reconciliation as separate idempotent states. Timeout means uncertain and must be reconciled before retry.
+- VM remains responsible for an approved customer refund even if a supplier has been paid. Supplier receivable/recovery requires evidence-backed supplier responsibility and contractual recoverability; a complaint alone is not debt.
+- Preserve existing payment verification, webhook authentication, refund authorization, original payment route, refund ceilings, immutable journal and reconciliation controls.
+- The legacy web checkout bypass of CheckoutExecutionService remains open until fixed and tested.
 
 ## 30-Minute Stock-Hold and Late-Payment Reconciliation Policy
 
@@ -174,38 +126,32 @@ If a vendor sells an item offline and forgets to update their VMARKET status, a 
 5. Produce a file-by-file plan listing changes, migrations, dependencies, risks, and acceptance tests.
 6. Do not push directly to `main`.
 
-### Phase 2: Delivery coverage and fee settings
+### Phase 2: Central delivery coverage and fees
 
-1. Use canonical Nigerian state/LGA records and server-side destination validation.
-2. Allow vendors to enable only the destinations they serve.
-3. Support LGA-specific pricing and state-level fallback pricing.
-4. Require every enabled doorstep-delivery destination to have a valid vendor-configured fee greater than zero. The in_shop_pickup fulfilment type is the explicit exception and must always have a zero delivery fee.
-5. Do not permit missing, zero, negative, malformed, or client-controlled fees.
-6. Customer pickup must be modelled separately.
-7. Snapshot the selected destination, fulfilment method, and agreed fee at checkout. Subsequent settings changes must not alter existing orders.
-8. Fail closed for unsupported destinations.
+1. Define the initial service areas reachable from Uyo; do not assume all Nigerian destinations are covered.
+2. Define VM-owned customer delivery fees and approved logistics-company rate/settlement agreements. Missing or stale coverage/fee rules must fail closed.
+3. Snapshot the destination, quoted customer fee and applicable rule version on the order.
+4. Require every rider assigned to new VM work to be active and linked to exactly one active logistics company.
+5. Keep supplier source/pickup location separate from customer destination and logistics coverage.
 
 ### Phase 3: Checkout and payment
 
-1. Reconcile each vendor's product subtotal, discount allocation, fulfilment method, delivery fee, cashback eligibility, payable total, commission, and vendor payable.
-2. Show customers a clear breakdown for each vendor order before payment.
-3. Calculate authoritative totals on the server using safe monetary arithmetic.
-4. Preserve the parent checkout and child vendor-order relationship.
-5. Verify Paystack transactions server-side against amount, currency, reference, status, and order linkage.
-6. Make payment confirmation and webhook processing idempotent.
-7. Handle late callbacks, duplicate events, timeout uncertainty, and reconciliation without duplicating financial entries.
-8. Do not mark an order paid based only on frontend success or customer-provided evidence.
+1. Link every order item to the exact selected supplier offer and immutable purchase-cost snapshot.
+2. Preserve server-side payment verification, exact amount/currency/reference binding, idempotency, unique constraints and reconciliation.
+3. Prevent supplier payable creation or eligibility from order placement, payment success alone, supplier readiness or carrier collection.
+4. Preserve the approved customer payment paths. Supplier-shop pickup payment, where supported, must remain within VM's authorized payment workflow.
+5. Audit every web/API checkout route. The legacy web checkout bypass of CheckoutExecutionService must be corrected before release.
 
-### Phase 4: Vendor-managed fulfilment
+### Phase 4: Central fulfilment and supplier pickup
 
-1. Implement or adapt secure order acceptance, preparation, readiness, dispatch, delivery/pickup confirmation, failure, and complaint transitions.
-2. Enforce vendor ownership and authorised delivery-person access on the server.
-3. Keep dispatch separate from delivery confirmation.
-4. Record timestamps, actor identity, relevant evidence, and transition history.
-5. Remove obsolete platform dispatch dependencies from critical paths.
-6. Keep the rider app as an operational tool for vendor-linked riders, but remove platform-managed dispatch, fleet affiliation for new orders, and every rider financial/payout workflow. Enforce that each active rider belongs to one vendor and only receives that vendor's manually assigned orders. Preserve legacy logistics dependencies for historical records until dependency mapping supports safe retirement.
-7. **Settlement trigger:** do not make vendor proceeds eligible before verified successful doorstep delivery or confirmed customer in-shop pickup. Keep the 24-hour return/refund window, active return/dispute holds, vendor eligibility, bank-security cooldown, authorization, and transfer-proof controls. Evaluate eligibility per vendor child order; a rider operational event is evidence, not a payout instruction.
-7. Preserve existing order data and avoid destructive migrations.
+1. VM coordinates product sourcing and dispatch through an approved logistics company.
+2. Validate logistics-company status and the rider's exclusive active link to that company on assignment and relevant custody transitions.
+3. Separate supplier-to-VM collection, logistics-company custody, delivery attempts, customer handover and return-to-origin events.
+4. Doorstep completion requires server-verified customer OTP and doorstep photo. Supplier-shop pickup requires the reservation pass, separate one-time customer pickup verification and in-shop photo.
+5. Only verified customer handover makes the supplier payable eligible, after order/amount reconciliation. Eligibility does not trigger automatic payment.
+6. Remove or block new-order vendor-controlled dispatch, vendor-linked rider assignments, vendor commission payouts and legacy fleet payment paths after dependencies are mapped; preserve historical records.
+7. A failed delivery or customer refusal is not automatic refund approval, supplier fault or debt.
+
 ## Current-code findings that must be addressed
 
 The initial source inspection found direct mismatches with the adopted rules. These are findings from code review, not claims that fixes have already been implemented:

@@ -43,6 +43,19 @@
 
         addItem: function (product, quantity = 1) {
             quantity = parseInt(quantity, 10) || 1;
+
+            // Single-Shop Order Integrity Check
+            if (this.items.length > 0 && product.shop_name) {
+                const currentShop = this.items[0].shop_name;
+                if (currentShop && currentShop !== product.shop_name) {
+                    if (confirm(`Your cart already contains items from "${currentShop}". Victorious MARKET orders are fulfilled directly from individual merchant branches. Would you like to clear your cart and start an order from "${product.shop_name}" instead?`)) {
+                        this.items = [];
+                    } else {
+                        return;
+                    }
+                }
+            }
+
             const existingIndex = this.items.findIndex(item => item.id === product.id);
 
             if (existingIndex > -1) {

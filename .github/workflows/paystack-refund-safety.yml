@@ -66,6 +66,7 @@ jobs:
           php -l tests/Feature/StructuralEntityAndLogisticsInvariantTest.php
           php -l tests/Feature/VendorPayoutLifecycleTest.php
           php -l tests/Feature/VendorSettlementProtectionWindowTest.php
+          php -l tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php
 
       - name: Run financial audit and payment hardening proof tests
-        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/VendorManagedDeliveryRiderTest.php tests/Feature/StructuralEntityAndLogisticsInvariantTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php --display-warnings
+        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/VendorManagedDeliveryRiderTest.php tests/Feature/StructuralEntityAndLogisticsInvariantTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php --display-warnings

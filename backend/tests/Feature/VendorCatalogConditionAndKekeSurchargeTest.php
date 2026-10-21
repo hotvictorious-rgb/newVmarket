@@ -582,6 +582,11 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'pickup_enabled' => true,
         ]);
 
+        \App\Models\ShopDeliveryCoverage::firstOrCreate(
+            ['shop_id' => $shopEket->id, 'state_id' => $this->shop->state_id, 'lga_id' => $this->uyoLga->id],
+            ['is_active' => true]
+        );
+
         // Product at Uyo Branch (Shop 1): Standard Bike Item
         $productUyoBranch = Product::create([
             'vendor_id' => $this->vendor->id,
