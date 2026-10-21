@@ -473,3 +473,13 @@ Status: FIXED — focused regression passed. No merge or deployment.
 **Regression coverage added:** an administrator's attempt to onboard an Eket supplier is rejected before a vendor profile is created.
 
 **Status:** Source and regression test committed on `docs/retailer-central-fulfilment-model`; tests/CI have not run for these latest commits. No merge or deployment.
+
+
+## VM-AUD-088 — Align public product eligibility with supplier KYC requirements (21 October 2026)
+
+**Severity:** High  
+**Finding:** Public product eligibility required an active supplier profile and confirmed offer but did not require verified supplier KYC, while sourcing selection and supplier payout required verified KYC. This could advertise a product that the checkout sourcing service would reject.
+
+**Change:** The public product eligibility scope now requires `vendor_profiles.kyc_status = verified`, aligning catalog visibility with sourcing eligibility. Added regression coverage for a confirmed offer from a supplier whose KYC status is no longer verified.
+
+**Status:** Source and test committed on `docs/retailer-central-fulfilment-model`; automated tests have not run for this latest commit. No merge or deployment.
