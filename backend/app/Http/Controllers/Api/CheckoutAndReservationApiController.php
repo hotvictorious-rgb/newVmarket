@@ -350,7 +350,7 @@ class CheckoutAndReservationApiController extends Controller
 
         $reservation = PickupReservation::where('reservation_code', strtoupper(trim($code)))
             ->where('customer_id', $user->id)
-            ->with(['shop:id,name,address,lga_id', 'product:id,name,thumbnail,unit_price'])
+            ->with(['product:id,name,thumbnail,unit_price'])
             ->first();
 
         if (!$reservation) {
@@ -369,11 +369,6 @@ class CheckoutAndReservationApiController extends Controller
                 'total_amount' => $reservation->total_amount,
                 'expires_at' => $reservation->expires_at,
                 'created_at' => $reservation->created_at,
-                'shop' => $reservation->shop ? [
-                    'id' => $reservation->shop->id,
-                    'name' => $reservation->shop->name,
-                    'address' => $reservation->shop->address,
-                ] : null,
                 'product' => $reservation->product ? [
                     'id' => $reservation->product->id,
                     'name' => $reservation->product->name,
@@ -458,14 +453,36 @@ class CheckoutAndReservationApiController extends Controller
         $userId = $request->user()->id;
 
         $reservations = PickupReservation::where('customer_id', $userId)
-            ->with(['shop:id,name,address,lga_id', 'product:id,name,thumbnail,unit_price', 'order:id,order_number,order_status,payment_status'])
+            ->with(['product:id,name,thumbnail,unit_price', 'order:id,order_number,order_status,payment_status'])
             ->orderBy('id', 'desc')
             ->paginate(15);
 
+        $data = $reservations->getCollection()->map(function (PickupReservation $reservation) {
+            return [
+                'reservation_code' => $reservation->reservation_code,
+                'status' => $reservation->status,
+                'quantity' => $reservation->quantity,
+                'estimated_total' => $reservation->estimated_total,
+                'expires_at' => $reservation->expires_at,
+                'created_at' => $reservation->created_at,
+                'product' => $reservation->product ? [
+                    'name' => $reservation->product->name,
+                    'thumbnail' => $reservation->product->thumbnail,
+                    'unit_price' => $reservation->product->unit_price,
+                ] : null,
+                'order' => $reservation->order ? [
+                    'order_number' => $reservation->order->order_number,
+                    'order_status' => $reservation->order->order_status,
+                    'payment_status' => $reservation->order->payment_status,
+                ] : null,
+                'support_message' => 'Contact Victorious MARKET support before travelling to any collection point.',
+            ];
+        });
+
         return response()->json([
             'status' => true,
-            'reservations' => $reservations->items(),
-            'data' => $reservations->items(),
+            'reservations' => $data,
+            'data' => $data,
             'meta' => [
                 'current_page' => $reservations->currentPage(),
                 'last_page' => $reservations->lastPage(),
@@ -476,229 +493,11 @@ class CheckoutAndReservationApiController extends Controller
 
     public function payPickupReservation(Request $request, string $code): JsonResponse
     {
-        $user = $request->user();
-        $code = strtoupper(trim($code));
-
-        $result = DB::transaction(function () use ($user, $code, $request) {
-            $reservation = PickupReservation::where('customer_id', $user->id)
-                ->where('reservation_code', $code)
-                ->lockForUpdate()
-                ->first();
-
-            if (!$reservation) {
-                return ['error' => true, 'code' => 404, 'message' => 'Reservation not found or unauthorized.'];
-            }
-
-            if ($reservation->status === 'order_placed') {
-                return ['error' => true, 'code' => 422, 'message' => 'An order has already been placed for this reservation.'];
-            }
-
-            if ($reservation->status === 'cancelled' || $reservation->status === 'expired') {
-                return ['error' => true, 'code' => 422, 'message' => "Reservation is {$reservation->status} and cannot be paid."];
-            }
-
-            if ($reservation->status !== 'inspected_accepted') {
-                return [
-                    'error' => true,
-                    'code' => 422,
-                    'message' => 'Reservation must be inspected and accepted at merchant shop before payment can be initialized.',
-                ];
-            }
-
-            $product = Product::marketplaceEligible()->lockForUpdate()->find($reservation->product_id);
-            if (!$product) {
-                return [
-                    'error' => true,
-                    'code' => 422,
-                    'message' => 'Product has expired or is no longer eligible for checkout. The vendor must re-confirm product freshness.',
-                ];
-            }
-            if ($product->available_quantity < $reservation->quantity) {
-                return [
-                    'error' => true,
-                    'code' => 422,
-                    'message' => "Insufficient stock remaining for {$product->name}.",
-                ];
-            }
-
-            $shop = Shop::withTrashed()->with('vendor.user')->findOrFail($reservation->shop_id);
-            if ($shop->trashed() || !$shop->is_active) {
-                return [
-                    'error' => true,
-                    'code' => 422,
-                    'message' => 'The selected shop branch is currently inactive.',
-                ];
-            }
-
-            if (!$shop->vendor || $shop->vendor->trashed() || $shop->vendor->marketplace_status !== 'active') {
-                return [
-                    'error' => true,
-                    'code' => 422,
-                    'message' => 'The merchant providing this item is currently not active on the marketplace.',
-                ];
-            }
-
-            if (!$shop->vendor->user || $shop->vendor->user->status !== 'active') {
-                return [
-                    'error' => true,
-                    'code' => 422,
-                    'message' => 'The merchant user account is inactive.',
-                ];
-            }
-
-            $merchandiseSubtotal = $reservation->estimated_total;
-
-            // Optional cashback redemption with pessimistic balance reservation
-            $cashbackApplied = '0.00';
-            if ($request->boolean('use_cashback') || $request->boolean('redeem_cashback')) {
-                $now = Carbon::now();
-                $availableLotsSum = CustomerCashbackLedger::where('customer_id', $user->id)
-                    ->where('status', 'available')
-                    ->where('matures_at', '<=', $now)
-                    ->where('expires_at', '>', $now)
-                    ->lockForUpdate()
-                    ->sum('amount');
-
-                $activeReservedSum = \App\Models\CashbackReservation::where('customer_id', $user->id)
-                    ->where('status', 'reserved')
-                    ->where('expires_at', '>', $now)
-                    ->lockForUpdate()
-                    ->sum('amount');
-
-                $effectiveAvailable = bcsub((string)$availableLotsSum, (string)$activeReservedSum, 2);
-                if (bccomp($effectiveAvailable, '0.00', 2) > 0) {
-                    $maxRedemption = BcMathService::mul($merchandiseSubtotal, '0.50');
-                    $cashbackApplied = bccomp($effectiveAvailable, $maxRedemption) > 0 ? $maxRedemption : $effectiveAvailable;
-                }
-            }
-
-            $totalPayable = BcMathService::sub($merchandiseSubtotal, $cashbackApplied);
-
-            if (bccomp($totalPayable, '100000000.00', 2) > 0) {
-                return [
-                    'error' => true,
-                    'code' => 422,
-                    'message' => 'Payable amount exceeds Paystack maximum single transaction limit of ₦100,000,000.00.',
-                ];
-            }
-
-            $offer = SupplierOffer::where('product_id', $product->id)
-                ->where('shop_id', $shop->id)
-                ->where('is_available', true)
-                ->first();
-
-            $supplierUnitCost = $offer ? (string) $offer->wholesale_cost : (string) ($product->cost_price ?? '0.00');
-            if (BcMathService::comp($supplierUnitCost, '0.00') <= 0) {
-                $supplierUnitCost = BcMathService::mul((string) $product->unit_price, '0.85');
-            }
-            $supplierCostTotal = BcMathService::mul($supplierUnitCost, (string) $reservation->quantity);
-            // Earn cashback only on the eligible merchandise amount actually funded
-            // by real Paystack money after the redeemed cashback discount.
-            $customerCashback5 = BcMathService::mul($totalPayable, '0.05');
-            $vendorNet90 = '0.00'; // no new marketplace merchandise commission
-            $platformMargin5 = '0.00';
-            $retailerMerchandiseMargin = BcMathService::sub(
-                BcMathService::sub($merchandiseSubtotal, $supplierCostTotal),
-                $customerCashback5
-            );
-
-            $orderNumber = 'VM-' . date('Ymd') . '-' . strtoupper(Str::random(4));
-            $paymentRef = Order::generateUniquePaymentReference();
-            $pickupOtp = Order::generateUniquePickupOtp();
-
-            $order = Order::create([
-                'order_number' => $orderNumber,
-                'customer_id' => $user->id,
-                'vendor_id' => $shop->vendor_id,
-                'shop_id' => $shop->id,
-                'fulfillment_type' => 'in_shop_pickup',
-                'retailer_model_order' => true,
-                'order_status' => 'confirmed',
-                'payment_status' => 'pending',
-                'payment_method' => 'paystack',
-                'payment_reference' => $paymentRef,
-                'guest_access_token' => bin2hex(random_bytes(32)),
-                'origin_lga_id' => $shop->lga_id,
-                'destination_lga_id' => $shop->lga_id,
-                'merchandise_subtotal' => $merchandiseSubtotal,
-                'delivery_fee' => '0.00',
-                'supplier_cost_total_snapshot' => $supplierCostTotal,
-                'retailer_merchandise_margin' => $retailerMerchandiseMargin,
-                'logistics_company_payable_default_amount' => '0.00',
-                'logistics_company_payable_amount' => '0.00',
-                'cashback_redeemed' => $cashbackApplied,
-                'grand_total' => $totalPayable,
-                'vendor_net_90' => $vendorNet90,
-                'customer_cashback_5' => $customerCashback5,
-                'platform_margin_5' => $platformMargin5,
-                'pickup_verification_code' => $pickupOtp,
-                'verification_code' => Order::generateUniqueDeliveryOtp(),
-                'vendor_settlement_status' => 'held',
-                'expires_at' => Carbon::now()->addMinutes(30),
-            ]);
-
-            // Atomic Cashback Pre-Payment Reservation
-            if (bccomp($cashbackApplied, '0.00', 2) > 0) {
-                \App\Models\CashbackReservation::create([
-                    'customer_id' => $user->id,
-                    'order_id' => $order->id,
-                    'amount' => $cashbackApplied,
-                    'status' => 'reserved',
-                    'expires_at' => Carbon::now()->addMinutes(30),
-                ]);
-            }
-
-            // Verify product availability under the two-status model (In Stock vs Out of Stock)
-            if (!$product->is_in_stock) {
-                return ['error' => true, 'message' => "Product '{$product->name}' is currently out of stock."];
-            }
-
-            OrderItem::create([
-                'order_id' => $order->id,
-                'product_id' => $product->id,
-                'product_name' => $product->name,
-                'quantity' => $reservation->quantity,
-                'unit_price' => $reservation->unit_price,
-                'line_total' => $reservation->estimated_total,
-                'supplier_offer_id' => $offer?->id,
-                'supplier_vendor_id' => $offer ? $offer->vendor_id : $shop->vendor_id,
-                'supplier_shop_id' => $shop->id,
-                'supplier_name_snapshot' => $offer?->vendor?->business_name ?? ($shop->vendor->business_name ?? ($shop->vendor->user->name ?? 'Supplier')),
-                'supplier_shop_name_snapshot' => $shop->name,
-                'supplier_cost_snapshot' => $supplierUnitCost,
-                'supplier_cost_currency' => 'NGN',
-                'supplier_snapshot_at' => Carbon::now(),
-            ]);
-
-            // Mark reservation as payment completed and bind order
-            $reservation->status = 'payment_completed';
-            $reservation->order_id = $order->id;
-            $reservation->save();
-
-            return ['error' => false, 'order' => $order, 'reservation' => $reservation];
-        });
-
-        if (!empty($result['error'])) {
-            return response()->json([
-                'status' => false,
-                'message' => $result['message'],
-            ], $result['code'] ?? 422);
-        }
-
-        $order = $result['order'];
-        $callbackUrl = route('storefront') . '?order_success=' . $order->order_number;
-        $paystackInit = $this->paystackService->initializeTransaction($order, $callbackUrl, $user->email);
-
         return response()->json([
-            'status' => true,
-            'message' => 'Pickup payment initialized. After payment is verified, open your order status page for the customer pickup OTP. Keep your reservation pass for the cashier.',
-            'data' => [
-                'order_number' => $order->order_number,
-                'reservation_code' => $code,
-                'grand_total' => $order->grand_total,
-                'paystack' => $paystackInit,
-            ],
-        ], 200);
+            'status' => false,
+            'code' => 'SUPPORT_MANAGED_PICKUP_ONLY',
+            'message' => 'Public pickup reservation payment is disabled. Contact Victorious MARKET support to arrange any approved pickup exception.',
+        ], 410);
     }
 
     public function cancelPickupReservation(Request $request, string $code): JsonResponse
