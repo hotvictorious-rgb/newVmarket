@@ -16,7 +16,6 @@ class ReturnCase extends Model
             // private supplier or supplier-specific collection point.
             if (($order && $order->retailer_model_order) || ($parentOrder && $parentOrder->retailer_model_order)) {
                 $returnCase->vendor_id = null;
-                $returnCase->collection_point_id = null;
             }
         });
     }
