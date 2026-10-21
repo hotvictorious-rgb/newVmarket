@@ -343,3 +343,13 @@ Required controls:
 - **Critical limitation:** The selector is a foundation only and is **not wired into either checkout writer or pickup reservation/payment yet**. There is not yet an authorized workflow that records supplier physical confirmation, controls confirmation expiry, or audits admin override. Do not treat these commits as end-to-end sourcing completion. The selector's row lock is meaningful only when invoked inside the caller's database transaction; integration must ensure that.
 - **Verification status:** No test execution result is claimed for these latest commits. A fresh CI run is required to validate migration syntax, schema test, and query behavior.
 - **Next step:** Implement a permissioned, audited availability-confirmation workflow and test selector eligibility/tie-breaking/expiry/ownership. Then integrate the shared selector and immutable item snapshot writer into the canonical checkout and pickup payment paths without yet reinterpreting legacy accounting fields.
+
+
+## 23. Supplier selection foundation CI result — 21 October 2026
+
+- **Workflow:** [run 39570443180](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39570443180), commit `d7b3de1b8f4aae4f8024865a4957f4d7b16dd706`.
+- **Observed result:** workflow completed successfully; changed-file PHP syntax check passed; selected financial-audit/payment-hardening suites report **145 passed, 987 assertions**.
+- **What this proves:** the changed-file syntax check and the workflow's selected existing regression suites passed at that commit.
+- **What this does not prove:** the CI command does not establish that `SupplierSourcingSnapshotSchemaTest` ran, that the new forward migration applies on a real migrated database, or that `SupplierOfferSelectionService` has query-level behavior coverage. A later commit added the audit note but did not change runtime code.
+- **Next verification required:** run the supplier-sourcing schema test explicitly and add selector feature tests for cheapest eligible offer, deterministic ties, expired/missing availability evidence, inactive/soft-deleted supplier/shop, shop-supplier mismatch, pickup-disabled shops, and no-offer fail-closed behavior. The current selector is still not called by checkout or pickup payment.
+- **Release status:** retailer sourcing and accounting remain launch blockers. No merge to `main` or deployment.
