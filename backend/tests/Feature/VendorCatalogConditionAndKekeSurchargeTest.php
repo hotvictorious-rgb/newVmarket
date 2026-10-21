@@ -450,6 +450,20 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertNotSame($otpA, $otpB);
         $this->assertEquals('ready_for_pickup', $orderTwoBulky->fresh()->order_status);
 
+        // Supplier-facing order data is limited to its assigned item group and
+        // excludes customer identity, address IDs, and central logistics contacts.
+        Sanctum::actingAs($supplierUserB, ['*']);
+        $supplierOrderResponse = $this->getJson('/api/v1/vendor/orders');
+        $supplierOrderResponse->assertOk();
+        $supplierOrder = collect($supplierOrderResponse->json('data'))
+            ->firstWhere('id', $orderTwoBulky->id);
+        $this->assertNotNull($supplierOrder);
+        $this->assertArrayNotHasKey('customer_id', $supplierOrder);
+        $this->assertArrayNotHasKey('customer_address_id', $supplierOrder);
+        $this->assertArrayNotHasKey('rider_id', $supplierOrder);
+        $this->assertArrayNotHasKey('logistics_company_id', $supplierOrder);
+        $this->assertCount(1, $supplierOrder['items']);
+
         // A supplier can report a stock failure after confirming and preparing
         // its package, as long as that package has not yet been collected.
         Sanctum::actingAs($supplierUserB, ['*']);
