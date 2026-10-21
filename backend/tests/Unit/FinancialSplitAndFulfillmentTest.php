@@ -99,6 +99,10 @@ class FinancialSplitAndFulfillmentTest extends TestCase
         $this->assertFalse($uyoToEket['is_available']);
         $this->assertEquals('0.00', $uyoToEket['fee']);
         $this->assertEquals('destination_outside_uyo', $uyoToEket['rate_tier']);
+        $this->assertNull(
+            DeliveryLane::resolveFee($uyo->id, $eket->id),
+            'The fee resolver must not expose a legacy out-of-Uyo lane.'
+        );
 
         // A source outside Uyo must remain prohibited even for a Uyo destination.
         $eketShop = Shop::create([
