@@ -1239,6 +1239,50 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
     }
 
 
+    public function test_supplier_cannot_register_a_second_shop_or_pickup_point(): void
+    {
+        $this->actingAs($this->vendorUser)
+            ->post('/vendor/shops', [
+                'name' => 'Second Plaza Pickup',
+                'address' => 'Another Uyo address',
+                'lga_id' => $this->uyoLga->id,
+                'phone' => '+2348011223344',
+                'pickup_enabled' => '1',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(1, Shop::where('vendor_id', $this->vendor->id)->whereNull('deleted_at')->count());
+    }
+
+    public function test_supplier_cannot_move_shop_outside_uyo(): void
+    {
+        $this->actingAs($this->vendorUser)
+            ->post("/vendor/shops/{$this->shop->id}/update", [
+                'name' => $this->shop->name,
+                'address' => $this->shop->address,
+                'lga_id' => $this->eketLga->id,
+                'phone' => '+2348011223344',
+                'pickup_enabled' => '1',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame($this->uyoLga->id, $this->shop->fresh()->lga_id);
+    }
+
+    public function test_supplier_cannot_configure_delivery_coverage(): void
+    {
+        $this->actingAs($this->vendorUser)
+            ->post("/vendor/shops/{$this->shop->id}/coverage", [
+                'lga_ids' => [$this->eketLga->id],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('shop_delivery_coverages', [
+            'shop_id' => $this->shop->id,
+            'lga_id' => $this->eketLga->id,
+        ]);
+    }
+
     public function test_delivery_rejects_outside_uyo_even_if_legacy_lane_is_active(): void
     {
         DeliveryLane::create([
