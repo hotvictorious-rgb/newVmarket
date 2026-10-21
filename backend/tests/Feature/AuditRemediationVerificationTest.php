@@ -1132,4 +1132,66 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertSame(1, Order::where('customer_id', $this->customer->id)->count());
     }
 
+
+    public function test_refund_disbursement_fails_closed_without_original_payment_reference(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        /** @var Order $order */
+        $order = $fixture['order'];
+        $order->update(['payment_reference' => null, 'payment_status' => 'paid']);
+
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+        ]);
+
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldNotReceive('initiateRefund');
+        $service = new ReturnAndRefundService($gateway);
+
+        $beforeJournalCount = FinancialJournalEntry::count();
+        $result = $service->adminDisburseRefund($this->superAdmin, $case);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('original payment reference', $result['message']);
+        $this->assertSame('refund_pending', $case->fresh()->status);
+        $this->assertNull($case->fresh()->refund_claim_token);
+        $this->assertSame($beforeJournalCount, FinancialJournalEntry::count());
+        $this->assertNull($case->fresh()->refunded_at);
+    }
+
+    public function test_refund_disbursement_fails_closed_for_zero_refund_amount(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '0.00',
+        ]);
+
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldNotReceive('initiateRefund');
+        $service = new ReturnAndRefundService($gateway);
+
+        $beforeJournalCount = FinancialJournalEntry::count();
+        $result = $service->adminDisburseRefund($this->superAdmin, $case);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('greater than zero', $result['message']);
+        $this->assertSame($beforeJournalCount, FinancialJournalEntry::count());
+        $this->assertNull($case->fresh()->refund_claim_token);
+        $this->assertSame('refund_pending', $case->fresh()->status);
+    }
 }
