@@ -147,7 +147,7 @@ class NotificationDispatchService
         // 1. Vendor Counter Alert with Secret 6-digit PIN
         if ($order->vendor && $order->vendor->user) {
             $vendorUserId = $order->vendor->user_id;
-            $vendorPhone = $order->vendor->business_phone ?? '+2348000000001';
+            $vendorPhone = trim((string) ($order->vendor->business_phone ?: $order->vendor->user?->phone));
             $vendorMsg = "Victorious Market Counter Authorized: Handover OTP for Order {$order->order_number} is [{$order->pickup_verification_code}]. Verify assigned courier identity before releasing package.";
 
             if ($vendorPhone !== '' && self::isChannelActive('whatsapp', $eventType)) {
@@ -234,7 +234,7 @@ class NotificationDispatchService
         // 2. Vendor Notification: Handover confirmed
         if ($order->vendor && $order->vendor->user) {
             $vendorUserId = $order->vendor->user_id;
-            $vendorPhone = $order->vendor->business_phone ?? '+2348000000001';
+            $vendorPhone = trim((string) ($order->vendor->business_phone ?: $order->vendor->user?->phone));
             $vendorMsg = "Victorious Market: Order {$order->order_number} custody transferred to courier {$riderName}. Status is now Out for Delivery.";
 
             if ($vendorPhone !== '' && self::isChannelActive('whatsapp', $eventType)) {
@@ -327,7 +327,7 @@ class NotificationDispatchService
         // 3. Vendor Escrow Settlement Notification
         if ($order->vendor && $order->vendor->user) {
             $vendorUserId = $order->vendor->user_id;
-            $vendorPhone = $order->vendor->business_phone ?? '+2348000000001';
+            $vendorPhone = trim((string) ($order->vendor->business_phone ?: $order->vendor->user?->phone));
             $vendorMsg = "Victorious Market: Order {$order->order_number} delivered to customer. 90% payout of ₦" . number_format((float)$order->vendor_net_90, 2) . " entered 24h sovereign buffer.";
 
             if ($vendorPhone !== '' && self::isChannelActive('whatsapp', $eventType)) {
