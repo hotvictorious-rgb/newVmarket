@@ -698,4 +698,62 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         // 4. Verify Double-Entry Balance
         $this->assertTrue(FinancialJournalEntry::assertOrderBalanced($parentOrder->id));
     }
+    public function test_retailer_model_order_cannot_enter_legacy_child_order_settlement(): void
+    {
+        $reference = 'VM-RETAILER-CHILD-BLOCK-' . strtoupper(substr(sha1(uniqid('', true)), 0, 8));
+        $parent = Order::create([
+            'order_number' => 'VM-RETAILER-PARENT-' . strtoupper(substr(sha1($reference), 0, 8)),
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendorA->id,
+            'shop_id' => $this->shopA->id,
+            'retailer_model_order' => true,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'pending',
+            'payment_status' => 'pending',
+            'payment_method' => 'paystack',
+            'payment_reference' => $reference,
+            'guest_access_token' => 'guest_retailer_parent_' . substr(sha1($reference), 0, 8),
+            'origin_lga_id' => $this->originLga->id,
+            'destination_lga_id' => $this->originLga->id,
+            'merchandise_subtotal' => '500.00',
+            'delivery_fee' => '500.00',
+            'grand_total' => '1000.00',
+            'supplier_cost_total_snapshot' => '300.00',
+            'vendor_settlement_status' => 'held',
+        ]);
+
+        Order::create([
+            'order_number' => 'VM-RETAILER-CHILD-' . strtoupper(substr(sha1($reference . '-child'), 0, 8)),
+            'parent_order_id' => $parent->id,
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendorA->id,
+            'shop_id' => $this->shopA->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'pending',
+            'payment_status' => 'pending',
+            'payment_method' => 'paystack',
+            'payment_reference' => $reference,
+            'guest_access_token' => 'guest_retailer_child_' . substr(sha1($reference), 0, 8),
+            'origin_lga_id' => $this->originLga->id,
+            'destination_lga_id' => $this->originLga->id,
+            'merchandise_subtotal' => '500.00',
+            'delivery_fee' => '500.00',
+            'grand_total' => '1000.00',
+            'vendor_settlement_status' => 'held',
+        ]);
+
+        $result = app(OrderSettlementService::class)->settlePaystackOrder($parent, [
+            'reference' => $reference,
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => 100000,
+            'channel' => 'card',
+        ], $this->customer);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('RETAILER_PARENT_CHILD_ORDER_FORBIDDEN', $result['status']);
+        $this->assertSame('pending', $parent->fresh()->payment_status);
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $parent->id)->count());
+    }
+
 }
