@@ -2692,6 +2692,7 @@ class PortalController extends Controller
 
             if (bccomp($remainingNeeded, '0.00', 2) > 0) {
                 $eligibleOrders = Order::where('vendor_id', $vendor->id)
+                    ->where('retailer_model_order', false)
                     ->where('vendor_settlement_status', 'eligible')
                     ->where('payment_status', 'paid')
                     ->where('order_status', 'delivered')
