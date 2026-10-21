@@ -188,6 +188,23 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             ]);
         }
         $this->fleetCompany = $fleetCompany;
+        $checkoutCorridor = DeliveryCorridor::create([
+            'code' => 'financial-test-uyo-corridor',
+            'name' => 'Financial Test Uyo Corridor',
+            'lga_id' => $this->uyoLga->id,
+            'landmark_aliases' => ['Uyo', 'Oron Road'],
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+        LogisticsCompanyCorridorRate::create([
+            'logistics_company_id' => $this->fleetCompany->id,
+            'delivery_corridor_id' => $checkoutCorridor->id,
+            'base_payable' => '900.00',
+            'bulky_surcharge_per_unit' => '200.00',
+            'tariff_version' => 1,
+            'is_active' => true,
+        ]);
 
         $existingVendorRider = RiderProfile::where('vendor_id', $this->vendorProfile->id)->first();
         if ($existingVendorRider) {
@@ -751,6 +768,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $payload = [
             'shop_id' => $this->shop->id,
             'fulfillment_type' => 'doorstep_delivery',
+            'customer_address_id' => CustomerAddress::where('user_id', $this->customerUser->id)->where('lga_id', $this->uyoLga->id)->value('id'),
             'destination_lga_id' => $this->shop->lga_id,
             'items' => [
                 [
