@@ -103,10 +103,10 @@ class NotificationDispatchService
         // 2. Vendor HQ & Branch Counter Staff Alert
         if ($order->vendor && $order->vendor->user) {
             $vendorUserId = $order->vendor->user_id;
-            $vendorPhone = $order->vendor->business_phone ?? '+2348000000001';
+            $vendorPhone = trim((string) ($order->vendor->business_phone ?: $order->vendor->user?->phone));
             $vendorMsg = "Victorious Market Plaza Alert: New Order {$order->order_number} received! Please inspect and prepare package.";
 
-            if (self::isChannelActive('whatsapp', $eventType)) {
+            if ($vendorPhone !== '' && self::isChannelActive('whatsapp', $eventType)) {
                 $dispatches[] = self::record('whatsapp', $vendorPhone, 'Vendor', $vendorMsg);
             }
             if (self::isChannelActive('in_app', $eventType)) {
@@ -150,7 +150,7 @@ class NotificationDispatchService
             $vendorPhone = $order->vendor->business_phone ?? '+2348000000001';
             $vendorMsg = "Victorious Market Counter Authorized: Handover OTP for Order {$order->order_number} is [{$order->pickup_verification_code}]. Verify assigned courier identity before releasing package.";
 
-            if (self::isChannelActive('whatsapp', $eventType)) {
+            if ($vendorPhone !== '' && self::isChannelActive('whatsapp', $eventType)) {
                 $dispatches[] = self::record('whatsapp', $vendorPhone, 'Vendor Counter', $vendorMsg);
             }
             if (self::isChannelActive('in_app', $eventType)) {
@@ -237,7 +237,7 @@ class NotificationDispatchService
             $vendorPhone = $order->vendor->business_phone ?? '+2348000000001';
             $vendorMsg = "Victorious Market: Order {$order->order_number} custody transferred to courier {$riderName}. Status is now Out for Delivery.";
 
-            if (self::isChannelActive('whatsapp', $eventType)) {
+            if ($vendorPhone !== '' && self::isChannelActive('whatsapp', $eventType)) {
                 $dispatches[] = self::record('whatsapp', $vendorPhone, 'Vendor', $vendorMsg);
             }
             if (self::isChannelActive('in_app', $eventType)) {
@@ -330,7 +330,7 @@ class NotificationDispatchService
             $vendorPhone = $order->vendor->business_phone ?? '+2348000000001';
             $vendorMsg = "Victorious Market: Order {$order->order_number} delivered to customer. 90% payout of ₦" . number_format((float)$order->vendor_net_90, 2) . " entered 24h sovereign buffer.";
 
-            if (self::isChannelActive('whatsapp', $eventType)) {
+            if ($vendorPhone !== '' && self::isChannelActive('whatsapp', $eventType)) {
                 $dispatches[] = self::record('whatsapp', $vendorPhone, 'Vendor', $vendorMsg);
             }
             if (self::isChannelActive('in_app', $eventType)) {
@@ -365,9 +365,9 @@ class NotificationDispatchService
                 }
             }
         } else {
-            $vendorPhone = $payout->vendor->business_phone ?? '+2348000000001';
+            $vendorPhone = trim((string) ($payout->vendor?->business_phone ?: $payout->vendor?->user?->phone));
             $msg = "Victorious Market Treasury: Merchant payout of ₦" . number_format((float)$payout->amount, 2) . " successfully disbursed to {$payout->bank_name} ({$payout->account_number}).";
-            if (self::isChannelActive('whatsapp', $eventType)) {
+            if ($vendorPhone !== '' && self::isChannelActive('whatsapp', $eventType)) {
                 $dispatches[] = self::record('whatsapp', $vendorPhone, 'Vendor', $msg);
             }
             if ($payout->vendor && $payout->vendor->user) {
@@ -413,7 +413,7 @@ class NotificationDispatchService
         // Alert Vendor & Branch Counter Staff
         if ($returnCase->vendor && $returnCase->vendor->user) {
             $vendorUserId = $returnCase->vendor->user_id;
-            $vendorPhone = $returnCase->vendor->business_phone ?? '+2348000000001';
+            $vendorPhone = trim((string) ($returnCase->vendor->business_phone ?: $returnCase->vendor->user?->phone));
 
             $title = self::renderTemplate($eventType, 'vendor', 'title', ['order_number' => $orderNumber], "Doorstep Return Initiated");
             $body = self::renderTemplate($eventType, 'vendor', 'body', [
@@ -428,7 +428,7 @@ class NotificationDispatchService
             if (self::isChannelActive('fcm', $eventType)) {
                 self::dispatchPush($vendorUserId, $title, $body, ['type' => 'doorstep_return', 'return_case_id' => $returnCase->id], $eventType);
             }
-            if (self::isChannelActive('whatsapp', $eventType)) {
+            if ($vendorPhone !== '' && self::isChannelActive('whatsapp', $eventType)) {
                 $dispatches[] = self::record('whatsapp', $vendorPhone, 'Vendor', "Victorious Market: " . $body);
             }
 
