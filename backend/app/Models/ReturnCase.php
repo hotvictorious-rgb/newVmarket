@@ -6,6 +6,15 @@ use Illuminate\Database\Eloquent\Model;
 
 class ReturnCase extends Model
 {
+    protected $hidden = [
+        'vendor_id',
+        'vendor_return_otp',
+        'vendor_disputed',
+        'vendor_dispute_reason',
+        'vendor_dispute_photo_path',
+        'vendor_disputed_at',
+    ];
+
     protected $fillable = [
         'case_number',
         'customer_id',
