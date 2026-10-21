@@ -601,3 +601,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Prevents disabled admin sessions from deciding customer-vs-supplier disputes and influencing who bears refund/delivery costs.
 
 **Verification boundary:** Source and test committed; CI/test execution pending. No merge or deployment.
+
+
+### VM-AUD-117 — Do not report an ambiguous refund timeout as a definitive failure (21 October 2026)
+
+**Finding:** `FinancialOperationService::dispatchRefund()` deliberately keeps an ambiguous gateway timeout in `initiated` because Paystack may have accepted the refund. `ReturnAndRefundService` nevertheless returned a generic failure result to the admin, which could encourage manual retry despite an open operation and quarantined wallet credits.
+
+**Fix:** The return service now reports the outcome as `initiated` when the financial operation is still open/uncertain, explicitly says reconciliation is required, and keeps wallet credits quarantined. Only an authoritative terminal `failed` result restores credits and returns a definitive failure.
+
+**Business impact:** Makes the admin UI reflect the real financial state, reduces unsafe retry pressure, and keeps the no-duplicate-refund guard intact when Paystack's response is ambiguous.
+
+**Verification boundary:** Source committed; regression test/CI execution pending. No merge or deployment.
