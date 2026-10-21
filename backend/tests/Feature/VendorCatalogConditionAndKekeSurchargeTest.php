@@ -96,6 +96,23 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         ]);
     }
 
+    public function test_supplier_recovery_journal_idempotency_keys_are_order_scoped_and_bounded(): void
+    {
+        $service = app(\App\Services\SupplierReassignmentRecoveryService::class);
+        $method = new \ReflectionMethod($service, 'journalIdempotencyKey');
+        $method->setAccessible(true);
+        $callerKey = str_repeat('same-caller-key-', 12);
+
+        $firstOrderKey = $method->invoke($service, 101, $callerKey);
+        $sameOrderRetryKey = $method->invoke($service, 101, $callerKey);
+        $secondOrderKey = $method->invoke($service, 202, $callerKey);
+
+        $this->assertSame($firstOrderKey, $sameOrderRetryKey);
+        $this->assertNotSame($firstOrderKey, $secondOrderKey);
+        $this->assertLessThanOrEqual(100, strlen($firstOrderKey));
+        $this->assertLessThanOrEqual(100, strlen($secondOrderKey));
+    }
+
     public function test_vendor_terminal_denies_non_active_supplier_accounts(): void
     {
         Sanctum::actingAs($this->vendorUser, ['*']);
