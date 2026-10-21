@@ -67,7 +67,7 @@ Before removing legacy code/schema, trace all callers, scheduled jobs, financial
 
 ## 8. Verification status
 
-This file establishes the current business policy. It does not by itself disable existing pickup endpoints or UI, refactor checkout, migrate production data, update already-published legal terms, or prove CI success. Those runtime and deployment tasks must be tracked separately and verified before release.
+This file establishes the current business policy. Runtime work is in progress on `docs/retailer-central-fulfilment-model`: checkout intent and direct checkout no longer require a customer-selected shop, resolve each product to a fresh confirmed Uyo supplier offer, snapshot item-level supplier costs, calculate one order-level base fee plus per-unit bulky surcharges, and create per-supplier assignment rows. Supplier availability confirmation is now per supplier and handover is blocked until all suppliers confirm. However, multi-supplier ready-for-collection, per-supplier rider collection proof/OTP, logistics assignment and dispatch are not yet fully implemented end-to-end. Legacy pickup reservation endpoints/UI and the order-level handover flow still require hardening. Tests have been edited but have not been run; no CI success, merge to `main`, or deployment is claimed. Do not treat this as release-ready until the remaining workflow and regression tests pass.
 
 
 ## 9. Owner-confirmed geography and delivery modes (21 October 2026)
