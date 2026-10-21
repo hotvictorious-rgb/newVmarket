@@ -163,7 +163,7 @@
                 <span>Delivery Lane Serviceability &mdash; Legacy LGA Route Matrix</span>
             </h1>
             <p class="page-header-subtitle">
-                Customer charges are configured separately as one flat base fee per order plus a per-unit bulky surcharge in Uyo Corridor &amp; Company Tariffs. This legacy matrix controls route serviceability and ETA only; its lane fees do not set new customer checkout prices. New delivery remains Uyo-only.
+                Customer charges use one global flat base fee per order plus a per-unit bulky surcharge. These global settings are also available in Uyo Corridor &amp; Company Tariffs. This legacy matrix controls route serviceability and ETA; lane-specific fees do not set new checkout prices. New delivery remains Uyo-only.
             </p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
