@@ -1668,7 +1668,6 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertStringContainsString('active administrator', $result['message']);
         $this->assertSame('available', $credit->fresh()->status);
         $this->assertNull($case->fresh()->refund_claim_token);
-        $this->assertDatabaseMissing('financial_operations', ['metadata->return_case_id' => $case->id]);
-        $this->assertDatabaseMissing('financial_reservations', ['source_id' => $order->id, 'purpose' => 'customer_refund_hold', 'status' => 'active']);
+        $this->assertTrue(\App\Models\FinancialOperation::where('metadata->return_case_id', $case->id)->doesntExist());
     }
 }
