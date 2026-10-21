@@ -233,155 +233,137 @@ class FulfillmentAvailabilityService
         }
 
         $destLga = $destinationLgaId ? \App\Models\Lga::with('state')->find($destinationLgaId) : null;
+        if (!$destLga) {
+            return [
+                'status' => true,
+                'available' => false,
+                'message' => 'Select a valid delivery destination to check availability.',
+                'fulfillment_options' => [
+                    'delivery' => ['available' => false, 'total_shipping_fee' => '0.00', 'currency' => 'NGN'],
+                    'in_shop_pickup' => ['available' => false, 'message' => 'Pickup requests must be arranged through Victorious MARKET support.'],
+                ],
+            ];
+        }
 
-        // Group cart items by shop
-        $shopGroups = [];
+        $sourcingService = app(\App\Services\SourcingAllocationService::class);
+        $baseFee = null;
+        $bulkySurchargePerUnit = null;
+        $bulkyQuantity = 0;
+
         foreach ($cartItems as $item) {
             $productId = $item['product_id'] ?? $item['id'] ?? null;
-            if (!$productId) {
-                continue;
-            }
-
-            $product = Product::with(['shop.lga', 'shop.state', 'vendor.user'])->find($productId);
-            if (!$product || !$product->shop || $product->shop->trashed() || !$product->shop->is_active) {
-                continue;
-            }
-            if (!$product->vendor || $product->vendor->trashed() || $product->vendor->marketplace_status !== 'active' || ($product->vendor->user && $product->vendor->user->status !== 'active')) {
-                continue;
-            }
-
-            $shopId = $product->shop->id;
-            if (!isset($shopGroups[$shopId])) {
-                $shopGroups[$shopId] = [
-                    'shop' => $product->shop,
-                    'vendor' => $product->vendor,
-                    'products' => [],
+            $quantity = (int) ($item['quantity'] ?? 1);
+            if (!$productId || $quantity < 1) {
+                return [
+                    'status' => false,
+                    'available' => false,
+                    'message' => 'One or more cart items are invalid.',
+                    'fulfillment_options' => [],
                 ];
             }
-            $shopGroups[$shopId]['products'][] = [
-                'product' => $product,
-                'quantity' => $item['quantity'] ?? 1,
-            ];
-        }
 
-        if (empty($shopGroups)) {
-            return [
-                'status' => false,
-                'available' => false,
-                'message' => 'No active products or shops found for cart items.',
-                'fulfillment_options' => [],
-            ];
-        }
-
-        $vendorLanes = [];
-        $totalShippingFee = '0.00';
-        $orderBaseFee = null;
-        $orderBulkySurchargePerUnit = null;
-        $totalBulkyQuantity = 0;
-        $allDeliverable = true;
-        $anyDeliverable = false;
-
-        $pickupShops = [];
-        $anyPickupAvailable = false;
-
-        foreach ($shopGroups as $shopId => $group) {
-            $shop = $group['shop'];
-
-            // 1. Delivery evaluation
-            if ($destinationLgaId) {
-                // Every source shop is checked for route serviceability, but the customer
-                // pays one base route fee for the complete order. Bulky charges accumulate
-                // per physical unit across all source groups.
-                $deliveryRes = $this->checkDeliveryAvailability($shop->id, $destinationLgaId, 'bike');
-                $isLaneAvail = $deliveryRes['is_available'] ?? false;
-                $baseFee = $isLaneAvail ? (string) ($deliveryRes['fee'] ?? '0.00') : '0.00';
-                $groupBulkyQuantity = 0;
-                foreach ($group['products'] as $groupProduct) {
-                    $pTier = strtolower((string) ($groupProduct['product']->package_tier ?? 'bike'));
-                    if (in_array($pTier, ['keke', 'bulky'], true)) {
-                        $groupBulkyQuantity += (int) ($groupProduct['quantity'] ?? 1);
-                    }
-                }
-                $groupSurcharge = (string) ($deliveryRes['bulky_surcharge'] ?? '0.00');
-                $groupBulkyTotal = BcMathService::mul($groupSurcharge, (string) $groupBulkyQuantity);
-
-                if ($isLaneAvail) {
-                    $anyDeliverable = true;
-                    if ($orderBaseFee === null) {
-                        $orderBaseFee = $baseFee;
-                        $orderBulkySurchargePerUnit = $groupSurcharge;
-                    } elseif (BcMathService::comp($orderBaseFee, $baseFee) !== 0 || BcMathService::comp((string) $orderBulkySurchargePerUnit, $groupSurcharge) !== 0) {
-                        $allDeliverable = false;
-                    }
-                    $totalBulkyQuantity += $groupBulkyQuantity;
-                } else {
-                    $allDeliverable = false;
-                }
-
-                $vendorLanes[] = [
-                    'shop_id' => $shop->id,
-                    'seller_id' => $shop->vendor_id,
-                    'shop_name' => $shop->name,
-                    'origin_lga' => $shop->lga ? ['id' => $shop->lga->id, 'name' => $shop->lga->name] : null,
-                    // Component only; the order-level base fee is exposed once below.
-                    'delivery_fee' => $groupBulkyTotal,
-                    'bulky_quantity' => $groupBulkyQuantity,
-                    'bulky_surcharge_total' => $groupBulkyTotal,
-                    'estimated_delivery_time' => $deliveryRes['estimated_time_text'] ?? '24-48 hours',
-                    'is_available' => $isLaneAvail,
-                    'unavailability_reason' => $isLaneAvail ? null : ($deliveryRes['message'] ?? 'Lane unserviced'),
-                    'collection_points' => $deliveryRes['collection_points'] ?? [],
+            $product = Product::marketplaceEligible()->find($productId);
+            if (!$product || !$product->is_in_stock || !$product->isFresh()) {
+                return [
+                    'status' => true,
+                    'available' => false,
+                    'message' => 'One or more products are no longer available. Refresh the cart and try again.',
+                    'fulfillment_options' => [
+                        'delivery' => ['available' => false, 'total_shipping_fee' => '0.00', 'currency' => 'NGN'],
+                        'in_shop_pickup' => ['available' => false, 'message' => 'Pickup requests must be arranged through Victorious MARKET support.'],
+                    ],
                 ];
-            } else {
-                $allDeliverable = false;
             }
 
-            // 2. Pickup evaluation
-            $pickupRes = $this->checkPickupAvailability($shop->id);
-            if (!empty($pickupRes['is_available'])) {
-                $anyPickupAvailable = true;
-                $pickupShops[] = [
-                    'shop_id' => $shop->id,
-                    'name' => $shop->name,
-                    'address' => $shop->address,
-                    'pickup_time_slots' => ['08:00 - 11:00', '11:00 - 14:00', '14:00 - 18:00'],
-                    'pickup_instructions' => 'Bring your 6-digit reservation code for inspection.',
-                    'opening_time' => $shop->pickup_opening_time ?? '08:00',
-                    'closing_time' => $shop->pickup_closing_time ?? '18:00',
+            if (isset($product->inventory_quantity) && (int) $product->inventory_quantity > 0 && (int) $product->inventory_quantity < $quantity) {
+                return [
+                    'status' => true,
+                    'available' => false,
+                    'message' => 'One or more products do not have enough confirmed quantity.',
+                    'fulfillment_options' => [
+                        'delivery' => ['available' => false, 'total_shipping_fee' => '0.00', 'currency' => 'NGN'],
+                        'in_shop_pickup' => ['available' => false, 'message' => 'Pickup requests must be arranged through Victorious MARKET support.'],
+                    ],
                 ];
+            }
+
+            $offer = $sourcingService->resolveCheapestOffer($product, $quantity, null, 'doorstep_delivery');
+            if (!$offer) {
+                return [
+                    'status' => true,
+                    'available' => false,
+                    'message' => 'One or more products have no eligible supplier available in Uyo.',
+                    'fulfillment_options' => [
+                        'delivery' => ['available' => false, 'total_shipping_fee' => '0.00', 'currency' => 'NGN'],
+                        'in_shop_pickup' => ['available' => false, 'message' => 'Pickup requests must be arranged through Victorious MARKET support.'],
+                    ],
+                ];
+            }
+
+            $availability = $this->checkDeliveryAvailability((int) $offer['shop_id'], (int) $destinationLgaId, 'bike');
+            if (empty($availability['is_available'])) {
+                return [
+                    'status' => true,
+                    'available' => false,
+                    'message' => 'The complete order cannot currently be delivered to this destination.',
+                    'fulfillment_options' => [
+                        'delivery' => ['available' => false, 'total_shipping_fee' => '0.00', 'currency' => 'NGN'],
+                        'in_shop_pickup' => ['available' => false, 'message' => 'Pickup requests must be arranged through Victorious MARKET support.'],
+                    ],
+                ];
+            }
+
+            $itemBaseFee = (string) ($availability['fee'] ?? '0.00');
+            $itemBulkySurcharge = (string) ($availability['bulky_surcharge'] ?? '0.00');
+            if ($baseFee === null) {
+                $baseFee = $itemBaseFee;
+                $bulkySurchargePerUnit = $itemBulkySurcharge;
+            } elseif (
+                BcMathService::comp($baseFee, $itemBaseFee) !== 0
+                || BcMathService::comp((string) $bulkySurchargePerUnit, $itemBulkySurcharge) !== 0
+            ) {
+                return [
+                    'status' => true,
+                    'available' => false,
+                    'message' => 'The complete order needs a delivery-fee review before checkout.',
+                    'fulfillment_options' => [
+                        'delivery' => ['available' => false, 'total_shipping_fee' => '0.00', 'currency' => 'NGN'],
+                        'in_shop_pickup' => ['available' => false, 'message' => 'Pickup requests must be arranged through Victorious MARKET support.'],
+                    ],
+                ];
+            }
+
+            if (in_array(strtolower((string) ($product->package_tier ?? 'bike')), ['keke', 'bulky'], true)) {
+                $bulkyQuantity += $quantity;
             }
         }
 
-        if ($destinationLgaId && $allDeliverable && $orderBaseFee !== null) {
-            $totalShippingFee = BcMathService::add(
-                $orderBaseFee,
-                BcMathService::mul((string) ($orderBulkySurchargePerUnit ?? '0.00'), (string) $totalBulkyQuantity)
-            );
-        }
-
-        $overallAvailable = ($destinationLgaId && $allDeliverable) || $anyPickupAvailable;
+        $baseFee = $baseFee ?? '0.00';
+        $bulkySurchargePerUnit = $bulkySurchargePerUnit ?? '0.00';
+        $bulkySurchargeTotal = BcMathService::mul($bulkySurchargePerUnit, (string) $bulkyQuantity);
+        $totalFee = BcMathService::add($baseFee, $bulkySurchargeTotal);
 
         return [
             'status' => true,
-            'available' => $overallAvailable,
+            'available' => true,
             'fulfillment_options' => [
                 'delivery' => [
-                    'available' => (bool)($destinationLgaId && $allDeliverable),
-                    'base_route_fee' => $orderBaseFee ?? '0.00',
-                    'bulky_surcharge_per_unit' => $orderBulkySurchargePerUnit ?? '0.00',
-                    'bulky_quantity' => $totalBulkyQuantity,
-                    'bulky_surcharge_total' => BcMathService::mul((string) ($orderBulkySurchargePerUnit ?? '0.00'), (string) $totalBulkyQuantity),
-                    'total_shipping_fee' => $totalShippingFee,
+                    'available' => true,
+                    'base_route_fee' => $baseFee,
+                    'bulky_surcharge_per_unit' => $bulkySurchargePerUnit,
+                    'bulky_quantity' => $bulkyQuantity,
+                    'bulky_surcharge_total' => $bulkySurchargeTotal,
+                    'total_shipping_fee' => $totalFee,
                     'currency' => 'NGN',
-                    'destination_lga' => $destLga ? ['id' => $destLga->id, 'name' => $destLga->name] : null,
-                    'vendor_lanes' => $vendorLanes,
+                    'destination_lga' => ['id' => $destLga->id, 'name' => $destLga->name],
                 ],
                 'in_shop_pickup' => [
-                    'available' => $anyPickupAvailable,
-                    'shops' => $pickupShops,
+                    'available' => false,
+                    'message' => 'Pickup requests must be arranged through Victorious MARKET support.',
                 ],
             ],
         ];
     }
+
 }
 
