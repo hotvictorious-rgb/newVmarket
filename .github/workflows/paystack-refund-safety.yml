@@ -55,6 +55,7 @@ jobs:
           php -l app/Http/Controllers/Api/RiderTerminalApiController.php
           php -l app/Services/NotificationDispatchService.php
           php -l app/Services/CheckoutExecutionService.php
+          php -l app/Services/SourcingAllocationService.php
           php -l app/Services/OrderSettlementService.php
           php -l app/Models/Order.php
           php -l app/Models/OrderItem.php
@@ -65,6 +66,7 @@ jobs:
           php -l database/migrations/2026_10_21_000006_add_supplier_offer_availability_evidence.php
           php -l database/migrations/2026_10_20_000046_add_customer_address_id_to_orders.php
           php -l database/migrations/2026_10_20_000001_allow_cashback_maturity_to_start_after_fulfilment.php
+          php -l database/migrations/2026_10_21_000004_create_supplier_offers_and_sourcing_fields.php
           php -l tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php
           php -l tests/Feature/FinancialAuditRemediationProofTest.php
           php -l tests/Feature/PaystackPaymentHardeningTest.php
@@ -80,6 +82,7 @@ jobs:
           php -l tests/Feature/AdminSupplierOnboardingTest.php
           php -l tests/Feature/SupplierSourcingSnapshotSchemaTest.php
           php -l tests/Feature/SupplierOfferSelectionServiceTest.php
+          php -l tests/Feature/AutomatedSupplierSourcingTest.php
 
       - name: Run financial audit and payment hardening proof tests
-        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php --display-warnings
+        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/AutomatedSupplierSourcingTest.php --display-warnings

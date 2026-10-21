@@ -31,11 +31,11 @@ class OrderItem extends Model
     ];
 
     protected $casts = [
-        'unit_price' => 'string',
-        'cost_price' => 'string',
-        'supplier_cost_snapshot' => 'string',
+        'unit_price' => 'decimal:2',
+        'cost_price' => 'decimal:2',
+        'supplier_cost_snapshot' => 'decimal:2',
         'supplier_snapshot_at' => 'datetime',
-        'line_total' => 'string',
+        'line_total' => 'decimal:2',
         'quantity' => 'integer',
         'accepted_quantity' => 'integer',
         'rejected_quantity' => 'integer',

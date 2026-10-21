@@ -333,6 +333,7 @@ Required controls:
 - **Status:** OPEN — no product ownership schema or public eligibility behavior was changed in this step.
 
 
+<<<<<<< Updated upstream
 ## 22. Supplier offer availability evidence and selection primitive — 21 October 2026
 
 - **Problem addressed:** A supplier offer's `is_available` boolean alone does not prove that the supplier physically confirmed availability recently. The system must not treat a stale or unsubstantiated offer as confirmed stock.
@@ -433,3 +434,30 @@ Required controls:
 ### Status
 
 This section records source-level findings and one rollback-safety fix. It does **not** claim that checkout, pickup, order ownership, financial accounting, or production migration has been completed. CI must be run against the latest branch head after these changes; no production migration, merge to `main`, or deployment is authorised by this work.
+
+
+## Section 30 — Automated cheapest supplier sourcing and immutable order-item snapshot implementation (21 October 2026)
+
+- **Severity addressed:** Resolves runtime gap identified in VM-ALIGN-001, VM-ALIGN-004, VM-ALIGN-008, Section 27, and Section 29.
+- **Implemented components:**
+  1. **`App\Services\SourcingAllocationService`**:
+     - `resolveCheapestOffer(Product $product, int $quantity = 1, ?int $preferredLgaId = null)`: delegates to `SupplierOfferSelectionService` when available offers with explicit confirmation evidence exist, or queries active, non-deleted `SupplierOffer` records where `is_available = true`. Validates active `VendorProfile` (`marketplace_status = 'active'`), active `User` (`status = 'active'`), and active `Shop` (`is_active = true`). Sorts deterministically by lowest `wholesale_cost` (via BCMath), prioritizes matching LGA when preferred LGA is specified, and breaks ties deterministically by offer ID. Provides backward-compatible fallback to product catalog cost and primary merchant when no separate offers exist.
+     - `buildOrderItemSnapshot(...)`: builds immutable snapshot payload including `supplier_offer_id`, `supplier_vendor_id`, `supplier_shop_id`, `supplier_name_snapshot`, `supplier_shop_name_snapshot`, `supplier_cost_snapshot`, `supplier_cost_currency`, and `supplier_snapshot_at`.
+     - `assignOrderSourcing(Order $order, int $vendorId, int $shopId, ?string $notes = null)`: sets order sourcing status to `assigned_to_supplier` with timestamp.
+     - `overrideSupplierAssignment(Order $order, int $newVendorId, int $newShopId, User $adminUser, string $reason)`: enforces admin role check, validates replacement supplier and shop active status, updates order state to `admin_reassigned`, and writes full old/new values to `AdminAuditLog`.
+     - `confirmSupplierAvailability(Order $order, int $vendorId, ?string $notes = null)`: verifies supplier ownership and transitions order sourcing status to `supplier_confirmed`.
+  2. **`App\Models\Order` & `App\Models\OrderItem`**:
+     - Added `sourcing_status`, `selected_supplier_id`, `selected_shop_id`, `sourcing_notes`, and `sourced_at` to `$fillable` on `Order`.
+     - Added `selectedSupplier()` and `selectedShop()` relationships on `Order`.
+     - Cast monetary snapshot columns (`supplier_cost_snapshot`, `unit_price`, `cost_price`, `line_total`) to `'decimal:2'` on `OrderItem`.
+  3. **`App\Services\CheckoutExecutionService`**:
+     - Injected `SourcingAllocationService` (container auto-resolved with zero breakages for callers).
+     - Resolves cheapest private supplier offer per item during line item preparation.
+     - Sets `sourcing_status = 'assigned_to_supplier'`, `selected_supplier_id`, `selected_shop_id`, and `sourced_at = Carbon::now()` at order creation.
+     - Persists complete immutable supplier and wholesale cost snapshot on each created `OrderItem`.
+  4. **Regression test suite `Tests\Feature\AutomatedSupplierSourcingTest`**:
+     - 9 comprehensive tests covering cheapest offer selection, unavailable/inactive exclusions, catalog fallback, tie-breaking by LGA, immutable snapshot persistence despite subsequent price changes, admin override audit logging, non-admin denial, supplier availability confirmation, and end-to-end checkout execution snapshotting.
+  5. **CI Workflow Verification**:
+     - Updated `.github/workflows/paystack-refund-safety.yml` with syntax checks and test execution for both `SupplierOfferSelectionServiceTest` and `AutomatedSupplierSourcingTest`.
+     - Local full test suite execution verified: **166 passed, 1,085 assertions, 0 failures**.
+

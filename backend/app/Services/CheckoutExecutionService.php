@@ -26,8 +26,11 @@ class CheckoutExecutionService
 {
     public function __construct(
         protected FulfillmentAvailabilityService $fulfillmentService,
-        protected PaystackService $paystackService
-    ) {}
+        protected PaystackService $paystackService,
+        protected ?SourcingAllocationService $sourcingService = null
+    ) {
+        $this->sourcingService = $sourcingService ?? app(SourcingAllocationService::class);
+    }
 
     /**
      * Authoritative Order Checkout Execution Engine.
@@ -190,11 +193,14 @@ class CheckoutExecutionService
                     ];
                 }
 
+                $resolvedOffer = $this->sourcingService->resolveCheapestOffer($product, $item['quantity'], $shop->lga_id ?? null);
+
                 $itemsToCreate[] = [
                     'product' => $product,
                     'quantity' => $item['quantity'],
                     'unit_price' => $product->unit_price,
                     'line_total' => $lineTotal,
+                    'resolved_offer' => $resolvedOffer,
                 ];
             }
 
@@ -336,6 +342,10 @@ class CheckoutExecutionService
                 'pickup_verification_code' => Order::generateUniquePickupOtp(),
                 'verification_code' => Order::generateUniqueDeliveryOtp(),
                 'vendor_settlement_status' => 'held',
+                'sourcing_status' => 'assigned_to_supplier',
+                'selected_supplier_id' => $shop->vendor_id,
+                'selected_shop_id' => $shop->id,
+                'sourced_at' => Carbon::now(),
                 'expires_at' => Carbon::now()->addMinutes(30),
             ]);
 
@@ -350,17 +360,31 @@ class CheckoutExecutionService
                 ]);
             }
 
-            // Order creation binds the 30-minute payment safety reservation
+            // Order creation binds the 30-minute payment safety reservation with immutable supplier snapshots
             foreach ($itemsToCreate as $itemData) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $itemData['product']->id,
-                    'product_name' => $itemData['product']->name,
-                    'quantity' => $itemData['quantity'],
-                    'unit_price' => $itemData['unit_price'],
-                    'cost_price' => $itemData['product']->cost_price ?? '0.00',
-                    'line_total' => $itemData['line_total'],
-                ]);
+                $resolvedOffer = $itemData['resolved_offer'] ?? null;
+                if (!$resolvedOffer) {
+                    $resolvedOffer = [
+                        'supplier_offer_id' => null,
+                        'vendor_id' => $itemData['product']->vendor_id,
+                        'shop_id' => $itemData['product']->shop_id,
+                        'supplier_name' => $itemData['product']->vendor->business_name ?? ($itemData['product']->vendor->user->name ?? 'Supplier'),
+                        'shop_name' => $itemData['product']->shop->name ?? 'Shop Branch',
+                        'wholesale_cost' => bcadd((string)($itemData['product']->cost_price ?? '0.00'), '0', 2),
+                        'currency' => 'NGN',
+                    ];
+                }
+
+                $snapshotData = $this->sourcingService->buildOrderItemSnapshot(
+                    $resolvedOffer,
+                    $itemData['product'],
+                    $itemData['quantity'],
+                    (string)$itemData['unit_price'],
+                    (string)$itemData['line_total']
+                );
+                $snapshotData['order_id'] = $order->id;
+
+                OrderItem::create($snapshotData);
             }
 
             // If order is 100% paid via wallet credit, settle double-entry books immediately!

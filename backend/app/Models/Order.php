@@ -79,6 +79,11 @@ class Order extends Model
         'paystack_refund_status',
         'refund_reconciliation_token',
         'refund_reconciliation_claimed_at',
+        'sourcing_status',
+        'selected_supplier_id',
+        'selected_shop_id',
+        'sourcing_notes',
+        'sourced_at',
     ];
 
     /**
@@ -120,6 +125,7 @@ class Order extends Model
         'expires_at' => 'datetime',
         'delivery_halted_at' => 'datetime',
         'doorstep_rejection_photos' => 'array',
+        'sourced_at' => 'datetime',
     ];
 
     public function isPickupLocked(): bool
@@ -241,6 +247,16 @@ class Order extends Model
     public function shop()
     {
         return $this->belongsTo(Shop::class, 'shop_id')->withTrashed();
+    }
+
+    public function selectedSupplier()
+    {
+        return $this->belongsTo(VendorProfile::class, 'selected_supplier_id')->withTrashed();
+    }
+
+    public function selectedShop()
+    {
+        return $this->belongsTo(Shop::class, 'selected_shop_id')->withTrashed();
     }
 
     public function collectionPoint()
