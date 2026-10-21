@@ -82,7 +82,7 @@ class LogisticsCompanyProfile extends Model
 
         $current = $this->wallet_balance ?? '0.00';
         $sum = \App\Services\BcMathService::add($current, $amount);
-        $this->wallet_balance = number_format((float)$sum, 2, '.', '');
+        $this->wallet_balance = $sum;
         $this->save();
     }
 
