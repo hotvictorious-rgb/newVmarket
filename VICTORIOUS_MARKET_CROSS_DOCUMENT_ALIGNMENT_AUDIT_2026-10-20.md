@@ -501,3 +501,10 @@ This section records source-level findings and one rollback-safety fix. It does 
 - The catalogue-decoupling migration/model changes recorded in Section 31 still require a CI run against the latest branch head. No claim is made that latest code is green.
 - Next code slice: trace and test all live order creation/refund/settlement paths, then remove legacy ownership requirements for new orders with a forward migration and historical compatibility tests. Only after every producer/consumer is mapped should runtime financial calculations change.
 - `main` remains untouched; no deployment is authorized.
+
+
+### Section 32 verification addendum
+
+- The payment/refund matrix's vendor FIFO payout checklist was also changed to explicitly preserve that rule for historical marketplace payouts only; it is not a new supplier-payment threshold.
+- README branch metadata now identifies `docs/retailer-central-fulfilment-model` as the canonical working branch.
+- **CI status:** no workflow run is currently returned for the latest alignment commit sequence. Documentation edits are not runtime verification; catalogue migration, checkout/pickup sourcing, order ownership, legacy financial calculations and cashback enforcement remain unverified/open.
