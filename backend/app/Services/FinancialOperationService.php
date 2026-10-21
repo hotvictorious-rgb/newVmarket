@@ -71,6 +71,16 @@ class FinancialOperationService
                         'Cannot create refund: return case does not belong to the specified order.'
                     );
                 }
+                $approvedById = (int) ($authorization['approved_by_user_id'] ?? 0);
+                if ($lockedReturnCase->status !== 'refund_pending'
+                    || $lockedReturnCase->resolution_type !== 'refund'
+                    || empty($lockedReturnCase->reviewed_by_admin_id)
+                    || (int) $lockedReturnCase->reviewed_by_admin_id !== $approvedById
+                    || ($authorization['type'] ?? null) !== 'admin_approved_return') {
+                    throw new \DomainException(
+                        'Cannot create a customer refund operation unless the return case is explicitly approved for refund and the authorizing administrator matches the persisted reviewer.'
+                    );
+                }
 
                 $returnCase = $lockedReturnCase;
             }
@@ -285,12 +295,19 @@ class FinancialOperationService
             $case = $caseId ? ReturnCase::find($caseId) : null;
             $approverId = (int) ($authorization['approved_by_user_id'] ?? 0);
             $deliveryFeeAuthorized = ($authorization['refund_delivery_fee'] ?? false) === true;
+            $activeApprover = $approverId > 0
+                && User::whereKey($approverId)
+                    ->where('status', 'active')
+                    ->whereIn('user_type', ['super_admin', 'admin_employee'])
+                    ->exists();
 
             return $case
                 && (int) $case->order_id === (int) $order->id
-                && in_array($case->status, ['refund_pending', 'refund_approved'], true)
+                && $case->status === 'refund_pending'
+                && $case->resolution_type === 'refund'
                 && !empty($case->reviewed_by_admin_id)
                 && (int) $case->reviewed_by_admin_id === $approverId
+                && $activeApprover
                 && (!$deliveryFeeAuthorized || (bool) $case->refund_delivery_fee);
         }
 
