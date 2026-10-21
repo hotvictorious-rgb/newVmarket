@@ -178,3 +178,54 @@ Required controls:
 - **Verification status:** Documentation aligned and synchronized with zero contradictions.
 
 
+
+
+## 15. Post-integration retailer-model verification addendum — 21 October 2026
+
+**Branch reviewed:** `docs/retailer-central-fulfilment-model`  
+**Commit reviewed:** `da802f66a8602899870a99d6fde0c6b784a77e41`  
+**Scope:** Targeted source inspection after the reported branch integration. This is a source inspection, not a local test run or production verification.
+
+### VM-ALIGN-001 — Checkout execution still enforces legacy vendor-managed fulfilment
+- **Severity:** Critical / launch blocker.
+- **Approved rule:** Victorious MARKET is the retailer; suppliers are private sourcing partners. For new delivery orders, VM centrally coordinates logistics through an accredited logistics company and its eligible fleet. Customers cannot choose a rider or logistics company at checkout.
+- **Evidence:** In `backend/app/Services/CheckoutExecutionService.php`, the inspected checkout path requires an active `Shop` and `VendorProfile`, validates products against that selected shop/vendor, and contains the explicit comment/message: “Delivery is vendor-managed at launch. Rider and logistics-fleet assignment happens after checkout.” It rejects any supplied `rider_id` or `logistics_company_id` but still describes the fulfilment as vendor-managed. The order-item snapshot shown in this file captures product, quantity, retail unit price and line total; this inspected block does not establish automated cheapest-supplier selection or supplier cost snapshotting.
+- **Required fix:** Do not make a narrow text-only change. Trace every active web/API checkout and reservation entry point, current product/shop/vendor schema, migrations and settlement/refund consumers. Then refactor the canonical checkout to resolve an approved supplier offer privately, select only a verified available offer using the approved lowest-cost rule, persist the selected supplier/shop and immutable cost snapshot, and route paid delivery orders to admin dispatch after supplier availability confirmation. Keep pickup reservation/payment semantics separate. Preserve idempotency and Paystack uncertain-outcome safeguards.
+- **Regression tests required:** Both checkout aliases use the same execution boundary; no vendor/shop chosen by customer; cheapest eligible available offer wins; unavailable/inactive offers excluded; ties deterministic; no offer blocks checkout safely; admin override audited; delivery assignment cannot happen before payment and supplier confirmation; pickup reservation is ₦0 upfront and does not initialize doorstep payment; duplicate/concurrent requests do not duplicate orders or Paystack initialization; order item cost snapshot remains unchanged after offer price changes.
+- **Status:** OPEN — source contradicts the approved retailer model. No code fix or tests were performed in this addendum.
+
+### VM-ALIGN-002 — Business-rule document header contradicts its own owner decision
+- **Severity:** High (documentation / implementation-risk).
+- **Approved rule:** The 21 October retailer decision supersedes legacy vendor-managed fulfilment for new work.
+- **Evidence:** `.ai/BUSINESS_RULES.md` had an owner-decision preamble declaring the retailer model, followed by a status line identifying it as the vendor-managed baseline, a 20 October review date, and an authority paragraph pointing to the older system-rules document as the single source of truth.
+- **Resolution:** Updated the status, review date and authority paragraph to identify the retailer model as current for new work and explicitly treat conflicting older marketplace assumptions as historical. Updated failed-delivery wording to describe an authorised return-to-source workflow coordinated by VM rather than direct vendor-managed returns.
+- **Status:** DOCUMENTATION FIX APPLIED; runtime behaviour remains unverified.
+
+### VM-ALIGN-003 — Pickup OTP fields are not yet canonicalised
+- **Severity:** High (handover integrity / documentation).
+- **Approved rule:** Pickup reservation pass, payment verification and one-time pickup OTP are separate controls; the OTP must be verified server-side and must not leak in list/history APIs.
+- **Evidence:** Current model code includes both `orders.pickup_verification_code` and `orders.verification_code`; the initial migration comments label one “Vendor -> Rider collection OTP” and the other “Rider -> Customer delivery OTP OR In-Shop Handover OTP”. Documents inconsistently call the pickup OTP `verification_code` and `pickup_verification_code`.
+- **Required fix:** Trace every writer, verifier, API resource, notification, migration and test. Choose one canonical pickup OTP field or an explicit compatibility mapping, migrate safely without invalidating historical orders, and prove secrets remain hidden. Do not rename a field until consumers are mapped.
+- **Status:** OPEN — naming/consumer map and regression tests required.
+
+### VM-ALIGN-004 — Immutable supplier offer/cost snapshot is not proven end-to-end
+- **Severity:** Critical / financial integrity.
+- **Approved rule:** Each order item records the selected private supplier/branch and agreed wholesale cost snapshot, separate from customer retail price. Later supplier price changes must not alter active or historical order economics.
+- **Evidence:** `OrderItem.php` now allows `cost_price`, but the inspected checkout service block builds item data with product, quantity, `unit_price`, and `line_total`; the inspected `OrderItem` model does not expose supplier-offer ID or supplier/shop snapshot fields. A model fillable field alone does not prove the service writes a cost snapshot or that a migration supports it.
+- **Required fix:** Trace migrations and all order-item creation paths, settlement/refund/reporting consumers, then persist immutable supplier offer ID, supplier/shop identity snapshot and cost amount/currency as needed. Verify database constraints and historical rows before any migration.
+- **Regression tests required:** cost snapshot created for each item; supplier price changes do not alter it; admin reassignment has explicit audited cost-change/requote rules; settlement and refunds use the correct agreed snapshots.
+- **Status:** OPEN — end-to-end persistence and downstream usage not proven.
+
+### VM-ALIGN-005 — Full test claim is not independently verified in this audit
+- **Severity:** Medium (release evidence).
+- **Evidence:** Prior session notes report 22 passing tests / 151 assertions for four targeted suites. This audit did not execute tests locally or retrieve a successful CI run tied to the exact merged commit. The merge commit's embedded audit text also contains a different statement (11 suites, 194 tests / 1237 assertions), so the reported totals are inconsistent and must not be repeated as one verified result.
+- **Required action:** Run the exact documented command from a clean checkout at the current branch SHA and record command, environment, commit, exit status and totals; inspect CI checks tied to that SHA. Do not mark all system alignment complete from a selected test subset.
+- **Status:** OPEN — exact-commit verification required.
+
+### VM-ALIGN-006 — Old schema still requires vendor/shop on orders
+- **Severity:** Critical / architecture and migration blocker.
+- **Approved rule:** A VM customer order is not a public vendor child order; supplier sourcing belongs at order-item/fulfilment allocation level, and one customer checkout may contain items sourced from different suppliers.
+- **Evidence:** The inspected initial migration defines `orders.vendor_id` and `orders.shop_id` as non-null foreign keys, while the newer model requires canonical listings with multiple private supplier offers. This schema shape may prevent a single VM order containing products sourced from different suppliers and makes the legacy order-level vendor/shop ownership assumption visible. Later migrations may change nullability; those were not fully inspected in this pass.
+- **Required fix:** Inspect all later migrations and live schema assumptions first. Design an additive supplier-offer/order-item sourcing relation and order-level fulfilment groups if required. Backfill/retain historical associations, map foreign-key and reporting consumers, then make vendor/shop nullable or retire them only after verified dependency migration. Do not edit the initial migration as a substitute for a safe forward migration.
+- **Status:** OPEN — later migration and dependency audit required.
+
