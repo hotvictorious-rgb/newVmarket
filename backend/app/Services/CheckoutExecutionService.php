@@ -264,17 +264,17 @@ class CheckoutExecutionService
                     ];
                 }
                 $deliveryCorridorId = (int) $deliveryCorridor->id;
-                $deliveryBaseFee = (string) $deliveryCorridor->customer_base_fee;
                 $laneId = $availability['lane_id'] ?? null;
-                $bulkySurcharge = (string) $deliveryCorridor->customer_bulky_surcharge_per_unit;
                 foreach ($itemsToCreate as $it) {
                     $tier = strtolower((string) ($it['product']->package_tier ?? 'bike'));
                     if (in_array($tier, ['keke', 'bulky'], true)) {
                         $deliveryBulkyQuantity += (int) $it['quantity'];
                     }
                 }
-                $deliveryBulkySurcharge = $bulkySurcharge;
-                $deliveryFee = $deliveryCorridor->calculateCustomerFee($deliveryBulkyQuantity);
+                $customerPricing = app(CustomerDeliveryPricingService::class)->quote($deliveryBulkyQuantity);
+                $deliveryBaseFee = $customerPricing['base_fee'];
+                $deliveryBulkySurcharge = $customerPricing['bulky_surcharge_per_unit'];
+                $deliveryFee = $customerPricing['total_fee'];
             }
 
             // Cashback Redemption Check under Pessimistic Balance Reservation
