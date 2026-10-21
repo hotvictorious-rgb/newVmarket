@@ -15,6 +15,13 @@ class OrderSupplierAssignment extends Model
         'supplier_confirmed_at',
         'supplier_rejected_at',
         'supplier_response_notes',
+        'supplier_pickup_code',
+        'handover_ready_at',
+        'collected_at',
+        'collection_proof_image_path',
+        'collection_notes',
+        'pickup_failed_attempts',
+        'pickup_locked_until',
         'admin_override_by',
         'admin_override_reason',
     ];
@@ -23,7 +30,23 @@ class OrderSupplierAssignment extends Model
         'assigned_at' => 'datetime',
         'supplier_confirmed_at' => 'datetime',
         'supplier_rejected_at' => 'datetime',
+        'handover_ready_at' => 'datetime',
+        'collected_at' => 'datetime',
+        'pickup_locked_until' => 'datetime',
+        'pickup_failed_attempts' => 'integer',
     ];
+
+    public static function generateUniquePickupCode(): string
+    {
+        do {
+            $code = (string) random_int(100000, 999999);
+            $exists = self::where('supplier_pickup_code', $code)
+                ->whereIn('status', ['ready_for_collection', 'collected'])
+                ->exists();
+        } while ($exists);
+
+        return $code;
+    }
 
     public function order()
     {
