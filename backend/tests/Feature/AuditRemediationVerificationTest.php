@@ -383,7 +383,7 @@ class AuditRemediationVerificationTest extends TestCase
     }
 
     /**
-     * Finding 5: Doorstep wallet credit is reversed upon manual cash refund disburse
+     * Finding 5: Manual bank refund is disabled and wallet credit is preserved
      */
     public function test_finding_5_manual_bank_refund_is_disabled_and_wallet_credit_is_preserved(): void
     {
