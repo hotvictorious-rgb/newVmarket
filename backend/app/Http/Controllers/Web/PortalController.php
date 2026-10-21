@@ -2547,6 +2547,13 @@ class PortalController extends Controller
                 return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
             }
 
+            if (\\App\\Models\\FinancialJournalEntry::whereIn('event_id', [
+                'EVT-FLEET-PAYOUT-' . $payout->id,
+                'EVT-FLEET-REJECT-' . $payout->id,
+            ])->exists()) {
+                return back()->with('error', "Logistics payout #{$payout->id} already has a terminal accounting event. Finance reconciliation is required; wallet restoration was blocked.");
+            }
+
             // A logistics payout can remain "pending" after its transfer claim was
             // acquired. Never restore the wallet while a transfer may be in flight
             // or its gateway outcome is uncertain; reconcile it first.
@@ -3005,6 +3012,13 @@ class PortalController extends Controller
             $payout = \App\Models\VendorPayoutRequest::with('vendor')->where('id', $validated['payout_id'])->lockForUpdate()->firstOrFail();
             if ($payout->status !== 'pending') {
                 return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
+            }
+
+            if (\\App\\Models\\FinancialJournalEntry::whereIn('event_id', [
+                'EVT-VND-PAYOUT-' . $payout->id,
+                'EVT-MERCHANT-REJECT-' . $payout->id,
+            ])->exists()) {
+                return back()->with('error', "Vendor payout #{$payout->id} already has a terminal accounting event. Finance reconciliation is required; liability reversal was blocked.");
             }
 
             // A payout may remain in the legacy "pending" status after Paystack accepts
