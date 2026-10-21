@@ -823,7 +823,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertTrue($service->hasLogisticsRequestJournalEvidence($fleetPayout));
     }
 
-    public function test_high_value_vendor_payout_strictly_requires_super_admin()
+    public function test_vendor_payout_hard_cap_applies_even_to_super_admin()
     {
         $this->createTestOrder([
             'merchandise_subtotal' => '15000000.00',
@@ -831,7 +831,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'grand_total' => '15000000.00',
         ]);
 
-        // Payout of ₦12,000,000 exceeds single transfer threshold (₦10m)
+        // Launch policy caps a single vendor payout at ₦500,000 for every role.
         $payout = VendorPayoutRequest::create([
             'vendor_id' => $this->vendor->id,
             'amount' => '12000000.00',
@@ -849,13 +849,14 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
                 'payout_id' => $payout->id,
             ]);
         $response->assertSessionHas('error');
-        $this->assertStringContainsString('Disbursement ceiling exceeded', session('error'));
+        $this->assertStringContainsString('between ₦5,000 and ₦500,000', session('error'));
 
-        // SuperAdmin succeeds
+        // Super Admin must not bypass the hard launch cap either.
         $responseSuccess = $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
             'payout_id' => $payout->id,
         ]);
-        $responseSuccess->assertSessionHas('status');
-        $this->assertEquals('approved', $payout->fresh()->status);
+        $responseSuccess->assertSessionHas('error');
+        $this->assertStringContainsString('between ₦5,000 and ₦500,000', session('error'));
+        $this->assertEquals('pending', $payout->fresh()->status);
     }
 }
