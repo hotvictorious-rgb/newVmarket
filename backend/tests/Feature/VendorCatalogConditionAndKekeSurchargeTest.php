@@ -517,8 +517,9 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'is_active' => true,
             'pickup_enabled' => false,
         ]);
-        foreach ([[$productB_Bike, '7500.00'], [$productB_Keke, '210000.00']] as [$recoveryProduct, $replacementCost]) {
-            SupplierOffer::create([
+        $replacementOffers = [];
+        foreach ([[$productB_Bike, '6500.00'], [$productB_Keke, '210000.00']] as [$recoveryProduct, $replacementCost]) {
+            $replacementOffers[$recoveryProduct->id] = SupplierOffer::create([
                 'product_id' => $recoveryProduct->id,
                 'vendor_id' => $recoverySupplier->id,
                 'shop_id' => $recoveryShop->id,
@@ -545,6 +546,29 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $cashbackBeforeRecovery = $orderTwoBulky->fresh()->customer_cashback_5;
 
         $recoveryService = app(\\App\\Services\\SupplierReassignmentRecoveryService::class);
+        $journalCountBeforeStaleOffer = \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count();
+        $replacementOffers[$productB_Keke->id]->availability_expires_at = Carbon::now()->subMinute();
+        $replacementOffers[$productB_Keke->id]->save();
+        try {
+            $recoveryService->reassignRejectedItems(
+                $orderTwoBulky->id,
+                $rejectedAssignment->id,
+                $recoverySupplier->id,
+                $recoveryShop->id,
+                $rejectedItems->pluck('id')->all(),
+                $recoveryAdmin,
+                'Reject stale offer recovery attempt.',
+                'supplier-recovery-stale-001'
+            );
+            $this->fail('Expired replacement availability evidence must block recovery.');
+        } catch (\\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('fresh confirmed offer', $exception->getMessage());
+        }
+        $this->assertSame($journalCountBeforeStaleOffer, \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count());
+        $this->assertEquals('supplier_rejected', $orderTwoBulky->fresh()->sourcing_status);
+        $replacementOffers[$productB_Keke->id]->availability_expires_at = Carbon::now()->addDay();
+        $replacementOffers[$productB_Keke->id]->save();
+
         $firstItem = $rejectedItems->first();
         $secondItem = $rejectedItems->last();
         $firstRecoveryArgs = [
