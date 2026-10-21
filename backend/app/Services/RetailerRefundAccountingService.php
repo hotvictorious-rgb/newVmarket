@@ -39,12 +39,12 @@ class RetailerRefundAccountingService
         foreach ($returnItems as $returnItem) {
             $item = $returnItem->orderItem;
             if (!$item || (int) $item->order_id !== (int) $order->id
-                || empty($item->supplier_vendor_id)
-                || $item->supplier_cost_snapshot === null) {
+                || empty($item->fulfillment_supplier_vendor_id)
+                || $item->fulfillment_supplier_cost_snapshot === null) {
                 throw new RuntimeException('Retailer refund is missing the order item supplier/cost snapshot.');
             }
 
-            $lineCost = BcMathService::mul((string) $item->supplier_cost_snapshot, (string) $returnItem->quantity);
+            $lineCost = BcMathService::mul((string) $item->fulfillment_supplier_cost_snapshot, (string) $returnItem->quantity);
             $supplierCostRefund = BcMathService::add($supplierCostRefund, $lineCost);
             if (BcMathService::comp($lineCost, '0.00') <= 0) {
                 continue;
@@ -54,7 +54,7 @@ class RetailerRefundAccountingService
                 $recovery = VendorRecoveryLedger::firstOrCreate(
                     ['idempotency_key' => "return-case-{$returnCase->id}-supplier-cost-recovery-item-{$returnItem->id}"],
                     [
-                        'vendor_id' => $item->supplier_vendor_id,
+                        'vendor_id' => $item->fulfillment_supplier_vendor_id,
                         'return_case_id' => $returnCase->id,
                         'order_id' => $order->id,
                         'amount' => $lineCost,
@@ -63,7 +63,7 @@ class RetailerRefundAccountingService
                     ]
                 );
                 if ($recovery->wasRecentlyCreated) {
-                    $this->journal($order, $returnCase, $reference, $financialOperationId, 'SUPPLIER-RECOVERY-' . $returnItem->id, VendorProfile::class, (int) $item->supplier_vendor_id, 'supplier_recovery_receivable', 'debit', $lineCost, 'Authorized recovery of settled supplier cost.');
+                    $this->journal($order, $returnCase, $reference, $financialOperationId, 'SUPPLIER-RECOVERY-' . $returnItem->id, VendorProfile::class, (int) $item->fulfillment_supplier_vendor_id, 'supplier_recovery_receivable', 'debit', $lineCost, 'Authorized recovery of settled supplier cost.');
                 }
             } elseif ($order->vendor_settlement_status === 'settled') {
                 $this->journal($order, $returnCase, $reference, $financialOperationId, 'SUPPLIER-LOSS-' . $returnItem->id, User::class, null, 'retailer_supplier_refund_loss_pending_mapping', 'debit', $lineCost, 'Settled supplier cost absorbed pending authorized recovery mapping.');
