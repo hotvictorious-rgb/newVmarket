@@ -171,3 +171,12 @@ The logistics payout reversal service could continue accounting mutations when t
 - Added a regression test that soft-deletes the company and verifies reversal leaves the payout pending and creates no journal entries.
 - Commits: service cc4bbb997a341eebc75035ec13fa0a13d0b26d62; regression test 2ba59c483e3e78d9b7233fb6ec229e972b51a61f.
 - Verification status: committed source and test changes are not yet run in PHP/CI.
+
+## 19. Prevent duplicate payout rejection after a terminal journal event (21 October 2026)
+
+Manual rejection previously trusted the payout request's status column as the sole terminal-state signal. If the status remained stale at pending while a confirmed payout or prior rejection journal already existed, the rejection path could apply a second liability/wallet reversal.
+
+- Both vendor and logistics rejection endpoints now check for an existing payout-finalization or rejection accounting event before any state, wallet or journal mutation. A terminal accounting event with a stale pending status is quarantined for finance reconciliation.
+- Added a regression test for both payout types confirming that an existing terminal payout journal prevents a second rejection and prevents wallet/journal changes.
+- Commits: controller a16a4e8d73c84412e571b77898142cf45a3a72fc; test 87bba3870f255243fe621e82ab5c80af1cd5f313.
+- Verification status: changes committed; tests have not been executed in PHP or CI.
