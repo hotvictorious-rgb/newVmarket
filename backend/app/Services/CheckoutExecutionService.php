@@ -55,7 +55,7 @@ class CheckoutExecutionService
             return [
                 'success' => false,
                 'status_code' => 422,
-                'message' => 'Wallet credit cannot be used to pay for orders at launch. Use an approved Paystack payment method or reserve for in-shop payment through the authorised workflow.',
+                'message' => 'Instant refund wallet credit is not checkout tender at launch. Use an approved Paystack payment method; cashback redemption remains subject to its existing caps.',
             ];
         }
 
