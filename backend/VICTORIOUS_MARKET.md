@@ -64,7 +64,7 @@ Record customer receipts, merchandise revenue, supplier purchase cost, delivery 
 
 A supplier payment must not become eligible when an order is merely placed, paid, accepted, or marked ready. Eligibility begins only after verified successful customer delivery or confirmed customer pickup and the required order/amount reconciliation. Eligibility is not an automatic transfer: apply authorized payment controls and record actual payment confirmation. If a customer refund is owed after a supplier has already been paid, VM remains responsible for the customer remedy. Any supplier recovery is separate, evidence-based, contractually supportable and must not delay a valid customer refund.
 
-The owner/accountant must approve the retailer chart of accounts, whether cashback remains active and how it is funded, the logistics-company charging/payment terms, supplier payment authorization, delivery-fee margin, and treatment of discounts, taxes and gateway fees. Do not infer the old marketplace percentages as new retailer policy.
+The owner/accountant must approve the retailer chart of accounts, the logistics-company agreement/rate terms and override controls, supplier payment authorization, delivery-fee margin/subsidy treatment, and treatment of discounts, taxes and gateway fees. Cashback remains active under the existing 5% terms stated above. Do not infer the old marketplace percentages as new retailer policy.
 
 ### Existing payment and refund safeguards
 
