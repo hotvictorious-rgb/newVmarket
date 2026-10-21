@@ -17,7 +17,7 @@ class CustomerCashbackLedger extends Model
     ];
 
     protected $casts = [
-        'amount' => 'string',
+        'amount' => 'decimal:2',
         'matures_at' => 'datetime',
         'expires_at' => 'datetime',
     ];
