@@ -1,16 +1,18 @@
 # Victorious MARKET — Cross-Document and Implementation Alignment Audit
 
 **Audit date:** 20 October 2026  
-**Branch reviewed:** `audit/paystack-refund-webhook-safety`  
-**Status:** Documentation alignment and source-code trace; launch blockers remain open  
+**Canonical working branch:** `docs/retailer-central-fulfilment-model`  
+**Status:** Current policy alignment plus partial runtime implementation; launch blockers and CI verification remain open  
 **Authority:** `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md`  
 **Release rule:** Do not merge to `main`, deploy, or represent a finding as fixed without explicit owner approval and evidence.
 
+> **Latest binding policy correction (21 October 2026):** This current baseline supersedes older source-audit conclusions below wherever they conflict. Sections documenting vendor-managed delivery, 90/5/5 merchandise allocation, vendor 90/10 delivery earnings, disabled cashback, or vendor payout FIFO rules are retained as historical findings only; they are not current policy for new retailer transactions.
+
 ## 1. Scope and limits
 
-This audit compared the authoritative business rules with the payment/refund matrix, payout policy, vendor-delivery business rules, implementation audit, delivery/financial-integrity plan, root and backend project overviews, README files, and `backend/database/seeders/LegalDocumentSeeder.php`. It also traced selected checkout, reservation, settlement, and refund service paths.
+This audit compares the current authoritative system rules with the payment/refund matrix, payout policy, delivery audits, retailer model, README/project overviews, legal-document seeder, checkout, pickup, settlement, cashback and logistics-payable paths. The working branch now includes documentation changes, a forward migration for retailer financial snapshots and logistics-company overrides, retailer settlement branching, pickup cashback correction, an admin logistics-company assignment/override service and routes, and regression coverage.
 
-This is **not** proof that production is aligned. The live database's published legal-document rows, production configuration, provider dashboard, bank records, and deployed runtime were not inspected in this pass. The legal-document seeder source and documentation were changed, but no runtime checkout, payment, fulfilment, refund, cashback, or payout service/controller code was changed in this pass, and no test suite was run here. Source-code findings below are therefore open remediation/verification items, not claims of completed fixes.
+This is **not** proof that production is aligned. The live database's published legal-document rows, production configuration, provider dashboard, bank records, and deployed runtime were not inspected. The latest code changes have not yet been confirmed by a successful CI run. Parent/child checkout, customer-facing shop independence, pickup offer sourcing, supplier disbursement lifecycle, post-handover logistics recovery, and some historical financial consumers remain open.
 
 ## 1A. Branch and pull-request isolation warning
 
@@ -18,23 +20,20 @@ The GitHub comparison of `main` against `audit/paystack-refund-webhook-safety` r
 
 The open draft PR #3 points from `docs/vendor-managed-delivery-business-rules` to `main`, not from this audit branch. Therefore, **do not merge this branch wholesale** and do not assume the open PR contains the changes described here. Before any merge, inspect the exact base/head commit and full diff, split policy/documentation changes from runtime remediation, explain every deleted test, and restore or replace coverage for removed behaviours. The 418-commit comparison is a release-control warning, not a statement that all 418 commits were authored in this session.
 
-## 2. Canonical business baseline
+## 2. Canonical current business baseline
 
-All project documents must preserve these rules unless the owner expressly changes them:
-
-1. Victorious MARKET is the customer-facing marketplace/payment/refund coordinator. Approved vendors own products, stock accuracy, fulfilment, and their own riders.
-2. A multi-vendor parent checkout uses one verified parent payment capture and separate vendor child orders. Each child has its own vendor, fulfilment, delivery-fee snapshot, item-level earnings, refund ceiling, dispute/hold state, and settlement eligibility.
-3. Launch customer payment paths are only: (a) pay before delivery through Victorious MARKET; or (b) reserve for in-shop pickup and pay at the vendor shop through Victorious MARKET's authorised workflow. No doorstep COD, vendor cash collection, private-account transfer, or other off-platform settlement.
-4. Launch rails are Paystack card and standard bank transfer unless separately approved. Legacy wallet-credit balances are **not** a third checkout tender at launch. Cashback redemption is a separate loyalty discount, capped at 50% of merchandise subtotal per checkout.
-5. Merchandise allocation is based on eligible post-discount merchandise actually collected: 90% vendor / 5% customer cashback liability / 5% platform. Delivery fee is separately allocated 90% vendor / 10% platform; no rider payable is created. Victorious MARKET bears Paystack processing fees and vendor payout transfer fees as a platform expense.
-6. Doorstep handover requires server-verified customer OTP plus a linked doorstep delivery photo. In-shop pickup requires both the `RES-XXXXXX` reservation pass and a separate one-time customer pickup OTP, plus an in-shop pickup photo. These checks prove the handover process, not product quality. GPS, signature, separate rider-pickup photo, and hub-inspection photo are not mandatory.
-7. The standard claim/return request window is 24 hours from confirmed delivery/pickup, with authorised admin review of legitimate late cases and applicable statutory/warranty rights preserved. This is not a guarantee of refund approval or provider completion within 24 hours.
-8. Refunds use the verified original Paystack route where supported. No wallet-credit refund or off-platform refund is enabled at launch. Automatic approval is limited to a verified duplicate successful capture and a verified payment for an order cancelled before any vendor action; other refunds require persisted authorised human approval before gateway dispatch.
-9. Vendor earnings become eligible 24 hours after confirmed fulfilment only when applicable holds, disputes, security checks, and reconciliation checks permit. Eligibility is not automatic payout.
-10. Vendor payout is manually approved at launch; minimum ₦5,000, maximum ₦500,000. Server-calculated strict FIFO selects whole earning records only. Stop before an over-cap record; never split or skip it. One active request remains reserved while pending, approved-unsent, in-flight, or uncertain. If the oldest record alone exceeds the cap, flag it for finance resolution.
-11. No spendable vendor wallet. Vendor debt/recovery is separate from payout and customer refund. A complaint alone is not confirmed debt. Repayment requires verified bank receipt; offset requires authorised approval and contractual basis. Never silently offset or rewrite history.
-12. Cashback maturity is fulfilment + 24-hour claim window + separate 24-hour maturity buffer, only when no blocking case remains. The 365-day validity period starts at actual maturity. Reverse unspent cashback; track spent-cashback recovery separately and offset only against future cashback as it matures.
-13. Preserve immutable financial history. Use linked reversals/adjustments, idempotency, verified webhook events, reconciliation, and explicit refund/payout lifecycle states. A timeout is neither proof of success nor proof of failure.
+1. Victorious MARKET is the single customer-facing retailer. Suppliers are private sourcing partners, not public storefront sellers. Customer prices, payments, refunds, pickup authorization and delivery coordination belong to VM.
+2. Doorstep delivery is coordinated by VM through approved logistics companies. Each assigned rider must be active and linked to exactly one active logistics company. The logistics-company payable is not a rider payable.
+3. The default logistics-company payable for a new doorstep order is 90% of the snapshotted customer delivery fee; the default VM delivery margin is 10%. An authorized admin may approve a higher or lower company amount for actual Nigerian route/operating conditions and negotiated terms. Preserve the default and final amounts, reason, admin identity and timestamp. If the payable exceeds the customer delivery fee, record the excess as a VM-funded delivery subsidy/expense. Never mutate a completed journal entry; use linked balanced adjustments.
+4. Supplier payable is the immutable agreed wholesale cost per order item, not a percentage of merchandise. It becomes eligible only after verified customer handover and reconciliation; eligibility is not automatic transfer.
+5. Cashback remains active at 5% on eligible post-discount merchandise actually funded by real money through verified Paystack payment, after redeemed cashback and excluding delivery. It is funded from VM gross retail margin, never supplier cost. No cashback is earned on an unfulfilled/cancelled order or discount/cashback-funded value.
+6. Existing cashback terms remain: verified fulfilment, 24-hour claim window, separate 24-hour maturity buffer, no blocking case, 365-day validity beginning at actual maturity, redemption capped at 50% of cart merchandise subtotal, reversal of unspent cashback and separate spent-cashback recovery offset only against future matured cashback.
+7. The former 90/5/5 merchandise split, vendor delivery earnings, vendor payout thresholds and vendor-managed delivery apply only to historical transactions and migration/reconciliation. Do not use them for new retailer orders, supplier payables or logistics-company charges.
+8. Doorstep handover requires server-verified customer OTP plus a linked doorstep delivery photo. In-shop pickup remains unpaid at reservation, inspect-before-pay, VM-authorized Paystack at the counter, and requires the reservation pass, separate one-time customer pickup OTP and in-shop photo.
+9. Refund approval, gateway submission, provider confirmation and reconciliation are distinct. Refund merchandise and delivery-fee components independently. Customer refunds remain VM's responsibility and must not wait for supplier or logistics-company recovery.
+10. Preserve historical cashback, vendor earnings, payouts, foreign keys, legal versions, journals and audit records. Do not silently recalculate or relabel old transactions as retailer transactions.
+11. Payment verification, webhook authentication, state-transition guards, idempotency, immutable snapshots, balanced journals, audit logs and reconciliation remain mandatory. Admin overrides and company assignments are row-locked, authorized and audited.
+12. A policy statement or source change is not proof of a passing migration, CI run, deployed runtime or published legal document. No merge to `main` or deployment is authorized without explicit approval.
 
 ## 3. Documentation alignment completed on this branch
 
