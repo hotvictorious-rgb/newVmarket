@@ -184,24 +184,11 @@ class FulfillmentAvailabilityService
      */
     public function checkPickupAvailability(int $shopId): array
     {
-        $shop = Shop::with(['lga', 'state'])->find($shopId);
-        if (!$shop || !$shop->pickup_enabled) {
-            return [
-                'is_available' => false,
-                'message' => 'In-shop pickup is not enabled for this shop.',
-            ];
-        }
-
+        // Public pickup is disabled. A support-managed exception is handled outside public availability APIs.
         return [
-            'is_available' => true,
-            'shop_id' => $shop->id,
-            'shop_name' => $shop->name,
-            'address' => $shop->address,
-            'lga' => $shop->lga->name ?? null,
-            'state' => $shop->state->name ?? null,
-            'prep_time_minutes' => $shop->pickup_prep_time_minutes,
-            'opening_time' => $shop->pickup_opening_time,
-            'closing_time' => $shop->pickup_closing_time,
+            'is_available' => false,
+            'message' => 'Public pickup is not offered. Standard fulfilment is doorstep delivery within Uyo only. Contact Victorious MARKET support at 09118949035 for assistance.',
+            'rate_tier' => 'support_managed_exception_only',
         ];
     }
 
