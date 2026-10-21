@@ -361,43 +361,11 @@ class CheckoutAndReservationApiController extends Controller
 
     public function showPickupReservation(Request $request, string $code): JsonResponse
     {
-        $user = $request->user();
-        if (!$user) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Authentication is required to view pickup reservation details.',
-            ], 401);
-        }
-
-        $reservation = PickupReservation::where('reservation_code', strtoupper(trim($code)))
-            ->where('customer_id', $user->id)
-            ->with(['product:id,name,thumbnail,unit_price'])
-            ->first();
-
-        if (!$reservation) {
-            return response()->json(['status' => false, 'message' => 'Reservation not found or unauthorized access.'], 404);
-        }
-
-        // Never serialize the model wholesale: it can contain customer handover
-        // OTPs and internal reservation/payment metadata. Return only the fields
-        // required for customer-facing reservation status.
         return response()->json([
-            'status' => true,
-            'data' => [
-                'reservation_code' => $reservation->reservation_code,
-                'status' => $reservation->status,
-                'quantity' => $reservation->quantity,
-                'total_amount' => $reservation->total_amount,
-                'expires_at' => $reservation->expires_at,
-                'created_at' => $reservation->created_at,
-                'product' => $reservation->product ? [
-                    'id' => $reservation->product->id,
-                    'name' => $reservation->product->name,
-                    'thumbnail' => $reservation->product->thumbnail,
-                    'unit_price' => $reservation->product->unit_price,
-                ] : null,
-            ],
-        ]);
+            'status' => false,
+            'code' => 'SUPPORT_MANAGED_PICKUP_ONLY',
+            'message' => 'Public supplier pickup reservation details are disabled. Contact Victorious MARKET support for an approved pickup exception.',
+        ], 410);
     }
 
     public function cashbackBalance(Request $request): JsonResponse
