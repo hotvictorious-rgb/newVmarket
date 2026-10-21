@@ -64,6 +64,7 @@ class VendorApiTerminalTest extends TestCase
             'bank_name' => 'Zenith Bank',
             'account_number' => '1029384756',
             'account_name' => strtoupper($name . ' ENTERPRISES'),
+            'bank_updated_at' => Carbon::now()->subDays(5),
         ]);
 
         $lga = Lga::first();
