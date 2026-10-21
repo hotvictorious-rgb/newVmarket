@@ -1588,7 +1588,7 @@ class PortalController extends Controller
             return back()->with('error', 'Please configure your verified commercial bank account before requesting withdrawal.');
         }
 
-        if ($vendor->isWithinBankCooldown()) {
+        if (!$vendor->bank_updated_at || $vendor->isWithinBankCooldown()) {
             return back()->with('error', 'Security Cooldown Active: Bank account was recently updated. For fraud prevention, withdrawals are locked for 48 hours following bank detail modifications.');
         }
 
@@ -2398,7 +2398,7 @@ class PortalController extends Controller
                 return ['valid' => false, 'message' => 'Disbursement blocked: Logistics company user account is inactive or suspended.'];
             }
 
-            if ($company->isWithinBankCooldown()) {
+            if (!$company->bank_updated_at || $company->isWithinBankCooldown()) {
                 return ['valid' => false, 'message' => 'Disbursement blocked: Logistics company bank account was recently updated and is under a 48-hour security cooldown.'];
             }
 
@@ -2729,7 +2729,7 @@ class PortalController extends Controller
                 return ['valid' => false, 'message' => 'Disbursement blocked: supplier recovery debt remains unresolved and requires finance review.'];
             }
 
-            if ($vendor->isWithinBankCooldown()) {
+            if (!$vendor->bank_updated_at || $vendor->isWithinBankCooldown()) {
                 return ['valid' => false, 'message' => 'Disbursement blocked: Merchant bank account was recently updated and is under a 48-hour security cooldown.'];
             }
 
@@ -3213,7 +3213,7 @@ class PortalController extends Controller
             return back()->with('error', 'Please configure your verified corporate bank account before requesting withdrawal.');
         }
 
-        if ($company->isWithinBankCooldown()) {
+        if (!$company->bank_updated_at || $company->isWithinBankCooldown()) {
             return back()->with('error', 'Security Cooldown Active: Bank account was recently updated. For fraud prevention, withdrawals are locked for 48 hours following bank detail modifications.');
         }
 
