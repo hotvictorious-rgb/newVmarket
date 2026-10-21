@@ -916,6 +916,13 @@ class OrderSettlementService
                 ];
             }
 
+            if ($lockedOrder->retailer_model_order && $lockedOrder->sourcing_status !== 'supplier_confirmed') {
+                return [
+                    'success' => false,
+                    'message' => 'Courier handover is blocked until every assigned supplier has confirmed availability.',
+                ];
+            }
+
             if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'])) {
                 return [
                     'success' => false,
