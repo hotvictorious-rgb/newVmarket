@@ -978,6 +978,36 @@ class PortalController extends Controller
     }
 
     /**
+     * Assign an approved logistics company after supplier availability is confirmed.
+     */
+    public function adminAssignLogisticsCompany(Request $request, int $id, LogisticsCompanyPayableService $service)
+    {
+        $validated = $request->validate([
+            'logistics_company_id' => ['required', 'integer', 'exists:logistics_company_profiles,id'],
+            'reason' => ['required', 'string', 'min:1', 'max:2000'],
+        ]);
+
+        try {
+            $result = $service->assignCompany(
+                Order::findOrFail($id),
+                $request->user(),
+                (int) $validated['logistics_company_id'],
+                (string) $validated['reason']
+            );
+        } catch (\\Throwable $e) {
+            return back()->withErrors(['logistics_company_assignment' => $e->getMessage()])->withInput();
+        }
+
+        $orderNumber = $result['order']->order_number;
+        return redirect()->route('admin.orders.index')->with(
+            'success',
+            $result['replayed']
+                ? "Logistics company assignment for {$orderNumber} was already applied."
+                : "Logistics company assigned to {$orderNumber} and audited."
+        );
+    }
+
+    /**
      * Admin commercial override for the retailer-model logistics-company payable.
      * The service enforces role/state checks, immutable audit and balanced adjustments.
      */
