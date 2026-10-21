@@ -12,6 +12,7 @@ use App\Models\LogisticsCollectionPoint;
 use App\Models\LogisticsCompanyProfile;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderSupplierAssignment;
 use App\Models\Product;
 use App\Models\RiderProfile;
 use App\Models\Shop;
@@ -388,7 +389,7 @@ class CheckoutExecutionService
                 'pickup_verification_code' => Order::generateUniquePickupOtp(),
                 'verification_code' => Order::generateUniqueDeliveryOtp(),
                 'vendor_settlement_status' => 'held',
-                'sourcing_status' => 'assigned_to_supplier',
+                'sourcing_status' => $isFullyWalletPaid ? 'awaiting_supplier_confirmation' : 'awaiting_payment',
                 'selected_supplier_id' => null,
                 'selected_shop_id' => null,
                 'sourced_at' => Carbon::now(),
@@ -419,6 +420,27 @@ class CheckoutExecutionService
                 $snapshotData['order_id'] = $order->id;
 
                 OrderItem::create($snapshotData);
+            }
+
+            // Record one internal assignment row per distinct supplier shop. Item-level
+            // snapshots remain the financial authority; these rows coordinate acceptance.
+            $supplierGroups = [];
+            foreach ($itemsToCreate as $itemData) {
+                $offer = $itemData['resolved_offer'];
+                $groupKey = (int) $offer['vendor_id'] . ':' . (int) $offer['shop_id'];
+                $supplierGroups[$groupKey] = [
+                    'supplier_vendor_id' => (int) $offer['vendor_id'],
+                    'supplier_shop_id' => (int) $offer['shop_id'],
+                ];
+            }
+            foreach ($supplierGroups as $supplierGroup) {
+                OrderSupplierAssignment::create([
+                    'order_id' => $order->id,
+                    'supplier_vendor_id' => $supplierGroup['supplier_vendor_id'],
+                    'supplier_shop_id' => $supplierGroup['supplier_shop_id'],
+                    'status' => $isFullyWalletPaid ? 'awaiting_supplier_confirmation' : 'awaiting_payment',
+                    'assigned_at' => $isFullyWalletPaid ? Carbon::now() : null,
+                ]);
             }
 
             // If order is 100% paid via wallet credit, settle double-entry books immediately!
