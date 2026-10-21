@@ -76,7 +76,7 @@ class ProductApiController extends Controller
 
         // Ignore legacy shop_id filters: customers cannot select or enumerate private suppliers.
 
-        $products = $query->paginate(20);
+        $products = $query->paginate(20);\n        $products->getCollection()->each(static function ($product): void {\n            $product->makeHidden(['shop_id', 'shop']);\n        });
 
         return response()->json([
             'status' => true,
