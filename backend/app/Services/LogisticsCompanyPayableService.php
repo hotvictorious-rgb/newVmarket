@@ -41,7 +41,7 @@ class LogisticsCompanyPayableService
                 throw new InvalidArgumentException('Verified customer payment and confirmed supplier availability are required before logistics assignment.');
             }
             if (in_array($locked->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true)
-                || $locked->received_at !== null || $locked->rider_id !== null) {
+                || $locked->received_at !== null || $locked->pickup_confirmed_by_rider === true) {
                 throw new InvalidArgumentException('Logistics company cannot be changed after handover, terminal outcome, or rider custody assignment.');
             }
             $company = LogisticsCompanyProfile::query()
