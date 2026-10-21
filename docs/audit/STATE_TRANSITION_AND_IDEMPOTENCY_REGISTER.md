@@ -645,3 +645,24 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Prevents cash leaving Victorious MARKET for a case whose approved remedy is not a refund, while keeping any change of remedy explicit and auditable.
 
 **Verification boundary:** Source and tests committed; tests/CI pending. No merge or deployment.
+
+
+### VM-AUD-121 — Enforce the refund remedy at the financial-operation boundary (21 October 2026)
+
+**Finding:** The final persisted authorization fence checked reviewer identity but did not require `resolution_type=refund`, and accepted the legacy `refund_approved` state even though the return-case schema's active approval state is `refund_pending`. The background reconciler could therefore bypass the return-service remedy check for inconsistent case metadata.
+
+**Fix:** Refund operation creation and the last pre-dispatch authorization fence now require a `refund_pending` case with `resolution_type=refund`, the matching persisted reviewer, and an active administrative account. Reconciliation only selects explicitly approved refund cases. The admin approval action persists the chosen refund remedy.
+
+**Business impact:** Prevents an operation created by background reconciliation or another internal caller from sending cash for a replacement/repair case or an unapproved state.
+
+**Verification boundary:** Source and regression tests committed; CI/test execution pending. No merge or deployment.
+
+### VM-AUD-122 — Release reservations when a refund is blocked before gateway submission (21 October 2026)
+
+**Finding:** If the final pre-dispatch authorization check failed (for example, the reviewer became inactive after operation creation) or the original payment reference disappeared before submission, the service returned a terminal result without releasing the active reservation. No gateway request had been made, but the refundable balance could remain held.
+
+**Fix:** Pre-dispatch authorization/reference failures now mark the operation failed, record the reason in metadata, and release active reservations atomically. Added a feature test that deactivates the reviewer after operation creation and asserts the gateway is not called and the reservation is released.
+
+**Business impact:** Prevents a rejected pre-dispatch attempt from trapping customer refund capacity and makes the reason visible for audit. The guard is safe because these branches occur before a gateway attempt is created.
+
+**Verification boundary:** Source and test committed; CI/test execution pending. No merge or deployment.
