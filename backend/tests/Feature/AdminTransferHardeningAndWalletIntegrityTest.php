@@ -360,6 +360,29 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
+    public function test_verified_success_can_finalize_supplier_payout_after_uncertain_hold(): void
+    {
+        [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
+        $service = app(RetailerSupplierPayoutService::class);
+        $requested = $service->requestPayout($this->vendor);
+        $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
+        $payout = $requested['payout'];
+
+        $processing = $service->markProcessing($payout->id, $this->superAdmin->id, 'RCP_TEST_SUPPLIER', 'SUPPAYOUT-UNCERTAIN-SUCCESS');
+        $this->assertTrue($processing['success'], $processing['message'] ?? 'Supplier payout processing claim failed.');
+        $held = $service->markUncertain($payout->id, 'Timeout after Paystack may have accepted the transfer.', 'UNCERTAIN_TIMEOUT');
+        $this->assertTrue($held['success']);
+        $this->assertSame('uncertain', $payout->fresh()->status);
+
+        $finalized = $service->finalizeSuccess($payout->id, $payout->transfer_reference, 'TRF_CONFIRMED_AFTER_TIMEOUT', '8000.00');
+        $this->assertTrue($finalized['success'], $finalized['message'] ?? 'Verified uncertain payout could not be finalized.');
+        $this->assertSame('paid', $payout->fresh()->status);
+        $this->assertSame('settled', $payout->allocations()->first()->fresh()->status);
+
+        $audit = app(FinancialReconciliationEngine::class)->reconcileRetailerSupplierPayables($order->id);
+        $this->assertSame(0, $audit['mismatches'], json_encode($audit['errors'], JSON_UNESCAPED_SLASHES));
+    }
+
     public function test_supplier_payout_uncertain_outcome_cannot_be_released_as_unsubmitted(): void
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
