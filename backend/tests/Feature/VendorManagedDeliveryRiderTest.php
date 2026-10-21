@@ -266,6 +266,12 @@ class VendorManagedDeliveryRiderTest extends TestCase
             'merchandise_subtotal' => '10000.00',
             'delivery_fee' => '1500.00',
             'grand_total' => '11500.00',
+            // Legacy required columns remain non-null for historical row compatibility.
+            'vendor_net_90' => '9000.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '500.00',
+            'logistics_fee_retained' => '1350.00',
+            'platform_delivery_fee' => '150.00',
         ]);
 
         $response = $this->actingAs($this->vendorUserA, 'sanctum')
@@ -462,10 +468,8 @@ class VendorManagedDeliveryRiderTest extends TestCase
         $resPickup = $this->actingAs($this->vendorUserA, 'sanctum')->postJson("/api/v1/vendor/orders/{$pickupOrder->id}/assign-rider", [
             'rider_id' => $rider->id,
         ]);
-        $resPickup->assertStatus(422);
-        $resPickup->assertJsonFragment([
-            'message' => 'Cannot assign delivery rider: this order is configured for in-shop pickup.',
-        ]);
+        // The vendor-managed assignment endpoint is retired for new retailer orders.
+        $resPickup->assertStatus(410);
 
         // 2. Order already out for delivery / custody taken
         $inTransitOrder = $this->createTestOrder([
@@ -524,10 +528,8 @@ class VendorManagedDeliveryRiderTest extends TestCase
         $res = $this->actingAs($this->vendorUserA, 'sanctum')->postJson("/api/v1/vendor/orders/{$doorstepOrder->id}/assign-rider", [
             'rider_id' => $fleetRider->id,
         ]);
-        $res->assertStatus(403);
-        $res->assertJsonFragment([
-            'message' => 'Unauthorized: Legacy or fleet-linked riders cannot receive new vendor deliveries.',
-        ]);
+        // The vendor-managed assignment endpoint is retired; fleet dispatch is centrally controlled.
+        $res->assertStatus(410);
     }
 
     /**
