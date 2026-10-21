@@ -40,6 +40,7 @@ class Order extends Model
         'retailer_merchandise_margin',
         'logistics_company_payable_default_amount',
         'logistics_company_payable_amount',
+        'logistics_company_payable_ledger_company_id',
         'logistics_company_payable_override_reason',
         'logistics_company_payable_override_by',
         'logistics_company_payable_override_at',
