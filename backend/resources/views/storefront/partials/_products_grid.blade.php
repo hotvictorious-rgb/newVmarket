@@ -5,9 +5,9 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
             </div>
             <div>
-                <strong style="font-size: 13.5px; color: #1E3A8A; display: block; margin-bottom: 2px;">Transit Corridor Dispatch to {{ $activeCity }}</strong>
+                <strong style="font-size: 13.5px; color: #1E3A8A; display: block; margin-bottom: 2px;">Victorious MARKET Uyo Delivery</strong>
                 <div style="font-size: 11.5px; color: #3B82F6; line-height: 1.4;">
-                    Local physical shops are being onboarded. These items deliver swiftly to {{ $activeCity }} via verified fast transit (12&ndash;24 hrs).
+                    Approved suppliers are based in Uyo. Victorious MARKET coordinates collection and local delivery.
                 </div>
             </div>
         </div>
@@ -65,7 +65,7 @@
                         <span>In-Shop {{ $activeCity }} &bull; Same-Day</span>
                     @elseif($lane)
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                        <span>Transit from {{ $product->shop->lga->name ?? 'Hub' }} (&#8358;{{ number_format((float)$lane->base_fee) }})</span>
+                        <span>Uyo local delivery</span>
                     @else
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
                         <span>Regional Transit</span>
@@ -77,11 +77,11 @@
             <div class="vm-product-info" style="padding: 12px 14px 10px;">
                 <div class="vm-product-shop" style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #64748B; margin-bottom: 5px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                    <a href="{{ route('shop.storefront', $product->shop->slug ?? $product->shop_id) }}" style="color: #475569; text-decoration: none; font-weight: 600;">
+                    <a href="{{ route('storefront') }}" style="color: #475569; text-decoration: none; font-weight: 600;">
                         {{ Str::limit($product->shop->name ?? 'Verified Merchant Plaza', 20) }}
                     </a>
                     <span style="opacity: 0.5;">•</span>
-                    <span style="color: #94A3B8;">{{ $product->shop->lga->name ?? 'Uyo' }}</span>
+                    <span style="color: #94A3B8;">Uyo</span>
                 </div>
 
                 <h3 class="vm-product-name" style="font-size: 14px; font-weight: 700; color: #0F172A; margin: 0 0 8px; line-height: 1.35; min-height: 36px;">
@@ -147,8 +147,8 @@
                             data-name="{{ $product->name }}" 
                             data-price="{{ $product->unit_price }}" 
                             data-image="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}"
-                            data-shop="{{ $product->shop->name ?? 'Verified Merchant' }}" 
-                            data-lga="{{ $product->shop->lga->name ?? 'Uyo' }}" 
+                            data-shop="Victorious MARKET" 
+                            data-lga="Uyo" 
                             data-slug="{{ $product->slug }}"
                             style="background: #F5F3FF; border: 1.5px solid rgba(94, 23, 235, 0.25); color: #5E17EB; font-weight: 700; font-size: 12px; padding: 8px 6px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.15s ease;">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
@@ -218,7 +218,7 @@
             </div>
             <h4 style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0 0 6px;">No Direct Local Merchants in {{ $activeCity }} Yet</h4>
             <p style="font-size: 13px; color: #64748B; max-width: 420px; margin: 0 auto 16px; line-height: 1.5;">
-                We are actively onboarding physical plaza vendors in {{ $activeCity }}. In the meantime, you can explore products delivering swiftly from our verified transit corridor.
+                Victorious MARKET sources from approved Uyo suppliers and coordinates local delivery. Supplier identities remain private.
             </p>
             <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
                 <a href="{{ route('storefront', ['scope' => 'all']) }}#catalog" style="background: var(--vm-primary, #5E17EB); color: #FFFFFF; border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
