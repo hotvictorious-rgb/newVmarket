@@ -35,6 +35,7 @@ use App\Models\CustomerAddress;
 use App\Services\BcMathService;
 use App\Services\CheckoutExecutionService;
 use App\Services\OrderSettlementService;
+use App\Services\LogisticsCompanyPayableService;
 use App\Services\ReturnAndRefundService;
 use App\Services\DoorstepHandshakeService;
 use Carbon\Carbon;
@@ -974,6 +975,37 @@ class PortalController extends Controller
         $pendingSettlementsCount = Order::where('vendor_settlement_status', 'eligible')->count();
 
         return view('admin.orders', compact('recentOrders', 'pendingSettlementsCount'));
+    }
+
+    /**
+     * Admin commercial override for the retailer-model logistics-company payable.
+     * The service enforces role/state checks, immutable audit and balanced adjustments.
+     */
+    public function adminOverrideLogisticsCompanyPayable(Request $request, int $id, LogisticsCompanyPayableService $service)
+    {
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0', 'regex:/^\\d{1,12}(\\.\\d{1,2})?$/'],
+            'reason' => ['required', 'string', 'min:1', 'max:2000'],
+        ]);
+
+        try {
+            $result = $service->override(
+                Order::findOrFail($id),
+                $request->user(),
+                (string) $validated['amount'],
+                (string) $validated['reason']
+            );
+        } catch (\\Throwable $e) {
+            return back()->withErrors(['logistics_company_payable' => $e->getMessage()])->withInput();
+        }
+
+        $orderNumber = $result['order']->order_number;
+        return redirect()->route('admin.orders.index')->with(
+            'success',
+            $result['replayed']
+                ? "Logistics-company payable override for {$orderNumber} was already applied."
+                : "Logistics-company payable for {$orderNumber} updated and audited."
+        );
     }
 
     /**
