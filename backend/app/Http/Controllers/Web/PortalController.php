@@ -3514,8 +3514,8 @@ class PortalController extends Controller
 
         // Do not allow administrators to create new routes outside the permanent Uyo-only launch scope.
         // Runtime serviceability also rejects legacy inter-LGA lanes that already exist.
-        $originLga = \\App\\Models\\Lga::with('state')->find($validated['origin_lga_id']);
-        $destinationLga = \\App\\Models\\Lga::with('state')->find($validated['destination_lga_id']);
+        $originLga = \App\Models\Lga::with('state')->find($validated['origin_lga_id']);
+        $destinationLga = \App\Models\Lga::with('state')->find($validated['destination_lga_id']);
         $isUyoLga = static fn ($lga): bool => $lga
             && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
             && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
