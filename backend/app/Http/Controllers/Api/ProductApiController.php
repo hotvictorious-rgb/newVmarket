@@ -27,17 +27,31 @@ class ProductApiController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug']);
+            ->with(['category:id,name,slug']);
 
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->integer('category_id'));
         }
 
         if ($request->filled('lga_id')) {
-            $lgaId = $request->integer('lga_id');
-            $query->whereHas('shop', function ($q) use ($lgaId) {
-                $q->where('lga_id', $lgaId);
-            });
+            $requestedLga = \\App\\Models\\Lga::with('state')->find($request->integer('lga_id'));
+            if (!$requestedLga
+                || strtolower(trim((string) $requestedLga->name)) !== 'uyo'
+                || strtolower(trim((string) ($requestedLga->state->name ?? ''))) !== 'akwa ibom') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Victorious MARKET currently serves customers only within Uyo, Akwa Ibom State.',
+                    'data' => [],
+                ], 422);
+            }
+        }
+
+        // Public catalog queries cannot select a private supplier shop.
+        if ($request->filled('shop_id')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Supplier shop filtering is not supported by Victorious MARKET.',
+            ], 410);
         }
 
         if ($request->filled('search')) {
@@ -67,15 +81,21 @@ class ProductApiController extends Controller
             }
         }
 
-        if ($request->filled('shop_id')) {
-            $query->where('shop_id', $request->integer('shop_id'));
-        }
-
         $products = $query->paginate(20);
+        $products->getCollection()->each(function (Product $product): void {
+            $product->makeHidden([
+                'vendor_id',
+                'shop_id',
+                'cost_price',
+                'supplierOffers',
+                'vendor',
+                'shop',
+            ]);
+        });
 
         return response()->json([
             'status' => true,
-            'message' => 'Products retrieved successfully.',
+            'message' => 'Victorious MARKET products retrieved successfully.',
             'data' => $products,
         ]);
     }
@@ -83,7 +103,7 @@ class ProductApiController extends Controller
     public function show(int $id): JsonResponse
     {
         $product = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,address,lga_id,pickup_enabled,pickup_opening_time,pickup_closing_time', 'category:id,name,slug'])
+            ->with(['category:id,name,slug'])
             ->find($id);
 
         if (!$product) {
@@ -93,6 +113,15 @@ class ProductApiController extends Controller
             ], 404);
         }
 
+        $product->makeHidden([
+            'vendor_id',
+            'shop_id',
+            'cost_price',
+            'supplierOffers',
+            'vendor',
+            'shop',
+        ]);
+
         return response()->json([
             'status' => true,
             'data' => $product,
@@ -100,33 +129,10 @@ class ProductApiController extends Controller
     }
     public function shops(Request $request): JsonResponse
     {
-        $query = \App\Models\Shop::where('is_active', true)
-            ->with(['lga:id,name', 'vendor:id,business_name,user_id'])
-            ->orderBy('is_primary_branch', 'desc');
-
-        if ($request->filled('lga_id')) {
-            $query->where('lga_id', $request->integer('lga_id'));
-        }
-
-        $shops = $query->get()->map(function ($shop) {
-            return [
-                'id' => $shop->id,
-                'name' => $shop->name ?: ($shop->vendor?->business_name ?? 'Merchant Shop'),
-                'slug' => $shop->slug,
-                'address' => $shop->address,
-                'lga_id' => $shop->lga_id,
-                'lga_name' => $shop->lga?->name,
-                'logo_url' => url('assets/img/vm_icon.jpg'),
-                'pickup_enabled' => (bool)$shop->pickup_enabled,
-                'pickup_opening_time' => $shop->pickup_opening_time ? substr((string)$shop->pickup_opening_time, 0, 5) : '08:00',
-                'pickup_closing_time' => $shop->pickup_closing_time ? substr((string)$shop->pickup_closing_time, 0, 5) : '18:00',
-            ];
-        });
-
+        // Private supplier locations are not a customer-facing marketplace directory.
         return response()->json([
-            'status' => true,
-            'message' => 'Shops retrieved successfully.',
-            'data' => $shops,
-        ]);
-    }
-}
+            'status' => false,
+            'message' => 'Supplier shop discovery is retired. Browse products through Victorious MARKET; any pickup exception must be arranged through central support.',
+            'data' => [],
+        ], 410);
+    }}
