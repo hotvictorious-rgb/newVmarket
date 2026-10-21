@@ -1246,6 +1246,7 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
 
             $remainingToMatch = $amount;
             $fifoOrders = Order::where('vendor_id', $lockedVendor->id)
+                ->where('retailer_model_order', false)
                 ->where('vendor_settlement_status', 'eligible')
                 ->where('payment_status', 'paid')
                 ->where('order_status', 'delivered')
