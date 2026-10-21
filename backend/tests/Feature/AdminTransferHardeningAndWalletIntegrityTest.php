@@ -630,7 +630,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $walletBefore = (string) $this->company->fresh()->wallet_balance;
         $journalCountBefore = FinancialJournalEntry::count();
 
-        $result = app(\\App\\Services\\PayoutFinalizationService::class)
+        $result = app(\App\Services\\PayoutFinalizationService::class)
             ->revertLogisticsPayout($payout, 'Authoritative gateway failure');
 
         $this->assertTrue($result['success']);
@@ -658,7 +658,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $journalCountBefore = FinancialJournalEntry::count();
         $this->company->delete();
 
-        $result = app(\\App\\Services\\PayoutFinalizationService::class)
+        $result = app(\App\Services\\PayoutFinalizationService::class)
             ->revertLogisticsPayout($payout, 'Authoritative gateway failure');
 
         $this->assertFalse($result['success']);
@@ -682,7 +682,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'order_id' => null,
             'transaction_reference' => 'TEST-FLEET-TERMINAL',
             'event_id' => 'EVT-FLEET-PAYOUT-' . $logisticsPayout->id,
-            'beneficiary_type' => \\App\\Models\\LogisticsCompanyProfile::class,
+            'beneficiary_type' => \App\Models\\LogisticsCompanyProfile::class,
             'beneficiary_id' => $this->company->id,
             'account_name' => 'logistics_payout_payable',
             'entry_type' => 'debit',
@@ -713,7 +713,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'order_id' => null,
             'transaction_reference' => 'TEST-VND-TERMINAL',
             'event_id' => 'EVT-VND-PAYOUT-' . $vendorPayout->id,
-            'beneficiary_type' => \\App\\Models\\VendorProfile::class,
+            'beneficiary_type' => \App\Models\\VendorProfile::class,
             'beneficiary_id' => $this->vendor->id,
             'account_name' => 'vendor_payout_payable',
             'entry_type' => 'debit',
@@ -732,7 +732,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
 
     public function test_payout_request_journal_evidence_requires_both_exact_legs(): void
     {
-        $service = app(\\App\\Services\\PayoutFinalizationService::class);
+        $service = app(\App\Services\\PayoutFinalizationService::class);
         $vendorPayout = VendorPayoutRequest::create([
             'vendor_id' => $this->vendor->id,
             'amount' => '15000.00',
@@ -746,7 +746,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'order_id' => null,
             'transaction_reference' => 'TEST-VND-REQ-EVIDENCE',
             'event_id' => 'EVT-MERCHANT-REQ-' . $vendorPayout->id,
-            'beneficiary_type' => \\App\\Models\\VendorProfile::class,
+            'beneficiary_type' => \App\Models\\VendorProfile::class,
             'beneficiary_id' => $this->vendor->id,
             'account_name' => 'vendor_payable',
             'entry_type' => 'debit',
@@ -760,7 +760,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'order_id' => null,
             'transaction_reference' => 'TEST-VND-REQ-EVIDENCE',
             'event_id' => 'EVT-MERCHANT-REQ-' . $vendorPayout->id,
-            'beneficiary_type' => \\App\\Models\\VendorProfile::class,
+            'beneficiary_type' => \App\Models\\VendorProfile::class,
             'beneficiary_id' => $this->vendor->id,
             'account_name' => 'vendor_payout_payable',
             'entry_type' => 'credit',
@@ -775,7 +775,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'order_id' => null,
             'transaction_reference' => 'TEST-VND-REQ-EVIDENCE',
             'event_id' => 'EVT-MERCHANT-REQ-' . $vendorPayout->id,
-            'beneficiary_type' => \\App\\Models\\VendorProfile::class,
+            'beneficiary_type' => \App\Models\\VendorProfile::class,
             'beneficiary_id' => $this->vendor->id,
             'account_name' => 'vendor_payout_payable',
             'entry_type' => 'credit',
@@ -798,7 +798,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'order_id' => null,
             'transaction_reference' => 'TEST-FLEET-REQ-EVIDENCE',
             'event_id' => 'EVT-FLEET-REQ-' . $fleetPayout->id,
-            'beneficiary_type' => \\App\\Models\\LogisticsCompanyProfile::class,
+            'beneficiary_type' => \App\Models\\LogisticsCompanyProfile::class,
             'beneficiary_id' => $this->company->id,
             'account_name' => 'logistics_company_wallet',
             'entry_type' => 'debit',
@@ -812,7 +812,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'order_id' => null,
             'transaction_reference' => 'TEST-FLEET-REQ-EVIDENCE',
             'event_id' => 'EVT-FLEET-REQ-' . $fleetPayout->id,
-            'beneficiary_type' => \\App\\Models\\LogisticsCompanyProfile::class,
+            'beneficiary_type' => \App\Models\\LogisticsCompanyProfile::class,
             'beneficiary_id' => $this->company->id,
             'account_name' => 'logistics_payout_payable',
             'entry_type' => 'credit',
