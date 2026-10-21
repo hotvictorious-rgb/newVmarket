@@ -408,6 +408,11 @@ class VendorTerminalApiController extends Controller
             if ($order->payment_status !== 'paid' || $order->order_status !== 'confirmed') {
                 return ['success' => false, 'status_code' => 422, 'message' => 'Supplier availability can only be confirmed after payment is verified and the order is confirmed.'];
             }
+            // A rejection is an order-wide sourcing hold. Do not let another supplier's
+            // later confirmation overwrite the hold and accidentally reopen dispatch.
+            if ($order->retailer_model_order && $order->sourcing_status === 'supplier_rejected') {
+                return ['success' => false, 'status_code' => 409, 'message' => 'This order is on administrative sourcing hold after a supplier rejection. Do not confirm or prepare further packages until an administrator resolves it.'];
+            }
             if ($assignment->status === 'supplier_confirmed') {
                 return ['success' => true, 'message' => 'Your supplier assignment was already confirmed.', 'order' => $order];
             }
