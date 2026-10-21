@@ -1503,4 +1503,45 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertFalse($result['success']);
         $this->assertStringContainsString('Unauthorized', $result['message']);
     }
+
+    public function test_ambiguous_refund_timeout_is_reported_as_pending_reconciliation(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+        ]);
+        $credit = CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'return_case_id' => $case->id,
+            'amount' => '10000.00',
+            'credit_type' => 'doorstep_refund_credit',
+            'status' => 'available',
+        ]);
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldReceive('initiateRefund')->once()->andReturn([
+            'success' => false,
+            'status' => 'initiated',
+            'code' => 'UNCERTAIN_TIMEOUT',
+            'is_definitive' => false,
+            'message' => 'Gateway response timed out after submission.',
+        ]);
+
+        $result = (new ReturnAndRefundService($gateway))->adminDisburseRefund($this->superAdmin, $case);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('initiated', $result['status']);
+        $this->assertStringContainsString('reconciliation is required', $result['message']);
+        $this->assertSame('quarantined', $credit->fresh()->status);
+        $this->assertSame('initiated', \App\Models\FinancialOperation::where('metadata->return_case_id', $case->id)->firstOrFail()->status);
+    }
 }
