@@ -404,10 +404,17 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertEquals('5800.00', $orderItem->cost_price);
         $this->assertEquals($vendorA->id, $orderItem->supplier_vendor_id);
         $this->assertEquals($shopA->id, $orderItem->supplier_shop_id);
+        $this->assertEquals($offer->id, $orderItem->fulfillment_supplier_offer_id);
+        $this->assertEquals('5800.00', $orderItem->fulfillment_supplier_cost_snapshot);
+        $this->assertEquals($vendorA->id, $orderItem->fulfillment_supplier_vendor_id);
+        $this->assertEquals($shopA->id, $orderItem->fulfillment_supplier_shop_id);
 
         // Later: supplier raises their wholesale cost on the offer
         $offer->wholesale_cost = '7200.00';
         $offer->save();
+
+        $this->assertEquals('5800.00', $orderItem->fresh()->supplier_cost_snapshot);
+        $this->assertEquals('5800.00', $orderItem->fresh()->fulfillment_supplier_cost_snapshot);
 
         // The historical OrderItem snapshot remains immutable!
         $refreshedItem = $orderItem->fresh();
