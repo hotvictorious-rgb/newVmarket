@@ -59,6 +59,57 @@
         </div>
     @endif
 
+    @php
+        $activeRetailerSupplierPayout = collect($retailerSupplierPayoutRequests ?? [])->first(
+            fn ($payout) => in_array($payout->status, ['pending', 'processing', 'uncertain'], true)
+        );
+    @endphp
+    <section class="dash-card" style="margin-bottom: 24px; padding: 22px;">
+        <div class="page-header-row" style="margin-bottom: 12px;">
+            <div>
+                <h2 style="margin: 0 0 6px; font-size: 18px; font-weight: 800;">Retailer Supplier Payables</h2>
+                <p class="page-header-subtitle" style="max-width: 760px;">
+                    Separate from legacy merchant sales payouts. This requests eligible item-level supplier costs from Victorious MARKET orders after verified payment, delivery, refund-window expiry, and finance reconciliation.
+                </p>
+            </div>
+            <form method="POST" action="{{ route('vendor.supplier-payout.request') }}">
+                @csrf
+                <button type="submit" class="btn-dash btn-dash-primary"
+                    {{ $activeRetailerSupplierPayout ? 'disabled' : '' }}
+                    title="{{ $activeRetailerSupplierPayout ? 'Resolve the active request before requesting another payout.' : 'Calculate and reserve eligible supplier item payables.' }}">
+                    Request Supplier Payables
+                </button>
+            </form>
+        </div>
+        @if($activeRetailerSupplierPayout)
+            <div style="padding: 10px 12px; margin: 12px 0; border-radius: 8px; background: rgba(245, 158, 11, .12);">
+                An active supplier payout request #{{ $activeRetailerSupplierPayout->id }} is {{ strtoupper($activeRetailerSupplierPayout->status) }}. Do not create another request; uncertain transfers require treasury reconciliation.
+            </div>
+        @endif
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr><th>Request</th><th>Amount</th><th>Status</th><th>Gateway</th><th>Items</th><th>Created</th></tr>
+                </thead>
+                <tbody>
+                    @forelse($retailerSupplierPayoutRequests ?? [] as $supplierPayout)
+                        <tr>
+                            <td>#{{ $supplierPayout->id }}</td>
+                            <td>₦{{ number_format((float) $supplierPayout->amount, 2) }}</td>
+                            <td>{{ strtoupper($supplierPayout->status) }}</td>
+                            <td>{{ $supplierPayout->gateway_status ?? '—' }}</td>
+                            <td>{{ $supplierPayout->allocations->count() }}</td>
+                            <td>{{ $supplierPayout->created_at?->format('d M Y, H:i') }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6" class="text-center">No retailer supplier-payable requests yet.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+        <small>Launch controls: minimum ₦5,000 and maximum ₦500,000 per request. Supplier KYC and bank details must remain valid. These are payout safeguards, not commercial tariff promises.</small>
+    </section>
+
     <!-- 4 Financial Stats Cards: Clarifying Lifetime Earnings vs Withdrawable Balance -->
     <div class="stat-grid-4" style="margin-bottom: 24px;">
         <div class="stat-card stat-card-border-purple">
@@ -350,6 +401,11 @@
                     <div style="margin-bottom: 14px;">
                         <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; color: var(--adm-text);">Bank Name</label>
                         <input type="text" name="bank_name" value="{{ old('bank_name', $vendor->bank_name) }}" required class="form-control" style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--adm-border, #E2E8F0); border-radius: 8px; font-size: 13.5px;" placeholder="e.g. Zenith Bank PLC">
+                    </div>
+
+                    <div style="margin-bottom: 14px;">
+                        <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; color: var(--adm-text);">Bank Code</label>
+                        <input type="text" name="bank_code" value="{{ old('bank_code', $vendor->bank_code) }}" required maxlength="20" pattern="[A-Za-z0-9_-]+" class="form-control" style="width: 100%; padding: 10px 12px; border: 1.5px solid var(--adm-border, #E2E8F0); border-radius: 8px; font-size: 13.5px;" placeholder="e.g. 057">
                     </div>
 
                     <div style="margin-bottom: 14px;">
