@@ -2,11 +2,11 @@
 
 > **Superseding owner decision (21 October 2026):** Victorious MARKET is a retailer operating centrally from Uyo, Akwa Ibom State. Suppliers are private product sources, not public marketplace sellers. They submit offers for VM approval or map offers to existing canonical listings. VM controls customer-facing prices and delivery, uses approved logistics companies, and requires every rider to be linked to exactly one active logistics company. Authorized supplier-shop pickup remains supported using the existing customer verification and photo flow. Supplier payment eligibility begins only after verified successful customer delivery or confirmed pickup and reconciliation. Earlier multi-vendor, vendor-managed delivery, vendor commission/payout and vendor-linked rider rules in this document are legacy assumptions and are superseded for new retailer-model work. Do not infer that code has been migrated. See [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](../RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md).
 
-**Status:** Authoritative business-rule baseline for vendor-managed fulfilment
+**Status:** Authoritative business-rule baseline for retailer operations and VM-coordinated central fulfilment
 **Last reviewed:** 20 October 2026
 **Review note:** The rules are approved requirements; Section 14 lists implementation gaps found in the audit branch, not completed fixes.  
 **Scope:** Delivery, vendor-linked riders, in-shop pickup, customer privacy, failed delivery, delivery fees, COD boundaries, and legacy logistics.  
-**Authority:** Read with [VICTORIOUS_MARKET_SYSTEM_RULES_V1.md](../VICTORIOUS_MARKET_SYSTEM_RULES_V1.md), the single source of truth. These rules supersede older descriptions of platform-managed logistics, conflicting OTP/photo requirements, logistics-company dispatch, rider earnings, and rider payouts. Historical records must be preserved. Documentation alignment only; implementation remains unverified.
+**Authority:** The owner-confirmed retailer model in [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](../RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md) controls business-model decisions. This file controls operational acceptance rules; [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](../PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) controls payment/refund details. Older system rules, legal text, tests, or implementation descriptions do not override these current policies. Legacy records may be retained for audit, but legacy marketplace rules must not govern new retailer transactions. Documentation alignment does not prove implementation.
 
 ## Decision record — retailer and central fulfilment model
 
@@ -191,7 +191,7 @@ All payments must be processed/recorded through Victorious MARKET's authorized p
 16. Refund operations enforce component, order and aggregate-capture ceilings under concurrency; approvals, gateway execution and confirmed outcomes are distinct.
 17. Run targeted tests and full suites; document exact commands, commit, results and CI evidence. Documentation-only changes must not be reported as code fixes.
 
-## 14. Required implementation work and source-audit findings
+## 14. Required implementation work and source-audit findings (open; not yet implemented)
 
 The previous audit contains findings about the legacy marketplace implementation. Re-evaluate each finding under the retailer model rather than implementing the old vendor rules literally.
 
