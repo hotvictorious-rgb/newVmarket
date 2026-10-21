@@ -721,3 +721,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Reduces leakage of payment workflow metadata, internal reconciliation references, private settlement evidence, and supplier cost snapshots through supplier order detail/list responses.
 
 **Verification boundary:** Source and regression test committed; tests/CI pending. No merge or deployment.
+
+
+### VM-AUD-128 — Do not retry a refund with an unproven legacy wallet-credit hold (21 October 2026)
+
+**Finding:** Legacy wallet credits could remain `quarantined` without a persisted pre-refund status snapshot and without a linked refund operation. The retry workflow previously ignored that inconsistent state and could initiate another refund without knowing whether the wallet credit could safely be restored after a definitive failure.
+
+**Fix:** Refund prevalidation now examines linked operations before handling quarantined credits. An open operation keeps ownership of the hold and is returned as initiated without redispatch. A retry is allowed only when all linked attempts are definitively failed and every quarantined credit has a valid saved prior status; those credits are restored from the snapshot and re-quarantined for the new attempt. Unknown legacy holds or holds without an operation are blocked for finance reconciliation. Added a regression test.
+
+**Business impact:** Prevents wallet credit from being stranded or incorrectly restored/spent while retrying a cash refund. Unknown historical states are held for manual reconciliation rather than guessed.
+
+**Verification boundary:** Source and regression test committed; tests/CI pending. No merge or deployment.
