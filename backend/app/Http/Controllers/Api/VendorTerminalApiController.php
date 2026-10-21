@@ -1314,10 +1314,11 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             ], 422);
         }
 
-        if ($vendor->isWithinBankCooldown()) {
+        if (!$vendor->bank_updated_at || $vendor->isWithinBankCooldown()) {
             return response()->json([
                 'status' => false,
-                'message' => 'Security Cooldown Active: Bank account was recently updated. For fraud prevention, withdrawals are locked for 48 hours following bank detail modifications.',
+                'code' => 'BANK_VERIFICATION_COOLDOWN',
+                'message' => 'Security hold: verified bank details must have an audited update timestamp and remain unchanged for 48 hours before withdrawals.',
             ], 403);
         }
 
