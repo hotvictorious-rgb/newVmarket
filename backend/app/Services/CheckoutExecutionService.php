@@ -383,6 +383,7 @@ class CheckoutExecutionService
                 'delivery_bulky_surcharge_per_unit_snapshot' => $deliveryBulkySurcharge,
                 'delivery_bulky_quantity_snapshot' => $deliveryBulkyQuantity,
                 'supplier_cost_total_snapshot' => $supplierCostTotal,
+                'fulfillment_supplier_cost_total_snapshot' => $supplierCostTotal,
                 'retailer_merchandise_margin' => $retailerMerchandiseMargin,
                 'logistics_company_payable_default_amount' => $vendorDeliveryNet90,
                 'logistics_company_payable_amount' => $vendorDeliveryNet90,
