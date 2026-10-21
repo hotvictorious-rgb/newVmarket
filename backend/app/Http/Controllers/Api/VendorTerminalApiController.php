@@ -443,22 +443,85 @@ class VendorTerminalApiController extends Controller
         $vendor = $ctx['vendor'];
         $shop = $ctx['shop'];
 
-        $query = Order::where('vendor_id', $vendor->id);
-        if ($ctx['is_employee'] && $shop) {
-            $query->where('shop_id', $shop->id);
+        $order = Order::findOrFail($id);
+
+        // Preserve the historical single-supplier lifecycle for legacy records.
+        if (!$order->retailer_model_order) {
+            $legacyQuery = Order::where('vendor_id', $vendor->id);
+            if ($ctx['is_employee'] && $shop) {
+                $legacyQuery->where('shop_id', $shop->id);
+            }
+            $legacyOrder = $legacyQuery->findOrFail($id);
+            $result = $this->settlementService->markVendorHandoverReady($legacyOrder, $ctx['user']);
+
+            return response()->json([
+                'status' => (bool) ($result['success'] ?? false),
+                'message' => $result['message'] ?? 'Unable to authorize handover.',
+                'data' => $result['order'] ?? null,
+            ], ($result['success'] ?? false) ? 200 : 422);
         }
 
-        $order = $query->findOrFail($id);
+        $result = DB::transaction(function () use ($id, $vendor, $shop, $ctx) {
+            $lockedOrder = Order::whereKey($id)->lockForUpdate()->firstOrFail();
+            if ($lockedOrder->payment_status !== 'paid') {
+                return ['success' => false, 'status_code' => 422, 'message' => 'Only paid orders can be prepared for collection.'];
+            }
+            if ($lockedOrder->sourcing_status !== 'supplier_confirmed') {
+                return ['success' => false, 'status_code' => 422, 'message' => 'All suppliers must confirm availability before collection preparation.'];
+            }
+            if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'], true)) {
+                return ['success' => false, 'status_code' => 422, 'message' => 'This order cannot be prepared for supplier collection in its current state.'];
+            }
 
-        // Use the shared lifecycle service so API and web entry points enforce
-        // the same locked transition, payment gate, OTP generation, and notification path.
-        $result = $this->settlementService->markVendorHandoverReady($order, $ctx['user']);
+            $assignmentQuery = OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                ->where('supplier_vendor_id', $vendor->id);
+            if ($ctx['is_employee'] && $shop) {
+                $assignmentQuery->where('supplier_shop_id', $shop->id);
+            }
+            $assignment = $assignmentQuery->lockForUpdate()->first();
+            if (!$assignment) {
+                return ['success' => false, 'status_code' => 404, 'message' => 'This order has no supplier assignment for your account or shop.'];
+            }
+            if ($assignment->status === 'ready_for_collection') {
+                return ['success' => true, 'message' => 'Your items are already marked ready for collection.', 'pickup_otp' => $assignment->supplier_pickup_code, 'assignment' => $assignment];
+            }
+            if ($assignment->status !== 'supplier_confirmed') {
+                return ['success' => false, 'status_code' => 422, 'message' => 'Confirm item availability before marking items ready for collection.'];
+            }
+
+            $assignment->status = 'ready_for_collection';
+            $assignment->supplier_pickup_code = OrderSupplierAssignment::generateUniquePickupCode();
+            $assignment->handover_ready_at = Carbon::now();
+            $assignment->save();
+
+            $allReady = !OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                ->whereNotIn('status', ['ready_for_collection', 'collected'])
+                ->exists();
+
+            if ($allReady) {
+                $lockedOrder->order_status = 'ready_for_pickup';
+                $lockedOrder->vendor_handover_ready_at = Carbon::now();
+                $lockedOrder->save();
+            }
+
+            return [
+                'success' => true,
+                'message' => $allReady
+                    ? 'All supplier packages are ready. The assigned rider can collect each package using its supplier-specific OTP.'
+                    : 'Your package is ready. Victorious MARKET is waiting for the remaining supplier package(s).',
+                'pickup_otp' => $assignment->supplier_pickup_code,
+                'assignment' => $assignment,
+                'all_suppliers_ready' => $allReady,
+            ];
+        });
 
         return response()->json([
             'status' => (bool) ($result['success'] ?? false),
-            'message' => $result['message'] ?? 'Unable to authorize handover.',
-            'data' => $result['order'] ?? null,
-        ], ($result['success'] ?? false) ? 200 : 422);
+            'message' => $result['message'] ?? 'Unable to prepare supplier items for collection.',
+            'data' => $result['assignment'] ?? null,
+            'pickup_otp' => $result['pickup_otp'] ?? null,
+            'all_suppliers_ready' => $result['all_suppliers_ready'] ?? false,
+        ], ($result['success'] ?? false) ? 200 : ($result['status_code'] ?? 422));
     }
 
     /**
