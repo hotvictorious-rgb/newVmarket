@@ -450,6 +450,23 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertNotSame($otpA, $otpB);
         $this->assertEquals('ready_for_pickup', $orderTwoBulky->fresh()->order_status);
 
+        // A supplier can report a stock failure after confirming and preparing
+        // its package, as long as that package has not yet been collected.
+        Sanctum::actingAs($supplierUserB, ['*']);
+        $rejectPreparedPackage = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/reject-availability", [
+            'reason' => 'Final stock check found the item was damaged.',
+        ]);
+        $rejectPreparedPackage->assertOk()
+            ->assertJsonPath('sourcing_status', 'supplier_rejected');
+        $rejectedPreparedAssignment = OrderSupplierAssignment::where('order_id', $orderTwoBulky->id)
+            ->where('supplier_vendor_id', $supplierB->id)
+            ->firstOrFail();
+        $this->assertEquals('supplier_rejected', $rejectedPreparedAssignment->status);
+        $this->assertNull($rejectedPreparedAssignment->supplier_pickup_code);
+        $this->assertNull($rejectedPreparedAssignment->handover_ready_at);
+        $this->assertEquals('confirmed', $orderTwoBulky->fresh()->order_status);
+        $this->assertEquals('paid', $orderTwoBulky->fresh()->payment_status);
+
         // A supplier rejection after payment must create an administrative hold,
         // preserve the paid customer order, and never trigger an automatic refund.
         $orderBike->forceFill([
