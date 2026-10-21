@@ -42,13 +42,16 @@ class SupplierOfferSelectionService
             ->whereNotNull('availability_expires_at')
             ->where('availability_expires_at', '>', $now)
             ->whereHas('vendor', function ($query) {
-                $query->where('marketplace_status', 'active')
+                $query->whereNull('vendor_profiles.deleted_at')
+                    ->where('marketplace_status', 'active')
                     ->whereHas('user', function ($userQuery) {
                         $userQuery->where('status', 'active');
                     });
             })
             ->whereHas('shop', function ($query) use ($fulfillmentType) {
-                $query->where('is_active', true);
+                $query->whereNull('shops.deleted_at')
+                    ->whereColumn('shops.vendor_id', 'supplier_offers.vendor_id')
+                    ->where('is_active', true);
 
                 if ($fulfillmentType === 'in_shop_pickup') {
                     $query->where('pickup_enabled', true);
