@@ -16,5 +16,8 @@ Schedule::command('backup:google-drive')->dailyAt('02:00');
 // Automated Gateway Reconciliation for Timeouts and In-Flight Transfers
 Schedule::command('finance:reconcile')->everyFifteenMinutes();
 
+// Mature eligible cashback after the claim window + maturity buffer and expire lots 365 days after actual maturity.
+Schedule::command('cashback:mature')->everyFifteenMinutes()->withoutOverlapping();
+
 // Automated 7-Day Product Freshness Lifecycle Expiration (Hourly)
 Schedule::command('products:expire-stale-listings')->hourly();
