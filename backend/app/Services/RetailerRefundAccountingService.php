@@ -7,6 +7,7 @@ use App\Models\CustomerCashbackLedger;
 use App\Models\FinancialJournalEntry;
 use App\Models\Order;
 use App\Models\ReturnCase;
+use App\Models\RetailerSupplierPayoutAllocation;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Models\VendorRecoveryLedger;
