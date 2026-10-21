@@ -501,6 +501,49 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCountBefore, FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REJECT-' . $payout->id)->count());
     }
 
+    public function test_stale_vendor_and_logistics_processing_claims_are_not_automatically_retried(): void
+    {
+        $vendorPayout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '15000.00',
+            'status' => 'pending',
+            'processing_token' => 'CLAIM-VND-STALE-001',
+            'processing_started_at' => now()->subMinutes(10),
+            'transfer_reference' => 'VND-PAYOUT-STALE-001',
+            'bank_name' => $this->vendor->bank_name,
+            'bank_code' => $this->vendor->bank_code,
+            'account_number' => $this->vendor->account_number,
+            'account_name' => $this->vendor->account_name,
+        ]);
+
+        $vendorResponse = $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
+            'payout_id' => $vendorPayout->id,
+        ]);
+        $vendorResponse->assertSessionHas('error');
+        $this->assertEquals('pending', $vendorPayout->fresh()->status);
+        $this->assertEquals('CLAIM-VND-STALE-001', $vendorPayout->fresh()->processing_token);
+
+        $logisticsPayout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '15000.00',
+            'status' => 'pending',
+            'processing_token' => 'CLAIM-FLEET-STALE-001',
+            'processing_started_at' => now()->subMinutes(10),
+            'transfer_reference' => 'FLEET-PAYOUT-STALE-001',
+            'bank_name' => $this->company->bank_name,
+            'bank_code' => $this->company->bank_code,
+            'account_number' => $this->company->account_number,
+            'account_name' => $this->company->account_name,
+        ]);
+
+        $logisticsResponse = $this->actingAs($this->superAdmin)->post(route('admin.disburse.logistics_payout'), [
+            'payout_id' => $logisticsPayout->id,
+        ]);
+        $logisticsResponse->assertSessionHas('error');
+        $this->assertEquals('pending', $logisticsPayout->fresh()->status);
+        $this->assertEquals('CLAIM-FLEET-STALE-001', $logisticsPayout->fresh()->processing_token);
+    }
+
     public function test_high_value_vendor_payout_strictly_requires_super_admin()
     {
         $this->createTestOrder([
