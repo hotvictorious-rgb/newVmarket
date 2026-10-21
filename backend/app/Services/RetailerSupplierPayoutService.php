@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AdminAuditLog;
 use App\Models\FinancialJournalEntry;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -188,9 +189,11 @@ class RetailerSupplierPayoutService
                 'account_name' => $lockedSupplier->account_name,
             ]);
 
+            $allocatedItemIds = [];
             foreach ($allocations as $allocation) {
                 /** @var OrderItem $item */
                 $item = $allocation['item'];
+                $allocatedItemIds[] = (int) $item->id;
                 RetailerSupplierPayoutAllocation::create([
                     'retailer_supplier_payout_request_id' => $payout->id,
                     'supplier_vendor_id' => $lockedSupplier->id,
@@ -208,6 +211,22 @@ class RetailerSupplierPayoutService
                     'SUPPAYOUT-REQ-' . $payout->id . '-ITEM-' . $item->id . '-CR',
                     'supplier_payout_payable', 'credit', $allocation['amount'], 'Supplier payout request payable reservation.');
             }
+
+            AdminAuditLog::create([
+                'user_id' => $lockedSupplier->user_id,
+                'action' => 'retailer_supplier_payout_requested',
+                'target_type' => RetailerSupplierPayoutRequest::class,
+                'target_id' => $payout->id,
+                'old_values' => [],
+                'new_values' => [
+                    'supplier_vendor_id' => $lockedSupplier->id,
+                    'amount' => $total,
+                    'transfer_reference' => $payout->transfer_reference,
+                    'order_item_ids' => $allocatedItemIds,
+                    'bank_name' => $payout->bank_name,
+                    'account_number_last4' => substr((string) $payout->account_number, -4),
+                ],
+            ]);
 
             return ['success' => true, 'payout' => $payout->fresh('allocations'), 'message' => 'Supplier payout request reserved for admin processing.'];
         }, 3);
