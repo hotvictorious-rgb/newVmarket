@@ -423,3 +423,14 @@ Allowed: `reserved` and not expired -> `inspected_accepted`, or `reserved` and e
 **Changes on this branch:** Added the hold check inside `OrderSettlementService::verifyRiderPickupOtp` after the paid-order precondition and before the pickup state transition. Disabled the legacy order-level supplier confirmation helper for retailer-model orders. Added a regression assertion to the supplier rejection feature test proving that the legacy helper throws and leaves the paid order on hold. Existing HTTP regressions cover late supplier confirmation (409) and collection preparation (422).
 
 **Verification:** Code and test changes are committed but have not been executed in this session. Do not claim CI or runtime verification. Remaining work includes auditing all direct writers of `sourcing_status`, `order_status`, assignment status and rider custody, and implementing the audited post-payment reassignment/refund resolution workflow. No merge or deployment is authorized.
+
+
+### VM-AUD-064 — post-payment sourcing recovery must compensate capture-time supplier payables (21 October 2026)
+
+**Finding:** `OrderSettlementService::settlePaystackOrder` posts item-level `supplier_payable` credits from each order item's supplier/cost snapshots during verified payment settlement. A later admin edit to `order_items`, `supplier_cost_total_snapshot`, or `retailer_merchandise_margin` alone would make current sourcing data disagree with the original financial journal and could leave the old supplier payable outstanding or create a duplicate payable.
+
+**Invariant:** Preserve the original capture and journal entries. Post-payment recovery must be an authorized, idempotent operation with order/assignment/item row locks; revalidate fresh confirmed offers from an active approved Uyo supplier; append balanced compensating journal entries to reverse the affected old supplier payable and recognize the replacement supplier payable plus any cost delta against retailer margin/loss; atomically update item and assignment snapshots; preserve the customer's retail price, delivery fee, cashback basis, and payment record; record old/new values and reason in the admin audit log; and keep collection blocked until all required supplier assignments are confirmed. If no eligible replacement exists, route to the existing authorized refund workflow rather than directly mutating payment state.
+
+**Important distinction:** A `supplier_payable` credit posted at capture is not, by itself, proof that payout is eligible. Payout authorization must separately enforce fulfilment, acceptance, reconciliation, and any applicable hold. Do not mutate historical capture journal rows to implement a sourcing change.
+
+**Status:** Accounting path inspected and documented; no post-payment reassignment/refund resolution implementation or new financial reconciliation test has been added yet. CI/test execution remains unverified. No merge or deployment is authorized.
