@@ -204,12 +204,12 @@ class SupplierReassignmentRecoveryService
 
                 $itemSuffix = $idempotencyKey . '-ITEM-' . $item->id;
                 $this->postSupplierJournalEntry(
-                    $order, $transactionReference, $itemSuffix . '-OLD',
+                    $order, (int) $item->id, $transactionReference, $itemSuffix . '-OLD',
                     $oldVendorId, 'debit', $oldLineCost,
                     "Reverse operational supplier payable for item #{$item->id} after approved recovery."
                 );
                 $this->postSupplierJournalEntry(
-                    $order, $transactionReference, $itemSuffix . '-NEW',
+                    $order, (int) $item->id, $transactionReference, $itemSuffix . '-NEW',
                     (int) $newVendor->id, 'credit', $newLineCost,
                     "Replacement supplier payable for item #{$item->id} after approved recovery."
                 );
@@ -411,6 +411,7 @@ class SupplierReassignmentRecoveryService
 
     private function postSupplierJournalEntry(
         Order $order,
+        int $orderItemId,
         string $transactionReference,
         string $keySuffix,
         int $vendorId,
@@ -425,6 +426,7 @@ class SupplierReassignmentRecoveryService
 
         FinancialJournalEntry::create([
             'order_id' => $order->id,
+            'order_item_id' => $orderItemId,
             'transaction_reference' => $transactionReference,
             'event_id' => 'EVT-' . $transactionReference . '-' . substr(hash('sha256', $keySuffix), 0, 20),
             'idempotency_key' => $this->journalIdempotencyKey($keySuffix),
@@ -453,6 +455,7 @@ class SupplierReassignmentRecoveryService
 
         FinancialJournalEntry::create([
             'order_id' => $order->id,
+            'order_item_id' => $orderItemId,
             'transaction_reference' => $transactionReference,
             'event_id' => 'EVT-' . $transactionReference . '-' . substr(hash('sha256', $keySuffix), 0, 20),
             'idempotency_key' => $this->journalIdempotencyKey($keySuffix),
