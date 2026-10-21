@@ -1567,4 +1567,58 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertSame(1, \App\Models\FinancialOperation::where('metadata->return_case_id', $case->id)->count());
         $this->assertSame('pending', $order->fresh()->paystack_refund_status);
     }
+
+    public function test_refund_disbursement_rejects_non_refund_resolution_type(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'replacement',
+            'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+        ]);
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldNotReceive('initiateRefund');
+
+        $result = (new ReturnAndRefundService($gateway))->adminDisburseRefund($this->superAdmin, $case);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('resolution_type=refund', $result['message']);
+        $this->assertSame('replacement', $case->fresh()->resolution_type);
+        $this->assertSame('refund_pending', $case->fresh()->status);
+        $this->assertNull($case->fresh()->refund_claim_token);
+    }
+
+    public function test_explicit_admin_approval_converts_requested_resolution_to_refund(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'requested',
+            'resolution_type' => 'replacement',
+            'total_refundable_amount' => '10000.00',
+        ]);
+
+        $result = (new ReturnAndRefundService())->adminApproveReturn(
+            $this->superAdmin,
+            $case,
+            'Approved for refund after review.'
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('refund_pending', $case->fresh()->status);
+        $this->assertSame('refund', $case->fresh()->resolution_type);
+        $this->assertSame($this->superAdmin->id, $case->fresh()->reviewed_by_admin_id);
+    }
 }
