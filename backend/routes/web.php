@@ -79,6 +79,7 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/logistics-companies', [PortalController::class, 'adminStoreLogisticsCompany'])->name('admin.logistics_companies.store');
     Route::post('/logistics-companies/{id}/toggle-status', [PortalController::class, 'adminToggleLogisticsCompanyStatus'])->name('admin.logistics_companies.toggle_status');
     Route::get('/orders', [PortalController::class, 'adminOrdersPage'])->name('admin.orders.index');
+    Route::post('/orders/{id}/logistics-company-payable', [PortalController::class, 'adminOverrideLogisticsCompanyPayable'])->whereNumber('id')->name('admin.orders.logistics_company_payable.override');
     Route::get('/products', [PortalController::class, 'adminProductsPage'])->name('admin.products.index');
     Route::post('/supplier-offers/{offerId}/confirm-availability', [AdminSupplierOfferAvailabilityController::class, 'confirm'])
         ->whereNumber('offerId')
