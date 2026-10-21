@@ -677,3 +677,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Prevents conflicting transfer callbacks from being falsely accepted and improves treasury reconciliation accuracy.
 
 **Verification boundary:** Source and regression test committed; tests/CI remain pending. No merge or deployment.
+
+
+### VM-AUD-124 — Redact internal financial metadata from customer return and wallet APIs (21 October 2026)
+
+**Finding:** Customer return-case create/list/detail endpoints serialized raw `ReturnCase` Eloquent models. Those models include internal claim tokens, Paystack refund IDs, bank references, reviewer IDs, arbitration notes, and cost allocation. Nested item/evidence/inspection models also contain internal fields. The wallet summary serialized raw `CustomerWalletCredit` records, including the new refund-reservation status snapshot and internal notes.
+
+**Fix:** Customer return-case create/list/detail now use an explicit allowlist serializer. It exposes customer-relevant status, amounts, item summaries, collection-point details, evidence links, and safe inspection results while omitting claim tokens, bank/gateway references, reviewer IDs, arbitration notes, cost allocation, supplier fields, and internal inspection metadata. Wallet history is now allowlisted and maps internal `quarantined` status to customer-facing `refund_pending`; `refund_reserved_from_status` is hidden from generic model serialization. Added a feature test checking sensitive fields are absent from customer detail/list/wallet responses.
+
+**Business impact:** Protects internal financial references and workflow tokens from customer API exposure, reduces the chance of exposing supplier/arbitration details, and presents wallet-credit holds as a clear pending-refund state without leaking internal reconciliation notes.
+
+**Verification boundary:** Source and regression test committed; tests/CI pending. No merge or deployment.
