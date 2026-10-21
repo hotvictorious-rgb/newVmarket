@@ -2438,18 +2438,18 @@ class PortalController extends Controller
         );
 
         if (!$transferRes['success']) {
-            $isNetworkError = in_array($transferRes['code'] ?? '', ['NETWORK_EXCEPTION', 'UNCERTAIN_TIMEOUT'], true);
-            DB::transaction(function () use ($payoutId, $transferRes, $isNetworkError) {
+            $isUncertain = !in_array($transferRes['code'] ?? '', ['DEFINITIVE_REJECTION', 'CONFIG_MISSING', 'AMOUNT_BELOW_MINIMUM'], true);
+            DB::transaction(function () use ($payoutId, $transferRes, $isUncertain) {
                 LogisticsPayoutRequest::where('id', $payoutId)->update([
-                    'processing_token' => $isNetworkError ? 'HOLD_TIMEOUT_RECONCILIATION' : null,
-                    'processing_started_at' => $isNetworkError ? Carbon::now() : null,
-                    'gateway_status' => $isNetworkError ? 'processing' : 'failed',
-                    'admin_notes' => $isNetworkError
+                    'processing_token' => $isUncertain ? 'HOLD_TIMEOUT_RECONCILIATION' : null,
+                    'processing_started_at' => $isUncertain ? Carbon::now() : null,
+                    'gateway_status' => $isUncertain ? 'processing' : 'failed',
+                    'admin_notes' => $isUncertain
                         ? 'GATEWAY_TIMEOUT: Transfer outcome uncertain. Locked in HOLD_TIMEOUT_RECONCILIATION awaiting gateway verification: ' . ($transferRes['message'] ?? '')
                         : 'Transfer initiation failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request'),
                 ]);
             });
-            $msg = $isNetworkError
+            $msg = $isUncertain
                 ? 'Gateway connection timeout. Payout locked in HOLD_TIMEOUT_RECONCILIATION state. Use Reconcile with Paystack before retry.'
                 : ('Paystack Automated Transfer Failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request.') . ' Payout reverted to pending review.');
             return back()->with('error', $msg);
@@ -2872,24 +2872,24 @@ class PortalController extends Controller
         );
 
         if (!$transferRes['success']) {
-            $isNetworkError = in_array($transferRes['code'] ?? '', ['NETWORK_EXCEPTION', 'UNCERTAIN_TIMEOUT'], true);
-            DB::transaction(function () use ($payoutId, $transferRes, $isNetworkError) {
+            $isUncertain = !in_array($transferRes['code'] ?? '', ['DEFINITIVE_REJECTION', 'CONFIG_MISSING', 'AMOUNT_BELOW_MINIMUM'], true);
+            DB::transaction(function () use ($payoutId, $transferRes, $isUncertain) {
                 \App\Models\VendorPayoutRequest::where('id', $payoutId)->update([
-                    'processing_token' => $isNetworkError ? 'HOLD_TIMEOUT_RECONCILIATION' : null,
-                    'processing_started_at' => $isNetworkError ? Carbon::now() : null,
-                    'gateway_status' => $isNetworkError ? 'processing' : 'failed',
-                    'admin_notes' => $isNetworkError
+                    'processing_token' => $isUncertain ? 'HOLD_TIMEOUT_RECONCILIATION' : null,
+                    'processing_started_at' => $isUncertain ? Carbon::now() : null,
+                    'gateway_status' => $isUncertain ? 'processing' : 'failed',
+                    'admin_notes' => $isUncertain
                         ? 'GATEWAY_TIMEOUT: Transfer outcome uncertain. Locked in HOLD_TIMEOUT_RECONCILIATION awaiting gateway verification: ' . ($transferRes['message'] ?? '')
                         : 'Transfer initiation failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request'),
                 ]);
-                if (!$isNetworkError) {
+                if (!$isUncertain) {
                     \App\Models\VendorPayoutAllocation::where('vendor_payout_request_id', $payoutId)->where('status', 'allocated')->update([
                         'status' => 'reversed',
                         'reversed_at' => Carbon::now(),
                     ]);
                 }
             });
-            $msg = $isNetworkError
+            $msg = $isUncertain
                 ? 'Gateway connection timeout. Payout locked in HOLD_TIMEOUT_RECONCILIATION state. Use Reconcile with Paystack before retry.'
                 : ('Paystack Transfer Initiation Error: ' . ($transferRes['message'] ?? 'Automated transfer could not be initiated with bank gateway. Payout reverted to pending.'));
             return back()->with('error', $msg);
