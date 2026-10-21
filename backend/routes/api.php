@@ -181,6 +181,8 @@ Route::prefix('v1')->group(function () {
 
             // Financial Ledger, Payouts & 48h Cooldown
             Route::get('payouts', [VendorTerminalApiController::class, 'payouts']);
+            Route::get('supplier-payouts', [VendorTerminalApiController::class, 'retailerSupplierPayouts']);
+            Route::post('supplier-payouts', [VendorTerminalApiController::class, 'requestRetailerSupplierPayout']);
             Route::post('payouts', [VendorTerminalApiController::class, 'requestPayout']);
             Route::post('bank/update', [VendorTerminalApiController::class, 'updateBank']);
 
