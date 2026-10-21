@@ -185,8 +185,8 @@ Manual rejection previously trusted the payout request's status column as the so
 
 A further audit found that payout paths treated any journal row with a request event ID as proof that the original payout reservation had been posted. A partial/corrupt event containing only one leg, a wrong beneficiary, or a mismatched amount could therefore authorize a wallet credit or liability reversal that did not match the actual reservation.
 
-- Added shared evidence checks in PayoutFinalizationService for vendor and logistics request journals. Each requires both expected account/entry legs, the correct beneficiary type and ID, and the exact payout amount.
+- Added shared evidence checks in PayoutFinalizationService for vendor and logistics request journals. Each requires exactly two rows for the request event, both expected account/entry legs, the correct beneficiary type and ID, and the exact payout amount; extra or mismatched rows invalidate the evidence.
 - Vendor and logistics finalization/reversal now use these stronger checks; manual rejection endpoints call the same evidence methods instead of a loose event-ID existence check.
 - Added regression coverage for single-leg, mismatched-amount and complete two-leg request journal evidence for both payout types.
-- Commits: service helper c8622583c5c2dcbd8c876d2aa3bfd6ecf94e20b8; controller call sites 11fd47cb2234df5917a3f2dce6f756985699aae2; regression test 6f6b0f1610121d3bf75177aa8c796c9c7be02c76; fixture hardening 7de78a5d7bb0f026794ac9108f3f519295e6c530.
+- Commits: initial service helper c8622583c5c2dcbd8c876d2aa3bfd6ecf94e20b8; exact-leg hardening 5fa24b5311def21084545cbb64479a41fe79225f; controller call sites 11fd47cb2234df5917a3f2dce6f756985699aae2; regression test 6f6b0f1610121d3bf75177aa8c796c9c7be02c76; fixture hardening 7de78a5d7bb0f026794ac9108f3f519295e6c530 and 6e8c8f1c3516fd8edcb13d877c2a7637e9edf456.
 - Verification status: changes committed but tests/CI have not run. Ensure the test fixtures satisfy all schema constraints and execute the relevant payout suite before release.
