@@ -1382,6 +1382,43 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertSame([], $result['collection_points']);
     }
 
+    public function test_public_catalog_excludes_unverified_supplier_offers(): void
+    {
+        $product = Product::create([
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'category_id' => $this->category->id,
+            'name' => 'Unverified Supplier Catalog Guard',
+            'slug' => 'unverified-supplier-catalog-guard',
+            'unit_price' => '10000.00',
+            'condition' => 'brand_new',
+            'package_tier' => 'bike',
+            'inventory_quantity' => 5,
+            'is_in_stock' => true,
+            'listing_status' => 'listed',
+            'is_approved' => true,
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+
+        SupplierOffer::create([
+            'product_id' => $product->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'wholesale_cost' => '5000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now(),
+            'availability_confirmed_by' => $this->vendorUser->id,
+            'availability_expires_at' => Carbon::now()->addDay(),
+        ]);
+
+        $this->vendor->update(['kyc_status' => 'pending']);
+
+        $this->assertNull(Product::marketplaceEligible()->find($product->id));
+        $this->assertNull(
+            app(SupplierOfferSelectionService::class)->selectLowestCost($product->fresh(), 'doorstep_delivery')
+        );
+    }
+
     public function test_supplier_offer_with_future_confirmation_timestamp_is_not_selectable(): void
     {
         $product = Product::create([
