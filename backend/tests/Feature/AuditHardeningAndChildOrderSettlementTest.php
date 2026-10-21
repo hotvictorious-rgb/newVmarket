@@ -103,6 +103,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'account_name' => 'Alpha Electronics Ltd',
             'bank_updated_at' => Carbon::now()->subDays(10),
             'marketplace_status' => 'active',
+            'kyc_status' => 'verified',
         ]);
         $this->shopA = Shop::create([
             'vendor_id' => $this->vendorA->id,
@@ -154,6 +155,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'account_name' => 'Beta Fashion Hub',
             'bank_updated_at' => Carbon::now()->subDays(10),
             'marketplace_status' => 'active',
+            'kyc_status' => 'verified',
         ]);
         $this->shopB = Shop::create([
             'vendor_id' => $this->vendorB->id,
