@@ -306,16 +306,16 @@ Documentation alignment does not close the previously recorded source-code findi
 
 **Do not combine merchandise and delivery into one refund approval.** A single customer case can contain both, but each component requires its own decision, amount, authorization record, financial operation, reservation, gateway reconciliation, and ledger reversal.
 
-- Merchandise refund: scope to the vendor child order and item/order-line quantities. Calculate from immutable post-discount allocations and reverse only the related 90/5/5 merchandise/cashback/platform amounts.
-- Delivery-fee refund: scope to the delivery fee actually captured for that child order. Decide independently using reason/evidence/policy, and reverse only the actual 90/10 vendor/platform delivery allocation. It must not contain merchandise value or cashback.
+- Merchandise refund: scope to the VM order item(s) and quantities; calculate from the immutable captured amount and original price/discount snapshot. Do not apply the former 90/5/5 marketplace split.
+- Delivery-fee refund: scope to the delivery fee actually captured for the VM order. Decide independently using reason, evidence, policy and applicable law. Account for only the approved captured delivery component under the approved retailer chart of accounts; do not apply the former 90/10 vendor/platform split.
 - A merchandise approval must not implicitly approve delivery. A delivery approval must not implicitly approve merchandise. Either component may be denied or remain pending while the other succeeds.
 - Use separate component-specific idempotent operations tied to the same original parent Paystack capture and exact child order. Separate refund decisions do not create a new payment or change the original-channel-only launch rule.
 - Enforce component remaining balance, child-order refund ceiling and aggregate parent-capture ceiling under locks, including active reservations and confirmed refunds from all components and vendors.
 - A zero-fee in_shop_pickup order cannot have a delivery-fee refund. Do not infer a refund from failed delivery alone.
 - Webhooks and reconciliation must match the exact provider refund identity and operation. A component's refund.processed/refund.failed event cannot change a sibling component. Uncertain/failed gateway outcome leaves that component open for reconciliation.
-- Vendor recovery and cashback recovery remain separate linked accounting operations; neither can silently alter the approval or gateway status of the other refund component.
+- Supplier recovery and any cashback adjustment remain separate linked accounting operations; neither can silently alter the approval or gateway status of the other refund component.
 - Keep shared provenance without collapsing states: both component decisions reference the original parent capture and child-order allocation history, but retain independent approvals, reservations, gateway outcomes and audit records. Only confirmed Paystack cash refunds plus active cash-refund reservations count against the shared parent-capture cash-refund ceiling.
-- Cashback reversal/recovery must link to the originating merchandise item/refund and use the cashback ledger. It is not a second Paystack refund and must not be counted again against the parent-capture cash-refund ceiling. Cashback maturity and recovery have separate lifecycle states and timing, but must reconcile back to the same source order/item/refund.
+- Historical cashback reversal/recovery must link to the originating item/refund and use the historical cashback ledger. It is not a second Paystack refund. New retailer-model cashback accrual remains subject to explicit owner/accountant approval.
 
 ### Audit findings and required implementation work
 
