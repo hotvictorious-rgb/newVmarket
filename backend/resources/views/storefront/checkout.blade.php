@@ -124,7 +124,6 @@
                 <!-- STEP 2: CENTRAL UYO DELIVERY ONLY -->
                 @php $isDeliveryAvailable = $deliveryCheck['is_available'] ?? false; @endphp
                 <input type="hidden" name="fulfillment_type" value="doorstep_delivery">
-                <input type="hidden" name="destination_lga_id" id="vmDestLgaSelect" value="{{ $destLga->id }}">
                 <div style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 14px; padding: 22px; margin-bottom: 20px; box-shadow: var(--vm-shadow-xs);">
                     <div style="font-weight: 800; font-size: 15px; color: #0F172A; margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
                         <span style="background: #5E17EB; color: #FFF; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;">2</span>
