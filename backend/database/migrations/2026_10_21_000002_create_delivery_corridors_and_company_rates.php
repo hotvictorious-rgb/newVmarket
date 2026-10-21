@@ -14,8 +14,6 @@ return new class extends Migration
             $table->string('name', 160);
             $table->foreignId('lga_id')->constrained('lgas')->restrictOnDelete();
             $table->json('landmark_aliases');
-            $table->decimal('customer_base_fee', 12, 2)->default(0);
-            $table->decimal('customer_bulky_surcharge_per_unit', 12, 2)->default(0);
             $table->unsignedSmallInteger('estimated_delivery_hours_min')->default(2);
             $table->unsignedSmallInteger('estimated_delivery_hours_max')->default(4);
             $table->boolean('is_active')->default(false);
