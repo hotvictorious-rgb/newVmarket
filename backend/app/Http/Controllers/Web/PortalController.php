@@ -4117,17 +4117,6 @@ class PortalController extends Controller
             abort(403, 'Only the supplier account owner can modify payout bank details.');
         }
 
-        $hasSupplierPayout = RetailerSupplierPayoutRequest::where('supplier_vendor_id', $vendor->id)
-            ->whereIn('status', ['pending', 'processing', 'uncertain'])
-            ->exists();
-        $hasLegacyPayout = VendorPayoutRequest::where('vendor_id', $vendor->id)
-            ->whereIn('status', ['pending', 'approved'])
-            ->whereNull('disbursed_at')
-            ->exists();
-        if ($hasSupplierPayout || $hasLegacyPayout) {
-            return back()->with('error', 'Bank details cannot be changed while any payout is pending, approved, or awaiting gateway reconciliation.');
-        }
-
         $validated = $request->validate([
             'bank_name' => 'required|string|max:100',
             'bank_code' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9_-]+$/'],
@@ -4137,38 +4126,54 @@ class PortalController extends Controller
             'account_number.regex' => 'NUBAN account number must be exactly 10 digits.',
         ]);
 
-        $oldBankSnapshot = [
-            'bank_name' => $vendor->bank_name,
-            'bank_code' => $vendor->bank_code,
-            'account_name' => $vendor->account_name,
-            'account_number_last4' => $vendor->account_number ? substr((string) $vendor->account_number, -4) : null,
-        ];
+        return DB::transaction(function () use ($vendor, $validated, $request) {
+            // Lock supplier identity and recheck payout state in the same transaction
+            // that updates the bank snapshot, preventing request/update races.
+            $lockedVendor = VendorProfile::whereKey($vendor->id)->lockForUpdate()->firstOrFail();
+            $hasSupplierPayout = RetailerSupplierPayoutRequest::where('supplier_vendor_id', $lockedVendor->id)
+                ->whereIn('status', ['pending', 'processing', 'uncertain'])
+                ->exists();
+            $hasLegacyPayout = VendorPayoutRequest::where('vendor_id', $lockedVendor->id)
+                ->whereIn('status', ['pending', 'approved', 'processing', 'in_flight', 'uncertain'])
+                ->whereNull('disbursed_at')
+                ->exists();
+            if ($hasSupplierPayout || $hasLegacyPayout) {
+                return back()->with('error', 'Bank details cannot be changed while any payout is pending, approved, or awaiting gateway reconciliation.');
+            }
 
-        $vendor->bank_name = strip_tags(trim($validated['bank_name']));
-        $vendor->bank_code = strtoupper(trim($validated['bank_code']));
-        $vendor->account_number = trim($validated['account_number']);
-        $vendor->account_name = strtoupper(strip_tags(trim($validated['account_name'])));
-        $vendor->bank_updated_at = Carbon::now();
-        $vendor->save();
+            $oldBankSnapshot = [
+                'bank_name' => $lockedVendor->bank_name,
+                'bank_code' => $lockedVendor->bank_code,
+                'account_name' => $lockedVendor->account_name,
+                'account_number_last4' => $lockedVendor->account_number ? substr((string) $lockedVendor->account_number, -4) : null,
+            ];
+            $lockedVendor->update([
+                'bank_name' => strip_tags(trim($validated['bank_name'])),
+                'bank_code' => strtoupper(trim($validated['bank_code'])),
+                'account_number' => trim($validated['account_number']),
+                'account_name' => strtoupper(strip_tags(trim($validated['account_name']))),
+                'bank_updated_at' => Carbon::now(),
+            ]);
 
-        AdminAuditLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'supplier_bank_details_updated',
-            'target_type' => VendorProfile::class,
-            'target_id' => $vendor->id,
-            'old_values' => $oldBankSnapshot,
-            'new_values' => [
-                'bank_name' => $vendor->bank_name,
-                'bank_code' => $vendor->bank_code,
-                'account_name' => $vendor->account_name,
-                'account_number_last4' => substr((string) $vendor->account_number, -4),
-                'cooldown_expires_at' => $vendor->bank_updated_at->copy()->addHours(48)->toIso8601String(),
-            ],
-            'ip_address' => $request->ip(),
-            'user_agent' => substr((string) $request->userAgent(), 0, 1000),
-        ]);
+            AdminAuditLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'supplier_bank_details_updated',
+                'target_type' => VendorProfile::class,
+                'target_id' => $lockedVendor->id,
+                'old_values' => $oldBankSnapshot,
+                'new_values' => [
+                    'bank_name' => $lockedVendor->bank_name,
+                    'bank_code' => $lockedVendor->bank_code,
+                    'account_name' => $lockedVendor->account_name,
+                    'account_number_last4' => substr((string) $lockedVendor->account_number, -4),
+                    'cooldown_expires_at' => $lockedVendor->bank_updated_at->copy()->addHours(48)->toIso8601String(),
+                ],
+                'ip_address' => $request->ip(),
+                'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+            ]);
 
-        return back()->with('status', 'Bank details updated and audited. The 48-hour anti-fraud cooldown is active.');
+            return back()->with('status', 'Bank details updated and audited. The 48-hour anti-fraud cooldown is active.');
+        }, 3);
     }
 
     public function vendorRefreshProductFreshness(Request $request, int $id)
