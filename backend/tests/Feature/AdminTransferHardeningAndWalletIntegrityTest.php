@@ -616,6 +616,32 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
     }
 
+    public function test_logistics_payout_reversal_holds_when_company_profile_is_missing(): void
+    {
+        $payout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '15000.00',
+            'status' => 'pending',
+            'gateway_status' => 'processing',
+            'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
+            'transfer_reference' => 'FLEET-MISSING-COMPANY-001',
+            'bank_name' => $this->company->bank_name,
+            'bank_code' => $this->company->bank_code,
+            'account_number' => $this->company->account_number,
+            'account_name' => $this->company->account_name,
+        ]);
+        $journalCountBefore = FinancialJournalEntry::count();
+        $this->company->delete();
+
+        $result = app(\\App\\Services\\PayoutFinalizationService::class)
+            ->revertLogisticsPayout($payout, 'Authoritative gateway failure');
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected']);
+        $this->assertEquals('pending', $payout->fresh()->status);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
+    }
+
     public function test_high_value_vendor_payout_strictly_requires_super_admin()
     {
         $this->createTestOrder([
