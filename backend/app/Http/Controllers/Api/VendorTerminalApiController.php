@@ -1179,10 +1179,23 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             ], !empty($result['protected']) ? 409 : 422);
         }
 
+        /** @var RetailerSupplierPayoutRequest $payout */
+        $payout = $result['payout'];
+        $payout->setAttribute('account_number_masked', '******' . substr((string) $payout->account_number, -4));
+        $payout->makeHidden([
+            'account_number',
+            'bank_code',
+            'recipient_code',
+            'processing_token',
+            'admin_notes',
+            'rejection_reason',
+            'approved_by_admin_id',
+        ]);
+
         return response()->json([
             'success' => true,
             'message' => $result['message'],
-            'data' => $result['payout'],
+            'data' => $payout,
         ], 201);
     }
 
