@@ -218,6 +218,16 @@ class SourcingAllocationService
             'supplier_cost_snapshot' => $resolvedOffer['wholesale_cost'],
             'supplier_cost_currency' => $resolvedOffer['currency'] ?? 'NGN',
             'supplier_snapshot_at' => Carbon::now(),
+            // Operational assignment initially mirrors the capture-time supplier.
+            // After payment, recovery may change only fulfillment_* fields; the
+            // supplier_* capture evidence remains immutable for financial audit.
+            'fulfillment_supplier_offer_id' => $resolvedOffer['supplier_offer_id'],
+            'fulfillment_supplier_vendor_id' => $resolvedOffer['vendor_id'],
+            'fulfillment_supplier_shop_id' => $resolvedOffer['shop_id'],
+            'fulfillment_supplier_name_snapshot' => $resolvedOffer['supplier_name'],
+            'fulfillment_supplier_shop_name_snapshot' => $resolvedOffer['shop_name'],
+            'fulfillment_supplier_cost_snapshot' => $resolvedOffer['wholesale_cost'],
+            'fulfillment_supplier_snapshot_at' => Carbon::now(),
         ];
     }
 
@@ -350,6 +360,13 @@ class SourcingAllocationService
                 $item->supplier_cost_snapshot = BcMathService::add((string) $offer->wholesale_cost, '0.00');
                 $item->supplier_cost_currency = 'NGN';
                 $item->supplier_snapshot_at = Carbon::now();
+                $item->fulfillment_supplier_offer_id = $offer->id;
+                $item->fulfillment_supplier_vendor_id = $newVendor->id;
+                $item->fulfillment_supplier_shop_id = $newShop->id;
+                $item->fulfillment_supplier_name_snapshot = $newVendor->business_name ?? $newVendor->user->name;
+                $item->fulfillment_supplier_shop_name_snapshot = $newShop->name;
+                $item->fulfillment_supplier_cost_snapshot = BcMathService::add((string) $offer->wholesale_cost, '0.00');
+                $item->fulfillment_supplier_snapshot_at = Carbon::now();
                 $item->cost_price = BcMathService::add((string) $offer->wholesale_cost, '0.00');
                 $item->save();
             }
@@ -381,6 +398,7 @@ class SourcingAllocationService
                 );
             }
             $order->supplier_cost_total_snapshot = $supplierCostTotal;
+            $order->fulfillment_supplier_cost_total_snapshot = $supplierCostTotal;
             $order->retailer_merchandise_margin = BcMathService::sub(
                 BcMathService::sub((string) $order->merchandise_subtotal, $supplierCostTotal),
                 (string) $order->customer_cashback_5
