@@ -3,6 +3,7 @@
 use App\Http\Controllers\Web\AdminSupplierOfferAvailabilityController;
 use App\Http\Controllers\Web\AdminOrderSupplierAssignmentController;
 use App\Http\Controllers\Web\AdminSupplierRecoveryController;
+use App\Http\Controllers\Web\AdminRetailerSupplierPayoutController;
 use App\Http\Controllers\Web\PaystackPaymentController;
 use App\Http\Controllers\Web\PortalController;
 use App\Http\Controllers\Web\WebAuthController;
@@ -70,6 +71,10 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/', [PortalController::class, 'adminDashboard'])->name('admin.dashboard');
     Route::get('/delivery-lanes', [PortalController::class, 'adminDeliveryLanesPage'])->name('admin.delivery_lanes.index');
     Route::get('/settlements', [PortalController::class, 'adminSettlementsPage'])->name('admin.settlements.index');
+    Route::get('/retailer-supplier-payouts', [AdminRetailerSupplierPayoutController::class, 'index'])->name('admin.retailer-supplier-payouts.index');
+    Route::post('/retailer-supplier-payouts/{id}/disburse', [AdminRetailerSupplierPayoutController::class, 'disburse'])->whereNumber('id')->name('admin.retailer-supplier-payouts.disburse');
+    Route::post('/retailer-supplier-payouts/{id}/reconcile', [AdminRetailerSupplierPayoutController::class, 'reconcile'])->whereNumber('id')->name('admin.retailer-supplier-payouts.reconcile');
+    Route::post('/retailer-supplier-payouts/{id}/reject', [AdminRetailerSupplierPayoutController::class, 'reject'])->whereNumber('id')->name('admin.retailer-supplier-payouts.reject');
         Route::get('/announcements', [PortalController::class, 'adminAnnouncementsPage'])->name('admin.announcements.index');
     Route::get('/banners', [PortalController::class, 'adminBannersPage'])->name('admin.banners.index');
     Route::post('/banners', [PortalController::class, 'adminStoreBanner'])->name('admin.banners.store');
