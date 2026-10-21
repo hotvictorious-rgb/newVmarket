@@ -642,6 +642,69 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
     }
 
+    public function test_rejection_cannot_repeat_after_terminal_payout_journal_exists(): void
+    {
+        $logisticsPayout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '15000.00',
+            'status' => 'pending',
+            'bank_name' => $this->company->bank_name,
+            'bank_code' => $this->company->bank_code,
+            'account_number' => $this->company->account_number,
+            'account_name' => $this->company->account_name,
+        ]);
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'TEST-FLEET-TERMINAL',
+            'event_id' => 'EVT-FLEET-PAYOUT-' . $logisticsPayout->id,
+            'beneficiary_type' => \\App\\Models\\LogisticsCompanyProfile::class,
+            'beneficiary_id' => $this->company->id,
+            'account_name' => 'logistics_payout_payable',
+            'entry_type' => 'debit',
+            'amount' => '15000.00',
+            'currency' => 'NGN',
+            'description' => 'Test terminal accounting marker.',
+        ]);
+        $walletBefore = (string) $this->company->fresh()->wallet_balance;
+        $logisticsResponse = $this->actingAs($this->superAdmin)->post(route('admin.reject.logistics_payout'), [
+            'payout_id' => $logisticsPayout->id,
+            'rejection_reason' => 'Attempted duplicate rejection.',
+        ]);
+        $logisticsResponse->assertSessionHas('error');
+        $this->assertEquals('pending', $logisticsPayout->fresh()->status);
+        $this->assertEquals($walletBefore, (string) $this->company->fresh()->wallet_balance);
+        $this->assertSame(0, FinancialJournalEntry::where('event_id', 'EVT-FLEET-REJECT-' . $logisticsPayout->id)->count());
+
+        $vendorPayout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '15000.00',
+            'status' => 'pending',
+            'bank_name' => $this->vendor->bank_name,
+            'bank_code' => $this->vendor->bank_code,
+            'account_number' => $this->vendor->account_number,
+            'account_name' => $this->vendor->account_name,
+        ]);
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'TEST-VND-TERMINAL',
+            'event_id' => 'EVT-VND-PAYOUT-' . $vendorPayout->id,
+            'beneficiary_type' => \\App\\Models\\VendorProfile::class,
+            'beneficiary_id' => $this->vendor->id,
+            'account_name' => 'vendor_payout_payable',
+            'entry_type' => 'debit',
+            'amount' => '15000.00',
+            'currency' => 'NGN',
+            'description' => 'Test terminal accounting marker.',
+        ]);
+        $vendorResponse = $this->actingAs($this->superAdmin)->post(route('admin.reject.vendor_payout'), [
+            'payout_id' => $vendorPayout->id,
+            'rejection_reason' => 'Attempted duplicate rejection.',
+        ]);
+        $vendorResponse->assertSessionHas('error');
+        $this->assertEquals('pending', $vendorPayout->fresh()->status);
+        $this->assertSame(0, FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REJECT-' . $vendorPayout->id)->count());
+    }
+
     public function test_high_value_vendor_payout_strictly_requires_super_admin()
     {
         $this->createTestOrder([
