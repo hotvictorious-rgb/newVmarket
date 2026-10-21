@@ -677,7 +677,7 @@ class RiderTerminalApiController extends Controller
                     if ($supplierIds->count() !== 1) {
                         $requiresAdminAssignment = true;
                     } else {
-                        $supplier = \App\Models\VendorProfile::with('shops')->find($supplierIds->first());
+                        $supplier = \App\Models\VendorProfile::with(['shops', 'user'])->find($supplierIds->first());
                         $supplierShop = $supplier?->shops()->where('is_active', true)->first();
                         if (!$supplier || $supplier->marketplace_status !== 'active' || !$supplierShop) {
                             $requiresAdminAssignment = true;
