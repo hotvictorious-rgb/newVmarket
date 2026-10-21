@@ -12,6 +12,15 @@
 
 @section('content')
 <div style="max-width:1200px;margin:0 auto;padding:20px;">
+    @if(session('status'))
+        <div role="status" style="padding:12px 16px;margin-bottom:16px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;color:#065f46;">{{ session('status') }}</div>
+    @endif
+    @if($errors->any())
+        <div role="alert" style="padding:12px 16px;margin-bottom:16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#9a3412;">
+            <strong>Please correct the following:</strong>
+            <ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+        </div>
+    @endif
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:24px;">
         <h2 style="margin-top:0;">Customer delivery pricing (flat per order)</h2>
         <p>These are the customer-facing charges for delivery anywhere within Uyo: one flat base fee per order, plus a surcharge for each physical unit that cannot safely fit on a bike. These values do not determine what a logistics company earns.</p>
