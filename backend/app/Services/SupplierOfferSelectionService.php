@@ -59,6 +59,13 @@ class SupplierOfferSelectionService
                 if ($fulfillmentType === 'in_shop_pickup') {
                     $query->where('pickup_enabled', true);
                 }
+
+                $query->whereHas('lga', function ($lga) {
+                    $lga->whereRaw('LOWER(TRIM(lgas.name)) = ?', ['uyo'])
+                        ->whereHas('state', function ($state) {
+                            $state->whereRaw('LOWER(TRIM(states.name)) = ?', ['akwa ibom']);
+                        });
+                });
             })
             ->orderBy('wholesale_cost')
             ->orderBy('id')
