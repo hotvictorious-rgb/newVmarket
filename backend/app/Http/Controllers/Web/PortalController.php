@@ -793,6 +793,12 @@ class PortalController extends Controller
             'account_name' => 'nullable|string|max:255',
         ]);
 
+        $supplierLga = Lga::with('state')->findOrFail($validated['lga_id']);
+        if (strtolower(trim((string) $supplierLga->name)) !== 'uyo'
+            || strtolower(trim((string) ($supplierLga->state->name ?? ''))) !== 'akwa ibom') {
+            return back()->withErrors(['lga_id' => 'Victorious MARKET suppliers must be physically located in Uyo, Akwa Ibom State.'])->withInput();
+        }
+
         return DB::transaction(function () use ($validated) {
             $cleanPhone = preg_replace('/[^0-9+]/', '', $validated['phone']);
             $email = !empty($validated['email']) ? strtolower(trim($validated['email'])) : 'supplier_' . Str::lower(Str::random(8)) . '@victoriousmarket.ng';
@@ -888,6 +894,12 @@ class PortalController extends Controller
             'account_number' => 'nullable|string|max:20',
             'account_name' => 'nullable|string|max:255',
         ]);
+
+        $logisticsLga = Lga::with('state')->findOrFail($validated['lga_id']);
+        if (strtolower(trim((string) $logisticsLga->name)) !== 'uyo'
+            || strtolower(trim((string) ($logisticsLga->state->name ?? ''))) !== 'akwa ibom') {
+            return back()->withErrors(['lga_id' => 'Victorious MARKET logistics partners must be based in Uyo, Akwa Ibom State.'])->withInput();
+        }
 
         return DB::transaction(function () use ($validated) {
             $cleanPhone = preg_replace('/[^0-9+]/', '', $validated['phone']);
