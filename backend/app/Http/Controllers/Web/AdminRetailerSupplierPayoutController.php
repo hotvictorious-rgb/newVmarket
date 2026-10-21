@@ -15,7 +15,7 @@ class AdminRetailerSupplierPayoutController extends Controller
 {
     public function index(Request $request)
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeSuperAdmin($request);
         $payouts = RetailerSupplierPayoutRequest::with('supplier', 'allocations')
             ->latest('id')
             ->paginate(25);
