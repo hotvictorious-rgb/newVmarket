@@ -3,20 +3,27 @@
 namespace Tests\Feature;
 
 use App\Http\Middleware\EnsureUserRole;
+use App\Models\Category;
 use App\Models\Country;
 use App\Models\FinancialJournalEntry;
 use App\Models\Lga;
 use App\Models\LogisticsCompanyProfile;
 use App\Models\LogisticsPayoutRequest;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
 use App\Models\ReturnCase;
+use App\Models\RetailerSupplierPayoutAllocation;
+use App\Models\RetailerSupplierPayoutRequest;
 use App\Models\Shop;
 use App\Models\State;
 use App\Models\User;
 use App\Models\VendorPayoutRequest;
 use App\Models\VendorProfile;
 use App\Models\VendorRecoveryLedger;
+use App\Services\FinancialReconciliationEngine;
 use App\Services\PaystackService;
+use App\Services\RetailerSupplierPayoutService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
@@ -163,6 +170,138 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'customer_cashback_5' => $cb5,
             'platform_margin_5' => $pm5,
         ], $attributes));
+    }
+
+    protected function createSupplierPayableOrderItem(string $supplierCost = '7000.00'): array
+    {
+        $category = Category::create([
+            'name' => 'Supplier Payout Test Category',
+            'slug' => 'supplier-payout-test-' . uniqid(),
+            'is_active' => true,
+            'priority' => 1,
+        ]);
+        $product = Product::create([
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'category_id' => $category->id,
+            'name' => 'Supplier Payout Test Product',
+            'slug' => 'supplier-payout-product-' . uniqid(),
+            'unit_price' => '10000.00',
+            'condition' => 'brand_new',
+            'package_tier' => 'bike',
+            'inventory_quantity' => 10,
+            'is_in_stock' => true,
+            'listing_status' => 'listed',
+            'is_approved' => true,
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+
+        $order = $this->createTestOrder([
+            'retailer_model_order' => true,
+            'refund_window_expires_at' => Carbon::now()->subDay(),
+            'delivered_at' => Carbon::now()->subDays(2),
+            'supplier_cost_total_snapshot' => $supplierCost,
+        ]);
+
+        $item = OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'product_name' => $product->name,
+            'quantity' => 1,
+            'unit_price' => '10000.00',
+            'line_total' => '10000.00',
+            'supplier_vendor_id' => $this->vendor->id,
+            'supplier_shop_id' => $this->shop->id,
+            'supplier_cost_snapshot' => $supplierCost,
+            'supplier_snapshot_at' => Carbon::now(),
+            'fulfillment_supplier_vendor_id' => $this->vendor->id,
+            'fulfillment_supplier_shop_id' => $this->shop->id,
+            'fulfillment_supplier_cost_snapshot' => $supplierCost,
+            'fulfillment_supplier_snapshot_at' => Carbon::now(),
+        ]);
+
+        FinancialJournalEntry::create([
+            'order_id' => $order->id,
+            'order_item_id' => $item->id,
+            'transaction_reference' => $order->payment_reference,
+            'event_id' => 'EVT-SUPPLIER-PAYABLE-' . $order->id . '-ITEM-' . $item->id . '-TEST',
+            'idempotency_key' => 'SUPPAYOUT-TEST-CAPTURE-' . $order->id . '-' . $item->id,
+            'beneficiary_type' => VendorProfile::class,
+            'beneficiary_id' => $this->vendor->id,
+            'account_name' => 'supplier_payable',
+            'entry_type' => 'credit',
+            'amount' => $supplierCost,
+            'currency' => 'NGN',
+            'description' => 'Agreed wholesale supplier payable for order item #' . $item->id,
+        ]);
+
+        return [$order, $item];
+    }
+
+    public function test_retailer_supplier_payout_reserves_and_finalizes_item_payable_idempotently(): void
+    {
+        [$order, $item] = $this->createSupplierPayableOrderItem('7000.00');
+        $service = app(RetailerSupplierPayoutService::class);
+
+        $requestResult = $service->requestPayout($this->vendor);
+        $this->assertTrue($requestResult['success'], $requestResult['message'] ?? 'Supplier payout request failed.');
+        /** @var RetailerSupplierPayoutRequest $payout */
+        $payout = $requestResult['payout'];
+        $this->assertSame('7000.00', (string) $payout->amount);
+        $this->assertSame(1, $payout->allocations->count());
+        $this->assertTrue($service->requestJournalComplete($payout));
+
+        $duplicateRequest = $service->requestPayout($this->vendor);
+        $this->assertFalse($duplicateRequest['success']);
+        $this->assertSame(1, RetailerSupplierPayoutRequest::where('supplier_vendor_id', $this->vendor->id)->count());
+
+        $processing = $service->markProcessing($payout->id, $this->superAdmin->id, 'RCP_TEST_SUPPLIER', 'SUPPAYOUT-TEST-PROCESSING');
+        $this->assertTrue($processing['success'], $processing['message'] ?? 'Supplier payout processing claim failed.');
+
+        $finalized = $service->finalizeSuccess($payout->id, $payout->transfer_reference, 'TRF_TEST_SUPPLIER', '7000.00');
+        $this->assertTrue($finalized['success'], $finalized['message'] ?? 'Supplier payout finalization failed.');
+        $this->assertSame('paid', $payout->fresh()->status);
+        $this->assertSame('settled', $payout->allocations()->first()->fresh()->status);
+
+        $audit = app(FinancialReconciliationEngine::class)->reconcileRetailerSupplierPayables($order->id);
+        $this->assertSame(0, $audit['mismatches'], json_encode($audit['errors'], JSON_UNESCAPED_SLASHES));
+
+        $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
+        $repeatFinalize = $service->finalizeSuccess($payout->id, $payout->transfer_reference, 'TRF_TEST_SUPPLIER', '7000.00');
+        $this->assertTrue($repeatFinalize['success']);
+        $this->assertTrue($repeatFinalize['idempotent'] ?? false);
+        $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
+    }
+
+    public function test_retailer_supplier_payout_reversal_restores_item_payable_once(): void
+    {
+        [$order, $item] = $this->createSupplierPayableOrderItem('9000.00');
+        $service = app(RetailerSupplierPayoutService::class);
+        $requestResult = $service->requestPayout($this->vendor);
+        $this->assertTrue($requestResult['success'], $requestResult['message'] ?? 'Supplier payout request failed.');
+        $payout = $requestResult['payout'];
+
+        $reversed = $service->reverse($payout->id, 'not_submitted', 'Admin rejected before gateway submission.');
+        $this->assertTrue($reversed['success'], $reversed['message'] ?? 'Supplier payout reservation release failed.');
+        $this->assertSame('rejected', $payout->fresh()->status);
+        $this->assertSame('reversed', $payout->allocations()->first()->fresh()->status);
+
+        $netSupplierPayable = FinancialJournalEntry::where('order_item_id', $item->id)
+            ->where('account_name', 'supplier_payable')
+            ->where('beneficiary_type', VendorProfile::class)
+            ->where('beneficiary_id', $this->vendor->id)
+            ->selectRaw("COALESCE(SUM(CASE WHEN entry_type = 'credit' THEN amount ELSE -amount END), 0) AS net_amount")
+            ->value('net_amount');
+        $this->assertEquals('9000.00', number_format((float) $netSupplierPayable, 2, '.', ''));
+
+        $audit = app(FinancialReconciliationEngine::class)->reconcileRetailerSupplierPayables($order->id);
+        $this->assertSame(0, $audit['mismatches'], json_encode($audit['errors'], JSON_UNESCAPED_SLASHES));
+
+        $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
+        $repeatReverse = $service->reverse($payout->id, 'not_submitted', 'Duplicate rejection retry.');
+        $this->assertTrue($repeatReverse['success']);
+        $this->assertTrue($repeatReverse['idempotent'] ?? false);
+        $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
     public function test_vendor_payout_disbursement_blocked_if_vendor_is_suspended_or_trashed()
