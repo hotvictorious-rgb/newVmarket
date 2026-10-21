@@ -363,3 +363,13 @@ Required controls:
 - **Still open:** availability confirmation is not yet exposed through a permissioned, audited workflow; selector is not integrated into either checkout writer or pickup reservation/payment; product catalogue eligibility still depends on legacy supplier/shop ownership; order-level vendor/shop constraints and legacy 90/5/5 and 90/10 calculations remain unresolved.
 - **Next:** confirm the backend test command and CI workflow, run `SupplierOfferSelectionServiceTest` and `SupplierSourcingSnapshotSchemaTest` explicitly, then repair any observed failures before moving on to the authorized confirmation workflow.
 - **Release status:** not launch-ready; no merge to `main` or deployment.
+
+
+## 25. Supplier selector tests now execute in CI — 21 October 2026
+
+- **CI workflow updated:** `.github/workflows/paystack-refund-safety.yml` now runs `SupplierSourcingSnapshotSchemaTest` and `SupplierOfferSelectionServiceTest` alongside the existing selected financial/payment regression suite. The syntax step also checks the supplier selector service, model, order-item model, and both new sourcing migrations.
+- **First execution caught a real issue:** the new test file initially had doubled namespace separators, causing a PHP parse error before tests ran. The file was corrected and the syntax step was expanded to include the sourcing runtime and migration files. This is resolved in the later passing run; the failed run remains part of the audit history.
+- **Passing evidence:** [GitHub Actions run 39571578977](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39571578977), commit `7519fcc56c51aeda6cc0dba52544880bb6862a40`, completed successfully. The selected suite reports **152 passed, 1,011 assertions**; both supplier-sourcing feature test classes passed; the workflow's listed PHP syntax checks passed.
+- **Scope limit:** this is a selected suite, not a claim that every repository test passes. The schema test verifies the test database schema after migrations, not a production database upgrade rehearsal.
+- **Still open / launch blockers:** no authorized, audited supplier availability-confirmation endpoint or service; no supplier selector or immutable cost snapshot integration in the web/API checkout and pickup writer; canonical product eligibility remains coupled to legacy vendor/shop ownership; legacy order-level vendor/shop non-null constraints and financial split calculations remain to be migrated safely.
+- **Next action:** map the existing admin authorization and audit-event patterns, then implement the availability-confirmation workflow with explicit actor, confirmation timestamp, expiry, offer locking, and audit record. Do not accept supplier availability or supplier IDs from customer input.
