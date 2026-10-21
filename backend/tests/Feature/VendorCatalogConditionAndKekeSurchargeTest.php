@@ -8,10 +8,12 @@ use App\Models\CustomerAddress;
 use App\Models\DeliveryLane;
 use App\Models\Lga;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Shop;
 use App\Models\State;
 use App\Models\SystemSetting;
+use App\Models\SupplierOffer;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Services\FulfillmentAvailabilityService;
@@ -278,6 +280,55 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'listing_confirmed_at' => Carbon::now(),
         ]);
 
+        // Product listings are retailer-facing catalogue records; private sourcing is
+        // resolved independently for each item. The bulky product is supplied by a
+        // different Uyo shop than the bike product.
+        $supplierUserB = User::create([
+            'name' => 'Uyo Supplier B',
+            'email' => 'supplier-b@test.com',
+            'phone' => '+2348099887767',
+            'password' => bcrypt('SupplierPass123!'),
+            'user_type' => 'vendor',
+            'status' => 'active',
+        ]);
+        $supplierB = VendorProfile::create([
+            'user_id' => $supplierUserB->id,
+            'business_name' => 'Uyo Supplier B Ltd',
+            'contact_phone' => '+2348099887767',
+            'marketplace_status' => 'active',
+            'commission_rate' => 10.00,
+            'bank_name' => 'Access Bank',
+            'account_number' => '0223456789',
+            'account_name' => 'UYO SUPPLIER B',
+        ]);
+        $shopB = Shop::create([
+            'vendor_id' => $supplierB->id,
+            'name' => 'Supplier B Uyo Shop',
+            'slug' => 'supplier-b-uyo-shop',
+            'address' => 'Aka Road, Uyo',
+            'country_id' => $this->shop->country_id,
+            'state_id' => $this->shop->state_id,
+            'lga_id' => $this->uyoLga->id,
+            'is_active' => true,
+            'pickup_enabled' => false,
+        ]);
+        foreach ([
+            [$bikeProduct, $this->vendor, $this->shop, '1000.00', $this->vendorUser],
+            [$kekeProduct, $supplierB, $shopB, '20000.00', $supplierUserB],
+        ] as [$product, $supplier, $supplierShop, $cost, $confirmer]) {
+            SupplierOffer::create([
+                'product_id' => $product->id,
+                'vendor_id' => $supplier->id,
+                'shop_id' => $supplierShop->id,
+                'wholesale_cost' => $cost,
+                'is_available' => true,
+                'availability_confirmed_at' => Carbon::now(),
+                'availability_confirmed_by' => $confirmer->id,
+                'availability_expires_at' => Carbon::now()->addDay(),
+                'notes' => 'Test-confirmed Uyo sourcing offer',
+            ]);
+        }
+
         Sanctum::actingAs($customer, ['*']);
 
         // Case A: Order with ONLY bike item -> Normal delivery fee (500.00)
@@ -335,6 +386,16 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertEquals('500.00', $orderTwoBulky->delivery_base_fee_snapshot);
         $this->assertEquals('1000.00', $orderTwoBulky->delivery_bulky_surcharge_per_unit_snapshot);
         $this->assertEquals(2, $orderTwoBulky->delivery_bulky_quantity_snapshot);
+
+        // The customer has one order while private supplier snapshots differ by item.
+        $orderItems = OrderItem::where('order_id', $orderTwoBulky->id)->orderBy('id')->get();
+        $this->assertCount(2, $orderItems);
+        $this->assertEquals($this->vendor->id, $orderItems[0]->supplier_vendor_id);
+        $this->assertEquals($supplierB->id, $orderItems[1]->supplier_vendor_id);
+        $this->assertEquals($this->shop->id, $orderItems[0]->supplier_shop_id);
+        $this->assertEquals($shopB->id, $orderItems[1]->supplier_shop_id);
+        $this->assertNull($orderTwoBulky->selected_supplier_id);
+        $this->assertNull($orderTwoBulky->selected_shop_id);
     }
 
     public function test_public_product_api_filters_by_condition_and_package_tier(): void
