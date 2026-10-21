@@ -96,56 +96,57 @@ A supplier payable is linked to the accepted order item/sourcing unit. Its purch
 
 Supplier payment timing here means the earliest eligibility trigger, not an unapproved payout SLA, payout rail or automatic-transfer instruction. Additional supplier-payment terms must be agreed and approved separately.
 
-## 5. Payment and refund state matrix
+## 5. Payment, refund and supplier-payment state matrix
 
 These are business states, not necessarily literal database enum values. Map existing application statuses deliberately; do not add aliases that disagree about whether money moved.
 
-### Payment / order collection
+### Payment and order collection
 
 | State/evidence | Allowed result | Prohibited result / next action |
 |---|---|---|
-| Checkout created, no authoritative payment | Awaiting payment; stock hold active until expiry | No vendor settlement, spendable cashback or fulfilled status |
+| Checkout created, no authoritative payment | Awaiting payment; apply the approved stock/availability hold | No fulfilment or supplier payment eligibility |
 | Browser callback says success only | Show verification in progress | Do not mark paid from browser fields alone |
-| Verified charge.success / verified transaction | Settle once if reference, exact kobo amount, NGN currency and order binding match and order is fulfillable | No duplicate settlement or duplicate cashback |
-| Verified success but order cancelled/stock unavailable | Record late/exception payment; block fulfilment and settlement; create refund case | Do not reopen or oversell; do not bypass refund approval |
-| Underpayment / overpayment / reference or currency mismatch | Quarantine for reconciliation; preserve evidence | No fulfilment, vendor allocation, or cashback until resolved |
-| Duplicate successful charge | Keep one charge as the order payment; create separate duplicate-payment case | Do not link both charges to the same settlement or silently keep excess funds |
-| Payment status unknown/timeout | Pending reconciliation; retain financial/stock controls as policy requires | Do not assume failed, release stock blindly, or dispatch a second charge/refund |
-| Confirmed payment failure/abandonment | Release stock hold according to expiry policy | Do not create a refund for a payment that never captured funds |
+| Verified charge.success / verified transaction | Record customer payment once if reference, exact kobo amount, NGN currency and order binding match | No duplicate payment posting or duplicate supplier payable |
+| Verified success but order cancelled/product unavailable | Record late/exception payment; block fulfilment and supplier payment; open refund case | Do not reactivate automatically or bypass refund approval |
+| Underpayment / overpayment / reference or currency mismatch | Quarantine for reconciliation; preserve evidence | No fulfilment or supplier payment until resolved |
+| Duplicate successful charge | Keep one valid charge as order payment; create a separate duplicate-payment case | Do not settle twice or silently keep excess funds |
+| Payment status unknown/timeout | Pending reconciliation; retain financial/stock controls as policy requires | Do not assume failure, release stock blindly, or dispatch a second charge/refund |
+| Confirmed payment failure/abandonment | Release stock hold according to approved expiry policy | Do not create a refund for funds that were never captured |
 
-### Refund lifecycle
+### Customer refund lifecycle
 
 | Paystack event/state | Internal business state | Required action |
 |---|---|---|
-| Admin approval, before gateway call | Approved/ready to execute | Persist approver, amount, currency, reason, payment reference, allocation snapshot and idempotency key |
-| refund.pending | Refund pending | Keep reservation/obligation open; store event and provider identifiers |
+| Admin approval, before gateway call | Approved/ready to execute | Persist approver, amount, currency, reason, payment reference, component/source snapshot and idempotency key |
+| refund.pending | Refund pending | Keep obligation open; store event and provider identifiers |
 | refund.processing | Refund processing | Keep obligation open; no final refund journal/closed status yet |
-| refund.needs-attention | Needs attention/manual action | Alert authorized admin; preserve the customer obligation and follow-up deadline. Do not use wallet credit, off-platform payment, or an alternate bank destination unless a separate owner-approved exception explicitly permits it. |
-| refund.processed with matching operation, amount, currency and original transaction | Confirmed refund | Commit reservation and write idempotent balanced journals; update order/return state only after matching evidence |
+| refund.needs-attention | Needs attention/manual action | Alert authorized admin; preserve customer obligation. Do not use wallet/off-platform payment or alternate bank destination without separate owner-approved exception |
+| refund.processed with matching operation, amount, currency and original transaction | Confirmed refund | Commit reservation and write idempotent balanced journals; update order/case only after matching evidence |
 | refund.failed with matching operation | Failed attempt / obligation still open | Verify provider account credit and refund identity; alert admin; controlled retry/manual handling only |
 | Unmatched, conflicting or malformed event | Unmatched/manual reconciliation | Do not mutate financial operation/reservation/order; preserve event and alert authorized staff |
 | Gateway timeout / uncertain result | Uncertain; reservation remains active | Reconcile the same attempt before any retry |
 | Refund requested but not approved | Awaiting approval | No Paystack call and no final journal |
 
-**Important:** Paystack says a refund reported as processed may still take up to 10 business days for the customer to receive funds. Customer messaging should say “processed” rather than promise instant bank receipt.
+Paystack may report a refund as processed before the customer sees the funds in their account. Customer messaging should accurately distinguish provider-processed status from confirmed customer receipt; do not promise instant bank receipt.
 
 ### Supplier payable and payment authorization lifecycle
 
-For new retailer-model transactions, do not create marketplace vendor earning records or use the old vendor payout batch as the supplier-payment mechanism.
-
-- Link each supplier payable to the accepted order item/sourcing unit, canonical product, selected supplier offer, agreed purchase cost and currency.
-- Supplier payable eligibility requires verified customer delivery or confirmed pickup, the correct order/offer/quantity, required proof and amount reconciliation.
-- Keep payable state, approval, payment attempt, provider confirmation, reversal and reconciliation separate and idempotent. Do not infer payment success from a timeout or supplier screenshot.
-- Do not use the former vendor payout minimum/maximum, FIFO earning-record selection, vendor debt balance or 90% earning share as supplier payment rules.
-- Existing vendor earning and payout records remain historical and must be preserved/reconciled during migration. Do not relabel old journal entries as supplier costs without an approved accounting migration.
+- **Not eligible:** order placement, customer payment alone, supplier acceptance/readiness, VM collection, rider assignment, rider collection, delivery attempt or an unverified completion event.
+- **Eligible for authorized payment:** verified successful customer doorstep delivery or confirmed customer pickup, required proof, exact selected supplier offer/order item/quantity, agreed purchase-cost snapshot and amount reconciliation.
+- **Authorized:** payment approval is recorded by the authorized actor under the approved supplier-payment process. Eligibility alone is not authorization.
+- **In flight/uncertain:** preserve the same payment attempt and payable reservation. A timeout is not success or failure; reconcile before retrying.
+- **Paid:** mark paid only after authoritative provider confirmation and reconciliation for the exact supplier, recipient, amount, currency and payment reference.
+- **Failed/reversed:** retain attempt history and reconcile returned funds/provider status before restoring payable availability or retrying.
+- Each payable/payment is linked to the supplier offer and order item/sourcing unit. Repeated callbacks or retries must not duplicate the payable or transfer.
+- Do not apply the former vendor payout thresholds, FIFO earning-record selection, 90% vendor share or vendor debt balance to supplier payments. Preserve historical vendor earning/payout records as legacy history.
 
 ### Dispute lifecycle
 
 | Event | Required response |
 |---|---|
-| charge.dispute.create | Open dispute case, record deadline/amount/reference, preserve payment and fulfilment evidence, hold affected unsettled vendor proceeds |
-| charge.dispute.remind | Update reminder/deadline and notify authorized case owner; keep hold |
-| charge.dispute.resolve | Verify final dispute outcome, record evidence and decision, then apply approved financial recovery/release; never infer outcome from an unverified payload |
+| charge.dispute.create | Open a dispute case, record deadline/amount/reference, preserve payment and fulfilment evidence, and apply the authorized hold/review rule to affected supplier payment/refund obligations |
+| charge.dispute.remind | Update reminder/deadline and notify authorized case owner; keep the case open |
+| charge.dispute.resolve | Verify final provider outcome, record evidence and decision, then apply approved accounting/recovery; never infer outcome from an unverified payload |
 
 ## 6. Paystack webhook subscriptions
 
@@ -214,53 +215,53 @@ Do not subscribe to subscription, invoice, payment-request, dedicated-account or
 
 These are requirements to verify against code; listing them does not mean they are already implemented.
 
-### Payment collection
-- [ ] Confirm one parent payment and immutable per-child allocation snapshots.
-- [ ] Reject COD across checkout, APIs, settings and legacy payment paths at launch; prove in-shop pickup is not treated as COD.
-- [ ] Ensure webhook and transaction verification use the same strict settlement service.
-- [ ] Record every verified charge/reference, including duplicate/late/mismatched charges.
-- [ ] Add a controlled duplicate-payment case/operation and tests for double charge.
-- [ ] Cover cancellation and stock loss between checkout and late payment; atomically recheck stock.
-- [ ] Distinguish underpayment, overpayment, currency mismatch, reference mismatch and invalid payer binding; keep each from fulfilling.
-- [ ] Add/verify reconciliation state for uncertain payment and safe stock-hold release.
-- [ ] Restrict enabled payment channels to Paystack card + standard bank transfer; implement and test `bank.transfer.rejected` without duplicate refunding.
-- [ ] Keep COD disabled across every launch path; no rider/customer cash collection workflow is enabled.
-- [ ] Keep DVA disabled at launch; reject or ignore DVA-only flows safely and do not subscribe to `dedicatedaccount.assign.success` / `dedicatedaccount.assign.failed` until DVA is separately approved.
-- [ ] Add an immutable earning ledger: one merchandise earning per vendor order-item line and one separate delivery earning per vendor child order; store source IDs, integer-kobo amount, allocation snapshot, lifecycle, and refund/recovery links.
-- [ ] Make vendor withdrawable balance a derived total of eligible earning records, not an order-level aggregate alone; apply payment, fulfilment, 24-hour window, returns/disputes, KYC/vendor status, bank cooldown and recovery checks per earning.
-- [ ] Reject vendor-entered amounts; compute the strict FIFO whole-record batch server-side, obey ₦5,000 minimum / ₦500,000 maximum, stop before over-cap record, and atomically reserve selected records. Reject duplicate active requests and concurrent double-reservation.
-- [ ] Split admin payout approval from payment initiation. Pending review cannot call Paystack; only an approved request can enter processing; verified transfer success finalizes the exact earning snapshot.
-- [ ] Test rejection/failed/reversed/timeout payout states, exact reservation restoration, webhook races, and no rider/logistics beneficiary for new vendor-managed orders.
+### Customer payment and checkout
+
+- [ ] Audit every storefront/API checkout path. Close the known legacy web checkout bypass of CheckoutExecutionService and apply consistent idempotency/payment initialization.
+- [ ] Link each order item to the exact selected supplier offer and immutable purchase-cost snapshot; do not create duplicate public listings for matching supplier offers.
+- [ ] Reject doorstep COD and off-platform supplier payment; keep supplier-shop payment-at-location only within VM's authorized payment workflow.
+- [ ] Ensure webhook and transaction verification share the same authoritative payment service and validate exact reference, integer-kobo amount, NGN currency, customer/order binding and idempotency.
+- [ ] Record duplicate, late, underpaid, overpaid and mismatched transactions for reconciliation without duplicate fulfilment/payable.
+- [ ] Keep DVA disabled at launch; do not subscribe to DVA-only events unless the owner separately approves the product.
+- [ ] Preserve historical wallet-credit records but block legacy wallet-credit checkout tender and wallet-credit refunds at UI/API/service boundaries unless a separately approved policy permits them.
+
+### Supplier payable and central logistics
+
+- [ ] Add/validate supplier offer/order-item linkage and immutable purchase-cost snapshot.
+- [ ] Make supplier payment eligibility depend on verified successful customer delivery or pickup and required reconciliation; supplier readiness, order payment, VM collection or carrier collection alone is insufficient.
+- [ ] Implement idempotent supplier payment authorization, attempt, provider confirmation, reversal and reconciliation states. Timeouts must be reconciled before retry.
+- [ ] Define VM-owned delivery coverage from Uyo, customer delivery-fee rules, approved logistics-company rate cards and payment terms. Unsupported destinations fail closed.
+- [ ] Require an approved active logistics company and a rider linked to exactly one active logistics company for every new delivery assignment.
+- [ ] Keep rider custody, customer handover, supplier payable, refund approval and supplier recovery separate. No rider financial posting or supplier wholesale-price exposure.
+- [ ] Preserve legacy vendor earnings, payouts, cashback, recovery and logistics journals as historical records; do not reclassify them as supplier costs without an approved accounting migration.
 
 ### Refunds and cashback
-- [ ] Persist authorization provenance before dispatch. Permit automatic approval only for verified duplicate charges and pre-vendor-action cancellation under the narrow policy in Q10; require authorized human approval for all other refunds.
-- [ ] Ensure partial-refund calculations use captured immutable item allocations and include prior confirmed refunds plus active reservations.
-- [ ] Ensure reservations are concurrency-safe across child orders, partial refunds, provisional holds and repeated idempotency keys.
-- [ ] Enforce original-channel refunds only at launch; block wallet-credit refunds and legacy wallet-credit checkout tender at UI/API/service boundaries. Preserve historical wallet-credit records without allowing them as a third launch payment path. Cashback redemption remains a separate capped discount.
-- [ ] Add secure `refund.needs-attention` handling, notifications and follow-up tracking. Preserve original-transaction Paystack-only refund policy; do not use alternate bank details/retry flow unless a separate owner-approved exception exists.
-- [ ] On refund.failed, preserve the customer obligation and reservation policy; alert and reconcile provider credit before retry.
-- [ ] Verify the default customer return/refund/protection window is 24 hours from verified fulfilment and cashback's earliest maturity is `refund_window_expires_at + 24 hours` (`+ 1 day`), only if no blocking case remains. The cashback buffer does not extend the customer claim window and is not a gateway refund SLA.
-- [ ] Implement a cashback recovery ledger and offset future cashback before making new cashback spendable; document the policy in Terms & Conditions and complete legal/consumer-policy review.
-- [ ] Make refund completion depend on matched refund.processed evidence and idempotent journal posting.
-- [ ] Preserve partial-refund sibling states; one confirmed partial refund must not falsely mark the entire child order fully refunded/completed.
-- [ ] Keep customer refund status separate from vendor recovery status.
 
-### Supplier payables, logistics charges and disputes
-- [ ] Verify payout eligibility per child order after fulfilment, protection window and no blocking return/dispute.
-- [ ] Implement charge.dispute.* handlers with exact names, case/deadline tracking, evidence preservation and affected-settlement hold.
-- [ ] Never create a payout record from unmatched transfer.success.
-- [ ] Make transfer failure/reversal handling race-safe; stale failure must not overwrite success.
-- [ ] Verify provider transfer status/returned funds before retry; use a new attempt/reference.
-- [ ] Keep rider and legacy logistics payouts excluded from new vendor-managed delivery flows.
+- [ ] Persist authorization provenance before dispatch. Automatic approval remains limited to verified duplicate charges and verified pre-supplier-action cancellation under the narrow policy; other refunds require authorized human approval.
+- [ ] Calculate refunds from immutable captured amounts/discount snapshots and previous refunds plus active reservations; enforce component and aggregate-capture ceilings under concurrency.
+- [ ] Enforce original-channel refunds only at launch; no wallet-credit/off-platform substitute without a separate approved policy.
+- [ ] Add secure refund.needs-attention handling, notifications and follow-up. On refund.failed, preserve the customer obligation and reconcile provider credit before retry.
+- [ ] Preserve the 24-hour customer claim window subject to law and warranty rights; it is not a gateway refund SLA or a supplier payment delay.
+- [ ] Preserve historical cashback lots and obligations. Do not enable new retailer-model cashback accrual/funding from the former 5% marketplace split until owner/accountant approval.
+- [ ] Keep merchandise and delivery-fee refund decisions separate. One component's state must not alter another component's approval or gateway result.
+- [ ] Keep customer refund status separate from supplier recovery. VM remains responsible for a valid refund; supplier recovery requires evidence-backed responsibility and contractual recoverability and must not delay the refund.
 
 ### Webhook reliability
-- [ ] HMAC-SHA512 signature validation on raw body before business processing.
-- [ ] Immutable payload hash per provider event identity; conflict returns a non-success response and creates a security/audit record.
-- [ ] Safe duplicate delivery, out-of-order delivery, unmatched retry, stale-claim recovery and dead-letter/manual-review paths.
-- [ ] Store enough provider identifiers to distinguish multiple partial refunds against one original payment.
+
+- [ ] HMAC-SHA512 signature validation on the raw body before business processing.
+- [ ] Immutable payload hash per provider event identity; conflicting duplicate returns a non-success response and creates a security/audit record.
+- [ ] Safe duplicate/out-of-order delivery, unmatched-event review, stale-claim recovery and dead-letter/manual-review paths.
+- [ ] Store enough provider identifiers to distinguish multiple partial refunds against one original payment and multiple supplier-payment attempts.
 - [ ] Scheduled reconciliation for lost webhook, uncertain timeout and stale pending refund/transfer.
-- [ ] Alerts/monitoring for unmatched/conflicting events and prolonged financial states.
+- [ ] Alerts for unmatched/conflicting events and prolonged financial states.
 - [ ] Test exact Paystack payload shapes for every subscribed event, including amount units and reference fields.
+
+### Accounting, migration and release
+
+- [ ] Approve retailer chart of accounts, supplier payment terms, logistics-company rates/settlement, delivery-fee margin, tax/discount treatment and whether new cashback accrual continues.
+- [ ] Do not infer old vendor FIFO payout thresholds, commission percentages or vendor-debt offsets as supplier payment rules.
+- [ ] Run targeted supplier/catalogue, checkout, payment, pickup, central delivery, supplier payment, refund, idempotency, concurrency and historical migration tests.
+- [ ] Run full backend/frontend suites and record exact commit, commands, CI results and remaining gaps before release.
 
 ## 10. Source-code observations from this review
 
