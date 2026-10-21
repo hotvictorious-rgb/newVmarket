@@ -110,7 +110,7 @@ The former 90/5/5 merchandise allocation is retired for new retailer transaction
 Record separately, using immutable linked financial entries:
 - customer merchandise revenue and verified customer payment;
 - the agreed supplier purchase cost for each order item (`cost_price * quantity`);
-- **cashback policy gate:** historical cashback balances and customer obligations remain preserved; new retailer-model accrual is disabled until a separate owner-approved policy specifies formula, funding, redemption, maturity, expiry and recovery;
+- **cashback:** active 5% loyalty benefit on eligible post-discount merchandise actually funded by real money used to complete the order, excluding delivery and redeemed cashback/discount-funded value. The existing claim window, separate maturity buffer, 365-day validity from actual maturity, 50% redemption cap, refund reversal and spent-cashback recovery terms apply;
 - delivery charges collected from the customer;
 - logistics-company charges and amounts payable under the applicable logistics agreement;
 - payment-processing fees, discounts, approved refunds, and other authorized expenses;
