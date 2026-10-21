@@ -495,10 +495,10 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'confirmed',
         ])->save();
-        $pickupBlocked = app(\\App\\Services\\OrderSettlementService::class)->verifyRiderPickupOtp(
+        $pickupBlocked = app(\App\Services\OrderSettlementService::class)->verifyRiderPickupOtp(
             $orderBike->fresh(),
             '123456',
-            new \\App\\Models\\RiderProfile()
+            new \App\Models\RiderProfile()
         );
         $this->assertFalse($pickupBlocked['success']);
         $this->assertStringContainsString('supplier-rejection hold', $pickupBlocked['message']);
