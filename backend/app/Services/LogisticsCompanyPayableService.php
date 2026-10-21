@@ -42,7 +42,7 @@ class LogisticsCompanyPayableService
             }
             if (in_array($locked->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true)
                 || $locked->received_at !== null || $locked->rider_id !== null) {
-                throw new InvalidArgumentException('The payable cannot be overridden after rider custody is confirmed, customer handover, or a terminal order outcome.');
+                throw new InvalidArgumentException('The logistics company must be assigned before rider assignment, customer handover, or a terminal order outcome.');
             }
             $company = LogisticsCompanyProfile::query()
                 ->whereKey($companyId)
