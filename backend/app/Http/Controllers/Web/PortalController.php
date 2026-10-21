@@ -4078,10 +4078,15 @@ class PortalController extends Controller
             abort(403, 'Only the supplier account owner can modify payout bank details.');
         }
 
-        if (RetailerSupplierPayoutRequest::where('supplier_vendor_id', $vendor->id)
+        $hasSupplierPayout = RetailerSupplierPayoutRequest::where('supplier_vendor_id', $vendor->id)
             ->whereIn('status', ['pending', 'processing', 'uncertain'])
-            ->exists()) {
-            return back()->with('error', 'Bank details cannot be changed while a supplier payout is pending or awaiting gateway reconciliation.');
+            ->exists();
+        $hasLegacyPayout = VendorPayoutRequest::where('vendor_id', $vendor->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->whereNull('disbursed_at')
+            ->exists();
+        if ($hasSupplierPayout || $hasLegacyPayout) {
+            return back()->with('error', 'Bank details cannot be changed while any payout is pending, approved, or awaiting gateway reconciliation.');
         }
 
         $validated = $request->validate([
