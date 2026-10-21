@@ -280,6 +280,10 @@ class SourcingAllocationService
                 || $order->order_status !== 'pending' || $lockedAssignment->status !== 'awaiting_payment') {
                 throw new InvalidArgumentException('Supplier overrides are allowed only before payment while the order and assignment are still pending.');
             }
+            if ((int) $lockedAssignment->supplier_vendor_id === $newVendorId
+                && (int) $lockedAssignment->supplier_shop_id === $newShopId) {
+                throw new InvalidArgumentException('Choose a different supplier shop for an override.');
+            }
             if ($order->expires_at && Carbon::now()->gte($order->expires_at)) {
                 throw new InvalidArgumentException('This checkout reservation has expired; create a new checkout before changing suppliers.');
             }
