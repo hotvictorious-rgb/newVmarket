@@ -47,6 +47,13 @@ class RetailerSupplierPayoutService
                     return ['success' => false, 'message' => 'Complete and verify the supplier bank details before requesting a payout.'];
                 }
             }
+            if (!$lockedSupplier->bank_updated_at || $lockedSupplier->bank_updated_at->gt(now()->subHours(48))) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'message' => 'Supplier bank details are missing a verified update timestamp or remain within the 48-hour security cooldown. No payout reservation was created.',
+                ];
+            }
 
             $activeRequest = RetailerSupplierPayoutRequest::where('supplier_vendor_id', $lockedSupplier->id)
                 ->whereIn('status', ['pending', 'processing', 'uncertain'])
