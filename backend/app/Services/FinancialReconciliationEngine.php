@@ -232,6 +232,8 @@ class FinancialReconciliationEngine
             foreach ($orderBatch as $order) {
                 $result['orders_checked']++;
                 $expectedBySupplier = [];
+                $expectedByItemSupplier = [];
+                $ledgerByItemSupplier = [];
                 $orderErrors = [];
                 $items = $itemsByOrder->get($order->id, collect());
                 if ($items->isEmpty()) {
@@ -248,6 +250,11 @@ class FinancialReconciliationEngine
                     }
                     $lineCost = BcMathService::mul((string) $unitCost, (string) $item->quantity);
                     $expectedBySupplier[$supplierId] = BcMathService::add($expectedBySupplier[$supplierId] ?? '0.00', $lineCost);
+                    $expectedByItemSupplier[$item->id . ':' . $supplierId] = [
+                        'item_id' => (int) $item->id,
+                        'supplier_id' => $supplierId,
+                        'amount' => $lineCost,
+                    ];
                 }
 
                 $ledgerBySupplier = [];
@@ -267,6 +274,12 @@ class FinancialReconciliationEngine
                     $ledgerBySupplier[$supplierId] = $entry->entry_type === 'credit'
                         ? BcMathService::add($current, (string) $entry->amount)
                         : BcMathService::sub($current, (string) $entry->amount);
+
+                    $itemSupplierKey = $journalItemId . ':' . $supplierId;
+                    $itemCurrent = $ledgerByItemSupplier[$itemSupplierKey] ?? '0.00';
+                    $ledgerByItemSupplier[$itemSupplierKey] = $entry->entry_type === 'credit'
+                        ? BcMathService::add($itemCurrent, (string) $entry->amount)
+                        : BcMathService::sub($itemCurrent, (string) $entry->amount);
                 }
 
                 // A completed refund reverses supplier payable for returned items.
@@ -310,6 +323,27 @@ class FinancialReconciliationEngine
                             $expectedBySupplier[$supplierId] ?? '0.00',
                             $refundSupplierCost
                         );
+                        $itemSupplierKey = $item->id . ':' . $supplierId;
+                        if (!isset($expectedByItemSupplier[$itemSupplierKey])) {
+                            $orderErrors[] = "Refunded return item #{$returnItem->id} has no operational supplier-cost entry to reverse.";
+                        } else {
+                            $expectedByItemSupplier[$itemSupplierKey]['amount'] = BcMathService::sub(
+                                $expectedByItemSupplier[$itemSupplierKey]['amount'],
+                                $refundSupplierCost
+                            );
+                        }
+                    }
+                }
+
+                $itemSupplierKeys = array_unique(array_merge(array_keys($expectedByItemSupplier), array_keys($ledgerByItemSupplier)));
+                foreach ($itemSupplierKeys as $itemSupplierKey) {
+                    $expectedEntry = $expectedByItemSupplier[$itemSupplierKey] ?? null;
+                    $expected = $expectedEntry['amount'] ?? '0.00';
+                    $actual = $ledgerByItemSupplier[$itemSupplierKey] ?? '0.00';
+                    if (BcMathService::comp($expected, $actual) !== 0) {
+                        $itemId = $expectedEntry['item_id'] ?? (int) explode(':', $itemSupplierKey, 2)[0];
+                        $supplierId = $expectedEntry['supplier_id'] ?? (int) explode(':', $itemSupplierKey, 2)[1];
+                        $orderErrors[] = "Order item #{$itemId}, supplier #{$supplierId} payable mismatch: operational expected ₦{$expected}, ledger net ₦{$actual}.";
                     }
                 }
 
