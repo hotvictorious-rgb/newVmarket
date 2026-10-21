@@ -327,7 +327,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 
-        $this->vendor->update(['kyc_status' => 'pending']);
+        $this->vendor->update(['kyc_status' => 'submitted']);
         $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
         $processing = $service->markProcessing($payout->id, $this->superAdmin->id, 'RCP_TEST_SUPPLIER', 'SUPPAYOUT-KYC-RECHECK');
 
