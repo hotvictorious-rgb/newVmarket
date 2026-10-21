@@ -73,8 +73,14 @@ class SourcingAllocationService
         }
 
         // 2. Query explicit private supplier offers
+        $now = Carbon::now();
         $offers = SupplierOffer::where('product_id', $product->id)
             ->where('is_available', true)
+            ->whereNotNull('availability_confirmed_at')
+            ->where('availability_confirmed_at', '<=', $now)
+            ->whereNotNull('availability_confirmed_by')
+            ->whereNotNull('availability_expires_at')
+            ->where('availability_expires_at', '>', $now)
             ->with(['vendor.user', 'shop'])
             ->get();
 
