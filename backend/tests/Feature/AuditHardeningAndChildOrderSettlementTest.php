@@ -99,6 +99,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'business_name' => 'Alpha Electronics Ltd',
             'business_phone' => '08099990001',
             'bank_name' => 'Zenith Bank',
+            'bank_code' => '057',
             'account_number' => '1012345678',
             'account_name' => 'Alpha Electronics Ltd',
             'bank_updated_at' => Carbon::now()->subDays(10),
