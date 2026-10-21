@@ -541,3 +541,27 @@ This section records source-level findings and one rollback-safety fix. It does 
 - **Handover boundary:** retailer orders no longer receive the old vendor 90/5/5 or vendor delivery journal entries a second time during the doorstep handshake. Cashback maturity begins after verified handover.
 - **Verification:** GitHub Actions run [`39584971896`](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39584971896) passed **170 tests / 1,126 assertions** on commit `38bd8925490e9331afb18bc272b7363a34a6eef3`, including retailer refund journal de-duplication, company wallet release idempotency, cashback recovery offset, and higher/lower logistics payable overrides after rider assignment but before custody OTP. This does not verify a production migration, production legal-document rows, post-handover company recovery, or the full supplier payout lifecycle.
 - **Remaining launch blockers:** removing customer-facing shop selection and legacy split writes, completing pickup offer sourcing/payment integration, supplier payable disbursement, pre-fulfilment cancellation refund accounting, partial-item/supplier-return edge cases, order-linked company payout reconciliation/recovery after a transfer, production legal-document verification, and migration-upgrade verification remain open. `main` remains untouched and no deployment is authorized.
+
+
+## Section 35 — Owner-directed delivery-first simplification and pickup retirement boundary (21 October 2026)
+
+### Binding simplification decision
+
+- Doorstep delivery is the only standard customer-facing online fulfilment method.
+- The customer must not create an automated in-shop pickup reservation or select a supplier/shop at checkout.
+- A customer who prefers pickup must call or WhatsApp Victorious MARKET support. Support may arrange pickup as an exception only after checking the complete order, confirmed availability, physical readiness at one approved collection point, payment arrangement and customer agreement.
+- Supplier/collection addresses are not disclosed before the plan is confirmed. A multi-product order must not default to multiple customer visits; VM coordinates sourcing and consolidation or offers a feasible delivery plan.
+- One order retains one customer-facing checkout, one agreed delivery destination and one snapshotted published delivery fee. Internal source count must not silently create extra customer charges.
+- Current logistics-company 90% default/authorized audited override and active 5% eligible-real-money-funded cashback policy remain unchanged by this simplification.
+
+### Documentation updated
+
+The canonical policy is `docs/architecture/RETAILER_FULFILMENT_SIMPLIFICATION_2026-10-21.md`. The policy notice was added to the system rules, retailer sourcing model, root/backend project overviews, README, AI business rules, payment/refund matrix, delivery-integrity plan, state-transition register, this audit and the legal-document seeder. README's active pickup descriptions were changed to support-managed exceptions, and the legal seeder's pickup section now states that new automated reservations are not offered.
+
+### Runtime work still required — not claimed complete
+
+- Existing storefront product detail/checkout pages, customer dashboard/sidebar/reservations pages, web reservation routes, public pickup-reservation API, fulfilment availability API, customer reservation lookup, vendor/counter inspection routes, pickup status transitions, demo seed data and OpenAPI specification still require a coordinated code audit and gating/removal.
+- Preserve historical reservation/order data and routes needed for support, financial reconciliation, audit and legal obligations; do not mass-delete tables or rewrite old migrations.
+- Prevent new public pickup reservation writes and early supplier-address disclosure before removing dependent UI/code. Add regression tests for multi-source orders, one approved destination, route/coverage checks, duplicate requests, legacy reads and authorized support exceptions.
+- Published production legal-document rows must be versioned and verified separately; updating a seeder is not proof that current database rows changed.
+- No CI pass, production migration, merge to `main`, or deployment is claimed by this documentation pass.
