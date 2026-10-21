@@ -76,7 +76,7 @@ class RetailerRefundAccountingService
         $priorCashbackLiabilityReversed = (string) FinancialJournalEntry::where('order_id', $order->id)
             ->where('account_name', 'cashback_liability')
             ->where('entry_type', 'debit')
-            ->where('event_id', 'like', 'EVT-RETAILER-REFUND-CB-REV-%')
+            ->where('event_id', 'like', 'EVT-RETAILER-REFUND-%-CB-REV')
             ->sum('amount');
         $priorSpentRecovery = (string) CashbackRecoveryLedger::where('order_id', $order->id)->sum('amount');
         $alreadyReversed = BcMathService::add($priorCashbackLiabilityReversed, $priorSpentRecovery);
