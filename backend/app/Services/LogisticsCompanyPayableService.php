@@ -282,10 +282,8 @@ class LogisticsCompanyPayableService
                 throw new InvalidArgumentException('The assigned logistics company must be active and approved.');
             }
 
+            // Company payable is independently tariffed; a promotional/free customer delivery fee may still require a VM-funded subsidy.
             $fee = bcadd((string) $locked->delivery_fee, '0', 2);
-            if (BcMathService::comp($fee, '0.00') <= 0) {
-                throw new InvalidArgumentException('A zero-fee order cannot have a logistics-company payable.');
-            }
 
             $default = $locked->logistics_company_payable_default_amount;
             if ($default === null) {
