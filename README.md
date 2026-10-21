@@ -70,7 +70,7 @@ The standard customer return/claim window is **24 hours from verified doorstep d
 
 - The backend must use the approved 24-hour customer claim-window setting consistently across customer interfaces, APIs, services and jobs. It is not a supplier-payment delay; supplier payment eligibility begins after verified customer handover and reconciliation, under the approved supplier terms.
 - The 24-hour period is the standard operational claim/reporting window, not a blanket waiver of rights that cannot lawfully be excluded. It must not be presented as eliminating remedies available under the Federal Competition and Consumer Protection Act or other applicable Nigerian law, including where goods are defective, unsafe, misdescribed, or non-conforming. Applicable law and valid warranty obligations prevail where they provide a stronger remedy; obtain qualified Nigerian legal review of customer-facing Terms before launch.
-- A return request, dispute, failed delivery, unconfirmed pickup, or other blocking case must be evaluated before affected vendor earnings or cashback are released.
+- A return request, dispute, failed delivery or unconfirmed pickup must be evaluated before the affected supplier payable/payment or any applicable cashback adjustment is finalized.
 - Verified duplicate successful charges, verified paid orders cancelled before any vendor action, payment exceptions, chargebacks, and applicable non-waivable legal obligations follow their own evidence and authorization rules. The fulfilment-based 24-hour clock does not erase those obligations.
 - Only verified duplicate charges and verified paid orders cancelled before any vendor action qualify for the narrow automatic-refund-approval exception. Other refunds require persisted authorized human approval before dispatch.
 - The platform remains responsible for executing an approved customer refund. Vendor recovery, where justified by the actual allocation and approved reason, is a separate auditable process; it must not be confused with whether the customer refund succeeded.
@@ -246,15 +246,15 @@ Before release, verify at minimum:
 
 - Card and bank-transfer payment confirmation, mismatch handling and duplicate events.
 - bank.transfer.rejected handling without duplicate refunding.
-- Parent/child allocation equality and multi-vendor fulfilment isolation.
+- Customer order and order-item linkage to the selected supplier offer and immutable purchase-cost snapshot.
 - COD rejection through every checkout/API/configuration path.
-- 24-hour return-window start/end and the separate 24-hour cashback-maturity buffer.
+- 24-hour customer claim-window behavior; preserve historical cashback obligations and do not enable new retailer cashback accrual without approved funding/accounting rules.
 - Original-channel-only refunds, approval provenance, refund ceilings and refund reconciliation.
-- Cashback reversal/recovery without silent wallet debit.
-- Vendor-only rider assignments, protected Call Customer action and rider response privacy.
+- Historical cashback reversal/recovery without silent wallet debit; new retailer cashback policy explicitly approved.
+- Active logistics-company assignment, exactly-one-company rider linkage, protected Call Customer action and rider response privacy.
 - Zero-fee in-shop pickup with RES-XXXXXX, no rider assignment, and no ambiguity with rider parcel codes.
-- Vendor settlement eligibility, strict FIFO whole-record payout batches, admin approval, transfer verification and balanced journals.
-- Legacy logistics paths blocked for new work while historical records remain auditable.
+- Supplier payment eligibility only after verified customer handover and reconciliation; idempotent payment attempts and provider reconciliation.
+- Legacy vendor commission/payout and supplier/vendor-managed delivery paths blocked for new work while historical records remain auditable.
 
 ## Known implementation gaps
 
