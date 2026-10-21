@@ -69,6 +69,7 @@ class SupplierOfferSelectionServiceTest extends TestCase
             'business_name' => 'Supplier One Ltd',
             'business_phone' => '08030000001',
             'marketplace_status' => 'active',
+            'kyc_status' => 'verified',
         ]);
         $this->shop = Shop::create([
             'vendor_id' => $this->vendor->id,
