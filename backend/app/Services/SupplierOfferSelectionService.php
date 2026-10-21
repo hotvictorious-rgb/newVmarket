@@ -38,6 +38,7 @@ class SupplierOfferSelectionService
             ->with(['vendor.user', 'shop'])
             ->where('product_id', $product->id)
             ->where('is_available', true)
+            ->where('wholesale_cost', '>', 0)
             ->whereNotNull('availability_confirmed_at')
             ->whereNotNull('availability_expires_at')
             ->where('availability_expires_at', '>', $now)
