@@ -179,6 +179,7 @@ class VendorProfile extends Model
     public function getGrossSales(): string
     {
         $sum = Order::where('vendor_id', $this->id)
+            ->where('retailer_model_order', false)
             ->where('payment_status', 'paid')
             ->sum('merchandise_subtotal');
         return number_format((float)$sum, 2, '.', '');
@@ -187,6 +188,7 @@ class VendorProfile extends Model
     public function getLifetimeNetEarnings(): string
     {
         $orders = Order::where('vendor_id', $this->id)
+            ->where('retailer_model_order', false)
             ->where('payment_status', 'paid')
             ->whereNotIn('vendor_settlement_status', ['refunded']);
         $merchandise = (string) (clone $orders)->sum('vendor_net_90');
@@ -197,6 +199,7 @@ class VendorProfile extends Model
     public function getEscrowHeldBalance(): string
     {
         $orders = Order::where('vendor_id', $this->id)
+            ->where('retailer_model_order', false)
             ->where('payment_status', 'paid')
             ->whereIn('vendor_settlement_status', ['held', 'disputed']);
         $merchandise = (string) (clone $orders)->sum('vendor_net_90');
@@ -215,6 +218,7 @@ class VendorProfile extends Model
     public function getTotalSettledBalance(): string
     {
         $orders = Order::where('vendor_id', $this->id)
+            ->where('retailer_model_order', false)
             ->where('vendor_settlement_status', 'settled');
         $merchandise = (string) (clone $orders)->sum('vendor_net_90');
         $delivery = (string) (clone $orders)->whereNull('logistics_company_id')->sum('logistics_fee_retained');
@@ -226,6 +230,7 @@ class VendorProfile extends Model
         // Must be paid, delivered, and have zero active return cases or disputes
         // Authoritative Partial-Allocation Accounting: Sum only unallocated remaining payable
         $eligibleOrders = Order::where('vendor_id', $this->id)
+            ->where('retailer_model_order', false)
             ->where('vendor_settlement_status', 'eligible')
             ->where('payment_status', 'paid')
             ->where('order_status', 'delivered')
