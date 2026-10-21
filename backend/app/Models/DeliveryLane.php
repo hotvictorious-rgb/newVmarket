@@ -43,6 +43,21 @@ class DeliveryLane extends Model
      */
     public static function resolveFee(int $originLgaId, int $destinationLgaId, string $packageTier = 'bike'): ?array
     {
+        // Binding retailer policy: fee resolution itself must reject any non-Uyo route,
+        // even when an old active inter-LGA lane remains in the database.
+        $origin = Lga::with('state')->find($originLgaId);
+        $destination = Lga::with('state')->find($destinationLgaId);
+        $isUyoLga = static function ($lga): bool {
+            return $lga
+                && strtolower(trim((string) $lga->name)) === 'uyo'
+                && $lga->state
+                && strtolower(trim((string) $lga->state->name)) === 'akwa ibom';
+        };
+
+        if (!$isUyoLga($origin) || !$isUyoLga($destination)) {
+            return null;
+        }
+
         $lane = self::where('origin_lga_id', $originLgaId)
             ->where('destination_lga_id', $destinationLgaId)
             ->where('is_active', true)
