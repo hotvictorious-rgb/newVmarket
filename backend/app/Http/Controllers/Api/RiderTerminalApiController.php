@@ -554,11 +554,17 @@ class RiderTerminalApiController extends Controller
             $photoPath
         );
 
+        $returnCase = $result['return_case'] ?? null;
         return response()->json([
             'status' => $result['success'],
             'message' => $result['message'],
             'data' => $result['success'] ? [
-                'return_case' => $result['return_case'],
+                'return_case' => $returnCase instanceof ReturnCase ? [
+                    'id' => $returnCase->id,
+                    'case_number' => $returnCase->case_number,
+                    'status' => $returnCase->status,
+                    'return_destination_requires_admin_assignment' => $returnCase->status === 'pending_supplier_assignment',
+                ] : null,
             ] : null,
         ], $result['success'] ? 200 : 422);
     }
@@ -583,6 +589,12 @@ class RiderTerminalApiController extends Controller
         $rider = $request->user()->riderProfile;
         $case = \App\Models\ReturnCase::findOrFail($validated['return_case_id']);
 
+        if ((int) $case->returned_by_rider_id !== (int) $rider->user_id) {
+            return response()->json(['status' => false, 'message' => 'This return case is not assigned to the authenticated rider.'], 403);
+        }
+        if ($case->status === 'pending_supplier_assignment') {
+            return response()->json(['status' => false, 'message' => 'This return contains items from multiple or unresolved suppliers. Admin assignment is required before vendor handover verification.'], 422);
+        }
         if ($case->status === 'returned_to_vendor') {
             return response()->json(['status' => false, 'message' => 'Vendor return has already been confirmed and sealed. Photo proof is immutable.'], 422);
         }
@@ -595,10 +607,16 @@ class RiderTerminalApiController extends Controller
 
         $result = $handshakeService->verifyVendorReturnOtp($case, $rider, $validated['otp'], $photoPath);
 
+        $updatedCase = $result['case'] ?? null;
         return response()->json([
             'status' => $result['success'],
             'message' => $result['message'],
-            'data' => $result['success'] ? $result['case'] : null,
+            'data' => $result['success'] && $updatedCase instanceof ReturnCase ? [
+                'id' => $updatedCase->id,
+                'case_number' => $updatedCase->case_number,
+                'status' => $updatedCase->status,
+                'returned_to_vendor_at' => $updatedCase->returned_to_vendor_at?->toIso8601String(),
+            ] : null,
         ], $result['success'] ? 200 : 422);
     }
 
