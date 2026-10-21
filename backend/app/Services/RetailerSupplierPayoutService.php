@@ -216,18 +216,78 @@ class RetailerSupplierPayoutService
     public function markProcessing(int $payoutId, int $adminId, string $recipientCode, string $processingToken): array
     {
         return DB::transaction(function () use ($payoutId, $adminId, $recipientCode, $processingToken) {
-            $payout = RetailerSupplierPayoutRequest::whereKey($payoutId)->lockForUpdate()->first();
-            if (!$payout) {
+            // Follow supplier -> payout -> order -> item lock order, matching payout
+            // reservation and return/recovery flows as closely as possible.
+            $preview = RetailerSupplierPayoutRequest::whereKey($payoutId)->first();
+            if (!$preview) {
                 return ['success' => false, 'message' => 'Supplier payout request was not found.'];
+            }
+            $supplier = VendorProfile::whereKey($preview->supplier_vendor_id)->lockForUpdate()->first();
+            $payout = RetailerSupplierPayoutRequest::whereKey($payoutId)->lockForUpdate()->first();
+            if (!$payout || !$supplier || (int) $payout->supplier_vendor_id !== (int) $supplier->id) {
+                return ['success' => false, 'protected' => true, 'message' => 'Supplier payout beneficiary changed or is unavailable.'];
             }
             if ($payout->status !== 'pending' || $payout->processing_token) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout is not available for a new transfer attempt.'];
+            }
+            if ($supplier->marketplace_status !== 'active' || !$supplier->isKycVerified()) {
+                return ['success' => false, 'protected' => true, 'message' => 'Supplier is inactive or KYC is no longer verified; payout remains reserved for review.'];
+            }
+            if (!$supplier->bank_updated_at || $supplier->bank_updated_at->gt(now()->subHours(48))) {
+                return ['success' => false, 'protected' => true, 'message' => 'Supplier bank-detail cooldown is active; payout remains reserved.'];
+            }
+            foreach (['bank_name', 'bank_code', 'account_number', 'account_name'] as $field) {
+                if (trim((string) $supplier->{$field}) === '' || (string) $supplier->{$field} !== (string) $payout->{$field}) {
+                    return ['success' => false, 'protected' => true, 'message' => 'Supplier bank details changed after this payout request; reject this request and create a fresh one after the cooldown.'];
+                }
+            }
+            if ($supplier->shops()->where('is_active', true)->count() !== 1) {
+                return ['success' => false, 'protected' => true, 'message' => 'Supplier must have exactly one active shop before payout.'];
             }
             if (trim($recipientCode) === '') {
                 return ['success' => false, 'message' => 'A verified Paystack transfer recipient is required.'];
             }
             if (!$this->requestJournalComplete($payout)) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout request journal is incomplete; finance reconciliation is required.'];
+            }
+
+            $allocations = $payout->allocations()->orderBy('order_id')->orderBy('order_item_id')->lockForUpdate()->get();
+            if ($allocations->isEmpty()) {
+                return ['success' => false, 'protected' => true, 'message' => 'Supplier payout has no item allocations.'];
+            }
+            foreach ($allocations as $allocation) {
+                if ((int) $allocation->supplier_vendor_id !== (int) $supplier->id || $allocation->status !== 'allocated') {
+                    return ['success' => false, 'protected' => true, 'message' => 'Supplier payout allocation beneficiary or status changed; finance review is required.'];
+                }
+            }
+
+            $orderIds = $allocations->pluck('order_id')->map(fn ($id) => (int) $id)->unique()->sort()->values()->all();
+            $orders = Order::whereIn('id', $orderIds)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $itemIds = $allocations->pluck('order_item_id')->map(fn ($id) => (int) $id)->unique()->sort()->values()->all();
+            $items = OrderItem::whereIn('id', $itemIds)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+
+            foreach ($allocations as $allocation) {
+                $order = $orders->get((int) $allocation->order_id);
+                $item = $items->get((int) $allocation->order_item_id);
+                if (!$order || !$item || (int) $item->order_id !== (int) $order->id
+                    || (int) $item->fulfillment_supplier_vendor_id !== (int) $supplier->id
+                    || !$order->retailer_model_order
+                    || $order->payment_status !== 'paid'
+                    || $order->order_status !== 'delivered'
+                    || !$order->refund_window_expires_at
+                    || $order->refund_window_expires_at->gt(now())
+                    || $order->dispute()->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled'])->exists()
+                    || $order->returnCases()->whereNotIn('status', ['rejected', 'closed', 'refunded', 'resolved', 'replacement_completed'])->exists()) {
+                    return ['success' => false, 'protected' => true, 'message' => "Order/item eligibility changed for supplier payout allocation #{$allocation->id}; payout remains reserved."];
+                }
+            }
+
+            $audit = app(FinancialReconciliationEngine::class);
+            foreach ($orderIds as $orderId) {
+                $check = $audit->reconcileRetailerSupplierPayables((int) $orderId);
+                if ($check['mismatches'] > 0) {
+                    return ['success' => false, 'protected' => true, 'message' => "Order #{$orderId} no longer reconciles; supplier payout remains reserved."];
+                }
             }
 
             $payout->status = 'processing';
