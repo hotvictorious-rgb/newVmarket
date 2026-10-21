@@ -96,15 +96,13 @@ This decision record supersedes older vendor-delivery Q&A decisions for new work
 - Customer handover requires server-verified one-time customer OTP (`delivery_otp`) plus a mandatory doorstep delivery photo.
 - Failed attempts and returns to origin are tracked separately; failed delivery does not grant automatic refund or release supplier payable.
 
-### Supplier-shop pickup (Inspect First, Pay at the Shop)
+### Pickup requests (support-managed exception only)
 
-- **Online Reservation Pass:** Customer reserves the product online with ₦0 upfront, generating a reservation pass (`RES-XXXXXX`) and 24-hour stock hold at the supplier's physical shop in Uyo.
-- **Physical Inspection First:** Customer arrives at the supplier shop counter and physically inspects the item to confirm quality, authenticity, and satisfaction before any payment is collected.
-- **Pay at Counter Upon Satisfaction:** If satisfied, customer pays at the shop counter through VM's authorized payment workflow and provides the one-time customer pickup verification OTP (`pickup_verification_code`).
-- **Counter Evidence:** The supplier confirms payment and OTP verification, records the required in-shop photo, and hands over the item.
-- **Customer Walk-Away Protection:** If the customer is not satisfied upon inspection, they do not pay, no money is lost, and the reservation expires or is cancelled cleanly.
-- Only verified counter handover makes the supplier's wholesale cost payable eligible.
+Doorstep delivery is the only standard online fulfilment method. The website and public APIs must not offer automated in-shop pickup reservations, supplier/shop selection or early supplier-address disclosure. Customers who prefer pickup must contact Victorious MARKET support.
 
+Support can confirm an exception only after checking the complete order, confirmed availability of every item, physical readiness at one approved collection point, payment arrangements and customer agreement. Record the staff actor, timestamp, approved location, decision and reason. Do not direct customers to multiple supplier shops by default; consolidate internally or offer a feasible delivery plan. Do not silently add fees or alter the checkout delivery-fee snapshot.
+
+Existing pickup reservation tables, states, endpoints and historical records are legacy compatibility only until safely retired. They may be used to resolve existing obligations but must not create new public reservations. Disable new public writes and early address disclosure before removing dependent code; preserve historical reads and financial audit trails.
 ## 6. VM-defined delivery coverage and fees
 
 1. VM controls customer-facing service coverage and delivery-fee quotes; suppliers do not configure marketplace delivery prices.
