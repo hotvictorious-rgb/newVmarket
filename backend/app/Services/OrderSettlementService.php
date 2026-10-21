@@ -880,6 +880,16 @@ class OrderSettlementService
         return DB::transaction(function () use ($order, $merchantUser) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
+            // New retailer orders require each supplier assignment to be prepared
+            // independently. The legacy order-level shortcut must never bypass this.
+            if ($lockedOrder->retailer_model_order
+                && \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)->exists()) {
+                return [
+                    'success' => false,
+                    'message' => 'Retailer orders require supplier-specific collection readiness. Use the assigned supplier order workflow.',
+                ];
+            }
+
             // Authorization & Branch Isolation Guard for Merchant Owner / Counter Staff
             if ($merchantUser) {
                 if ($merchantUser->status !== 'active') {
