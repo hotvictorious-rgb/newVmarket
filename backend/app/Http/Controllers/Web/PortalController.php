@@ -4074,29 +4074,57 @@ class PortalController extends Controller
     public function vendorUpdateBank(Request $request)
     {
         $vendor = $this->resolveVendorProfile();
+        if (!$request->user() || !$request->user()->isVendor()) {
+            abort(403, 'Only the supplier account owner can modify payout bank details.');
+        }
+
+        if (RetailerSupplierPayoutRequest::where('supplier_vendor_id', $vendor->id)
+            ->whereIn('status', ['pending', 'processing', 'uncertain'])
+            ->exists()) {
+            return back()->with('error', 'Bank details cannot be changed while a supplier payout is pending or awaiting gateway reconciliation.');
+        }
 
         $validated = $request->validate([
             'bank_name' => 'required|string|max:100',
-            'account_number' => 'required|string|regex:/^[0-9]{10}$/',
+            'bank_code' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9_-]+$/'],
+            'account_number' => ['required', 'string', 'size:10', 'regex:/^[0-9]{10}$/'],
             'account_name' => 'required|string|max:150',
         ], [
             'account_number.regex' => 'NUBAN account number must be exactly 10 digits.',
         ]);
 
+        $oldBankSnapshot = [
+            'bank_name' => $vendor->bank_name,
+            'bank_code' => $vendor->bank_code,
+            'account_name' => $vendor->account_name,
+            'account_number_last4' => $vendor->account_number ? substr((string) $vendor->account_number, -4) : null,
+        ];
+
         $vendor->bank_name = strip_tags(trim($validated['bank_name']));
+        $vendor->bank_code = strtoupper(trim($validated['bank_code']));
         $vendor->account_number = trim($validated['account_number']);
-        $vendor->account_name = strip_tags(trim($validated['account_name']));
+        $vendor->account_name = strtoupper(strip_tags(trim($validated['account_name'])));
         $vendor->bank_updated_at = Carbon::now();
         $vendor->save();
 
         AdminAuditLog::create([
-            'admin_user_id' => $vendor->user_id,
-            'action' => 'vendor_bank_account_updated',
-            'description' => "Vendor {$vendor->business_name} updated bank details to {$vendor->bank_name} ({$vendor->account_number}). 48h withdrawal cooldown activated.",
+            'user_id' => $request->user()->id,
+            'action' => 'supplier_bank_details_updated',
+            'target_type' => VendorProfile::class,
+            'target_id' => $vendor->id,
+            'old_values' => $oldBankSnapshot,
+            'new_values' => [
+                'bank_name' => $vendor->bank_name,
+                'bank_code' => $vendor->bank_code,
+                'account_name' => $vendor->account_name,
+                'account_number_last4' => substr((string) $vendor->account_number, -4),
+                'cooldown_expires_at' => $vendor->bank_updated_at->copy()->addHours(48)->toIso8601String(),
+            ],
             'ip_address' => $request->ip(),
+            'user_agent' => substr((string) $request->userAgent(), 0, 1000),
         ]);
 
-        return back()->with('status', 'Designated bank account details updated successfully. 48-Hour Anti-Fraud Cooldown is now active.');
+        return back()->with('status', 'Bank details updated and audited. The 48-hour anti-fraud cooldown is active.');
     }
 
     public function vendorRefreshProductFreshness(Request $request, int $id)
