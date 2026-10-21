@@ -511,13 +511,13 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'user_type' => 'super_admin',
             'status' => 'active',
         ]);
-        $journalCountBefore = \\App\\Models\\FinancialJournalEntry::where('order_id', $orderBike->id)->count();
-        $payout = app(\\App\\Services\\OrderSettlementService::class)
+        $journalCountBefore = \App\Models\FinancialJournalEntry::where('order_id', $orderBike->id)->count();
+        $payout = app(\App\Services\OrderSettlementService::class)
             ->disburseVendorSettlement($orderBike->fresh(), $adminUser, 'proofs/legacy-payout-must-not-exist.jpg');
         $this->assertFalse($payout['success']);
         $this->assertStringContainsString('cannot use the legacy order-level vendor payout', $payout['message']);
         $this->assertEquals('eligible', $orderBike->fresh()->vendor_settlement_status);
-        $this->assertSame($journalCountBefore, \\App\\Models\\FinancialJournalEntry::where('order_id', $orderBike->id)->count());
+        $this->assertSame($journalCountBefore, \App\Models\FinancialJournalEntry::where('order_id', $orderBike->id)->count());
     }
 
     public function test_public_product_api_filters_by_condition_and_package_tier(): void
