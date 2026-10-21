@@ -26,6 +26,7 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class ReturnsRefundsAndPaystackSafetyTest extends TestCase
@@ -1314,6 +1315,17 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'item_condition' => 'opened_tested',
             'status' => 'approved',
         ]);
+
+        Sanctum::actingAs($this->customer, ['*']);
+        $customerReturnList = $this->getJson('/api/v1/customer/returns')->assertOk();
+        $customerReturn = $customerReturnList->json('data.0');
+        $this->assertArrayNotHasKey('vendor_id', $customerReturn);
+        $this->assertArrayNotHasKey('vendor', $customerReturn);
+        $this->assertArrayNotHasKey('vendor_return_otp', $customerReturn);
+        $customerReturnDetail = $this->getJson('/api/v1/customer/returns/' . $case->case_number)->assertOk()->json('data');
+        $this->assertArrayNotHasKey('vendor_id', $customerReturnDetail);
+        $this->assertArrayNotHasKey('vendor', $customerReturnDetail);
+        $this->assertArrayNotHasKey('vendor_return_otp', $customerReturnDetail);
 
         $paystack = \Mockery::mock(\App\Services\PaystackService::class);
         $paystack->shouldReceive('initiateRefund')
