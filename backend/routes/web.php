@@ -70,6 +70,11 @@ Route::post('/demo/quick-login', [WebAuthController::class, 'quickDemoLogin'])->
 Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/', [PortalController::class, 'adminDashboard'])->name('admin.dashboard');
     Route::get('/delivery-lanes', [PortalController::class, 'adminDeliveryLanesPage'])->name('admin.delivery_lanes.index');
+    Route::get('/delivery-corridors/manage', [\App\Http\Controllers\Web\AdminDeliveryCorridorController::class, 'page'])->name('admin.delivery_corridors.manage');
+    Route::get('/delivery-corridors', [\App\Http\Controllers\Web\AdminDeliveryCorridorController::class, 'index'])->name('admin.delivery_corridors.index');
+    Route::post('/delivery-corridors', [\App\Http\Controllers\Web\AdminDeliveryCorridorController::class, 'storeCorridor'])->name('admin.delivery_corridors.store');
+    Route::put('/delivery-corridors/{id}', [\App\Http\Controllers\Web\AdminDeliveryCorridorController::class, 'updateCorridor'])->whereNumber('id')->name('admin.delivery_corridors.update');
+    Route::post('/delivery-corridors/{id}/company-rates', [\App\Http\Controllers\Web\AdminDeliveryCorridorController::class, 'upsertCompanyRate'])->whereNumber('id')->name('admin.delivery_corridors.company_rates.upsert');
     Route::get('/settlements', [PortalController::class, 'adminSettlementsPage'])->name('admin.settlements.index');
     Route::get('/retailer-supplier-payouts', [AdminRetailerSupplierPayoutController::class, 'index'])->name('admin.retailer-supplier-payouts.index');
     Route::post('/retailer-supplier-payouts/{id}/disburse', [AdminRetailerSupplierPayoutController::class, 'disburse'])->whereNumber('id')->name('admin.retailer-supplier-payouts.disburse');
