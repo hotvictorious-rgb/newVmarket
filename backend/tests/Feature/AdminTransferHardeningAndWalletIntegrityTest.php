@@ -343,6 +343,49 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertEquals('30000.00', number_format((float)$creditEntry->amount, 2, '.', ''));
     }
 
+    /**
+     * P0 regression: an uncertain logistics transfer response must remain on reconciliation hold.
+     */
+    public function test_logistics_payout_initiation_timeout_keeps_reconciliation_hold(): void
+    {
+        $payout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '20000.00',
+            'status' => 'pending',
+            'bank_name' => $this->company->bank_name,
+            'bank_code' => $this->company->bank_code,
+            'account_number' => $this->company->account_number,
+            'account_name' => $this->company->account_name,
+        ]);
+
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldReceive('createTransferRecipient')->once()->andReturn([
+            'success' => true,
+            'recipient_code' => 'RCP_FLEET_TIMEOUT',
+        ]);
+        $mock->shouldReceive('initiateTransfer')->once()->andReturn([
+            'success' => false,
+            'code' => 'UNCERTAIN_TIMEOUT',
+            'is_definitive' => false,
+            'message' => 'Connection timed out after submitting transfer request.',
+        ]);
+        $this->app->instance(PaystackService::class, $mock);
+
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.disburse.logistics_payout'), [
+            'payout_id' => $payout->id,
+            'notes' => 'Regression test for uncertain gateway outcome',
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('HOLD_TIMEOUT_RECONCILIATION', session('error'));
+
+        $payout->refresh();
+        $this->assertEquals('pending', $payout->status);
+        $this->assertEquals('HOLD_TIMEOUT_RECONCILIATION', $payout->processing_token);
+        $this->assertEquals('processing', $payout->gateway_status);
+        $this->assertNotNull($payout->transfer_reference);
+    }
+
     public function test_logistics_payout_disbursement_blocked_if_company_or_user_suspended()
     {
         $this->logisticsUser->update(['status' => 'suspended']);
