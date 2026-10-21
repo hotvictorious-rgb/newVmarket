@@ -36,6 +36,7 @@ class AdminDeliveryCorridorController extends Controller
             ->get();
         $companies = LogisticsCompanyProfile::with('hqLga.state')
             ->where('status', 'active')
+            ->whereHas('user', fn ($user) => $user->where('status', 'active'))
             ->whereHas('hqLga', function ($q) {
                 $q->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
                     ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']));
@@ -228,6 +229,8 @@ class AdminDeliveryCorridorController extends Controller
                 ->lockForUpdate()
                 ->first();
             if (!$company
+                || !$company->user
+                || $company->user->status !== 'active'
                 || strtolower(trim((string) ($company->hqLga->name ?? ''))) !== 'uyo'
                 || strtolower(trim((string) ($company->hqLga->state->name ?? ''))) !== 'akwa ibom') {
                 throw new InvalidArgumentException('The tariff must belong to an active logistics company based in Uyo, Akwa Ibom State.');
