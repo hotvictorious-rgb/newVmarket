@@ -1863,4 +1863,41 @@ class AuditRemediationVerificationTest extends TestCase
             $this->assertArrayNotHasKey($internalField, $serialized['items'][0], "Supplier order item leaked {$internalField}.");
         }
     }
+
+    public function test_legacy_quarantined_wallet_credit_without_operation_blocks_refund_retry(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+        ]);
+        $credit = CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'return_case_id' => $case->id,
+            'amount' => '10000.00',
+            'credit_type' => 'doorstep_refund_credit',
+            'status' => 'quarantined',
+            'refund_reserved_from_status' => null,
+            'notes' => 'Legacy unresolved refund hold.',
+        ]);
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldNotReceive('initiateRefund');
+
+        $result = (new ReturnAndRefundService($gateway))->adminDisburseRefund($this->superAdmin, $case);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('quarantined without a safely retryable failed refund attempt', $result['message']);
+        $this->assertSame('quarantined', $credit->fresh()->status);
+        $this->assertTrue(\App\Models\FinancialOperation::where('metadata->return_case_id', $case->id)->doesntExist());
+        $this->assertNull($case->fresh()->refund_claim_token);
+    }
 }
