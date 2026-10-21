@@ -638,7 +638,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
      * Test 7: Branch Alignment Check at Checkout.
      * Prevents selecting an arbitrary shop branch of a vendor if product belongs to another branch.
      */
-    public function test_checkout_rejects_mismatched_shop_branch(): void
+    public function test_checkout_rejects_public_pickup_even_if_legacy_shop_branch_is_supplied(): void
     {
         // Create second shop branch under same vendor
         $otherBranch = Shop::create([
@@ -664,7 +664,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'shop_id' => $otherBranch->id, // Mismatched branch!
         ]);
 
-        $response->assertSessionHasErrors(['shop_id']);
+        $response->assertSessionHasErrors(['fulfillment_type']);\n        $this->assertDatabaseMissing('orders', ['customer_id' => $this->customerUser->id]);
     }
 
     /**
