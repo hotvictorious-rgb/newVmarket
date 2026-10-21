@@ -745,3 +745,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Remaining work — not claimed complete:** The safe hold is in place, but an administrator-facing workflow to split/assign a multi-supplier return case into per-supplier handoffs is not yet implemented. Those cases must remain on hold; do not mark them returned or refund them until that assignment workflow exists.
 
 **Verification boundary:** Source and regression tests committed; tests/CI pending. No merge or deployment.
+
+
+### VM-AUD-130 — Remove placeholder phone recipients from supplier notifications (21 October 2026)
+
+**Finding:** Several supplier notification paths fell back to the placeholder phone `+2348000000001` when a supplier business phone was absent. These messages can contain order identifiers, handover PINs, payout amounts and bank-account details, so sending them to a placeholder risks disclosure to an unrelated recipient.
+
+**Fix:** Removed the placeholder fallback across order-created, handover-ready, delivery, payout, and return notification flows. Notifications now use a configured supplier business phone or the supplier account phone; external WhatsApp/SMS dispatch is skipped when no valid recipient exists. The custody OTP flow raises an admin alert if no private delivery channel is available.
+
+**Business impact:** Prevents sensitive supplier order and financial notifications from being routed to a dummy or unrelated phone number. Missing contact data now causes a visible delivery gap rather than an unsafe fallback.
+
+**Verification boundary:** Source committed; tests/CI pending. No merge or deployment.
