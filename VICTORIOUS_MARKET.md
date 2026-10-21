@@ -58,17 +58,13 @@ Customers shop on Victorious MARKET through two distinct, transparent fulfilment
 8. **Verified Handshake:** Handover requires customer verification of the delivery OTP (`delivery_otp`) plus a mandatory doorstep delivery photo proof.
 9. **Supplier Settlement:** Only after verified customer delivery is the supplier's wholesale cost payable unlocked for payment.
 
-### Channel B: In-Shop Pickup (Inspect First, Pay at the Shop via Paystack)
-1. **Browse & Reserve (₦0 Upfront):** The customer selects "In-Shop Pickup" at checkout. The checkout fee is ₦0 upfront.
-2. **Automated Location Assignment:** The system automatically assigns the reservation to the supplier shop that has the item available at the cheapest wholesale cost, issuing a unique reservation pass (`RES-XXXXXX`) and customer pickup OTP (`verification_code`).
-3. **Admin Location Override:** Admin can review the assigned reservation and override/reassign the pickup location to another accredited supplier branch if required.
-4. **Customer Journey & Direct Support:** While traveling to the shop, the customer can **call or chat Victorious MARKET customer support** for directions, timing, or assistance.
-5. **Arrival & Reservation Presentation:** The customer arrives at the designated supplier shop counter and presents their `RES-XXXXXX` reservation code. The supplier verifies the reservation code in their terminal.
-6. **Physical Inspection First:** The customer **physically inspects the item at the counter first** to verify condition, authenticity, and satisfaction before any payment is made.
-7. **Pay at Shop Counter via Paystack:** Once satisfied, the customer makes payment **directly to Victorious MARKET via Paystack** (mobile payment link, counter QR code, or online counter checkout). Strictly NO cash or private vendor bank account transfers.
-8. **Verified Release:** Once payment is confirmed by Paystack, the supplier verifies the customer's pickup OTP (`verification_code`), records the required in-shop photo proof, and releases the goods.
-9. **Zero-Risk Customer Protection:** If the customer is not satisfied upon physical inspection, they do not pay, no funds are deducted, and the reservation is cancelled cleanly without refund delays.
+### Channel B: Pickup request through support (exception only)
 
+Pickup is not a standard checkout option and customers cannot create a new automated pickup reservation. A customer who prefers pickup must call or WhatsApp Victorious MARKET support. Support verifies all items in the order, confirmed availability, physical readiness at one approved collection point, payment arrangements and customer agreement before confirming the exception.
+
+The customer receives collection instructions only after the complete plan is confirmed. Never expose supplier addresses from product/source data or tell customers to travel before confirmation. Multi-product orders must be consolidated at one approved point or handled through an agreed feasible delivery plan; customers must not be sent to multiple suppliers by default.
+
+Existing reservation codes and records remain historical compatibility/audit data only until safe retirement. They do not authorize new public reservation writes.
 ## 6. Secure Payments and Retail Accounting
 
 Customer payment must be verified against authoritative payment-provider information, the expected reference, exact amount in integer kobo, NGN currency and the correct order/customer. Browser redirects, screenshots, supplier claims or rider scans alone are not payment proof.
@@ -112,10 +108,15 @@ VM contracts or authorizes logistics companies to carry out delivery. Every ride
 
 Logistics companies and riders manage operational custody and delivery, but cannot change product prices, mark payment successful, approve refunds or create supplier payables. Rider-to-company parcel custody evidence is distinct from proof that the customer received the product. Doorstep completion requires the existing server-verified customer OTP and doorstep photo. A dispatch assignment or rider collection scan alone is not successful fulfilment.
 
-### Supplier-shop pickup
+### Supplier-shop pickup — support-managed exception only
 
-Customer pickup at an authorized supplier shop remains available through the existing reservation flow. VM authorizes the pickup location and order; the customer uses the reservation pass/reference and separate one-time customer pickup verification, and the required in-shop photo is recorded. Supplier readiness does not equal pickup. Only verified customer handover completes fulfilment and makes the supplier payable eligible. The supplier shop is a collection location, not a public storefront or an independent payment channel.
+### Pickup requests (support-managed exception only)
 
+Doorstep delivery is the only standard online fulfilment method. The website and public APIs must not offer automated in-shop pickup reservations, supplier/shop selection or early supplier-address disclosure. Customers who prefer pickup must contact Victorious MARKET support.
+
+Support can confirm an exception only after checking the complete order, confirmed availability of every item, physical readiness at one approved collection point, payment arrangements and customer agreement. Record the staff actor, timestamp, approved location, decision and reason. Do not direct customers to multiple supplier shops by default; consolidate internally or offer a feasible delivery plan. Do not silently add fees or alter the checkout delivery-fee snapshot.
+
+Existing pickup reservation tables, states, endpoints and historical records are legacy compatibility only until safely retired. They may be used to resolve existing obligations but must not create new public reservations. Disable new public writes and early address disclosure before removing dependent code; preserve historical reads and financial audit trails.
 ### Failed delivery and custody
 
 Failed attempts, returns to origin, custody transfers, damaged/lost parcels, and customer refusal must be recorded as separate operational outcomes. They must not automatically imply refund approval, supplier fault, supplier debt, or successful fulfilment. VM decides the customer remedy under the applicable refund/consumer-rights policy. Supplier recovery requires separate evidence and a contractual basis.
