@@ -68,7 +68,7 @@ Existing approved customer payment paths and Paystack verification safeguards re
 
 The standard customer return/claim window is **24 hours from verified doorstep delivery or confirmed in-shop pickup**. This is a customer-protection window; it is **not** a promise that Paystack will process a refund within 24 hours.
 
-- The backend must use the approved 24-hour setting consistently across customer interfaces, APIs, services, jobs, and vendor settlement eligibility, evaluated independently per vendor child order.
+- The backend must use the approved 24-hour customer claim-window setting consistently across customer interfaces, APIs, services and jobs. It is not a supplier-payment delay; supplier payment eligibility begins after verified customer handover and reconciliation, under the approved supplier terms.
 - The 24-hour period is the standard operational claim/reporting window, not a blanket waiver of rights that cannot lawfully be excluded. It must not be presented as eliminating remedies available under the Federal Competition and Consumer Protection Act or other applicable Nigerian law, including where goods are defective, unsafe, misdescribed, or non-conforming. Applicable law and valid warranty obligations prevail where they provide a stronger remedy; obtain qualified Nigerian legal review of customer-facing Terms before launch.
 - A return request, dispute, failed delivery, unconfirmed pickup, or other blocking case must be evaluated before affected vendor earnings or cashback are released.
 - Verified duplicate successful charges, verified paid orders cancelled before any vendor action, payment exceptions, chargebacks, and applicable non-waivable legal obligations follow their own evidence and authorization rules. The fulfilment-based 24-hour clock does not erase those obligations.
@@ -168,7 +168,7 @@ Webhook subscription must match the enabled Paystack products and channels. The 
 | refund.processed | Confirm only when event identity, operation, amount, currency and original transaction all match. |
 | refund.failed | Preserve the obligation and reconcile whether a safe retry or manual review is required. |
 | refund.needs-attention | Alert authorized operators; keep the customer refund obligation open. Do not switch to wallet or alternate-bank payment without a separate approved policy. |
-| transfer.success | Verify transfer identity, amount and currency before marking an authorized vendor payout paid. |
+| transfer.success | Verify transfer identity, amount, currency, recipient and operation type before marking an authorized supplier payment or historical vendor payout paid. |
 | transfer.failed | Reconcile failure and returned funds; do not let a delayed failure overwrite a confirmed success. |
 | transfer.reversed | Record a genuine reversal and reverse only previously posted disbursement entries. |
 
@@ -184,7 +184,7 @@ Webhooks are not a substitute for authoritative API verification or scheduled re
 - **Delivery and financial-integrity plan:** DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md
 - **Product and business overview:** VICTORIOUS_MARKET.md
 - **Deployment guide:** SHARED_HOSTING_DEPLOYMENT_GUIDE.md
-- **Business-rule source for vendor-managed delivery:** .ai/BUSINESS_RULES.md
+- **Business-rule source:** RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md and .ai/BUSINESS_RULES.md
 - **Focused financial-safety CI workflow:** .github/workflows/paystack-refund-safety.yml
 
 The codebase uses Laravel 12, PHP 8.2+, Composer, a relational database (SQLite for local testing or a supported production database), and BCMath for money arithmetic. Node.js is needed if the frontend assets must be built.
@@ -264,7 +264,7 @@ The repository's audit documents identify implementation work that remains to be
 - Removing financial side effects from rider-triggered failed-delivery and handover flows.
 - Complete bank-transfer rejection handling and provider-status reconciliation.
 - Explicit refund pending/processing/needs-attention handling.
-- Consistent cashback maturity based on actual fulfilment-window expiry and a separate customer cashback-recovery ledger.
+- Preserve historical cashback lots and customer obligations; obtain an explicit owner/accountant decision before enabling new retailer-model cashback accrual/funding.
 - Persisted human refund approval provenance and reason-specific delivery-fee refund decisions.
 - Retailer-model migration: supplier offer/order-item linkage, supplier payables after verified fulfilment, and retirement of marketplace vendor earnings and commission rules.
 - Central logistics-company assignment, mandatory rider-to-logistics-company linkage, VM-owned coverage and delivery pricing, and retirement of supplier/vendor-managed dispatch paths.
@@ -282,7 +282,10 @@ These documents serve different purposes and should remain consistent:
 4. [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) — payment channels, refund/cashback policy, settlement and Paystack event matrix.
 5. [VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md](VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md) — code observations, retailer migration gaps and verification checklist.
 6. [DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md](DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md) — delivery and accounting implementation plan.
-7. [SHARED_HOSTING_DEPLOYMENT_GUIDE.md](SHARED_HOSTING_DEPLOYMENT_GUIDE.md) — deployment instructions.
+7. [VICTORIOUS_MARKET_SYSTEM_RULES_V1.md](VICTORIOUS_MARKET_SYSTEM_RULES_V1.md) — authoritative system rules and migration gates.
+8. [VICTORIOUS_MARKET_CROSS_DOCUMENT_ALIGNMENT_AUDIT_2026-10-20.md](VICTORIOUS_MARKET_CROSS_DOCUMENT_ALIGNMENT_AUDIT_2026-10-20.md) — cross-document/source audit and remaining blockers.
+9. [VENDOR_PAYOUT_POLICY.md](VENDOR_PAYOUT_POLICY.md) — explicitly legacy-only vendor payout rules; not supplier payment policy.
+10. [SHARED_HOSTING_DEPLOYMENT_GUIDE.md](SHARED_HOSTING_DEPLOYMENT_GUIDE.md) — deployment instructions.
 
 If documents conflict, follow the current owner-confirmed retailer model in `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md`, then reconcile the code and every downstream policy before release. This branch is documentation and audit work; it does not claim that the application has already been migrated. The old multi-vendor checkout, vendor commission/payout splits, vendor-managed delivery and vendor-linked riders are legacy assumptions until a separate implementation migration is completed.
 
