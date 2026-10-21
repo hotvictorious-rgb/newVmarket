@@ -49,4 +49,17 @@ class RetailerSupplierPayoutInputGuardTest extends TestCase
         $this->assertFalse($result['success']);
         $this->assertTrue($result['protected']);
     }
+
+    public function test_success_finalization_rejects_malformed_reference_and_amount_before_database_access(): void
+    {
+        $emptyReference = $this->service()->finalizeSuccess(1, ' ', 'TRF-1', '100.00');
+        $invalidAmount = $this->service()->finalizeSuccess(1, 'TRF-123456789', 'TRF-1', '1e3');
+        $zeroAmount = $this->service()->finalizeSuccess(1, 'TRF-123456789', 'TRF-1', '0.00');
+
+        $this->assertFalse($emptyReference['success']);
+        $this->assertFalse($invalidAmount['success']);
+        $this->assertFalse($zeroAmount['success']);
+        $this->assertTrue($emptyReference['protected']);
+        $this->assertTrue($invalidAmount['protected']);
+    }
 }
