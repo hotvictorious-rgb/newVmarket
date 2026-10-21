@@ -1,6 +1,6 @@
 @extends('layouts.dashboard')
 
-@section('title', '90% Payout Desk & Bank Settlements — Vendor')
+@section('title', 'Merchant Payouts & Supplier Payables — Vendor')
 @section('role_title', 'Merchant Commerce Suite')
 @section('page_title', '90% Payout Desk & Bank Settlements')
 @section('role_badge', 'VENDOR')
@@ -21,10 +21,10 @@
         <div>
             <h1 class="page-header-title">
                 <span style="font-size: 26px;">💳</span>
-                <span>90% Payout Desk &amp; Treasury Settlements</span>
+                <span>Merchant Payouts &amp; Supplier Payables</span>
             </h1>
             <p class="page-header-subtitle">
-                Guaranteed 90% merchant revenue share. All payments are held safely in platform escrow until customer delivery verification and refund window maturation.
+                Legacy marketplace settlement balances are shown separately from Victorious MARKET item-level supplier payables. Retailer-model supplier orders do not use the legacy 90% merchant payout calculation.
             </p>
         </div>
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -114,7 +114,7 @@
     <div class="stat-grid-4" style="margin-bottom: 24px;">
         <div class="stat-card stat-card-border-purple">
             <div class="stat-card-info">
-                <span class="stat-card-label">Gross Merchant Sales</span>
+                <span class="stat-card-label">Legacy Marketplace Gross Sales</span>
                 <span class="stat-card-value">₦{{ number_format((float)($vendorMetrics['gross_sales'] ?? 0), 2) }}</span>
                 <span class="stat-card-subtext" style="color: var(--adm-primary);">100% Customer Volume</span>
             </div>
@@ -123,7 +123,7 @@
 
         <div class="stat-card stat-card-border-blue">
             <div class="stat-card-info">
-                <span class="stat-card-label">Lifetime 90% Net Earnings</span>
+                <span class="stat-card-label">Legacy Marketplace Net Earnings</span>
                 <span class="stat-card-value">₦{{ number_format((float)($vendorMetrics['net_earnings'] ?? 0), 2) }}</span>
                 <span class="stat-card-subtext" style="color: var(--adm-info);">Guaranteed Merchandise Cut</span>
             </div>
