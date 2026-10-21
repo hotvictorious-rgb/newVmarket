@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Web\AdminSupplierOfferAvailabilityController;
 use App\Http\Controllers\Web\AdminOrderSupplierAssignmentController;
+use App\Http\Controllers\Web\AdminSupplierRecoveryController;
 use App\Http\Controllers\Web\PaystackPaymentController;
 use App\Http\Controllers\Web\PortalController;
 use App\Http\Controllers\Web\WebAuthController;
@@ -85,6 +86,10 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/orders/supplier-assignments/{assignmentId}/override', [AdminOrderSupplierAssignmentController::class, 'override'])
         ->whereNumber('assignmentId')
         ->name('admin.orders.supplier_assignments.override');
+    Route::post('/orders/{id}/supplier-assignments/{assignmentId}/recover', [AdminSupplierRecoveryController::class, 'recover'])
+        ->whereNumber('id')
+        ->whereNumber('assignmentId')
+        ->name('admin.orders.supplier_assignments.recover');
     Route::get('/products', [PortalController::class, 'adminProductsPage'])->name('admin.products.index');
     Route::post('/supplier-offers/{offerId}/confirm-availability', [AdminSupplierOfferAvailabilityController::class, 'confirm'])
         ->whereNumber('offerId')
