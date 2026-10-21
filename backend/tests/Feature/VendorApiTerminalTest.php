@@ -372,6 +372,20 @@ class VendorApiTerminalTest extends TestCase
             ]);
     }
 
+    public function test_vendor_api_payout_is_held_when_bank_update_timestamp_is_missing(): void
+    {
+        [$user, $vendor] = $this->createVendor('Legacy Bank Timestamp', 'legacy-bank-time@example.com', '08099223345');
+        $vendor->update(['bank_updated_at' => null]);
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/v1/vendor/payouts', ['amount' => 5000.00]);
+
+        $response->assertStatus(403)
+            ->assertJsonPath('status', false)
+            ->assertJsonPath('code', 'BANK_VERIFICATION_COOLDOWN');
+        $this->assertSame(0, \App\Models\VendorPayoutRequest::where('vendor_id', $vendor->id)->count());
+    }
+
     public function test_vendor_can_request_payout_within_withdrawable_balance(): void
     {
         [$user, $vendor, $shop] = $this->createVendor('Fast Payouts', 'fast@example.com', '08099223344');
