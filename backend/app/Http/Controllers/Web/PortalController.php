@@ -4682,97 +4682,14 @@ class PortalController extends Controller
 
     public function createReservation(Request $request)
     {
-        if (!Auth::check() || Auth::user()->user_type !== 'customer') {
-            return redirect()->route('customer.login')
-                ->with('info', 'Please sign in or create an account to reserve items for in-shop inspection.');
-        }
-
-        $validated = $request->validate([
-            'product_id' => 'required|integer|exists:products,id',
-            'quantity' => 'nullable|integer|min:1',
-            'shop_id' => 'required|integer|exists:shops,id',
-            'customer_name' => 'nullable|string|max:150',
-            'customer_phone' => 'nullable|string|max:30',
-        ]);
-
-        $product = Product::marketplaceEligible()->with('vendor')->where('id', $validated['product_id'])->first();
-        if (!$product) {
-            return back()->withErrors([
-                'product_id' => 'This product listing has expired or is no longer eligible for in-shop reservation.'
-            ])->withInput();
-        }
-
-        if ($product->vendor && $product->vendor->marketplace_status !== 'active') {
-            return back()->withErrors(['product_id' => 'Merchant is not currently active on the marketplace.']);
-        }
-
-        // Multi-Tenant Alignment Guard: Shop must belong to product's vendor AND be active
-        $shop = Shop::where('vendor_id', $product->vendor_id)
-            ->where('is_active', true)
-            ->findOrFail($validated['shop_id']);
-
-        if (!$shop->pickup_enabled) {
-            return back()->withErrors(['shop_id' => 'In-store pickup is not enabled for this branch location.']);
-        }
-
-        $quantity = $validated['quantity'] ?? 1;
-        $estimatedTotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
-
-        $user = Auth::user();
-
-        $code = PickupReservation::generateCode();
-        $reservation = PickupReservation::create([
-            'reservation_code' => $code,
-            'customer_id' => $user->id,
-            'vendor_id' => $product->vendor_id,
-            'shop_id' => $shop->id,
-            'product_id' => $product->id,
-            'quantity' => $quantity,
-            'unit_price' => $product->unit_price,
-            'estimated_total' => $estimatedTotal,
-            'status' => 'reserved',
-            'expires_at' => Carbon::now()->addHours(24),
-        ]);
-
-        session(['reservation_code_' . $reservation->reservation_code => true]);
-
-        return redirect()->route('reservation.pass', ['code' => $reservation->reservation_code])->with('status', 'In-Shop Pickup reservation confirmed! Present this code at the shop counter.');
+        return redirect()->route('storefront')
+            ->with('error', 'Public supplier pickup reservations are disabled. Contact Victorious MARKET support to request an approved pickup exception.');
     }
 
     public function showReservationPass(string $code)
     {
-        $reservation = PickupReservation::where('reservation_code', strtoupper(trim($code)))
-            ->with(['shop.lga', 'product.category', 'customer'])
-            ->firstOrFail();
-
-        $user = Auth::user();
-        $isAuthorized = false;
-
-        if ($user) {
-            // Shopper who created reservation
-            if ((int)$user->id === (int)$reservation->customer_id) {
-                $isAuthorized = true;
-            }
-            // Super Admin or Admin Staff
-            elseif (in_array($user->user_type, ['super_admin', 'admin_employee'])) {
-                $isAuthorized = true;
-            }
-            // Merchant owning the shop
-            elseif ($user->vendorProfile && (int)$user->vendorProfile->id === (int)$reservation->vendor_id) {
-                $isAuthorized = true;
-            }
-            // Counter employee assigned to the reservation's shop branch
-            elseif ($user->vendorEmployeeProfile && (int)$user->vendorEmployeeProfile->shop_id === (int)$reservation->shop_id) {
-                $isAuthorized = true;
-            }
-        }
-
-        // Allow guest / direct session pass if created in current session
-        if (!$isAuthorized && session('reservation_code_' . $reservation->reservation_code) !== true) {
-            abort(403, 'Unauthorized access: You do not have permission to view this reservation pass.');
-        }
-
-        return view('storefront.reservation_pass', compact('reservation'));
+        return redirect()->route('storefront')
+            ->with('error', 'Supplier pickup passes are not publicly available. Contact Victorious MARKET support for an approved pickup exception.');
     }
 
     public function showOrderStatus(Request $request, string $orderNumber)
