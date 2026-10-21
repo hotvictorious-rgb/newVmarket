@@ -26,6 +26,7 @@ use App\Services\PaystackService;
 use App\Services\RetailerSupplierPayoutService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Mockery;
 use Tests\TestCase;
 
@@ -332,6 +333,10 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
 
         $response->assertRedirect();
         $response->assertSessionHas('error');
+
+        Sanctum::actingAs($this->vendorUser);
+        $apiResponse = $this->postJson('/api/v1/vendor/payouts', ['amount' => '5000.00']);
+        $apiResponse->assertStatus(409)->assertJsonPath('code', 'SUPPLIER_RECOVERY_DEBT_HOLD');
         $this->assertSame(0, VendorPayoutRequest::where('vendor_id', $this->vendor->id)->count());
     }
 
