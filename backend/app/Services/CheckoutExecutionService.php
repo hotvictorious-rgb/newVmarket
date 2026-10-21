@@ -213,9 +213,12 @@ class CheckoutExecutionService
             foreach ($itemsToCreate as $itemData) {
                 $offer = $itemData['resolved_offer'];
                 $sourceShop = Shop::withTrashed()->with(['lga.state', 'vendor.user'])->find($offer['shop_id']);
+                if (!$sourceShop || $sourceShop->trashed() || !$sourceShop->is_active) {
+                    return ['error' => true, 'status_code' => 422, 'message' => 'Every selected supplier must have an active shop in Uyo, Akwa Ibom State.'];
+                }
                 $sourceLga = strtolower(trim((string) ($sourceShop->lga->name ?? '')));
                 $sourceState = strtolower(trim((string) ($sourceShop->lga->state->name ?? '')));
-                if (!$sourceShop || $sourceShop->trashed() || !$sourceShop->is_active || $sourceLga !== 'uyo' || $sourceState !== 'akwa ibom') {
+                if ($sourceLga !== 'uyo' || $sourceState !== 'akwa ibom') {
                     return ['error' => true, 'status_code' => 422, 'message' => 'Every selected supplier must have an active shop in Uyo, Akwa Ibom State.'];
                 }
             }
