@@ -503,3 +503,13 @@ Status: FIXED — focused regression passed. No merge or deployment.
 **Change:** Legacy web reservation creation and pass pages now redirect customers to Victorious MARKET support; public API reservation detail lookup now returns HTTP 410 without supplier details. Cancellation of a customer's own old reservation remains available so customers can close out stale reservations. Pickup exceptions must be arranged through central support.
 
 **Status:** Source committed on `docs/retailer-central-fulfilment-model`; automated tests have not run for this latest change. No merge or deployment.
+
+
+## VM-AUD-091 — Close customer tracking authorization through the compatibility supplier field (21 October 2026)
+
+**Severity:** Critical  
+**Finding:** The legacy web order-tracking controller authorized a supplier whenever its profile matched `orders.vendor_id`. Retailer-model orders retain that field only as a compatibility anchor for the primary source, so a private supplier could potentially open customer tracking despite supplier-terminal assignment scoping. The tracking view also displayed legacy vendor payout language and supplier branch identity.
+
+**Change:** Supplier-profile authorization now applies only to legacy non-retailer orders. Customer tracking shows Victorious MARKET and describes supplier settlement as privately controlled; it no longer prints the legacy 90% vendor payout for retailer orders or identifies the supplier pickup shop.
+
+**Status:** Source committed on `docs/retailer-central-fulfilment-model`; regression test and full branch-head CI verification remain outstanding. No merge or deployment.
