@@ -72,14 +72,14 @@ Customer payment must be verified against authoritative payment-provider informa
 
 ### Retail accounting replaces marketplace commission splits
 
-The former 90% vendor / 5% cashback / 5% platform merchandise split and 90% vendor / 10% platform delivery split are **superseded and retired** for the retailer model.
+The former 90% vendor / 5% cashback / 5% platform merchandise split is **retired** for the retailer model. The separate logistics-company delivery rule is: default 90% of the customer delivery fee to the logistics company and 10% VM delivery margin, subject to an audited admin override.
 
 Victorious MARKET accounts for transactions as a retailer:
 - **Wholesale Cost Price (`cost_price`):** Agreed price owed to the private supplier.
 - **Retail Selling Price (`unit_price`):** Customer-facing price published by VM (`Wholesale Cost + VM Profit Margin`).
 - **VM Gross Profit Margin:** `Retail Selling Price - Supplier Wholesale Cost = VM Gross Margin`.
-- **Customer 5% Cashback Retention:** The **5% customer cashback feature is actively retained** as Victorious MARKET's core customer loyalty mechanism. In the retailer model, the 5% cashback liability is funded directly out of VM's gross retail margin (never deducted from the supplier's wholesale cost). Suppliers receive 100% of their agreed wholesale cost. **Non-Compounding Rule:** Cashback CANNOT be earned on the portion of an order covered by existing cashback or discounts; it is strictly earned only on **real money paid through Paystack** on eligible merchandise (`(Merchandise Subtotal - Cashback Redeemed) * 5%`). Cashback matures into the customer's wallet 24 hours after the return window closes and is redeemable on future checkouts up to 50% of the cart merchandise subtotal.
-- **Delivery Revenue & Expense:** Customer delivery fee collected minus logistics company charge = VM delivery margin.
+- **Customer 5% Cashback (active):** Cashback is funded from VM's gross retail margin, never deducted from supplier wholesale cost. Earn 5% only on eligible post-discount merchandise actually funded by real money through VM's verified Paystack flow, after redeemed cashback; exclude delivery, discounts and cashback-funded value. Cashback matures after verified fulfilment + the 24-hour claim window + the separate 24-hour maturity buffer, provided no blocking case remains. Its 365-day validity begins at maturity. Redemption is capped at 50% of cart merchandise subtotal. Refunds reverse unspent cashback; spent-cashback recovery is tracked separately and may be offset only against future matured cashback under the existing terms.
+- **Delivery Revenue & Expense:** The default logistics-company payable is 90% of the customer delivery fee; VM's default delivery margin is the remaining 10%. The company—not the rider—is the payee under this rule. Authorized admins can approve a higher or lower amount with an immutable reason/approver/time audit. Any amount above the fee is recorded as an explicit VM delivery subsidy.
 
 Suppliers receive 100% of their agreed wholesale cost upon verified completion. No percentage commission is deducted from suppliers.
 
@@ -301,7 +301,7 @@ Suppliers should be able to sell their wholesale inventory smoothly.
 Logistics partners should operate through structured, accountable workflows.
 And the platform maintains immutable, balanced records of every transaction.
 
-Merchants should be able to reach more customers and manage their businesses more efficiently.
+Approved suppliers should be able to supply VM reliably under private wholesale arrangements, while customers continue to see and transact with Victorious MARKET as the retailer.
 
 Vendor-managed delivery teams should operate through structured and accountable processes.
 
@@ -336,14 +336,14 @@ By combining merchant verification, quality-focused product listings, secure pay
 
 Victorious MARKET treats merchandise and delivery fees as separate financial components. A customer may raise one case about both, but **the merchandise refund and delivery-fee refund must be approved independently**. Approval of a product refund never automatically approves delivery-fee refundability, and approval of a delivery-fee refund never automatically approves the product refund.
 
-- A merchandise refund identifies the affected vendor child order, item/order lines and quantities, applies the original discount allocation, and reverses only the corresponding 90% vendor / 5% cashback / 5% platform merchandise allocation.
-- A delivery-fee refund identifies the captured delivery fee for that vendor child order, records its own reason/evidence/approval, and reverses only the 90% vendor / 10% platform delivery-fee allocation. It never includes merchandise value or cashback.
+- A merchandise refund identifies the affected VM order item(s) and quantity, applies the original discount allocation, and reverses the actual captured retailer accounting entries plus the related cashback ledger entry where applicable. The former vendor 90/5/5 split is historical-only.
+- A delivery-fee refund identifies the captured delivery fee for the VM order, records its own reason/evidence/approval, and reverses the actual delivery-fee and logistics-company payable/margin entries for that transaction. It never includes merchandise value or cashback. Any already-paid logistics-company amount is handled through a separate authorized recovery/adjustment and never delays the customer refund.
 - Each approved component has its own decision record, amount, idempotent financial operation, reservation, gateway state and customer-facing result. Both operations return funds through the original Paystack payment channel at launch. They may reference the same original parent checkout capture but must not be collapsed into one undifferentiated approval or ledger reversal.
 - The customer can receive one component while the other remains pending, is denied, or fails and requires reconciliation. Customer communications must state each component's decision and confirmed Paystack result separately.
 - The system must enforce the component balance, child-order refund ceiling and shared parent-capture ceiling, counting active reservations and confirmed refunds across all vendors/components. A zero-fee in_shop_pickup order has no delivery fee to refund.
-- Vendor recovery and cashback recovery are separate from the customer's gateway refund. A customer refund is complete only when Paystack confirms that specific component; vendor recovery does not delay or replace that confirmation.
+- Supplier recovery, logistics-company recovery and cashback recovery are separate from the customer's gateway refund. A customer refund is complete only when Paystack confirms that specific component; vendor recovery does not delay or replace that confirmation.
 - **Shared source history does not mean shared approval or one combined state.** Both component decisions link to the same original parent capture and relevant child-order allocation history, while retaining separate approval records, reservations, gateway operations, and outcomes. Confirmed Paystack refunds plus active refund reservations across all child orders/components share one parent-capture ceiling; the same amount cannot be refunded twice.
-- **Cashback is linked to merchandise history but is not a second customer gateway refund.** A merchandise refund may require reversal of the associated unspent cashback and/or a separately tracked recovery of cashback already spent. That cashback adjustment uses the same originating order/item/refund evidence, but it is accounted for in the cashback ledger and must not be counted again as an additional Paystack cash refund against the parent-capture ceiling. Cashback maturity remains a separate clock: fulfilment, the 24-hour customer claim window, then the further 24-hour maturity buffer, with no blocking case.
+- **Cashback is linked to merchandise history but is not a second customer gateway refund.** A merchandise refund may require reversal of the associated unspent cashback and/or a separately tracked recovery of cashback already spent. That cashback adjustment uses the same originating order/item/refund evidence, but it is accounted for in the cashback ledger and must not be counted again as an additional Paystack cash refund against the parent-capture ceiling. Cashback maturity remains a separate clock: verified fulfilment, the 24-hour customer claim window, then the further 24-hour maturity buffer, with no blocking case; the 365-day validity period starts at maturity.
 - The existing 24-hour customer return/claim window and separate 24-hour cashback-maturity buffer remain unchanged.
 
 These are binding business requirements, not a statement that the current code already supports independent component approvals. See the payment/refund matrix and implementation audit for required changes and tests.
