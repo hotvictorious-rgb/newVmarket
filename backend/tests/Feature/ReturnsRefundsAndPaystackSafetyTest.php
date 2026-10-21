@@ -1234,10 +1234,10 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'supplier_cost_snapshot' => '5000.00',
             'supplier_cost_currency' => 'NGN',
             'supplier_snapshot_at' => Carbon::now(),
-            'fulfillment_supplier_vendor_id' => $this->vendorA->id,
-            'fulfillment_supplier_shop_id' => $this->shopA->id,
-            'fulfillment_supplier_name_snapshot' => $this->vendorA->business_name,
-            'fulfillment_supplier_shop_name_snapshot' => $this->shopA->name,
+            'fulfillment_supplier_vendor_id' => $this->vendorB->id,
+            'fulfillment_supplier_shop_id' => $this->shopB->id,
+            'fulfillment_supplier_name_snapshot' => $this->vendorB->business_name,
+            'fulfillment_supplier_shop_name_snapshot' => $this->shopB->name,
             'fulfillment_supplier_cost_snapshot' => '5000.00',
             'fulfillment_supplier_snapshot_at' => Carbon::now(),
         ]);
@@ -1258,6 +1258,35 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
                 'description' => 'Balanced retailer refund test opening entry.',
             ]));
         }
+
+        // Simulate the balanced recovery adjustment: capture-time supplier A is
+        // reversed and the current operational supplier B receives the payable.
+        FinancialJournalEntry::create([
+            'order_id' => $order->id,
+            'transaction_reference' => 'TEST-RECOVERY-' . $order->id,
+            'event_id' => 'TEST-RECOVERY-OLD-' . $order->id,
+            'idempotency_key' => 'TEST-RECOVERY-OLD-' . $order->id,
+            'beneficiary_type' => VendorProfile::class,
+            'beneficiary_id' => $this->vendorA->id,
+            'account_name' => 'supplier_payable',
+            'entry_type' => 'debit',
+            'amount' => '5000.00',
+            'currency' => 'NGN',
+            'description' => 'Reverse captured supplier payable for recovery refund test.',
+        ]);
+        FinancialJournalEntry::create([
+            'order_id' => $order->id,
+            'transaction_reference' => 'TEST-RECOVERY-' . $order->id,
+            'event_id' => 'TEST-RECOVERY-NEW-' . $order->id,
+            'idempotency_key' => 'TEST-RECOVERY-NEW-' . $order->id,
+            'beneficiary_type' => VendorProfile::class,
+            'beneficiary_id' => $this->vendorB->id,
+            'account_name' => 'supplier_payable',
+            'entry_type' => 'credit',
+            'amount' => '5000.00',
+            'currency' => 'NGN',
+            'description' => 'Credit current operational supplier payable for recovery refund test.',
+        ]);
 
         $case = ReturnCase::create([
             'case_number' => 'RET-RETAIL-' . strtoupper(uniqid()),
@@ -1307,6 +1336,8 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'account_name' => 'supplier_payable',
             'entry_type' => 'debit',
             'amount' => '5000.00',
+            'beneficiary_type' => VendorProfile::class,
+            'beneficiary_id' => $this->vendorB->id,
         ]);
         $this->assertDatabaseHas('financial_journal_entries', [
             'order_id' => $order->id,
