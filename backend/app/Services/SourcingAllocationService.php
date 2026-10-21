@@ -308,8 +308,9 @@ class SourcingAllocationService
             $newVendor = VendorProfile::withTrashed()->with('user')->find($newVendorId);
             $newShop = Shop::withTrashed()->with(['lga.state', 'vendor.user'])->find($newShopId);
             if (!$newVendor || $newVendor->trashed() || $newVendor->marketplace_status !== 'active'
-                || !$newVendor->user || $newVendor->user->status !== 'active') {
-                throw new InvalidArgumentException('The replacement supplier account must be active and approved.');
+                || !$newVendor->user || $newVendor->user->status !== 'active'
+                || !$newVendor->isKycVerified()) {
+                throw new InvalidArgumentException('The replacement supplier account must be active, KYC-verified, and approved.');
             }
             if (!$newShop || $newShop->trashed() || !$newShop->is_active
                 || (int) $newShop->vendor_id !== (int) $newVendor->id) {
