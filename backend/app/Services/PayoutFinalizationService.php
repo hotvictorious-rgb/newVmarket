@@ -980,7 +980,8 @@ class PayoutFinalizationService
             ->where('amount', $amount);
 
         return (clone $event)->count() === 2
-            && (clone $base)->where('account_name', 'vendor_payable')->where('entry_type', 'debit')->exists()
+            && (clone $event)->distinct()->count('transaction_reference') === 1
+            && (clone $base)->where('currency', 'NGN')->where('account_name', 'vendor_payable')->where('entry_type', 'debit')->exists()
             && (clone $base)->where('account_name', 'vendor_payout_payable')->where('entry_type', 'credit')->exists();
     }
 
@@ -994,7 +995,8 @@ class PayoutFinalizationService
             ->where('amount', $amount);
 
         return (clone $event)->count() === 2
-            && (clone $base)->where('account_name', 'logistics_company_wallet')->where('entry_type', 'debit')->exists()
+            && (clone $event)->distinct()->count('transaction_reference') === 1
+            && (clone $base)->where('currency', 'NGN')->where('account_name', 'logistics_company_wallet')->where('entry_type', 'debit')->exists()
             && (clone $base)->where('account_name', 'logistics_payout_payable')->where('entry_type', 'credit')->exists();
     }
 
