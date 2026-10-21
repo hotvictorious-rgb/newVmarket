@@ -1667,10 +1667,26 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             $photoPath
         );
 
+        $caseData = null;
+        if ($result['success'] && ($result['case'] ?? null) instanceof \App\Models\ReturnCase) {
+            $updatedCase = $result['case'];
+            $caseData = [
+                'id' => $updatedCase->id,
+                'case_number' => $updatedCase->case_number,
+                'status' => $updatedCase->status,
+                'vendor_disputed' => (bool) $updatedCase->vendor_disputed,
+                'vendor_dispute_reason' => $updatedCase->vendor_dispute_reason,
+                'vendor_dispute_photo_url' => $updatedCase->vendor_dispute_photo_path
+                    ? url($updatedCase->vendor_dispute_photo_path)
+                    : null,
+                'vendor_disputed_at' => $updatedCase->vendor_disputed_at?->toIso8601String(),
+            ];
+        }
+
         return response()->json([
             'status' => $result['success'],
             'message' => $result['message'],
-            'data' => $result['success'] ? $result['case'] : null,
+            'data' => $caseData,
         ], $result['success'] ? 200 : 422);
     }
 
