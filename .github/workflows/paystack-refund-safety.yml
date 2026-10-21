@@ -74,6 +74,7 @@ jobs:
           php -l app/Http/Controllers/Web/AdminSupplierRecoveryController.php
           php -l app/Services/OrderSettlementService.php
           php -l app/Models/Order.php
+          php -l app/Models/ReturnCase.php
           php -l app/Models/OrderItem.php
           php -l app/Models/SupplierOffer.php
           php -l app/Services/SupplierOfferSelectionService.php
