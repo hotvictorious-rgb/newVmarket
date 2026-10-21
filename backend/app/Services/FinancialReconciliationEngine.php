@@ -219,7 +219,7 @@ class FinancialReconciliationEngine
             ])->groupBy('order_id');
             $entriesByOrder = FinancialJournalEntry::whereIn('order_id', $orderIds)
                 ->where('account_name', 'supplier_payable')
-                ->get(['order_id', 'event_id', 'beneficiary_type', 'beneficiary_id', 'entry_type', 'amount'])
+                ->get(['order_id', 'order_item_id', 'event_id', 'beneficiary_type', 'beneficiary_id', 'entry_type', 'amount'])
                 ->groupBy('order_id');
 
             $itemsById = $itemsByOrder->flatten(1)->keyBy('id');
@@ -254,9 +254,14 @@ class FinancialReconciliationEngine
                 $supplierJournalEntries = $entriesByOrder->get($order->id, collect());
                 foreach ($supplierJournalEntries as $entry) {
                     $supplierId = (int) ($entry->beneficiary_id ?? 0);
+                    $journalItemId = (int) ($entry->order_item_id ?? 0);
+                    $journalItem = $itemsById->get($journalItemId);
                     if ($supplierId <= 0 || $entry->beneficiary_type !== VendorProfile::class) {
                         $orderErrors[] = 'A supplier_payable journal entry has an invalid supplier beneficiary.';
                         continue;
+                    }
+                    if (!$journalItem || (int) $journalItem->order_id !== (int) $order->id) {
+                        $orderErrors[] = 'A supplier_payable journal entry is not linked to a valid order item on this order.';
                     }
                     $current = $ledgerBySupplier[$supplierId] ?? '0.00';
                     $ledgerBySupplier[$supplierId] = $entry->entry_type === 'credit'
@@ -291,6 +296,7 @@ class FinancialReconciliationEngine
                         $expectedRefundEvent = 'EVT-RETAILER-REFUND-' . $returnCase->id . '-SUPPLIER-PAYABLE-' . $returnItem->id;
                         $hasRefundDebit = $supplierJournalEntries->contains(function ($entry) use ($expectedRefundEvent, $supplierId, $refundSupplierCost) {
                             return $entry->event_id === $expectedRefundEvent
+                                && (int) $entry->order_item_id === (int) $item->id
                                 && $entry->beneficiary_type === VendorProfile::class
                                 && (int) $entry->beneficiary_id === $supplierId
                                 && $entry->entry_type === 'debit'
