@@ -81,6 +81,14 @@ The following statements are **requirements**, not verified accomplishments:
 - Doorstep/in-shop photo and OTP/pass evidence prove the handover process only, not the product's conformity or the absence of warranty rights.
 - The 24-hour in-shop reservation hold, the 24-hour customer claim window, any separately approved cashback maturity buffer, bank-transfer notification target, and actual gateway refund completion are different clocks and must not be conflated. The 30-minute stock hold described in older delivery-plan text has been superseded; do not implement it as the reservation expiry.
 
+## 6A. Runtime findings discovered and resolved during code alignment — 21 October 2026
+
+| ID | Severity | Finding | Resolution / verification state |
+|---|---|---|---|
+| VM-CODE-001 | P0 | `RiderTerminalApiController::guardRiderWithLogistics` authorized new delivery terminal access through an active vendor and rejected logistics-company riders, contradicting the centrally managed retailer model. | **Code changed on this branch:** guard now delegates to `RiderProfile::isEligibleForCentralDelivery()`, requiring an active rider with no vendor link and one linked active logistics company whose user account is active when present. **Tests/lint not yet run; do not mark release-verified.** |
+| VM-CODE-002 | P0 | `DoorstepHandshakeService::processDoorstepHandover` repeated vendor ownership checks and rejected logistics-company assignments, so direct service calls could not enforce the new central-delivery rule. | **Code changed on this branch:** handover now checks rider eligibility against the exact order rider and logistics-company IDs, and verifies the assigned company is active. Vendor/shop metadata no longer grants dispatch authority. **Tests/lint not yet run; transition coverage still requires tests.** |
+| VM-CODE-003 | P0 | Rider eligibility was expressed separately across the controller and handover service, making contradictory authorization rules easy to reintroduce. | **Code changed on this branch:** shared eligibility predicates added to `RiderProfile`. **Remaining verification:** audit rider assignment, pickup confirmation, arrival, failed-attempt and delivery-OTP transitions; add/update tests and run backend suite. |
+
 ## 6. Required closure order before implementation or release
 
 1. Audit supplier-offer/catalogue matching, new-listing approval, canonical listing deduplication, and immutable supplier offer/purchase-cost snapshots on order items.
