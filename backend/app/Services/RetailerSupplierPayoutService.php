@@ -358,7 +358,8 @@ class RetailerSupplierPayoutService
             if ($payout->status === 'paid' && $this->payoutJournalComplete($payout)) {
                 return ['success' => true, 'idempotent' => true, 'payout' => $payout];
             }
-            if ($payout->status !== 'processing' || $payout->transfer_reference !== $transferReference
+            if (!in_array($payout->status, ['processing', 'uncertain'], true)
+                || $payout->transfer_reference !== $transferReference
                 || BcMathService::comp((string) $payout->amount, $verifiedAmount) !== 0) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout finalization does not match the active request, reference, and amount.'];
             }
