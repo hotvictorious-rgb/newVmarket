@@ -13,6 +13,7 @@ use App\Http\Requests\StoreProductRequest;
 use App\Jobs\SendTermiiNotificationJob;
 use App\Models\CustomerAddress;
 use App\Models\DeliveryLane;
+use App\Models\DeliveryCorridor;
 use App\Models\Lga;
 use App\Models\Order;
 use App\Models\Product;
@@ -121,6 +122,18 @@ class ModularArchitectureAndMaintainabilityTest extends TestCase
             'state_id' => $this->state->id,
             'lga_id' => $this->lga->id,
             'is_default' => true,
+        ]);
+
+        DeliveryCorridor::create([
+            'code' => 'uyo-oron-road-test',
+            'name' => 'Uyo Oron Road Test Corridor',
+            'lga_id' => $this->lga->id,
+            'landmark_aliases' => ['Oron Road'],
+            'customer_base_fee' => '500.00',
+            'customer_bulky_surcharge_per_unit' => '250.00',
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
         ]);
 
         $this->lane = DeliveryLane::create([
