@@ -386,6 +386,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
                 'shop_id' => $this->shopA->id,
                 'customer_address_id' => $address->id,
                 'fulfillment_type' => 'doorstep_delivery',
+                'payment_method' => 'paystack',
                 'redeem_cashback' => true,
                 'items' => [
                     ['product_id' => $this->productA->id, 'quantity' => 1],
@@ -409,6 +410,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
                 'shop_id' => $this->shopA->id,
                 'customer_address_id' => $address->id,
                 'fulfillment_type' => 'doorstep_delivery',
+                'payment_method' => 'paystack',
                 'redeem_cashback' => true,
                 'items' => [
                     ['product_id' => $this->productA->id, 'quantity' => 1],
