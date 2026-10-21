@@ -206,3 +206,12 @@ The following core sources were aligned to that model on branch `docs/retailer-c
 - **Resolution status:** Open; requires migration/schema and model changes coordinated with supplier-offer selection and checkout locking. No runtime data shape has been guessed.
 - **Required invariant:** every new retailer order item must snapshot the selected supplier offer, supplier identity, purchase cost, variant/quantity and relevant terms. Historical orders remain readable without pretending they have snapshots they never stored.
 
+
+
+### R-004 — Storefront checkout rider selection did not exclude supplier/shop-linked profiles
+
+- **Finding confirmed:** `backend/app/Http/Controllers/Web/PortalController.php::processCheckout` selected riders by active status, active user, active logistics company and (for one branch) online status, but did not exclude profiles that also carried legacy `vendor_id` or `shop_id` links. This is an independent assignment path from the model-level guard and did not rely on `isEligibleForCentralDelivery()`.
+- **Resolution applied:** all four rider-selection query branches in this storefront method now require both `vendor_id IS NULL` and `shop_id IS NULL` before a rider can be selected.
+- **Commit:** `cdbfbf0b69b9bd3adb17d67090b92dffc11c6bbe`.
+- **Verification status:** source change committed; PHP lint and automated tests have not been run. Add regression coverage for vendor-linked and shop-linked profiles with a logistics-company ID, plus a valid central-company rider.
+- **Scope limit / remaining conflict:** this is a narrow guard, not completion of the storefront checkout migration. The method still creates orders directly, writes legacy vendor/shop and 90/5/5 / 90/10 fields, may assign a rider during checkout, and initializes Paystack outside the shared `CheckoutExecutionService` path. Those P0 checkout and accounting issues remain open; do not describe retailer checkout as fixed.
