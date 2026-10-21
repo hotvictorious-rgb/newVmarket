@@ -202,6 +202,15 @@
                                     <a href="{{ route('order.status', $order->order_number) }}" target="_blank" class="btn-dash btn-dash-outline" style="padding: 4px 8px; font-size: 11px;">
                                         Track ↗
                                     </a>
+                                    @if($order->retailer_model_order && $order->fulfillment_type === 'doorstep_delivery' && $order->logistics_company_id && !in_array($order->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true))
+                                        <form method="POST" action="{{ route('admin.orders.logistics_company_payable.override', $order->id) }}" style="display:grid; gap:5px; min-width:190px; margin-top:6px;">
+                                            @csrf
+                                            <small style="color:var(--adm-text-muted);">Company payable (default 90%): ₦{{ number_format((float)($order->logistics_company_payable_default_amount ?? ((float)$order->delivery_fee * 0.90)), 2) }}</small>
+                                            <input name="amount" type="number" min="0" step="0.01" required value="{{ number_format((float)($order->logistics_company_payable_amount ?? $order->logistics_company_payable_default_amount ?? ((float)$order->delivery_fee * 0.90)), 2, '.', '') }}" aria-label="Logistics company payable amount" style="max-width:180px;">
+                                            <input name="reason" type="text" required maxlength="2000" placeholder="Reason for higher/lower amount" aria-label="Override reason" style="max-width:220px;">
+                                            <button type="submit" class="btn-dash btn-dash-primary" style="padding:4px 8px;font-size:11px;">Save audited company amount</button>
+                                        </form>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
