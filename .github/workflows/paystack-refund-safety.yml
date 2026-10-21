@@ -48,6 +48,9 @@ jobs:
         run: |
           php -l app/Http/Controllers/Web/PaystackPaymentController.php
           php -l app/Http/Controllers/Web/AdminSupplierOfferAvailabilityController.php
+          php -l app/Http/Controllers/Web/PortalController.php
+          php -l app/Http/Controllers/Api/CheckoutAndReservationApiController.php
+          php -l app/Services/LogisticsCompanyPayableService.php
           php -l app/Services/FinancialReconciliationEngine.php
           php -l app/Services/PaystackService.php
           php -l app/Services/ReturnAndRefundService.php
@@ -64,6 +67,8 @@ jobs:
           php -l app/Services/SupplierOfferAvailabilityService.php
           php -l database/migrations/2026_10_21_000005_add_supplier_snapshots_to_order_items.php
           php -l database/migrations/2026_10_21_000006_add_supplier_offer_availability_evidence.php
+          php -l database/migrations/2026_10_21_000007_make_product_supplier_ownership_nullable.php
+          php -l database/migrations/2026_10_21_000008_add_retailer_financial_snapshots_and_logistics_override.php
           php -l database/migrations/2026_10_20_000046_add_customer_address_id_to_orders.php
           php -l database/migrations/2026_10_20_000001_allow_cashback_maturity_to_start_after_fulfilment.php
           php -l database/migrations/2026_10_21_000004_create_supplier_offers_and_sourcing_fields.php
