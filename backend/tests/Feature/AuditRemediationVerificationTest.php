@@ -1719,4 +1719,30 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertSame(0, \App\Models\FinancialReservation::where('financial_operation_id', $operation->id)->where('status', 'active')->count());
         $this->assertGreaterThan(0, \App\Models\FinancialReservation::where('financial_operation_id', $operation->id)->where('status', 'released')->count());
     }
+
+    public function test_supplier_payout_terminal_failure_rejects_mismatched_reversal_replay(): void
+    {
+        $payout = \App\Models\RetailerSupplierPayoutRequest::create([
+            'supplier_vendor_id' => $this->vendor->id,
+            'amount' => '10000.00',
+            'status' => 'failed',
+            'gateway_status' => 'failed',
+            'transfer_reference' => 'SUPR-TERMINAL-FAIL-001',
+            'bank_name' => 'Test Bank',
+            'bank_code' => '001',
+            'account_number' => '0123456789',
+            'account_name' => 'Test Supplier',
+        ]);
+
+        $result = app(\App\Services\RetailerSupplierPayoutService::class)->reverse(
+            $payout->id,
+            'reversed',
+            'Mismatched replay must not be acknowledged.'
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected']);
+        $this->assertStringContainsString('conflicts with the requested gateway outcome', $result['message']);
+        $this->assertSame('failed', $payout->fresh()->status);
+    }
 }
