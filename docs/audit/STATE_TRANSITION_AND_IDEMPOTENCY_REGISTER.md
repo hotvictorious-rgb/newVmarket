@@ -448,3 +448,15 @@ Allowed: `reserved` and not expired -> `inspected_accepted`, or `reserved` and e
 ## VM-AUD-082 — supplier terminal requires active organization state (21 October 2026)
 
 Supplier terminal authentication now requires both the supplier user and supplier organization to be active. Pending, inactive, suspended, missing, or otherwise non-active supplier organizations fail closed for owner and employee terminal access. Regression coverage was added for pending, active, and suspended owner-account states. Test execution is pending; this is not a CI verification or deployment claim.
+
+
+### VM-AUD-093–VM-AUD-103 — Supplier payout transition hardening (21 October 2026)
+
+- `markProcessing` now rejects invalid admin identity, blank/oversized recipient identifiers, and weak processing tokens before opening the transaction.
+- `markUncertain` now requires a bounded reason, a normalized gateway-status identifier, and a processing/uncertain source state; terminal states remain idempotent.
+- `finalizeSuccess` now requires the stored recipient code, locks affected orders and order items in deterministic order, and revalidates the current supplier beneficiary, paid/delivered state, refund-window expiry, and active dispute/return holds before posting settlement journals.
+- `reverse` now requires a non-empty bounded reason and retains its allow-list for authoritative outcomes only.
+- Added structured operational logs for successful finalization and release/reversal events, excluding full bank-account data.
+- Added unit regression tests for invalid transition inputs in `backend/tests/Unit/RetailerSupplierPayoutInputGuardTest.php`.
+
+**Verification:** Source and regression tests are committed on `docs/retailer-central-fulfilment-model`; automated tests have not been executed in this session. These guards do not replace the remaining full integration tests for uncertain gateway outcomes, payout reconciliation, supplier recovery/refund interaction, or concurrent state changes. No merge or deployment.
