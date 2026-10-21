@@ -6,7 +6,7 @@
 **Last reviewed:** 21 October 2026
 **Review note:** The rules are approved requirements; Section 14 lists implementation gaps found in the audit branch, not completed fixes.  
 **Scope:** Delivery, vendor-linked riders, in-shop pickup, customer privacy, failed delivery, delivery fees, COD boundaries, and legacy logistics.  
-**Authority:** For new retailer-model work, use [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](../RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md) as the owner-approved business baseline, together with [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](../PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) for payment/refund controls. `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md` may contain older marketplace assumptions and must not override the newer owner decision where they conflict. Preserve historical records. This document records requirements, not proof of implementation; runtime alignment remains unverified until each finding is tested.
+**Authority:** `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md` is the single source of truth for current launch rules. `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md` describes the operating model and `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md` describes payment/refund controls; neither may contradict the system rules. Older marketplace sections in this file are historical-only where they conflict. Preserve historical records. This document records requirements, not proof of implementation; runtime alignment remains unverified until each finding is tested.
 
 ## Decision record — retailer and central fulfilment model
 
