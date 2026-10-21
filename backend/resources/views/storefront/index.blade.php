@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Victorious MARKET — Premier Omnichannel Marketplace in Akwa Ibom')
+@section('title', 'Victorious MARKET — Your Trusted Online Market in Uyo, Akwa Ibom State')
 
 @section('content')
 <div class="vm-container" style="margin-top: 18px; margin-bottom: 40px;">
@@ -150,7 +150,7 @@
                     </div>
                     <div class="vm-val-prop-text">
                         <strong class="vm-val-prop-title" style="display: block; font-size: 13px; font-weight: 700; color: #0F172A;">Uyo Local Delivery</strong>
-                        <span class="vm-val-prop-desc" style="display: block; font-size: 11px; color: #64748B;">Uyo, Eket & nationwide logistics</span>
+                        <span class="vm-val-prop-desc" style="display: block; font-size: 11px; color: #64748B;">Doorstep delivery within Uyo LGA only</span>
                     </div>
                 </div>
 
