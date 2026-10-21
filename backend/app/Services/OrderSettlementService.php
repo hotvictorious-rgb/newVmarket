@@ -598,6 +598,7 @@ class OrderSettlementService
                         if (BcMathService::comp($lineCost, '0.00') > 0) {
                             FinancialJournalEntry::create([
                                 'order_id' => $lockedOrder->id,
+                                'order_item_id' => $item->id,
                                 'transaction_reference' => $reference,
                                 'event_id' => 'EVT-SUPPLIER-PAYABLE-' . $lockedOrder->id . '-ITEM-' . $item->id . '-' . $reference,
                                 'beneficiary_type' => VendorProfile::class,
