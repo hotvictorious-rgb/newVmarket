@@ -24,6 +24,7 @@ use App\Models\VendorProfile;
 use App\Models\VendorEmployeeProfile;
 use App\Models\LogisticsPayoutRequest;
 use App\Models\VendorPayoutRequest;
+use App\Models\VendorRecoveryLedger;
 use App\Models\RetailerSupplierPayoutRequest;
 use App\Models\AdminAuditLog;
 use App\Models\ReturnCase;
@@ -1593,6 +1594,12 @@ class PortalController extends Controller
 
         return DB::transaction(function () use ($vendor, $validated) {
             $lockedVendor = VendorProfile::where('id', $vendor->id)->lockForUpdate()->first();
+            if (VendorRecoveryLedger::where('vendor_id', $lockedVendor->id)
+                ->where('status', 'pending_recovery')
+                ->where('amount', '>', 0)
+                ->exists()) {
+                return back()->with('error', 'Payout is held because an unresolved supplier recovery debt requires finance review.');
+            }
 
             // Only one unresolved payout request may reserve a vendor's earnings.
             // Keep the reservation until an explicit terminal outcome or reconciliation.
@@ -2714,6 +2721,12 @@ class PortalController extends Controller
 
             if (!$vendor->user || $vendor->user->status !== 'active') {
                 return ['valid' => false, 'message' => 'Disbursement blocked: Merchant user account is inactive or suspended.'];
+            }
+            if (VendorRecoveryLedger::where('vendor_id', $vendor->id)
+                ->where('status', 'pending_recovery')
+                ->where('amount', '>', 0)
+                ->exists()) {
+                return ['valid' => false, 'message' => 'Disbursement blocked: supplier recovery debt remains unresolved and requires finance review.'];
             }
 
             if ($vendor->isWithinBankCooldown()) {
