@@ -278,3 +278,17 @@ Required controls:
 - Updated two vendor rider-assignment endpoint expectations to HTTP 410, consistent with the endpoint's already-retired behavior and the approved central dispatch model.
 - **Verification:** CI runs triggered for commits `3b4109ad492771a1454ab496b0b672c56c00bcfe` and `713049b6431a6c5b93545068e5f57d3a68f28231`; they were still in progress/queued when recorded. No passing result is claimed.
 - **Still open:** Several old tests assert vendor-managed delivery and vendor-specific denial messages. They must be classified and migrated to central fleet dispatch, not made green by removing safety checks. Runtime checkout remains vendor-managed and does not yet populate supplier offer snapshots.
+
+
+## 19. Latest CI findings and test-contract updates — 21 October 2026
+
+- **Workflow:** [run 39569055737](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39569055737), commit `713049b6431a6c5b93545068e5f57d3a68f28231`.
+- **Observed result:** PHP syntax checks passed; targeted feature tests failed with **6 failed, 197 passed, 1,295 assertions**. The earlier non-null legacy-order fixture QueryException no longer appears in this run, indicating that fixture repair addressed that failure.
+- **Remaining failures observed in the job log:**
+  1. `AuditHardeningAndChildOrderSettlementTest`: rider terminal request received 403 rather than 200.
+  2. `VendorManagedDeliveryRiderTest`: one in-transit vendor-assignment test still expected legacy HTTP 422 although the route is retired and returns 410.
+  3. `StructuralEntityAndLogisticsInvariantTest`: four assertions expected vendor/rider/shop-specific messages, while the central-fleet authorization guard executes first.
+- **Test-contract changes committed after that run:** explicitly set `vendor_id` and `shop_id` to null in the central-fleet rider fixture; changed the remaining vendor assignment test to expect the retired-route 410; aligned structural assertions with the central-fleet guard's actual first-denial contract. These are test-only edits and do not weaken runtime authorization.
+- **Important limitation:** Those changes have not yet been verified by a CI run for their new commit(s). The rider-terminal 403 remains unresolved until a fresh run confirms the explicit fixture is eligible; do not mark the suite green.
+- **Architecture status unchanged:** `CheckoutExecutionService.php` still selects a customer-chosen shop/vendor and writes legacy 90/5/5 and 90/10 economics. Supplier-offer selection and immutable order-item supplier-cost snapshot population remain unimplemented in the runtime. This is still a launch blocker.
+- **Next required work:** Inspect the next CI run and response cause for the rider-terminal 403; then map order/item creation, supplier-offer eligibility, pickup reservation, payment/refund and accounting consumers before changing checkout. Do not merge to `main` or deploy without explicit approval.
