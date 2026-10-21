@@ -2,8 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\FinancialJournalEntry;
 use App\Models\LogisticsPayoutRequest;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\VendorProfile;
 use App\Models\ProcessedWebhookEvent;
 use App\Models\VendorPayoutRequest;
 use Carbon\Carbon;
@@ -39,6 +42,8 @@ class FinancialReconciliationEngine
             'vendor_reconciled' => 0,
             'logistics_reconciled' => 0,
             'refunds_reconciled' => 0,
+            'supplier_payable_orders_checked' => 0,
+            'supplier_payable_mismatches' => 0,
             'errors' => [],
         ];
 
@@ -190,7 +195,98 @@ class FinancialReconciliationEngine
         // 3. Reconcile Customer Refunds
         $results['refunds_reconciled'] = $this->reconcileRefunds();
 
+        // Supplier liabilities are independent of legacy order-level vendor payouts.
+        // Audit their operational item snapshots against the net supplier_payable ledger;
+        // mismatches are reported and never auto-corrected or paid by this scan.
+        $supplierAudit = $this->reconcileRetailerSupplierPayables();
+        $results['supplier_payable_orders_checked'] = $supplierAudit['orders_checked'];
+        $results['supplier_payable_mismatches'] = $supplierAudit['mismatches'];
+        $results['errors'] = array_merge($results['errors'], $supplierAudit['errors']);
+
         return $results;
+    }
+
+    /**
+     * Reconcile retailer-model supplier liabilities by order and supplier. This is a
+     * read-only safety audit: it compares current fulfillment supplier/cost snapshots
+     * with net supplier_payable journal entries and never releases money automatically.
+     * An optional order ID supports focused regression checks and manual investigations.
+     */
+    public function reconcileRetailerSupplierPayables(?int $onlyOrderId = null): array
+    {
+        $result = ['orders_checked' => 0, 'mismatches' => 0, 'errors' => []];
+        $orders = Order::query()
+            ->where('retailer_model_order', true)
+            ->where('payment_status', 'paid')
+            ->when($onlyOrderId !== null, fn ($query) => $query->whereKey($onlyOrderId))
+            ->orderBy('id');
+
+        $orders->chunkById(100, function ($orderBatch) use (&$result) {
+            $orderIds = $orderBatch->pluck('id')->all();
+            $itemsByOrder = OrderItem::whereIn('order_id', $orderIds)->orderBy('id')->get([
+                'id', 'order_id', 'quantity', 'fulfillment_supplier_vendor_id', 'fulfillment_supplier_cost_snapshot',
+            ])->groupBy('order_id');
+            $entriesByOrder = FinancialJournalEntry::whereIn('order_id', $orderIds)
+                ->where('account_name', 'supplier_payable')
+                ->where('beneficiary_type', VendorProfile::class)
+                ->get(['order_id', 'beneficiary_id', 'entry_type', 'amount'])
+                ->groupBy('order_id');
+
+            foreach ($orderBatch as $order) {
+                $result['orders_checked']++;
+                $expectedBySupplier = [];
+                $orderErrors = [];
+                $items = $itemsByOrder->get($order->id, collect());
+                if ($items->isEmpty()) {
+                    $orderErrors[] = 'No order items exist for a paid retailer-model order.';
+                }
+
+                foreach ($items as $item) {
+                    $supplierId = (int) ($item->fulfillment_supplier_vendor_id ?? 0);
+                    $unitCost = $item->fulfillment_supplier_cost_snapshot;
+                    if ($supplierId <= 0 || $unitCost === null || BcMathService::comp((string) $unitCost, '0.00') <= 0
+                        || (int) $item->quantity <= 0) {
+                        $orderErrors[] = "Order item #{$item->id} is missing a valid fulfillment supplier, cost snapshot, or quantity.";
+                        continue;
+                    }
+                    $lineCost = BcMathService::mul((string) $unitCost, (string) $item->quantity);
+                    $expectedBySupplier[$supplierId] = BcMathService::add($expectedBySupplier[$supplierId] ?? '0.00', $lineCost);
+                }
+
+                $ledgerBySupplier = [];
+                foreach ($entriesByOrder->get($order->id, collect()) as $entry) {
+                    $supplierId = (int) ($entry->beneficiary_id ?? 0);
+                    if ($supplierId <= 0) {
+                        $orderErrors[] = 'A supplier_payable journal entry has no supplier beneficiary ID.';
+                        continue;
+                    }
+                    $current = $ledgerBySupplier[$supplierId] ?? '0.00';
+                    $ledgerBySupplier[$supplierId] = $entry->entry_type === 'credit'
+                        ? BcMathService::add($current, (string) $entry->amount)
+                        : BcMathService::sub($current, (string) $entry->amount);
+                }
+
+                $supplierIds = array_unique(array_merge(array_keys($expectedBySupplier), array_keys($ledgerBySupplier)));
+                foreach ($supplierIds as $supplierId) {
+                    $expected = $expectedBySupplier[$supplierId] ?? '0.00';
+                    $actual = $ledgerBySupplier[$supplierId] ?? '0.00';
+                    if (BcMathService::comp($expected, $actual) !== 0) {
+                        $orderErrors[] = "Supplier #{$supplierId} payable mismatch: operational expected ₦{$expected}, ledger net ₦{$actual}.";
+                    }
+                }
+
+                if ($orderErrors) {
+                    $result['mismatches']++;
+                    $result['errors'][] = ['order_id' => $order->id, 'issues' => $orderErrors];
+                    Log::critical('Retailer supplier payable reconciliation mismatch; no automatic payout or journal repair was attempted.', [
+                        'order_id' => $order->id,
+                        'issues' => $orderErrors,
+                    ]);
+                }
+            }
+        });
+
+        return $result;
     }
 
     /**
