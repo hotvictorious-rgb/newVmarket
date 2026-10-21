@@ -118,6 +118,22 @@ class SupplierOfferSelectionServiceTest extends TestCase
         ], $overrides));
     }
 
+    public function test_unverified_supplier_is_not_selectable_even_with_fresh_offer(): void
+    {
+        $offer = $this->offer();
+        $this->vendor->update(['kyc_status' => 'submitted']);
+
+        $selectedWhileUnverified = app(SupplierOfferSelectionService::class)
+            ->selectLowestCost($this->product, 'doorstep_delivery');
+        $this->assertNull($selectedWhileUnverified);
+
+        $this->vendor->update(['kyc_status' => 'verified']);
+        $selectedAfterVerification = app(SupplierOfferSelectionService::class)
+            ->selectLowestCost($this->product, 'doorstep_delivery');
+        $this->assertNotNull($selectedAfterVerification);
+        $this->assertSame($offer->id, $selectedAfterVerification->id);
+    }
+
     public function test_selects_lowest_cost_eligible_offer_with_deterministic_tie_break(): void
     {
         $higher = $this->offer(['wholesale_cost' => '6000.00']);
