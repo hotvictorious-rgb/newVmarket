@@ -1,10 +1,10 @@
 # VICTORIOUS MARKET — Authoritative System Rules Specification
 
-**Version:** 1.0  
-**Policy date:** 20 October 2026  
-**Status:** Owner-confirmed business baseline for documentation alignment before implementation  
-**Applies to:** Customer orders, approved vendors, vendor-managed delivery, refunds, cashback, vendor earnings, payouts, disputes and recoveries  
-**Implementation status:** These are requirements, not proof that code or published database terms already comply. Do not begin implementation until the document set is reconciled and the current code has been audited against it.
+**Version:** 1.1  
+**Policy date:** 21 October 2026  
+**Status:** Owner-confirmed retailer and central-fulfilment business baseline  
+**Applies to:** Customer orders, supplier offers, central delivery, logistics companies/riders, pickup, refunds, supplier payables, disputes and recoveries  
+**Implementation status:** These are requirements, not proof that code or published database terms already comply. The legacy marketplace implementation must be audited and migrated before launch. See [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md).
 
 ## 1. Authority and change control
 
@@ -12,26 +12,30 @@ This document is the single source of truth for launch business rules. The READM
 
 This specification does not override applicable Nigerian law, consumer rights, valid warranty obligations, payment-provider terms or contractual obligations that cannot lawfully be excluded. Customer-facing legal wording requires appropriate Nigerian legal review before publication.
 
-## 2. Marketplace and vendor model
+## 2. Retailer and supplier model
 
-- Victorious MARKET is a curated marketplace with vetted and approved partner vendors, not an open marketplace where anyone can register and sell immediately.
-- Victorious MARKET owns the customer-facing support, order coordination, refund decision/coordination, payment verification, settlement controls and audit records.
-- Vendors own/fulfil their products, keep listings and stock/prices accurate, prepare orders, manage their own approved riders and receive returned/rejected goods directly.
-- Vendors manage and pay their riders outside Victorious MARKET's financial systems. New orders do not create a platform fleet, logistics-company payable, rider wallet, rider earnings or rider payout.
-- Contracts, receipts, payment flow and operational conduct must consistently reflect whether the platform acts as marketplace intermediary/agent; do not describe the arrangement as buy-and-resell unless that is the actual arrangement.
-- Vendor onboarding, suspension and removal must preserve order history, outstanding customer obligations, earnings and confirmed recoveries.
+- Victorious MARKET is the customer-facing retailer operating from Uyo, Akwa Ibom State. Customers buy from VM, not public supplier storefronts.
+- Suppliers are private product sources. They may submit a new product for VM approval or offer a product against an existing canonical listing. VM controls public descriptions, retail price, publication, customer terms and corrections.
+- A new product receives one canonical listing. An offer matching an existing product is linked to that listing rather than creating a duplicate. Distinct variants, models, specifications or condition may require distinct listings.
+- Each accepted order item must snapshot the selected supplier, supplier offer, product/variant, agreed purchase cost, quantity and relevant supply terms. Supplier offer edits must not rewrite an existing order.
+- VM owns order acceptance, customer payments, delivery coordination, service coverage, pickup authorization, customer support, refund decisions and financial records.
+- VM serves destinations it can currently cover through product sourcing and approved logistics arrangements. Uyo is the operating base, not a promise of nationwide coverage. Missing/uncertain coverage or fee means delivery is unavailable until resolved.
+- VM coordinates delivery through approved logistics companies. Every rider assigned to new VM work must be active and linked to exactly one active logistics company. Supplier/vendor-linked riders cannot receive new VM delivery assignments.
+- Authorized supplier-shop pickup remains supported through the existing reservation flow, separate one-time customer pickup verification and required in-shop photo.
+- Supplier payment eligibility begins only after verified successful customer delivery or confirmed customer pickup and reconciliation. Eligibility does not trigger an automatic transfer.
+- Existing schema names and vendor records may remain during migration, but historical marketplace commissions, vendor payout thresholds and vendor-managed delivery rules do not govern new retailer transactions.
 
-## 3. Parent checkout, child orders and payment
+## 3. Customer checkout, supplier linkage and payment
 
-- One parent checkout may contain products from multiple vendors. It creates separate child orders per vendor, each with its own fulfilment, delivery fee, delivery status, item-level earnings and claim/settlement evaluation.
-- Only two customer payment paths are permitted at launch: **(1) pay before delivery through Victorious MARKET checkout**, or **(2) reserve an in-shop pickup order through Victorious MARKET and pay at the approved vendor's shop when collecting it**.
-- The reserve-and-pay-at-shop option is for customer counter pickup only; it is not cash-on-delivery and cannot be used for doorstep delivery.
-- All payment collection and payment records must go through Victorious MARKET's authorised payment workflow. Vendors must not accept or solicit private cash payments, personal-account bank transfers, or other off-platform settlement. For an in-shop reservation, the vendor must complete/record the payment through the platform's approved payment flow before marking the order paid or releasing the item. Legacy wallet-credit balances are not an allowed checkout tender at launch; cashback redemption is a separate loyalty discount subject to its own cap. Preserve historical wallet-credit records, but do not allow them to create a third payment path without a separate owner-approved policy. Launch payment rails are Paystack card and standard bank transfer only, unless the owner separately approves another platform-integrated rail.
-- A reservation is created in Victorious MARKET and tied to the customer, vendor child order, item/quantity, price snapshot and expiry. Preserve the existing 24-hour reservation expiry unless separately changed by the owner. Expiry releases the stock hold only after confirming no payment is successful or uncertain/in flight; uncertain payment must be reconciled first.
-- Payment success must be established by trusted server-side provider verification or an authenticated, verified webhook. Browser redirects, screenshots and client-supplied status are not proof.
-- Validate transaction reference, order association, amount, currency and provider status. A parent checkout charge is collected once and allocated to child orders once; child allocations must sum to the verified parent capture. Shop payment must also have a unique platform order/payment reference and be reconciled to the correct reservation/child order.
+- Customer checkout is with Victorious MARKET as retailer. Do not expose suppliers as public marketplace sellers or calculate new supplier payables from marketplace vendor commission.
+- Each order item must link internally to the exact selected supplier offer and immutable agreed purchase-cost snapshot. Where an order includes products from multiple suppliers, preserve item/sourcing-unit linkage and separate supplier amounts without exposing public vendor storefronts.
+- Only authorized customer payment paths may be used. Launch rails remain Paystack card and standard bank transfer unless separately approved. Supplier-shop pickup may retain the reservation/payment-at-location flow only when payment is processed and recorded through VM's authorized workflow. No doorstep COD or off-platform supplier collection/private-account transfer.
+- Legacy wallet-credit checkout tender remains disabled. Preserve historical wallet-credit and cashback records; do not treat them as new retailer tender or new cashback funding without explicit approval.
+- A reservation is created in VM and tied to the customer, order, item/quantity, price snapshot and expiry. Preserve the existing 24-hour reservation expiry unless the owner changes it. Expiry releases stock only after payment is confirmed not successful/uncertain/in flight; uncertain payment must be reconciled first.
+- Payment success must be established by trusted server-side provider verification or an authenticated, verified webhook. Browser redirects, screenshots, supplier claims and rider status are not proof.
+- Validate transaction reference, order association, exact amount in integer kobo, NGN currency and provider status. A customer capture must not be duplicated by repeated requests or webhooks.
 - Timeouts and missing/out-of-order webhooks trigger verification/reconciliation of the original transaction, not a blind retry or duplicate charge.
-- Refunds use the verified original payment route where supported. Customer wallet-credit refunds and off-platform refunds are disabled at launch unless a separately approved, lawful exception is documented.
+- Refunds use the verified original payment route where supported. Customer wallet-credit refunds and off-platform refunds remain disabled at launch unless a separately approved lawful exception is documented.
 
 ## 4. Cancellation, doorstep acceptance, rejection and redelivery
 
@@ -72,46 +76,44 @@ OTP/pass verification confirms the handover process, while a photo provides supp
 - Refunds are calculated per affected child order/item and must never exceed the verified parent capture or the remaining refundable amount after prior refunds. Merchandise and delivery-fee refund decisions are made independently according to the reason, actual allocation, published terms and applicable law.
 - At launch, refund through the original verified payment method where supported. A complaint or approval does not automatically establish that the vendor owes money.
 
-## 7. Vendor earnings eligibility and payout
+## 7. Supplier payment eligibility and execution
 
-- Vendor earnings become eligible for payout **24 hours after confirmed doorstep delivery or confirmed in-shop pickup**, provided the affected earning has no applicable return/dispute/payment hold and all vendor, security and reconciliation checks pass.
-- Becoming eligible is not an automatic bank transfer. A vendor requests payout through the platform's payout process; an authorised admin manually approves every request at launch.
-- Minimum payout request: **₦5,000**. Maximum payout request: **₦500,000**.
-- The vendor does not enter the amount. The server calculates a batch from the oldest eligible, unreserved earning records using strict FIFO.
-- **Whole earning records only:** add each oldest eligible record in full while the total remains at or below ₦500,000. If adding the next full record would exceed ₦500,000, stop. Do not split that record and do not skip it to include newer records. The record and all newer records remain for a later batch.
-- If the calculated batch is below ₦5,000, no payout request is created yet. If the oldest eligible record itself exceeds ₦500,000, do not split or skip it; flag for authorised finance review and an explicit accounting-safe resolution.
-- One active payout request per vendor may exist while pending review, approved but not sent, processing/in-flight, or uncertain/awaiting reconciliation. A new request is permitted only after the prior request is definitively resolved.
-- Reserve the exact whole earning records atomically. Rejection releases those reservations once. Approval is not payment; mark paid only after authoritative provider success and reconciliation.
-- Victorious MARKET bears outbound vendor payout transfer charges (including applicable transfer fees/stamp duty charged for that payout) as a platform expense. The vendor receives the exact approved payout amount; never deduct these charges from vendor earnings.
-- Do not release a payout reservation because of a timeout alone. Reconcile the same transfer reference before retrying. Duplicate requests, callbacks, webhooks or retries must not duplicate a transfer or ledger entry.
+- Supplier payment eligibility begins only after verified successful doorstep delivery or confirmed customer pickup and required order/amount reconciliation.
+- Order placement, customer payment, supplier acceptance/readiness, VM collection, rider assignment, rider collection, delivery attempt or unverified completion is not enough to make a supplier payable eligible.
+- A supplier payable represents the agreed purchase cost from the selected offer/order-item snapshot, not a marketplace vendor earning or commission.
+- Eligibility is not an automatic bank transfer. The approved payment process must separately record payable creation, authorization, payment attempt, provider confirmation, reversal and reconciliation.
+- Payment instructions and callbacks must be idempotent. A timeout is uncertain; reconcile the existing provider attempt before retrying. Repeated events must not create a second payable or transfer.
+- The former vendor payout minimum/maximum, FIFO batches, one-active-vendor-request rule and platform-paid vendor transfer fees do not govern supplier payables. No replacement payout threshold, payment rail, payment SLA or approval threshold is approved by this rule set.
+- Supplier agreements must define commercial terms. VM must not assume every supplier accepts payment after fulfilment without agreement.
+- VM remains responsible for an approved customer refund even if the supplier has already been paid. Supplier recovery is separate, evidence-backed and contract-dependent; it must not delay a valid customer refund.
 
-## 8. Disputes, vendor debt and recovery
+## 8. Disputes, supplier recovery and write-offs
 
-- Maintain separate, linked records for customer refund, vendor earnings, dispute, platform receivable/vendor debt, repayment and payout. This is a disputes/recoveries ledger, not a spendable vendor wallet.
-- Only a documented, authorised decision can establish vendor liability and a confirmed debt. A complaint or pending investigation is not a confirmed debt.
-- A vendor may repay a confirmed debt by direct bank transfer to the designated Victorious MARKET account. The platform verifies the received funds against bank/provider records and links the repayment to a unique recovery reference, vendor, case, order and amount. A screenshot or promise alone is not payment.
-- Alternatively, an authorised admin may approve an offset from the vendor's held or future earnings, where the vendor agreement permits it. Every offset records the approving admin, reason, amount, affected earning records and vendor notification. Do not automatically offset without that admin approval.
-- Vendors may challenge a proposed recovery. Hold the genuinely disputed amount for review; do not treat an allegation as confirmed debt.
-- If the vendor was already paid, record a separate recovery receivable. The platform cannot pretend a completed bank transfer has been reversed. The vendor can repay directly or the platform can recover from future earnings with authorised approval and contractual basis.
-- Track outstanding, partially repaid, fully recovered, disputed and written-off states. Correct errors through reversing/adjustment entries, never by deleting original ledger history. Only an authorised senior admin may write off a debt with a reason and audit trail.
+- Keep separate linked records for customer refund, supplier payable/payment, dispute, platform receivable, supplier repayment and any authorized offset. Do not create a spendable supplier wallet.
+- Only a documented authorized decision plus evidence and contractual basis can establish supplier liability. A complaint or pending investigation is not confirmed debt.
+- Repayment must be verified against bank/provider records and linked to a unique recovery reference, supplier, case, order and amount. A screenshot or promise alone is not payment.
+- Offset against future supplier payables only if the supplier agreement permits it and an authorized admin approves and records the amount, reason, affected payable(s), notification and audit trail. Never offset automatically.
+- If the supplier has already been paid, record a separate recovery receivable; do not pretend the completed bank transfer has been reversed.
+- If responsibility is ambiguous, do not automatically debit the supplier. Track disputed, partially recovered, fully recovered and written-off states. Correct errors with linked reversal/adjustment entries; do not delete ledger history.
+- An authorized write-off/impairment must have a reason and audit trail and follow accountant-approved treatment. Customer refund obligations are independent and must not wait for supplier recovery.
 
-## 9. Cashback — preserve the existing design
+## 9. Cashback and legacy customer obligations
 
-- Cashback remains the existing customer loyalty feature, not a refund method or vendor wallet.
-- Eligible post-discount merchandise is allocated **90% vendor / 5% customer cashback / 5% platform**. Cashback is not calculated on delivery fees. The vendor delivery-fee allocation remains 90% vendor / 10% platform.
-- Cashback stays pending until verified fulfilment establishes the end of the standard 24-hour claim window. It then has a **separate additional 24-hour maturity buffer**; earliest maturity is `refund_window_expires_at + 24 hours`, only if no blocking claim, dispute, failed-delivery case or unconfirmed pickup remains.
-- Cashback's **365-day validity period starts at its actual `matures_at` timestamp**, not checkout, payment or delivery. This is a validity period after maturity, not a 365-day maturity hold.
-- Cashback is non-transferable and not withdrawable to an external bank account. It may be redeemed on eligible future purchases under the existing redemption limit (currently no more than 50% of merchandise subtotal per checkout).
-- If the associated order is cancelled or refunded, reverse unspent cashback. If cashback has already been spent, record the recoverable amount separately and offset it against future cashback as that future cashback matures; do not silently debit the customer's cash wallet or create a negative spendable balance. Preserve the current cashback implementation and disclose these rules in customer terms.
+- Cashback is not a refund method, supplier payable or withdrawable cash balance.
+- Preserve historical cashback lots, customer balances, redemption/reversal history and obligations during the retailer-model migration. Do not delete or silently reclassify existing balances.
+- The former 5% marketplace cashback allocation was funded as part of the 90/5/5 merchandise split. That split is not a default retailer rule. The owner/accountant must explicitly decide whether new retailer-model sales continue to accrue cashback and how it is funded before new accrual logic is enabled.
+- Until an approved migration decision is made, do not infer new cashback accrual from the old marketplace percentages. Any continuing redemption of existing lots must follow the documented existing customer rules and legal review.
+- If a refund reverses cashback already spent, track any recoverable amount separately and do not silently debit a cash wallet or create a negative spendable balance. Any new maturity/recovery policy must be explicitly approved and disclosed.
 
-## 10. Allocation and financial accounting
+## 10. Retail accounting and financial integrity
 
-- Use immutable checkout allocation snapshots and integer-kobo/decimal-safe arithmetic.
-- Merchandise: 90% vendor, 5% customer cashback liability, 5% platform share on eligible post-discount merchandise.
-- Vendor-configured delivery fee: 90% vendor, 10% platform share. No rider payable is created.
-- Platform bears Paystack processing fees and vendor payout transfer charges from its platform share/platform expense; do not silently deduct vendor payout fees or Paystack processing fees from vendor or cashback allocations.
-- Refund only the approved customer amount. Reverse the corresponding vendor, platform, delivery-fee and cashback allocations once. Refund execution and vendor recovery are separate processes.
-- Every payment, refund, payout, repayment, offset, cashback accrual/reversal and adjustment must be idempotent, authorised, balanced and reconcilable. Never edit/delete a completed financial entry; post a linked reversal or adjustment.
+- Use immutable order/payment snapshots and integer-kobo/decimal-safe arithmetic.
+- Record customer receipts/revenue, supplier purchase cost/payable, delivery charges, logistics-company charges/payables, gateway fees, discounts, approved refunds, any explicitly approved cashback liability, and operating expenses separately.
+- The former 90% vendor / 5% cashback / 5% platform merchandise split and 90% vendor / 10% platform delivery split are not default rules for retailer-model transactions.
+- Supplier purchase cost is a cost/payable, not marketplace commission. Logistics-company charges and customer delivery-fee margin must follow an approved agreement/rate card; do not invent a split or percentage.
+- Customer refunds reverse the approved captured amount under the independent merchandise/delivery component policy and original payment-route controls. Refund execution and supplier recovery are separate processes.
+- Every payment, refund, supplier payment, repayment, offset, cashback adjustment and journal correction must be idempotent, authorized, balanced and reconcilable. Never edit/delete a completed financial entry; post a linked reversal or adjustment.
+- Balanced journals do not prove cash is available. Record real liquidity shortfalls, losses, receivables and approved write-offs honestly. Do not claim internal holds/ledgers are regulated escrow without establishing that legal status.
 
 ## 11. Roles, notifications and audit
 
