@@ -565,6 +565,42 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $customerTotalBeforeRecovery = $orderTwoBulky->fresh()->grand_total;
         $cashbackBeforeRecovery = $orderTwoBulky->fresh()->customer_cashback_5;
 
+        // The test marks this order paid directly rather than invoking the gateway
+        // settlement handler, so seed a balanced capture-time payable journal before
+        // exercising recovery's reconciliation guard.
+        $simulatedCaptureSupplierTotal = '0.00';
+        foreach (OrderItem::where('order_id', $orderTwoBulky->id)->orderBy('id')->get() as $captureItem) {
+            $captureLineCost = \\App\\Services\\BcMathService::mul(
+                (string) $captureItem->supplier_cost_snapshot,
+                (string) $captureItem->quantity
+            );
+            $simulatedCaptureSupplierTotal = \\App\\Services\\BcMathService::add($simulatedCaptureSupplierTotal, $captureLineCost);
+            \\App\\Models\\FinancialJournalEntry::create([
+                'order_id' => $orderTwoBulky->id,
+                'transaction_reference' => 'TEST-CAPTURE-' . $orderTwoBulky->id,
+                'event_id' => 'TEST-CAPTURE-SUPPLIER-' . $orderTwoBulky->id . '-' . $captureItem->id,
+                'idempotency_key' => 'TEST-CAPTURE-SUPPLIER-' . $orderTwoBulky->id . '-' . $captureItem->id,
+                'beneficiary_type' => VendorProfile::class,
+                'beneficiary_id' => $captureItem->supplier_vendor_id,
+                'account_name' => 'supplier_payable',
+                'entry_type' => 'credit',
+                'amount' => $captureLineCost,
+                'currency' => 'NGN',
+                'description' => 'Test capture supplier payable for recovery regression.',
+            ]);
+        }
+        \\App\\Models\\FinancialJournalEntry::create([
+            'order_id' => $orderTwoBulky->id,
+            'transaction_reference' => 'TEST-CAPTURE-' . $orderTwoBulky->id,
+            'event_id' => 'TEST-CAPTURE-CASH-' . $orderTwoBulky->id,
+            'idempotency_key' => 'TEST-CAPTURE-CASH-' . $orderTwoBulky->id,
+            'account_name' => 'cash_in_escrow',
+            'entry_type' => 'debit',
+            'amount' => $simulatedCaptureSupplierTotal,
+            'currency' => 'NGN',
+            'description' => 'Test escrow funding leg for supplier payable recovery regression.',
+        ]);
+
         $recoveryService = app(\\App\\Services\\SupplierReassignmentRecoveryService::class);
         $journalCountBeforeStaleOffer = \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count();
         $replacementOffers[$kekeProduct->id]->availability_expires_at = Carbon::now()->subMinute();
