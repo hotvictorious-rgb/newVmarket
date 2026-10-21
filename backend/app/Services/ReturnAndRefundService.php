@@ -845,7 +845,7 @@ class ReturnAndRefundService
                 // The verified FinancialOperationService finalizer already posted the
                 // balanced gateway refund entries; do not duplicate them here.
             } elseif ($order->retailer_model_order) {
-                app(\\App\\Services\\RetailerRefundAccountingService::class)->reverse(
+                app(\App\Services\RetailerRefundAccountingService::class)->reverse(
                     $order,
                     $lockedCase,
                     (string) $merchandiseRefund,
