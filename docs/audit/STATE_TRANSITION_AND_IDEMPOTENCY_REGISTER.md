@@ -491,3 +491,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Keeps gateway outcome and internal payout state consistent, reduces confusing admin reconciliation screens, and prevents an invalid transition from being reported as successful. It does not replace verification of the actual Paystack transfer.
 
 **Verification boundary:** Source and test are committed; automated tests have not been executed. No merge or deployment.
+
+
+### VM-AUD-107 — Enforce payout initiator authorization inside the service (21 October 2026)
+
+**Finding:** `markProcessing()` validated that the supplied admin ID was positive, but did not verify that the ID belonged to an active super administrator. The web controller already enforced a super-admin role, but other internal call sites or future routes could bypass that controller boundary.
+
+**Fix:** The payout service now checks the persisted user record inside its transaction and fails closed unless the initiating user is an active `super_admin`. The controller check remains as the first authorization layer.
+
+**Business impact:** Reduces the chance that a non-admin or inactive account can initiate a supplier transfer through an alternate code path. This is an additional control; it does not replace route authorization, 2FA, or gateway-side controls.
+
+**Verification boundary:** Source committed; a database-backed authorization regression test and CI execution remain pending. No merge or deployment.
