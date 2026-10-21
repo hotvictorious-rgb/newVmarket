@@ -325,6 +325,8 @@ class AuditRemediationVerificationTest extends TestCase
         );
         $case = $createRes['case'];
         $case->status = 'refund_pending';
+        $case->resolution_type = 'refund';
+        $case->reviewed_by_admin_id = $this->superAdmin->id;
         $case->save();
 
         // Mock Paystack to fail
@@ -746,6 +748,8 @@ class AuditRemediationVerificationTest extends TestCase
 
         $case = $res['case'];
         $case->status = 'refund_pending';
+        $case->resolution_type = 'refund';
+        $case->reviewed_by_admin_id = $this->superAdmin->id;
         $case->save();
 
         // Simulate instant doorstep wallet credit creation
@@ -771,7 +775,7 @@ class AuditRemediationVerificationTest extends TestCase
 
         $disburseRes = $service->adminDisburseRefund($this->superAdmin, $case);
         $this->assertFalse($disburseRes['success']);
-        $this->assertStringContainsString('partially or fully redeemed', $disburseRes['message']);
+        $this->assertStringContainsString('already been redeemed or spent', $disburseRes['message']);
     }
 
     /**
@@ -968,7 +972,7 @@ class AuditRemediationVerificationTest extends TestCase
         $res = $service->adminDisburseRefund($this->superAdmin, $case);
 
         $this->assertFalse($res['success']);
-        $this->assertStringContainsString("Requires prior Super Admin approval into 'refund_pending'", $res['message']);
+        $this->assertStringContainsString('explicitly approved with resolution_type=refund', $res['message']);
     }
 
     /**
@@ -1142,6 +1146,7 @@ class AuditRemediationVerificationTest extends TestCase
             'status' => 'refund_pending',
             'resolution_type' => 'refund',
             'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
         ]);
 
         $gateway = Mockery::mock(PaystackService::class);
@@ -1172,6 +1177,7 @@ class AuditRemediationVerificationTest extends TestCase
             'status' => 'refund_pending',
             'resolution_type' => 'refund',
             'total_refundable_amount' => '0.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
         ]);
 
         $gateway = Mockery::mock(PaystackService::class);
