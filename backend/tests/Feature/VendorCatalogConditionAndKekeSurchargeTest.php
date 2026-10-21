@@ -612,6 +612,25 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'listing_confirmed_at' => Carbon::now(),
         ]);
 
+        foreach ([
+            [$productA1, $this->vendor, $this->shop, '3000.00', $this->vendorUser],
+            [$productA2, $this->vendor, $this->shop, '4000.00', $this->vendorUser],
+            [$productB_Bike, $vendorB, $shopB, '7000.00', $vendorUserB],
+            [$productB_Keke, $vendorB, $shopB, '200000.00', $vendorUserB],
+        ] as [$product, $supplier, $supplierShop, $cost, $confirmer]) {
+            SupplierOffer::create([
+                'product_id' => $product->id,
+                'vendor_id' => $supplier->id,
+                'shop_id' => $supplierShop->id,
+                'wholesale_cost' => $cost,
+                'is_available' => true,
+                'availability_confirmed_at' => Carbon::now(),
+                'availability_confirmed_by' => $confirmer->id,
+                'availability_expires_at' => Carbon::now()->addDay(),
+                'notes' => 'Test-confirmed supplier offer',
+            ]);
+        }
+
         $service = new FulfillmentAvailabilityService();
 
         // Evaluate Cart containing items from BOTH Vendor A and Vendor B
@@ -628,19 +647,8 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $deliveryOptions = $availability['fulfillment_options']['delivery'];
         $this->assertTrue($deliveryOptions['available']);
 
-        // Collect lanes by shop_id
-        $vendorLanes = collect($deliveryOptions['vendor_lanes'])->keyBy('shop_id');
-        $this->assertCount(2, $vendorLanes);
-
-        // Per-supplier lane shows only its bulky surcharge component; base route fee is order-level.
-        $laneA = $vendorLanes->get($this->shop->id);
-        $this->assertNotNull($laneA);
-        $this->assertEquals('0.00', $laneA['delivery_fee'], 'Bike-only supplier group has no bulky surcharge component');
-
-        // Vendor B has one bulky unit -> one configured surcharge (₦1,000.00).
-        $laneB = $vendorLanes->get($shopB->id);
-        $this->assertNotNull($laneB);
-        $this->assertEquals('1000.00', $laneB['delivery_fee'], 'Vendor B contributes one bulky surcharge, not another base route fee');
+        // Customer-facing cart availability must not expose supplier/shop identities.
+        $this->assertArrayNotHasKey('vendor_lanes', $deliveryOptions);
 
         // Total is one base fee plus one bulky surcharge, not one fee per supplier.
         $this->assertEquals('500.00', $deliveryOptions['base_route_fee']);
@@ -740,6 +748,23 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'listing_confirmed_at' => Carbon::now(),
         ]);
 
+        foreach ([
+            [$productUyoBranch, $this->shop, '1500.00'],
+            [$productEketBranch, $shopEket, '180000.00'],
+        ] as [$product, $supplierShop, $cost]) {
+            SupplierOffer::create([
+                'product_id' => $product->id,
+                'vendor_id' => $this->vendor->id,
+                'shop_id' => $supplierShop->id,
+                'wholesale_cost' => $cost,
+                'is_available' => true,
+                'availability_confirmed_at' => Carbon::now(),
+                'availability_confirmed_by' => $this->vendorUser->id,
+                'availability_expires_at' => Carbon::now()->addDay(),
+                'notes' => 'Test offer origin guard',
+            ]);
+        }
+
         $service = new FulfillmentAvailabilityService();
 
         // Customer in Uyo orders from BOTH branches of the SAME vendor
@@ -752,14 +777,10 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
 
         $this->assertFalse($availability['fulfillment_options']['delivery']['available']);
         $deliveryOptions = $availability['fulfillment_options']['delivery'];
-        $vendorLanes = collect($deliveryOptions['vendor_lanes'])->keyBy('shop_id');
 
-        // The Eket source is invalid under the Uyo-only supplier-origin rule; do not
-        // advertise a partial order or price it as if all items were fulfillable.
-        $this->assertCount(2, $vendorLanes);
-        $laneEket = $vendorLanes->get($shopEket->id);
-        $this->assertNotNull($laneEket);
-        $this->assertFalse($laneEket['is_available']);
+        // The Eket supplier offer is ineligible; fail the complete cart closed and
+        // expose no supplier names, shop IDs, or address details to the customer.
+        $this->assertArrayNotHasKey('vendor_lanes', $deliveryOptions);
         $this->assertEquals('0.00', $deliveryOptions['total_shipping_fee']);
     }
 
