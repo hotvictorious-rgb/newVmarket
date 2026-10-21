@@ -321,3 +321,13 @@ Required controls:
 5. Add regression coverage for each entry point and historical rows before changing settlement/reporting consumers.
 
 - **Status:** DEPENDENCY MAP PARTIAL; no runtime checkout behavior changed in this step. Supplier selection, snapshots on all production order-item writers, multi-supplier order schema, and accounting migration remain OPEN.
+
+
+## 21. Canonical catalogue is still coupled to vendor-owned product listings — 21 October 2026
+
+- **Severity:** Critical / architecture blocker.
+- **Evidence:** `Product::scopeMarketplaceEligible()` requires an active `VendorProfile` and active `Shop` for each public product. `Product` still exposes `vendor_id` and `shop_id` as fillable listing ownership fields. The supplier-offer table links offers back to the same `products` rows, so adding offers alone does not yet create a truly VM-owned catalogue independent of supplier ownership.
+- **Why this matters:** The approved model requires Victorious MARKET to own the customer-facing catalogue and privately source the same canonical item from multiple suppliers. If the canonical listing disappears whenever its original vendor/shop becomes inactive, or if public listing identity remains tied to one shop, the system cannot reliably switch sources while keeping the same VM listing and customer retail price.
+- **Required safe migration:** Inspect the products table's original nullability, foreign keys, inventory/availability consumers, product creation/moderation UI, storefront query scope, reviews, SEO slugs, and historical orders. Design a forward migration that permits a VM-owned canonical product without a required public vendor/shop association while preserving old records. Define public sale availability from canonical listing approval/freshness plus at least one eligible supplier offer, not from the legacy listing owner alone.
+- **Required regression tests:** Canonical listing remains stable when one supplier is suspended; same VM product can have multiple supplier offers; inactive/soft-deleted vendor or shop excludes only its offer; storefront never exposes supplier identity/cost; no eligible offer blocks checkout without changing the listing's retail price; legacy products remain readable and historical orders unchanged.
+- **Status:** OPEN — no product ownership schema or public eligibility behavior was changed in this step.
