@@ -1628,4 +1628,47 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertSame('refund', $case->fresh()->resolution_type);
         $this->assertSame($this->superAdmin->id, $case->fresh()->reviewed_by_admin_id);
     }
+
+    public function test_refund_cannot_use_an_inactive_recorded_reviewer(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $inactiveReviewer = User::create([
+            'name' => 'Inactive Recorded Reviewer',
+            'email' => 'inactive-recorded-reviewer@vmarket.ng',
+            'password' => bcrypt('AdminPass123!'),
+            'user_type' => 'admin_employee',
+            'status' => 'inactive',
+        ]);
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $inactiveReviewer->id,
+        ]);
+        $credit = CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'return_case_id' => $case->id,
+            'amount' => '10000.00',
+            'credit_type' => 'doorstep_refund_credit',
+            'status' => 'available',
+        ]);
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldNotReceive('initiateRefund');
+
+        $result = (new ReturnAndRefundService($gateway))->adminDisburseRefund($this->superAdmin, $case);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('active administrator', $result['message']);
+        $this->assertSame('available', $credit->fresh()->status);
+        $this->assertNull($case->fresh()->refund_claim_token);
+        $this->assertDatabaseMissing('financial_operations', ['metadata->return_case_id' => $case->id]);
+        $this->assertDatabaseMissing('financial_reservations', ['source_id' => $order->id, 'purpose' => 'customer_refund_hold', 'status' => 'active']);
+    }
 }
