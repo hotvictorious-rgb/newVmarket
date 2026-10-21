@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Category;
+use App\Models\AdminAuditLog;
 use App\Models\Country;
 use App\Models\CustomerAddress;
 use App\Models\DeliveryLane;
@@ -446,6 +447,34 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertMatchesRegularExpression('/^[0-9]{6}$/', (string) $otpA);
         $this->assertNotSame($otpA, $otpB);
         $this->assertEquals('ready_for_pickup', $orderTwoBulky->fresh()->order_status);
+
+        // A supplier rejection after payment must create an administrative hold,
+        // preserve the paid customer order, and never trigger an automatic refund.
+        $orderBike->forceFill([
+            'payment_status' => 'paid',
+            'order_status' => 'confirmed',
+            'sourcing_status' => 'awaiting_supplier_confirmation',
+        ])->save();
+        OrderSupplierAssignment::where('order_id', $orderBike->id)->update([
+            'status' => 'awaiting_supplier_confirmation',
+            'assigned_at' => Carbon::now(),
+        ]);
+        Sanctum::actingAs($this->vendorUser, ['*']);
+        $reject = $this->postJson("/api/v1/vendor/orders/{$orderBike->id}/reject-availability", [
+            'reason' => 'The listed item is no longer physically available.',
+        ]);
+        $reject->assertOk()
+            ->assertJsonPath('status', true)
+            ->assertJsonPath('sourcing_status', 'supplier_rejected');
+        $this->assertEquals('paid', $orderBike->fresh()->payment_status);
+        $this->assertEquals('confirmed', $orderBike->fresh()->order_status);
+        $this->assertEquals('supplier_rejected', $orderBike->fresh()->sourcing_status);
+        $this->assertEquals('supplier_rejected', OrderSupplierAssignment::where('order_id', $orderBike->id)->firstOrFail()->status);
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'target_type' => Order::class,
+            'target_id' => $orderBike->id,
+            'action' => 'supplier_rejected_paid_retailer_order',
+        ]);
     }
 
     public function test_public_product_api_filters_by_condition_and_package_tier(): void
