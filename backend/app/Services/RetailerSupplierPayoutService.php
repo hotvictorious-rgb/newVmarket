@@ -246,6 +246,16 @@ class RetailerSupplierPayoutService
 
     public function markProcessing(int $payoutId, int $adminId, string $recipientCode, string $processingToken): array
     {
+        // Fail closed even when this service is called outside the current admin
+        // controller. These values identify the authorized transfer attempt.
+        if ($adminId < 1 || trim($recipientCode) === '' || mb_strlen($recipientCode) > 200
+            || !preg_match('/^[A-Za-z0-9._:-]{12,100}$/', trim($processingToken))) {
+            return ['success' => false, 'protected' => true, 'message' => 'A valid administrator, verified transfer recipient, and unique processing token are required.'];
+        }
+
+        $recipientCode = trim($recipientCode);
+        $processingToken = trim($processingToken);
+
         return DB::transaction(function () use ($payoutId, $adminId, $recipientCode, $processingToken) {
             // Follow supplier -> payout -> order -> item lock order, matching payout
             // reservation and return/recovery flows as closely as possible.
@@ -340,6 +350,13 @@ class RetailerSupplierPayoutService
 
     public function markUncertain(int $payoutId, string $reason, string $gatewayStatus = 'uncertain'): array
     {
+        $reason = trim($reason);
+        $gatewayStatus = strtolower(trim($gatewayStatus));
+        if ($reason === '' || mb_strlen($reason) > 2000
+            || !preg_match('/^[a-z0-9_:-]{1,80}$/', $gatewayStatus)) {
+            return ['success' => false, 'protected' => true, 'message' => 'A bounded reason and valid gateway status are required to place a payout on hold.'];
+        }
+
         return DB::transaction(function () use ($payoutId, $reason, $gatewayStatus) {
             $payout = RetailerSupplierPayoutRequest::whereKey($payoutId)->lockForUpdate()->first();
             if (!$payout) {
@@ -385,14 +402,29 @@ class RetailerSupplierPayoutService
             if ($allocations->isEmpty() || !$this->requestJournalComplete($payout)) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout allocations or request journal are incomplete.'];
             }
+            $orderIds = $allocations->pluck('order_id')->map(fn ($id) => (int) $id)->unique()->sort()->values()->all();
+            $lockedOrders = Order::whereIn('id', $orderIds)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $itemIds = $allocations->pluck('order_item_id')->map(fn ($id) => (int) $id)->unique()->sort()->values()->all();
+            $lockedItems = OrderItem::whereIn('id', $itemIds)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+
             foreach ($allocations as $allocation) {
                 if ((int) $allocation->supplier_vendor_id !== (int) $payout->supplier_vendor_id
                     || $allocation->status !== 'allocated') {
                     return ['success' => false, 'protected' => true, 'message' => 'Supplier payout allocation state or beneficiary changed; do not finalize automatically.'];
                 }
-                $itemIdentity = OrderItem::whereKey($allocation->order_item_id)->first();
-                if (!$itemIdentity || (int) $itemIdentity->order_id !== (int) $allocation->order_id) {
-                    return ['success' => false, 'protected' => true, 'message' => 'Supplier payout allocation no longer maps to its original order item; finance reconciliation is required.'];
+                $itemIdentity = $lockedItems->get((int) $allocation->order_item_id);
+                $orderIdentity = $lockedOrders->get((int) $allocation->order_id);
+                if (!$itemIdentity || !$orderIdentity
+                    || (int) $itemIdentity->order_id !== (int) $allocation->order_id
+                    || (int) $itemIdentity->fulfillment_supplier_vendor_id !== (int) $payout->supplier_vendor_id
+                    || !$orderIdentity->retailer_model_order
+                    || $orderIdentity->payment_status !== 'paid'
+                    || $orderIdentity->order_status !== 'delivered'
+                    || !$orderIdentity->refund_window_expires_at
+                    || $orderIdentity->refund_window_expires_at->gt(now())
+                    || $orderIdentity->dispute()->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled'])->exists()
+                    || $orderIdentity->returnCases()->whereNotIn('status', ['rejected', 'closed', 'refunded', 'resolved', 'replacement_completed'])->exists()) {
+                    return ['success' => false, 'protected' => true, 'message' => 'Supplier payout no longer matches its delivered, eligible order item or a financial hold is active; finance reconciliation is required.'];
                 }
                 $eventId = 'EVT-SUPPLIER-PAYOUT-' . $payout->id . '-ITEM-' . $allocation->order_item_id;
                 $entries = FinancialJournalEntry::where('event_id', $eventId)->count();
@@ -433,6 +465,10 @@ class RetailerSupplierPayoutService
      */
     public function reverse(int $payoutId, string $outcome, string $reason): array
     {
+        $reason = trim($reason);
+        if ($reason === '' || mb_strlen($reason) > 2000) {
+            return ['success' => false, 'protected' => true, 'message' => 'A reversal or reservation-release reason of 1–2,000 characters is required.'];
+        }
         if (!in_array($outcome, ['not_submitted', 'failed', 'reversed'], true)) {
             return ['success' => false, 'protected' => true, 'message' => 'Only an authoritative non-submission, failure, or reversal can release supplier payout reservations.'];
         }
