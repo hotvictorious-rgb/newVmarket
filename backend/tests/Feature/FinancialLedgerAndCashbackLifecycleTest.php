@@ -1013,7 +1013,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         ]);
 
         $ordersBefore = Order::where('customer_id', $this->customerUser->id)->count();
-        $result = app(\\App\\Services\\CheckoutExecutionService::class)->execute($this->customerUser, [
+        $result = app(\App\Services\CheckoutExecutionService::class)->execute($this->customerUser, [
             'fulfillment_type' => 'doorstep_delivery',
             'destination_lga_id' => $this->uyoLga->id,
             'items' => [[
