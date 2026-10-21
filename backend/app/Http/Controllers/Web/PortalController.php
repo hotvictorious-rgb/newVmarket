@@ -3692,22 +3692,6 @@ class PortalController extends Controller
             }
         }
 
-        // Any attempt to activate/create an inter-LGA corridor is rejected; deactivation remains allowed.
-        if ($request->has('set_active') && (bool) $request->input('set_active')) {
-            $origin = Lga::with('state')->find($originLgaId);
-            $destination = !empty($validated['destination_lga_id'])
-                ? Lga::with('state')->find((int) $validated['destination_lga_id'])
-                : null;
-            $isUyo = static fn ($lga): bool => $lga
-                && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
-                && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
-            if (!$isUyo($origin) || !$isUyo($destination)) {
-                return back()->withErrors([
-                    'delivery_lane' => 'Only Uyo-to-Uyo delivery lanes may be activated.',
-                ]);
-            }
-        }
-
         // Case A: State-Level Corridor Toggle (Out-of-State)
         if (!empty($validated['destination_state_id'])) {
             $stateId = (int)$validated['destination_state_id'];
@@ -3768,6 +3752,22 @@ class PortalController extends Controller
         $lane = DeliveryLane::where('origin_lga_id', $originLgaId)
             ->where('destination_lga_id', $destLgaId)
             ->first();
+
+        $requestedActive = $request->has('set_active')
+            ? (bool) $request->input('set_active')
+            : ($lane ? !(bool) $lane->is_active : false);
+        if ($requestedActive) {
+            $origin = Lga::with('state')->find($originLgaId);
+            $destination = Lga::with('state')->find($destLgaId);
+            $isUyo = static fn ($lga): bool => $lga
+                && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
+                && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
+            if (!$isUyo($origin) || !$isUyo($destination)) {
+                return back()->withErrors([
+                    'delivery_lane' => 'Only Uyo-to-Uyo delivery lanes may be activated.',
+                ]);
+            }
+        }
 
         if ($lane) {
             $lane->is_active = $request->has('set_active') ? (bool)$request->input('set_active') : !$lane->is_active;
