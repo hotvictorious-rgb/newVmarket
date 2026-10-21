@@ -772,7 +772,7 @@ class ReturnAndRefundService
                 $dispatchRes = $finOpService->dispatchRefund($op);
 
                 if (empty($dispatchRes['success'])) {
-                    $dispatchStatus = (string) ($dispatchRes['status'] ?? '');
+                    $dispatchStatus = (string) ($dispatchRes['status'] ?? ($dispatchRes['operation']->status ?? ''));
                     // Restore wallet credits only for an authoritative terminal
                     // gateway failure. An initiated/uncertain outcome keeps them
                     // quarantined until reconciliation.
