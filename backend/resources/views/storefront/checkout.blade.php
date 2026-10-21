@@ -277,7 +277,7 @@
                         <div style="font-size: 12px; color: #64748B; margin-top: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                             <span style="display: inline-flex; align-items: center; gap: 4px;">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                                <span>{{ $product->shop->name ?? 'Verified Merchant' }}</span>
+                                <span>Victorious MARKET</span>
                             </span>
                             &bull; <span>Qty: {{ $quantity }}</span>
                             &bull;
@@ -492,7 +492,7 @@ function vmHandleDestLgaChange(destLgaId) {
     } else {
         // Corridor is active & serviced
         if (suspendedAlert) suspendedAlert.style.display = 'none';
-        if (statusBadge) statusBadge.innerHTML = `<span style="background: #ECFDF5; color: #059669; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #059669;"></span> Serviced Corridor ({{ $product->shop->lga->name ?? 'Origin' }} &rarr; ${selectedOptionText})</span>`;
+        if (statusBadge) statusBadge.innerHTML = `<span style="background: #ECFDF5; color: #059669; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #059669;"></span> Serviced Corridor (Uyo &rarr; ${selectedOptionText})</span>`;
         if (radioDelivery) {
             radioDelivery.disabled = false;
         }
