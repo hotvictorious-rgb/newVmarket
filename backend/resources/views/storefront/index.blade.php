@@ -421,60 +421,13 @@
         </div>
     </div>
 
-    <!-- 4. Top Verified Merchants -->
-    <div class="vm-section-block" id="merchants" style="margin-bottom: 34px;">
-        <div class="vm-section-header" style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px;">
-            <div style="border-left: 4px solid var(--vm-info); padding-left: 12px;">
-                <h2 class="vm-section-title" style="font-size: 19px; font-weight: 800; color: #0F172A; margin: 0; line-height: 1.2;">Top Verified Merchants</h2>
-                <p class="vm-section-desc" style="font-size: 13px; color: #64748B; margin-top: 3px;">Official retail stores offering physical counter inspection and rapid dispatch.</p>
-            </div>
-            <a href="#merchants" class="vm-section-link" style="font-size: 13px; font-weight: 700; color: var(--vm-info); text-decoration: none;">All Stores &rarr;</a>
-        </div>
+    <!-- Victorious MARKET is the single public retailer; supplier identities remain private. -->
+    <section class="vm-section-block" aria-label="Victorious MARKET service promise" style="margin-bottom: 34px; padding: 22px; border: 1px solid var(--vm-border); border-radius: 12px; background: #FFFFFF;">
+        <h2 style="font-size: 19px; font-weight: 800; color: #0F172A; margin: 0 0 8px;">Trusted shopping, delivered within Uyo</h2>
+        <p style="font-size: 13px; color: #64748B; margin: 0;">We source from approved suppliers in Uyo and manage your order centrally. Supplier details stay private, and delivery availability is confirmed at checkout.</p>
+    </section>
 
-        <div class="vm-merchants-grid" id="vmShopsGridContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
-            @forelse($shops as $shop)
-                <a href="{{ route('shop.storefront', $shop->slug) }}" class="vm-merchant-box" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 14px; box-shadow: var(--vm-shadow-xs); text-decoration: none; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);">
-                    <div style="width: 56px; height: 56px; border-radius: 10px; background: #F8FAFC; border: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;">
-                        <img src="{{ $shop->logo_url ?? $shop->image_path ?? asset('assets/img/vm_icon.jpg') }}" alt="{{ $shop->name }}" style="width: 100%; height: 100%; object-fit: cover;">
-                    </div>
-                    <div class="vm-merchant-details" style="flex-grow: 1; min-width: 0;">
-                        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
-                            <strong class="vm-merchant-name" style="font-size: 14px; font-weight: 700; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ $shop->name }}</strong>
-                            <span style="font-size: 9.5px; background: #ECFDF5; color: #059669; font-weight: 800; padding: 1px 6px; border-radius: 4px; flex-shrink: 0;">VERIFIED</span>
-                        </div>
-                        <span class="vm-merchant-location" style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748B; flex-wrap: wrap;">
-                            <span style="display: inline-flex; align-items: center; gap: 3px;">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                                <span>{{ $shop->lga->name ?? 'Uyo' }}</span>
-                            </span>
-                            <span style="opacity: 0.4;">•</span>
-                            <span style="display: inline-flex; align-items: center; gap: 3px;">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                                <span>{{ substr($shop->pickup_opening_time ?? '08:00', 0, 5) }} - {{ substr($shop->pickup_closing_time ?? '18:00', 0, 5) }}</span>
-                            </span>
-                        </span>
-                    </div>
-                    <span style="color: var(--vm-primary); font-size: 18px; font-weight: 700; flex-shrink: 0;">&rsaquo;</span>
-                </a>
-            @empty
-                <div class="vm-merchant-box" style="grid-column: 1 / -1; background: #FFFFFF; border: 1.5px dashed var(--vm-border); border-radius: 12px; padding: 24px; text-align: center;">
-                    <div style="width: 44px; height: 44px; border-radius: 50%; background: #EFF6FF; color: #2563EB; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px;">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                    </div>
-                    <strong style="display: block; font-size: 14.5px; font-weight: 700; color: #0F172A; margin-bottom: 4px;">No Physical Plazas in <span class="vm-dynamic-city-label">{{ $activeCity ?? 'this LGA' }}</span> Yet</strong>
-                    <span style="display: block; font-size: 12.5px; color: #64748B; max-width: 460px; margin: 0 auto 12px; line-height: 1.4;">
-                        Local merchant accreditation is ongoing. Orders delivering to <span class="vm-dynamic-city-label">{{ $activeCity ?? 'this LGA' }}</span> are fulfilled via verified transit corridors from regional partner plazas.
-                    </span>
-                    <button type="button" onclick="if(window.vmOpenLocationModal) window.vmOpenLocationModal();" style="background: #F8FAFC; border: 1px solid #CBD5E1; color: #334155; font-size: 11.5px; font-weight: 700; padding: 6px 14px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                        <span>Change LGA</span>
-                    </button>
-                </div>
-            @endforelse
-        </div>
-    </div>
-
-            <!-- Dynamic Promotional Strip (Configurable via Admin Panel) -->
+    <!-- Dynamic Promotional Strip (Configurable via Admin Panel) -->
     @if(isset($promoBanners) && $promoBanners->isNotEmpty())
         @php $promo = $promoBanners->first(); @endphp
         <div class="vm-promo-strip-container" style="margin-bottom: 30px;">
