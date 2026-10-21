@@ -178,7 +178,7 @@ class AdminRetailerSupplierPayoutController extends Controller
     private function authorizeAdmin(Request $request): void
     {
         $user = $request->user();
-        if (!$user || !in_array($user->user_type, ['admin', 'admin_employee'], true)) {
+        if (!$user || !in_array($user->user_type, ['super_admin', 'admin', 'admin_employee'], true)) {
             abort(403, 'Admin access required.');
         }
     }
