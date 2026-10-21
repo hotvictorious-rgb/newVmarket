@@ -56,9 +56,14 @@ class SupplierOfferAvailabilityService
                 ->where('vendor_id', $offer->vendor_id)
                 ->first();
 
-            if (!$vendor || !$shop) {
+            $activeShopCount = Shop::where('vendor_id', $offer->vendor_id)
+                ->whereNull('deleted_at')
+                ->where('is_active', true)
+                ->count();
+
+            if (!$vendor || !$shop || $activeShopCount !== 1) {
                 throw ValidationException::withMessages([
-                    'supplier_offer' => 'Availability cannot be confirmed for an inactive supplier or shop, or a mismatched supplier/shop pair.',
+                    'supplier_offer' => 'Availability requires an active supplier, a matching active shop, and exactly one active shop for that supplier.',
                 ]);
             }
 
