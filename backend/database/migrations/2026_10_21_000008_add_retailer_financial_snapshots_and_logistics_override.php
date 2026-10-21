@@ -18,6 +18,7 @@ return new class extends Migration
             $table->decimal('retailer_merchandise_margin', 24, 2)->nullable()->after('supplier_cost_total_snapshot');
             $table->decimal('logistics_company_payable_default_amount', 24, 2)->nullable()->after('delivery_fee');
             $table->decimal('logistics_company_payable_amount', 24, 2)->nullable()->after('logistics_company_payable_default_amount');
+            $table->foreignId('logistics_company_payable_ledger_company_id')->nullable()->after('logistics_company_payable_amount')->constrained('logistics_company_profiles')->nullOnDelete();
             $table->text('logistics_company_payable_override_reason')->nullable()->after('logistics_company_payable_amount');
             $table->foreignId('logistics_company_payable_override_by')->nullable()->after('logistics_company_payable_override_reason')->constrained('users')->nullOnDelete();
             $table->timestamp('logistics_company_payable_override_at')->nullable()->after('logistics_company_payable_override_by');
@@ -28,6 +29,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('orders', function (Blueprint $table) {
+            $table->dropForeign(['logistics_company_payable_ledger_company_id']);
             $table->dropForeign(['logistics_company_payable_override_by']);
             $table->dropColumn([
                 'retailer_model_order',
@@ -35,6 +37,7 @@ return new class extends Migration
                 'retailer_merchandise_margin',
                 'logistics_company_payable_default_amount',
                 'logistics_company_payable_amount',
+                'logistics_company_payable_ledger_company_id',
                 'logistics_company_payable_override_reason',
                 'logistics_company_payable_override_by',
                 'logistics_company_payable_override_at',
