@@ -403,7 +403,7 @@ class PortalWebTest extends TestCase
             ->assertSee('Customer delivery pricing (flat per order)');
 
         $uyo = Lga::where('name', 'Uyo')->whereHas('state', fn ($q) => $q->where('name', 'Akwa Ibom'))->firstOrFail();
-        $response = $this->actingAs($admin)->post('/admin/delivery-corridors', [
+        $response = $this->actingAs($admin)->postJson('/admin/delivery-corridors', [
             'code' => 'uyo-plaza-demo',
             'name' => 'Uyo Plaza Corridor',
             'lga_id' => $uyo->id,
@@ -428,7 +428,7 @@ class PortalWebTest extends TestCase
         $company = LogisticsCompanyProfile::where('status', 'active')
             ->whereHas('hqLga', fn ($q) => $q->where('name', 'Uyo')->whereHas('state', fn ($state) => $state->where('name', 'Akwa Ibom')))
             ->firstOrFail();
-        $rateResponse = $this->actingAs($admin)->post('/admin/delivery-corridors/' . $corridor->id . '/company-rates', [
+        $rateResponse = $this->actingAs($admin)->postJson('/admin/delivery-corridors/' . $corridor->id . '/company-rates', [
             'logistics_company_id' => $company->id,
             'base_payable' => '1600.00',
             'bulky_surcharge_per_unit' => '400.00',
