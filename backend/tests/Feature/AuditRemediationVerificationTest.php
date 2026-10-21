@@ -333,17 +333,14 @@ class AuditRemediationVerificationTest extends TestCase
             ->once()
             ->andReturn([
                 'success' => false,
+                'code' => 'DEFINITIVE_REJECTION',
+                'is_definitive' => true,
                 'message' => 'Paystack declined: Insufficient balance on account',
             ]);
 
         $customService = new ReturnAndRefundService($mockPaystack);
 
-        $res = $customService->adminDisburseRefund(
-            $this->superAdmin,
-            $case,
-            'BANK-REF-112233',
-            'proof.pdf'
-        );
+        $res = $customService->adminDisburseRefund($this->superAdmin, $case);
 
         $this->assertFalse($res['success']);
         $this->assertStringContainsString('Paystack gateway refund failed', $res['message']);
@@ -388,7 +385,7 @@ class AuditRemediationVerificationTest extends TestCase
     /**
      * Finding 5: Doorstep wallet credit is reversed upon manual cash refund disburse
      */
-    public function test_finding_5_doorstep_wallet_credit_reversed_on_cash_refund(): void
+    public function test_finding_5_manual_bank_refund_is_disabled_and_wallet_credit_is_preserved(): void
     {
         $fixture = $this->createOrder('delivered', 1);
         $order = $fixture['order'];
@@ -415,12 +412,7 @@ class AuditRemediationVerificationTest extends TestCase
         ]);
 
         $mockPaystack = Mockery::mock(PaystackService::class);
-        $mockPaystack->shouldReceive('initiateRefund')
-            ->once()
-            ->andReturn([
-                'success' => true,
-                'refund_reference' => 'PSTK-REF-778899',
-            ]);
+        $mockPaystack->shouldNotReceive('initiateRefund');
 
         $service = new ReturnAndRefundService($mockPaystack);
         $res = $service->adminDisburseRefund(
@@ -430,9 +422,10 @@ class AuditRemediationVerificationTest extends TestCase
             'proof.pdf'
         );
 
-        $this->assertTrue($res['success']);
-        $this->assertEquals('refunded', $case->fresh()->status);
-        $this->assertEquals('reversed_for_cash_refund', $walletCredit->fresh()->status);
+        $this->assertFalse($res['success']);
+        $this->assertStringContainsString('Manual bank and wallet refunds are disabled', $res['message']);
+        $this->assertEquals('refund_pending', $case->fresh()->status);
+        $this->assertEquals('available', $walletCredit->fresh()->status);
     }
 
     /**
