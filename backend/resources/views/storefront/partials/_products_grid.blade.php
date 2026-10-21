@@ -62,7 +62,7 @@
                     @endif">
                     @if($isLocalShop)
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                        <span>In-Shop {{ $activeCity }} &bull; Same-Day</span>
+                        <span>Uyo Doorstep Delivery</span>
                     @elseif($lane)
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
                         <span>Transit from {{ $product->shop->lga->name ?? 'Hub' }} (&#8358;{{ number_format((float)$lane->base_fee) }})</span>
@@ -77,8 +77,8 @@
             <div class="vm-product-info" style="padding: 12px 14px 10px;">
                 <div class="vm-product-shop" style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #64748B; margin-bottom: 5px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                    <a href="{{ route('shop.storefront', $product->shop->slug ?? $product->shop_id) }}" style="color: #475569; text-decoration: none; font-weight: 600;">
-                        {{ Str::limit($product->shop->name ?? 'Verified Merchant Plaza', 20) }}
+                    <a href="{{ route('storefront') }}" style="color: #475569; text-decoration: none; font-weight: 600;">
+                        Victorious MARKET
                     </a>
                     <span style="opacity: 0.5;">•</span>
                     <span style="color: #94A3B8;">{{ $product->shop->lga->name ?? 'Uyo' }}</span>
@@ -147,8 +147,8 @@
                             data-name="{{ $product->name }}" 
                             data-price="{{ $product->unit_price }}" 
                             data-image="{{ $product->image_url ?? $product->image_path ?? asset('assets/img/placeholder/placeholder-1-1.png') }}"
-                            data-shop="{{ $product->shop->name ?? 'Verified Merchant' }}" 
-                            data-lga="{{ $product->shop->lga->name ?? 'Uyo' }}" 
+                            data-shop="Victorious MARKET" 
+                            data-lga="Uyo" 
                             data-slug="{{ $product->slug }}"
                             style="background: #F5F3FF; border: 1.5px solid rgba(94, 23, 235, 0.25); color: #5E17EB; font-weight: 700; font-size: 12px; padding: 8px 6px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.15s ease;">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
