@@ -28,6 +28,9 @@ class RetailerSupplierPayoutService
             if (!$lockedSupplier || $lockedSupplier->marketplace_status !== 'active') {
                 return ['success' => false, 'message' => 'Only an active supplier can request a supplier-payable payout.'];
             }
+            if (!$lockedSupplier->isKycVerified()) {
+                return ['success' => false, 'protected' => true, 'message' => 'Supplier payout is held until the supplier KYC status is verified.'];
+            }
 
             if ($lockedSupplier->shops()->where('is_active', true)->count() !== 1) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout requires exactly one active supplier shop.'];
