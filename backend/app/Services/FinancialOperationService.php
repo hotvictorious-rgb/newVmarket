@@ -991,6 +991,158 @@ class FinancialOperationService
         });
     }
 
+
+    /**
+     * Finalize an authoritative failed/reversed refund attempt without posting
+     * cash-out journals. This releases its reservation and restores any wallet
+     * credit quarantined for this attempt, but only while the reconciler owns
+     * the exact order lease and the gateway reference matches a stored attempt.
+     */
+    public function finalizeRefundFailure(
+        FinancialOperation $operation,
+        array $gatewayEvidence,
+        string $expectedReference,
+        ?string $expectedRefundClaimToken = null
+    ): array {
+        $expectedReference = trim($expectedReference);
+        $gatewayStatus = strtolower(trim((string) ($gatewayEvidence['status'] ?? $gatewayEvidence['data']['status'] ?? '')));
+        if ($expectedReference === '' || mb_strlen($expectedReference) > 200
+            || !in_array($gatewayStatus, ['failed', 'reversed'], true)) {
+            return [
+                'success' => false,
+                'protected' => true,
+                'message' => 'A matching gateway reference and authoritative failed/reversed status are required to finalize a refund failure.',
+            ];
+        }
+
+        return DB::transaction(function () use ($operation, $gatewayEvidence, $expectedReference, $expectedRefundClaimToken, $gatewayStatus) {
+            $lockedOp = FinancialOperation::whereKey($operation->id)->lockForUpdate()->firstOrFail();
+            if ($lockedOp->operation_type !== 'customer_refund') {
+                return ['success' => false, 'protected' => true, 'message' => 'Only customer-refund operations can use refund failure finalization.'];
+            }
+            if (in_array($lockedOp->status, ['failed', 'reversed'], true)) {
+                return ['success' => true, 'idempotent' => true, 'status' => $lockedOp->status, 'operation' => $lockedOp];
+            }
+            if ($lockedOp->status === 'confirmed') {
+                return ['success' => false, 'protected' => true, 'message' => 'A confirmed refund cannot be downgraded to failed/reversed without a separate audited reversal workflow.'];
+            }
+
+            $attempt = GatewayAttempt::where('financial_operation_id', $lockedOp->id)
+                ->where('gateway_reference', $expectedReference)
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->first();
+            if (!$attempt) {
+                return ['success' => false, 'protected' => true, 'message' => 'Gateway failure reference does not match a persisted attempt for this operation.'];
+            }
+
+            $evidenceData = is_array($gatewayEvidence['data'] ?? null) ? $gatewayEvidence['data'] : [];
+            $evidenceReference = $gatewayEvidence['refund_reference'] ?? ($evidenceData['reference'] ?? null);
+            if ($evidenceReference !== null && (string) $evidenceReference !== $expectedReference) {
+                return ['success' => false, 'protected' => true, 'message' => 'Gateway failure evidence reference conflicts with the persisted refund attempt.'];
+            }
+            $evidenceAmount = $gatewayEvidence['amount'] ?? ($evidenceData['amount'] ?? null);
+            $evidenceCurrency = $gatewayEvidence['currency'] ?? ($evidenceData['currency'] ?? null);
+            $amountIsWholeKobo = is_int($evidenceAmount)
+                || (is_string($evidenceAmount) && preg_match('/^\\d+$/D', $evidenceAmount) === 1);
+            if ($evidenceAmount !== null
+                && (!$amountIsWholeKobo || (int) $evidenceAmount !== (int) $lockedOp->amount_kobo)) {
+                return ['success' => false, 'protected' => true, 'message' => 'Gateway failure amount conflicts with the persisted refund operation.'];
+            }
+            if ($evidenceCurrency !== null
+                && strtoupper(trim((string) $evidenceCurrency)) !== strtoupper((string) $lockedOp->currency)) {
+                return ['success' => false, 'protected' => true, 'message' => 'Gateway failure currency conflicts with the persisted refund operation.'];
+            }
+
+            $orderId = (int) ($lockedOp->metadata['order_id'] ?? 0);
+            $order = $orderId > 0 ? Order::whereKey($orderId)->lockForUpdate()->first() : null;
+            if (!$order) {
+                return ['success' => false, 'protected' => true, 'message' => 'Refund order was not found; failure finalization is blocked.'];
+            }
+            if ($expectedRefundClaimToken !== null
+                && $order->refund_reconciliation_token !== $expectedRefundClaimToken) {
+                return ['success' => false, 'protected' => true, 'message' => 'Refund reconciliation lease was lost before failure finalization.'];
+            }
+
+            $returnCaseId = (int) ($lockedOp->metadata['return_case_id'] ?? 0);
+            $returnCase = $returnCaseId > 0 ? ReturnCase::whereKey($returnCaseId)->lockForUpdate()->first() : null;
+            if ($returnCaseId > 0 && (!$returnCase || (int) $returnCase->order_id !== (int) $order->id)) {
+                return ['success' => false, 'protected' => true, 'message' => 'Refund case/order association is inconsistent; finance review is required.'];
+            }
+
+            $now = Carbon::now();
+            $lockedOp->update([
+                'status' => $gatewayStatus,
+                'failed_at' => $gatewayStatus === 'failed' ? $now : $lockedOp->failed_at,
+                'reversed_at' => $gatewayStatus === 'reversed' ? $now : $lockedOp->reversed_at,
+            ]);
+            $attempt->update([
+                'outcome' => $gatewayStatus,
+                'response_payload' => $gatewayEvidence,
+                'error_message' => 'Authoritative gateway refund status: ' . $gatewayStatus,
+            ]);
+            FinancialReservation::where('financial_operation_id', $lockedOp->id)
+                ->where('status', 'active')
+                ->update([
+                    'status' => 'released',
+                    'released_at' => $now,
+                ]);
+
+            if ($returnCase) {
+                $credits = CustomerWalletCredit::where('return_case_id', $returnCase->id)
+                    ->where('status', 'quarantined')
+                    ->whereIn('refund_reserved_from_status', ['available', 'pending_approval'])
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+                foreach ($credits as $credit) {
+                    $credit->update([
+                        'status' => $credit->refund_reserved_from_status,
+                        'refund_reserved_from_status' => null,
+                        'notes' => trim(($credit->notes ? $credit->notes . ' | ' : '')
+                            . 'Wallet credit restored after authoritative gateway refund ' . $gatewayStatus . '.'),
+                    ]);
+                }
+
+                if ((string) $returnCase->paystack_refund_id === $expectedReference) {
+                    $returnCase->paystack_refund_id = null;
+                }
+                $returnCase->refund_claim_token = null;
+                $returnCase->refund_claimed_at = null;
+                $returnCase->save();
+            }
+
+            $hasOtherOpenOperation = FinancialOperation::where('operation_type', 'customer_refund')
+                ->whereJsonContains('metadata->order_id', $order->id)
+                ->where('id', '!=', $lockedOp->id)
+                ->whereNotIn('status', ['confirmed', 'failed', 'reversed'])
+                ->exists();
+            if ((string) $order->paystack_refund_reference === $expectedReference) {
+                $order->paystack_refund_reference = null;
+            }
+            $order->paystack_refund_status = $hasOtherOpenOperation ? 'pending' : 'failed';
+            $order->refund_reconciliation_token = null;
+            $order->refund_reconciliation_claimed_at = null;
+            $order->save();
+
+            Log::notice('Refund failure reconciled against authoritative gateway evidence.', [
+                'operation_id' => $lockedOp->id,
+                'order_id' => $order->id,
+                'return_case_id' => $returnCase?->id,
+                'gateway_reference' => $expectedReference,
+                'gateway_status' => $gatewayStatus,
+                'amount_kobo' => $lockedOp->amount_kobo,
+            ]);
+
+            return [
+                'success' => true,
+                'status' => $gatewayStatus,
+                'operation' => $lockedOp->fresh(),
+                'message' => 'Authoritative refund failure/reversal recorded; no cash-out journal was posted and reservations were released.',
+            ];
+        }, 3);
+    }
+
     /**
      * Acquire a lease token on a financial operation for distributed worker safety.
      * Guarantees fencing against stale workers.
