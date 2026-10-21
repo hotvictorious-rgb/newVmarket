@@ -563,6 +563,31 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertEquals('CLAIM-FLEET-STALE-001', $logisticsPayout->fresh()->processing_token);
     }
 
+    public function test_logistics_payout_rejection_does_not_credit_wallet_without_request_journal(): void
+    {
+        $payout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '15000.00',
+            'status' => 'pending',
+            'bank_name' => $this->company->bank_name,
+            'bank_code' => $this->company->bank_code,
+            'account_number' => $this->company->account_number,
+            'account_name' => $this->company->account_name,
+        ]);
+        $walletBefore = (string) $this->company->fresh()->wallet_balance;
+
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.reject.logistics_payout'), [
+            'payout_id' => $payout->id,
+            'rejection_reason' => 'Legacy request requires accounting review.',
+        ]);
+
+        $response->assertSessionHas('status');
+        $this->assertEquals('rejected', $payout->fresh()->status);
+        $this->assertEquals($walletBefore, (string) $this->company->fresh()->wallet_balance);
+        $this->assertStringContainsString('REJECTION_JOURNAL_MISSING', $payout->fresh()->admin_notes);
+        $this->assertSame(0, FinancialJournalEntry::where('event_id', 'EVT-FLEET-REJECT-' . $payout->id)->count());
+    }
+
     public function test_high_value_vendor_payout_strictly_requires_super_admin()
     {
         $this->createTestOrder([
