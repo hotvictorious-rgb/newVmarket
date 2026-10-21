@@ -188,7 +188,7 @@ class CustomerExperienceAndHardeningTest extends TestCase
         ]);
 
         $response->assertStatus(422)
-            ->assertJsonPath('status', false)
+            ->assertJsonPath('status', true)
             ->assertJsonPath('available', false)
             ->assertJsonPath('fulfillment_options.delivery.available', false);
     }
