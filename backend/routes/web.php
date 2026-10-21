@@ -79,6 +79,9 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/logistics-companies/{id}/toggle-status', [PortalController::class, 'adminToggleLogisticsCompanyStatus'])->name('admin.logistics_companies.toggle_status');
     Route::get('/orders', [PortalController::class, 'adminOrdersPage'])->name('admin.orders.index');
     Route::get('/products', [PortalController::class, 'adminProductsPage'])->name('admin.products.index');
+    Route::post('/supplier-offers/{offerId}/confirm-availability', [AdminSupplierOfferAvailabilityController::class, 'confirm'])
+        ->whereNumber('offerId')
+        ->name('admin.supplier_offers.confirm_availability');
     Route::post('/products/{id}/toggle-flagship', [PortalController::class, 'adminToggleProductFlagship'])->name('admin.products.toggle_flagship');
 
     // Collection Points Governance (Return Drop-off Hubs)
