@@ -4368,7 +4368,7 @@ class PortalController extends Controller
         $deliveryCheck = $fulfillmentService->checkDeliveryAvailability((int) $sourceOffer['shop_id'], $destLga->id, $product->package_tier ?? 'standard');
         $pickupCheck = ['is_available' => false];
 
-        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+        $lgas = collect([$destLga]);
 
         // 5% cashback estimation
         $cashbackEarnable = \App\Services\BcMathService::mul($product->unit_price, '0.05');
