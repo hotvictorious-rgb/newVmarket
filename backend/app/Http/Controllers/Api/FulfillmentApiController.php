@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Services\FulfillmentAvailabilityService;
 use App\Models\CustomerAddress;
-use App\Models\Shop;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -32,7 +31,11 @@ class FulfillmentApiController extends Controller
             $destLgaId = $request->input('destination_lga_id');
 
             if (!$destLgaId && $request->filled('address_id')) {
-                $address = CustomerAddress::find($request->input('address_id'));
+                $addressQuery = CustomerAddress::whereKey($request->input('address_id'));
+                if ($request->user()) {
+                    $addressQuery->where('user_id', $request->user()->id);
+                }
+                $address = $addressQuery->first();
                 if ($address) {
                     $destLgaId = $address->lga_id;
                 }
@@ -53,8 +56,7 @@ class FulfillmentApiController extends Controller
     }
 
     /**
-     * Single-lane delivery fee query (API Contract Sec 4.2).
-     * Request: { shop_id: 6, address_id: 4 } or { shop_id: 6, destination_lga_id: 69 }
+     * Customer-safe order-level delivery fee query. No supplier/shop selection is accepted.
      */
     public function deliveryFee(Request $request): JsonResponse
     {
