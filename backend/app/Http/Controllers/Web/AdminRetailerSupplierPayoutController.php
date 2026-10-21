@@ -53,6 +53,26 @@ class AdminRetailerSupplierPayoutController extends Controller
                 : ($reversal['message'] ?? 'Supplier payout held for finance reconciliation.'));
         }
 
+        if (empty($recipient['is_simulated'])) {
+            $verifiedAccountName = trim((string) data_get($recipient, 'data.details.account_name', ''));
+            $normalizeName = static fn (string $name): string => preg_replace('/[^A-Z0-9]/', '', strtoupper($name));
+            if ($verifiedAccountName === ''
+                || $normalizeName($verifiedAccountName) !== $normalizeName((string) $payout->account_name)) {
+                $reason = 'Paystack bank-account name verification is missing or does not match the supplier payout snapshot.';
+                $this->audit($request, 'retailer_supplier_payout_recipient_name_mismatch', $payout, [
+                    'account_name' => $payout->account_name,
+                    'account_number_last4' => substr((string) $payout->account_number, -4),
+                ], [
+                    'verified_account_name' => $verifiedAccountName ?: null,
+                    'action' => 'transfer_blocked_before_submission',
+                ]);
+                $released = app(RetailerSupplierPayoutService::class)->reverse($payout->id, 'not_submitted', $reason);
+                return back()->with('error', $released['success']
+                    ? 'Transfer blocked: the verified bank-account name did not match the supplier. Review bank details and wait through the cooldown.'
+                    : ($released['message'] ?? 'Transfer blocked; supplier payout remains held for finance reconciliation.'));
+            }
+        }
+
         $processing = app(RetailerSupplierPayoutService::class)->markProcessing(
             $payout->id,
             (int) $request->user()->id,
