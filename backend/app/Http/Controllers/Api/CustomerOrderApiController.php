@@ -674,7 +674,7 @@ class CustomerOrderApiController extends Controller
         $user = $request->user();
 
         $cases = ReturnCase::where('customer_id', $user->id)
-            ->with(['order:id,order_number', 'collectionPoint:id,name,address', 'items.product'])
+            ->with(['order:id,order_number', 'collectionPoint:id,name,address', 'items.product', 'items.orderItem:id,product_name'])
             ->latest()
             ->paginate(15);
 
@@ -716,7 +716,7 @@ class CustomerOrderApiController extends Controller
 
         return response()->json([
             'status' => true,
-            'data' => $this->formatCustomerReturnCase($case),
+            'data' => $this->formatCustomerReturnCase($case, true),
         ]);
     }
 
@@ -825,7 +825,7 @@ class CustomerOrderApiController extends Controller
      * model directly: it contains internal claim tokens, gateway/bank references,
      * reviewer IDs, arbitration notes, supplier fields and inspection metadata.
      */
-    protected function formatCustomerReturnCase(ReturnCase $case): array
+    protected function formatCustomerReturnCase(ReturnCase $case, bool $includeEvidenceAndInspections = false): array
     {
         return [
             'id' => $case->id,
@@ -864,14 +864,14 @@ class CustomerOrderApiController extends Controller
                 'item_condition' => $item->item_condition,
                 'status' => $item->status,
             ])->values(),
-            'evidence' => $case->evidence->map(fn (\App\Models\ReturnEvidence $evidence) => [
+            'evidence' => $includeEvidenceAndInspections ? $case->evidence->map(fn (\App\Models\ReturnEvidence $evidence) => [
                 'id' => $evidence->id,
                 'file_url' => $evidence->file_path ? url($evidence->file_path) : null,
                 'evidence_type' => $evidence->evidence_type,
                 'caption' => $evidence->caption,
                 'created_at' => $evidence->created_at?->toIso8601String(),
-            ])->values(),
-            'inspections' => $case->inspections->map(fn (\App\Models\ReturnInspection $inspection) => [
+            ])->values() : [],
+            'inspections' => $includeEvidenceAndInspections ? $case->inspections->map(fn (\App\Models\ReturnInspection $inspection) => [
                 'id' => $inspection->id,
                 'condition_rating' => $inspection->condition_rating,
                 'packaging_intact' => $inspection->packaging_intact,
@@ -881,7 +881,7 @@ class CustomerOrderApiController extends Controller
                     'name' => $inspection->collectionPoint->name,
                     'address' => $inspection->collectionPoint->address,
                 ] : null,
-            ])->values(),
+            ])->values() : [],
         ];
     }
 
