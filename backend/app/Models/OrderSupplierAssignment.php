@@ -1,0 +1,47 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class OrderSupplierAssignment extends Model
+{
+    protected $fillable = [
+        'order_id',
+        'supplier_vendor_id',
+        'supplier_shop_id',
+        'status',
+        'assigned_at',
+        'supplier_confirmed_at',
+        'supplier_rejected_at',
+        'supplier_response_notes',
+        'admin_override_by',
+        'admin_override_reason',
+    ];
+
+    protected $casts = [
+        'assigned_at' => 'datetime',
+        'supplier_confirmed_at' => 'datetime',
+        'supplier_rejected_at' => 'datetime',
+    ];
+
+    public function order()
+    {
+        return $this->belongsTo(Order::class);
+    }
+
+    public function supplier()
+    {
+        return $this->belongsTo(VendorProfile::class, 'supplier_vendor_id')->withTrashed();
+    }
+
+    public function shop()
+    {
+        return $this->belongsTo(Shop::class, 'supplier_shop_id')->withTrashed();
+    }
+
+    public function overriddenBy()
+    {
+        return $this->belongsTo(User::class, 'admin_override_by');
+    }
+}
