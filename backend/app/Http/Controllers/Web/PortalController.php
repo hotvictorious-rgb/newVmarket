@@ -56,157 +56,66 @@ class PortalController extends Controller
     public function storefront(Request $request)
     {
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
-        
-        $activeCity = $request->input('city', session('customer_city', 'Uyo'));
-        $activeState = $request->input('state', session('customer_state', 'Akwa Ibom'));
 
-        // Lookup LGA
-        $selectedLga = Lga::where('name', $activeCity)->first();
-        if (!$selectedLga) {
-            $selectedLga = Lga::where('name', 'Uyo')->first();
-        }
-        $selectedLgaId = $selectedLga ? $selectedLga->id : 69;
-
-        // Origin LGAs with active fulfillment to destination LGA
+        // Permanent launch boundary: the storefront is one central retailer for Uyo only.
+        // Query parameters/session state cannot switch customers to another LGA or expose
+        // supplier shops as public storefronts.
+        $activeCity = 'Uyo';
+        $activeState = 'Akwa Ibom';
+        $selectedLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->firstOrFail();
+        $selectedLgaId = (int) $selectedLga->id;
+        $activeLanes = collect();
         $eligibleOriginLgaIds = collect([$selectedLgaId]);
-        $activeLanes = DeliveryLane::where('destination_lga_id', $selectedLgaId)
-            ->where('is_active', true)
-            ->with('originLga')
-            ->get();
+        $shops = collect();
+        $lgas = collect([$selectedLga]);
+        $localProductsCount = Product::marketplaceEligible()->count();
+        $corridorProductsCount = 0;
+        $scope = 'all';
+        $hasLocalShops = false;
+        $coverageStatus = 'uyo_local_delivery';
+        $statusBadge = 'Uyo Local Delivery';
+        $previewStatus = 'Delivery within Uyo, Akwa Ibom State';
+        $isFallbackCatalog = false;
+        $isCorridorCatalog = false;
 
-        foreach ($activeLanes as $lane) {
-            $eligibleOriginLgaIds->push($lane->origin_lga_id);
-        }
-        $eligibleOriginLgaIds = $eligibleOriginLgaIds->unique();
-
-        // Check local merchant availability in this LGA
-        $hasLocalShops = Shop::where('lga_id', $selectedLgaId)->where('pickup_enabled', true)->exists();
-
-        // Count local products vs corridor transit products
-        $localProductsCount = Product::marketplaceEligible()
-            ->whereHas('shop', function ($q) use ($selectedLgaId) {
-                $q->where('lga_id', $selectedLgaId);
-            })->count();
-
-        $corridorProductsCount = Product::marketplaceEligible()
-            ->whereHas('shop', function ($q) use ($eligibleOriginLgaIds, $selectedLgaId) {
-                $q->whereIn('lga_id', $eligibleOriginLgaIds)->where('lga_id', '!=', $selectedLgaId);
-            })->count();
-
-        // Scope: 'local' (vendor shop in this LGA), 'corridor' (transit lanes), or 'all' (delivering to this LGA)
-        // If customer selects LGA, default to 'local' if local items exist, otherwise allow 'all' with clear corridor labeling
-        $defaultScope = ($localProductsCount > 0) ? 'local' : 'all';
-        $scope = $request->input('scope', $defaultScope);
-
-        // Query eligible products
-        $query = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug']);
-
-        if ($scope === 'local') {
-            $query->whereHas('shop', function ($q) use ($selectedLgaId) {
-                $q->where('lga_id', $selectedLgaId);
-            });
-        } elseif ($scope === 'corridor') {
-            $query->whereHas('shop', function ($q) use ($eligibleOriginLgaIds, $selectedLgaId) {
-                $q->whereIn('lga_id', $eligibleOriginLgaIds)->where('lga_id', '!=', $selectedLgaId);
-            });
-        } else {
-            // All delivering: local shops prioritized first, then active corridors
-            $query->whereHas('shop', function ($q) use ($eligibleOriginLgaIds) {
-                $q->whereIn('lga_id', $eligibleOriginLgaIds);
-            })->orderByRaw("CASE WHEN shop_id IN (SELECT id FROM shops WHERE lga_id = ?) THEN 0 ELSE 1 END", [$selectedLgaId]);
-        }
-
+        $query = Product::marketplaceEligible()->with(['category:id,name,slug']);
         if ($request->filled('category')) {
             $query->whereHas('category', function ($q) use ($request) {
                 $q->where('slug', $request->input('category'));
             });
         }
-
-        if ($request->filled('condition')) {
-            $condition = $request->input('condition');
-            if (in_array($condition, ['brand_new', 'uk_used'], true)) {
-                $query->where('condition', $condition);
+        if ($request->filled('condition') && in_array($request->input('condition'), ['brand_new', 'uk_used'], true)) {
+            $query->where('condition', $request->input('condition'));
+        }
+        if ($request->filled('package_tier')) {
+            $tier = strtolower((string) $request->input('package_tier'));
+            if (in_array($tier, ['bike', 'keke', 'standard', 'bulky'], true)) {
+                $query->whereIn('package_tier', in_array($tier, ['keke', 'bulky'], true) ? ['keke', 'bulky'] : ['bike', 'standard']);
             }
         }
-
-        if ($request->filled('package_tier')) {
-            $query->where('package_tier', $request->input('package_tier'));
-        }
-
         if ($request->filled('search')) {
-            $search = $request->input('search');
-            $query->where('name', 'like', "%{$search}%");
+            $search = trim((string) $request->input('search'));
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
         }
 
         $products = $query->latest()->take(12)->get();
-        $isFallbackCatalog = false;
-        $isCorridorCatalog = false;
-
-        // If local catalog is empty without search/category filters, provide clear corridor transit items
-        if ($products->isEmpty() && !$request->filled('search') && !$request->filled('category')) {
-            if ($scope === 'local' && $corridorProductsCount > 0) {
-                // Fetch corridor products with clear transit indication
-                $products = Product::marketplaceEligible()
-                    ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
-                    ->whereHas('shop', function ($q) use ($eligibleOriginLgaIds, $selectedLgaId) {
-                        $q->whereIn('lga_id', $eligibleOriginLgaIds)->where('lga_id', '!=', $selectedLgaId);
-                    })
-                    ->latest()
-                    ->take(12)
-                    ->get();
-                $isCorridorCatalog = true;
-            } elseif ($corridorProductsCount === 0) {
-                // Truly empty LGA: load flagship items as explicit regional dispatch
-                $products = Product::marketplaceEligible()
-                    ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
-                    ->latest()
-                    ->take(12)
-                    ->get();
-                $isFallbackCatalog = true;
-            }
-        }
-
         $latestProducts = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
+            ->with(['category:id,name,slug'])
             ->latest()
             ->take(6)
             ->get();
 
-        // Stores Closer to You: Strictly physical shops located in this LGA
-        $shops = Shop::with('lga:id,name')
-            ->where('pickup_enabled', true)
-            ->where('lga_id', $selectedLgaId)
-            ->take(6)
-            ->get();
-
-        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
-
-        // Coverage Status
-        if ($hasLocalShops) {
-            $coverageStatus = 'pickup_and_delivery';
-            $statusBadge = '⚡ In-Shop Pickup & Same-Day Delivery Active';
-            $previewStatus = 'Pickup and delivery available in this local government';
-        } elseif ($activeLanes->isNotEmpty()) {
-            $minHours = $activeLanes->min('estimated_delivery_hours_min') ?? 12;
-            $maxHours = $activeLanes->max('estimated_delivery_hours_max') ?? 24;
-            $coverageStatus = 'transit_delivery';
-            $statusBadge = "🚚 Transit Delivery Corridor Active ({$minHours}-{$maxHours} hrs)";
-            $previewStatus = "Delivery corridor active ({$minHours}-{$maxHours} hrs delivery speed)";
-        } else {
-            $coverageStatus = 'regional';
-            $statusBadge = '📦 Nationwide Park Dispatch';
-            $previewStatus = 'Delivery options and speeds vary by regional dispatch';
-        }
-
-        // Return dynamic JSON for AJAX requests
         if ($request->ajax() || $request->wantsJson() || $request->has('ajax')) {
             $productsHtml = view('storefront.partials._products_grid', compact(
-                'products', 'activeCity', 'selectedLgaId', 'activeLanes', 
-                'isFallbackCatalog', 'isCorridorCatalog', 'scope', 
+                'products', 'activeCity', 'selectedLgaId', 'activeLanes',
+                'isFallbackCatalog', 'isCorridorCatalog', 'scope',
                 'localProductsCount', 'corridorProductsCount'
             ))->render();
-            
             $shopsHtml = view('storefront.partials._shops_grid', compact('shops', 'activeCity', 'selectedLgaId'))->render();
 
             return response()->json([
@@ -219,16 +128,15 @@ class PortalController extends Controller
                 'preview_status' => $previewStatus,
                 'products_count' => $products->count(),
                 'local_products_count' => $localProductsCount,
-                'corridor_products_count' => $corridorProductsCount,
-                'scope' => $scope,
+                'corridor_products_count' => 0,
+                'scope' => 'all',
                 'products_html' => $productsHtml,
                 'shops_html' => $shopsHtml,
-                'is_fallback' => $isFallbackCatalog,
-                'is_corridor' => $isCorridorCatalog,
+                'is_fallback' => false,
+                'is_corridor' => false,
             ]);
         }
 
-        // Dynamic Cached Storefront Banners
         $heroBanners = Banner::getActiveHeroBanners();
         $promoBanners = Banner::getActivePromoBanners();
 
