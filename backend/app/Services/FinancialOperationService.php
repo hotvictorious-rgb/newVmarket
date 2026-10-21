@@ -717,66 +717,203 @@ class FinancialOperationService
                         $hasAuthorizedSupplierFault
                     );
                 } else {
-                // 90/5/5 Reversal Splits
+                // Legacy marketplace-only refund allocations. The retailer-model path above
+                // uses immutable supplier cost and is deliberately kept separate.
                 $vendorNetDebit = bcmul($merchandiseRefund, '0.9000', 2);
                 $customerCashbackDebit = bcmul($merchandiseRefund, '0.0500', 2);
-                $platformMarginDebit = bcmul($merchandiseRefund, '0.0500', 2);
+                $platformMarginDebit = bcsub($merchandiseRefund, bcadd($vendorNetDebit, $customerCashbackDebit, 2), 2);
 
-                $calcSum = bcadd(bcadd($vendorNetDebit, $customerCashbackDebit, 2), $platformMarginDebit, 2);
-                if (bccomp($calcSum, $merchandiseRefund, 2) !== 0) {
-                    $diff = bcsub($merchandiseRefund, $calcSum, 2);
-                    $vendorNetDebit = bcadd($vendorNetDebit, $diff, 2);
+                if ($order && $order->vendor_settlement_status === 'settled' && $returnCase
+                    && $returnCase->admin_ruling === 'uphold_customer_claim'
+                    && $returnCase->cost_allocation === 'vendor_100'
+                    && !empty($returnCase->reviewed_by_admin_id)
+                    && !empty($returnCase->admin_ruled_at)) {
+                    $recovery = VendorRecoveryLedger::firstOrCreate(
+                        ['idempotency_key' => "return-case-{$returnCase->id}-merchandise-recovery"],
+                        [
+                            'vendor_id' => $order->vendor_id,
+                            'return_case_id' => $returnCase->id,
+                            'order_id' => $order->id,
+                            'amount' => $vendorNetDebit,
+                            'status' => 'pending_recovery',
+                            'notes' => "Authorized vendor-fault recovery for merchandise refund of Return #{$returnCase->case_number}",
+                        ]
+                    );
+                    if ($recovery->wasRecentlyCreated) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $order->id,
+                            'financial_operation_id' => $lockedOp->id,
+                            'transaction_reference' => $disburseRef,
+                            'event_id' => 'EVT-RFD-' . $lockedOp->id . '-VND-RECOVERY',
+                            'idempotency_key' => 'REFUND-' . $lockedOp->id . '-VENDOR-RECOVERY',
+                            'beneficiary_type' => VendorProfile::class,
+                            'beneficiary_id' => $order->vendor_id,
+                            'account_name' => 'vendor_recovery_receivable',
+                            'entry_type' => 'debit',
+                            'amount' => $vendorNetDebit,
+                            'currency' => 'NGN',
+                            'description' => "Authorized merchant recovery for post-settlement merchandise refund #{$returnCase->case_number}",
+                        ]);
+                    }
+                } elseif ($order && $order->vendor_settlement_status === 'settled') {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'financial_operation_id' => $lockedOp->id,
+                        'transaction_reference' => $disburseRef,
+                        'event_id' => 'EVT-RFD-' . $lockedOp->id . '-VND-LOSS',
+                        'idempotency_key' => 'REFUND-' . $lockedOp->id . '-VENDOR-LOSS',
+                        'beneficiary_type' => User::class,
+                        'beneficiary_id' => null,
+                        'account_name' => 'platform_refund_loss_pending_mapping',
+                        'entry_type' => 'debit',
+                        'amount' => $vendorNetDebit,
+                        'currency' => 'NGN',
+                        'description' => "Platform-funded refund absorbed vendor share because no authorized vendor-fault ruling supports a receivable; accountant mapping required.",
+                    ]);
+                } else {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order?->id,
+                        'financial_operation_id' => $lockedOp->id,
+                        'transaction_reference' => $disburseRef,
+                        'event_id' => 'EVT-RFD-' . $lockedOp->id . '-VND',
+                        'idempotency_key' => 'REFUND-' . $lockedOp->id . '-VENDOR-DEBIT',
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $order?->vendor_id,
+                        'account_name' => 'vendor_payable',
+                        'entry_type' => 'debit',
+                        'amount' => $vendorNetDebit,
+                        'currency' => 'NGN',
+                        'description' => "Legacy marketplace vendor payable reversed for approved return.",
+                    ]);
                 }
 
-                // Debit Vendor Payable
-                FinancialJournalEntry::create([
-                    'order_id' => $order?->id,
-                    'financial_operation_id' => $lockedOp->id,
-                    'transaction_reference' => $disburseRef,
-                    'event_id' => 'EVT-RFD-' . $lockedOp->id . '-VND',
-                    'idempotency_key' => 'REFUND-' . $lockedOp->id . '-VENDOR-DEBIT',
-                    'beneficiary_type' => VendorProfile::class,
-                    'beneficiary_id' => $order?->vendor_id,
-                    'account_name' => 'vendor_payable',
-                    'entry_type' => 'debit',
-                    'amount' => $vendorNetDebit,
-                    'currency' => 'NGN',
-                    'description' => "Merchant payable reversed for approved return item: Case #{$returnCase->case_number}",
-                ]);
-
-                // Debit Cashback Liability
                 FinancialJournalEntry::create([
                     'order_id' => $order?->id,
                     'financial_operation_id' => $lockedOp->id,
                     'transaction_reference' => $disburseRef,
                     'event_id' => 'EVT-RFD-' . $lockedOp->id . '-CBK',
                     'idempotency_key' => 'REFUND-' . $lockedOp->id . '-CASHBACK-DEBIT',
-                    'beneficiary_type' => null,
-                    'beneficiary_id' => null,
+                    'beneficiary_type' => User::class,
+                    'beneficiary_id' => $order?->customer_id,
                     'account_name' => 'cashback_liability',
                     'entry_type' => 'debit',
                     'amount' => $customerCashbackDebit,
                     'currency' => 'NGN',
-                    'description' => "Customer 5% cashback liability clawed back for returned item: Case #{$returnCase->case_number}",
+                    'description' => "Legacy marketplace cashback liability reversed for Return Case #{$returnCase?->case_number}",
                 ]);
 
-                // Debit Platform Margin
                 FinancialJournalEntry::create([
                     'order_id' => $order?->id,
                     'financial_operation_id' => $lockedOp->id,
                     'transaction_reference' => $disburseRef,
                     'event_id' => 'EVT-RFD-' . $lockedOp->id . '-REV',
                     'idempotency_key' => 'REFUND-' . $lockedOp->id . '-PLATFORM-DEBIT',
-                    'beneficiary_type' => null,
+                    'beneficiary_type' => User::class,
                     'beneficiary_id' => null,
                     'account_name' => 'platform_revenue',
                     'entry_type' => 'debit',
                     'amount' => $platformMarginDebit,
                     'currency' => 'NGN',
-                    'description' => "Platform 5% margin reversed for return Case #{$returnCase->case_number}",
+                    'description' => "Legacy marketplace platform margin reversed for Return Case #{$returnCase?->case_number}",
                 ]);
 
+                if (BcMathService::comp($deliveryFeeRefund, '0.00') > 0 && $order) {
+                    $deliveryNetDebit = bcmul($deliveryFeeRefund, '0.9000', 2);
+                    $deliveryPlatformDebit = bcsub($deliveryFeeRefund, $deliveryNetDebit, 2);
+                    if ($order->logistics_company_id) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $order->id,
+                            'financial_operation_id' => $lockedOp->id,
+                            'transaction_reference' => $disburseRef,
+                            'event_id' => 'EVT-RFD-' . $lockedOp->id . '-LOG',
+                            'idempotency_key' => 'REFUND-' . $lockedOp->id . '-LOGISTICS-DEBIT',
+                            'beneficiary_type' => LogisticsCompanyProfile::class,
+                            'beneficiary_id' => $order->logistics_company_id,
+                            'account_name' => 'logistics_payable',
+                            'entry_type' => 'debit',
+                            'amount' => $deliveryNetDebit,
+                            'currency' => 'NGN',
+                            'description' => "Legacy logistics payable reversed for Return Case #{$returnCase?->case_number}",
+                        ]);
+                    } elseif ($order->vendor_settlement_status === 'settled'
+                        && $returnCase
+                        && $returnCase->admin_ruling === 'uphold_customer_claim'
+                        && $returnCase->cost_allocation === 'vendor_100'
+                        && !empty($returnCase->reviewed_by_admin_id)
+                        && !empty($returnCase->admin_ruled_at)) {
+                        $recovery = VendorRecoveryLedger::firstOrCreate(
+                            ['idempotency_key' => "return-case-{$returnCase->id}-delivery-recovery"],
+                            [
+                                'vendor_id' => $order->vendor_id,
+                                'return_case_id' => $returnCase->id,
+                                'order_id' => $order->id,
+                                'amount' => $deliveryNetDebit,
+                                'status' => 'pending_recovery',
+                                'notes' => "Authorized vendor-fault recovery for legacy delivery refund Return #{$returnCase->case_number}",
+                            ]
+                        );
+                        if ($recovery->wasRecentlyCreated) {
+                            FinancialJournalEntry::create([
+                                'order_id' => $order->id,
+                                'financial_operation_id' => $lockedOp->id,
+                                'transaction_reference' => $disburseRef,
+                                'event_id' => 'EVT-RFD-' . $lockedOp->id . '-DELIVERY-RECOVERY',
+                                'idempotency_key' => 'REFUND-' . $lockedOp->id . '-DELIVERY-RECOVERY',
+                                'beneficiary_type' => VendorProfile::class,
+                                'beneficiary_id' => $order->vendor_id,
+                                'account_name' => 'vendor_recovery_receivable',
+                                'entry_type' => 'debit',
+                                'amount' => $deliveryNetDebit,
+                                'currency' => 'NGN',
+                                'description' => "Authorized legacy delivery recovery for Return #{$returnCase->case_number}",
+                            ]);
+                        }
+                    } elseif ($order->vendor_settlement_status === 'settled') {
+                        FinancialJournalEntry::create([
+                            'order_id' => $order->id,
+                            'financial_operation_id' => $lockedOp->id,
+                            'transaction_reference' => $disburseRef,
+                            'event_id' => 'EVT-RFD-' . $lockedOp->id . '-DELIVERY-LOSS',
+                            'idempotency_key' => 'REFUND-' . $lockedOp->id . '-DELIVERY-LOSS',
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => null,
+                            'account_name' => 'platform_refund_loss_pending_mapping',
+                            'entry_type' => 'debit',
+                            'amount' => $deliveryNetDebit,
+                            'currency' => 'NGN',
+                            'description' => "Platform-funded legacy delivery refund without authorized vendor-fault recovery.",
+                        ]);
+                    } else {
+                        FinancialJournalEntry::create([
+                            'order_id' => $order->id,
+                            'financial_operation_id' => $lockedOp->id,
+                            'transaction_reference' => $disburseRef,
+                            'event_id' => 'EVT-RFD-' . $lockedOp->id . '-DELIVERY-VND',
+                            'idempotency_key' => 'REFUND-' . $lockedOp->id . '-DELIVERY-VENDOR-DEBIT',
+                            'beneficiary_type' => VendorProfile::class,
+                            'beneficiary_id' => $order->vendor_id,
+                            'account_name' => 'vendor_payable',
+                            'entry_type' => 'debit',
+                            'amount' => $deliveryNetDebit,
+                            'currency' => 'NGN',
+                            'description' => "Legacy vendor-managed delivery payable reversed for Return Case #{$returnCase?->case_number}",
+                        ]);
+                    }
 
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'financial_operation_id' => $lockedOp->id,
+                        'transaction_reference' => $disburseRef,
+                        'event_id' => 'EVT-RFD-' . $lockedOp->id . '-DELIVERY-REV',
+                        'idempotency_key' => 'REFUND-' . $lockedOp->id . '-DELIVERY-PLATFORM-DEBIT',
+                        'beneficiary_type' => User::class,
+                        'beneficiary_id' => null,
+                        'account_name' => 'platform_delivery_revenue',
+                        'entry_type' => 'debit',
+                        'amount' => $deliveryPlatformDebit,
+                        'currency' => 'NGN',
+                        'description' => "Legacy marketplace delivery platform margin reversed for Return Case #{$returnCase?->case_number}",
+                    ]);
                 }
 
                 // Credit Cash Escrow Outflow
