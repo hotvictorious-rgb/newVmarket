@@ -56,7 +56,7 @@ Customer payment must be verified against authoritative payment-provider informa
 
 ### Retail accounting replaces marketplace commission accounting
 
-The former 90% vendor / 5% cashback / 5% platform merchandise split and 90% vendor / 10% platform delivery split are not default rules for the retailer model. A supplier's wholesale purchase price is a product cost/payable, not a marketplace commission or vendor earning. Do not rename vendor payout records and continue treating them as supplier payables.
+The former 90% vendor / 5% cashback / 5% platform merchandise split and 90% vendor / 10% platform delivery split are retired marketplace assumptions, not active rules for the fresh retailer model. A supplier's agreed wholesale purchase price is a product cost/payable, not a marketplace commission or vendor earning. Do not reuse vendor payout records to calculate supplier payables. Any legacy compatibility behavior must be isolated from new retailer orders.
 
 Record customer receipts, merchandise revenue, supplier purchase cost, delivery revenue/charges, logistics-company charges, payment fees, approved discounts/refunds, any owner-approved cashback liability, supplier amounts owed and transfers separately. Entries must be linked, immutable and reconcilable. A balanced journal does not prove that cash is available; liquidity shortfalls and losses must be shown honestly.
 
@@ -261,7 +261,7 @@ A trustworthy marketplace is not one that claims never to fail. It is one that h
 
 The repository contains a Laravel application with existing marketplace-oriented data models and financial flows. The retailer and central fulfilment model is the approved business direction, but the code is not yet proven migrated. Existing source-code findings and implementation gaps remain open until fixed and tested.
 
-Before launch, complete the supplier-offer/order-item linkage, central delivery and logistics-company rider enforcement, customer checkout compatibility audit, supplier payable accounting, payment/refund safety verification, operational coverage configuration, and migration of historical marketplace records without losing audit trails.
+Before launch, complete supplier-offer/order-item linkage, central delivery and logistics-company rider enforcement, customer checkout compatibility audit, supplier payable accounting, payment/refund safety verification, and operational coverage configuration. `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md` is the launch-policy authority. If this fresh deployment has no legacy transactions, document that fact and disable/remove obsolete marketplace workflows through a reviewed migration; do not leave old marketplace rules active merely for compatibility. If legacy records exist, retain them as read-only history until an approved migration plan exists.
 
 ## 18. Long-Term Vision
 
