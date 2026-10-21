@@ -72,7 +72,7 @@ class FinancialSplitAndFulfillmentTest extends TestCase
     /**
      * Test 2: Directional LGA Delivery Lane Resolution.
      */
-    public function test_directional_delivery_lane_resolution(): void
+    public function test_delivery_lane_resolution_is_strictly_uyo_only(): void
     {
         $uyo = Lga::where('name', 'Uyo')->firstOrFail();
         $eket = Lga::where('name', 'Eket')->firstOrFail();
@@ -80,12 +80,11 @@ class FinancialSplitAndFulfillmentTest extends TestCase
 
         $service = new FulfillmentAvailabilityService();
 
-        // Intra-Uyo: ₦500.00
         $intraUyo = $service->checkDeliveryAvailability($shop->id, $uyo->id);
         $this->assertTrue($intraUyo['is_available']);
         $this->assertEquals('500.00', $intraUyo['fee']);
 
-        // Uyo to Eket is available only because an explicit directional route is enabled.
+        // A legacy active lane must not make out-of-Uyo delivery serviceable.
         DeliveryLane::updateOrCreate([
             'origin_lga_id' => $uyo->id,
             'destination_lga_id' => $eket->id,
@@ -96,54 +95,33 @@ class FinancialSplitAndFulfillmentTest extends TestCase
             'estimated_delivery_hours_max' => 24,
             'is_active' => true,
         ]);
-        $interLga = $service->checkDeliveryAvailability($shop->id, $eket->id);
-        $this->assertTrue($interLga['is_available']);
-        $this->assertEquals('1500.00', $interLga['fee']);
-        $this->assertEquals('logistics_managed', $interLga['delivery_mode']);
+        $uyoToEket = $service->checkDeliveryAvailability($shop->id, $eket->id);
+        $this->assertFalse($uyoToEket['is_available']);
+        $this->assertEquals('0.00', $uyoToEket['fee']);
+        $this->assertEquals('outside_uyo_launch_boundary', $uyoToEket['rate_tier']);
 
-        // Real-World Scenario: Asymmetric unserviceable corridor
-        // Vendor shop located in Eket
         $eketShop = Shop::create([
             'vendor_id' => $shop->vendor_id,
             'country_id' => $shop->country_id ?? 1,
             'lga_id' => $eket->id,
             'state_id' => $eket->state_id,
-            'name' => 'Eket Marine Plaza Branch',
-            'slug' => 'eket-marine-plaza-branch',
+            'name' => 'Legacy Eket Source Shop',
+            'slug' => 'legacy-eket-source-shop',
             'phone' => '+2348098765432',
             'address' => '12 Marina Road, Eket',
             'is_primary' => false,
             'pickup_enabled' => true,
         ]);
-
-        // Eket -> Uyo is unserviceable / deactivated by admin
-        DeliveryLane::updateOrCreate([
-            'origin_lga_id' => $eket->id,
-            'destination_lga_id' => $uyo->id,
-        ], [
-            'base_fee' => '1500.00',
-            'bulky_surcharge' => '1000.00',
-            'estimated_delivery_hours_min' => 12,
-            'estimated_delivery_hours_max' => 24,
-            'is_active' => false, // Explicitly Deactivated / Unserviceable
-        ]);
-
-        // Doorstep delivery from Eket to Uyo MUST be unavailable
         $eketToUyo = $service->checkDeliveryAvailability($eketShop->id, $uyo->id);
         $this->assertFalse($eketToUyo['is_available']);
         $this->assertEquals('0.00', $eketToUyo['fee']);
         $this->assertEquals('origin_outside_uyo', $eketToUyo['rate_tier']);
 
-        // But In-Shop Counter Inspection & Pickup at Eket Shop is 100% available with ₦0.00 fee!
         $pickup = $service->checkPickupAvailability($eketShop->id);
-        $this->assertTrue($pickup['is_available']);
-        $this->assertEquals('Eket Marine Plaza Branch', $pickup['shop_name']);
-        $this->assertEquals('Eket', $pickup['lga']);
+        $this->assertFalse($pickup['is_available']);
+        $this->assertEquals('support_managed_exception_only', $pickup['rate_tier']);
     }
 
-    /**
-     * Test 3: 48-Hour NUBAN Bank Cooldown Security Invariant.
-     */
     public function test_vendor_bank_cooldown_invariant(): void
     {
         $vendor = VendorProfile::firstOrFail();
