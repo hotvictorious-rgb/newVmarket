@@ -4418,15 +4418,15 @@ class PortalController extends Controller
             ->firstOrFail();
 
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
-        $activeCity = session('customer_city', 'Uyo');
+        $activeCity = 'Uyo';
         $activeState = session('customer_state', 'Akwa Ibom');
-        $destLga = Lga::where('name', $activeCity)->first() ?? Lga::where('name', 'Uyo')->first();
+        $destLga = Lga::where('name', 'Uyo')->whereHas('state', fn($q) => $q->where('name', 'Akwa Ibom'))->first();
 
         $fulfillmentService = new \App\Services\FulfillmentAvailabilityService();
         $deliveryCheck = $fulfillmentService->checkDeliveryAvailability($product->shop_id, $destLga->id, $product->package_tier ?? 'standard');
         $pickupCheck = $fulfillmentService->checkPickupAvailability($product->shop_id);
 
-        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+        $lgas = $destLga ? collect([$destLga]) : collect();
 
         // 5% cashback estimation
         $cashbackEarnable = \App\Services\BcMathService::mul($product->unit_price, '0.05');
@@ -4459,8 +4459,8 @@ class PortalController extends Controller
             return redirect()->route('storefront')->with('info', 'Marketplace catalog is currently being updated. Please browse our stores.');
         }
 
-        $activeCity = session('customer_city', 'Uyo');
-        $destLga = Lga::where('name', $activeCity)->first() ?? Lga::where('name', 'Uyo')->first();
+        $activeCity = 'Uyo';
+        $destLga = Lga::where('name', 'Uyo')->whereHas('state', fn($q) => $q->where('name', 'Akwa Ibom'))->first();
 
         $fulfillmentService = new \App\Services\FulfillmentAvailabilityService();
         $deliveryCheck = $fulfillmentService->checkDeliveryAvailability($product->shop_id, $destLga->id, $product->package_tier ?? 'standard');
@@ -4471,8 +4471,8 @@ class PortalController extends Controller
         $deliveryFee = $deliveryCheck['is_available'] ? $deliveryCheck['fee'] : '0.00';
         $totalPayable = \App\Services\BcMathService::add($merchandiseSubtotal, $deliveryFee);
 
-        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
-        $allShops = Shop::where('pickup_enabled', true)->get();
+        $lgas = $destLga ? collect([$destLga]) : collect();
+        $allShops = collect();
 
         // Check if user has available cashback
         $user = Auth::user();
