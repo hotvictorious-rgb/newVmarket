@@ -47,6 +47,7 @@ jobs:
       - name: PHP syntax check for changed files
         run: |
           php -l app/Http/Controllers/Web/PaystackPaymentController.php
+          php -l app/Http/Controllers/Web/AdminSupplierOfferAvailabilityController.php
           php -l app/Services/FinancialReconciliationEngine.php
           php -l app/Services/PaystackService.php
           php -l app/Services/ReturnAndRefundService.php
@@ -59,6 +60,7 @@ jobs:
           php -l app/Models/OrderItem.php
           php -l app/Models/SupplierOffer.php
           php -l app/Services/SupplierOfferSelectionService.php
+          php -l app/Services/SupplierOfferAvailabilityService.php
           php -l database/migrations/2026_10_21_000005_add_supplier_snapshots_to_order_items.php
           php -l database/migrations/2026_10_21_000006_add_supplier_offer_availability_evidence.php
           php -l database/migrations/2026_10_20_000046_add_customer_address_id_to_orders.php
