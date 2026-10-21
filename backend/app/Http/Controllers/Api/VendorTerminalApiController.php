@@ -1146,6 +1146,20 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             ->latest('id')
             ->paginate(20);
 
+        $payouts->getCollection()->transform(function (RetailerSupplierPayoutRequest $payout) {
+            $payout->setAttribute('account_number_masked', '******' . substr((string) $payout->account_number, -4));
+            $payout->makeHidden([
+                'account_number',
+                'bank_code',
+                'recipient_code',
+                'processing_token',
+                'admin_notes',
+                'rejection_reason',
+                'approved_by_admin_id',
+            ]);
+            return $payout;
+        });
+
         return response()->json(['success' => true, 'data' => $payouts]);
     }
 
