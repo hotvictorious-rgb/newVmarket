@@ -124,6 +124,7 @@ class AdminRetailerSupplierPayoutController extends Controller
 
         RetailerSupplierPayoutRequest::whereKey($payout->id)->update([
             'paystack_transfer_code' => $transfer['transfer_code'] ?? null,
+            'gateway_status' => 'submission_acknowledged',
         ]);
 
         return $this->verifyAndFinalize($payout->fresh(), $paystack, 'Supplier payout submitted; reconciliation result: ');
@@ -140,6 +141,16 @@ class AdminRetailerSupplierPayoutController extends Controller
         ], ['action' => 'reconciliation_attempted']);
         if (!in_array($payout->status, ['processing', 'uncertain'], true)) {
             return back()->with('error', 'Only a processing or uncertain supplier payout can be reconciled.');
+        }
+        if ($payout->status === 'processing'
+            && $payout->gateway_status === 'processing'
+            && empty($payout->paystack_transfer_code)) {
+            app(RetailerSupplierPayoutService::class)->markUncertain(
+                $payout->id,
+                'Treasury reconciliation was requested before a transfer submission response was persisted. The original transfer may still be in flight.',
+                'submission_outcome_unknown'
+            );
+            return back()->with('error', 'Transfer submission outcome is not yet persisted. The payout is now held; do not release or retry it. Verify again after the original submission outcome is resolved.');
         }
 
         return $this->verifyAndFinalize($payout, app(PaystackService::class), 'Supplier payout reconciliation: ');
