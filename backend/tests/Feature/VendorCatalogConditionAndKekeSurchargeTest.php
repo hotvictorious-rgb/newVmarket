@@ -499,6 +499,25 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertTrue($blocked, 'Legacy order-level supplier confirmation must reject retailer orders.');
         $this->assertEquals('supplier_rejected', $orderBike->fresh()->sourcing_status);
         $this->assertEquals('paid', $orderBike->fresh()->payment_status);
+
+        // Even a manually/stale-marked eligible status must not let a retailer
+        // order use the legacy single-vendor payout path or create payout journals.
+        $orderBike->forceFill(['vendor_settlement_status' => 'eligible'])->save();
+        $adminUser = User::create([
+            'name' => 'Finance Super Admin',
+            'email' => 'finance-super-admin@victoriousmarket.ng',
+            'phone' => '+2348099990011',
+            'password' => bcrypt('SecurePass123!'),
+            'user_type' => 'super_admin',
+            'status' => 'active',
+        ]);
+        $journalCountBefore = \\App\\Models\\FinancialJournalEntry::where('order_id', $orderBike->id)->count();
+        $payout = app(\\App\\Services\\OrderSettlementService::class)
+            ->disburseVendorSettlement($orderBike->fresh(), $adminUser, 'proofs/legacy-payout-must-not-exist.jpg');
+        $this->assertFalse($payout['success']);
+        $this->assertStringContainsString('cannot use the legacy order-level vendor payout', $payout['message']);
+        $this->assertEquals('eligible', $orderBike->fresh()->vendor_settlement_status);
+        $this->assertSame($journalCountBefore, \\App\\Models\\FinancialJournalEntry::where('order_id', $orderBike->id)->count());
     }
 
     public function test_public_product_api_filters_by_condition_and_package_tier(): void
