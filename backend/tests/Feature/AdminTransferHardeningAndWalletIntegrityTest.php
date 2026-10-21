@@ -315,6 +315,31 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'account_name' => $this->vendor->account_name,
         ]);
 
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'TEST-MERCHANT-REQ-' . $payout->id,
+            'event_id' => 'EVT-MERCHANT-REQ-' . $payout->id,
+            'beneficiary_type' => \App\Models\VendorProfile::class,
+            'beneficiary_id' => $this->vendor->id,
+            'account_name' => 'vendor_payable',
+            'entry_type' => 'debit',
+            'amount' => '30000.00',
+            'currency' => 'NGN',
+            'description' => 'Test request journal debit.',
+        ]);
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'TEST-MERCHANT-REQ-' . $payout->id,
+            'event_id' => 'EVT-MERCHANT-REQ-' . $payout->id,
+            'beneficiary_type' => \App\Models\VendorProfile::class,
+            'beneficiary_id' => $this->vendor->id,
+            'account_name' => 'vendor_payout_payable',
+            'entry_type' => 'credit',
+            'amount' => '30000.00',
+            'currency' => 'NGN',
+            'description' => 'Test request journal credit.',
+        ]);
+
         $response = $this->actingAs($this->superAdmin)->post(route('admin.reject.vendor_payout'), [
             'payout_id' => $payout->id,
             'rejection_reason' => 'Invalid BVN details provided.',
