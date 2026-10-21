@@ -469,3 +469,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Change:** Added `2026_10_21_000002_make_return_case_vendor_optional_for_retailer_orders.php`, which makes `vendor_id` nullable while preserving its foreign-key relationship. Rollback refuses to restore NOT NULL when central return cases with null supplier IDs exist, preventing a destructive/failed rollback.
 
 **Verification boundary:** The migration source was reviewed against the model and original schema. Migration execution, database-driver compatibility, and a feature test creating a retailer-model return case have not yet been run. This is a code-level fix, not a claim of runtime verification. No merge or deployment is authorized.
+
+
+### VM-AUD-105 — Completed payout idempotency must match gateway reference and amount (21 October 2026)
+
+**Finding:** `finalizeSuccess()` returned idempotent success for any callback reaching an already-paid payout with a complete journal, before comparing the callback's transfer reference and verified amount with the persisted payout. That did not mutate the ledger, but it could falsely acknowledge a mismatched gateway event and conceal a reconciliation error. The method also accepted malformed/non-positive verified amounts up to decimal comparison.
+
+**Fix:** Validate a non-empty bounded transfer reference and a positive decimal amount before entering the transaction. For an already-paid payout, return idempotent success only when the incoming transfer reference and amount exactly match the stored payout; otherwise return a protected mismatch without changing financial state. Added unit tests for blank reference, scientific-notation amount, and zero amount.
+
+**Business impact:** Reduces the risk of a wrong or misrouted transfer notification being treated as a successful duplicate, improves gateway reconciliation and auditability, and preserves the no-double-posting behavior for genuine retries.
+
+**Verification boundary:** Code and tests are committed; tests have not been executed. A database-backed regression test for an already-paid payout receiving a mismatched reference/amount is still required. No merge or deployment is authorized.
