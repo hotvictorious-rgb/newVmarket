@@ -9,6 +9,8 @@ use App\Models\CustomerCashbackLedger;
 use App\Models\CustomerWalletCredit;
 use App\Models\CashbackRecoveryLedger;
 use App\Models\DeliveryLane;
+use App\Models\DeliveryCorridor;
+use App\Models\LogisticsCompanyCorridorRate;
 use App\Models\DisputeAndReturn;
 use App\Models\FinancialJournalEntry;
 use App\Models\Lga;
@@ -770,6 +772,24 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
 
     public function test_retailer_order_uses_item_cost_cashback_and_audited_logistics_company_override(): void
     {
+        $corridor = DeliveryCorridor::create([
+            'code' => 'test-uyo-retailer-' . strtolower(substr(sha1((string) microtime(true)), 0, 8)),
+            'name' => 'Test Uyo Retailer Corridor',
+            'lga_id' => $this->uyoLga->id,
+            'landmark_aliases' => ['Oron Road'],
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+        LogisticsCompanyCorridorRate::create([
+            'logistics_company_id' => $this->fleetCompany->id,
+            'delivery_corridor_id' => $corridor->id,
+            'base_payable' => '900.00',
+            'bulky_surcharge_per_unit' => '200.00',
+            'tariff_version' => 1,
+            'is_active' => true,
+        ]);
+
         $reference = Order::generateUniquePaymentReference();
         $order = Order::create([
             'order_number' => 'VM-RETAILER-FIN-' . strtoupper(substr(sha1($reference), 0, 8)),
@@ -778,6 +798,8 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'shop_id' => $this->shop->id,
             'origin_lga_id' => $this->shop->lga_id,
             'destination_lga_id' => $this->uyoLga->id,
+            'delivery_corridor_id' => $corridor->id,
+            'delivery_bulky_quantity_snapshot' => 0,
             'fulfillment_type' => 'doorstep_delivery',
             'retailer_model_order' => true,
             'order_status' => 'pending',
@@ -793,10 +815,10 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'vendor_net_90' => '0.00',
             'customer_cashback_5' => '500.00',
             'platform_margin_5' => '0.00',
-            'logistics_fee_retained' => '900.00',
-            'platform_delivery_fee' => '100.00',
-            'logistics_company_payable_default_amount' => '900.00',
-            'logistics_company_payable_amount' => '900.00',
+            'logistics_fee_retained' => '0.00',
+            'platform_delivery_fee' => '0.00',
+            'logistics_company_payable_default_amount' => null,
+            'logistics_company_payable_amount' => null,
             'sourcing_status' => 'supplier_confirmed',
             'vendor_settlement_status' => 'held',
             'verification_code' => '123456',
@@ -835,12 +857,9 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'entry_type' => 'credit',
             'amount' => '6000.00',
         ]);
-        $this->assertDatabaseHas('financial_journal_entries', [
+        $this->assertDatabaseMissing('financial_journal_entries', [
             'order_id' => $order->id,
             'account_name' => 'logistics_company_payable',
-            'entry_type' => 'credit',
-            'amount' => '900.00',
-            'beneficiary_id' => null,
         ]);
         $this->assertDatabaseMissing('financial_journal_entries', [
             'order_id' => $order->id,
@@ -852,6 +871,16 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $assigned = $service->assignCompany($order->fresh(), $this->superAdmin, $this->fleetCompany->id, 'Uyo route covered by approved fleet');
         $this->assertTrue($assigned['success']);
         $this->assertSame($this->fleetCompany->id, (int) $assigned['order']->logistics_company_id);
+        $this->assertSame('900.00', $assigned['order']->logistics_company_payable_amount);
+        $this->assertSame('900.00', $assigned['order']->logistics_company_base_payable_snapshot);
+        $this->assertSame('200.00', $assigned['order']->logistics_company_bulky_surcharge_per_unit_snapshot);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'logistics_company_payable',
+            'entry_type' => 'credit',
+            'amount' => '900.00',
+            'beneficiary_id' => $this->fleetCompany->id,
+        ]);
 
         // Commercial rate may still be adjusted after rider assignment, but not after
         // the rider confirms physical parcel custody.
