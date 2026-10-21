@@ -1455,23 +1455,6 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             return response()->json(['status' => false, 'message' => 'Unauthorized: Only merchant owner can modify settlement bank accounts.'], 403);
         }
 
-        $vendor = $ctx['vendor'];
-
-        $hasSupplierPayout = RetailerSupplierPayoutRequest::where('supplier_vendor_id', $vendor->id)
-            ->whereIn('status', ['pending', 'processing', 'uncertain'])
-            ->exists();
-        $hasLegacyPayout = VendorPayoutRequest::where('vendor_id', $vendor->id)
-            ->whereIn('status', ['pending', 'approved'])
-            ->whereNull('disbursed_at')
-            ->exists();
-        if ($hasSupplierPayout || $hasLegacyPayout) {
-            return response()->json([
-                'status' => false,
-                'code' => 'PAYOUT_IN_FLIGHT',
-                'message' => 'Bank details cannot be changed while any payout is pending, approved, or awaiting gateway reconciliation.',
-            ], 409);
-        }
-
         $validated = $request->validate([
             'bank_name' => 'required|string|max:100',
             'bank_code' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9_-]+$/'],
@@ -1482,48 +1465,69 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             'account_number.regex' => 'Account number must contain only numbers.',
         ]);
 
-        $oldBankSnapshot = [
-            'bank_name' => $vendor->bank_name,
-            'bank_code' => $vendor->bank_code,
-            'account_name' => $vendor->account_name,
-            'account_number_last4' => $vendor->account_number ? substr((string) $vendor->account_number, -4) : null,
-        ];
-        $vendor->update([
-            'bank_name' => strip_tags(trim($validated['bank_name'])),
-            'bank_code' => strtoupper(trim($validated['bank_code'])),
-            'account_number' => trim($validated['account_number']),
-            'account_name' => strtoupper(strip_tags(trim($validated['account_name']))),
-            'bank_updated_at' => Carbon::now(),
-        ]);
-        AdminAuditLog::create([
-            'user_id' => $ctx['user']->id,
-            'action' => 'supplier_bank_details_updated',
-            'target_type' => VendorProfile::class,
-            'target_id' => $vendor->id,
-            'old_values' => $oldBankSnapshot,
-            'new_values' => [
-                'bank_name' => $vendor->bank_name,
-                'bank_code' => $vendor->bank_code,
-                'account_name' => $vendor->account_name,
-                'account_number_last4' => substr((string) $vendor->account_number, -4),
-                'cooldown_expires_at' => $vendor->bank_updated_at->copy()->addHours(48)->toIso8601String(),
-            ],
-            'ip_address' => $request->ip(),
-            'user_agent' => substr((string) $request->userAgent(), 0, 1000),
-        ]);
+        return DB::transaction(function () use ($ctx, $validated, $request) {
+            // Serialize bank changes with payout reservation/submission. Recheck active
+            // requests only after locking the supplier row to close the TOCTOU gap.
+            $vendor = VendorProfile::whereKey($ctx['vendor']->id)->lockForUpdate()->firstOrFail();
+            $hasSupplierPayout = RetailerSupplierPayoutRequest::where('supplier_vendor_id', $vendor->id)
+                ->whereIn('status', ['pending', 'processing', 'uncertain'])
+                ->exists();
+            $hasLegacyPayout = VendorPayoutRequest::where('vendor_id', $vendor->id)
+                ->whereIn('status', ['pending', 'approved', 'processing', 'in_flight', 'uncertain'])
+                ->whereNull('disbursed_at')
+                ->exists();
+            if ($hasSupplierPayout || $hasLegacyPayout) {
+                return response()->json([
+                    'status' => false,
+                    'code' => 'PAYOUT_IN_FLIGHT',
+                    'message' => 'Bank details cannot be changed while any payout is pending, approved, or awaiting gateway reconciliation.',
+                ], 409);
+            }
 
-        return response()->json([
-            'status' => true,
-            'message' => 'Designated bank account details updated successfully. 48-Hour Anti-Fraud Cooldown is now active.',
-            'data' => [
+            $oldBankSnapshot = [
                 'bank_name' => $vendor->bank_name,
                 'bank_code' => $vendor->bank_code,
-                'account_number_masked' => '******' . substr($vendor->account_number, -4),
                 'account_name' => $vendor->account_name,
-                'cooldown_active' => true,
-                'cooldown_expires_at' => $vendor->bank_updated_at->copy()->addHours(48)->toIso8601String(),
-            ],
-        ]);
+                'account_number_last4' => $vendor->account_number ? substr((string) $vendor->account_number, -4) : null,
+            ];
+            $vendor->update([
+                'bank_name' => strip_tags(trim($validated['bank_name'])),
+                'bank_code' => strtoupper(trim($validated['bank_code'])),
+                'account_number' => trim($validated['account_number']),
+                'account_name' => strtoupper(strip_tags(trim($validated['account_name']))),
+                'bank_updated_at' => Carbon::now(),
+            ]);
+
+            AdminAuditLog::create([
+                'user_id' => $ctx['user']->id,
+                'action' => 'supplier_bank_details_updated',
+                'target_type' => VendorProfile::class,
+                'target_id' => $vendor->id,
+                'old_values' => $oldBankSnapshot,
+                'new_values' => [
+                    'bank_name' => $vendor->bank_name,
+                    'bank_code' => $vendor->bank_code,
+                    'account_name' => $vendor->account_name,
+                    'account_number_last4' => substr((string) $vendor->account_number, -4),
+                    'cooldown_expires_at' => $vendor->bank_updated_at->copy()->addHours(48)->toIso8601String(),
+                ],
+                'ip_address' => $request->ip(),
+                'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+            ]);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Designated bank account details updated successfully. 48-Hour Anti-Fraud Cooldown is now active.',
+                'data' => [
+                    'bank_name' => $vendor->bank_name,
+                    'bank_code' => $vendor->bank_code,
+                    'account_number_masked' => '******' . substr((string) $vendor->account_number, -4),
+                    'account_name' => $vendor->account_name,
+                    'cooldown_active' => true,
+                    'cooldown_expires_at' => $vendor->bank_updated_at->copy()->addHours(48)->toIso8601String(),
+                ],
+            ]);
+        }, 3);
     }
 
     /**
