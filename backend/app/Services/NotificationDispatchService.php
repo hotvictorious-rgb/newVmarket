@@ -542,11 +542,11 @@ class NotificationDispatchService
 
         $vendorUserId = (int) $vendor->user_id;
         $vendorPhone = trim((string) ($vendor->business_phone ?: $vendor->user->phone));
-        $title = self::renderTemplate($eventType, 'vendor', 'title', ['order_number' => $orderNumber], 'Return Package Arrived at Counter');
+        $title = self::renderTemplate($eventType, 'vendor', 'title', ['order_number' => $orderNumber], 'Return Package Expected at Counter');
         $body = self::renderTemplate($eventType, 'vendor', 'body', [
             'order_number' => $orderNumber,
             'otp' => $otp,
-        ], "Courier has arrived with return parcel for Order #{$orderNumber}. Security Return OTP: [{$otp}]. Verify items before releasing OTP.");
+        ], "A return parcel for Order #{$orderNumber} is expected. Keep this OTP private and share it only with the assigned rider after the parcel physically arrives and the items match.");
 
         if (self::isChannelActive('in_app', $eventType)) {
             self::createInApp($vendorUserId, $title, $body, $eventType, ['return_case_id' => $returnCase->id, 'return_otp' => $otp]);
