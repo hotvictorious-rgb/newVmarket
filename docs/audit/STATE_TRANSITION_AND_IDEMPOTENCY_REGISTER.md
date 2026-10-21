@@ -579,3 +579,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Lets treasury retry a legitimate refund after a clear gateway rejection without risking a duplicate refund while the earlier attempt is still pending or uncertain. It also makes the retry trail explicit for reconciliation and audit.
 
 **Verification boundary:** Code and regression test committed; tests/CI remain pending. Ambiguous gateway outcomes still block retries until reconciliation. No merge or deployment.
+
+
+### VM-AUD-115 — Finalize authoritative asynchronous refund failures safely (21 October 2026)
+
+**Finding:** When the refund reconciler verified a pending Paystack refund as `failed` or `reversed`, it only logged the event and left the financial operation open. That kept the refund reservation active, left the old refund reference attached, and could leave wallet credits quarantined indefinitely. A normal retry could not proceed safely.
+
+**Fix:** Added `FinancialOperationService::finalizeRefundFailure()`. It accepts only failed/reversed gateway statuses, requires a matching persisted gateway attempt reference, validates amount/currency evidence when present, checks the active order reconciliation lease, marks the operation terminal, releases active reservations, restores quarantined wallet credits to their persisted pre-refund status, and clears matching stale references. A confirmed operation cannot be downgraded. Added a migration to persist `refund_reserved_from_status`, updated the wallet model/finalizer, wired the reconciliation engine to use the guarded failure finalizer, and added an async-failure regression test.
+
+**Business impact:** Prevents failed asynchronous refunds from leaving customer wallet credit locked indefinitely, releases funds reserved for a refund that did not settle, and permits a safe manual retry after a definitive failure while still blocking retries for uncertain or already-confirmed operations.
+
+**Verification boundary:** Code, migration and tests committed; test execution and CI remain pending. No merge or deployment.
