@@ -376,6 +376,14 @@ class RetailerSupplierPayoutService
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout allocations or request journal are incomplete.'];
             }
             foreach ($allocations as $allocation) {
+                if ((int) $allocation->supplier_vendor_id !== (int) $payout->supplier_vendor_id
+                    || $allocation->status !== 'allocated') {
+                    return ['success' => false, 'protected' => true, 'message' => 'Supplier payout allocation state or beneficiary changed; do not finalize automatically.'];
+                }
+                $itemIdentity = OrderItem::whereKey($allocation->order_item_id)->first();
+                if (!$itemIdentity || (int) $itemIdentity->order_id !== (int) $allocation->order_id) {
+                    return ['success' => false, 'protected' => true, 'message' => 'Supplier payout allocation no longer maps to its original order item; finance reconciliation is required.'];
+                }
                 $eventId = 'EVT-SUPPLIER-PAYOUT-' . $payout->id . '-ITEM-' . $allocation->order_item_id;
                 $entries = FinancialJournalEntry::where('event_id', $eventId)->count();
                 if ($entries !== 0 && !$this->hasExactPair($eventId, $allocation, 'supplier_payout_payable', 'debit', 'cash_in_escrow', 'credit')) {
