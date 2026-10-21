@@ -924,7 +924,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'notes' => 'Fixture for future cashback offset.',
         ]);
 
-        $result = app(\\App\\Services\\CashbackMaturityService::class)->matureOrder($order);
+        $result = app(\App\Services\CashbackMaturityService::class)->matureOrder($order);
         $this->assertTrue($result['matured']);
         $this->assertSame('available', $lot->fresh()->status);
         $this->assertSame('400.00', $lot->fresh()->amount);
