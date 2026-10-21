@@ -20,7 +20,7 @@ class LegalDocumentSeeder extends Seeder
         // 1. TERMS OF SERVICE
         $termsContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — TERMS AND CONDITIONS OF SERVICE
-**Effective Date:** October 20, 2026  
+**Effective Date:** October 21, 2026  
 **Version:** 2.0.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 
@@ -128,8 +128,8 @@ MARKDOWN;
         // 2. RETURN AND REFUND POLICY
         $refundContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — RETURN, REFUND & DOORSTEP ACCEPTANCE POLICY
-**Effective Date:** October 20, 2026  
-**Version:** 1.2.0  
+**Effective Date:** October 21, 2026  
+**Version:** 2.0.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 
 ---
@@ -206,7 +206,7 @@ MARKDOWN;
         // 3. PRIVACY & DATA PROTECTION POLICY
         $privacyContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — PRIVACY & DATA PROTECTION POLICY
-**Effective Date:** October 20, 2026  
+**Effective Date:** October 21, 2026  
 **Version:** 1.1.0  
 **Regulatory Compliance:** Nigeria Data Protection Act (NDPA) & NDPR  
 
@@ -340,7 +340,7 @@ MARKDOWN;
 # LEGACY — LOGISTICS FLEET OPERATIONS & CHAIN-OF-CUSTODY SLA (INACTIVE FOR NEW ORDERS)
 
 > **Historical record only:** Victorious MARKET does not assign new orders to a central fleet, operate collection hubs for new fulfilment, or pay rider/logistics compensation for new vendor-managed orders. This document is retained for audit and historical obligations only; it is not the active policy for new orders.
-**Effective Date:** October 20, 2026  
+**Effective Date:** October 21, 2026  
 **Version:** 1.1.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 **Contract Type:** Transport & Delivery Service Level Agreement (SLA)  
@@ -475,7 +475,7 @@ VM operates from Uyo and serves only destinations where product sourcing, curren
 
 ### 5. Supplier Relationship
 Supplier offers are reviewed before use. VM snapshots the selected supplier offer, product/variant, agreed purchase cost, quantity and relevant terms on each accepted order item. Supplier offer changes do not silently change an accepted order. If a supplier cannot fulfil, VM follows an authorized sourcing, cancellation or refund workflow; substitutions require any necessary customer consent.
-MARKDOWN;MARKDOWN;
+MARKDOWN;
 
         $doc6 = LegalDocument::updateOrCreate(
             ['slug' => 'about-us'],
@@ -506,8 +506,8 @@ MARKDOWN;MARKDOWN;
         // 7. ORDER CANCELLATION POLICY
         $cancellationContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — ORDER CANCELLATION & PRE-DISPATCH POLICY
-**Effective Date:** October 20, 2026  
-**Version:** 1.2.0  
+**Effective Date:** October 21, 2026  
+**Version:** 2.0.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 
 ---
@@ -631,7 +631,7 @@ VM coordinates delivery through an approved logistics company. Each assigned rid
 
 #### Can suppliers collect money or change the price after I order?
 No. Customer payment goes through VM's authorized workflow. The accepted order snapshots the product, price and selected supplier offer. VM does not silently increase the customer's price or substitute a product; any permitted substitution requires the appropriate authorization and customer consent.
-MARKDOWN;MARKDOWN;
+MARKDOWN;
 
         $doc8 = LegalDocument::updateOrCreate(
             ['slug' => 'frequently-asked-questions'],
@@ -663,7 +663,7 @@ MARKDOWN;MARKDOWN;
         $contactContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — CONTACT & CUSTOMER CARE CENTER
 **Customer Support & Official Contact**  
-**Effective Date:** October 20, 2026 &bull; Version: 1.2.0  
+**Effective Date:** October 21, 2026 &bull; Version: 2.0.0  
 
 ---
 
@@ -678,7 +678,7 @@ Include your order number and the affected VM order/item where relevant. Never s
 
 ---
 
-### 2. Vendor-Managed Fulfilment and Pickup
+### 2. VM-Coordinated Delivery and Authorized Pickup
 
 Victorious MARKET coordinates customer delivery through approved logistics companies. Every rider assigned to a new VM delivery must be active and linked to exactly one active logistics company; a supplier may not dispatch its own rider as the VM carrier or mark delivery complete. Authorized supplier-shop pickup is available only when VM approves it and the reservation pass, separate one-time customer pickup verification and in-shop photo are recorded. Contact VM support for return/inspection instructions; do not send goods to an unverified address.
 
@@ -686,7 +686,7 @@ Victorious MARKET coordinates customer delivery through approved logistics compa
 
 ### 3. Complaints and Disputes
 
-Open a support request through the website/order record or use the official contact number above. Explain the issue, identify the affected item and vendor child order, and attach available supporting evidence. An authorised administrator reviews the case and records the decision. No fixed 24-hour dispute-resolution or refund-completion time is promised. Applicable consumer rights and valid warranty obligations remain in force.
+Open a support request through the website/order record or use the official contact number above. Explain the issue, identify the affected VM order/item, and attach available supporting evidence. An authorised administrator reviews the case and records the decision. No fixed 24-hour dispute-resolution or refund-completion time is promised. Applicable consumer rights and valid warranty obligations remain in force.
 
 ---
 
