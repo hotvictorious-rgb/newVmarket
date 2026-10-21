@@ -220,16 +220,10 @@ class CheckoutExecutionService
                     $destLgaId = $shop->lga_id;
                 }
 
-                $orderPackageTier = 'bike';
-                foreach ($itemsToCreate as $it) {
-                    $tier = $it['product']->package_tier ?? 'bike';
-                    if (in_array(strtolower($tier), ['keke', 'bulky'], true)) {
-                        $orderPackageTier = 'keke';
-                        break;
-                    }
-                }
-
-                $availability = $this->fulfillmentService->checkDeliveryAvailability($shop->id, $destLgaId, $orderPackageTier);
+                // One customer-facing order pays one base route fee. Each physical unit
+                // marked keke/bulky adds the configured bulky surcharge once; do not
+                // convert the whole order into one shared bulky charge.
+                $availability = $this->fulfillmentService->checkDeliveryAvailability($shop->id, $destLgaId, 'bike');
                 if (!$availability['is_available']) {
                     return [
                         'error' => true,
@@ -238,6 +232,14 @@ class CheckoutExecutionService
                 }
 
                 $deliveryFee = $availability['fee'];
+                $bulkySurcharge = (string) ($availability['bulky_surcharge'] ?? '0.00');
+                foreach ($itemsToCreate as $it) {
+                    $tier = strtolower((string) ($it['product']->package_tier ?? 'bike'));
+                    if (in_array($tier, ['keke', 'bulky'], true)) {
+                        $perUnitSurcharge = BcMathService::mul($bulkySurcharge, (string) $it['quantity']);
+                        $deliveryFee = BcMathService::add($deliveryFee, $perUnitSurcharge);
+                    }
+                }
             }
 
             // Cashback Redemption Check under Pessimistic Balance Reservation
