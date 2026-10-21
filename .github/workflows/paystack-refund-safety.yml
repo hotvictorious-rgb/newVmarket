@@ -89,6 +89,7 @@ jobs:
           php -l database/migrations/2026_10_21_000008_add_retailer_financial_snapshots_and_logistics_override.php
           php -l database/migrations/2026_10_21_000009_add_operational_supplier_snapshots.php
           php -l database/migrations/2026_10_21_000010_allow_centrally_owned_retailer_returns.php
+          php -l database/migrations/2026_10_21_000011_add_order_item_link_to_financial_journal_entries.php
           php -l database/migrations/2026_10_21_000009_create_cashback_recovery_ledger.php
           php -l database/migrations/2026_10_20_000046_add_customer_address_id_to_orders.php
           php -l database/migrations/2026_10_20_000001_allow_cashback_maturity_to_start_after_fulfilment.php
