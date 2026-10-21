@@ -333,39 +333,36 @@ These sources describe Paystack's event vocabulary and provider status meanings.
 
 ## 14. Binding rule: merchandise and delivery refunds are approved independently
 
-The owner has confirmed that **delivery is never mixed with merchandise, and merchandise refunds and delivery-fee refunds must be approved independently**. This rule applies to a single-vendor order and to every child order inside a multi-vendor parent checkout.
+**Delivery is never mixed with merchandise.** A customer may submit one case about both, but merchandise and delivery-fee refunds require independent approval, amounts, financial operations, reservations, provider states and audit outcomes. This applies to VM orders regardless of which private supplier provided the product.
 
 ### Component decision matrix
 
-| Component | Approval unit | Included in approved amount | Accounting reversal | Must not include |
+| Component | Approval unit | Amount basis | Accounting treatment | Must not include |
 |---|---|---|---|---|
-| Merchandise/item | Specific child order + item/order-line(s) + quantity | Approved merchandise value after the original discount allocation; prior item refunds and cashback adjustments are accounted for | Reverse only the actual 90% vendor / 5% cashback / 5% platform allocation attributable to the approved merchandise amount | Delivery fee or delivery-fee commission |
-| Delivery fee | Specific child order's captured delivery-fee component | Only the independently approved refundable delivery-fee amount | Reverse only the actual 90% vendor / 10% platform delivery-fee allocation | Merchandise value, merchandise commission, or cashback |
+| Merchandise/item | Specific VM order item(s), variant and quantity | Approved captured merchandise value after the original discount allocation, less prior refunds | Reverse only the approved captured merchandise amount under the approved retailer chart of accounts; adjust historical cashback separately only where applicable | Delivery fee or old vendor commission split |
+| Delivery fee | The actual captured delivery-fee component for the VM order | Only the independently approved refundable delivery-fee amount | Account for only the approved captured delivery component under the approved retailer chart of accounts and actual logistics terms | Merchandise value or cashback |
 | Both components | Two distinct decisions and financial operations | Each component's independently approved amount | Post separate component-specific reversals and reconcile separately | One combined approval or undifferentiated ledger reversal |
 
 ### Required state and execution rules
 
 1. A customer may submit one complaint/request mentioning both components, but the system must create separate decision records. Approval of merchandise does not approve delivery; approval of delivery does not approve merchandise.
-2. Each component may independently be not_requested, pending_review, approved, rejected, gateway_pending, confirmed, failed, or needs_attention (map to existing canonical enums rather than introducing duplicate enums unnecessarily). One component can be pending or rejected while the other is confirmed.
-3. Only an approved component can create a dispatchable refund operation. The two narrow automatic-approval exceptions already approved (verified duplicate successful capture and verified pre-vendor-action cancellation) must still record which captured component/amount is being corrected; they do not permit an undifferentiated combined refund.
-4. For each approved component, create a distinct idempotent financial operation and reservation tied to the exact parent Paystack capture, child vendor order, component type, item/line IDs when applicable, amount in kobo, decision/approver and reason. A distinct component operation is not a new charge or payment channel: the actual refund still returns to the original Paystack payment channel.
-5. Enforce component-level remaining amount, child-order allocation ceiling, and aggregate parent-capture ceiling under locks. Count confirmed refunds plus active reservations across every component and every child order. A refund of one component must reduce only that component's remaining balance and also reduce the shared parent capture's remaining refundable amount.
-5a. **Shared history/cap, independent states:** each component operation must reference the same original parent capture and the exact child order/allocation, but retain its own approval, reservation, gateway state and audit history. Confirmed Paystack cash refunds plus active cash-refund reservations across all components and child orders count toward the single aggregate parent-capture refund ceiling. Do not count the same refund twice.
-5b. **Cashback linkage is not a second gateway refund:** a merchandise refund must calculate the related cashback reversal/recovery from the immutable item allocation and cashback ledger. This shares source history with the merchandise refund but remains a separate cashback-ledger adjustment, not another Paystack cash refund; never add cashback recovery a second time to the parent-capture cash-refund ceiling. Cashback maturity/recovery has its own state and timing, while remaining linked to the originating order, item and refund operation.
-6. A delivery-fee refund is impossible for in_shop_pickup because its captured delivery fee is zero. Never invent a delivery amount to refund. Where delivery was charged, whether it is refundable depends on the separately approved reason-specific policy and applicable law.
-7. Merchandise and delivery gateway operations have independent states and idempotency keys. A Paystack refund.pending, refund.processing, refund.needs-attention, refund.processed, or refund.failed event must match the exact refund operation/provider identity; it must not close, fail, or overwrite a sibling component operation.
-8. Customer refund completion requires provider-confirmed outcome for that exact component. refund.failed or an uncertain timeout leaves that component's customer obligation open and subject to reconciliation. Vendor recovery remains a separate evidence-based operation and does not gate customer refund completion.
-9. Customer-facing status must show each component separately: amount requested, approved/denied decision, amount actually confirmed by Paystack, and any component still under review. Do not describe a combined total as refunded while one approved component remains unresolved.
-10. The 24-hour customer claim window and the separate 24-hour cashback-maturity buffer remain unchanged. This rule separates component decisions; it does not extend the window or promise gateway processing within 24 hours.
+2. Each component may independently be pending review, approved, rejected, gateway pending, confirmed, failed or needs attention. Map these to existing canonical enums rather than introducing duplicate enums unnecessarily. One component can remain pending/rejected while the other is confirmed.
+3. Only an approved component can create a dispatchable refund operation. The two narrow automatic-approval exceptions remain a verified duplicate successful capture and a verified paid order cancelled before any supplier/fulfilment action, subject to every documented guard.
+4. Each approved component requires a distinct idempotent financial operation and reservation tied to the original Paystack capture, VM order, component type, item IDs when applicable, amount in kobo, decision/approver and reason. The refund still returns to the original verified Paystack channel where supported.
+5. Enforce component remaining amount and aggregate original-capture ceiling under locks. Count confirmed refunds plus active reservations across every component; never refund the same captured amount twice.
+6. A delivery-fee refund is impossible when supplier-shop pickup has a zero delivery fee. Never invent a delivery amount to refund. Refundability of a charged delivery fee depends on the separately approved reason-specific policy, evidence, agreement and applicable law.
+7. Merchandise and delivery gateway operations have independent states and idempotency keys. Each Paystack refund event must match the exact refund operation/provider identity; it must not close, fail or overwrite a sibling component.
+8. Customer refund completion requires provider-confirmed outcome for that exact component. refund.failed or uncertain timeout leaves that component's customer obligation open for reconciliation. Supplier recovery remains separate and does not gate customer refund completion.
+9. Customer-facing status must show each component separately: amount requested, decision, amount confirmed by Paystack and any component still under review. Do not describe the whole case as refunded while a component remains unresolved.
+10. The 24-hour customer claim window is separate from gateway processing and supplier payment eligibility. Cashback maturity/funding is not defined by this component rule; preserve historical cashback obligations and require owner/accountant approval for new retailer accrual.
 
 ### Required implementation and regression proof
 
-- Model a component type (merchandise or delivery_fee) and item/line scope on the refund request/operation metadata or normalized columns; enforce valid values server-side.
+- Model component type (merchandise or delivery_fee) and item scope on refund request/operation metadata or normalized columns; enforce valid values server-side.
 - Remove flows that infer delivery-fee approval from merchandise acceptance or infer merchandise approval from delivery outcome.
-- Reuse immutable captured allocation snapshots; never recalculate old refunds using current prices/vendor settings.
-- Ensure component-specific idempotency binds the key to parent capture, child order, component, item scope, amount, reason and approval.
-- Test the full cross-product of merchandise/delivery independent decisions, mixed success/failure/pending states, partial-item refunds, multi-vendor children, zero-fee pickup, concurrent reservations, duplicate webhooks and correct 90/5/5 versus 90/10 journal reversals.
-
+- Reuse immutable captured price/discount snapshots; never recalculate old refunds using current product or supplier-offer prices.
+- Ensure component-specific idempotency binds the key to the original capture, order, component, item scope, amount, reason and approval.
+- Test independent merchandise/delivery decisions, mixed success/failure/pending states, partial-item refunds, zero-fee pickup, concurrent reservations, duplicate webhooks and correct retailer-ledger reversals.
 
 ## Owner-confirmed rule: platform-funded customer refund; separate supplier recovery
 
