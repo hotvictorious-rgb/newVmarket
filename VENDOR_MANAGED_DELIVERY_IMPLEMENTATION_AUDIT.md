@@ -151,26 +151,28 @@ Doorstep COD is disabled. Customers may pay before delivery through Victorious M
 
 ## 5. Required regression and security tests
 
-1. Vendor A cannot list, create, activate, assign, or reassign Vendor B’s riders/orders.
+The earlier numbered vendor-managed-delivery cases below are historical regression cases only where they exercise legacy records or code. They are not acceptance criteria for new retailer orders. New retailer acceptance requires VM-controlled assignment through an approved logistics company and rejects supplier/vendor-controlled dispatch.
+
+1. Legacy vendor A cannot access or mutate another legacy vendor's historical riders/orders; new VM delivery assignments must instead be authorized by VM operations and the approved logistics-company relationship.
 2. Fleet-only, ownerless, inactive-vendor, inactive-user, and dual-linked rider profiles cannot act on new work.
 3. Rider API list/detail/history/returns and rendered rider UI contain no raw customer phone, payment status, total/amount due, delivery fee financial field, card/bank details, payment reference, refund amount, cashback, commission, vendor settlement, payout or ledger data.
 4. Protected Call Customer works for the authenticated rider’s assigned order without disclosing the number in JSON, HTML, logs, or analytics.
-5. Rider cannot mutate an order unless `order.rider_id` exactly matches their rider profile and order vendor matches their active vendor.
+5. Rider cannot mutate an order unless the assignment links that rider to the exact active logistics company and delivery/fulfilment unit; vendor ownership is not the authorization rule for new retailer delivery.
 6. Two concurrent assignment requests cannot leave two active riders; assignment after custody is rejected; deactivation is blocked during custody.
 7. Failed-delivery event records evidence and custody only; concurrent duplicate attempts do not create duplicate return cases or financial entries.
 8. Rider handover records operational evidence only. No rider-triggered wallet credit, financial journal, rider/logistics payable, vendor-fund release, or financial amount is returned to the rider.
 9. Pickup `in_shop_pickup` is zero-fee, requires the `RES-XXXXXX` reservation pass AND one-time customer pickup OTP plus an in-shop pickup photo at the vendor counter, requires no rider, and cannot be fulfilled through rider doorstep endpoints.
-10. Multi-vendor checkout keeps fees, assignments, and allocations isolated by child vendor order.
+10. New retailer checkout must not depend on public multi-vendor child orders or vendor commission allocation. If legacy parent/child rows exist, preserve their historical integrity and prove that new orders use the retailer workflow.
 11. COD is rejected across all launch checkout modes and legacy paths; a future release requires separate explicit owner approval and passing vendor-owned collection/reconciliation controls.
 12. Historical logistics orders and financial records remain readable to authorized auditors, but legacy fleet roles cannot receive new work.
-13. Merchandise 90/5/5 and delivery-fee 90/10 allocations balance and refund correctly without any rider beneficiary.
-14. Merchandise earnings are traceable to each vendor order-item line and delivery earnings separately to each vendor child order; partial item/fee refunds reverse only the correct source earning.
-15. Vendor cannot choose a payout amount; server calculates strict FIFO batch of whole earning records, stops before exceeding ₦500,000, never splits/skips, and rejects overlapping requests.
+13. New retailer orders must not create 90/5/5 merchandise or 90/10 delivery allocations. Any legacy financial allocation regression test must be explicitly isolated to historical records and must not authorize those rules for new orders.
+14. New supplier payables must trace to the immutable supplier offer/order-item cost snapshot and verified fulfilment. Logistics-company charges must trace to approved rate-card/agreement snapshots. Refunds must reverse the actual VM customer charge without applying legacy vendor earning allocations.
+15. Legacy vendor payout code, if retained for historical read-only audit, must not create supplier payments or new retailer financial activity. New supplier payment amounts derive from the agreed purchase-cost snapshot and approved supplier terms, not vendor earning FIFO or historical payout thresholds.
 16. Admin approval precedes payment initiation; pending-review cannot call Paystack; only verified transfer success marks the snapshotted earnings paid.
 
 ## 6. Implementation order
 
-1. **P0 privacy/financial containment:** remove rider financial fields/raw phone; exact-assignment authorization; block rider-triggered financial posting; enforce vendor-only rider guard.
+1. **P0 privacy/financial containment:** remove rider financial fields/raw phone; exact assignment authorization; block rider-triggered financial posting; enforce VM/logistics-company assignment rules for new work.
 2. **P1 lifecycle integrity:** atomic assignment/custody, rider deactivation guard, failed-attempt transaction/idempotency, pickup code/status reconciliation.
 3. **P1 checkout and legacy isolation:** remove customer-supplied rider/fleet IDs; disable new fleet assignment/payout routes; remove rider earnings and financial screens; keep legacy read-only access.
 4. **P2 policy and verification:** confirm credential onboarding; prove COD is disabled; update API contracts, UI, notifications, and remaining docs.
