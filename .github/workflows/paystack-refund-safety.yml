@@ -55,6 +55,8 @@ jobs:
           php -l app/Console/Commands/MatureCustomerCashbackCommand.php
           php -l app/Services/DoorstepHandshakeService.php
           php -l app/Services/ReturnAndRefundService.php
+          php -l app/Services/FinancialOperationService.php
+          php -l app/Services/RetailerRefundAccountingService.php
           php -l app/Models/CashbackRecoveryLedger.php
           php -l app/Services/FinancialReconciliationEngine.php
           php -l app/Services/PaystackService.php
