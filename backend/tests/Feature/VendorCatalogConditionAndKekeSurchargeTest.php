@@ -19,6 +19,7 @@ use App\Models\SupplierOffer;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Services\FulfillmentAvailabilityService;
+use App\Services\SupplierOfferSelectionService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -1004,4 +1005,41 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $product = Product::where('name', 'Camera Lens Without Photo')->first();
         $this->assertNull($product);
     }
+
+    public function test_supplier_offer_without_confirming_actor_is_not_selectable(): void
+    {
+        $product = Product::create([
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'category_id' => $this->category->id,
+            'name' => 'Availability Evidence Guard Product',
+            'slug' => 'availability-evidence-guard-product',
+            'unit_price' => '10000.00',
+            'condition' => 'brand_new',
+            'package_tier' => 'bike',
+            'inventory_quantity' => 5,
+            'is_in_stock' => true,
+            'listing_status' => 'listed',
+            'is_approved' => true,
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+
+        SupplierOffer::create([
+            'product_id' => $product->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'wholesale_cost' => '7000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now(),
+            'availability_confirmed_by' => null,
+            'availability_expires_at' => Carbon::now()->addDay(),
+            'notes' => 'Missing confirming actor must fail closed',
+        ]);
+
+        $selected = app(SupplierOfferSelectionService::class)
+            ->selectLowestCost($product, 'doorstep_delivery');
+
+        $this->assertNull($selected);
+    }
+
 }
