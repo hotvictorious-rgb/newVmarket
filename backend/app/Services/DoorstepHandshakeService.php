@@ -498,7 +498,7 @@ class DoorstepHandshakeService
                     ->first();
 
                 if (BcMathService::comp((string) $lockedOrder->customer_cashback_5, '0.00') > 0 && !$cashbackLedger) {
-                    throw new \\RuntimeException('Retailer cashback liability exists without its cashback ledger lot.');
+                    throw new \RuntimeException('Retailer cashback liability exists without its cashback ledger lot.');
                 }
 
                 if ($cashbackLedger && BcMathService::comp($totalAcceptedMerchandise, '0.00') > 0) {
