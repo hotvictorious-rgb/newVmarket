@@ -689,6 +689,42 @@ class ReturnAndRefundService
 
         $gatewayJournalAlreadyPosted = false;
 
+        // Reuse a live operation for reconciliation, never issue a second gateway
+        // refund while its outcome is open. A new idempotency key is permitted only
+        // after every prior attempt for this case is definitively failed.
+        $priorOperations = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+            ->where('metadata->return_case_id', $caseId)
+            ->orderBy('id')
+            ->get();
+        if ($priorOperations->contains(fn ($operation) => in_array($operation->status, ['confirmed', 'reversed'], true))) {
+            ReturnCase::where('id', $caseId)->where('refund_claim_token', $claimToken)->update([
+                'refund_claim_token' => null,
+                'refund_claimed_at' => null,
+            ]);
+            return [
+                'success' => false,
+                'status' => 'reconciliation_required',
+                'message' => 'A prior refund attempt is confirmed or reversed. Finance must reconcile its journal and gateway evidence before another refund can be initiated.',
+            ];
+        }
+        $openOperation = $priorOperations->first(fn ($operation) => !in_array($operation->status, ['failed', 'confirmed', 'reversed'], true));
+        if ($openOperation) {
+            ReturnCase::where('id', $caseId)->where('refund_claim_token', $claimToken)->update([
+                'refund_claim_token' => null,
+                'refund_claimed_at' => null,
+            ]);
+            return [
+                'success' => true,
+                'status' => 'initiated',
+                'message' => 'An earlier refund operation is still open. No second Paystack request was sent; reconcile the existing operation.',
+                'case' => ReturnCase::find($caseId),
+                'total_refunded' => $totalCashRefund,
+            ];
+        }
+        $retryIdempotencyKey = $priorOperations->isNotEmpty()
+            ? 'REFUND-CASE-' . $caseId . '-ATTEMPT-' . ($priorOperations->count() + 1)
+            : null;
+
         // 2. Only dispatch to Paystack when no manual bank reference was supplied.
         if (empty($bankReference) && empty($paystackRefundId) && !empty($preValidation['order_payment_reference'])) {
             $finOpService = new \App\Services\FinancialOperationService($this->paystackService);
@@ -701,7 +737,7 @@ class ReturnAndRefundService
                     $totalCashRefund,
                     "Manual refund for Return Case #{$preValidation['case_number']}",
                     $case,
-                    null,
+                    $retryIdempotencyKey,
                     [
                         'type' => 'admin_approved_return',
                         'approved_by_user_id' => (int) $case->reviewed_by_admin_id,
