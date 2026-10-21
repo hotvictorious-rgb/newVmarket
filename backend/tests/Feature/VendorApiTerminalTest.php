@@ -62,6 +62,7 @@ class VendorApiTerminalTest extends TestCase
             'marketplace_status' => 'active',
             'commission_rate' => 10.00,
             'bank_name' => 'Zenith Bank',
+            'bank_code' => '057',
             'account_number' => '1029384756',
             'account_name' => strtoupper($name . ' ENTERPRISES'),
             'bank_updated_at' => Carbon::now()->subDays(5),
