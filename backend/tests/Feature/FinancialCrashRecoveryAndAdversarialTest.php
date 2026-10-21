@@ -237,6 +237,58 @@ class FinancialCrashRecoveryAndAdversarialTest extends TestCase
     }
 
     /**
+     * P0 regression: a transfer API timeout must retain the payout hold and prohibit a blind retry.
+     */
+    public function test_vendor_payout_initiation_timeout_keeps_reconciliation_hold(): void
+    {
+        $this->vendor->update(['marketplace_status' => 'active']);
+        $this->createTestOrder([
+            'order_number' => 'ORD-INIT-TIMEOUT-01',
+            'merchandise_subtotal' => '10000.00',
+            'vendor_net_90' => '9000.00',
+            'grand_total' => '10000.00',
+            'vendor_settlement_status' => 'eligible',
+        ]);
+
+        $payout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '9000.00',
+            'status' => 'pending',
+            'bank_name' => 'Zenith Bank',
+            'bank_code' => '057',
+            'account_number' => '1012345678',
+            'account_name' => 'Adversarial Test Merchant',
+        ]);
+
+        $mock = Mockery::mock(PaystackService::class);
+        $mock->shouldReceive('createTransferRecipient')->once()->andReturn([
+            'success' => true,
+            'recipient_code' => 'RCP_TEST_TIMEOUT',
+        ]);
+        $mock->shouldReceive('initiateTransfer')->once()->andReturn([
+            'success' => false,
+            'code' => 'UNCERTAIN_TIMEOUT',
+            'is_definitive' => false,
+            'message' => 'Connection timed out after submitting transfer request.',
+        ]);
+        $this->app->instance(PaystackService::class, $mock);
+
+        $response = $this->actingAs($this->superAdmin)->post(route('admin.disburse.vendor_payout'), [
+            'payout_id' => $payout->id,
+            'notes' => 'Regression test for uncertain gateway outcome',
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('HOLD_TIMEOUT_RECONCILIATION', session('error'));
+
+        $payout->refresh();
+        $this->assertEquals('pending', $payout->status);
+        $this->assertEquals('HOLD_TIMEOUT_RECONCILIATION', $payout->processing_token);
+        $this->assertEquals('processing', $payout->gateway_status);
+        $this->assertNotNull($payout->transfer_reference);
+    }
+
+    /**
      * P0/P1 Test: Gateway reconciliation finalizes payout when Paystack verifies transfer success.
      */
     public function test_admin_reconcile_vendor_payout_finalizes_on_gateway_success(): void
