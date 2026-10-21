@@ -323,6 +323,7 @@ class SecurityHardeningAndAuditTest extends TestCase
         // Invalid 8-digit NUBAN
         $responseInvalid = $this->actingAs($vendorUser)->post(route('vendor.bank.update'), [
             'bank_name' => 'Access Bank',
+            'bank_code' => '044',
             'account_number' => '12345678', // Invalid
             'account_name' => 'Bank Vendor Enterprises',
         ]);
@@ -331,6 +332,7 @@ class SecurityHardeningAndAuditTest extends TestCase
         // Valid 10-digit NUBAN
         $responseValid = $this->actingAs($vendorUser)->post(route('vendor.bank.update'), [
             'bank_name' => 'Access Bank PLC',
+            'bank_code' => '044',
             'account_number' => '0123456789', // Valid 10 digits
             'account_name' => 'Bank Vendor Enterprises',
         ]);
@@ -344,7 +346,7 @@ class SecurityHardeningAndAuditTest extends TestCase
         $this->assertTrue($vendor->isBankCooldownActive());
 
         $this->assertDatabaseHas('admin_audit_logs', [
-            'action' => 'vendor_bank_account_updated',
+            'action' => 'supplier_bank_details_updated',
         ]);
     }
 
