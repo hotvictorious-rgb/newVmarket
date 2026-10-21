@@ -906,6 +906,43 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertEquals('0.00', $deliveryOptions['total_shipping_fee']);
     }
 
+
+    public function test_supplier_offer_with_future_confirmation_timestamp_is_not_selectable(): void
+    {
+        $product = Product::create([
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'category_id' => $this->category->id,
+            'name' => 'Future Availability Timestamp Guard',
+            'slug' => 'future-availability-timestamp-guard',
+            'unit_price' => '10000.00',
+            'condition' => 'brand_new',
+            'package_tier' => 'bike',
+            'inventory_quantity' => 5,
+            'is_in_stock' => true,
+            'listing_status' => 'listed',
+            'is_approved' => true,
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+
+        SupplierOffer::create([
+            'product_id' => $product->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'wholesale_cost' => '7000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now()->addHour(),
+            'availability_confirmed_by' => $this->vendorUser->id,
+            'availability_expires_at' => Carbon::now()->addDay(),
+            'notes' => 'Future confirmation timestamp must fail closed',
+        ]);
+
+        $selected = app(SupplierOfferSelectionService::class)
+            ->selectLowestCost($product, 'doorstep_delivery');
+
+        $this->assertNull($selected);
+    }
+
     public function test_vendor_portal_creates_product_with_multi_photo_gallery(): void
     {
         \Illuminate\Support\Facades\Storage::fake('public');
