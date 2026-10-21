@@ -36,9 +36,9 @@
                 <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px; font-size: 12px;">
                     <div style="font-weight: 700; color: #0F172A; margin-bottom: 2px; display: flex; align-items: center; gap: 6px;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vm-primary)" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                        <span>In-Shop Inspection</span>
+                        <span>Uyo Local Dispatch</span>
                     </div>
-                    <div style="color: #64748B; font-size: 11px; line-height: 1.35;">Inspect physically at {{ $product->shop->name }} before payment release</div>
+                    <div style="color: #64748B; font-size: 11px; line-height: 1.35;">Products are sourced from approved Uyo suppliers and dispatched by Victorious MARKET.</div>
                 </div>
                 <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px; font-size: 12px;">
                     <div style="font-weight: 700; color: #0F172A; margin-bottom: 2px; display: flex; align-items: center; gap: 6px;">
@@ -93,17 +93,11 @@
                 {{ $product->name }}
             </h1>
 
-            <!-- Authoritative Merchant Legal Entity & Physical Branch Location -->
+            <!-- Central retailer identity; private supplier identity is never displayed. -->
             <div style="font-size: 13px; color: #64748B; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 8px 12px;">
-                <span style="display: inline-flex; align-items: center; gap: 5px;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><path d="M9 22v-4h6v4"/></svg>
-                    <span>Merchant: <a href="{{ route('shop.storefront', $product->shop->slug ?? $product->shop_id) }}" style="color: var(--vm-primary); text-decoration: none; font-weight: 700;">{{ $product->vendor->business_name ?? $product->shop->name }}</a></span>
-                </span>
+                <span style="font-weight: 700; color: #0F172A;">Sold by Victorious MARKET</span>
                 <span style="opacity: 0.4;">•</span>
-                <span style="display: inline-flex; align-items: center; gap: 5px; color: #334155;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284C7" stroke-width="2.2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    <span>Fulfillment Branch: <a href="{{ route('shop.storefront', $product->shop->slug ?? $product->shop_id) }}" style="color: #0F172A; text-decoration: none; font-weight: 700;">{{ $product->shop->name }}</a> (<strong style="color: #0284C7;">{{ $product->shop->lga->name ?? 'Uyo' }} LGA</strong>)</span>
-                </span>
+                <span>Locally sourced from approved Uyo suppliers</span>
             </div>
 
             <!-- Price & Cashback Banner -->
@@ -161,7 +155,7 @@
                     @if($isProductInStock)
                         <span style="width: 8px; height: 8px; border-radius: 50%; background: #10B981; display: inline-block;"></span>
                         <strong style="color: #0F172A; font-size: 13.5px;">In Stock</strong>
-                        <span style="font-size: 12px; color: #64748B;">(Verified at {{ $product->shop->name }})</span>
+                        <span style="font-size: 12px; color: #64748B;">(Availability confirmed with an approved Uyo supplier)</span>
                     @else
                         <span style="width: 8px; height: 8px; border-radius: 50%; background: #EF4444; display: inline-block;"></span>
                         <strong style="color: #DC2626; font-size: 13.5px;">Out of Stock</strong>
@@ -217,7 +211,7 @@
                     <div style="background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
                         <div style="display: flex; align-items: center; gap: 8px; color: #065F46; font-size: 12.5px; font-weight: 600;">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                            <span>In-Store Inspection: <strong>FREE (&#8358;0.00)</strong> at {{ $product->shop->name }}</span>
+                            <span>Pickup exceptions are arranged only through Victorious MARKET support</span>
                         </div>
                         <span style="background: #D1FAE5; color: #047857; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px;">
                             Zero Risk
