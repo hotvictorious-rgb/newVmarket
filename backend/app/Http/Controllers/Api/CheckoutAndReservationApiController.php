@@ -114,6 +114,13 @@ class CheckoutAndReservationApiController extends Controller
                         'fingerprint' => $existingIntent->fingerprint,
                         'merchandise_subtotal' => $existingIntent->merchandise_subtotal,
                         'delivery_fee' => $existingIntent->delivery_fee,
+                        'delivery_base_fee' => $existingIntent->payload_snapshot['delivery_base_fee'] ?? '0.00',
+                        'delivery_bulky_surcharge_per_unit' => $existingIntent->payload_snapshot['delivery_bulky_surcharge_per_unit'] ?? '0.00',
+                        'delivery_bulky_quantity' => $existingIntent->payload_snapshot['delivery_bulky_quantity'] ?? 0,
+                        'delivery_bulky_surcharge_total' => BcMathService::mul(
+                            (string) ($existingIntent->payload_snapshot['delivery_bulky_surcharge_per_unit'] ?? '0.00'),
+                            (string) ($existingIntent->payload_snapshot['delivery_bulky_quantity'] ?? 0)
+                        ),
                         'cashback_applied' => $existingIntent->cashback_applied,
                         'wallet_credit_applied' => $existingIntent->wallet_credit_applied,
                         'total_payable' => $existingIntent->total_payable,
@@ -292,6 +299,13 @@ class CheckoutAndReservationApiController extends Controller
                                 'fingerprint' => $existingIntent->fingerprint,
                                 'merchandise_subtotal' => $existingIntent->merchandise_subtotal,
                                 'delivery_fee' => $existingIntent->delivery_fee,
+                                'delivery_base_fee' => $existingIntent->payload_snapshot['delivery_base_fee'] ?? '0.00',
+                                'delivery_bulky_surcharge_per_unit' => $existingIntent->payload_snapshot['delivery_bulky_surcharge_per_unit'] ?? '0.00',
+                                'delivery_bulky_quantity' => $existingIntent->payload_snapshot['delivery_bulky_quantity'] ?? 0,
+                                'delivery_bulky_surcharge_total' => BcMathService::mul(
+                                    (string) ($existingIntent->payload_snapshot['delivery_bulky_surcharge_per_unit'] ?? '0.00'),
+                                    (string) ($existingIntent->payload_snapshot['delivery_bulky_quantity'] ?? 0)
+                                ),
                                 'cashback_applied' => $existingIntent->cashback_applied,
                                 'wallet_credit_applied' => $existingIntent->wallet_credit_applied,
                                 'total_payable' => $existingIntent->total_payable,
@@ -318,6 +332,13 @@ class CheckoutAndReservationApiController extends Controller
                 'fingerprint' => $intent->fingerprint,
                 'merchandise_subtotal' => $intent->merchandise_subtotal,
                 'delivery_fee' => $intent->delivery_fee,
+                'delivery_base_fee' => $intent->payload_snapshot['delivery_base_fee'] ?? '0.00',
+                'delivery_bulky_surcharge_per_unit' => $intent->payload_snapshot['delivery_bulky_surcharge_per_unit'] ?? '0.00',
+                'delivery_bulky_quantity' => $intent->payload_snapshot['delivery_bulky_quantity'] ?? 0,
+                'delivery_bulky_surcharge_total' => BcMathService::mul(
+                    (string) ($intent->payload_snapshot['delivery_bulky_surcharge_per_unit'] ?? '0.00'),
+                    (string) ($intent->payload_snapshot['delivery_bulky_quantity'] ?? 0)
+                ),
                 'cashback_applied' => $intent->cashback_applied,
                 'wallet_credit_applied' => $intent->wallet_credit_applied,
                 'total_payable' => $intent->total_payable,
