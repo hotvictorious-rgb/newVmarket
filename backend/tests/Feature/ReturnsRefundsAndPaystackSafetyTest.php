@@ -507,7 +507,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'case_number' => 'RET-LOSS-' . strtoupper(uniqid()),
             'customer_id' => $this->customer->id,
             'order_id' => $order->id,
-            'vendor_id' => $order->vendor_id,
+            'vendor_id' => null,
             'return_reason' => 'defective_product',
             'status' => 'refund_pending',
             'resolution_type' => 'refund',
@@ -1303,6 +1303,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'refunded_amount' => '0.00',
             'reviewed_by_admin_id' => $this->superAdmin->id,
         ]);
+        $this->assertNull($case->vendor_id, 'Retailer return cases are centrally owned and must not be attached to a private supplier.');
         ReturnItem::create([
             'return_case_id' => $case->id,
             'order_item_id' => $fixture['item']->id,
