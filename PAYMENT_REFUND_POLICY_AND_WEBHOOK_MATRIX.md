@@ -70,7 +70,7 @@ Implementation of this policy must be proved by code review and tests; this text
 
 The former marketplace 90/5/5 merchandise split and 90/10 vendor delivery-fee split are not binding for new retailer-model transactions. Do not use vendor commission or payout ledgers as supplier payable calculations.
 
-For new retailer-model transactions, keep separate records for verified customer receipts, merchandise revenue, supplier purchase cost/payable, delivery charges, logistics-company charges/payables, gateway fees, discounts, approved refunds, the active 5% cashback liability, and operating expenses. Supplier purchase cost is not a commission. Logistics-company charge terms and delivery-fee margin require explicit approval; do not invent a percentage.
+For new retailer-model transactions, keep separate records for verified customer receipts, merchandise revenue, supplier purchase cost/payable, delivery charges, logistics-company charges/payables, gateway fees, discounts, approved refunds, the active 5% cashback liability, and operating expenses. Supplier purchase cost is not a commission. New doorstep delivery defaults to 90% of the snapshotted customer delivery fee payable to the logistics company, with 10% default VM delivery margin and an audited higher/lower Super Admin override before rider custody. Amounts above the customer fee are recorded as VM subsidy; the company, not its rider, is the payee.
 
 A supplier payable is linked to the accepted order item/sourcing unit. Its purchase-cost snapshot must not change when the supplier's current offer changes. If an order contains items from different suppliers, preserve the supplier cost and fulfilment outcome per item or sourcing unit.
 
