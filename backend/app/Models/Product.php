@@ -106,6 +106,11 @@ class Product extends Model
         return $this->belongsTo(Shop::class, 'shop_id')->withTrashed();
     }
 
+    public function supplierOffers()
+    {
+        return $this->hasMany(SupplierOffer::class, 'product_id');
+    }
+
     public function category()
     {
         return $this->belongsTo(Category::class);
@@ -187,17 +192,28 @@ class Product extends Model
 
         return $query->where('is_approved', true)
             ->where('listing_status', 'listed')
+            ->where('is_in_stock', true)
             ->whereNotNull('listing_confirmed_at')
             ->where('listing_confirmed_at', '>', $sevenDaysAgo)
             ->where('listing_confirmed_at', '<=', $now)
-            ->whereHas('vendor', function ($q) {
-                $q->where('marketplace_status', 'active')
-                    ->whereHas('user', function ($uq) {
-                        $uq->where('status', 'active');
+            ->whereHas('supplierOffers', function ($offers) use ($now) {
+                $offers->where('is_available', true)
+                    ->whereNotNull('availability_confirmed_at')
+                    ->where('availability_confirmed_at', '<=', $now)
+                    ->whereNotNull('availability_expires_at')
+                    ->where('availability_expires_at', '>', $now)
+                    ->whereNull('deleted_at')
+                    ->whereHas('vendor', function ($vendor) {
+                        $vendor->whereNull('deleted_at')
+                            ->where('marketplace_status', 'active')
+                            ->whereHas('user', function ($user) {
+                                $user->where('status', 'active');
+                            });
+                    })
+                    ->whereHas('shop', function ($shop) {
+                        $shop->whereNull('deleted_at')
+                            ->where('is_active', true);
                     });
-            })
-            ->whereHas('shop', function ($sq) {
-                $sq->where('is_active', true);
             });
     }
 
