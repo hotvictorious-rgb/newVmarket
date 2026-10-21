@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\DeliveryLane;
 use App\Models\DeliveryCorridor;
+use App\Models\LogisticsCompanyCorridorRate;
+use App\Models\LogisticsCompanyProfile;
 use App\Models\Lga;
 use App\Models\User;
 use App\Services\DemoAccountRegistry;
@@ -417,6 +419,23 @@ class PortalWebTest extends TestCase
         $this->assertSame('650.00', $corridor->customer_base_fee);
         $this->assertSame('400.00', $corridor->customer_bulky_surcharge_per_unit);
         $this->assertSame($corridor->id, DeliveryCorridor::resolveForAddress($uyo->id, '12 Ibom Plaza Road', null)?->id);
+
+        $company = LogisticsCompanyProfile::where('status', 'active')
+            ->whereHas('hqLga', fn ($q) => $q->where('name', 'Uyo')->whereHas('state', fn ($state) => $state->where('name', 'Akwa Ibom')))
+            ->firstOrFail();
+        $rateResponse = $this->actingAs($admin)->post('/admin/delivery-corridors/' . $corridor->id . '/company-rates', [
+            'logistics_company_id' => $company->id,
+            'base_payable' => '1600.00',
+            'bulky_surcharge_per_unit' => '400.00',
+            'is_active' => true,
+        ]);
+        $rateResponse->assertOk()->assertJsonPath('rate.base_payable', '1600.00');
+        $rate = LogisticsCompanyCorridorRate::where('delivery_corridor_id', $corridor->id)
+            ->where('logistics_company_id', $company->id)
+            ->firstOrFail();
+        $this->assertSame('1600.00', $rate->base_payable);
+        $this->assertSame('400.00', $rate->bulky_surcharge_per_unit);
+        $this->assertSame('2400.00', $rate->calculatePayable(2));
     }
 
     public function test_ambiguous_or_unmatched_landmark_does_not_guess_a_delivery_corridor(): void
