@@ -546,3 +546,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Prevents disabled admin accounts from approving customer claims or initiating treasury refunds through a surviving session. It complements, rather than replaces, route middleware and account-session revocation.
 
 **Verification boundary:** Source and regression test committed; test execution and CI remain pending. No merge or deployment.
+
+
+### VM-AUD-112 — Quarantine every wallet-credit lot while a cash refund is pending (21 October 2026)
+
+**Finding:** The refund service checked whether an instant wallet credit had already been redeemed, but did not lock or disable still-spendable credits before initiating a Paystack cash refund. A customer could spend a wallet credit while the cash refund was pending. In addition, the gateway finalizer reversed only the first available credit lot, leaving additional lots spendable after a confirmed cash refund.
+
+**Fix:** The refund claim transaction now locks all wallet-credit lots for the return case, rejects the cash refund if any lot is already redeemed/spent, and changes all available/pending-approval lots to `quarantined` atomically with acquiring the claim. Credits are restored only after a definitive gateway failure or a known no-dispatch exception; ambiguous outcomes remain quarantined pending reconciliation. The confirmed-refund finalizer now locks and reverses all available, pending-approval, and quarantined lots for that return case. Added feature tests for pending refund quarantine of multiple lots and restoration after definitive rejection.
+
+**Business impact:** Prevents the customer from spending a return wallet credit while also receiving a cash refund, and prevents only-one-of-many credit lots from remaining spendable after a confirmed cash refund settles. It reduces duplicate customer benefit and protects Victorious MARKET's refund ledger.
+
+**Verification boundary:** Source and tests committed; test execution and CI remain pending. Ambiguous gateway outcomes intentionally keep credits unavailable until reconciliation. No merge or deployment.
