@@ -137,11 +137,11 @@ This requires accurate item quantities, evidence, pricing allocations, and finan
 
 ### Preventing abuse
 
-Customer rejection rights must be balanced with merchant and logistics protections.
+Customer rejection rights must be balanced with supplier and logistics protections.
 
 A customer should not automatically receive unrestricted compensation simply by claiming dissatisfaction.
 
-Likewise, a merchant should not be allowed to dismiss a legitimate complaint without review.
+Likewise, a supplier should not be allowed to dismiss a legitimate complaint without review.
 
 The system should distinguish between wrong items, damage, defects, inaccurate descriptions, failed delivery, and a genuine change of mind.
 
@@ -167,15 +167,15 @@ The platform must verify the amount due, account for discounts and previously is
 
 A refund should not be presented to the customer as completed merely because a request was submitted to a payment gateway.
 
-**Refund responsibility:** Victorious MARKET owns the approved customer refund process and executes refunds through the authorized financial workflow, ordinarily to the original payment channel. The customer must not be redirected to collect a marketplace refund from the vendor. Where the approved reason and actual order allocation make the vendor responsible, vendor recovery is tracked separately. If vendor proceeds remain held, an authorized offset may be applied; if already paid, record a recovery receivable/liability and use an approved future-settlement offset or recovery process. Customer refund completion depends on verified refund execution, not on whether vendor recovery has completed.
+**Refund responsibility:** Victorious MARKET owns the approved customer refund process and executes refunds through the authorized financial workflow, ordinarily to the original payment channel. The customer must not be redirected to collect a refund from the supplier. Where the approved reason and actual order allocation make the supplier responsible, supplier recovery is tracked separately. If supplier proceeds remain held, an authorized offset may be applied; if already paid, record a recovery receivable and use an approved future-settlement offset or recovery process. Customer refund completion depends on verified refund execution, not on whether supplier recovery has completed.
 
 ### Dispute resolution
 
 Where parties disagree, VICTORIOUS MARKET should maintain an evidence-based review process.
 
-The system should preserve the relevant order history, delivery records, customer statements, merchant responses, inspection findings, and financial transactions.
+The system should preserve the relevant order history, delivery records, customer statements, supplier responses, inspection findings, and financial transactions.
 
-The objective is not to automatically favor the customer or the merchant.
+The objective is not to automatically favor the customer or the supplier.
 
 **The objective is to reach a fair, explainable, and documented resolution.**
 
@@ -294,34 +294,26 @@ Before broad public launch, the most important milestones are financial correctn
 
 VICTORIOUS MARKET aims to become Nigeria’s most trusted retail commerce infrastructure.
 
-The long-term ambition is to create dependable commerce connecting verified suppliers, customers, accredited logistics carriers, and controlled financial operations.
+The long-term ambition is to create dependable retail commerce connecting verified private suppliers, customers, accredited logistics carriers, and controlled financial operations.
 
-Customers should be able to shop with complete confidence.
-Suppliers should be able to sell their wholesale inventory smoothly.
-Logistics partners should operate through structured, accountable workflows.
-And the platform maintains immutable, balanced records of every transaction.
+- Customers shop with complete confidence from one accountable retail brand.
+- Suppliers sell their wholesale inventory smoothly through predictable, verified supply workflows.
+- Accredited logistics partners and their linked fleet riders operate through structured, accountable custody workflows.
+- The platform maintains immutable, balanced records of every retail, wholesale, logistics, and loyalty transaction.
 
-Approved suppliers should be able to supply VM reliably under private wholesale arrangements, while customers continue to see and transact with Victorious MARKET as the retailer.
-
-Approved logistics companies should operate through structured and accountable processes, with each assigned rider linked to exactly one active company.
-
-And the platform should maintain reliable records of the transactions it facilitates.
-
-The ultimate measure of success will not be the number of features, merchants, or products available.
-
-It will be whether customers consistently receive what they paid for, merchants receive the money they legitimately earn, delivery partners fulfill their responsibilities, and disputes are resolved fairly.
+The ultimate measure of success will not be the raw number of features, suppliers, or listings available. It will be whether customers consistently receive the quality products they paid for, suppliers receive the wholesale payables they legitimately earn upon verified completion, logistics partners fulfill their delivery responsibilities, and disputes are resolved fairly.
 
 ## Conclusion
 
-**VICTORIOUS MARKET is building a trust-first online retail business designed to make quality commerce safer, more transparent, and more accountable in Nigeria.**
+**VICTORIOUS MARKET is building a centrally managed, trust-first online retail platform designed to make quality commerce safer, more transparent, and more accountable in Nigeria.**
 
-Its foundation is the belief that online shopping should not require customers to gamble with their money or depend entirely on a stranger's promises.
+Its foundation is the belief that online shopping should not require customers to gamble with their money or depend on unverified third-party promises.
 
-By combining private supplier verification, quality-focused product listings, secure payment processing, centrally coordinated delivery through approved logistics companies, transparent financial records, active cashback under defined terms, and fair customer protection, VICTORIOUS MARKET intends to establish a more dependable standard for online retail.
+By combining strict supplier and catalogue governance, quality-focused product listings, secure Paystack payment processing, centrally coordinated 3PL and counter-pickup fulfilment, transparent retail accounting, and fair customer protection, VICTORIOUS MARKET establishes a dependable standard for online retail.
 
-**Our Vision:** To become a trusted online retailer where Nigerians can buy quality products with confidence.
+**Our Vision:** To become Nigeria's most trusted digital retailer where customers can buy quality products with complete confidence.
 
-**Our Mission:** To source quality products from private suppliers and deliver them to customers through a secure, transparent, reliable, and accountable retail experience.
+**Our Mission:** To deliver verified quality products to customers through controlled sourcing, secure payments, accountable logistics, and transparent retail operations.
 
 **Our Commitment:** To build trust into every stage of the shopping experience—and earn that trust through consistent performance.
 
@@ -336,14 +328,14 @@ By combining private supplier verification, quality-focused product listings, se
 
 Victorious MARKET treats merchandise and delivery fees as separate financial components. A customer may raise one case about both, but **the merchandise refund and delivery-fee refund must be approved independently**. Approval of a product refund never automatically approves delivery-fee refundability, and approval of a delivery-fee refund never automatically approves the product refund.
 
-- A merchandise refund identifies the affected VM order item(s) and quantity, applies the original discount allocation, and reverses the actual captured retailer accounting entries plus the related cashback ledger entry where applicable. The former vendor 90/5/5 split is historical-only.
-- A delivery-fee refund identifies the captured delivery fee for the VM order, records its own reason/evidence/approval, and reverses the customer-facing delivery-fee revenue through the authorized refund workflow. It never includes merchandise value or cashback. The logistics-company payable is the agreed charge for the delivered trip and is not automatically clawed back solely because VM refunds the customer; any company recovery is a separate contract-authorized adjustment and never delays the customer refund.
-- Each approved component has its own decision record, amount, idempotent financial operation, reservation, gateway state and customer-facing result. Both operations return funds through the original Paystack payment channel at launch. They may reference the same original parent checkout capture but must not be collapsed into one undifferentiated approval or ledger reversal.
-- The customer can receive one component while the other remains pending, is denied, or fails and requires reconciliation. Customer communications must state each component's decision and confirmed Paystack result separately.
-- The system must enforce the component balance, order/item refund ceiling and shared parent-capture ceiling, counting active reservations and confirmed refunds across all applicable order components. A zero-fee in_shop_pickup order has no delivery fee to refund.
-- Supplier recovery, logistics-company recovery and cashback recovery are separate from the customer's gateway refund. A customer refund is complete only when Paystack confirms that specific component; vendor recovery does not delay or replace that confirmation.
-- **Shared source history does not mean shared approval or one combined state.** Both component decisions link to the same original parent capture and relevant child-order allocation history, while retaining separate approval records, reservations, gateway operations, and outcomes. Confirmed Paystack refunds plus active refund reservations across all child orders/components share one parent-capture ceiling; the same amount cannot be refunded twice.
-- **Cashback is linked to merchandise history but is not a second customer gateway refund.** A merchandise refund may require reversal of the associated unspent cashback and/or a separately tracked recovery of cashback already spent. That cashback adjustment uses the same originating order/item/refund evidence, but it is accounted for in the cashback ledger and must not be counted again as an additional Paystack cash refund against the parent-capture ceiling. Cashback maturity remains a separate clock: verified fulfilment, the 24-hour customer claim window, then the further 24-hour maturity buffer, with no blocking case; the 365-day validity period starts at maturity.
-- The existing 24-hour customer return/claim window and separate 24-hour cashback-maturity buffer remain unchanged.
+- **Merchandise Refund Accounting (Retailer Model):** A merchandise refund identifies the affected fulfilment group, order items, and quantities, applies the original discount/cashback redemption allocation, and reverses the corresponding **VM retail merchandise revenue** while adjusting the associated **supplier wholesale payable** (or recording a supplier recovery receivable if the supplier was already settled and is contractually at fault) and reversing unmatured/unspent **5% customer cashback** on that item. Legacy 90/5/5 marketplace allocations must not be used for retailer-model orders.
+- **Delivery-Fee Refund Accounting (Retailer Model):** A delivery-fee refund identifies the captured customer delivery fee for that fulfilment unit, records its own reason, evidence, and approval, and reverses the **VM delivery revenue** (and adjusts logistics company payable/recovery where applicable under the 3PL agreement). Legacy 90/10 vendor delivery allocations must not be used. It never includes merchandise value or cashback.
+- **Independent Execution & Idempotency:** Each approved component has its own decision record, amount, idempotent financial operation, reservation, gateway state, and customer-facing result. Both operations return funds through the original Paystack payment channel at launch. They may reference the same original parent checkout capture but must not be collapsed into one undifferentiated approval or ledger reversal.
+- **Partial & Asynchronous Resolution:** The customer can receive one component while the other remains pending, is denied, or fails and requires reconciliation. Customer communications must state each component's decision and confirmed Paystack result separately.
+- **Ceiling Enforcement:** The system must enforce the component balance, fulfilment-unit/item refund ceiling, and shared parent-capture ceiling, counting active reservations and confirmed refunds across all items and components. A zero-fee `in_shop_pickup` order has no delivery fee to refund.
+- **Separation of Customer Remedy and Supplier Recovery:** Supplier recovery and cashback recovery are separate from the customer's gateway refund. A customer refund is complete only when Paystack confirms that specific component; supplier recovery does not delay or replace that confirmation.
+- **Shared Source History vs. Separate State:** Both component decisions link to the same original parent capture and relevant order-item/fulfilment allocation history, while retaining separate approval records, reservations, gateway operations, and outcomes. Confirmed Paystack refunds plus active refund reservations across all items and components share one parent-capture ceiling; the same amount cannot be refunded twice.
+- **Cashback Ledger Adjustments:** A merchandise refund requires reversal of the associated unmatured or unspent cashback and/or a separately tracked recovery of cashback already spent. That cashback adjustment uses the same originating order/item/refund evidence, is accounted for in the cashback loyalty ledger, and must not be counted as an additional Paystack cash refund against the parent-capture ceiling. Cashback maturity remains a separate clock: verified fulfilment, the 24-hour customer claim window, then the further 24-hour maturity buffer, with no blocking case.
+- **FIFO Payout Protection on Eligible Payables:** Where supplier or logistics payables are settled via batch payouts, payouts use server-calculated strict FIFO batches of whole eligible earning/payable records, with a ₦5,000 minimum and ₦500,000 maximum; never split or skip an over-cap record.
 
-These are binding business requirements, not a statement that the current code already supports independent component approvals. See the payment/refund matrix and implementation audit for required changes and tests.
+These are binding business requirements for the retailer model. Historical marketplace orders created prior to the retailer cutover retain their original ledger structure for audit integrity.
