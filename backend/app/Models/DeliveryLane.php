@@ -55,7 +55,7 @@ class DeliveryLane extends Model
             return null;
         }
 
-        $lane = self::where('origin_lga_id'
+        $lane = self::where('origin_lga_id', $originLgaId)
             ->where('destination_lga_id', $destinationLgaId)
             ->where('is_active', true)
             ->first();
