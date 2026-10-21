@@ -662,7 +662,7 @@ class CustomerOrderApiController extends Controller
         return response()->json([
             'status' => true,
             'message' => $result['message'],
-            'data' => ($result['case'] instanceof ReturnCase ? $this->formatCustomerReturnCase($result['case'], true) : $result['case']),
+            'data' => ($result['case'] instanceof ReturnCase ? $this->formatCustomerReturnCase($result['case']->load(['order:id,order_number', 'collectionPoint', 'items.product', 'items.orderItem:id,product_name', 'evidence', 'inspections.collectionPoint']), true) : $result['case']),
         ], 201);
     }
 
@@ -702,6 +702,7 @@ class CustomerOrderApiController extends Controller
                 'order:id,order_number',
                 'collectionPoint',
                 'items.product',
+                'items.orderItem:id,product_name',
                 'evidence',
                 'inspections.collectionPoint',
             ])
