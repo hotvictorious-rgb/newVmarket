@@ -988,6 +988,14 @@ class OrderSettlementService
                 return ['success' => false, 'message' => 'Unpaid orders cannot be handed to a rider.'];
             }
 
+            // Enforce the supplier-rejection hold at the custody boundary too.
+            // Controller checks are not enough: this service can be called by other
+            // API/web flows and a valid-looking stale pickup OTP must not dispatch
+            // a paid order whose sourcing has been administratively frozen.
+            if ($lockedOrder->retailer_model_order && $lockedOrder->sourcing_status === 'supplier_rejected') {
+                return ['success' => false, 'message' => 'Rider collection is blocked while this retailer order is on supplier-rejection hold. An administrator must resolve sourcing first.'];
+            }
+
             if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'])) {
                 return ['success' => false, 'message' => "Order cannot be picked up in status {$lockedOrder->order_status}."];
             }
