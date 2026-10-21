@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AdminAuditLog;
 use App\Models\Category;
 use App\Models\Country;
 use App\Models\Lga;
@@ -11,6 +12,7 @@ use App\Models\State;
 use App\Models\SupplierOffer;
 use App\Models\User;
 use App\Models\VendorProfile;
+use App\Services\SupplierOfferAvailabilityService;
 use App\Services\SupplierOfferSelectionService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -198,6 +200,48 @@ class SupplierOfferSelectionServiceTest extends TestCase
         $this->assertSame($valid->id, $selected->id);
     }
 
+
+
+    public function test_availability_confirmation_is_audited_and_retry_is_idempotent(): void
+    {
+        $offer = $this->offer();
+        $expiry = Carbon::now()->addHours(2)->startOfSecond();
+        $service = app(SupplierOfferAvailabilityService::class);
+
+        $first = $service->confirm($offer->id, $this->admin, $expiry, 'Supplier confirmed stock');
+        $confirmedAt = $first->availability_confirmed_at->toISOString();
+
+        $second = $service->confirm($offer->id, $this->admin, $expiry, 'Supplier confirmed stock');
+
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame($confirmedAt, $second->availability_confirmed_at->toISOString());
+        $this->assertSame(1, AdminAuditLog::where('action', 'supplier_offer_availability_confirmed')
+            ->where('target_id', $offer->id)->count());
+        $this->assertSame($this->admin->id, $second->availability_confirmed_by);
+    }
+
+    public function test_availability_confirmation_rejects_non_admin_and_expired_evidence(): void
+    {
+        $offer = $this->offer();
+        $customer = User::create([
+            'name' => 'Ordinary Customer',
+            'email' => 'availability-customer@example.test',
+            'password' => bcrypt('test-password'),
+            'user_type' => 'customer',
+            'status' => 'active',
+        ]);
+        $service = app(SupplierOfferAvailabilityService::class);
+
+        try {
+            $service->confirm($offer->id, $customer, Carbon::now()->addHour());
+            $this->fail('Non-admin availability confirmation must be rejected.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('super administrator', $exception->getMessage());
+        }
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->confirm($offer->id, $this->admin, Carbon::now()->subSecond());
+    }
 
     public function test_excludes_offer_when_shop_is_not_owned_by_that_supplier(): void
     {
