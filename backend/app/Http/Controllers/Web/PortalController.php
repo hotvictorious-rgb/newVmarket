@@ -3512,6 +3512,20 @@ class PortalController extends Controller
             'is_bidirectional' => 'nullable',
         ]);
 
+        // Do not allow administrators to create new routes outside the permanent Uyo-only launch scope.
+        // Runtime serviceability also rejects legacy inter-LGA lanes that already exist.
+        $originLga = \\App\\Models\\Lga::with('state')->find($validated['origin_lga_id']);
+        $destinationLga = \\App\\Models\\Lga::with('state')->find($validated['destination_lga_id']);
+        $isUyoLga = static fn ($lga): bool => $lga
+            && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
+            && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
+
+        if (!$isUyoLga($originLga) || !$isUyoLga($destinationLga)) {
+            return back()
+                ->withErrors(['destination_lga_id' => 'Victorious MARKET delivery lanes must remain within Uyo, Akwa Ibom State.'])
+                ->withInput();
+        }
+
         $isBidirectional = $request->has('is_bidirectional') || $request->input('is_bidirectional') == '1';
 
         // Check if updating an existing lane
