@@ -215,3 +215,12 @@ The following core sources were aligned to that model on branch `docs/retailer-c
 - **Commit:** `cdbfbf0b69b9bd3adb17d67090b92dffc11c6bbe`.
 - **Verification status:** source change committed; PHP lint and automated tests have not been run. Add regression coverage for vendor-linked and shop-linked profiles with a logistics-company ID, plus a valid central-company rider.
 - **Scope limit / remaining conflict:** this is a narrow guard, not completion of the storefront checkout migration. The method still creates orders directly, writes legacy vendor/shop and 90/5/5 / 90/10 fields, may assign a rider during checkout, and initializes Paystack outside the shared `CheckoutExecutionService` path. Those P0 checkout and accounting issues remain open; do not describe retailer checkout as fixed.
+
+
+### R-005 — Storefront rider selection could accept a soft-deleted logistics-company relation
+
+- **Finding confirmed:** `RiderProfile::logisticsCompany()` uses `withTrashed()` so historical company records remain resolvable. The storefront checkout rider queries filtered for company status `active` but did not explicitly require `deleted_at IS NULL`; a soft-deleted company whose status remained active could therefore satisfy the relation query.
+- **Resolution applied:** all four storefront rider-selection relation filters now require both `deleted_at IS NULL` and `status = active`, in addition to the R-004 null vendor/shop-link guards.
+- **Commit:** `7d86ca34be356735d43484496fe2427ae913ea08`.
+- **Verification status:** source change committed and the controller was re-fetched to verify the query edits. PHP lint and automated tests have not been run. Add a regression test with a soft-deleted company retaining active status.
+- **Scope limit:** the model guard in `RiderProfile::isEligibleForCentralDelivery()` already checks the related company's deleted state, but this checkout query does not call that method. The direct query filters now close that specific bypass; the broader legacy checkout and assignment-at-checkout conflicts remain open.
