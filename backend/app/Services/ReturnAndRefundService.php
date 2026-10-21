@@ -627,6 +627,46 @@ class ReturnAndRefundService
                 ];
             }
 
+            $caseRefundOperations = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+                ->where('metadata->return_case_id', $lockedCase->id)
+                ->orderBy('id')
+                ->get();
+            $hasOpenCaseRefundOperation = $caseRefundOperations->contains(
+                fn ($operation) => !in_array($operation->status, ['confirmed', 'failed', 'reversed'], true)
+            );
+            $hasConfirmedOrReversedOperation = $caseRefundOperations->contains(
+                fn ($operation) => in_array($operation->status, ['confirmed', 'reversed'], true)
+            );
+
+            if ($walletCredits->contains(fn (CustomerWalletCredit $credit) => $credit->status === 'quarantined')) {
+                if ($hasOpenCaseRefundOperation) {
+                    // The existing operation owns this hold. The caller will return
+                    // its initiated/reconciliation state without dispatching again.
+                } elseif ($caseRefundOperations->isEmpty() || $hasConfirmedOrReversedOperation) {
+                    return [
+                        'valid' => false,
+                        'message' => 'A wallet credit is quarantined without a safely retryable failed refund attempt. Finance reconciliation is required before another refund can be initiated.',
+                    ];
+                } else {
+                    // All linked operations are definitively failed. Restore only
+                    // credits whose original status was durably captured; unknown
+                    // legacy holds must not be guessed or made spendable.
+                    foreach ($walletCredits->where('status', 'quarantined') as $walletCredit) {
+                        if (!in_array($walletCredit->refund_reserved_from_status, ['available', 'pending_approval'], true)) {
+                            return [
+                                'valid' => false,
+                                'message' => 'A legacy quarantined wallet credit has no saved prior status. Finance must reconcile it before retrying the refund.',
+                            ];
+                        }
+                        $walletCredit->status = $walletCredit->refund_reserved_from_status;
+                        $walletCredit->refund_reserved_from_status = null;
+                        $walletCredit->notes = trim(($walletCredit->notes ? $walletCredit->notes . ' | ' : '')
+                            . 'Restored from a prior failed refund reservation before a new authorized attempt.');
+                        $walletCredit->save();
+                    }
+                }
+            }
+
             $walletCreditStatuses = [];
             foreach ($walletCredits as $walletCredit) {
                 if (in_array($walletCredit->status, ['available', 'pending_approval'], true)) {
