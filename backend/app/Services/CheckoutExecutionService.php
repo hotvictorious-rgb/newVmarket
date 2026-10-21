@@ -79,34 +79,8 @@ class CheckoutExecutionService
             ];
         }
 
-        $shop = Shop::withTrashed()->with(['lga', 'vendor.user'])->findOrFail($validated['shop_id']);
-
-        // Guard 1: Shop Branch Invariant
-        if ($shop->trashed() || !$shop->is_active) {
-            return [
-                'success' => false,
-                'status_code' => 422,
-                'message' => 'The selected shop branch is currently inactive.',
-            ];
-        }
-
-        // Guard 2: Vendor Entity & User Account Invariant
-        if (!$shop->vendor || $shop->vendor->trashed() || $shop->vendor->marketplace_status !== 'active') {
-            return [
-                'success' => false,
-                'status_code' => 422,
-                'message' => 'The merchant providing this item is currently not active on the marketplace.',
-            ];
-        }
-
-        if (!$shop->vendor->user || $shop->vendor->user->status !== 'active') {
-            return [
-                'success' => false,
-                'status_code' => 422,
-                'message' => 'The merchant user account is inactive.',
-            ];
-        }
-
+        // Retailer checkout has no customer-selected supplier/shop. Each line is
+        // resolved independently to an eligible private supplier offer inside checkout.
         // Guard 3: Explicit Logistics Company Invariant
         if (!empty($validated['logistics_company_id'])) {
             $logistics = LogisticsCompanyProfile::withTrashed()->with('user')->find($validated['logistics_company_id']);
@@ -137,7 +111,7 @@ class CheckoutExecutionService
         }
 
         try {
-            $result = DB::transaction(function () use ($validated, $user, $shop, $idempotencyKey, $requestHash) {
+            $result = DB::transaction(function () use ($validated, $user, $idempotencyKey, $requestHash) {
             $merchandiseSubtotal = '0.00';
             $itemsToCreate = [];
 
