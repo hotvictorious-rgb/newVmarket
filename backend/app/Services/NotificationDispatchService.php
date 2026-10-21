@@ -568,6 +568,7 @@ class NotificationDispatchService
         if ($shopId) {
             $counterUserIds = VendorEmployeeProfile::where('shop_id', $shopId)
                 ->where('is_active', true)
+                ->whereHas('user', fn ($query) => $query->where('status', 'active'))
                 ->pluck('user_id');
 
             foreach ($counterUserIds as $counterUserId) {
