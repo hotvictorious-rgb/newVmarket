@@ -1362,6 +1362,8 @@
     @php
         $canonicalLgasList = \Illuminate\Support\Facades\Cache::remember('vmarket_canonical_lgas_uyo_v1', 86400, function () {
             return \App\Models\Lga::where('is_active', true)
+                ->where('name', 'Uyo')
+                ->whereHas('state', fn($q) => $q->where('name', 'Akwa Ibom'))
                 ->with('state:id,name')
                 ->orderBy('name')
                 ->get()
