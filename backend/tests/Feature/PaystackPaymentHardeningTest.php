@@ -72,7 +72,7 @@ class PaystackPaymentHardeningTest extends TestCase
             ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
             ->firstOrFail();
         $company = LogisticsCompanyProfile::where('status', 'active')
-            ->where('hq_lga_id', $uyoLga->id)
+            ->where('lga_id', $uyoLga->id)
             ->first();
         if (!$company) {
             $fleetUser = User::create([
@@ -85,7 +85,7 @@ class PaystackPaymentHardeningTest extends TestCase
             $company = LogisticsCompanyProfile::create([
                 'user_id' => $fleetUser->id,
                 'company_name' => 'Paystack Test Fleet Ltd',
-                'hq_lga_id' => $uyoLga->id,
+                'lga_id' => $uyoLga->id,
                 'wallet_balance' => '0.00',
                 'status' => 'active',
             ]);
