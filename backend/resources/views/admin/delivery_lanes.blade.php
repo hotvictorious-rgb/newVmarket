@@ -1,8 +1,8 @@
 @extends('layouts.dashboard')
 
-@section('title', 'Standard Delivery Fee Matrix & 3-Tier Distance Schedule — Super Admin')
+@section('title', 'Legacy Delivery Lane Serviceability — Super Admin')
 @section('role_title', 'Super Admin')
-@section('page_title', 'Standard Delivery Fee Matrix')
+@section('page_title', 'Delivery Lane Serviceability')
 @section('role_badge', 'SUPER ADMIN')
 @section('role_badge_class', 'role-badge-super-admin')
 
@@ -160,10 +160,10 @@
         <div>
             <h1 class="page-header-title">
                 <span style="font-size: 26px;">🛣️</span>
-                <span>Standard Delivery Fee Matrix &mdash; Directional LGA Delivery Lanes &amp; 3-Tier Distance Matrix</span>
+                <span>Delivery Lane Serviceability &mdash; Legacy LGA Route Matrix</span>
             </h1>
             <p class="page-header-subtitle">
-                Authoritative logistics pricing: Super Admin sets standard corridor fees and 3-tier zonal distance baselines (Municipal, Regional, Inter-State). Merchants individually configure physical shop delivery coverage (LGAs/states). Uncovered destinations fail closed to in-shop pickup.
+                Customer charges are configured separately as one flat base fee per order plus a per-unit bulky surcharge in Uyo Corridor &amp; Company Tariffs. This legacy matrix controls route serviceability and ETA only; its lane fees do not set new customer checkout prices. New delivery remains Uyo-only.
             </p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
