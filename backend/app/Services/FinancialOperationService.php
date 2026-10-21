@@ -10,6 +10,8 @@ use App\Models\Order;
 use App\Models\ReturnCase;
 use App\Models\VendorPayoutRequest;
 use App\Models\VendorProfile;
+use App\Models\LogisticsCompanyProfile;
+use App\Models\VendorRecoveryLedger;
 use App\Models\CustomerWalletCredit;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -799,7 +801,7 @@ class FinancialOperationService
                     'entry_type' => 'debit',
                     'amount' => $customerCashbackDebit,
                     'currency' => 'NGN',
-                    'description' => "Legacy marketplace cashback liability reversed for Return Case #{$returnCase?->case_number}",
+                    'description' => "Legacy marketplace cashback liability reversed for Return Case #{$returnCase->case_number}",
                 ]);
 
                 FinancialJournalEntry::create([
@@ -814,7 +816,7 @@ class FinancialOperationService
                     'entry_type' => 'debit',
                     'amount' => $platformMarginDebit,
                     'currency' => 'NGN',
-                    'description' => "Legacy marketplace platform margin reversed for Return Case #{$returnCase?->case_number}",
+                    'description' => "Legacy marketplace platform margin reversed for Return Case #{$returnCase->case_number}",
                 ]);
 
                 if (BcMathService::comp($deliveryFeeRefund, '0.00') > 0 && $order) {
@@ -833,7 +835,7 @@ class FinancialOperationService
                             'entry_type' => 'debit',
                             'amount' => $deliveryNetDebit,
                             'currency' => 'NGN',
-                            'description' => "Legacy logistics payable reversed for Return Case #{$returnCase?->case_number}",
+                            'description' => "Legacy logistics payable reversed for Return Case #{$returnCase->case_number}",
                         ]);
                     } elseif ($order->vendor_settlement_status === 'settled'
                         && $returnCase
@@ -896,7 +898,7 @@ class FinancialOperationService
                             'entry_type' => 'debit',
                             'amount' => $deliveryNetDebit,
                             'currency' => 'NGN',
-                            'description' => "Legacy vendor-managed delivery payable reversed for Return Case #{$returnCase?->case_number}",
+                            'description' => "Legacy vendor-managed delivery payable reversed for Return Case #{$returnCase->case_number}",
                         ]);
                     }
 
@@ -912,7 +914,7 @@ class FinancialOperationService
                         'entry_type' => 'debit',
                         'amount' => $deliveryPlatformDebit,
                         'currency' => 'NGN',
-                        'description' => "Legacy marketplace delivery platform margin reversed for Return Case #{$returnCase?->case_number}",
+                        'description' => "Legacy marketplace delivery platform margin reversed for Return Case #{$returnCase->case_number}",
                     ]);
                 }
 
