@@ -61,6 +61,9 @@ class PaystackPaymentHardeningTest extends TestCase
         $this->vendorProfile = $this->vendorUser->vendorProfile ?? VendorProfile::first();
         $this->shop = Shop::where('vendor_id', $this->vendorProfile->id)->first();
         $this->product = Product::where('shop_id', $this->shop->id)->first();
+        if ($this->product && $this->product->cost_price === null) {
+            $this->product->update(['cost_price' => '5000.00']);
+        }
     }
 
     /**
