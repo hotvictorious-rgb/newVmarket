@@ -198,3 +198,12 @@ The logistics company wallet model's credit method performs a read/modify/save. 
 - Both logistics payout rejection and payout reversal now reload the active company row with a database row lock before applying wallet changes. The payout row is locked first, and the company wallet mutation remains inside the same transaction as payout state and journal changes.
 - Commits: controller bea588c68c5c1b3f5f8434ce00d273a103276bbb; service 54f6ef469cf6fdff3f48f05db4797bc8cf2d6f47.
 - Verification status: source change committed; PHP syntax and payout regression workflows are still pending.
+
+## 22. Include payout hardening files in CI syntax and regression checks (21 October 2026)
+
+The existing Paystack safety workflow did not syntax-check PayoutFinalizationService or AdminTransferHardeningAndWalletIntegrityTest, and it did not execute that payout-focused test file. As a result, payout regressions could land while the existing workflow appeared unrelated or skipped the relevant coverage.
+
+- Extended the workflow syntax check to include PayoutFinalizationService and the payout hardening/idempotency schema test files.
+- Extended the feature-test command to run AdminTransferHardeningAndWalletIntegrityTest and FinancialJournalIdempotencySchemaTest with the existing financial hardening suite.
+- Commit: df5f8fd4d74266375e19c5776bb9b476b5c470bd.
+- Verification status: workflow update committed; the resulting run is pending. Do not treat CI as green until the latest branch-head run completes successfully.
