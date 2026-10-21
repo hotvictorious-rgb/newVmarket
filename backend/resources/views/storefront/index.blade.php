@@ -149,7 +149,7 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
                     </div>
                     <div class="vm-val-prop-text">
-                        <strong class="vm-val-prop-title" style="display: block; font-size: 13px; font-weight: 700; color: #0F172A;">Directional LGA Delivery</strong>
+                        <strong class="vm-val-prop-title" style="display: block; font-size: 13px; font-weight: 700; color: #0F172A;">Uyo Local Delivery</strong>
                         <span class="vm-val-prop-desc" style="display: block; font-size: 11px; color: #64748B;">Uyo, Eket & nationwide logistics</span>
                     </div>
                 </div>
@@ -529,28 +529,11 @@
         <!-- Dynamic Filter & Scope Pills -->
         <div class="vm-catalog-filter-bar" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid #E2E8F0;">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <!-- Scope: Local Shops vs All Delivering -->
-                <a href="{{ route('storefront', array_filter(['scope' => 'local', 'category' => request('category'), 'search' => request('search'), 'condition' => request('condition')])) }}#catalog" 
-                   class="vm-filter-pill {{ ($scope ?? 'local') === 'local' ? 'active' : '' }}"
-                   style="font-size: 12px; font-weight: 700; padding: 6px 14px; border-radius: 999px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;
-                   {{ ($scope ?? 'local') === 'local' ? 'background: #5E17EB; color: #FFFFFF;' : 'background: #F1F5F9; color: #475569; border: 1px solid #E2E8F0;' }}">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                    <span>In <span class="vm-dynamic-city-label">{{ $activeCity ?? 'Uyo' }}</span> Shops</span>
-                    @if(isset($localProductsCount))
-                        <span style="font-size: 10px; opacity: 0.9; background: {{ ($scope ?? 'local') === 'local' ? 'rgba(255,255,255,0.25)' : '#E2E8F0' }}; padding: 1px 6px; border-radius: 999px;">{{ $localProductsCount }}</span>
-                    @endif
-                </a>
-
-                <a href="{{ route('storefront', array_filter(['scope' => 'all', 'category' => request('category'), 'search' => request('search'), 'condition' => request('condition')])) }}#catalog" 
-                   class="vm-filter-pill {{ ($scope ?? '') === 'all' ? 'active' : '' }}"
-                   style="font-size: 12px; font-weight: 700; padding: 6px 14px; border-radius: 999px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;
-                   {{ ($scope ?? '') === 'all' ? 'background: #5E17EB; color: #FFFFFF;' : 'background: #F1F5F9; color: #475569; border: 1px solid #E2E8F0;' }}">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                    <span>All Delivering to <span class="vm-dynamic-city-label">{{ $activeCity ?? 'Uyo' }}</span></span>
-                    @if(isset($localProductsCount) && isset($corridorProductsCount))
-                        <span style="font-size: 10px; opacity: 0.9; background: {{ ($scope ?? '') === 'all' ? 'rgba(255,255,255,0.25)' : '#E2E8F0' }}; padding: 1px 6px; border-radius: 999px;">{{ $localProductsCount + $corridorProductsCount }}</span>
-                    @endif
-                </a>
+                <span class="vm-filter-pill active" style="font-size: 12px; font-weight: 700; padding: 6px 14px; border-radius: 999px; background: #5E17EB; color: #FFFFFF; display: inline-flex; align-items: center; gap: 6px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <span>Uyo-only sourcing &amp; delivery</span>
+                    <span style="font-size: 10px; background: rgba(255,255,255,0.25); padding: 1px 6px; border-radius: 999px;">{{ $localProductsCount }}</span>
+                </span>
 
                 <span style="color: #CBD5E1; font-weight: 300;">|</span>
 
