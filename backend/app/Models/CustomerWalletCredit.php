@@ -14,6 +14,7 @@ class CustomerWalletCredit extends Model
         'amount',
         'credit_type',
         'status',
+        'refund_reserved_from_status',
         'spent_on_order_id',
         'notes',
     ];
