@@ -42,8 +42,6 @@ class FinancialReconciliationEngine
             'vendor_reconciled' => 0,
             'logistics_reconciled' => 0,
             'refunds_reconciled' => 0,
-            'supplier_payable_orders_checked' => 0,
-            'supplier_payable_mismatches' => 0,
             'errors' => [],
         ];
 
@@ -194,14 +192,6 @@ class FinancialReconciliationEngine
 
         // 3. Reconcile Customer Refunds
         $results['refunds_reconciled'] = $this->reconcileRefunds();
-
-        // Supplier liabilities are independent of legacy order-level vendor payouts.
-        // Audit their operational item snapshots against the net supplier_payable ledger;
-        // mismatches are reported and never auto-corrected or paid by this scan.
-        $supplierAudit = $this->reconcileRetailerSupplierPayables();
-        $results['supplier_payable_orders_checked'] = $supplierAudit['orders_checked'];
-        $results['supplier_payable_mismatches'] = $supplierAudit['mismatches'];
-        $results['errors'] = array_merge($results['errors'], $supplierAudit['errors']);
 
         return $results;
     }
