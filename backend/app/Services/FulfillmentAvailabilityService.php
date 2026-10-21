@@ -23,6 +23,24 @@ class FulfillmentAvailabilityService
             ];
         }
 
+        // Owner policy: all sourcing shops must be physically based in Uyo, Akwa Ibom.
+        $originLgaName = strtolower(trim((string) ($shop->lga->name ?? '')));
+        $originStateName = strtolower(trim((string) ($shop->lga->state->name ?? '')));
+        if ($originLgaName !== 'uyo' || $originStateName !== 'akwa ibom') {
+            return [
+                'is_available' => false,
+                'lane_id' => null,
+                'origin_lga_id' => $shop->lga_id,
+                'destination_lga_id' => $destinationLgaId,
+                'fee' => '0.00',
+                'message' => 'Victorious MARKET sourcing and dispatch origins must be based in Uyo, Akwa Ibom State.',
+                'rate_tier' => 'origin_outside_uyo',
+                'delivery_mode' => null,
+                'is_collection_point' => false,
+                'collection_points' => [],
+            ];
+        }
+
         if (!$shop->vendor || $shop->vendor->trashed() || $shop->vendor->marketplace_status !== 'active') {
             return [
                 'is_available' => false,
@@ -48,23 +66,7 @@ class FulfillmentAvailabilityService
             ];
         }
 
-        // VENDOR COVERAGE RULE:
-        // Admin sets standard delivery fees; vendors configure the individual LGAs and states
-        // their physical shop's riders can physically service. Unsupported destinations fail closed.
-        if (!$shop->coversDestination($destinationLgaId, $destLga->state_id)) {
-            $shopLgaName = $shop->lga ? $shop->lga->name : 'its physical branch';
-            return [
-                'is_available' => false,
-                'lane_id' => null,
-                'origin_lga_id' => $shop->lga_id,
-                'destination_lga_id' => $destinationLgaId,
-                'fee' => '0.00',
-                'message' => "Merchant outlet ({$shop->name} in {$shopLgaName} LGA) does not offer doorstep delivery to {$destLga->name} LGA. In-shop pickup is available at the physical outlet.",
-                'rate_tier' => 'vendor_unserviced_area',
-                'is_collection_point' => false,
-                'collection_points' => [],
-            ];
-        }
+        // Route serviceability is controlled by the explicit directional route matrix, not vendor rider coverage.
 
         $isKekeOrBulky = in_array(strtolower($packageTier), ['keke', 'bulky'], true);
 
@@ -95,6 +97,7 @@ class FulfillmentAvailabilityService
                 'estimated_delivery_hours_max' => $lane->estimated_delivery_hours_max,
                 'estimated_time_text' => "{$lane->estimated_delivery_hours_min}-{$lane->estimated_delivery_hours_max} hours",
                 'rate_tier' => 'custom_override',
+                'delivery_mode' => $isCrossLga ? 'logistics_managed' : 'doorstep',
                 'is_collection_point' => $isCrossLga,
                 'collection_points' => $collectionPoints,
             ];
@@ -120,100 +123,31 @@ class FulfillmentAvailabilityService
             ];
         }
 
-        // 3-Tier Zonal Distance Fallback (Nationwide Coverage for unscheduled routes)
-        $shopLga = $shop->lga;
+        // Fail closed for routes outside the explicitly enabled directional lane matrix.
+        // Only Uyo-local delivery may use the local default fee without a separate lane.
+        $originLga = $shop->lga;
+        $isUyoLocal = $originLga
+            && (int) $originLga->id === (int) $destLga->id
+            && strtolower(trim((string) ($originLga->name ?? ''))) === 'uyo'
+            && strtolower(trim((string) ($originLga->state->name ?? ''))) === 'akwa ibom';
 
-        // Check if out-of-state corridor to this entire destination state is suspended
-        if ($shopLga && $destLga && $shopLga->state_id !== $destLga->state_id) {
-            $stateSuspended = DeliveryLane::where('origin_lga_id', $shop->lga_id)
-                ->whereHas('destinationLga', function ($q) use ($destLga) {
-                    $q->where('state_id', $destLga->state_id);
-                })
-                ->where('is_active', false)
-                ->exists();
-
-            if ($stateSuspended) {
-                return [
-                    'is_available' => false,
-                    'lane_id' => null,
-                    'origin_lga_id' => $shop->lga_id,
-                    'destination_lga_id' => $destinationLgaId,
-                    'fee' => '0.00',
-                    'message' => "Delivery is currently suspended to " . ($destLga->state->name ?? 'this state') . ".",
-                    'rate_tier' => 'state_corridor_suspended',
-                    'is_collection_point' => true,
-                    'collection_points' => [],
-                ];
-            }
-        }
-
-        if ($shopLga && $destLga) {
-            $bulkySurcharge = number_format((float)\App\Models\SystemSetting::get('zone_bulky_cargo_surcharge', '1000.00'), 2, '.', '');
-            
-            // Tier 1: Intra-LGA (Municipal same-LGA) -> Doorstep Delivery
-            if ($shopLga->id === $destLga->id) {
-                $baseFee = number_format((float)\App\Models\SystemSetting::get('zone_intra_lga_fee', '500.00'), 2, '.', '');
-                $eta = (string)\App\Models\SystemSetting::get('zone_intra_lga_eta', '2-4 hours');
-                $fee = $isKekeOrBulky ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
-                $fee = number_format((float)$fee, 2, '.', '');
-
-                return [
-                    'is_available' => true,
-                    'lane_id' => null,
-                    'origin_lga_id' => $shop->lga_id,
-                    'destination_lga_id' => $destinationLgaId,
-                    'fee' => $fee,
-                    'estimated_delivery_hours_min' => 2,
-                    'estimated_delivery_hours_max' => 4,
-                    'estimated_time_text' => $eta,
-                    'rate_tier' => 'tier_1_intra_lga',
-                    'is_collection_point' => false,
-                    'collection_points' => [],
-                ];
-            }
-
-            // Tier 2: Inter-LGA (Regional, same state) -> Collection Point Pickup
-            if ($shopLga->state_id === $destLga->state_id) {
-                $baseFee = number_format((float)\App\Models\SystemSetting::get('zone_inter_lga_fee', '1500.00'), 2, '.', '');
-                $eta = (string)\App\Models\SystemSetting::get('zone_inter_lga_eta', 'Same day / 12-24 hours');
-                $fee = $isKekeOrBulky ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
-                $fee = number_format((float)$fee, 2, '.', '');
-                $collectionPoints = $this->resolveCollectionPoints($destinationLgaId);
-
-                return [
-                    'is_available' => true,
-                    'lane_id' => null,
-                    'origin_lga_id' => $shop->lga_id,
-                    'destination_lga_id' => $destinationLgaId,
-                    'fee' => $fee,
-                    'estimated_delivery_hours_min' => 12,
-                    'estimated_delivery_hours_max' => 24,
-                    'estimated_time_text' => $eta,
-                    'rate_tier' => 'tier_2_inter_lga',
-                    'is_collection_point' => !empty($collectionPoints),
-                    'collection_points' => $collectionPoints,
-                ];
-            }
-
-            // Tier 3: Inter-State (National corridor)
-            $baseFee = number_format((float)\App\Models\SystemSetting::get('zone_inter_state_fee', '3500.00'), 2, '.', '');
-            $eta = (string)\App\Models\SystemSetting::get('zone_inter_state_eta', '2-4 business days');
+        if ($isUyoLocal) {
+            $bulkySurcharge = number_format((float) \App\Models\SystemSetting::get('zone_bulky_cargo_surcharge', '1000.00'), 2, '.', '');
+            $baseFee = number_format((float) \App\Models\SystemSetting::get('zone_intra_lga_fee', '500.00'), 2, '.', '');
             $fee = $isKekeOrBulky ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
-            $fee = number_format((float)$fee, 2, '.', '');
-            $collectionPoints = $this->resolveCollectionPoints($destinationLgaId);
-
             return [
                 'is_available' => true,
                 'lane_id' => null,
                 'origin_lga_id' => $shop->lga_id,
                 'destination_lga_id' => $destinationLgaId,
-                'fee' => $fee,
-                'estimated_delivery_hours_min' => 48,
-                'estimated_delivery_hours_max' => 96,
-                'estimated_time_text' => $eta,
-                'rate_tier' => 'tier_3_inter_state',
-                'is_collection_point' => !empty($collectionPoints),
-                'collection_points' => $collectionPoints,
+                'fee' => number_format((float) $fee, 2, '.', ''),
+                'estimated_delivery_hours_min' => 2,
+                'estimated_delivery_hours_max' => 4,
+                'estimated_time_text' => (string) \App\Models\SystemSetting::get('zone_intra_lga_eta', '2-4 hours'),
+                'rate_tier' => 'tier_1_intra_lga',
+                'delivery_mode' => 'doorstep',
+                'is_collection_point' => false,
+                'collection_points' => [],
             ];
         }
 
