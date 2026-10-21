@@ -429,6 +429,10 @@ class SourcingAllocationService
         User $adminUser,
         string $reason
     ): Order {
+        if ($order->retailer_model_order) {
+            throw new InvalidArgumentException('Retailer orders require an audited item-level supplier override before payment.');
+        }
+
         $isAdmin = $adminUser->isSuperAdmin()
             || $adminUser->isAdminEmployee()
             || in_array($adminUser->user_type, ['super_admin', 'admin_employee', 'admin'], true);
