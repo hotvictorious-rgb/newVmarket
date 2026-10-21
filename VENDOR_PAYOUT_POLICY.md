@@ -2,6 +2,8 @@
 
 > **Status (21 October 2026):** This policy is retained for historical records and compatibility review only. Victorious MARKET is now operating under a centralized retailer model. Suppliers are product sources, not marketplace vendors, and supplier purchase costs must not be calculated using vendor earnings, commission shares or this policy's payout thresholds.
 
+> **Additional current retailer rule (21 October 2026):** New doorstep delivery fees default to a logistics-company payable equal to 90% of the snapshotted customer delivery fee, with the remaining 10% as default VM delivery margin. An authorized admin may override the company amount higher or lower for actual route and operating conditions; the override must preserve before/final amount, reason, admin identity and timestamp. The company is the payee, not its rider. This logistics-company payable is separate from supplier wholesale payables and from every legacy vendor earning/payout record.
+
 ## Current authority
 
 Read [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md), [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md), and [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) for current policy.
