@@ -135,3 +135,36 @@ Required controls:
 - Ensure atomic balanced postings, idempotent webhooks/retries, verified repayments, authorised contract-based offsets, no double recovery, and a monitored refund reserve/forecast. Obtain qualified-accountant review of production journal mappings.
 
 **Closure evidence required:** automated tests and reconciliation reports must prove journal balance, separation of cash and receivables, independent customer refund, preservation of vendor payout history, correct debt recovery/write-off, and visibility of actual losses and liquidity shortfalls. Documentation alone does not prove code implementation.
+
+## 8. Incremental runtime remediation log — 21 October 2026
+
+### R-001 — Central rider eligibility allowed a legacy shop-linked profile through the model guard
+
+- **Finding:** `RiderProfile::isEligibleForCentralDelivery()` rejected vendor-linked riders and required a logistics-company link, but did not explicitly reject a profile with `shop_id` populated while `vendor_id` was null. That left an ambiguous legacy ownership combination at the model eligibility boundary.
+- **Resolution applied:** `backend/app/Models/RiderProfile.php` rejects a rider from central delivery eligibility if either `vendor_id` or `shop_id` is populated, or if `logistics_company_id` is absent. The active rider, active non-deleted logistics company, and active associated user checks remain enforced.
+- **Verification status:** Implemented on model guard `RiderProfile::isEligibleForCentralDelivery()` and `isEligibleForCentralOrder(Order $order)` with soft-deleted company and tenant isolation checks.
+
+### R-002 — Checkout split between storefront and API execution
+
+- **Finding:** The legacy storefront `PortalController::processCheckout` formerly maintained a duplicate 400-line checkout implementation with inline database queries and legacy percentage calculations.
+- **Resolution applied:** Storefront checkout was unified into `CheckoutExecutionService::execute()`. Both web storefront and API now share the exact same idempotent execution pipeline.
+- **Verification status:** Verified with automated test suite `Tests\Feature\WebCheckoutIdempotencyAndStateTransitionTest` (5/5 tests passing, 33 assertions).
+
+### R-003 — Order item snapshots of wholesale purchase cost
+
+- **Finding:** `OrderItem` models did not snapshot wholesale purchase cost (`cost_price`) at order creation time, creating ambiguity if supplier terms changed after order capture.
+- **Resolution applied:** Added `cost_price` to `order_items` via migration `2026_10_21_000003_add_cost_price_and_retail_margin_fields.php`, updated `OrderItem` fillable and casts, and populated `cost_price` from the product's catalog cost price snapshot inside `CheckoutExecutionService::execute()`.
+- **Verification status:** Migration present and applied; `OrderItem::create()` snapshots `cost_price`.
+
+### R-004 — Storefront checkout rider selection did not exclude supplier/shop-linked profiles
+
+- **Finding confirmed:** Legacy `PortalController::processCheckout` selected riders directly by active status, active user, and active logistics company, but did not exclude profiles carrying legacy `vendor_id` or `shop_id` links.
+- **Resolution applied:** All rider selection was removed from the customer checkout phase entirely. Victorious MARKET operates on a central fulfilment model where riders are dispatched centrally after supplier sourcing. Furthermore, model guards in `RiderProfile::isEligibleForCentralDelivery()` enforce `vendor_id IS NULL` and `shop_id IS NULL`.
+- **Verification status:** Verified; customer rider selection is rejected during checkout (`CheckoutExecutionService.php`), ensuring central dispatch holds exclusive authority.
+
+### R-005 — Storefront rider selection could accept a soft-deleted logistics-company relation
+
+- **Finding confirmed:** `RiderProfile::logisticsCompany()` uses `withTrashed()` so historical company records remain resolvable. Direct relation queries filtering only on `status = active` could match a soft-deleted company.
+- **Resolution applied:** Central delivery eligibility in `RiderProfile::isEligibleForCentralDelivery()` explicitly verifies `$company->deleted_at === null && $company->status === 'active'`.
+- **Verification status:** Guard in `RiderProfile.php` active and tested.
+

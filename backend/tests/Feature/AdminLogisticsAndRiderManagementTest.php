@@ -263,4 +263,86 @@ class AdminLogisticsAndRiderManagementTest extends TestCase
         $riderProfile->refresh();
         $this->assertFalse($riderProfile->is_active);
     }
+
+    /**
+     * PROOF VM-AUD-R001-R005: Rider eligibility for central delivery strictly requires:
+     * - vendor_id IS NULL and shop_id IS NULL (no legacy marketplace vendor links)
+     * - logistics_company_id IS NOT NULL
+     * - logistics company is active and NOT soft-deleted
+     * - rider user is active and rider is_active
+     */
+    public function test_central_delivery_rider_eligibility_guards(): void
+    {
+        $logisticsUser = User::create([
+            'name' => 'Speedy Couriers',
+            'email' => 'speedy@couriers.ng',
+            'phone' => '08099990001',
+            'user_type' => 'logistics_company',
+            'status' => 'active',
+            'password' => bcrypt('password123'),
+        ]);
+
+        $logisticsCompany = LogisticsCompanyProfile::create([
+            'user_id' => $logisticsUser->id,
+            'company_name' => 'Speedy Couriers',
+            'lga_id' => $this->uyoLga->id,
+            'fleet_size' => 10,
+            'status' => 'active',
+        ]);
+
+        $riderUser = User::create([
+            'name' => 'Centrally Dispatched Rider',
+            'email' => 'rider@speedycouriers.ng',
+            'phone' => '08099990002',
+            'user_type' => 'rider',
+            'status' => 'active',
+            'password' => bcrypt('password123'),
+        ]);
+
+        $rider = RiderProfile::create([
+            'user_id' => $riderUser->id,
+            'logistics_company_id' => $logisticsCompany->id,
+            'assigned_lga_id' => $this->uyoLga->id,
+            'is_active' => true,
+        ]);
+
+        // 1. Valid central rider -> eligible
+        $this->assertTrue($rider->isEligibleForCentralDelivery());
+
+        // 2. R-001 Guard: Legacy shop linkage rejects rider even if vendor_id is null
+        $rider->shop_id = 999;
+        $this->assertFalse($rider->isEligibleForCentralDelivery(), 'Rider with shop_id must not be eligible for central delivery');
+        $rider->shop_id = null;
+
+        // 3. Legacy vendor linkage rejects rider
+        $rider->vendor_id = 888;
+        $this->assertFalse($rider->isEligibleForCentralDelivery(), 'Rider with vendor_id must not be eligible for central delivery');
+        $rider->vendor_id = null;
+
+        // 4. Missing logistics_company_id rejects rider
+        $rider->logistics_company_id = null;
+        $this->assertFalse($rider->isEligibleForCentralDelivery(), 'Rider without logistics_company_id must not be eligible');
+        $rider->logistics_company_id = $logisticsCompany->id;
+
+        // 5. Inactive rider profile rejects rider
+        $rider->is_active = false;
+        $this->assertFalse($rider->isEligibleForCentralDelivery(), 'Inactive rider must not be eligible');
+        $rider->is_active = true;
+
+        // 6. R-005 Guard: Soft-deleted logistics company rejects rider even if status is active
+        $logisticsCompany->delete(); // sets deleted_at
+        $rider->unsetRelation('logisticsCompany');
+        $this->assertFalse($rider->isEligibleForCentralDelivery(), 'Rider of soft-deleted logistics company must not be eligible');
+
+        // Restore logistics company
+        $logisticsCompany->restore();
+        $rider->unsetRelation('logisticsCompany');
+        $this->assertTrue($rider->isEligibleForCentralDelivery());
+
+        // 7. Inactive logistics company rejects rider
+        $logisticsCompany->update(['status' => 'suspended']);
+        $rider->unsetRelation('logisticsCompany');
+        $this->assertFalse($rider->isEligibleForCentralDelivery(), 'Rider of suspended logistics company must not be eligible');
+    }
 }
+

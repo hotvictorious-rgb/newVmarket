@@ -67,6 +67,45 @@ class RiderProfile extends Model
         return !empty($this->vendor_id);
     }
 
+    /**
+     * New Victorious MARKET delivery work is centrally dispatched through one
+     * active logistics company. Vendor-linked or shop-linked riders remain historical only.
+     */
+    public function isEligibleForCentralDelivery(): bool
+    {
+        // A central-delivery rider must have exactly one operational owner:
+        // an active logistics company. Legacy vendor OR shop linkage is not
+        // allowed to coexist with central dispatch, even if vendor_id is null.
+        if (!$this->is_active
+            || $this->vendor_id !== null
+            || $this->shop_id !== null
+            || !$this->logistics_company_id) {
+            return false;
+        }
+
+        if ($this->user && $this->user->status !== 'active') {
+            return false;
+        }
+
+        $company = $this->logisticsCompany;
+        return $company !== null
+            && $company->deleted_at === null
+            && $company->status === 'active'
+            && (!$company->user || $company->user->status === 'active');
+    }
+
+    /**
+     * Validate the rider's single active logistics-company relationship against
+     * the company assigned to a specific new retailer delivery.
+     */
+    public function isEligibleForCentralOrder(Order $order): bool
+    {
+        return $this->isEligibleForCentralDelivery()
+            && (int) $order->rider_id === (int) $this->id
+            && !empty($order->logistics_company_id)
+            && (int) $order->logistics_company_id === (int) $this->logistics_company_id;
+    }
+
     public function isFleetRider(): bool
     {
         return !empty($this->logistics_company_id);

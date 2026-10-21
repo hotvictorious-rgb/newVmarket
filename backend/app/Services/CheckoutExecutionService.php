@@ -358,6 +358,7 @@ class CheckoutExecutionService
                     'product_name' => $itemData['product']->name,
                     'quantity' => $itemData['quantity'],
                     'unit_price' => $itemData['unit_price'],
+                    'cost_price' => $itemData['product']->cost_price ?? '0.00',
                     'line_total' => $itemData['line_total'],
                 ]);
             }
