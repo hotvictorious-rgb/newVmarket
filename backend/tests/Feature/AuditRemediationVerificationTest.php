@@ -1483,4 +1483,24 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertSame('failed', $order->fresh()->paystack_refund_status);
         $this->assertNull($order->fresh()->paystack_refund_reference);
     }
+
+    public function test_inactive_admin_cannot_arbitrate_return_dispute(): void
+    {
+        $inactiveAdmin = User::create([
+            'name' => 'Inactive Arbitration Admin',
+            'email' => 'inactive-arbitration@vmarket.ng',
+            'password' => bcrypt('AdminPass123!'),
+            'user_type' => 'admin_employee',
+            'status' => 'inactive',
+        ]);
+
+        $result = app(DoorstepHandshakeService::class)->arbitrateReturnDispute(
+            $inactiveAdmin,
+            new ReturnCase(),
+            'uphold_customer_claim'
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('Unauthorized', $result['message']);
+    }
 }
