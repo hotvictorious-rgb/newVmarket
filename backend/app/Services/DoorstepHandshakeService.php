@@ -268,7 +268,20 @@ class DoorstepHandshakeService
             $refundRequestedAmount = '0.00';
 
             if ($hasRejectedItems) {
-                // Generate 6-Digit Vendor Return Handshake OTP
+                // Retailer orders may contain rejected items from multiple private
+                // suppliers. A single vendor OTP cannot prove custody for several
+                // shops, so hold those cases for explicit supplier assignment.
+                $rejectedSupplierIds = collect($validatedLines)
+                    ->filter(fn ($line) => (int) ($line['rejected_qty'] ?? 0) > 0)
+                    ->map(fn ($line) => (int) ($line['order_item']->fulfillment_supplier_vendor_id ?? 0))
+                    ->filter(fn ($supplierId) => $supplierId > 0)
+                    ->unique()
+                    ->values();
+                $requiresSupplierAssignment = $lockedOrder->retailer_model_order
+                    && $rejectedSupplierIds->count() !== 1;
+
+                // Generate a six-digit vendor return handshake OTP. It is delivered
+                // privately to the verified supplier counter, never to the rider.
                 $vendorReturnOtp = (string) random_int(100000, 999999);
 
                 $returnCase = ReturnCase::create([
@@ -285,7 +298,7 @@ class DoorstepHandshakeService
                     'vendor_return_otp' => $vendorReturnOtp,
                     'doorstep_photo_path' => $doorstepPhotoPath,
                     'returned_by_rider_id' => $rider->user_id,
-                    'status' => 'in_transit_back_to_vendor',
+                    'status' => $requiresSupplierAssignment ? 'pending_supplier_assignment' : 'in_transit_back_to_vendor',
                     'resolution_type' => 'refund',
                     'total_refundable_amount' => $totalRejectedMerchandise,
                     'refund_delivery_fee' => false,
