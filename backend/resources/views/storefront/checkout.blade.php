@@ -121,125 +121,33 @@
                 </div>
 
                 <!-- ========================================== -->
-                <!-- STEP 2: FULFILLMENT METHOD -->
-                <!-- ========================================== -->
-                @php
-                    $isDeliveryAvailable = $deliveryCheck['is_available'] ?? true;
-                    $isCrossLga = ($product->shop->lga_id !== $destLga->id);
-                @endphp
-
-                @if($errors->has('fulfillment_type'))
-                    <div style="background: #FEF2F2; border: 1.5px solid #F87171; color: #991B1B; padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                        <span>{{ $errors->first('fulfillment_type') }}</span>
-                    </div>
-                @endif
-
+                <!-- STEP 2: CENTRAL UYO DELIVERY ONLY -->
+                @php $isDeliveryAvailable = $deliveryCheck['is_available'] ?? false; @endphp
+                <input type="hidden" name="fulfillment_type" value="doorstep_delivery">
+                <input type="hidden" name="destination_lga_id" id="vmDestLgaSelect" value="{{ $destLga->id }}">
                 <div style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 14px; padding: 22px; margin-bottom: 20px; box-shadow: var(--vm-shadow-xs);">
-                    <div style="font-weight: 800; font-size: 15px; color: #0F172A; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="background: #5E17EB; color: #FFF; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;">2</span>
-                            <span>Delivery or In-Store Pickup Choice</span>
-                        </div>
-                        <div id="vmCorridorStatusBadge">
-                            @if($isDeliveryAvailable)
-                                <span style="background: #ECFDF5; color: #059669; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px;">
-                                    <span style="width: 6px; height: 6px; border-radius: 50%; background: #059669;"></span>
-                                    <span>Serviced Corridor ({{ $product->shop->lga->name ?? 'Origin' }} &rarr; <span id="vmDestLgaName">{{ $destLga->name }}</span>)</span>
-                                </span>
-                            @else
-                                <span style="background: #FEF3C7; color: #D97706; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px;">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                                    <span>Route Suspended (<span id="vmDestLgaName">{{ $destLga->name }}</span>)</span>
-                                </span>
-                            @endif
-                        </div>
+                    <div style="font-weight: 800; font-size: 15px; color: #0F172A; margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+                        <span style="background: #5E17EB; color: #FFF; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;">2</span>
+                        <span>Victorious MARKET Uyo Delivery</span>
                     </div>
-
-                    <!-- Dynamic Warning Banner for Suspended Corridors -->
-                    <div id="vmSuspendedAlert" style="display: {{ $isDeliveryAvailable ? 'none' : 'flex' }}; align-items: flex-start; gap: 10px; background: #FFFBEB; border: 1.5px solid #FDE68A; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 12.5px; color: #92400E; line-height: 1.45;">
-                        <div style="color: #D97706; flex-shrink: 0; margin-top: 1px;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    @if($isDeliveryAvailable)
+                        <div id="vmCorridorStatusBadge" style="background: #ECFDF5; color: #047857; border: 1px solid #A7F3D0; border-radius: 8px; padding: 12px; font-size: 13px; font-weight: 700;">
+                            Delivery available within Uyo, Akwa Ibom State.
                         </div>
-                        <div>
-                            <strong>Doorstep delivery is currently suspended for this destination LGA.</strong><br>
-                            <span>Platform logistics along this corridor is temporarily offline. Your order has been automatically switched to <strong>guaranteed In-Store Counter Pickup at &#8358;0.00</strong>. You can inspect the item physically before OTP release.</span>
+                        <p id="vmDeliveryDesc" style="font-size: 12.5px; color: #64748B; line-height: 1.5; margin: 10px 0 0;">
+                            Victorious MARKET coordinates supplier collection and local delivery. Your order is confirmed after payment verification and delivered using customer handover verification.
+                        </p>
+                    @else
+                        <div id="vmCorridorStatusBadge" style="background: #FEF2F2; color: #991B1B; border: 1px solid #FCA5A5; border-radius: 8px; padding: 12px; font-size: 13px; font-weight: 700;">
+                            Delivery is temporarily unavailable for this order. Please contact Victorious MARKET support before paying.
                         </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
-                        <!-- In-Store Pickup Card -->
-                        <label id="vmCardPickup" style="border: {{ $isDeliveryAvailable ? '1.5px solid #CBD5E1' : '2px solid #5E17EB' }}; background: {{ $isDeliveryAvailable ? '#FFFFFF' : '#F5F3FF' }}; border-radius: 12px; padding: 16px; cursor: pointer; display: block; transition: all 0.2s ease;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
-                                <input type="radio" name="fulfillment_type" id="vmRadioPickup" value="in_shop_pickup" {{ $isDeliveryAvailable ? '' : 'checked' }} onchange="vmSelectFulfillment('pickup')" style="accent-color: #5E17EB; width: 18px; height: 18px;">
-                                <span style="background: #ECFDF5; color: #059669; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;">FREE (&#8358;0.00)</span>
-                            </div>
-                            <strong style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #0F172A; margin-bottom: 3px;">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                                <span>In-Shop Counter Pickup</span>
-                            </strong>
-                            <span style="font-size: 12px; color: #64748B; line-height: 1.4; display: block;">Collect &amp; inspect physically at {{ $product->shop->name }} counter. Pay &#8358;0 online upfront; hand over OTP only upon approval.</span>
-                        </label>
-
-                        <!-- Doorstep Delivery Card -->
-                        <label id="vmCardDelivery" style="border: {{ $isDeliveryAvailable ? '2px solid #5E17EB' : '1.5px dashed #CBD5E1' }}; background: {{ $isDeliveryAvailable ? '#F5F3FF' : '#F8FAFC' }}; opacity: {{ $isDeliveryAvailable ? '1' : '0.6' }}; cursor: {{ $isDeliveryAvailable ? 'pointer' : 'not-allowed' }}; border-radius: 12px; padding: 16px; display: block; transition: all 0.2s ease;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
-                                <input type="radio" name="fulfillment_type" id="vmRadioDelivery" value="doorstep_delivery" {{ $isDeliveryAvailable ? 'checked' : 'disabled' }} onchange="vmSelectFulfillment('delivery')" style="accent-color: #5E17EB; width: 18px; height: 18px;">
-                                <span id="vmDeliveryFeeBadge" style="background: {{ $isDeliveryAvailable ? 'rgba(94, 23, 235, 0.1)' : '#F1F5F9' }}; color: {{ $isDeliveryAvailable ? '#5E17EB' : '#94A3B8' }}; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;">
-                                    {{ $isDeliveryAvailable ? '&#8358;' . number_format((float)$deliveryFee, 0) : 'UNAVAILABLE' }}
-                                </span>
-                            </div>
-                            <strong id="vmDeliveryTitle" style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: {{ $isDeliveryAvailable ? '#5E17EB' : '#64748B' }}; margin-bottom: 3px;">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                                <span>Vendor Direct Doorstep Delivery</span>
-                            </strong>
-                            <span id="vmDeliveryDesc" style="font-size: 12px; color: #64748B; line-height: 1.4; display: block;">
-                                @if(!$isDeliveryAvailable)
-                                    Delivery route currently suspended for this destination. In-Shop Pickup active.
-                                @else
-                                    Delivered directly to your door with courier Handshake OTP security.
-                                @endif
-                            </span>
-                        </label>
-                    </div>
-
-                    <!-- Optional Accredited Delivery Station / Collection Hub (Inter-LGA / Line-Haul) -->
-                    <div id="vmCollectionPointFields" style="display: {{ ($isDeliveryAvailable && $isCrossLga && isset($collectionPoints) && count($collectionPoints) > 0) ? 'block' : 'none' }}; background: #EEF2FF; border: 1.5px solid #6366F1; border-radius: 12px; padding: 16px; margin-top: 10px; margin-bottom: 12px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                            <label style="display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 800; color: #1E1B4B;">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                                <span>Accredited Delivery Hub in {{ $destLga->name }} (Optional)</span>
-                            </label>
-                            <span style="font-size: 10px; font-weight: 700; background: #E0E7FF; color: #4338CA; padding: 2px 8px; border-radius: 6px;">
-                                Station Hub Available
-                            </span>
-                        </div>
-                        <select name="collection_point_id" id="vmCollectionPointSelect" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #818CF8; background: #FFF; font-size: 13.5px; color: #0F172A; font-weight: 600; outline: none;">
-                            <option value="">Direct Doorstep Handover to Street Address (Default)</option>
-                            @foreach($collectionPoints ?? [] as $cp)
-                                <option value="{{ $cp->id }}">
-                                    {{ $cp->name }} &mdash; {{ $cp->address }} (Station)
-                                </option>
-                            @endforeach
-                        </select>
-                        <div style="font-size: 11.5px; color: #4338CA; margin-top: 8px; line-height: 1.4; display: flex; align-items: flex-start; gap: 6px;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink: 0; margin-top: 1px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                            <span><strong>Delivery Hub Option:</strong> Direct doorstep delivery will bring the package straight to your address. Alternatively, select a station hub above if you prefer to collect it in person with your secret 6-digit OTP.</span>
-                        </div>
-                    </div>
-
-                    <!-- Pickup Shop Select Drawer -->
-                    <div id="vmPickupFields" style="display: {{ $isDeliveryAvailable ? 'none' : 'block' }}; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px; margin-top: 10px;">
-                        <label style="display: block; font-size: 12.5px; font-weight: 700; color: #334155; margin-bottom: 6px;">Select Branch Counter for Handover Inspection *</label>
-                        <select name="shop_id" style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #CBD5E1; background: #FFF; font-size: 13.5px; color: #0F172A;">
-                            @foreach($allShops ?? [] as $sh)
-                                <option value="{{ $sh->id }}" {{ $sh->id == $product->shop_id ? 'selected' : '' }}>{{ $sh->name }} &mdash; {{ $sh->address }} ({{ $sh->lga->name ?? 'Uyo' }})</option>
-                            @endforeach
-                        </select>
-                    </div>
+                    @endif
+                    <input type="hidden" id="vmRadioDelivery" value="doorstep_delivery" {{ $isDeliveryAvailable ? '' : 'disabled' }}>
+                    <span id="vmDestLgaName" style="display:none;">Uyo</span>
+                    <span id="vmDeliveryFeeBadge" style="display:none;">₦{{ number_format((float)$deliveryFee, 2) }}</span>
+                    <span id="vmDeliveryTitle" style="display:none;">Victorious MARKET Delivery</span>
                 </div>
 
-                <!-- ========================================== -->
                 <!-- STEP 3: PAYMENT METHOD -->
                 <!-- ========================================== -->
                 <div style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 14px; padding: 22px; margin-bottom: 24px; box-shadow: var(--vm-shadow-xs);">
@@ -250,21 +158,6 @@
                     <p id="vmStep3Subtitle" style="font-size: 12px; color: #64748B; margin: 0 0 16px 34px;">
                         All delivery payments are processed exclusively and securely through <strong>Paystack</strong> (Nigeria’s leading PCI-DSS Level 1 certified gateway).
                     </p>
-
-                    <!-- In-Shop Pickup Inspection Notice (Shown only when In-Shop Pickup is selected) -->
-                    <div id="vmPickupPaymentNotice" style="display: none; background: #EEF2FF; border: 1.5px solid #C7D2FE; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-                        <div style="display: flex; gap: 12px; align-items: flex-start;">
-                            <div style="color: #4F46E5; flex-shrink: 0; margin-top: 2px;">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            </div>
-                            <div>
-                                <strong style="font-size: 14px; color: #1E1B4B; display: block; margin-bottom: 4px;">&#8358;0.00 Online Payment Upfront &mdash; Inspect First at Merchant Counter</strong>
-                                <p style="font-size: 12px; color: #3730A3; margin: 0; line-height: 1.5;">
-                                    When picking up in person, you do not pay online upfront. Visit <strong>{{ $product->shop->name ?? 'the shop' }}</strong>, physically inspect and verify your items at the counter, and pay directly after you are 100% satisfied.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
 
                     <!-- Payment Options Grid (for Doorstep Delivery) -->
                     <div id="vmPaymentGatewayOptions" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;">
@@ -448,7 +341,7 @@
 
 <script>
 const activeLanesMap = @json($activeLanesMap ?? []);
-const shopOriginLgaId = {{ $product->shop->lga_id ?? 69 }};
+const shopOriginLgaId = {{ $destLga->id }};
 const subtotal = {{ (float)$merchandiseSubtotal }};
 let currentDeliveryFee = {{ (float)$deliveryFee }};
 const isItemOutOfStock = {{ $isOutOfStock ? 'true' : 'false' }};
@@ -586,12 +479,17 @@ function vmHandleDestLgaChange(destLgaId) {
             feeBadge.style.color = '#94A3B8';
         }
         if (deliveryTitle) deliveryTitle.style.color = '#64748B';
-        if (deliveryDesc) deliveryDesc.textContent = 'Merchant does not service doorstep deliveries to this LGA. In-Store Counter Pickup is active at ₦0.00.';
+        if (deliveryDesc) deliveryDesc.textContent = 'Delivery is temporarily unavailable. Contact Victorious MARKET support; supplier pickup is not a public checkout option.';
         if (cpFields) cpFields.style.display = 'none';
 
-        // Seamless auto-switch to guaranteed free in-shop pickup
+        // Fail closed. Never switch a customer to an unsupported supplier pickup flow.
         currentDeliveryFee = 0.0;
-        vmSelectFulfillment('pickup');
+        const payBtn = document.getElementById('vmPayNowBtn');
+        if (payBtn) {
+            payBtn.disabled = true;
+            payBtn.style.cursor = 'not-allowed';
+            payBtn.textContent = 'Delivery Unavailable — Contact Support';
+        }
     } else {
         // Corridor is active & serviced
         if (suspendedAlert) suspendedAlert.style.display = 'none';
