@@ -415,7 +415,6 @@ class PortalWebTest extends TestCase
 
         $response->assertCreated()->assertJsonPath('corridor.code', 'uyo-plaza-demo');
         $corridor = DeliveryCorridor::where('code', 'uyo-plaza-demo')->firstOrFail();
-        $this->assertSame($corridor->id, DeliveryCorridor::resolveForAddress($uyo->id, '12 Ibom Plaza Road', null)?->id);
 
         $pricingResponse = $this->actingAs($admin)->post('/admin/delivery-corridors/customer-fees', [
             'customer_base_fee' => '650.00',
@@ -441,6 +440,7 @@ class PortalWebTest extends TestCase
         $this->assertSame('1600.00', $rate->base_payable);
         $this->assertSame('400.00', $rate->bulky_surcharge_per_unit);
         $this->assertSame('2400.00', $rate->calculatePayable(2));
+        $this->assertSame($corridor->id, DeliveryCorridor::resolveForAddress($uyo->id, '12 Ibom Plaza Road', null)?->id);
     }
 
     public function test_ambiguous_or_unmatched_landmark_does_not_guess_a_delivery_corridor(): void
@@ -455,7 +455,7 @@ class PortalWebTest extends TestCase
             'estimated_delivery_hours_max' => 4,
             'is_active' => true,
         ]);
-        DeliveryCorridor::create([
+        $secondCorridor = DeliveryCorridor::create([
             'code' => 'uyo-alias-two',
             'name' => 'Alias Two',
             'lga_id' => $uyo->id,
@@ -464,6 +464,20 @@ class PortalWebTest extends TestCase
             'estimated_delivery_hours_max' => 4,
             'is_active' => true,
         ]);
+        $company = LogisticsCompanyProfile::where('status', 'active')
+            ->whereHas('hqLga', fn ($q) => $q->where('name', 'Uyo')->whereHas('state', fn ($state) => $state->where('name', 'Akwa Ibom')))
+            ->firstOrFail();
+        $firstCorridor = DeliveryCorridor::where('code', 'uyo-alias-one')->firstOrFail();
+        foreach ([$firstCorridor, $secondCorridor] as $corridor) {
+            LogisticsCompanyCorridorRate::create([
+                'logistics_company_id' => $company->id,
+                'delivery_corridor_id' => $corridor->id,
+                'base_payable' => '1500.00',
+                'bulky_surcharge_per_unit' => '300.00',
+                'tariff_version' => 1,
+                'is_active' => true,
+            ]);
+        }
 
         $this->assertNull(DeliveryCorridor::resolveForAddress($uyo->id, 'Plaza Road, Uyo', null));
         $this->assertNull(DeliveryCorridor::resolveForAddress($uyo->id, 'An unlisted street in Uyo', null));
