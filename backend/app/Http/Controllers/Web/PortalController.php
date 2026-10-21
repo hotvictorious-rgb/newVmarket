@@ -2565,7 +2565,10 @@ class PortalController extends Controller
                 return back()->with('error', "Logistics payout request #{$payout->id} has a gateway submission or uncertain outcome. Reconcile with Paystack before it can be rejected.");
             }
 
-            $company = $payout->company;
+            $company = LogisticsCompanyProfile::whereKey($payout->logistics_company_id)
+                ->whereNull('deleted_at')
+                ->lockForUpdate()
+                ->first();
             if (!$company || $company->trashed()) {
                 return back()->with('error', 'Cannot reject payout: logistics company record is missing or archived. Finance reconciliation is required.');
             }
