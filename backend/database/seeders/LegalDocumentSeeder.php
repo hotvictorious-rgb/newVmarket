@@ -60,7 +60,7 @@ Victorious MARKET is a centrally managed retailer, not a public multi-vendor mar
 ---
 
 ### 5. Delivery, Handover & Cryptographic Handshakes
-* **Geofenced Local Delivery:** Operations commence within verified coverage zones in Akwa Ibom State (centered in Uyo LGA) and expand only across verified logistics corridors.
+* **Uyo-Only Delivery:** Victorious MARKET sources only from approved supplier shops in Uyo LGA and delivers only to destinations within Uyo LGA, Akwa Ibom State. No inter-LGA, interstate, nationwide, or collection-point delivery is offered for new orders.
 * **Doorstep handover:** The customer's delivery OTP must be securely verified and a doorstep delivery photo recorded before completion.
 * **In-shop pickup:** The customer must present the `RES-XXXXXX` reservation pass AND complete one-time customer pickup OTP verification. The vendor must securely verify both and record an in-shop pickup photo before completion. Neither credential replaces the photo; the customer pickup OTP is distinct from any rider-to-vendor parcel-custody OTP.
 * **Evidence limits:** GPS, customer signature, separate rider-pickup photo and hub inspection photo are not mandatory. OTP/pass verification confirms the handover process; neither OTP nor photo proves product quality or removes applicable consumer rights.
@@ -473,7 +473,7 @@ Supplier purchase cost is a VM cost/payable, not a vendor commission. Customer r
 The former 90/5/5 merchandise allocation is retired. Cashback remains active at 5% under the existing eligibility, maturity, redemption, expiry and refund/recovery terms. Logistics-company payable defaults to 90% of the customer delivery fee, with 10% default VM margin; an authorized admin may approve a higher/lower company amount with reason and immutable audit. The logistics company, not its rider, is the payee.
 
 ### 4. Service Area and Delivery
-VM operates from Uyo and serves only destinations where product sourcing, current coverage, an approved logistics company, capacity and the customer-facing delivery charge are confirmed. No nationwide coverage, universal delivery time or unconfirmed fee is promised.
+VM operates from Uyo and serves only destinations where product sourcing, current coverage, an approved logistics company, capacity and the customer-facing delivery charge are confirmed. Victorious MARKET only sources and delivers within Uyo LGA, Akwa Ibom State. No out-of-Uyo delivery, universal delivery time, or unconfirmed fee is promised.
 
 ### 5. Supplier Relationship
 Supplier offers are reviewed before use. VM snapshots the selected supplier offer, product/variant, agreed purchase cost, quantity and relevant terms on each accepted order item. Supplier offer changes do not silently change an accepted order. If a supplier cannot fulfil, VM follows an authorized sourcing, cancellation or refund workflow; substitutions require any necessary customer consent.
@@ -591,7 +591,7 @@ Victorious MARKET is a centrally managed online retailer operating from Uyo, Akw
 VM approves supplier offers, controls public listings and retail prices, verifies customer payments, coordinates delivery through approved logistics companies, records pickup/delivery evidence, and handles customer support and refunds. These policies do not mean every application code path has already been migrated.
 
 #### Where do you deliver?
-VM serves only destinations where the product can be sourced and current logistics coverage, capacity and customer delivery charges are confirmed. No nationwide coverage or unconfirmed delivery time is promised.
+VM serves only destinations where the product can be sourced and current logistics coverage, capacity and customer delivery charges are confirmed. Victorious MARKET only sources and delivers within Uyo LGA, Akwa Ibom State. No out-of-Uyo delivery or unconfirmed delivery time is promised.
 
 ### Shopping and Payments
 
