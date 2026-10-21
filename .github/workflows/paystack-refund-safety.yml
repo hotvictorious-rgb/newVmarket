@@ -59,6 +59,7 @@ jobs:
           php -l app/Services/RetailerRefundAccountingService.php
           php -l app/Models/CashbackRecoveryLedger.php
           php -l app/Services/FinancialReconciliationEngine.php
+          php -l app/Services/PayoutFinalizationService.php
           php -l app/Services/PaystackService.php
           php -l app/Services/ReturnAndRefundService.php
           php -l app/Services/DoorstepHandshakeService.php
@@ -87,6 +88,8 @@ jobs:
           php -l database/migrations/2026_10_21_000004_create_supplier_offers_and_sourcing_fields.php
           php -l tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php
           php -l tests/Feature/FinancialAuditRemediationProofTest.php
+          php -l tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php
+          php -l tests/Feature/FinancialJournalIdempotencySchemaTest.php
           php -l tests/Feature/PaystackPaymentHardeningTest.php
           php -l tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php
           php -l tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php
@@ -105,4 +108,4 @@ jobs:
           php -l tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php
 
       - name: Run financial audit and payment hardening proof tests
-        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/AuditHardeningAndSecurityProofTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/AutomatedSupplierSourcingTest.php tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php --display-warnings
+        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php tests/Feature/FinancialJournalIdempotencySchemaTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/AuditHardeningAndSecurityProofTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/AutomatedSupplierSourcingTest.php tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php --display-warnings
