@@ -366,9 +366,6 @@ class VendorTerminalApiController extends Controller
                 }
             })
             ->with([
-                'logisticsCompany:id,company_name,contact_phone',
-                'rider:id,user_id,plate_number,vehicle_type',
-                'rider.user:id,name,phone',
                 'items' => function ($itemsQuery) use ($vendor, $shop, $ctx) {
                     $itemsQuery->where('supplier_vendor_id', $vendor->id);
                     if ($ctx['is_employee'] && $shop) {
