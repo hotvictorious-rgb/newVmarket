@@ -13,7 +13,7 @@ class ReturnCase extends Model
             $parentOrder = $returnCase->parent_order_id ? Order::find($returnCase->parent_order_id) : null;
 
             // Retailer returns belong to Victorious MARKET centrally, never to a
-            // private supplier or supplier-specific collection point.
+            // private supplier. Logistics collection-point choices remain independent.
             if (($order && $order->retailer_model_order) || ($parentOrder && $parentOrder->retailer_model_order)) {
                 $returnCase->vendor_id = null;
             }
