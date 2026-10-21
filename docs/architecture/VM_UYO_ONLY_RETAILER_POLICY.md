@@ -21,7 +21,7 @@
 - Delivery completion requires the customer's valid OTP and mandatory doorstep photo proof, with auditable timestamps/actor records.
 - Cashback remains 5% of eligible real customer money applied to merchandise, funded from Victorious MARKET gross margin. Exclude delivery fees and redeemed wallet/cashback credit from the eligible base; preserve configured caps, maturation, reversal and refund rules.
 - Payment/webhook retries and repeated jobs must be idempotent. A replay must not duplicate orders, supplier payables, logistics payables, refunds, cashback or journal entries. Financial paths fail closed when amounts, ownership, status or reconciliation cannot be verified.
-- Paystack prepayment is required for normal checkout; COD is disabled. Public pickup reservation is disabled; any exceptional pickup must be arranged by central support, explicitly agreed by the customer and separately authorized/audited without bypassing payment or Uyo-boundary checks.
+- Paystack prepayment is required for normal checkout; COD and instant refund-wallet-credit checkout tender are disabled at launch. Cashback redemption remains separately allowed under its existing caps. Public pickup reservation is disabled; any exceptional pickup must be arranged by central support, explicitly agreed by the customer and separately authorized/audited without bypassing payment or Uyo-boundary checks.
 
 ## Acceptance gates before production
 1. Non-Uyo destination is rejected by location selection, cart, checkout, fee API, lane administration and asynchronous fulfillment even if a legacy lane is active.
