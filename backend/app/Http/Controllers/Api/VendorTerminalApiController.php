@@ -312,16 +312,6 @@ class VendorTerminalApiController extends Controller
                         'assigned_at', 'supplier_confirmed_at', 'supplier_rejected_at', 'supplier_response_notes',
                     ]);
                 },
-                'supplierAssignments' => function ($assignmentQuery) use ($vendor, $shop, $ctx) {
-                    $assignmentQuery->where('supplier_vendor_id', $vendor->id)->where('status', '!=', 'admin_reassigned');
-                    if ($ctx['is_employee'] && $shop) {
-                        $assignmentQuery->where('supplier_shop_id', $shop->id);
-                    }
-                    $assignmentQuery->select([
-                        'id', 'order_id', 'supplier_vendor_id', 'supplier_shop_id', 'status',
-                        'assigned_at', 'supplier_confirmed_at', 'supplier_rejected_at', 'supplier_response_notes',
-                    ]);
-                },
             ])
             ->latest();
 
