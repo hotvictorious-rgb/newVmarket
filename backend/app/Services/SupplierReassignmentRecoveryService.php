@@ -299,7 +299,7 @@ class SupplierReassignmentRecoveryService
                 $order->sourcing_status = 'supplier_rejected';
             } else {
                 $hasConfirmedAssignment = OrderSupplierAssignment::where('order_id', $order->id)
-                    ->where('status', 'supplier_confirmed')
+                    ->whereIn('status', ['supplier_confirmed', 'ready_for_collection', 'collected'])
                     ->whereExists(function ($query) use ($order) {
                         $query->select(DB::raw(1))
                             ->from('order_items')
