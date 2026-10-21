@@ -40,6 +40,21 @@ class VendorTerminalApiController extends Controller
      */
     private function hideRetailerInternals(Order $order): Order
     {
+        if ($order->relationLoaded('items')) {
+            $order->items->each(function ($item) {
+                $item->makeHidden([
+                    'unit_price',
+                    'line_total',
+                    'cost_price',
+                    'supplier_offer_id',
+                    'supplier_vendor_id',
+                    'supplier_shop_id',
+                    'supplier_name_snapshot',
+                    'supplier_shop_name_snapshot',
+                ]);
+            });
+        }
+
         return $order->makeHidden([
             'vendor_id',
             'shop_id',
@@ -258,7 +273,6 @@ class VendorTerminalApiController extends Controller
                 }
             })
             ->with([
-                'customer:id,name,phone',
                 'logisticsCompany:id,company_name,contact_phone',
                 'rider:id,user_id,plate_number,vehicle_type',
                 'rider.user:id,name,phone',
@@ -267,7 +281,7 @@ class VendorTerminalApiController extends Controller
                     if ($ctx['is_employee'] && $shop) {
                         $itemsQuery->where('supplier_shop_id', $shop->id);
                     }
-                    $itemsQuery->with('product:id,name,unit_price,thumbnail');
+                    $itemsQuery->with('product:id,name,thumbnail');
                 },
                 'supplierAssignments' => function ($assignmentQuery) use ($vendor, $shop, $ctx) {
                     $assignmentQuery->where('supplier_vendor_id', $vendor->id);
@@ -345,7 +359,6 @@ class VendorTerminalApiController extends Controller
                 }
             })
             ->with([
-                'customer:id,name,phone,email',
                 'logisticsCompany:id,company_name,contact_phone',
                 'rider:id,user_id,plate_number,vehicle_type',
                 'rider.user:id,name,phone',
@@ -354,7 +367,7 @@ class VendorTerminalApiController extends Controller
                     if ($ctx['is_employee'] && $shop) {
                         $itemsQuery->where('supplier_shop_id', $shop->id);
                     }
-                    $itemsQuery->with('product:id,name,unit_price,thumbnail');
+                    $itemsQuery->with('product:id,name,thumbnail');
                 },
             ]);
 
