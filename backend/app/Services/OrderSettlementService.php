@@ -814,24 +814,10 @@ class OrderSettlementService
                 return ['success' => false, 'message' => 'Pickup verification code must be exactly 6 digits.'];
             }
 
-            // Vendor-owned rider only. Assignment is made by the vendor before pickup;
-            // a rider cannot claim an unassigned order or act across vendor boundaries.
-            if (!$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
-                return ['success' => false, 'message' => 'Vendor rider account is inactive or suspended.'];
-            }
-            if (!$rider->vendor_id || $rider->logistics_company_id
-                || (int) $rider->vendor_id !== (int) $lockedOrder->vendor_id) {
-                return ['success' => false, 'message' => 'Unauthorized: Rider must belong exclusively to the vendor that owns this order.'];
-            }
-            if (!$rider->vendor || $rider->vendor->marketplace_status !== 'active'
-                || ($rider->vendor->user && $rider->vendor->user->status !== 'active')) {
-                return ['success' => false, 'message' => 'Owning vendor account is inactive or suspended.'];
-            }
-            if ($lockedOrder->logistics_company_id) {
-                return ['success' => false, 'message' => 'Legacy fleet-linked orders must be safely migrated before vendor-managed delivery.'];
-            }
-            if ((int) $lockedOrder->rider_id !== (int) $rider->id) {
-                return ['success' => false, 'message' => 'Unauthorized: This order is not assigned to this vendor rider.'];
+            // New retailer deliveries use central logistics. Supplier/vendor association
+            // is private sourcing metadata and never authorizes physical custody.
+            if (!$rider->isEligibleForCentralOrder($lockedOrder)) {
+                return ['success' => false, 'message' => 'Unauthorized: Rider must be active and linked exclusively to the active logistics company assigned to this order.'];
             }
 
             // Enforce Vendor Handover Readiness
@@ -916,17 +902,11 @@ class OrderSettlementService
                 ];
             }
 
-            // Arrival is an operational action by the vendor-assigned rider only.
-            if (!$rider->is_active || ($rider->user && $rider->user->status !== 'active')
-                || !$rider->vendor_id || $rider->logistics_company_id
-                || (int) $rider->vendor_id !== (int) $lockedOrder->vendor_id
-                || (int) $lockedOrder->rider_id !== (int) $rider->id
-                || !$rider->vendor || $rider->vendor->marketplace_status !== 'active'
-                || ($rider->vendor->user && $rider->vendor->user->status !== 'active')
-                || $lockedOrder->logistics_company_id) {
+            // Arrival requires the exact centrally assigned active logistics rider.
+            if (!$rider->isEligibleForCentralOrder($lockedOrder)) {
                 return [
                     'success' => false,
-                    'message' => 'Unauthorized: Only the active rider assigned by this order’s owning vendor may mark arrival.',
+                    'message' => 'Unauthorized: Only the active rider assigned through this order active logistics company may mark arrival.',
                 ];
             }
 
@@ -990,45 +970,16 @@ class OrderSettlementService
                 ];
             }
 
-            // 1. Vendor-owned rider hardening: riders are operational agents of one vendor,
-            // never platform fleet beneficiaries. A delivery action requires exact assignment.
+            // 1. Central logistics rider hardening. Direct service calls must enforce
+            // the same exact assignment as the controller; no vendor fallback is allowed.
             $activeRider = $rider ?? ($lockedOrder->rider_id
-                ? RiderProfile::with(['user', 'vendor.user'])->find($lockedOrder->rider_id)
+                ? RiderProfile::with(['user', 'logisticsCompany.user'])->find($lockedOrder->rider_id)
                 : null);
             $haltReason = null;
             if (!$activeRider) {
-                $haltReason = 'Unauthorized: No assigned vendor rider is available for delivery confirmation.';
-            } elseif (!$activeRider->is_active) {
-                $haltReason = 'Unauthorized: Vendor rider profile is inactive. Delivery halted.';
-            } elseif ($activeRider->user && $activeRider->user->status !== 'active') {
-                $haltReason = 'Unauthorized: Vendor rider user account is inactive. Delivery halted.';
-            } elseif (!$activeRider->vendor_id || $activeRider->logistics_company_id) {
-                $haltReason = 'Unauthorized: Delivery actions require a rider linked exclusively to one vendor.';
-            } elseif ((int) $activeRider->vendor_id !== (int) $lockedOrder->vendor_id) {
-                $haltReason = 'Unauthorized: Rider does not belong to the vendor that owns this order.';
-            } elseif (!$activeRider->vendor || $activeRider->vendor->marketplace_status !== 'active'
-                || ($activeRider->vendor->user && $activeRider->vendor->user->status !== 'active')) {
-                $haltReason = 'Unauthorized: Owning vendor account is inactive or suspended.';
-            } elseif ((int) $lockedOrder->rider_id !== (int) $activeRider->id) {
-                $haltReason = 'Unauthorized: This order is not assigned to the authenticated vendor rider.';
-            }
-
-            if (!$haltReason && $lockedOrder->logistics_company_id) {
-                $haltReason = 'Legacy fleet-linked orders must be safely migrated before vendor-managed delivery can complete.';
-            }
-
-            // 3. Merchant / Vendor Hardening: Validate merchant active status
-            if (!$haltReason && $lockedOrder->vendor) {
-                if ($lockedOrder->vendor->marketplace_status !== 'active') {
-                    $haltReason = 'Merchant marketplace account is suspended. Delivery settlement halted.';
-                } elseif ($lockedOrder->vendor->user && $lockedOrder->vendor->user->status !== 'active') {
-                    $haltReason = 'Merchant user account is inactive. Delivery settlement halted.';
-                }
-            }
-
-            // 4. Shop Branch Hardening: Validate shop branch is active
-            if (!$haltReason && $lockedOrder->shop && !$lockedOrder->shop->is_active) {
-                $haltReason = 'Merchant shop branch is inactive or closed. Delivery settlement halted.';
+                $haltReason = 'Unauthorized: No assigned central logistics rider is available for delivery confirmation.';
+            } elseif (!$activeRider->isEligibleForCentralOrder($lockedOrder)) {
+                $haltReason = 'Unauthorized: Delivery confirmation requires the assigned active rider linked exclusively to the order active logistics company.';
             }
 
             if ($haltReason) {
