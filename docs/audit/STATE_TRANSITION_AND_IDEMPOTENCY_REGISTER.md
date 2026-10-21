@@ -688,3 +688,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Protects internal financial references and workflow tokens from customer API exposure, reduces the chance of exposing supplier/arbitration details, and presents wallet-credit holds as a clear pending-refund state without leaking internal reconciliation notes.
 
 **Verification boundary:** Source and regression test committed; tests/CI pending. No merge or deployment.
+
+
+### VM-AUD-125 — Keep wallet summary aligned with checkout policy (21 October 2026)
+
+**Finding:** The customer wallet summary advertised `spendable_rate=100%` even though checkout explicitly prohibits refund wallet credits as payment tender at launch. This contradicted the actual checkout policy and could mislead customers about what they can spend.
+
+**Fix:** Wallet summary now reports `spendable_rate=0%`, `checkout_redemption_enabled=false`, and an explanatory message. The available balance remains visible as a ledger balance, but is not represented as checkout spendable. Added a regression assertion.
+
+**Business impact:** Reduces customer confusion and support disputes over why a displayed wallet balance cannot be applied to checkout.
+
+**Verification boundary:** Source and regression test committed; tests/CI pending. No merge or deployment.
