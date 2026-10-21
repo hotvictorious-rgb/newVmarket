@@ -341,8 +341,12 @@ class CheckoutExecutionService
                 $walletCreditMerchandiseApplied
             );
             $customerCashback5 = BcMathService::mul($realMoneyMerchandiseBase, '0.05');
+            // Accounting margin is the gross retail sale less supplier cost and the
+            // newly accrued cashback liability. Previously redeemed wallet liabilities
+            // are separately debited below; subtracting them again here would unbalance
+            // the journal. Cashback eligibility itself uses $realMoneyMerchandiseBase.
             $retailerMerchandiseMargin = BcMathService::sub(
-                BcMathService::sub($realMoneyMerchandiseBase, $supplierCostTotal),
+                BcMathService::sub($merchandiseSubtotal, $supplierCostTotal),
                 $customerCashback5
             );
 
@@ -469,11 +473,12 @@ class CheckoutExecutionService
                 ]);
             }
 
-            // If order is 100% paid via wallet credit, settle double-entry books immediately!
+            // A fully wallet-funded retailer order must use the same cost-based
+            // supplier and company-payable accounts as Paystack settlement. Never post
+            // legacy vendor commissions or the legacy logistics_payable account here.
             if ($isFullyWalletPaid) {
                 CustomerWalletCredit::spendWalletBalance($user->id, $order->id, $walletCreditApplied);
 
-                // Debit: Customer Wallet Liability
                 FinancialJournalEntry::create([
                     'order_id' => $order->id,
                     'transaction_reference' => $paymentRef,
@@ -484,11 +489,10 @@ class CheckoutExecutionService
                     'entry_type' => 'debit',
                     'amount' => $walletCreditApplied,
                     'currency' => 'NGN',
-                    'description' => "100% Wallet refund credit redemption for Order #{$order->order_number}",
+                    'description' => "Customer wallet credit redeemed for fully wallet-funded Order #{$order->order_number}",
                 ]);
 
-                // Debit: Cashback Liability Redeemed (if any)
-                if (bccomp($cashbackApplied, '0.00', 2) > 0) {
+                if (BcMathService::comp($cashbackApplied, '0.00') > 0) {
                     FinancialJournalEntry::create([
                         'order_id' => $order->id,
                         'transaction_reference' => $paymentRef,
@@ -499,26 +503,45 @@ class CheckoutExecutionService
                         'entry_type' => 'debit',
                         'amount' => $cashbackApplied,
                         'currency' => 'NGN',
-                        'description' => "Customer cashback redeemed for Order #{$order->order_number}",
+                        'description' => "Customer cashback redeemed for fully wallet-funded Order #{$order->order_number}",
                     ]);
                 }
 
-                // Credit: Vendor Payable (90% Merchandise Net)
-                FinancialJournalEntry::create([
-                    'order_id' => $order->id,
-                    'transaction_reference' => $paymentRef,
-                    'event_id' => 'EVT-VND-ESCROW-' . $order->id . '-' . $paymentRef,
-                    'beneficiary_type' => VendorProfile::class,
-                    'beneficiary_id' => $primarySourceShop->vendor_id,
-                    'account_name' => 'vendor_payable',
-                    'entry_type' => 'credit',
-                    'amount' => $vendorNet90,
-                    'currency' => 'NGN',
-                    'description' => "Merchant 90% Net Payable held in escrow for Order #{$order->order_number}",
-                ]);
+                $walletOrderItems = $order->items()->orderBy('id')->lockForUpdate()->get();
+                $walletSupplierCostTotal = '0.00';
+                foreach ($walletOrderItems as $item) {
+                    $supplierId = (int) ($item->supplier_vendor_id ?? 0);
+                    $unitCost = $item->supplier_cost_snapshot;
+                    if ($supplierId <= 0 || $unitCost === null || BcMathService::comp((string) $unitCost, '0.00') <= 0
+                        || (int) $item->quantity <= 0) {
+                        throw new \RuntimeException('Wallet-funded retailer order is missing an immutable supplier/cost snapshot.');
+                    }
+                    $lineCost = BcMathService::mul((string) $unitCost, (string) $item->quantity);
+                    $walletSupplierCostTotal = BcMathService::add($walletSupplierCostTotal, $lineCost);
+                }
+                if ($order->supplier_cost_total_snapshot === null
+                    || BcMathService::comp($walletSupplierCostTotal, (string) $order->supplier_cost_total_snapshot) !== 0) {
+                    throw new \RuntimeException('Wallet-funded retailer supplier-cost total does not match the immutable order snapshot.');
+                }
 
-                // Credit: Customer Cashback Liability (5% Merchandise Split)
-                if (bccomp($customerCashback5, '0.00', 2) > 0) {
+                foreach ($walletOrderItems as $item) {
+                    $lineCost = BcMathService::mul((string) $item->supplier_cost_snapshot, (string) $item->quantity);
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'order_item_id' => $item->id,
+                        'transaction_reference' => $paymentRef,
+                        'event_id' => 'EVT-SUPPLIER-PAYABLE-' . $order->id . '-ITEM-' . $item->id . '-' . $paymentRef,
+                        'beneficiary_type' => VendorProfile::class,
+                        'beneficiary_id' => $item->supplier_vendor_id,
+                        'account_name' => 'supplier_payable',
+                        'entry_type' => 'credit',
+                        'amount' => $lineCost,
+                        'currency' => 'NGN',
+                        'description' => "Agreed wholesale supplier payable for wallet-funded Order #{$order->order_number}, item #{$item->id}",
+                    ]);
+                }
+
+                if (BcMathService::comp($customerCashback5, '0.00') > 0) {
                     FinancialJournalEntry::create([
                         'order_id' => $order->id,
                         'transaction_reference' => $paymentRef,
@@ -529,65 +552,101 @@ class CheckoutExecutionService
                         'entry_type' => 'credit',
                         'amount' => $customerCashback5,
                         'currency' => 'NGN',
-                        'description' => "Customer 5% Cashback Reward Liability accrued for Order #{$order->order_number}",
+                        'description' => "5% real-money merchandise cashback liability accrued for wallet-funded Order #{$order->order_number}",
                     ]);
-
-                    CustomerCashbackLedger::updateOrCreate([
-                        'order_id' => $order->id,
-                    ], [
+                    CustomerCashbackLedger::updateOrCreate(['order_id' => $order->id], [
                         'customer_id' => $user->id,
                         'amount' => $customerCashback5,
                         'status' => 'pending_maturation',
-                        'matures_at' => null, // Starts only after verified fulfilment and the 24-hour claim window.
-                        'expires_at' => null, // The 365-day validity period starts at maturity.
+                        'matures_at' => null,
+                        'expires_at' => null,
                     ]);
                 }
 
-                // Credit: Platform Revenue (5% Merchandise Cut)
-                if (bccomp($platformMargin5, '0.00', 2) > 0) {
+                if (BcMathService::comp($retailerMerchandiseMargin, '0.00') > 0) {
                     FinancialJournalEntry::create([
                         'order_id' => $order->id,
                         'transaction_reference' => $paymentRef,
-                        'event_id' => 'EVT-PLT-REV-' . $order->id . '-' . $paymentRef,
+                        'event_id' => 'EVT-RETAIL-MARGIN-WALLET-' . $order->id . '-' . $paymentRef,
                         'beneficiary_type' => User::class,
                         'beneficiary_id' => null,
-                        'account_name' => 'platform_revenue',
+                        'account_name' => 'retailer_merchandise_margin',
                         'entry_type' => 'credit',
-                        'amount' => $platformMargin5,
+                        'amount' => $retailerMerchandiseMargin,
                         'currency' => 'NGN',
-                        'description' => "Victorious Market 5% Platform Revenue Commission for Order #{$order->order_number}",
+                        'description' => "Retail merchandise margin for wallet-funded Order #{$order->order_number}",
                     ]);
-                }
-
-                // Credit: Logistics Fleet Payable (90% Delivery Net)
-                if (bccomp($logisticsNet90, '0.00', 2) > 0 && $logisticsCompanyId) {
+                } elseif (BcMathService::comp($retailerMerchandiseMargin, '0.00') < 0) {
                     FinancialJournalEntry::create([
                         'order_id' => $order->id,
                         'transaction_reference' => $paymentRef,
-                        'event_id' => 'EVT-LOG-ESCROW-' . $order->id . '-' . $paymentRef,
+                        'event_id' => 'EVT-RETAIL-LOSS-WALLET-' . $order->id . '-' . $paymentRef,
+                        'beneficiary_type' => User::class,
+                        'beneficiary_id' => null,
+                        'account_name' => 'retailer_merchandise_loss',
+                        'entry_type' => 'debit',
+                        'amount' => BcMathService::sub('0.00', $retailerMerchandiseMargin),
+                        'currency' => 'NGN',
+                        'description' => "Retail merchandise loss for wallet-funded Order #{$order->order_number}",
+                    ]);
+                }
+
+                $deliveryFeeSnapshot = (string) $order->delivery_fee;
+                $companyPayable = (string) ($order->logistics_company_payable_amount
+                    ?? BcMathService::mul($deliveryFeeSnapshot, '0.90'));
+                $order->logistics_company_payable_default_amount = $order->logistics_company_payable_default_amount
+                    ?? BcMathService::mul($deliveryFeeSnapshot, '0.90');
+                $order->logistics_company_payable_amount = $companyPayable;
+                $order->logistics_company_payable_ledger_company_id = $order->logistics_company_id;
+                $order->save();
+
+                if (BcMathService::comp($companyPayable, '0.00') > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $paymentRef,
+                        'event_id' => 'EVT-LOG-COMPANY-PAYABLE-WALLET-' . $order->id . '-' . $paymentRef,
                         'beneficiary_type' => LogisticsCompanyProfile::class,
-                        'beneficiary_id' => $logisticsCompanyId,
-                        'account_name' => 'logistics_payable',
+                        'beneficiary_id' => $order->logistics_company_id,
+                        'account_name' => 'logistics_company_payable',
                         'entry_type' => 'credit',
-                        'amount' => $logisticsNet90,
+                        'amount' => $companyPayable,
                         'currency' => 'NGN',
-                        'description' => "Logistics 90% Delivery Fee held in escrow for Order #{$order->order_number}",
+                        'description' => "Default/approved logistics-company payable for wallet-funded Order #{$order->order_number}; not a rider payable.",
                     ]);
                 }
 
-                // Credit: Platform Delivery Commission (10% Delivery Cut)
-                if (bccomp($platformDelivery10, '0.00', 2) > 0) {
+                $deliveryMargin = BcMathService::comp($deliveryFeeSnapshot, $companyPayable) > 0
+                    ? BcMathService::sub($deliveryFeeSnapshot, $companyPayable)
+                    : '0.00';
+                $deliverySubsidy = BcMathService::comp($companyPayable, $deliveryFeeSnapshot) > 0
+                    ? BcMathService::sub($companyPayable, $deliveryFeeSnapshot)
+                    : '0.00';
+                if (BcMathService::comp($deliveryMargin, '0.00') > 0) {
                     FinancialJournalEntry::create([
                         'order_id' => $order->id,
                         'transaction_reference' => $paymentRef,
-                        'event_id' => 'EVT-PLT-DELIV-' . $order->id . '-' . $paymentRef,
+                        'event_id' => 'EVT-PLATFORM-DELIVERY-REV-WALLET-' . $order->id . '-' . $paymentRef,
                         'beneficiary_type' => User::class,
                         'beneficiary_id' => null,
-                        'account_name' => 'platform_revenue',
+                        'account_name' => 'platform_delivery_revenue',
                         'entry_type' => 'credit',
-                        'amount' => $platformDelivery10,
+                        'amount' => $deliveryMargin,
                         'currency' => 'NGN',
-                        'description' => "Victorious Market 10% Delivery Logistics Platform Fee for Order #{$order->order_number}",
+                        'description' => "VM delivery margin after logistics-company payable for wallet-funded Order #{$order->order_number}",
+                    ]);
+                }
+                if (BcMathService::comp($deliverySubsidy, '0.00') > 0) {
+                    FinancialJournalEntry::create([
+                        'order_id' => $order->id,
+                        'transaction_reference' => $paymentRef,
+                        'event_id' => 'EVT-DELIVERY-SUBSIDY-WALLET-' . $order->id . '-' . $paymentRef,
+                        'beneficiary_type' => User::class,
+                        'beneficiary_id' => null,
+                        'account_name' => 'delivery_subsidy_expense',
+                        'entry_type' => 'debit',
+                        'amount' => $deliverySubsidy,
+                        'currency' => 'NGN',
+                        'description' => "VM-funded delivery subsidy for wallet-funded Order #{$order->order_number}",
                     ]);
                 }
             }
