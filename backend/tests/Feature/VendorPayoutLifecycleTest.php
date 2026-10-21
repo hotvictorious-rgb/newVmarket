@@ -448,10 +448,10 @@ class VendorPayoutLifecycleTest extends TestCase
         $response = $this->actingAs($this->vendorUser)->get(route('vendor.payout.index'));
 
         $response->assertStatus(200);
-        $response->assertSee('Gross Merchant Sales');
-        $response->assertSee('Lifetime 90% Net Earnings');
+        $response->assertSee('Legacy Marketplace Gross Sales');
+        $response->assertSee('Legacy Marketplace Net Earnings');
         $response->assertSee('In-Transit / Escrow Hold');
-        $response->assertSee('AVAILABLE TO WITHDRAW');
+        $response->assertSee('LEGACY BALANCE AVAILABLE TO WITHDRAW');
         $response->assertSee('Request Payout');
         $response->assertSee('Registered NUBAN Settlement Account');
     }
