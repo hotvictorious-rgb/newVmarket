@@ -263,3 +263,11 @@ Supplier-specific payout eligibility cannot safely allocate money from order-lev
 - Added schema assertion and updated recovery regression fixtures to persist item-level identity. The focused recovery/reconciliation test passed in CI at branch commit 8c42cbfd1e82bd1aac5c21fe7632fd04420606f0.
 - Commits: migration 75a24291c7c9f8036800b9aa40b7f8924675f49a; model a82ffba90106c8a405ac43fd505582dd99a97562; capture 081bee4aa063f8932c7e60056facf3972364769c; recovery 6a06fdb8105771395df8e630a9863d119a986c04; refund accounting b5178f0b1a9965df8598078f30c1c5148540ecc3; reconciliation 5ce19457fd3824a93d1b22820dfa2677ff562105; schema test 61d7d0e2e41abb194f0bb910450a6f79373fc1c4; recovery fixture 8c42cbfd1e82bd1aac5c21fe7632fd04420606f0; syntax coverage d9252cce6655a8458b28be67b6d43cc7eb4f5322.
 - Verification status: focused CI run passed. Full branch-head CI is still required after the latest documentation/test-message commits. Supplier-specific payout execution remains fail-closed until its request/reservation, gateway finalization, and reversal workflow is implemented and tested.
+
+## 28. Reconcile supplier payable per item, not just per supplier total (21 October 2026)
+
+Once journal rows carried order-item IDs, the audit was strengthened to compare net supplier_payable per (order item, supplier) as well as per supplier/order. This catches offsetting errors where one item is over-credited and another item for the same supplier is under-credited while the supplier's order-level total happens to match.
+
+- Operational line cost is compared to item-linked supplier payable credits minus debits; completed refund quantities reduce the expected liability only when the exact item-linked refund debit exists. Missing item links and invalid beneficiary types are critical mismatches.
+- Commit: 44bc2323f434a8a768fcfaa04def41bf719152cc.
+- CI verification at that code commit: **214 tests passed, 1,459 assertions**; PHP syntax checks passed, including the new item-link migration and supplier recovery files.
