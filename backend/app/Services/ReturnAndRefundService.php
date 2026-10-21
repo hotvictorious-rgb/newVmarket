@@ -753,18 +753,31 @@ class ReturnAndRefundService
                 $dispatchRes = $finOpService->dispatchRefund($op);
 
                 if (empty($dispatchRes['success'])) {
+                    $dispatchStatus = (string) ($dispatchRes['status'] ?? '');
                     // Restore wallet credits only for an authoritative terminal
                     // gateway failure. An initiated/uncertain outcome keeps them
                     // quarantined until reconciliation.
-                    if (($dispatchRes['status'] ?? '') === 'failed') {
+                    if ($dispatchStatus === 'failed') {
                         $this->restoreWalletCreditsAfterDefinitiveFailure($walletCreditStatuses);
                     }
-                    ReturnCase::where('id', $caseId)->update([
+                    ReturnCase::where('id', $caseId)->where('refund_claim_token', $claimToken)->update([
                         'refund_claim_token' => null,
                         'refund_claimed_at' => null,
                     ]);
+
+                    if ($dispatchStatus === 'initiated') {
+                        return [
+                            'success' => true,
+                            'status' => 'initiated',
+                            'message' => 'Paystack refund outcome is uncertain. No second refund request was sent; wallet credits remain quarantined and finance reconciliation is required before retry.',
+                            'case' => ReturnCase::find($caseId),
+                            'total_refunded' => $totalCashRefund,
+                        ];
+                    }
+
                     return [
                         'success' => false,
+                        'status' => $dispatchStatus ?: 'failed',
                         'message' => 'Paystack gateway refund failed: ' . ($dispatchRes['message'] ?? 'Payment provider rejected.'),
                     ];
                 }
