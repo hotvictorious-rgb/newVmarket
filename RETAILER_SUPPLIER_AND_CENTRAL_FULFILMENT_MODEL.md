@@ -24,21 +24,15 @@ A supplier submission is a wholesale proposal, never an auto-published marketpla
 
 ## 3. Customer order sourcing and supplier selection
 
-When a customer places an order on Victorious MARKET:
+For every new online order:
 1. The customer orders the canonical product from Victorious MARKET at the published retail price.
-2. For **Doorstep Delivery**, the customer pays upfront online via Paystack (+ delivery fee).
-3. For **In-Shop Pickup (Reservation)**, the customer reserves online for free (₦0 upfront) to inspect at the designated supplier shop.
-4. **Automated Sourcing Assignment (Cheapest + Available):**
-   - As soon as the customer completes checkout (payment verified for delivery, or reservation created for in-shop pickup), the system **automatically assigns the order/item to the accredited supplier that has the product in stock and offers the cheapest wholesale cost price (`cost_price`)**.
-5. **Admin Override Authority:**
-   - The Admin console maintains full supervisory control: Admin can review the automated assignment and **override it at any time**, manually reassigning the order or reservation to another accredited supplier/shop (e.g., for operational balancing, branch proximity, or relationship management).
-6. **Immutable Snapshot:** The order item records an immutable snapshot of:
-   - Canonical product and variant;
-   - Selected supplier ID and supplier shop ID;
-   - Agreed supplier wholesale purchase cost (`cost_price`);
-   - Customer retail selling price (`unit_price`);
-   - VM gross profit margin (`unit_price - cost_price`).
-7. Later edits to supplier wholesale prices never alter historical or active order snapshots.
+2. Doorstep delivery is the only standard online fulfilment method. The customer pays the merchandise total and the published destination/service delivery fee through the authorized VM checkout.
+3. Pickup is not a checkout or reservation type. A customer who prefers pickup must contact support for a confirmed exception; no automated reservation or supplier/shop selection is exposed.
+4. Sourcing runs server-side for each line using confirmed current availability, active/approved private source status and valid delivery coverage. The system assesses the complete order and feasible fulfilment plan, not merely the cheapest source for each line independently.
+5. If several sources are required, VM coordinates internal collection/consolidation. Do not expose supplier identity/address or direct the customer to multiple suppliers by default.
+6. Admin may override a source assignment only with appropriate authorization, a recorded reason and an audit trail.
+7. Each order item stores an immutable snapshot of the selected offer/source, agreed wholesale cost, retail price and selection timestamp. Later supplier-price edits must not rewrite existing order economics.
+8. If no feasible source and fulfilment plan exists, do not promise fulfilment or silently add fees. Contact the customer with an approved alternative or process the applicable cancellation/refund path.
 
 ## 4. Central operating base and service coverage
 
