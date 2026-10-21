@@ -631,32 +631,87 @@ class RiderTerminalApiController extends Controller
 
         $rider = $request->user()->riderProfile;
         $returnCases = \App\Models\ReturnCase::where(function ($q) use ($rider) {
-                $q->where('returned_by_rider_id', $rider->id)
-                  ->orWhereHas('order', fn($oq) => $oq->where('rider_id', $rider->id));
+                $q->where('returned_by_rider_id', $rider->user_id)
+                  ->orWhereHas('order', fn ($oq) => $oq->where('rider_id', $rider->id));
             })
-            ->where('status', 'in_transit_back_to_vendor')
-            ->with(['order.shop', 'order.customer', 'order.customerAddress.lga', 'order.customerAddress.state', 'order.items'])
+            ->whereIn('status', ['in_transit_back_to_vendor', 'pending_supplier_assignment'])
+            ->with([
+                'order.shop',
+                'order.customer',
+                'order.customerAddress.lga',
+                'order.customerAddress.state',
+                'order.items',
+                'items.orderItem',
+                'items.product',
+            ])
             ->get();
 
         return response()->json([
             'status' => true,
             'message' => 'Active return cases retrieved.',
             'data' => $returnCases->map(function ($case) {
+                $order = $case->order;
+                $shopName = $order && $order->shop ? $order->shop->name : 'Merchant Store';
+                $shopAddress = $order && $order->shop ? $order->shop->address : 'Vendor Location';
+                $shopPhone = $order && $order->shop ? $order->shop->phone : null;
+                $requiresAdminAssignment = $case->status === 'pending_supplier_assignment';
+
+                if ($order && $order->retailer_model_order) {
+                    $supplierIds = $case->items
+                        ->map(fn ($item) => (int) ($item->orderItem?->fulfillment_supplier_vendor_id ?? 0))
+                        ->filter(fn ($id) => $id > 0)
+                        ->unique()
+                        ->values();
+                    if ($supplierIds->isEmpty()) {
+                        $supplierIds = $order->items
+                            ->pluck('fulfillment_supplier_vendor_id')
+                            ->map(fn ($id) => (int) $id)
+                            ->filter(fn ($id) => $id > 0)
+                            ->unique()
+                            ->values();
+                    }
+
+                    if ($supplierIds->count() !== 1) {
+                        $requiresAdminAssignment = true;
+                    } else {
+                        $supplier = \App\Models\VendorProfile::with('shops')->find($supplierIds->first());
+                        $supplierShop = $supplier?->shops()->where('is_active', true)->first();
+                        if (!$supplier || $supplier->marketplace_status !== 'active' || !$supplierShop) {
+                            $requiresAdminAssignment = true;
+                        } else {
+                            $shopName = $supplierShop->name;
+                            $shopAddress = $supplierShop->address;
+                            $shopPhone = $supplier->business_phone ?: $supplier->user?->phone;
+                        }
+                    }
+
+                    if ($requiresAdminAssignment) {
+                        $shopName = 'Victorious MARKET — supplier assignment pending';
+                        $shopAddress = null;
+                        $shopPhone = null;
+                    }
+                }
+
+                $itemNames = $case->items->isNotEmpty()
+                    ? $case->items->map(fn ($item) => $item->orderItem?->product_name ?? $item->product?->name)->filter()->join(', ')
+                    : ($order && $order->items ? $order->items->pluck('product_name')->join(', ') : 'Returned item(s)');
+
                 return [
                     'id' => $case->id,
                     'case_number' => $case->case_number,
                     'order_id' => $case->order_id,
-                    'order_number' => $case->order ? $case->order->order_number : null,
-                    'shop_name' => $case->order && $case->order->shop ? $case->order->shop->name : 'Merchant Store',
-                    'shop_address' => $case->order && $case->order->shop ? $case->order->shop->address : 'Vendor Location',
-                    'shop_phone' => $case->order && $case->order->shop ? $case->order->shop->phone : null,
-                    'customer_name' => $case->order && $case->order->customer ? ($case->order->customerAddress?->contact_name ?: $case->order->customer->name) : 'Customer',
-                    'delivery_address' => $case->order ? $this->formatCustomerDeliveryAddress($case->order) : null,
+                    'order_number' => $order?->order_number,
+                    'shop_name' => $shopName,
+                    'shop_address' => $shopAddress,
+                    'shop_phone' => $shopPhone,
+                    'return_destination_requires_admin_assignment' => $requiresAdminAssignment,
+                    'customer_name' => $order && $order->customer ? ($order->customerAddress?->contact_name ?: $order->customer->name) : 'Customer',
+                    'delivery_address' => $order ? $this->formatCustomerDeliveryAddress($order) : null,
                     'rejection_category' => $case->rejection_category,
                     'status' => $case->status,
                     'doorstep_photo_path' => $case->doorstep_photo_path,
-                    'items_summary' => $case->order && $case->order->items ? $case->order->items->where('rejected_quantity', '>', 0)->pluck('product_name')->join(', ') : 'Rejected item(s)',
-                    'created_at' => $case->created_at ? $case->created_at->toIso8601String() : null,
+                    'items_summary' => $itemNames ?: 'Returned item(s)',
+                    'created_at' => $case->created_at?->toIso8601String(),
                 ];
             }),
         ]);
