@@ -79,6 +79,7 @@ class ReturnAndRefundService
             }
 
             $isAuthorizedLateOverride = $adminOverrideActor
+                && $adminOverrideActor->status === 'active'
                 && ($adminOverrideActor->isSuperAdmin() || $adminOverrideActor->user_type === 'admin_employee')
                 && is_string($adminOverrideReason)
                 && mb_strlen(trim($adminOverrideReason)) >= 10;
@@ -386,7 +387,7 @@ class ReturnAndRefundService
         ?string $adminNotes = null,
         ?string $faultRuling = null
     ): array {
-        if (!$adminUser->isSuperAdmin() && $adminUser->user_type !== 'admin_employee') {
+        if ($adminUser->status !== 'active' || (!$adminUser->isSuperAdmin() && $adminUser->user_type !== 'admin_employee')) {
             return ['success' => false, 'message' => 'Unauthorized: Only administrative staff can review return cases.'];
         }
 
@@ -514,7 +515,7 @@ class ReturnAndRefundService
         ?string $proofPath = null,
         bool $refundDeliveryFee = false
     ): array {
-        if (!$adminUser->isSuperAdmin()) {
+        if ($adminUser->status !== 'active' || !$adminUser->isSuperAdmin()) {
             return ['success' => false, 'message' => 'Unauthorized: Only Super Admin can disburse treasury refunds.'];
         }
 
