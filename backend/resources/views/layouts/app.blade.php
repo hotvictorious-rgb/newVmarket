@@ -1291,7 +1291,7 @@
                     <span class="vm-flag-tag">NG</span>
                     <span class="vm-country-name">Nigeria</span>
                 </div>
-                <span class="vm-country-sub">Nationwide Local Governments</span>
+                <span class="vm-country-sub">Uyo Service Area</span>
             </div>
 
             <!-- Search Input with Autocomplete -->
@@ -1304,8 +1304,8 @@
                             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
                     </span>
-                    <input type="text" id="vmLgaSearchInput" class="vm-modal-input vm-lga-search-input" placeholder="Confirm your Uyo delivery area" value="{{ session('customer_city', 'Uyo') }}" autocomplete="off">
-                    <button type="button" class="vm-input-clear-btn" id="vmLgaClearBtn" aria-label="Clear">×</button>
+                    <input type="text" id="vmLgaSearchInput" class="vm-modal-input vm-lga-search-input" placeholder="Confirm your Uyo delivery area" value="Uyo" autocomplete="off" readonly>
+                    <button type="button" class="vm-input-clear-btn" id="vmLgaClearBtn" aria-label="Clear" style="display:none;">×</button>
                 </div>
 
                 <!-- Autocomplete Dropdown List -->
@@ -1317,8 +1317,8 @@
                 <span class="vm-chips-heading">POPULAR LOCAL GOVERNMENTS:</span>
                 <div class="vm-city-chips-grid">
                     @php
-                        $popularCities = ['Abak', 'Eket', 'Ikot Abasi', 'Ikot Ekpene', 'Oron', 'Uyo'];
-                        $currentActiveCity = session('customer_city', 'Uyo');
+                        $popularCities = ['Uyo'];
+                        $currentActiveCity = 'Uyo';
                         $popularLgas = \App\Models\Lga::whereIn('name', $popularCities)->pluck('id', 'name')->toArray();
                     @endphp
                     @foreach($popularCities as $pCity)
@@ -1360,7 +1360,7 @@
 
     <!-- Embedded Canonical LGA List Dataset -->
     @php
-        $canonicalLgasList = \Illuminate\Support\Facades\Cache::remember('vmarket_canonical_lgas_min', 86400, function () {
+        $canonicalLgasList = \Illuminate\Support\Facades\Cache::remember('vmarket_canonical_lgas_uyo_v1', 86400, function () {
             return \App\Models\Lga::where('is_active', true)
                 ->with('state:id,name')
                 ->orderBy('name')
