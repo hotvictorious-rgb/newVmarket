@@ -195,14 +195,14 @@
     <!-- 2. Amazon-Inspired Quad Discovery & Recommendation Grid -->
     <div class="vm-amazon-discovery-grid">
 
-        <!-- Card 1: Verified Stores Closer to You in Uyo -->
+        <!-- Card 1: Victorious MARKET Uyo Fulfillment -->
         <div class="vm-discovery-card" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: var(--vm-shadow-xs);">
             <div class="vm-discovery-card-header" style="margin-bottom: 14px;">
                 <div class="vm-discovery-badge-pill" style="display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 999px; background: rgba(94, 23, 235, 0.08); color: var(--vm-primary); margin-bottom: 6px;">
                     <span class="vm-badge-dot" style="width: 5px; height: 5px; border-radius: 50%; background: var(--vm-primary);"></span>
                     <span>VERIFIED LOCAL HUBS</span>
                 </div>
-                <h3 class="vm-discovery-card-title" style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0;">Stores Closer to You in <span class="vm-dynamic-city-label">{{ $activeCity ?? 'Uyo' }}</span></h3>
+                <h3 class="vm-discovery-card-title" style="font-size: 16px; font-weight: 700; color: #0F172A; margin: 0;">Victorious MARKET in <span class="vm-dynamic-city-label">{{ $activeCity ?? 'Uyo' }}</span></h3>
             </div>
             
             <div class="vm-discovery-quad-grid" id="vmShopsGridContainer" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
@@ -211,7 +211,7 @@
 
             <div class="vm-discovery-card-footer">
                 <a href="#merchants" class="vm-discovery-card-link" style="font-size: 12.5px; font-weight: 700; color: var(--vm-primary); text-decoration: none;">
-                    Explore Stores in {{ $activeCity ?? 'Uyo' }} →
+                    Browse Products →
                 </a>
             </div>
         </div>
@@ -426,9 +426,9 @@
         <div class="vm-section-header" style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px;">
             <div style="border-left: 4px solid var(--vm-info); padding-left: 12px;">
                 <h2 class="vm-section-title" style="font-size: 19px; font-weight: 800; color: #0F172A; margin: 0; line-height: 1.2;">Top Verified Merchants</h2>
-                <p class="vm-section-desc" style="font-size: 13px; color: #64748B; margin-top: 3px;">Official retail stores offering physical counter inspection and rapid dispatch.</p>
+                <p class="vm-section-desc" style="font-size: 13px; color: #64748B; margin-top: 3px;">One trusted local retailer sourcing from approved Uyo suppliers.</p>
             </div>
-            <a href="#merchants" class="vm-section-link" style="font-size: 13px; font-weight: 700; color: var(--vm-info); text-decoration: none;">All Stores &rarr;</a>
+            <a href="#merchants" class="vm-section-link" style="font-size: 13px; font-weight: 700; color: var(--vm-info); text-decoration: none;">Browse Products &rarr;</a>
         </div>
 
         <div class="vm-merchants-grid" id="vmShopsGridContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
@@ -461,9 +461,9 @@
                     <div style="width: 44px; height: 44px; border-radius: 50%; background: #EFF6FF; color: #2563EB; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px;">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
                     </div>
-                    <strong style="display: block; font-size: 14.5px; font-weight: 700; color: #0F172A; margin-bottom: 4px;">No Physical Plazas in <span class="vm-dynamic-city-label">{{ $activeCity ?? 'this LGA' }}</span> Yet</strong>
+                    <strong style="display: block; font-size: 14.5px; font-weight: 700; color: #0F172A; margin-bottom: 4px;">Victorious MARKET — One Trusted Local Retailer</strong>
                     <span style="display: block; font-size: 12.5px; color: #64748B; max-width: 460px; margin: 0 auto 12px; line-height: 1.4;">
-                        Local merchant accreditation is ongoing. Orders delivering to <span class="vm-dynamic-city-label">{{ $activeCity ?? 'this LGA' }}</span> are fulfilled via verified transit corridors from regional partner plazas.
+                        All products are sold by Victorious MARKET. Supplier locations remain private; any pickup exception must be arranged through central support.
                     </span>
                     <button type="button" onclick="if(window.vmOpenLocationModal) window.vmOpenLocationModal();" style="background: #F8FAFC; border: 1px solid #CBD5E1; color: #334155; font-size: 11.5px; font-weight: 700; padding: 6px 14px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
