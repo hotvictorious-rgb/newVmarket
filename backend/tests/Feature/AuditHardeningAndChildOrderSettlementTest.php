@@ -392,7 +392,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
                 ],
             ]);
 
-        $res1->assertStatus(201);
+        $res1->assertStatus(201, $res1->getContent());
         $order1Number = $res1->json('data.order_number');
         $order1 = Order::where('order_number', $order1Number)->first();
         $this->assertEquals('500.00', $order1->cashback_redeemed);
