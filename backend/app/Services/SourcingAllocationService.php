@@ -54,7 +54,7 @@ class SourcingAllocationService
         if ($this->offerSelectionService) {
             try {
                 $confirmedOffer = $this->offerSelectionService->selectLowestCost($product, $fulfillmentType);
-                if ($confirmedOffer) {
+                if ($confirmedOffer && $this->isEligibleUyoShop($confirmedOffer->shop)) {
                     return [
                         'supplier_offer_id' => $confirmedOffer->id,
                         'vendor_id' => (int)$confirmedOffer->vendor_id,
@@ -87,7 +87,7 @@ class SourcingAllocationService
                 return false;
             }
             // Must have active shop
-            if (!$offer->shop || $offer->shop->trashed() || !$offer->shop->is_active) {
+            if (!$offer->shop || $offer->shop->trashed() || !$offer->shop->is_active || !$this->isEligibleUyoShop($offer->shop)) {
                 return false;
             }
             // Wholesale cost must be >= 0
@@ -143,7 +143,7 @@ class SourcingAllocationService
             $isUserActive = !$vendor || !$vendor->user || $vendor->user->status === 'active';
             $isShopActive = $shop && !$shop->trashed() && $shop->is_active;
 
-            if ($isVendorActive && $isUserActive && $isShopActive) {
+            if ($isVendorActive && $isUserActive && $isShopActive && $this->isEligibleUyoShop($shop)) {
                 $fallbackCost = ($product->cost_price && bccomp((string)$product->cost_price, '0.00', 2) > 0)
                     ? (string)$product->cost_price
                     : bcmul((string)$product->unit_price, '0.85', 2);
@@ -163,6 +163,21 @@ class SourcingAllocationService
         }
 
         return null;
+    }
+
+    /**
+     * Retailer sourcing is anchored to active supplier shops in Uyo, Akwa Ibom only.
+     */
+    private function isEligibleUyoShop(?Shop $shop): bool
+    {
+        if (!$shop || $shop->trashed() || !$shop->is_active) {
+            return false;
+        }
+
+        $shop->loadMissing('lga.state');
+
+        return strtolower(trim((string) ($shop->lga->name ?? ''))) === 'uyo'
+            && strtolower(trim((string) ($shop->lga->state->name ?? ''))) === 'akwa ibom';
     }
 
     /**
