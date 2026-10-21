@@ -65,6 +65,9 @@ class VendorTerminalApiController extends Controller
         return $order->makeHidden([
             'customer_id',
             'customer_address_id',
+            'shop_id',
+            'payment_reference',
+            'paystack_transaction_id',
             'origin_lga_id',
             'destination_lga_id',
             'delivery_lane_id',
