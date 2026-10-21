@@ -66,6 +66,25 @@ class FulfillmentAvailabilityService
             ];
         }
 
+        // Permanent launch boundary: both sourcing and customer delivery stay inside Uyo.
+        // Legacy/admin-configured inter-LGA lanes must never expand customer delivery coverage.
+        $destinationLgaName = strtolower(trim((string) ($destLga->name ?? '')));
+        $destinationStateName = strtolower(trim((string) ($destLga->state->name ?? '')));
+        if ($destinationLgaName !== 'uyo' || $destinationStateName !== 'akwa ibom') {
+            return [
+                'is_available' => false,
+                'lane_id' => null,
+                'origin_lga_id' => $shop->lga_id,
+                'destination_lga_id' => $destinationLgaId,
+                'fee' => '0.00',
+                'message' => 'Victorious MARKET currently delivers only within Uyo, Akwa Ibom State.',
+                'rate_tier' => 'outside_uyo_launch_boundary',
+                'delivery_mode' => null,
+                'is_collection_point' => false,
+                'collection_points' => [],
+            ];
+        }
+
         // Route serviceability is controlled by the explicit directional route matrix, not vendor rider coverage.
 
         $isKekeOrBulky = in_array(strtolower($packageTier), ['keke', 'bulky'], true);
