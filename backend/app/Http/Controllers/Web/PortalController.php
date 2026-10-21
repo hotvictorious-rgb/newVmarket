@@ -4512,11 +4512,8 @@ class PortalController extends Controller
             })
             ->toArray();
 
-        // Active collection points in destination LGA
-        $collectionPoints = \App\Models\LogisticsCollectionPoint::where('lga_id', $destLga->id)
-            ->where('is_active', true)
-            ->with('logisticsCompany')
-            ->get();
+        // Collection-point fulfilment is not offered under the Uyo-only doorstep model.
+        $collectionPoints = collect();
 
         return view('storefront.checkout', compact('product', 'quantity', 'merchandiseSubtotal', 'deliveryFee', 'totalPayable', 'deliveryCheck', 'pickupCheck', 'destLga', 'lgas', 'allShops', 'availableCashback', 'activeCity', 'activeLanesMap', 'collectionPoints'));
     }
