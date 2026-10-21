@@ -190,7 +190,7 @@ class ReturnAndRefundService
                 'customer_id' => $customer->id,
                 'order_id' => $lockedOrder->id,
                 'parent_order_id' => $lockedOrder->parent_order_id,
-                'vendor_id' => $lockedOrder->vendor_id,
+                'vendor_id' => $lockedOrder->retailer_model_order ? null : $lockedOrder->vendor_id,
                 'collection_point_id' => $collectionPointId,
                 'return_reason' => $reason,
                 'customer_description' => $customerDescription,
