@@ -4,7 +4,7 @@
 
 
 **Review date:** 20 October 2026  
-**Branch:** `audit/paystack-refund-webhook-safety`  
+**Current documentation branch:** `docs/retailer-central-fulfilment-model` (based on `audit/paystack-refund-webhook-safety`)  
 **Status:** Business rules documented; implementation gaps remain open. This report is an audit and implementation plan, not proof that the code has been fixed.  
 **Controlling policy:** `.ai/BUSINESS_RULES.md`  
 **No-merge rule:** Do not merge to `main` without explicit owner approval.
