@@ -73,10 +73,16 @@ class FinancialOperationService
                     );
                 }
                 $approvedById = (int) ($authorization['approved_by_user_id'] ?? 0);
+                $activeApprover = $approvedById > 0
+                    && User::whereKey($approvedById)
+                        ->where('status', 'active')
+                        ->whereIn('user_type', ['super_admin', 'admin_employee'])
+                        ->exists();
                 if ($lockedReturnCase->status !== 'refund_pending'
                     || $lockedReturnCase->resolution_type !== 'refund'
                     || empty($lockedReturnCase->reviewed_by_admin_id)
                     || (int) $lockedReturnCase->reviewed_by_admin_id !== $approvedById
+                    || !$activeApprover
                     || ($authorization['type'] ?? null) !== 'admin_approved_return') {
                     throw new \DomainException(
                         'Cannot create a customer refund operation unless the return case is explicitly approved for refund and the authorizing administrator matches the persisted reviewer.'
@@ -355,10 +361,22 @@ class FinancialOperationService
             $meta = $lockedOp->metadata ?? [];
             $authorization = $meta['refund_authorization'] ?? null;
             if (!$this->hasValidRefundAuthorization($lockedOp, $authorization)) {
+                $now = Carbon::now();
+                $lockedOp->update([
+                    'status' => 'failed',
+                    'failed_at' => $now,
+                    'metadata' => array_merge($meta, [
+                        'dispatch_block_reason' => 'Persisted refund authorization was invalid or inactive before gateway submission.',
+                    ]),
+                ]);
+                FinancialReservation::where('financial_operation_id', $lockedOp->id)
+                    ->where('status', 'active')
+                    ->update(['status' => 'released', 'released_at' => $now]);
+
                 return [
                     'terminal' => true,
                     'operation' => $lockedOp,
-                    'message' => 'Refund dispatch blocked: persisted human approval or an approved automatic-refund exception is required.',
+                    'message' => 'Refund dispatch blocked before gateway submission. The reservation was released; an active authorized administrator must approve a new attempt.',
                 ];
             }
 
@@ -373,7 +391,23 @@ class FinancialOperationService
             }
 
             if (empty($transRef)) {
-                throw new \DomainException("Cannot dispatch refund: Missing original payment_reference for Operation #{$lockedOp->id}");
+                $now = Carbon::now();
+                $lockedOp->update([
+                    'status' => 'failed',
+                    'failed_at' => $now,
+                    'metadata' => array_merge($meta, [
+                        'dispatch_block_reason' => 'Original payment reference was missing before gateway submission.',
+                    ]),
+                ]);
+                FinancialReservation::where('financial_operation_id', $lockedOp->id)
+                    ->where('status', 'active')
+                    ->update(['status' => 'released', 'released_at' => $now]);
+
+                return [
+                    'terminal' => true,
+                    'operation' => $lockedOp,
+                    'message' => 'Refund dispatch blocked because the original payment reference is missing. The reservation was released; finance reconciliation is required.',
+                ];
             }
 
             $attempt = GatewayAttempt::create([
