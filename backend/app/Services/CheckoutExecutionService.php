@@ -268,14 +268,39 @@ class CheckoutExecutionService
             $subtotalAfterCashback = BcMathService::sub($merchandiseSubtotal, $cashbackApplied);
             $totalBeforeWallet = BcMathService::add($subtotalAfterCashback, $deliveryFee);
 
-            // Mathematical Splits: Cashback is earned ONLY on real money paid (subtotalAfterCashback), never on cashback-funded value
-            $customerCashback5 = BcMathService::mul($subtotalAfterCashback, '0.05');
-            $vendorNet90 = BcMathService::mul($merchandiseSubtotal, '0.90');
-            $platformMargin5 = BcMathService::mul($merchandiseSubtotal, '0.05');
+            // Retailer accounting: snapshot the actual wholesale cost per item. Supplier payables
+            // are cost-based, never a merchandise commission percentage.
+            $supplierCostTotal = '0.00';
+            foreach ($itemsToCreate as $itemData) {
+                $offer = $itemData['resolved_offer'] ?? null;
+                $unitCost = $offer['wholesale_cost'] ?? null;
+                if ($unitCost === null || BcMathService::comp((string) $unitCost, '0.00') < 0) {
+                    return [
+                        'error' => true,
+                        'status_code' => 422,
+                        'message' => 'The selected supplier offer has no valid wholesale cost snapshot. Checkout cannot proceed.',
+                    ];
+                }
+                $supplierCostTotal = BcMathService::add(
+                    $supplierCostTotal,
+                    BcMathService::mul((string) $unitCost, (string) $itemData['quantity'])
+                );
+            }
 
-            // Delivery fee split: 90% vendor delivery earning, 10% platform. No rider/fleet payable.
+            // Cashback is 5% of eligible merchandise funded by real money through
+            // Paystack after cashback redemption. Delivery is excluded.
+            $customerCashback5 = BcMathService::mul($subtotalAfterCashback, '0.05');
+            $vendorNet90 = '0.00'; // no new 90% marketplace merchandise commission
+            $platformMargin5 = '0.00'; // retailer margin is computed from price - supplier cost - cashback
+            $retailerMerchandiseMargin = BcMathService::sub(
+                BcMathService::sub($merchandiseSubtotal, $supplierCostTotal),
+                $customerCashback5
+            );
+
+            // Default logistics-company payable is 90% of the snapshotted customer
+            // delivery fee. Admin may override the final company amount with audit.
             $vendorDeliveryNet90 = BcMathService::mul($deliveryFee, '0.90');
-            $platformDelivery10 = BcMathService::mul($deliveryFee, '0.10');
+            $platformDelivery10 = BcMathService::sub($deliveryFee, $vendorDeliveryNet90);
 
             $walletCreditApplied = '0.00';
             if (!empty($validated['redeem_wallet_credit'])) {
@@ -300,7 +325,7 @@ class CheckoutExecutionService
             $paymentStatus = $isFullyWalletPaid ? 'paid' : 'pending';
             $paidAt = $isFullyWalletPaid ? Carbon::now() : null;
 
-            // New checkout orders are vendor-managed: do not bind central fleet, collection point, or rider.
+            // Customer cannot choose a logistics company or rider; VM assigns an approved company after supplier availability is confirmed.
             $rider = null;
             $logisticsCompanyId = null;
 
@@ -320,6 +345,7 @@ class CheckoutExecutionService
                 'rider_id' => $rider ? $rider->id : null,
                 'logistics_company_id' => $logisticsCompanyId,
                 'fulfillment_type' => $validated['fulfillment_type'],
+                'retailer_model_order' => true,
                 'order_status' => $orderStatus,
                 'payment_status' => $paymentStatus,
                 'paid_at' => $paidAt,
@@ -331,6 +357,10 @@ class CheckoutExecutionService
                 'delivery_lane_id' => $laneId,
                 'merchandise_subtotal' => $merchandiseSubtotal,
                 'delivery_fee' => $deliveryFee,
+                'supplier_cost_total_snapshot' => $supplierCostTotal,
+                'retailer_merchandise_margin' => $retailerMerchandiseMargin,
+                'logistics_company_payable_default_amount' => $vendorDeliveryNet90,
+                'logistics_company_payable_amount' => $vendorDeliveryNet90,
                 'cashback_redeemed' => $cashbackApplied,
                 'wallet_credit_applied' => $walletCreditApplied,
                 'grand_total' => $grandTotal,
