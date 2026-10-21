@@ -4349,13 +4349,24 @@ class PortalController extends Controller
             ->firstOrFail();
 
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
-        $activeCity = session('customer_city', 'Uyo');
-        $activeState = session('customer_state', 'Akwa Ibom');
-        $destLga = Lga::where('name', $activeCity)->first() ?? Lga::where('name', 'Uyo')->first();
+        // Customer delivery is fixed to Uyo. Resolve a confirmed Uyo supplier offer,
+        // never the catalog contributor's shop, as the operational source of truth.
+        $activeCity = 'Uyo';
+        $activeState = 'Akwa Ibom';
+        $destLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->firstOrFail();
 
-        $fulfillmentService = new \App\Services\FulfillmentAvailabilityService();
-        $deliveryCheck = $fulfillmentService->checkDeliveryAvailability($product->shop_id, $destLga->id, $product->package_tier ?? 'standard');
-        $pickupCheck = $fulfillmentService->checkPickupAvailability($product->shop_id);
+        $sourceOffer = app(\App\Services\SourcingAllocationService::class)
+            ->resolveCheapestOffer($product, 1, null, 'doorstep_delivery');
+        if (!$sourceOffer) {
+            return redirect()->route('storefront')
+                ->with('error', 'This product currently has no confirmed supplier offer available in Uyo.');
+        }
+
+        $fulfillmentService = app(\App\Services\FulfillmentAvailabilityService::class);
+        $deliveryCheck = $fulfillmentService->checkDeliveryAvailability((int) $sourceOffer['shop_id'], $destLga->id, $product->package_tier ?? 'standard');
+        $pickupCheck = ['is_available' => false];
 
         $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
 
@@ -4390,20 +4401,31 @@ class PortalController extends Controller
             return redirect()->route('storefront')->with('info', 'Marketplace catalog is currently being updated. Please browse our stores.');
         }
 
-        $activeCity = session('customer_city', 'Uyo');
-        $destLga = Lga::where('name', $activeCity)->first() ?? Lga::where('name', 'Uyo')->first();
+        // Standard checkout is delivery-only and Uyo-only. The same confirmed
+        // supplier offer policy is used here and again by CheckoutExecutionService.
+        $activeCity = 'Uyo';
+        $destLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->firstOrFail();
 
-        $fulfillmentService = new \App\Services\FulfillmentAvailabilityService();
-        $deliveryCheck = $fulfillmentService->checkDeliveryAvailability($product->shop_id, $destLga->id, $product->package_tier ?? 'standard');
-        $pickupCheck = $fulfillmentService->checkPickupAvailability($product->shop_id);
+        $sourceOffer = app(\App\Services\SourcingAllocationService::class)
+            ->resolveCheapestOffer($product, $quantity, null, 'doorstep_delivery');
+        if (!$sourceOffer) {
+            return redirect()->route('storefront')
+                ->with('error', 'This product currently has no confirmed supplier offer available in Uyo.');
+        }
+
+        $fulfillmentService = app(\App\Services\FulfillmentAvailabilityService::class);
+        $deliveryCheck = $fulfillmentService->checkDeliveryAvailability((int) $sourceOffer['shop_id'], $destLga->id, $product->package_tier ?? 'standard');
+        $pickupCheck = ['is_available' => false];
 
         $merchandiseSubtotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
         // If doorstep route is not available/suspended, default to free In-Store Pickup
         $deliveryFee = $deliveryCheck['is_available'] ? $deliveryCheck['fee'] : '0.00';
         $totalPayable = \App\Services\BcMathService::add($merchandiseSubtotal, $deliveryFee);
 
-        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
-        $allShops = Shop::where('pickup_enabled', true)->get();
+        $lgas = collect([$destLga]);
+        $allShops = collect();
 
         // Check if user has available cashback
         $user = Auth::user();
