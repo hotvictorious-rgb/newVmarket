@@ -712,10 +712,53 @@ class FinancialReconciliationEngine
                         }
                         $reconciled++;
                     } elseif (in_array($gwStatus, ['failed', 'reversed'], true)) {
-                        // Do not mark the entire order failed for a failed partial refund.
-                        if ($releaseClaim('pending')) {
-                            Log::error("Paystack refund #{$refundReference} for order #{$claimedOrder->id} failed at gateway; operation requires review.");
+                        $gatewayRefundData = is_array($verifyRes['data'] ?? null) ? $verifyRes['data'] : [];
+                        $failureReference = $verifyRes['refund_reference'] ?? ($gatewayRefundData['reference'] ?? null);
+                        $verifiedAmount = $verifyRes['amount'] ?? ($gatewayRefundData['amount'] ?? null);
+                        $verifiedCurrency = $verifyRes['currency'] ?? ($gatewayRefundData['currency'] ?? null);
+                        $amountIsWholeKobo = is_int($verifiedAmount)
+                            || (is_string($verifiedAmount) && preg_match('/^\\d+$/D', $verifiedAmount) === 1);
+                        $amountMismatch = $verifiedAmount !== null
+                            && (!$amountIsWholeKobo || (int) $verifiedAmount !== (int) $existingOp->amount_kobo);
+                        $currencyMismatch = $verifiedCurrency !== null
+                            && strtoupper(trim((string) $verifiedCurrency)) !== strtoupper((string) $existingOp->currency);
+
+                        if (($failureReference !== null && (string) $failureReference !== $refundReference)
+                            || $amountMismatch || $currencyMismatch) {
+                            $releaseClaim('pending');
+                            Log::critical('Failed-refund verification conflicts with its stored operation; left pending for manual reconciliation.', [
+                                'order_id' => $claimedOrder->id,
+                                'operation_id' => $existingOp->id,
+                                'requested_reference' => $refundReference,
+                                'verified_reference' => $failureReference,
+                                'expected_amount_kobo' => $existingOp->amount_kobo,
+                                'verified_amount_kobo' => $verifiedAmount,
+                                'expected_currency' => $existingOp->currency,
+                                'verified_currency' => $verifiedCurrency,
+                            ]);
+                            continue;
                         }
+
+                        $finalizedFailure = $finOpService->finalizeRefundFailure(
+                            $existingOp,
+                            $verifyRes,
+                            $refundReference,
+                            $claimToken
+                        );
+                        if (empty($finalizedFailure['success']) || !empty($finalizedFailure['protected'])) {
+                            if (empty($finalizedFailure['stale_claim'])) {
+                                $releaseClaim('pending');
+                            }
+                            Log::critical('Authoritative failed refund could not be finalized safely; left pending for manual reconciliation.', [
+                                'order_id' => $claimedOrder->id,
+                                'operation_id' => $existingOp->id,
+                                'refund_reference' => $refundReference,
+                                'reason' => $finalizedFailure['message'] ?? 'Unknown failure-finalization guard.',
+                            ]);
+                            continue;
+                        }
+
+                        $reconciled++;
                     } else {
                         $releaseClaim('pending');
                     }
