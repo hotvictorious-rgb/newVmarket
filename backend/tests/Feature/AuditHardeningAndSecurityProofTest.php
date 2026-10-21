@@ -352,9 +352,9 @@ class AuditHardeningAndSecurityProofTest extends TestCase
     }
 
     /**
-     * Finding 5: Doorstep instant wallet credit is reversed upon manual cash refund
+     * Finding 5: All doorstep wallet-credit lots are reversed upon confirmed Paystack cash refund
      */
-    public function test_doorstep_instant_wallet_credit_is_reversed_when_manual_cash_refund_is_disbursed(): void
+    public function test_all_doorstep_wallet_credit_lots_are_reversed_after_confirmed_cash_refund(): void
     {
         $order = $this->buildBaseOrder([
             'order_status' => 'partially_delivered',
@@ -380,12 +380,20 @@ class AuditHardeningAndSecurityProofTest extends TestCase
             'customer_id' => $this->customer->id,
             'order_id' => $order->id,
             'return_case_id' => $returnCase->id,
-            'amount' => '10000.00',
+            'amount' => '6000.00',
             'credit_type' => 'doorstep_refund_credit',
             'status' => 'available',
         ]);
+        $pendingCredit = CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'return_case_id' => $returnCase->id,
+            'amount' => '4000.00',
+            'credit_type' => 'doorstep_refund_credit',
+            'status' => 'pending_approval',
+        ]);
 
-        $this->assertEquals('10000.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
+        $this->assertEquals('6000.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
 
         $paystack = \Mockery::mock(\App\Services\PaystackService::class);
         $paystack->shouldReceive('initiateRefund')
@@ -406,6 +414,7 @@ class AuditHardeningAndSecurityProofTest extends TestCase
 
         $this->assertTrue($result['success']);
         $this->assertEquals('reversed_for_cash_refund', $credit->fresh()->status);
+        $this->assertEquals('reversed_for_cash_refund', $pendingCredit->fresh()->status);
         $this->assertEquals('0.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
     }
 
