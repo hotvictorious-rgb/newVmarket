@@ -82,6 +82,7 @@ class VendorTerminalApiController extends Controller
             'delivery_bulky_surcharge_per_unit_snapshot',
             'delivery_bulky_quantity_snapshot',
             'supplier_cost_total_snapshot',
+            'fulfillment_supplier_cost_total_snapshot',
             'retailer_merchandise_margin',
             'logistics_company_payable_default_amount',
             'logistics_company_payable_amount',
