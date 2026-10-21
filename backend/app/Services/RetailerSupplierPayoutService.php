@@ -352,9 +352,11 @@ class RetailerSupplierPayoutService
     {
         $reason = trim($reason);
         $gatewayStatus = strtolower(trim($gatewayStatus));
+        $terminalGatewayStatuses = ['success', 'succeeded', 'failed', 'reversed', 'completed', 'cancelled', 'canceled'];
         if ($reason === '' || mb_strlen($reason) > 2000
-            || !preg_match('/^[a-z0-9_:-]{1,80}$/', $gatewayStatus)) {
-            return ['success' => false, 'protected' => true, 'message' => 'A bounded reason and valid gateway status are required to place a payout on hold.'];
+            || !preg_match('/^[a-z0-9_:-]{1,80}$/', $gatewayStatus)
+            || in_array($gatewayStatus, $terminalGatewayStatuses, true)) {
+            return ['success' => false, 'protected' => true, 'message' => 'A bounded reason and non-terminal gateway status are required to place a payout on hold.'];
         }
 
         return DB::transaction(function () use ($payoutId, $reason, $gatewayStatus) {
@@ -363,7 +365,7 @@ class RetailerSupplierPayoutService
                 return ['success' => false, 'message' => 'Supplier payout request was not found.'];
             }
             if (in_array($payout->status, ['paid', 'reversed', 'failed', 'rejected'], true)) {
-                return ['success' => true, 'idempotent' => true, 'payout' => $payout];
+                return ['success' => false, 'protected' => true, 'message' => 'A terminal payout cannot be changed to uncertain; reconcile its terminal state and journal evidence instead.'];
             }
             if (!in_array($payout->status, ['processing', 'uncertain'], true)) {
                 return ['success' => false, 'protected' => true, 'message' => 'Only an initiated or already uncertain transfer can be placed on a gateway-reconciliation hold.'];
