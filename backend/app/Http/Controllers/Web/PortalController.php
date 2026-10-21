@@ -174,17 +174,17 @@ class PortalController extends Controller
         if ($hasLocalShops) {
             $coverageStatus = 'uyo_local_delivery';
             $statusBadge = 'Uyo Doorstep Delivery Only';
-            $previewStatus = 'Sourced in Uyo and delivered within Uyo LGA';
+            $previewStatus = 'Service area: Uyo LGA only. Availability is confirmed at checkout.';
         } elseif ($activeLanes->isNotEmpty()) {
             $minHours = $activeLanes->min('estimated_delivery_hours_min') ?? 12;
             $maxHours = $activeLanes->max('estimated_delivery_hours_max') ?? 24;
             $coverageStatus = 'uyo_local_delivery';
             $statusBadge = 'Uyo Doorstep Delivery Only';
-            $previewStatus = 'Sourced in Uyo and delivered within Uyo LGA';
+            $previewStatus = 'Service area: Uyo LGA only. Availability is confirmed at checkout.';
         } else {
             $coverageStatus = 'uyo_local_delivery';
             $statusBadge = 'Uyo Doorstep Delivery Only';
-            $previewStatus = 'Sourced in Uyo and delivered within Uyo LGA';
+            $previewStatus = 'Service area: Uyo LGA only. Availability is confirmed at checkout.';
         }
 
         // Return dynamic JSON for AJAX requests
