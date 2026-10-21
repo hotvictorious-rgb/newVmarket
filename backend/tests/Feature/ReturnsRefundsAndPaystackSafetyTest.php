@@ -1217,6 +1217,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'retailer_model_order' => true,
             'payment_reference' => 'RETAILER-REFUND-' . strtoupper(uniqid()),
             'supplier_cost_total_snapshot' => '5000.00',
+            'fulfillment_supplier_cost_total_snapshot' => '5000.00',
             'retailer_merchandise_margin' => '4500.00',
             'vendor_net_90' => '0.00',
             'customer_cashback_5' => '500.00',
@@ -1233,6 +1234,12 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'supplier_cost_snapshot' => '5000.00',
             'supplier_cost_currency' => 'NGN',
             'supplier_snapshot_at' => Carbon::now(),
+            'fulfillment_supplier_vendor_id' => $this->vendorA->id,
+            'fulfillment_supplier_shop_id' => $this->shopA->id,
+            'fulfillment_supplier_name_snapshot' => $this->vendorA->business_name,
+            'fulfillment_supplier_shop_name_snapshot' => $this->shopA->name,
+            'fulfillment_supplier_cost_snapshot' => '5000.00',
+            'fulfillment_supplier_snapshot_at' => Carbon::now(),
         ]);
 
         $saleEntries = [
