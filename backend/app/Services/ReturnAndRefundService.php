@@ -143,6 +143,10 @@ class ReturnAndRefundService
                     return ['success' => false, 'message' => "Order item #{$orderItemId} does not belong to this order."];
                 }
 
+                if (RetailerSupplierPayoutAllocation::where('order_item_id', $orderItem->id)->where('status', 'allocated')->exists()) {
+                    return ['success' => false, 'code' => 'SUPPLIER_PAYOUT_RESERVED', 'message' => 'A supplier payout reservation is active for this item.'];
+                }
+
                 // Check already returned or requested quantities
                 $alreadyReturnedQty = (int) ReturnItem::where('order_item_id', $orderItem->id)
                     ->whereHas('returnCase', function ($q) {
