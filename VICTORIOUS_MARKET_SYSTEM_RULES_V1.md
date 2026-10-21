@@ -49,22 +49,21 @@ This specification does not override applicable Nigerian law, consumer rights, v
 - If replacement is unsuitable, declined, unavailable or inappropriate, VM reviews the refund or other remedy under the approved policy and applicable law.
 - Failed delivery, refusal, return-to-origin, redelivery, refund, supplier fault and supplier recovery are distinct states. None may silently mark a refund complete, release money or create supplier debt without an authorized auditable decision.
 
-## 5. Required fulfilment evidence and pickup reservation
+## 5. Required fulfilment evidence and support-managed pickup exception
 
-The only mandatory photo evidence types at launch are:
-1. Doorstep delivery photo linked to the VM order/fulfilment unit.
-2. In-shop pickup photo linked to the VM order/fulfilment unit.
+### Standard doorstep delivery
 
-OTP verification remains mandatory alongside the photos:
-- **Doorstep delivery:** server-verify the customer delivery OTP and record the doorstep photo before marking handover complete.
-- **Supplier-shop pickup:** the customer presents the reservation pass (RES-XXXXXX) and completes the separate one-time customer pickup OTP; the authorized pickup actor verifies both and records an in-shop photo.
-- Keep customer pickup credentials separate from rider-to-logistics-company custody credentials. Do not expose OTPs/pickup secrets in ordinary history, logs, analytics or unauthorized rider views. Verify server-side, expire credentials where applicable and prevent reuse.
-- GPS, customer signature, separate rider-pickup photo and hub-inspection photo are not mandatory at launch.
+A new online order uses doorstep delivery, one customer destination and the published delivery fee snapshotted at checkout. Server-verified payment is required before paid fulfilment proceeds. Source eligibility and current availability must be checked before supplier commitment. Verified delivery requires the customer delivery OTP plus mandatory photo proof. All state transitions, notifications, journals and wallet effects must be idempotent and auditable.
 
-A reservation is created through VM and holds the selected item for the existing 24-hour window unless the owner changes it. Any payment at a supplier-shop pickup must use VM's authorized payment workflow. Suppliers cannot accept private off-platform payment or mark an order paid from a screenshot. Release stock on expiry only after payment is safely reconciled.
+### Pickup exception — not a checkout fulfilment type
 
-OTP/pass and photo evidence support the handover process; they do not prove product quality or automatically establish supplier liability. Protect photo and credential access.
+Do not expose an automated in-shop pickup/reservation option in standard customer checkout or public APIs. A customer who prefers pickup must contact VM support. Support must verify every item in the complete order, physical readiness at one approved collection point, payment arrangements and customer agreement before confirming pickup or disclosing the approved collection details.
 
+Never send a customer to multiple supplier shops by default. VM must consolidate internally or offer a feasible delivery plan. Support decisions cannot bypass sourcing eligibility, payment verification, authorization, evidence or financial controls.
+
+### Legacy records
+
+Existing pickup reservation data, state values, routes and historical evidence may be retained temporarily for compatibility, audit and pre-existing obligations. Prevent new public pickup-reservation writes and early address disclosure before retiring dependent code. Preserve historical records and verify legacy reads. This specification records policy; it does not claim runtime enforcement until tests and deployment evidence confirm it.
 ## 6. Standard return/refund window and admin exceptions
 
 - The standard operational return/refund request window for eligible ordinary claims is 24 hours from verified doorstep delivery or confirmed customer pickup.
