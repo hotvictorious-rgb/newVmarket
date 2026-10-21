@@ -234,7 +234,7 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertEquals('39000.00', $resolved['wholesale_cost']);
     }
 
-    public function test_catalog_fallback_when_no_supplier_offers_exist(): void
+    public function test_catalog_owner_without_explicit_confirmed_offer_is_not_selectable(): void
     {
         [$userA, $vendorA, $shopA] = $this->createSupplier('Supplier Alpha', 'alpha3@supplier.ng', '08066666666');
 
@@ -252,15 +252,11 @@ class AutomatedSupplierSourcingTest extends TestCase
             'freshness_confirmed_at' => Carbon::now(),
         ]);
 
-        // Zero rows in supplier_offers table for this product
+        // Catalog ownership and a cost_price are not evidence that a supplier
+        // currently has stock or has accepted this particular sourcing offer.
         $resolved = $this->sourcingService->resolveCheapestOffer($product);
 
-        $this->assertNotNull($resolved);
-        $this->assertNull($resolved['supplier_offer_id']);
-        $this->assertEquals($vendorA->id, $resolved['vendor_id']);
-        $this->assertEquals($shopA->id, $resolved['shop_id']);
-        $this->assertEquals('9500.00', $resolved['wholesale_cost']);
-        $this->assertEquals('catalog_fallback', $resolved['source_type']);
+        $this->assertNull($resolved);
     }
 
     public function test_tie_breaking_prioritizes_preferred_lga_deterministically(): void
