@@ -81,7 +81,7 @@ class LogisticsCompanyPayableService
 
             $revision = (int) $locked->logistics_company_payable_override_revision + 1;
             $bulkyQuantity = (int) ($locked->delivery_bulky_quantity_snapshot ?? 0);
-            $amount = BcMathService::add((string) $rate->base_payable, BcMathService::mul((string) $rate->bulky_surcharge_per_unit, (string) $bulkyQuantity));
+            $amount = $rate->calculatePayable($bulkyQuantity);
             $baseline = FinancialJournalEntry::query()->where('order_id', $locked->id)->where('account_name', 'logistics_company_payable')->where('entry_type', 'credit')->exists();
             $ledgerCompanyId = $locked->logistics_company_payable_ledger_company_id;
             $oldAmount = $baseline ? (string) ($locked->logistics_company_payable_amount ?? $locked->logistics_company_payable_default_amount ?? '0.00') : '0.00';
