@@ -267,7 +267,19 @@ class PortalController extends Controller
             $lga = Lga::where('name', 'like', "%{$city}%")->first();
         }
 
-        $lgaId = $lga ? $lga->id : 69;
+        // The public customer location can only be Uyo LGA, Akwa Ibom State.
+        if (
+            !$lga
+            || strcasecmp(trim((string) $lga->name), 'Uyo') !== 0
+            || !$lga->state
+            || strcasecmp(trim((string) $lga->state->name), 'Akwa Ibom') !== 0
+        ) {
+            return redirect()->back()->withErrors([
+                'city' => 'Victorious MARKET currently sources and delivers only within Uyo LGA, Akwa Ibom State.',
+            ]);
+        }
+
+        $lgaId = $lga->id;
         $cityName = $lga ? $lga->name : $city;
 
         session([
@@ -3512,6 +3524,20 @@ class PortalController extends Controller
             'is_bidirectional' => 'nullable',
         ]);
 
+        $originLga = Lga::with('state')->find($validated['origin_lga_id']);
+        $destinationLga = Lga::with('state')->find($validated['destination_lga_id']);
+        $isUyo = static function ($lga): bool {
+            return $lga
+                && strcasecmp(trim((string) $lga->name), 'Uyo') === 0
+                && $lga->state
+                && strcasecmp(trim((string) $lga->state->name), 'Akwa Ibom') === 0;
+        };
+        if (!$isUyo($originLga) || !$isUyo($destinationLga)) {
+            return back()->withErrors([
+                'destination_lga_id' => 'New delivery lanes may only be Uyo-to-Uyo. Out-of-Uyo delivery is not offered.',
+            ])->withInput();
+        }
+
         $isBidirectional = $request->has('is_bidirectional') || $request->input('is_bidirectional') == '1';
 
         // Check if updating an existing lane
@@ -3674,6 +3700,21 @@ class PortalController extends Controller
     {
         $lane = DeliveryLane::findOrFail($id);
         $oldState = (bool)$lane->is_active;
+        if (!$oldState) {
+            $origin = Lga::with('state')->find($lane->origin_lga_id);
+            $destination = Lga::with('state')->find($lane->destination_lga_id);
+            $isUyo = static function ($lga): bool {
+                return $lga
+                    && strcasecmp(trim((string) $lga->name), 'Uyo') === 0
+                    && $lga->state
+                    && strcasecmp(trim((string) $lga->state->name), 'Akwa Ibom') === 0;
+            };
+            if (!$isUyo($origin) || !$isUyo($destination)) {
+                return back()->withErrors([
+                    'delivery_lane' => 'Out-of-Uyo delivery lanes cannot be activated under the current retailer policy.',
+                ]);
+            }
+        }
         $lane->is_active = !$lane->is_active;
         $lane->save();
 
@@ -3705,6 +3746,29 @@ class PortalController extends Controller
         ]);
 
         $originLgaId = (int)$validated['origin_lga_id'];
+
+        // New state-wide corridors are forbidden under the Uyo-only retailer policy.
+        if (!empty($validated['destination_state_id'])) {
+            return back()->withErrors([
+                'destination_state_id' => 'Victorious MARKET does not offer out-of-Uyo or interstate delivery corridors.',
+            ]);
+        }
+
+        $originPolicyLga = Lga::with('state')->find($originLgaId);
+        $destinationPolicyLga = !empty($validated['destination_lga_id'])
+            ? Lga::with('state')->find((int) $validated['destination_lga_id'])
+            : null;
+        $isUyoPolicyLga = static function ($lga): bool {
+            return $lga
+                && strcasecmp(trim((string) $lga->name), 'Uyo') === 0
+                && $lga->state
+                && strcasecmp(trim((string) $lga->state->name), 'Akwa Ibom') === 0;
+        };
+        if (!$isUyoPolicyLga($originPolicyLga) || !$isUyoPolicyLga($destinationPolicyLga)) {
+            return back()->withErrors([
+                'destination_lga_id' => 'Only Uyo-to-Uyo delivery configuration is allowed.',
+            ]);
+        }
 
         // Case A: State-Level Corridor Toggle (Out-of-State)
         if (!empty($validated['destination_state_id'])) {
@@ -4522,7 +4586,7 @@ class PortalController extends Controller
         $validated = $request->validate([
             'product_id' => 'required|integer|exists:products,id',
             'quantity' => 'required|integer|min:1',
-            'fulfillment_type' => 'required|in:doorstep_delivery,in_shop_pickup',
+            'fulfillment_type' => 'required|in:doorstep_delivery',
             'customer_name' => 'required|string|max:150',
             'customer_phone' => 'required|string|max:30',
             'destination_lga_id' => 'nullable|integer|exists:lgas,id',
