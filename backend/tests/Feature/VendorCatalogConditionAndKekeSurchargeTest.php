@@ -1239,6 +1239,54 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
     }
 
 
+    public function test_public_shop_directory_is_retired_to_protect_supplier_identity(): void
+    {
+        $this->getJson('/api/v1/shops')
+            ->assertStatus(410)
+            ->assertJsonPath('data', [])
+            ->assertJsonMissingPath('data.0.address')
+            ->assertJsonMissingPath('data.0.name');
+    }
+
+    public function test_public_product_api_does_not_expose_supplier_shop_or_vendor_ids(): void
+    {
+        $product = Product::create([
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'category_id' => $this->category->id,
+            'name' => 'Public Privacy Test Product',
+            'slug' => 'public-privacy-test-product',
+            'unit_price' => '10000.00',
+            'condition' => 'brand_new',
+            'package_tier' => 'bike',
+            'inventory_quantity' => 5,
+            'is_in_stock' => true,
+            'listing_status' => 'listed',
+            'is_approved' => true,
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+        SupplierOffer::create([
+            'product_id' => $product->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'wholesale_cost' => '5000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now(),
+            'availability_confirmed_by' => $this->vendorUser->id,
+            'availability_expires_at' => Carbon::now()->addDay(),
+        ]);
+
+        $this->getJson('/api/v1/products')
+            ->assertOk()
+            ->assertJsonMissingPath('data.data.0.vendor_id')
+            ->assertJsonMissingPath('data.data.0.shop_id');
+
+        $this->getJson("/api/v1/products/{$product->id}")
+            ->assertOk()
+            ->assertJsonMissingPath('data.vendor_id')
+            ->assertJsonMissingPath('data.shop_id');
+    }
+
     public function test_supplier_cannot_register_a_second_shop_or_pickup_point(): void
     {
         $this->actingAs($this->vendorUser)
