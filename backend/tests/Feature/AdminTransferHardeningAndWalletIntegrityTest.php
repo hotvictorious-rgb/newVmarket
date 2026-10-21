@@ -712,6 +712,10 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'vendor_id' => $this->vendor->id,
             'amount' => '15000.00',
             'status' => 'pending',
+            'bank_name' => $this->vendor->bank_name,
+            'bank_code' => $this->vendor->bank_code,
+            'account_number' => $this->vendor->account_number,
+            'account_name' => $this->vendor->account_name,
         ]);
         FinancialJournalEntry::create([
             'order_id' => null,
@@ -759,6 +763,10 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'logistics_company_id' => $this->company->id,
             'amount' => '12000.00',
             'status' => 'pending',
+            'bank_name' => $this->company->bank_name,
+            'bank_code' => $this->company->bank_code,
+            'account_number' => $this->company->account_number,
+            'account_name' => $this->company->account_name,
         ]);
         FinancialJournalEntry::create([
             'order_id' => null,
