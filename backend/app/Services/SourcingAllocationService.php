@@ -91,7 +91,7 @@ class SourcingAllocationService
                 return false;
             }
             // Wholesale cost must be >= 0
-            if (bccomp((string)$offer->wholesale_cost, '0.00', 2) < 0) {
+            if (bccomp((string)$offer->wholesale_cost, '0.00', 2) <= 0) {
                 return false;
             }
             return true;
