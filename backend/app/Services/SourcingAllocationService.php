@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AdminAuditLog;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderSupplierAssignment;
 use App\Models\Product;
 use App\Models\Shop;
 use App\Models\SupplierOffer;
@@ -241,6 +242,172 @@ class SourcingAllocationService
         $order->save();
 
         return $order;
+    }
+
+    /**
+     * Reassign selected order items to another confirmed Uyo supplier before payment.
+     * Retail orders can contain several supplier groups, so overrides must target the
+     * affected item IDs rather than changing a single order-wide supplier field.
+     */
+    public function overrideSupplierAssignmentGroup(
+        OrderSupplierAssignment $assignment,
+        int $newVendorId,
+        int $newShopId,
+        array $orderItemIds,
+        User $adminUser,
+        string $reason
+    ): OrderSupplierAssignment {
+        $isAdmin = $adminUser->isSuperAdmin()
+            || $adminUser->isAdminEmployee()
+            || in_array($adminUser->user_type, ['super_admin', 'admin_employee', 'admin'], true);
+        if (!$isAdmin) {
+            throw new InvalidArgumentException('Unauthorized: only administrators can override supplier sourcing.');
+        }
+
+        $reason = trim($reason);
+        if ($reason === '' || mb_strlen($reason) > 2000) {
+            throw new InvalidArgumentException('A non-empty override reason of at most 2,000 characters is required.');
+        }
+
+        $itemIds = array_values(array_unique(array_map('intval', $orderItemIds)));
+        if (!$itemIds) {
+            throw new InvalidArgumentException('Select at least one order item to reassign.');
+        }
+
+        return DB::transaction(function () use ($assignment, $newVendorId, $newShopId, $itemIds, $adminUser, $reason) {
+            $lockedAssignment = OrderSupplierAssignment::whereKey($assignment->id)->lockForUpdate()->firstOrFail();
+            $order = Order::whereKey($lockedAssignment->order_id)->lockForUpdate()->firstOrFail();
+
+            if (!$order->retailer_model_order || $order->payment_status !== 'pending'
+                || $order->order_status !== 'pending' || $lockedAssignment->status !== 'awaiting_payment') {
+                throw new InvalidArgumentException('Supplier overrides are allowed only before payment while the order and assignment are still pending.');
+            }
+            if ($order->expires_at && Carbon::now()->gte($order->expires_at)) {
+                throw new InvalidArgumentException('This checkout reservation has expired; create a new checkout before changing suppliers.');
+            }
+
+            $newVendor = VendorProfile::withTrashed()->with('user')->find($newVendorId);
+            $newShop = Shop::withTrashed()->with(['lga.state', 'vendor.user'])->find($newShopId);
+            if (!$newVendor || $newVendor->trashed() || $newVendor->marketplace_status !== 'active'
+                || !$newVendor->user || $newVendor->user->status !== 'active') {
+                throw new InvalidArgumentException('The replacement supplier account must be active and approved.');
+            }
+            if (!$newShop || $newShop->trashed() || !$newShop->is_active
+                || (int) $newShop->vendor_id !== (int) $newVendor->id) {
+                throw new InvalidArgumentException('The replacement shop must be active and belong to the replacement supplier.');
+            }
+            if (strtolower(trim((string) ($newShop->lga->name ?? ''))) !== 'uyo'
+                || strtolower(trim((string) ($newShop->lga->state->name ?? ''))) !== 'akwa ibom') {
+                throw new InvalidArgumentException('Replacement supplier shops must be physically based in Uyo, Akwa Ibom State.');
+            }
+
+            $items = OrderItem::where('order_id', $order->id)
+                ->whereIn('id', $itemIds)
+                ->where('supplier_vendor_id', $lockedAssignment->supplier_vendor_id)
+                ->where('supplier_shop_id', $lockedAssignment->supplier_shop_id)
+                ->lockForUpdate()
+                ->get();
+            if ($items->count() !== count($itemIds)) {
+                throw new InvalidArgumentException('Every selected order item must belong to this supplier assignment.');
+            }
+
+            $oldItems = [];
+            foreach ($items as $item) {
+                $offer = SupplierOffer::where('product_id', $item->product_id)
+                    ->where('vendor_id', $newVendor->id)
+                    ->where('shop_id', $newShop->id)
+                    ->where('is_available', true)
+                    ->whereNotNull('availability_confirmed_at')
+                    ->where('availability_confirmed_at', '<=', Carbon::now())
+                    ->whereNotNull('availability_confirmed_by')
+                    ->whereNotNull('availability_expires_at')
+                    ->where('availability_expires_at', '>', Carbon::now())
+                    ->first();
+
+                if (!$offer || BcMathService::comp((string) $offer->wholesale_cost, '0.00') <= 0) {
+                    throw new InvalidArgumentException("The replacement supplier has no fresh confirmed offer for {$item->product_name}.");
+                }
+
+                $oldItems[] = [
+                    'order_item_id' => $item->id,
+                    'product_id' => $item->product_id,
+                    'supplier_vendor_id' => $item->supplier_vendor_id,
+                    'supplier_shop_id' => $item->supplier_shop_id,
+                    'supplier_cost_snapshot' => $item->supplier_cost_snapshot,
+                ];
+
+                $item->supplier_offer_id = $offer->id;
+                $item->supplier_vendor_id = $newVendor->id;
+                $item->supplier_shop_id = $newShop->id;
+                $item->supplier_name_snapshot = $newVendor->business_name ?? $newVendor->user->name;
+                $item->supplier_shop_name_snapshot = $newShop->name;
+                $item->supplier_cost_snapshot = BcMathService::add((string) $offer->wholesale_cost, '0.00');
+                $item->supplier_cost_currency = 'NGN';
+                $item->supplier_snapshot_at = Carbon::now();
+                $item->cost_price = BcMathService::add((string) $offer->wholesale_cost, '0.00');
+                $item->save();
+            }
+
+            $remainingOldItems = OrderItem::where('order_id', $order->id)
+                ->where('supplier_vendor_id', $lockedAssignment->supplier_vendor_id)
+                ->where('supplier_shop_id', $lockedAssignment->supplier_shop_id)
+                ->exists();
+            if (!$remainingOldItems) {
+                $lockedAssignment->delete();
+            }
+
+            $newAssignment = OrderSupplierAssignment::firstOrCreate([
+                'order_id' => $order->id,
+                'supplier_vendor_id' => $newVendor->id,
+                'supplier_shop_id' => $newShop->id,
+            ], [
+                'status' => 'awaiting_payment',
+            ]);
+            if ($newAssignment->status !== 'awaiting_payment') {
+                throw new InvalidArgumentException('The replacement supplier group is not in a pending state and cannot be merged safely.');
+            }
+
+            $supplierCostTotal = '0.00';
+            foreach (OrderItem::where('order_id', $order->id)->get() as $item) {
+                $supplierCostTotal = BcMathService::add(
+                    $supplierCostTotal,
+                    BcMathService::mul((string) $item->supplier_cost_snapshot, (string) $item->quantity)
+                );
+            }
+            $order->supplier_cost_total_snapshot = $supplierCostTotal;
+            $order->retailer_merchandise_margin = BcMathService::sub(
+                BcMathService::sub((string) $order->merchandise_subtotal, $supplierCostTotal),
+                (string) $order->customer_cashback_5
+            );
+            $order->selected_supplier_id = null;
+            $order->selected_shop_id = null;
+            $order->sourcing_status = 'awaiting_payment';
+            $order->sourced_at = null;
+            $order->save();
+
+            AdminAuditLog::create([
+                'user_id' => $adminUser->id,
+                'action' => 'admin_override_supplier_assignment_items',
+                'target_type' => Order::class,
+                'target_id' => $order->id,
+                'old_values' => [
+                    'assignment_id' => $lockedAssignment->id,
+                    'items' => $oldItems,
+                ],
+                'new_values' => [
+                    'replacement_assignment_id' => $newAssignment->id,
+                    'supplier_vendor_id' => $newVendor->id,
+                    'supplier_shop_id' => $newShop->id,
+                    'order_item_ids' => $itemIds,
+                    'reason' => $reason,
+                    'admin_user_id' => $adminUser->id,
+                ],
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent() ?? 'System/CLI',
+            ]);
+
+            return $newAssignment->fresh();
+        });
     }
 
     /**
