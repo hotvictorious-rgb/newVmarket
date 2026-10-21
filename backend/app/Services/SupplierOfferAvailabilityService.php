@@ -1,15 +1,15 @@
 <?php
 
-namespace App\\Services;
+namespace App\Services;
 
-use App\\Models\\AdminAuditLog;
-use App\\Models\\Shop;
-use App\\Models\\SupplierOffer;
-use App\\Models\\User;
-use App\\Models\\VendorProfile;
-use Carbon\\Carbon;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Validation\\ValidationException;
+use App\Models\AdminAuditLog;
+use App\Models\Shop;
+use App\Models\SupplierOffer;
+use App\Models\User;
+use App\Models\VendorProfile;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class SupplierOfferAvailabilityService
@@ -81,9 +81,9 @@ class SupplierOfferAvailabilityService
 
             $oldValues = [
                 'is_available' => (bool) $offer->is_available,
-                'availability_confirmed_at' => optional($offer->availability_confirmed_at)?->toISOString(),
+                'availability_confirmed_at' => $offer->availability_confirmed_at?->toISOString(),
                 'availability_confirmed_by' => $offer->availability_confirmed_by,
-                'availability_expires_at' => optional($offer->availability_expires_at)?->toISOString(),
+                'availability_expires_at' => $offer->availability_expires_at?->toISOString(),
                 'notes' => $offer->notes,
             ];
 
