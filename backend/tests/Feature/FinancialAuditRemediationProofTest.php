@@ -61,6 +61,7 @@ class FinancialAuditRemediationProofTest extends TestCase
             'business_name' => 'Audit Proof Merchant',
             'status' => 'approved',
             'marketplace_status' => 'active',
+            'bank_updated_at' => Carbon::now()->subDays(5),
             'bank_name' => 'Zenith Bank',
             'bank_code' => '057',
             'account_number' => '1012345678',
