@@ -39,7 +39,9 @@ class DeliveryLane extends Model
     }
 
     /**
-     * Resolves directional delivery fee between two LGAs using BCMath.
+     * Legacy directional lane lookup used for serviceability/ETA and historical records.
+     * New retailer customer prices come from CustomerDeliveryPricingService; company
+     * payables come from LogisticsCompanyCorridorRate and never from this lane fee.
      */
     public static function resolveFee(int $originLgaId, int $destinationLgaId, string $packageTier = 'bike'): ?array
     {
