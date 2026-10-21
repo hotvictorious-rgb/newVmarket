@@ -566,4 +566,32 @@ class CustomerExperienceAndHardeningTest extends TestCase
             ->assertJsonPath('data.delivery_otp', '449911')
             ->assertJsonPath('data.tracking_stage', 3);
     }
+    public function test_public_pickup_reservation_endpoint_is_disabled(): void
+    {
+        $token = $this->customer->createToken('test')->plainTextToken;
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/customer/pickup-reservations', [
+                'shop_id' => $this->shop->id,
+                'product_id' => $this->product->id,
+                'quantity' => 1,
+            ]);
+
+        $response->assertStatus(410)
+            ->assertJsonPath('status', false)
+            ->assertJsonPath('code', 'SUPPORT_MANAGED_PICKUP_ONLY');
+    }
+
+    public function test_customer_location_selection_rejects_out_of_uyo_lga(): void
+    {
+        $response = $this->postJson('/set-location', [
+            'city' => 'Eket',
+            'state' => 'Akwa Ibom',
+            'lga_id' => $this->destLga->id,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'OUTSIDE_UYO_LAUNCH_BOUNDARY');
+    }
+
 }
