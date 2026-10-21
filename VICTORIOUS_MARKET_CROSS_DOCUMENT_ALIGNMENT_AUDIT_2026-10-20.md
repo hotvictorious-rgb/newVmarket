@@ -409,7 +409,7 @@ Required controls:
 - **Release status:** not launch-ready; no merge to `main` and no deployment.
 
 
-## Section 28 — Order ownership, supplier snapshots, and rollback safety (21 October 2026)
+## Section 29 — Order ownership, supplier snapshots, and rollback safety (21 October 2026)
 
 ### Confirmed from current branch source
 
