@@ -198,6 +198,25 @@ class SupplierOfferSelectionServiceTest extends TestCase
         $this->assertSame($valid->id, $selected->id);
     }
 
+
+    public function test_excludes_offer_when_shop_is_not_owned_by_that_supplier(): void
+    {
+        $otherSupplier = $this->createOtherSupplier('mismatched');
+        $mismatched = $this->offer([
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $otherSupplier['shop']->id,
+            'wholesale_cost' => '1000.00',
+        ]);
+        $valid = $this->offer(['wholesale_cost' => '3000.00']);
+
+        $selected = app(SupplierOfferSelectionService::class)
+            ->selectLowestCost($this->product, 'doorstep_delivery');
+
+        $this->assertNotNull($selected);
+        $this->assertSame($valid->id, $selected->id);
+        $this->assertNotSame($mismatched->id, $selected->id);
+    }
+
     public function test_returns_null_when_no_offer_is_eligible_and_rejects_unknown_fulfillment(): void
     {
         $this->offer([
