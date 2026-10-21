@@ -1745,4 +1745,60 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertStringContainsString('conflicts with the requested gateway outcome', $result['message']);
         $this->assertSame('failed', $payout->fresh()->status);
     }
+
+    public function test_customer_return_and_wallet_apis_do_not_expose_internal_financial_metadata(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'customer_description' => 'Item is defective.',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'refund_claim_token' => 'INTERNAL-CLAIM-SECRET-123',
+            'paystack_refund_id' => 'PSTK-INTERNAL-REF-123',
+            'bank_reference' => 'BANK-INTERNAL-REF-123',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+            'admin_notes' => 'Internal treasury note.',
+            'admin_ruling' => 'uphold_customer',
+            'cost_allocation' => 'platform_absorbed',
+        ]);
+        $credit = CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'return_case_id' => $case->id,
+            'amount' => '10000.00',
+            'credit_type' => 'doorstep_refund_credit',
+            'status' => 'quarantined',
+            'refund_reserved_from_status' => 'available',
+            'notes' => 'Internal reconciliation note.',
+        ]);
+
+        $request = \Illuminate\Http\Request::create('/api/v1/return-cases', 'GET');
+        $request->setUserResolver(fn () => $this->customer);
+        $controller = app(\App\Http\Controllers\Api\CustomerOrderApiController::class);
+
+        $detail = $controller->showReturnCase($request, $case->case_number)->getData(true)['data'];
+        foreach (['refund_claim_token', 'paystack_refund_id', 'bank_reference', 'reviewed_by_admin_id', 'admin_notes', 'admin_ruling', 'cost_allocation', 'vendor_id'] as $internalField) {
+            $this->assertArrayNotHasKey($internalField, $detail, "Customer return detail leaked {$internalField}.");
+        }
+
+        $list = $controller->listReturnCases($request)->getData(true)['data'];
+        $this->assertNotEmpty($list);
+        foreach (['refund_claim_token', 'paystack_refund_id', 'bank_reference', 'reviewed_by_admin_id', 'admin_notes', 'admin_ruling', 'cost_allocation', 'vendor_id'] as $internalField) {
+            $this->assertArrayNotHasKey($internalField, $list[0], "Customer return list leaked {$internalField}.");
+        }
+
+        $wallet = $controller->walletSummary($request)->getData(true)['data'];
+        $history = $wallet['history'][0];
+        $this->assertArrayNotHasKey('refund_reserved_from_status', $history);
+        $this->assertArrayNotHasKey('notes', $history);
+        $this->assertSame('refund_pending', $history['status']);
+        $this->assertSame('quarantined', $credit->fresh()->status);
+    }
 }
