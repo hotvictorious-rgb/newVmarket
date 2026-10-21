@@ -588,6 +588,34 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame(0, FinancialJournalEntry::where('event_id', 'EVT-FLEET-REJECT-' . $payout->id)->count());
     }
 
+    public function test_logistics_gateway_failure_does_not_restore_wallet_without_request_journal(): void
+    {
+        $payout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '15000.00',
+            'status' => 'pending',
+            'gateway_status' => 'processing',
+            'processing_token' => 'HOLD_TIMEOUT_RECONCILIATION',
+            'transfer_reference' => 'FLEET-FAIL-NO-REQUEST-JOURNAL',
+            'bank_name' => $this->company->bank_name,
+            'bank_code' => $this->company->bank_code,
+            'account_number' => $this->company->account_number,
+            'account_name' => $this->company->account_name,
+        ]);
+        $walletBefore = (string) $this->company->fresh()->wallet_balance;
+        $journalCountBefore = FinancialJournalEntry::count();
+
+        $result = app(\\App\\Services\\PayoutFinalizationService::class)
+            ->revertLogisticsPayout($payout, 'Authoritative gateway failure');
+
+        $this->assertTrue($result['success']);
+        $this->assertEquals('rejected', $payout->fresh()->status);
+        $this->assertEquals('failed', $payout->fresh()->gateway_status);
+        $this->assertEquals($walletBefore, (string) $this->company->fresh()->wallet_balance);
+        $this->assertStringContainsString('REQUEST_JOURNAL_MISSING', $payout->fresh()->admin_notes);
+        $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
+    }
+
     public function test_high_value_vendor_payout_strictly_requires_super_admin()
     {
         $this->createTestOrder([
