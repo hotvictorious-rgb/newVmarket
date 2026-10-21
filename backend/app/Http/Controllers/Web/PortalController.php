@@ -4201,6 +4201,19 @@ class PortalController extends Controller
 
         $lga = \App\Models\Lga::with('state')->findOrFail($validated['lga_id']);
 
+        // Supplier accounts are limited to one physical pickup point for the Uyo-only retailer model.
+        if (Shop::where('vendor_id', $vendor->id)->whereNull('deleted_at')->exists()) {
+            return redirect()->to(route('vendor.dashboard') . '#shop-branches')
+                ->with('error', 'Each Victorious MARKET supplier may register only one shop/pickup point. Update the existing shop instead.');
+        }
+
+        $lga = \\App\\Models\\Lga::with('state')->findOrFail($validated['lga_id']);
+        if (strtolower(trim((string) ($lga->name ?? ''))) !== 'uyo'
+            || strtolower(trim((string) ($lga->state->name ?? ''))) !== 'akwa ibom') {
+            return redirect()->to(route('vendor.dashboard') . '#shop-branches')
+                ->with('error', 'Supplier shops and pickup points must be physically located in Uyo, Akwa Ibom State.');
+        }
+
         $shop = Shop::create([
             'vendor_id' => $vendor->id,
             'country_id' => $lga->state->country_id ?? 1,
@@ -4247,6 +4260,12 @@ class PortalController extends Controller
         ]);
 
         $lga = \App\Models\Lga::with('state')->findOrFail($validated['lga_id']);
+
+        if (strtolower(trim((string) ($lga->name ?? ''))) !== 'uyo'
+            || strtolower(trim((string) ($lga->state->name ?? ''))) !== 'akwa ibom') {
+            return redirect()->to(route('vendor.dashboard') . '#shop-branches')
+                ->with('error', 'Supplier shops and pickup points must remain physically located in Uyo, Akwa Ibom State.');
+        }
 
         $shop->name = strip_tags(trim($validated['name']));
         $shop->address = strip_tags(trim($validated['address']));
@@ -4299,67 +4318,15 @@ class PortalController extends Controller
      */
     public function vendorUpdateDeliveryCoverage(Request $request, int $id)
     {
+        // Private suppliers do not define delivery coverage. Victorious MARKET
+        // centrally controls dispatch and serves Uyo only.
         $vendor = $this->resolveVendorProfile();
-
         if ($vendor->marketplace_status !== 'active') {
-            abort(403, 'Merchant marketplace account is currently not active.');
+            abort(403, 'Supplier account is currently not active.');
         }
+        Shop::where('vendor_id', $vendor->id)->findOrFail($id);
 
-        $shop = Shop::where('vendor_id', $vendor->id)->findOrFail($id);
-
-        $validated = $request->validate([
-            'lga_ids' => 'nullable|array',
-            'lga_ids.*' => 'integer|exists:lgas,id',
-            'state_ids' => 'nullable|array',
-            'state_ids.*' => 'integer|exists:states,id',
-        ]);
-
-        $selectedLgaIds = array_map('intval', $validated['lga_ids'] ?? []);
-        $selectedStateIds = array_map('intval', $validated['state_ids'] ?? []);
-
-        DB::transaction(function () use ($shop, $selectedLgaIds, $selectedStateIds) {
-            ShopDeliveryCoverage::where('shop_id', $shop->id)->delete();
-
-            $records = [];
-            $now = Carbon::now();
-
-            // Whole state coverages (lga_id is null)
-            foreach ($selectedStateIds as $stateId) {
-                $records[] = [
-                    'shop_id' => $shop->id,
-                    'state_id' => $stateId,
-                    'lga_id' => null,
-                    'is_active' => true,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            }
-
-            // Specific LGA coverages
-            if (!empty($selectedLgaIds)) {
-                $lgas = Lga::whereIn('id', $selectedLgaIds)->get();
-                foreach ($lgas as $lga) {
-                    if (in_array((int)$lga->state_id, $selectedStateIds, true)) {
-                        continue; // Whole state already covers this LGA
-                    }
-                    $records[] = [
-                        'shop_id' => $shop->id,
-                        'state_id' => (int)$lga->state_id,
-                        'lga_id' => (int)$lga->id,
-                        'is_active' => true,
-                        'created_at' => $now,
-                        'updated_at' => $now,
-                    ];
-                }
-            }
-
-            if (!empty($records)) {
-                ShopDeliveryCoverage::insert($records);
-            }
-        });
-
-        $count = count($selectedLgaIds) + count($selectedStateIds);
-        return back()->with('status', "Delivery coverage updated for '{$shop->name}' ({$count} areas saved). Standard platform delivery fees set by Admin apply to covered areas.");
+        return back()->with('error', 'Supplier-managed delivery coverage is retired. Victorious MARKET centrally manages delivery within Uyo, Akwa Ibom State.');
     }
 
     // ==========================================
