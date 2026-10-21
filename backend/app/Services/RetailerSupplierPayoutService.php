@@ -71,7 +71,18 @@ class RetailerSupplierPayoutService
             }
 
             $orderIds = $candidateItems->pluck('order_id')->unique()->sort()->values()->all();
-            Order::whereIn('id', $orderIds)->orderBy('id')->lockForUpdate()->get(['id']);
+            $lockedOrders = Order::whereIn('id', $orderIds)->orderBy('id')->lockForUpdate()->get();
+            foreach ($lockedOrders as $lockedOrder) {
+                if (!$lockedOrder->retailer_model_order
+                    || $lockedOrder->payment_status !== 'paid'
+                    || $lockedOrder->order_status !== 'delivered'
+                    || !$lockedOrder->refund_window_expires_at
+                    || $lockedOrder->refund_window_expires_at->gt(now())
+                    || $lockedOrder->dispute()->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled'])->exists()
+                    || $lockedOrder->returnCases()->whereNotIn('status', ['rejected', 'closed', 'refunded', 'resolved', 'replacement_completed'])->exists()) {
+                    return ['success' => false, 'protected' => true, 'message' => "Order #{$lockedOrder->id} changed eligibility while supplier payout was being prepared."];
+                }
+            }
             $items = OrderItem::whereIn('order_id', $orderIds)
                 ->where('fulfillment_supplier_vendor_id', $lockedSupplier->id)
                 ->orderBy('order_id')
