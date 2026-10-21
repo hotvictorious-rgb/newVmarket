@@ -483,6 +483,11 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertArrayNotHasKey('rider_id', $supplierOrder);
         $this->assertArrayNotHasKey('logistics_company_id', $supplierOrder);
         $this->assertCount(2, $supplierOrder['items']);
+        $this->assertNotContains(
+            $bikeProduct->id,
+            collect($supplierOrder['items'])->pluck('product_id')->all(),
+            'A supplier must not receive another supplier\'s item lines.'
+        );
 
         // A supplier can report a stock failure after confirming and preparing
         // its package, as long as that package has not yet been collected.
