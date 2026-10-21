@@ -1,5 +1,18 @@
 # Victorious MARKET — Real-World Scenario Hardening Plan
 
+
+## Current retailer policy acceptance scenarios (21 October 2026)
+
+1. **Default logistics-company payable:** Given a new doorstep order with a captured delivery fee of ₦1,000 and no override, the snapshotted company payable is ₦900 and default VM delivery margin is ₦100. The ₦900 belongs to the logistics company, not its rider.
+2. **Admin raises company payable:** Given the same ₦1,000 fee, an authorized admin approves ₦1,100 with a reason. The system records ₦900 default, ₦1,100 final, the reason, admin and timestamp, and records the ₦100 excess as a VM-funded delivery subsidy/expense. No existing posted journal is edited; linked balanced adjustment entries are used if the default was already posted.
+3. **Admin lowers company payable:** Given a ₦1,000 fee, an authorized admin approves ₦700 with a reason. The final payable and VM delivery margin reconcile to ₦700 and ₦300 respectively.
+4. **Unauthorized/malformed override:** A non-admin, inactive admin, zero/negative amount, missing reason, stale order state, already-finalized payout or duplicate concurrent override is rejected without mutation.
+5. **Cashback basis:** Given eligible post-discount merchandise of ₦10,000, cashback redeemed of ₦2,000, and delivery of ₦1,000, cashback earned is 5% × ₦8,000 = ₦400 after verified successful fulfilment. Delivery does not earn cashback.
+6. **Cashback non-compounding:** A discounted or cashback-funded amount does not earn cashback. Failed/unfulfilled/cancelled orders do not accrue a cashback lot.
+7. **Maturity and validity:** Cashback is unavailable until verified fulfilment + 24-hour claim window + separate 24-hour buffer, and no blocking case remains; its 365-day validity begins at maturity.
+8. **Refund:** An approved merchandise refund reverses the relevant unspent cashback once. Cashback already spent is recorded as separate recoverable exposure and offset only against future matured cashback under existing terms; no silent cash-wallet debit occurs.
+9. **Idempotency/concurrency:** Duplicate webhook delivery, retry, concurrent admin override or repeated payout attempt must not duplicate cashback lots, logistics payable adjustments, journal entries or company transfers.
+
 Date started: 21 October 2026
 Branch: `audit/paystack-refund-webhook-safety`
 Scope: test the actual application services, controllers, database constraints, queues, webhook handlers, and financial ledgers. Scenarios must run in automated tests wherever feasible; manual tabletop review is supplemental, not a substitute.
