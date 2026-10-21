@@ -271,7 +271,7 @@
                                 'doorstep_arrived' => ['name' => '4. Courier Arrived at Doorstep', 'desc' => 'Urgent arrival alert with 6-digit Delivery PIN', 'persona' => 'Customer'],
                                 'delivery_completed' => ['name' => '5. Doorstep Handover Sealed', 'desc' => 'Instant Cashback credited; Fleet & Vendor escrow', 'persona' => 'Customer, Fleet, Vendor'],
                                 'doorstep_return_dispute' => ['name' => '6. Doorstep Return Initiated', 'desc' => 'Customer refused item; courier returning parcel', 'persona' => 'Merchant, Super Admin'],
-                                'vendor_return_otp' => ['name' => '7. Return Handshake Counter PIN', 'desc' => 'Courier at merchant shop; return OTP required', 'persona' => 'Merchant Counter'],
+                                'vendor_return_otp' => ['name' => '7. Return Handshake Counter PIN', 'desc' => 'OTP sent privately to supplier counter; share only after physical parcel verification', 'persona' => 'Supplier Counter'],
                                 'return_accepted' => ['name' => '8. Return Accepted & Refunded', 'desc' => 'Merchant accepted return; customer wallet credited', 'persona' => 'Customer, Fleet'],
                                 'dispute_escalated' => ['name' => '9. Return Dispute Escalated', 'desc' => 'Merchant rejected return; sent to arbitration', 'persona' => 'Customer, Super Admin'],
                                 'dispute_arbitration' => ['name' => '10. Arbitration Ruling Issued', 'desc' => 'Super admin resolved return dispute verdict', 'persona' => 'Merchant, Customer'],
