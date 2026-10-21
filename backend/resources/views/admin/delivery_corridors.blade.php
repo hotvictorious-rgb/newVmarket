@@ -25,8 +25,8 @@
         </form>
     </div>
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:24px;">
-        <h2 style="margin-top:0;">Create Uyo customer-delivery corridor</h2>
-        <p>Customer pricing is separate from every logistics company's negotiated payable. Create a corridor and configure recognised landmarks/aliases so checkout can match the customer's saved address. Unmatched or ambiguous addresses are blocked rather than guessed.</p>
+        <h2 style="margin-top:0;">Create Uyo delivery corridor</h2>
+        <p>Customer pricing is separate from every logistics company's negotiated payable. Create a corridor and configure recognised landmarks/aliases so the system can identify the logistics payable route from the customer's saved address. Unmatched or ambiguous addresses are blocked rather than guessed.</p>
         <form method="POST" action="{{ route('admin.delivery_corridors.store') }}">
             @csrf
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
