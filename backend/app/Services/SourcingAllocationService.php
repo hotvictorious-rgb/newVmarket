@@ -36,7 +36,7 @@ class SourcingAllocationService
      *    - Lowest wholesale_cost ascending (BCMath comparison).
      *    - If cost ties and preferred LGA is specified, prioritize offer in that LGA.
      *    - Final tie-break by offer ID ascending.
-     * 6. Fallback: If no explicit supplier_offers rows exist, check product's default vendor and shop.
+     * 6. No catalog-owner fallback: missing explicit offer evidence means unavailable.
      * 7. Returns null if no eligible active supplier exists.
      *
      * @param Product $product
@@ -97,7 +97,7 @@ class SourcingAllocationService
             if (!$offer->vendor || $offer->vendor->trashed() || $offer->vendor->marketplace_status !== 'active') {
                 return false;
             }
-            if ($offer->vendor->user && $offer->vendor->user->status !== 'active') {
+            if (!$offer->vendor->user || $offer->vendor->user->status !== 'active') {
                 return false;
             }
             // Must have active shop
@@ -149,35 +149,9 @@ class SourcingAllocationService
             ];
         }
 
-        // 2. Backward compatibility fallback to catalog listing defaults if no supplier_offers exist
-        if (!$product->supplierOffers()->exists() && $product->vendor_id && $product->shop_id) {
-            $product->loadMissing(['vendor.user', 'shop']);
-            $vendor = $product->vendor;
-            $shop = $product->shop;
-
-            $isVendorActive = $vendor && !$vendor->trashed() && $vendor->marketplace_status === 'active';
-            $isUserActive = !$vendor || !$vendor->user || $vendor->user->status === 'active';
-            $isShopActive = $shop && !$shop->trashed() && $shop->is_active;
-
-            if ($isVendorActive && $isUserActive && $isShopActive && $this->isEligibleUyoShop($shop)) {
-                $fallbackCost = ($product->cost_price && bccomp((string)$product->cost_price, '0.00', 2) > 0)
-                    ? (string)$product->cost_price
-                    : bcmul((string)$product->unit_price, '0.85', 2);
-                $cost = bcadd($fallbackCost, '0', 2);
-                return [
-                    'supplier_offer_id' => null,
-                    'vendor_id' => (int)$product->vendor_id,
-                    'shop_id' => (int)$product->shop_id,
-                    'supplier_name' => $vendor->business_name ?? ($vendor->user->name ?? 'Supplier'),
-                    'shop_name' => $shop->name ?? 'Shop Branch',
-                    'wholesale_cost' => $cost,
-                    'currency' => 'NGN',
-                    'source_type' => 'catalog_fallback',
-                    'offer_model' => null,
-                ];
-            }
-        }
-
+        // New retailer sourcing must have an explicit, attributable, unexpired
+        // supplier offer. Catalog ownership/cost defaults are not stock evidence and
+        // must never silently create a supplier payable for a private supplier.
         return null;
     }
 
