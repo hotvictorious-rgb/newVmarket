@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\DeliveryLane;
+use App\Models\DeliveryCorridor;
 use App\Models\Lga;
 use App\Models\User;
 use App\Services\DemoAccountRegistry;
@@ -387,5 +388,64 @@ class PortalWebTest extends TestCase
         // Customer cannot access /admin/products or toggle flagship
         $this->actingAs($customer)->get('/admin/products')->assertStatus(403);
         $this->actingAs($customer)->post('/admin/products/' . $product->id . '/toggle-flagship')->assertStatus(403);
+    }
+
+    public function test_super_admin_can_manage_customer_corridors_separately_from_company_tariffs(): void
+    {
+        $admin = User::where('user_type', 'super_admin')->firstOrFail();
+        $this->actingAs($admin)->get('/admin/delivery-corridors/manage')
+            ->assertOk()
+            ->assertSee('Create Uyo customer-delivery corridor')
+            ->assertSee('Independent logistics-company payables')
+            ->assertSee('Customer base fee');
+
+        $uyo = Lga::where('name', 'Uyo')->whereHas('state', fn ($q) => $q->where('name', 'Akwa Ibom'))->firstOrFail();
+        $response = $this->actingAs($admin)->post('/admin/delivery-corridors', [
+            'code' => 'uyo-plaza-demo',
+            'name' => 'Uyo Plaza Corridor',
+            'lga_id' => $uyo->id,
+            'landmark_aliases' => ['Ibom Plaza', 'Plaza Uyo'],
+            'customer_base_fee' => '650.00',
+            'customer_bulky_surcharge_per_unit' => '400.00',
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+
+        $response->assertCreated()->assertJsonPath('corridor.code', 'uyo-plaza-demo');
+        $corridor = DeliveryCorridor::where('code', 'uyo-plaza-demo')->firstOrFail();
+        $this->assertSame('650.00', $corridor->customer_base_fee);
+        $this->assertSame('400.00', $corridor->customer_bulky_surcharge_per_unit);
+        $this->assertSame($corridor->id, DeliveryCorridor::resolveForAddress($uyo->id, '12 Ibom Plaza Road', null)?->id);
+    }
+
+    public function test_ambiguous_or_unmatched_landmark_does_not_guess_a_delivery_corridor(): void
+    {
+        $uyo = Lga::where('name', 'Uyo')->whereHas('state', fn ($q) => $q->where('name', 'Akwa Ibom'))->firstOrFail();
+        DeliveryCorridor::create([
+            'code' => 'uyo-alias-one',
+            'name' => 'Alias One',
+            'lga_id' => $uyo->id,
+            'landmark_aliases' => ['Plaza'],
+            'customer_base_fee' => '500.00',
+            'customer_bulky_surcharge_per_unit' => '300.00',
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+        DeliveryCorridor::create([
+            'code' => 'uyo-alias-two',
+            'name' => 'Alias Two',
+            'lga_id' => $uyo->id,
+            'landmark_aliases' => ['Plaza Road'],
+            'customer_base_fee' => '600.00',
+            'customer_bulky_surcharge_per_unit' => '350.00',
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+
+        $this->assertNull(DeliveryCorridor::resolveForAddress($uyo->id, 'Plaza Road, Uyo', null));
+        $this->assertNull(DeliveryCorridor::resolveForAddress($uyo->id, 'An unlisted street in Uyo', null));
     }
 }
