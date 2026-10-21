@@ -1033,7 +1033,7 @@ class OrderSettlementService
                         'success' => true,
                         'message' => 'This supplier package was already collected and sealed.',
                         'remaining_supplier_packages' => \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
-                            ->where('status', '!=', 'collected')
+                            ->whereNotIn('status', ['collected', 'admin_reassigned'])
                             ->count(),
                     ];
                 }
@@ -1058,7 +1058,7 @@ class OrderSettlementService
                 $lockedOrder->pickup_failed_attempts = 0;
                 $lockedOrder->pickup_locked_until = null;
                 $allCollected = !\App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
-                    ->where('status', '!=', 'collected')
+                    ->whereNotIn('status', ['collected', 'admin_reassigned'])
                     ->exists();
 
                 if ($allCollected) {
@@ -1086,7 +1086,7 @@ class OrderSettlementService
                     'message' => 'Supplier package collection verified. Continue to the remaining supplier collection point(s).',
                     'order' => $lockedOrder,
                     'remaining_supplier_packages' => \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
-                        ->where('status', '!=', 'collected')
+                        ->whereNotIn('status', ['collected', 'admin_reassigned'])
                         ->count(),
                 ];
             }
