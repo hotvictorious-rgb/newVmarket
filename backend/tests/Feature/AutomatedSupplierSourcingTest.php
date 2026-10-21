@@ -77,7 +77,7 @@ class AutomatedSupplierSourcingTest extends TestCase
         $fleetCompany = LogisticsCompanyProfile::create([
             'user_id' => $fleetUser->id,
             'company_name' => 'Automated Sourcing Logistics Ltd',
-            'hq_lga_id' => $this->uyoLga->id,
+            'lga_id' => $this->uyoLga->id,
             'wallet_balance' => '0.00',
             'status' => 'active',
         ]);
