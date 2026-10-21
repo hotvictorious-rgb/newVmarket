@@ -14,6 +14,7 @@ use App\Models\ReturnCase;
 use App\Models\ReturnEvidence;
 use App\Models\ReturnInspection;
 use App\Models\ReturnItem;
+use App\Models\RetailerSupplierPayoutAllocation;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\VendorProfile;
