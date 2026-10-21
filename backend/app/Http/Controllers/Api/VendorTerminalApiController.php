@@ -1296,6 +1296,17 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             ], 403);
         }
 
+        if (VendorRecoveryLedger::where('vendor_id', $vendor->id)
+            ->where('status', 'pending_recovery')
+            ->where('amount', '>', 0)
+            ->exists()) {
+            return response()->json([
+                'status' => false,
+                'code' => 'SUPPLIER_RECOVERY_DEBT_HOLD',
+                'message' => 'Payout is held because an unresolved supplier recovery debt requires finance review.',
+            ], 409);
+        }
+
         if (empty($vendor->account_number) || empty($vendor->bank_name)) {
             return response()->json([
                 'status' => false,
@@ -1320,6 +1331,16 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
 
         return DB::transaction(function () use ($vendor, $validated) {
             $lockedVendor = VendorProfile::where('id', $vendor->id)->lockForUpdate()->first();
+            if (VendorRecoveryLedger::where('vendor_id', $lockedVendor->id)
+                ->where('status', 'pending_recovery')
+                ->where('amount', '>', 0)
+                ->exists()) {
+                return response()->json([
+                    'status' => false,
+                    'code' => 'SUPPLIER_RECOVERY_DEBT_HOLD',
+                    'message' => 'Payout is held because an unresolved supplier recovery debt requires finance review.',
+                ], 409);
+            }
 
             $activePayout = VendorPayoutRequest::where('vendor_id', $lockedVendor->id)
                 ->whereIn('status', ['pending', 'approved', 'processing', 'in_flight', 'uncertain'])
