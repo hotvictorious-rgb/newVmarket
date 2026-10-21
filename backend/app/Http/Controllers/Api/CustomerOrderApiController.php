@@ -106,7 +106,7 @@ class CustomerOrderApiController extends Controller
             'intent_id' => 'nullable|integer|exists:checkout_intents,id',
             // Legacy clients may still send shop_id; it is ignored for supplier assignment.
             'shop_id' => 'nullable|integer|exists:shops,id',
-            'fulfillment_type' => 'required|in:doorstep_delivery,in_shop_pickup',
+            'fulfillment_type' => 'required|in:doorstep_delivery',
             'customer_address_id' => 'nullable|required_if:fulfillment_type,doorstep_delivery|integer|exists:customer_addresses,id',
             'items' => 'required|array|min:1|max:100',
             'items.*.product_id' => 'required|integer|exists:products,id',
