@@ -973,24 +973,28 @@ class PayoutFinalizationService
     public function hasVendorRequestJournalEvidence(VendorPayoutRequest $payout): bool
     {
         $amount = bcadd((string) $payout->amount, '0', 2);
-        $base = FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REQ-' . $payout->id)
+        $event = FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REQ-' . $payout->id);
+        $base = (clone $event)
             ->where('beneficiary_type', VendorProfile::class)
             ->where('beneficiary_id', $payout->vendor_id)
             ->where('amount', $amount);
 
-        return (clone $base)->where('account_name', 'vendor_payable')->where('entry_type', 'debit')->exists()
+        return (clone $event)->count() === 2
+            && (clone $base)->where('account_name', 'vendor_payable')->where('entry_type', 'debit')->exists()
             && (clone $base)->where('account_name', 'vendor_payout_payable')->where('entry_type', 'credit')->exists();
     }
 
     public function hasLogisticsRequestJournalEvidence(LogisticsPayoutRequest $payout): bool
     {
         $amount = bcadd((string) $payout->amount, '0', 2);
-        $base = FinancialJournalEntry::where('event_id', 'EVT-FLEET-REQ-' . $payout->id)
+        $event = FinancialJournalEntry::where('event_id', 'EVT-FLEET-REQ-' . $payout->id);
+        $base = (clone $event)
             ->where('beneficiary_type', LogisticsCompanyProfile::class)
             ->where('beneficiary_id', $payout->logistics_company_id)
             ->where('amount', $amount);
 
-        return (clone $base)->where('account_name', 'logistics_company_wallet')->where('entry_type', 'debit')->exists()
+        return (clone $event)->count() === 2
+            && (clone $base)->where('account_name', 'logistics_company_wallet')->where('entry_type', 'debit')->exists()
             && (clone $base)->where('account_name', 'logistics_payout_payable')->where('entry_type', 'credit')->exists();
     }
 
