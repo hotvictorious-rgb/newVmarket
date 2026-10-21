@@ -575,8 +575,10 @@ class DoorstepHandshakeService
             return [
                 'success' => true,
                 'message' => $hasRejectedItems
-                    ? "Delivery handover complete. Rejected items are pending vendor return and refund review; no wallet credit has been issued. Return OTP generated for vendor shop handover."
-                    : "Order delivery successfully completed and verified.",
+                    ? ($returnCase && $returnCase->status === 'pending_supplier_assignment'
+                        ? 'Delivery handover recorded. Rejected items belong to multiple or unresolved suppliers; admin assignment is required before return custody can be verified. No return OTP was disclosed to the rider.'
+                        : 'Delivery handover recorded. Rejected items are pending supplier return and refund review; the return OTP is sent privately to the assigned supplier counter. No wallet credit has been issued.')
+                    : 'Order delivery successfully completed and verified.',
                 'accepted_amount' => $totalAcceptedMerchandise,
                 'rejected_amount' => $totalRejectedMerchandise,
                 'return_case' => $returnCase,
