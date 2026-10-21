@@ -162,6 +162,7 @@ class FulfillmentAvailabilityService
                 'origin_lga_id' => $shop->lga_id,
                 'destination_lga_id' => $destinationLgaId,
                 'fee' => number_format((float) $fee, 2, '.', ''),
+                'base_fee' => $baseFee,
                 'bulky_surcharge' => $bulkySurcharge,
                 'estimated_delivery_hours_min' => 2,
                 'estimated_delivery_hours_max' => 4,
