@@ -27,7 +27,14 @@ class ProductApiController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug']);
+            ->whereHas('shop.lga', function ($q) {
+                $q->where('name', 'Uyo')
+                    ->whereHas('state', function ($stateQuery) {
+                        $stateQuery->where('name', 'Akwa Ibom');
+                    });
+            })
+            // Supplier/shop identity is private in the single-retailer model.
+            ->with(['shop:id,lga_id', 'category:id,name,slug']);
 
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->integer('category_id'));
@@ -67,11 +74,12 @@ class ProductApiController extends Controller
             }
         }
 
-        if ($request->filled('shop_id')) {
-            $query->where('shop_id', $request->integer('shop_id'));
-        }
+        // Ignore legacy shop_id filters: customers cannot select or enumerate private suppliers.
 
         $products = $query->paginate(20);
+        $products->getCollection()->each(static function ($product): void {
+            $product->makeHidden(['shop_id', 'shop']);
+        });
 
         return response()->json([
             'status' => true,
@@ -83,7 +91,14 @@ class ProductApiController extends Controller
     public function show(int $id): JsonResponse
     {
         $product = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,address,lga_id,pickup_enabled,pickup_opening_time,pickup_closing_time', 'category:id,name,slug'])
+            ->whereHas('shop.lga', function ($q) {
+                $q->where('name', 'Uyo')
+                    ->whereHas('state', function ($stateQuery) {
+                        $stateQuery->where('name', 'Akwa Ibom');
+                    });
+            })
+            // Do not serialize supplier identity, address, slug, or pickup settings to customers.
+            ->with(['shop:id,lga_id', 'category:id,name,slug'])
             ->find($id);
 
         if (!$product) {
@@ -93,6 +108,8 @@ class ProductApiController extends Controller
             ], 404);
         }
 
+        $product->makeHidden(['shop_id', 'shop']);
+
         return response()->json([
             'status' => true,
             'data' => $product,
@@ -100,33 +117,12 @@ class ProductApiController extends Controller
     }
     public function shops(Request $request): JsonResponse
     {
-        $query = \App\Models\Shop::where('is_active', true)
-            ->with(['lga:id,name', 'vendor:id,business_name,user_id'])
-            ->orderBy('is_primary_branch', 'desc');
-
-        if ($request->filled('lga_id')) {
-            $query->where('lga_id', $request->integer('lga_id'));
-        }
-
-        $shops = $query->get()->map(function ($shop) {
-            return [
-                'id' => $shop->id,
-                'name' => $shop->name ?: ($shop->vendor?->business_name ?? 'Merchant Shop'),
-                'slug' => $shop->slug,
-                'address' => $shop->address,
-                'lga_id' => $shop->lga_id,
-                'lga_name' => $shop->lga?->name,
-                'logo_url' => url('assets/img/vm_icon.jpg'),
-                'pickup_enabled' => (bool)$shop->pickup_enabled,
-                'pickup_opening_time' => $shop->pickup_opening_time ? substr((string)$shop->pickup_opening_time, 0, 5) : '08:00',
-                'pickup_closing_time' => $shop->pickup_closing_time ? substr((string)$shop->pickup_closing_time, 0, 5) : '18:00',
-            ];
-        });
-
+        // Supplier shops are private fulfilment sources, not public marketplace storefronts.
+        // Retain this endpoint for older clients, but return no private supplier records.
         return response()->json([
             'status' => true,
-            'message' => 'Shops retrieved successfully.',
-            'data' => $shops,
+            'message' => 'Victorious MARKET is a single retailer. Supplier shop details are private. Service area: Uyo LGA, Akwa Ibom State only.',
+            'data' => [],
         ]);
     }
 }
