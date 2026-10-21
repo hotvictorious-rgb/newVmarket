@@ -923,7 +923,7 @@ class ReturnAndRefundService
                     $cashbackReversal = $remainingRewardToReverse;
                 }
                 if (BcMathService::comp($cashbackReversal, '0.00') > 0 && !$cashbackLot) {
-                    throw new \\RuntimeException('Retailer cashback reversal has no original cashback ledger lot.');
+                    throw new \RuntimeException('Retailer cashback reversal has no original cashback ledger lot.');
                 }
                 $unspentCashback = '0.00';
                 if ($cashbackLot && in_array($cashbackLot->status, ['pending_maturation', 'available'], true)) {
