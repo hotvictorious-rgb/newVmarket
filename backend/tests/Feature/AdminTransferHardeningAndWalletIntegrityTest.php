@@ -252,6 +252,19 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertDatabaseCount('retailer_supplier_payout_allocations', 0);
     }
 
+    public function test_supplier_payout_request_rejects_shop_outside_uyo(): void
+    {
+        $this->shop->update(['lga_id' => $this->eketLga->id]);
+
+        $result = app(RetailerSupplierPayoutService::class)->requestPayout($this->vendor->fresh());
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected'] ?? false);
+        $this->assertStringContainsString('Uyo, Akwa Ibom State', $result['message']);
+        $this->assertDatabaseCount('retailer_supplier_payout_requests', 0);
+        $this->assertDatabaseCount('retailer_supplier_payout_allocations', 0);
+    }
+
     public function test_retailer_supplier_payout_reserves_and_finalizes_item_payable_idempotently(): void
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('7000.00');
