@@ -353,3 +353,13 @@ Required controls:
 - **What this does not prove:** the CI command does not establish that `SupplierSourcingSnapshotSchemaTest` ran, that the new forward migration applies on a real migrated database, or that `SupplierOfferSelectionService` has query-level behavior coverage. A later commit added the audit note but did not change runtime code.
 - **Next verification required:** run the supplier-sourcing schema test explicitly and add selector feature tests for cheapest eligible offer, deterministic ties, expired/missing availability evidence, inactive/soft-deleted supplier/shop, shop-supplier mismatch, pickup-disabled shops, and no-offer fail-closed behavior. The current selector is still not called by checkout or pickup payment.
 - **Release status:** retailer sourcing and accounting remain launch blockers. No merge to `main` or deployment.
+
+
+## 24. Supplier selector regression coverage added; execution still unverified — 21 October 2026
+
+- **Added feature test:** `backend/tests/Feature/SupplierOfferSelectionServiceTest.php` covers deterministic lowest wholesale cost and ID tie-breaking; missing confirmation and expired evidence; unavailable offers; inactive and soft-deleted supplier profiles; pickup-disabled shops; supplier/shop ownership mismatch; no eligible offer; and rejection of customer-controlled/unsupported supplier-selection mode.
+- **Migration hardening:** the availability-evidence forward migration now checks for the named eligibility index before adding it, matching the guarded-column pattern and avoiding a duplicate-index failure if the migration is reapplied in a schema-recovery workflow. This is additive; no historical migration was edited.
+- **Verification boundary:** these are source changes, not a test result. No claim is made that the new feature test or migration has run successfully until a workflow explicitly executes it and its logs are reviewed.
+- **Still open:** availability confirmation is not yet exposed through a permissioned, audited workflow; selector is not integrated into either checkout writer or pickup reservation/payment; product catalogue eligibility still depends on legacy supplier/shop ownership; order-level vendor/shop constraints and legacy 90/5/5 and 90/10 calculations remain unresolved.
+- **Next:** confirm the backend test command and CI workflow, run `SupplierOfferSelectionServiceTest` and `SupplierSourcingSnapshotSchemaTest` explicitly, then repair any observed failures before moving on to the authorized confirmation workflow.
+- **Release status:** not launch-ready; no merge to `main` or deployment.
