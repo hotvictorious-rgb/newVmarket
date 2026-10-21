@@ -1263,4 +1263,89 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertNull($case->fresh()->refund_claim_token);
         $this->assertSame('refund_pending', $case->fresh()->status);
     }
+
+    public function test_pending_paystack_refund_quarantines_every_unspent_wallet_credit_lot(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+        ]);
+        $availableCredit = CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'return_case_id' => $case->id,
+            'amount' => '6000.00',
+            'credit_type' => 'doorstep_refund_credit',
+            'status' => 'available',
+        ]);
+        $pendingCredit = CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'return_case_id' => $case->id,
+            'amount' => '4000.00',
+            'credit_type' => 'doorstep_refund_credit',
+            'status' => 'pending_approval',
+        ]);
+
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldReceive('initiateRefund')->once()->andReturn([
+            'success' => true,
+            'refund_reference' => 'RFD-WALLET-HOLD-001',
+            'status' => 'pending',
+        ]);
+        $result = (new ReturnAndRefundService($gateway))->adminDisburseRefund($this->superAdmin, $case);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('initiated', $result['status']);
+        $this->assertSame('quarantined', $availableCredit->fresh()->status);
+        $this->assertSame('quarantined', $pendingCredit->fresh()->status);
+    }
+
+    public function test_definitive_gateway_refund_failure_restores_quarantined_wallet_credit(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+        ]);
+        $credit = CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'return_case_id' => $case->id,
+            'amount' => '10000.00',
+            'credit_type' => 'doorstep_refund_credit',
+            'status' => 'available',
+        ]);
+
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldReceive('initiateRefund')->once()->andReturn([
+            'success' => false,
+            'code' => 'DEFINITIVE_REJECTION',
+            'is_definitive' => true,
+            'message' => 'Gateway definitively rejected the refund.',
+        ]);
+        $result = (new ReturnAndRefundService($gateway))->adminDisburseRefund($this->superAdmin, $case);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('available', $credit->fresh()->status);
+        $this->assertNull($case->fresh()->refund_claim_token);
+        $this->assertSame('refund_pending', $case->fresh()->status);
+    }
 }
