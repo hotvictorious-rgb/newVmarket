@@ -47,6 +47,7 @@ class SupplierOfferSelectionService
             ->whereHas('vendor', function ($query) {
                 $query->whereNull('vendor_profiles.deleted_at')
                     ->where('marketplace_status', 'active')
+                    ->where('kyc_status', 'verified')
                     ->whereRaw('(select count(*) from shops as active_supplier_shops where active_supplier_shops.vendor_id = vendor_profiles.id and active_supplier_shops.deleted_at is null and active_supplier_shops.is_active = 1) = 1')
                     ->whereHas('user', function ($userQuery) {
                         $userQuery->where('status', 'active');
