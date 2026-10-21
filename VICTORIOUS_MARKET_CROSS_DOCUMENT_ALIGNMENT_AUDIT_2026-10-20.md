@@ -473,3 +473,31 @@ This section records source-level findings and one rollback-safety fix. It does 
 - **Regression coverage added:** `SupplierOfferSelectionServiceTest` now covers exclusion without verified eligible offers, continued catalogue eligibility when the legacy/default supplier is inactive but another supplier has a valid offer, exclusion after that evidence expires, and a canonical product with null legacy vendor/shop references.
 - **Compatibility boundary:** this does not yet remove legacy shop requirements from `CheckoutExecutionService`, nor does it refactor `CheckoutAndReservationApiController::createPickupReservation()` / `payPickupReservation()`. It also does not retire legacy 90/5/5 or 90/10 financial fields. These remain separate launch blockers and must not be described as completed.
 - **Verification status:** the previously cited GitHub Actions run `39573855362` passed 166 tests / 1,085 assertions on commit `7a13109b195b0a5aaa4ef77e38120b16e30efbef`. That run predates the catalogue-decoupling commits, so it does not verify Section 31. A new CI run against the latest branch head is required before treating this change as green.
+
+
+## Section 32 — Cross-document retailer-policy alignment pass (21 October 2026)
+
+### Changes committed on `docs/retailer-central-fulfilment-model`
+
+- Updated `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md` to state that the old 90/5/5 and 90/10 splits are retired for new transactions, logistics-company charges require approved VM/company terms, and new cashback accrual remains disabled until a separate owner-approved policy is aligned across policy, code and customer terms.
+- Updated `README.md` so its current accounting summary no longer asserts active new 5% cashback accrual or describes legacy vendor-managed rules as binding.
+- Added a prominent supersession notice to `.ai/BUSINESS_RULES.md`; current retailer rules govern new work, while old vendor/rider/payout requirements are retained as migration history. Replaced active cashback and percentage-allocation instructions with historical-versus-new-transaction rules.
+- Updated `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md` to distinguish current payment/refund safeguards from legacy marketplace allocations and payout batches. The legacy FIFO payout checklist is now explicitly historical-only; it is not a supplier-payable rule.
+- Updated `DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md` to classify the old allocation/cashback language as legacy source-audit material and require immutable historical reversals while using retailer accounting for new orders.
+
+### Binding interpretation after this pass
+
+1. Victorious MARKET remains the sole customer-facing retailer; supplier/shop selection is private and server-controlled.
+2. New supplier payables use the immutable agreed wholesale cost per selected offer/order item, after verified handover and reconciliation.
+3. New logistics-company charges use an approved VM/company agreement. No replacement percentage, supplier-payment threshold, or payment SLA has been invented.
+4. The former 90/5/5 merchandise split, 90/10 delivery split, vendor payout FIFO thresholds, and vendor-managed delivery rules apply only to historical records where those rules were actually captured and remain necessary for reconciliation.
+5. Preserve historical cashback records and customer obligations. Do not accrue new cashback until an explicit owner-approved policy is consistent across the authoritative system rules, retailer model, payment/refund matrix, code and customer terms.
+6. Customer refund approval/execution remains independent of supplier recovery; recovery requires evidence, authorization and contractual basis.
+
+### Remaining alignment and verification blockers
+
+- The existing documents still contain detailed legacy rules and acceptance tests by design. They are now labelled or bounded as historical, but every remaining occurrence must be read in that context; do not delete source-audit evidence needed for migration.
+- This pass changed documentation only. It did not refactor checkout/pickup writers, remove legacy order-level vendor/shop constraints, change financial runtime calculations, or enable/disable cashback in code.
+- The catalogue-decoupling migration/model changes recorded in Section 31 still require a CI run against the latest branch head. No claim is made that latest code is green.
+- Next code slice: trace and test all live order creation/refund/settlement paths, then remove legacy ownership requirements for new orders with a forward migration and historical compatibility tests. Only after every producer/consumer is mapped should runtime financial calculations change.
+- `main` remains untouched; no deployment is authorized.
