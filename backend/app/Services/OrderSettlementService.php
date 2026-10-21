@@ -562,6 +562,156 @@ class OrderSettlementService
                 // Parent payment is allocated across child orders above. Do not post a
                 // second parent-level delivery split: each child's 90/10 split is authoritative.
             } else {
+                if ($lockedOrder->retailer_model_order) {
+                    // New retailer accounting: supplier payables are the immutable
+                    // item-level wholesale costs, never a percentage of merchandise.
+                    $items = $lockedOrder->items()->orderBy('id')->lockForUpdate()->get();
+                    $supplierCostTotal = '0.00';
+                    foreach ($items as $item) {
+                        if (empty($item->supplier_vendor_id) || $item->supplier_cost_snapshot === null) {
+                            throw new \RuntimeException('Retailer order item is missing its immutable supplier/cost snapshot.');
+                        }
+                        $lineCost = BcMathService::mul((string) $item->supplier_cost_snapshot, (string) $item->quantity);
+                        $supplierCostTotal = BcMathService::add($supplierCostTotal, $lineCost);
+                    }
+                    if ($lockedOrder->supplier_cost_total_snapshot !== null
+                        && BcMathService::comp($supplierCostTotal, (string) $lockedOrder->supplier_cost_total_snapshot) !== 0) {
+                        throw new \RuntimeException('Retailer supplier-cost total does not match the immutable order snapshot.');
+                    }
+
+                    foreach ($items as $item) {
+                        $lineCost = BcMathService::mul((string) $item->supplier_cost_snapshot, (string) $item->quantity);
+                        if (BcMathService::comp($lineCost, '0.00') > 0) {
+                            FinancialJournalEntry::create([
+                                'order_id' => $lockedOrder->id,
+                                'transaction_reference' => $reference,
+                                'event_id' => 'EVT-SUPPLIER-PAYABLE-' . $lockedOrder->id . '-ITEM-' . $item->id . '-' . $reference,
+                                'beneficiary_type' => VendorProfile::class,
+                                'beneficiary_id' => $item->supplier_vendor_id,
+                                'account_name' => 'supplier_payable',
+                                'entry_type' => 'credit',
+                                'amount' => $lineCost,
+                                'currency' => 'NGN',
+                                'description' => "Agreed wholesale supplier payable for order item #{$item->id} on Order #{$lockedOrder->order_number}",
+                            ]);
+                        }
+                    }
+
+                    if (BcMathService::comp((string) $lockedOrder->customer_cashback_5, '0.00') > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $lockedOrder->id,
+                            'transaction_reference' => $reference,
+                            'event_id' => 'EVT-CB-ACCRUE-' . $reference,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => $lockedOrder->customer_id,
+                            'account_name' => 'cashback_liability',
+                            'entry_type' => 'credit',
+                            'amount' => $lockedOrder->customer_cashback_5,
+                            'currency' => 'NGN',
+                            'description' => "Retailer 5% real-money merchandise cashback liability accrued for Order #{$lockedOrder->order_number}",
+                        ]);
+
+                        CustomerCashbackLedger::updateOrCreate([
+                            'order_id' => $lockedOrder->id,
+                        ], [
+                            'customer_id' => $lockedOrder->customer_id,
+                            'amount' => $lockedOrder->customer_cashback_5,
+                            'status' => 'pending_maturation',
+                            'matures_at' => null,
+                            'expires_at' => null,
+                        ]);
+                    }
+
+                    $retailerMargin = (string) ($lockedOrder->retailer_merchandise_margin ?? '0.00');
+                    if (BcMathService::comp($retailerMargin, '0.00') > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $lockedOrder->id,
+                            'transaction_reference' => $reference,
+                            'event_id' => 'EVT-RETAIL-MARGIN-' . $reference,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => null,
+                            'account_name' => 'retailer_merchandise_margin',
+                            'entry_type' => 'credit',
+                            'amount' => $retailerMargin,
+                            'currency' => 'NGN',
+                            'description' => "Retail merchandise margin after supplier cost and cashback for Order #{$lockedOrder->order_number}",
+                        ]);
+                    } elseif (BcMathService::comp($retailerMargin, '0.00') < 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $lockedOrder->id,
+                            'transaction_reference' => $reference,
+                            'event_id' => 'EVT-RETAIL-LOSS-' . $reference,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => null,
+                            'account_name' => 'retailer_merchandise_loss',
+                            'entry_type' => 'debit',
+                            'amount' => BcMathService::sub('0.00', $retailerMargin),
+                            'currency' => 'NGN',
+                            'description' => "Retail merchandise loss where supplier cost plus cashback exceeds merchandise revenue for Order #{$lockedOrder->order_number}",
+                        ]);
+                    }
+
+                    $deliveryFeeSnapshot = (string) $lockedOrder->delivery_fee;
+                    $defaultCompanyPayable = $lockedOrder->logistics_company_payable_default_amount;
+                    if ($defaultCompanyPayable === null) {
+                        $defaultCompanyPayable = BcMathService::mul($deliveryFeeSnapshot, '0.90');
+                        $lockedOrder->logistics_company_payable_default_amount = $defaultCompanyPayable;
+                    }
+                    $companyPayable = (string) ($lockedOrder->logistics_company_payable_amount ?? $defaultCompanyPayable);
+                    $lockedOrder->logistics_company_payable_amount = $companyPayable;
+                    $lockedOrder->save();
+
+                    if (BcMathService::comp($companyPayable, '0.00') > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $lockedOrder->id,
+                            'transaction_reference' => $reference,
+                            'event_id' => 'EVT-LOG-COMPANY-PAYABLE-' . $reference,
+                            'beneficiary_type' => LogisticsCompanyProfile::class,
+                            'beneficiary_id' => $lockedOrder->logistics_company_id,
+                            'account_name' => 'logistics_company_payable',
+                            'entry_type' => 'credit',
+                            'amount' => $companyPayable,
+                            'currency' => 'NGN',
+                            'description' => "Default/approved logistics-company payable for Order #{$lockedOrder->order_number}; not a rider payable.",
+                        ]);
+                    }
+
+                    $deliveryMargin = BcMathService::comp($deliveryFeeSnapshot, $companyPayable) > 0
+                        ? BcMathService::sub($deliveryFeeSnapshot, $companyPayable)
+                        : '0.00';
+                    $deliverySubsidy = BcMathService::comp($companyPayable, $deliveryFeeSnapshot) > 0
+                        ? BcMathService::sub($companyPayable, $deliveryFeeSnapshot)
+                        : '0.00';
+
+                    if (BcMathService::comp($deliveryMargin, '0.00') > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $lockedOrder->id,
+                            'transaction_reference' => $reference,
+                            'event_id' => 'EVT-PLATFORM-DELIVERY-REV-' . $reference,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => null,
+                            'account_name' => 'platform_delivery_revenue',
+                            'entry_type' => 'credit',
+                            'amount' => $deliveryMargin,
+                            'currency' => 'NGN',
+                            'description' => "VM delivery margin after logistics-company payable for Order #{$lockedOrder->order_number}",
+                        ]);
+                    }
+                    if (BcMathService::comp($deliverySubsidy, '0.00') > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $lockedOrder->id,
+                            'transaction_reference' => $reference,
+                            'event_id' => 'EVT-DELIVERY-SUBSIDY-' . $reference,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => null,
+                            'account_name' => 'delivery_subsidy_expense',
+                            'entry_type' => 'debit',
+                            'amount' => $deliverySubsidy,
+                            'currency' => 'NGN',
+                            'description' => "VM-funded delivery subsidy where company payable exceeds customer delivery fee for Order #{$lockedOrder->order_number}",
+                        ]);
+                    }
+                } else {
                 // Standard Single-Vendor Order Path:
                 // Credit: Vendor Payable (90% Merchandise Net)
                 FinancialJournalEntry::create([
@@ -639,6 +789,7 @@ class OrderSettlementService
                         'matures_at' => null, // No maturity clock before verified fulfilment.
                         'expires_at' => null, // Validity starts only after maturity.
                     ]);
+                }
                 }
             }
 
