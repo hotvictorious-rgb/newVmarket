@@ -13,11 +13,11 @@ Victorious MARKET is a centrally managed online retailer operating from Uyo, Akw
 ## At a glance
 
 - **Repository:** [hotvictorious-rgb/newVmarket](https://github.com/hotvictorious-rgb/newVmarket)
-- **Current audit branch:** audit/paystack-refund-webhook-safety
+- **Current documentation branch:** docs/retailer-central-fulfilment-model (based on audit/paystack-refund-webhook-safety; documentation-only, not a code migration).
 - **Application:** Laravel 12 / PHP 8.2+
 - **Currency:** NGN; payment amounts are validated in integer kobo.
 - **Customer payment:** through Victorious MARKET's authorized payment workflow. The existing supplier-shop reservation/payment-at-location option may remain only where payment is processed/recorded through VM; no supplier off-platform collection.
-- **No off-platform payment:** suppliers may not collect customer cash or private-account transfers outside VM's authorized workflow. Launch payment rails are Paystack card and standard bank transfer only unless separately approved. Doorstep COD, wallet-credit refunds, and legacy wallet-credit checkout tender are disabled; cashback redemption is a separate capped discount. DVA, USSD, mobile money and other unapproved rails are deferred.
+- **No off-platform payment:** suppliers may not collect customer cash or private-account transfers outside VM's authorized workflow. Launch payment rails are Paystack card and standard bank transfer only unless separately approved. Doorstep COD, wallet-credit refunds, and legacy wallet-credit checkout tender are disabled. Preserve historical cashback obligations; new retailer-model cashback accrual/funding needs explicit approval before enablement. DVA, USSD, mobile money and other unapproved rails are deferred.
 - **Reservation:** the existing in-shop reservation flow remains supported with its 24-hour stock hold unless separately changed by the owner; do not release stock while payment status is successful or uncertain/in flight.
 - **Operating base and coverage:** Uyo, Akwa Ibom State; serve only destinations where VM has confirmed product availability and logistics coverage.
 - **Fulfilment:** VM-coordinated delivery through approved logistics companies, or verified pickup at an authorized supplier shop.
