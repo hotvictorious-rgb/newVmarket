@@ -1799,6 +1799,8 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertArrayNotHasKey('refund_reserved_from_status', $history);
         $this->assertArrayNotHasKey('notes', $history);
         $this->assertSame('refund_pending', $history['status']);
+        $this->assertSame('0%', $wallet['spendable_rate']);
+        $this->assertFalse($wallet['checkout_redemption_enabled']);
         $this->assertSame('quarantined', $credit->fresh()->status);
     }
 }
