@@ -1,5 +1,7 @@
 <?php
 
+/* Current policy: delivery-first retailer; pickup is support-managed only. See docs/architecture/RETAILER_FULFILMENT_SIMPLIFICATION_2026-10-21.md. Legacy pickup terms below must not authorize new public reservations or early supplier-address disclosure. */
+
 namespace Database\Seeders;
 
 use App\Models\LegalDocument;
@@ -524,13 +526,11 @@ Victorious MARKET uses a controlled cancellation and refund workflow designed to
 
 ---
 
-### 3. In-Shop Pickup Reservations (24-Hour Expiry)
-* **Reservation Window:** In-shop pickup reservations hold the selected stock for **twenty-four (24) hours**.
-* **Payment and collection:** The customer reserves through Victorious MARKET and, where authorized, completes payment at the approved supplier shop through VM's authorized payment workflow. The supplier must not accept an off-platform cash/private-account payment and must not release the item until the platform verifies payment.
-* **Automatic Expiration:** If the customer does not complete the platform-recorded payment and pickup within 24 hours, the reservation may expire and stock may return to active inventory only after confirming there is no successful or uncertain/in-flight payment. Reconcile uncertain payments before releasing stock.
-
----
-
+### 3. Pickup Requests (Support-Managed Exception Only)
+* **No automated pickup reservation:** Customers cannot create a new in-shop pickup reservation through the standard website checkout or public API.
+* **Contact support:** Customers who prefer pickup must contact Victorious MARKET support. Pickup is not confirmed until support verifies every item in the complete order, physical readiness at one approved collection point, the payment arrangement and the customer's agreement.
+* **No early address disclosure:** Do not reveal a private supplier address or tell a customer to travel before support confirms the collection plan.
+* **Legacy reservations:** Existing reservation records and associated terms are retained only for historical compatibility, audit, and resolution of pre-existing obligations; they do not authorize new automated pickup reservations.
 ### 4. Post-Dispatch In-Transit Policy
 * **Ordinary cancellation after dispatch:** Once an order is out for delivery, an ordinary change-of-mind cancellation may be restricted because fulfilment costs may be committed. This does not bar a customer from rejecting wrong, damaged, defective, or non-conforming goods, reporting failed fulfilment, or seeking any remedy required by applicable law.
 * **Doorstep Decision:** The customer must await the rider's arrival and exercise their **Doorstep Acceptance & Partial Rejection** rights at physical handover.
