@@ -1,6 +1,6 @@
 # Victorious MARKET
 
-> **Owner-confirmed payment and handover rule (20 October 2026):** Only pay-before-delivery through Victorious MARKET or reserve in-shop pickup and pay at the vendor shop through Victorious MARKET's authorised payment workflow are permitted. No off-platform payment. Doorstep handover requires customer OTP verification plus a doorstep photo; in-shop pickup requires the RES-XXXXXX reservation pass plus one-time customer pickup OTP verification plus an in-shop photo. GPS, signature, separate rider-pickup photo and hub inspection photo are not mandatory. Payouts use server-calculated strict FIFO batches of whole earning records, with ₦5,000 minimum and ₦500,000 maximum; never split or skip an over-cap record.
+> **Owner-confirmed model (21 October 2026):** Victorious MARKET is a retailer operating from Uyo, Akwa Ibom State. Suppliers are private product sources, not public marketplace sellers. VM approves new listings or maps supplier offers to existing listings, controls customer-facing prices and coordinates delivery through approved logistics companies. Every assigned rider must be linked to exactly one active logistics company. Authorized supplier-shop pickup remains available with the existing reservation pass, separate one-time customer pickup verification and in-shop photo. Supplier payment eligibility begins only after verified successful customer delivery or pickup and reconciliation. Legacy vendor commissions, vendor payout thresholds and vendor-managed delivery are not default retailer rules.
 
 
 **Your Trusted Online Market for Quality Products**  
@@ -16,8 +16,8 @@ Victorious MARKET is a centrally managed online retailer operating from Uyo, Akw
 - **Current audit branch:** audit/paystack-refund-webhook-safety
 - **Application:** Laravel 12 / PHP 8.2+
 - **Currency:** NGN; payment amounts are validated in integer kobo.
-- **Only permitted payment paths:** pay before delivery through Victorious MARKET checkout, or reserve an in-shop pickup through Victorious MARKET and pay at the approved vendor shop through Victorious MARKET's authorised payment workflow.
-- **No off-platform payment:** vendors may not collect cash or private-account transfers for marketplace orders. Launch payment rails are Paystack card and standard bank transfer only unless separately approved. Doorstep COD, wallet-credit refunds, and legacy wallet-credit checkout tender are disabled; cashback redemption is a separate capped discount. DVA, USSD, mobile money and other unapproved rails are deferred.
+- **Customer payment:** through Victorious MARKET's authorized payment workflow. The existing supplier-shop reservation/payment-at-location option may remain only where payment is processed/recorded through VM; no supplier off-platform collection.
+- **No off-platform payment:** suppliers may not collect customer cash or private-account transfers outside VM's authorized workflow. Launch payment rails are Paystack card and standard bank transfer only unless separately approved. Doorstep COD, wallet-credit refunds, and legacy wallet-credit checkout tender are disabled; cashback redemption is a separate capped discount. DVA, USSD, mobile money and other unapproved rails are deferred.
 - **Reservation:** the existing in-shop reservation flow remains supported with its 24-hour stock hold unless separately changed by the owner; do not release stock while payment status is successful or uncertain/in flight.
 - **Operating base and coverage:** Uyo, Akwa Ibom State; serve only destinations where VM has confirmed product availability and logistics coverage.
 - **Fulfilment:** VM-coordinated delivery through approved logistics companies, or verified pickup at an authorized supplier shop.
@@ -26,7 +26,6 @@ Victorious MARKET is a centrally managed online retailer operating from Uyo, Akw
 ## Contents
 
 - [Retailer model and binding rules](#retailer-model-and-binding-rules)
-- [Checkout and payment lifecycle](#checkout-and-payment-lifecycle)
 - [Returns, refunds, and cashback](#returns-refunds-and-cashback)
 - [Retail accounting and supplier payment](#retail-accounting-and-supplier-payment)
 - [Central delivery and pickup](#central-delivery-and-pickup)
@@ -152,7 +151,7 @@ The platform must enforce these controls server-side, not only in the UI:
 5. **Refund ceilings:** confirmed refunds plus active reservations must remain within the child-order and parent-capture limits. Validate currency, amount, original payment identity, and operation status before finalizing.
 6. **Balanced accounting:** financial journal events must balance. Reversals must reverse real prior postings; never fabricate a cash outflow for a transfer that never disbursed.
 7. **Evidence and audit:** preserve provider payload identity, attempt history, approval provenance, operational proof, state transitions, and reconciliation decisions.
-8. **Least privilege:** enforce vendor ownership, rider-to-vendor linkage, and minimum data projections on every route and response.
+8. **Least privilege:** enforce supplier-offer/order-item access, rider-to-logistics-company linkage, and minimum data projections on every route and response.
 9. **Fail closed:** ambiguous payment, refund, transfer, custody, or ownership evidence goes to a visible review/reconciliation state, not an assumed success.
 10. **No false escrow claim:** internal holds, reservations and ledgers are accounting controls; do not describe them as a legally regulated escrow service unless that status has been independently established.
 
@@ -279,9 +278,9 @@ These documents serve different purposes and should remain consistent:
 
 1. [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md) — current owner-confirmed retailer, supplier, coverage, logistics and payment-eligibility model.
 2. [VICTORIOUS_MARKET.md](VICTORIOUS_MARKET.md) — broader product vision and operating model.
-3. [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md) — binding vendor-managed delivery, rider, privacy, pickup and COD rules.
+3. [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md) — binding retailer, supplier-offer, central logistics, rider privacy, pickup and COD rules.
 4. [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) — payment channels, refund/cashback policy, settlement and Paystack event matrix.
-5. [VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md](VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md) — code observations, implementation gaps and verification checklist.
+5. [VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md](VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md) — code observations, retailer migration gaps and verification checklist.
 6. [DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md](DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md) — delivery and accounting implementation plan.
 7. [SHARED_HOSTING_DEPLOYMENT_GUIDE.md](SHARED_HOSTING_DEPLOYMENT_GUIDE.md) — deployment instructions.
 
