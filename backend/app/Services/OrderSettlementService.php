@@ -1621,6 +1621,18 @@ class OrderSettlementService
                 return ['success' => false, 'message' => 'Settlement disbursement requires documented bank transfer proof.'];
             }
 
+            // Retailer-model supplier payables are item-level liabilities and must
+            // never flow through the legacy order-level vendor payout (vendor_net_90).
+            // A journal credit alone is not payout authorization: the retailer workflow
+            // must reconcile sourcing, collection, customer receipt, disputes/returns,
+            // and supplier-specific payable before a dedicated payout path is permitted.
+            if ($lockedOrder->retailer_model_order) {
+                return [
+                    'success' => false,
+                    'message' => 'Retailer-model orders cannot use the legacy order-level vendor payout workflow.',
+                ];
+            }
+
             if ($lockedOrder->vendor_settlement_status !== 'eligible') {
                 return [
                     'success' => false,
