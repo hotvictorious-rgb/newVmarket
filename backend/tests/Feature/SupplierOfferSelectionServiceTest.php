@@ -276,6 +276,70 @@ class SupplierOfferSelectionServiceTest extends TestCase
         $service->selectLowestCost($this->product, 'customer_chooses_supplier');
     }
 
+    public function test_only_super_admin_can_confirm_supplier_availability_through_web_route(): void
+    {
+        $offer = $this->offer([
+            'availability_confirmed_at' => null,
+            'availability_confirmed_by' => null,
+            'availability_expires_at' => null,
+            'is_available' => false,
+        ]);
+
+        $payload = [
+            'availability_expires_at' => Carbon::now()->addHours(2)->startOfSecond()->toDateTimeString(),
+            'notes' => 'Phone confirmation received from supplier',
+        ];
+
+        $customer = User::create([
+            'name' => 'Route Customer',
+            'email' => 'route-customer@example.test',
+            'password' => bcrypt('test-password'),
+            'user_type' => 'customer',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($customer)
+            ->post(route('admin.supplier_offers.confirm_availability', $offer->id), $payload)
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('admin_audit_logs', [
+            'action' => 'supplier_offer_availability_confirmed',
+            'target_id' => $offer->id,
+        ]);
+        $this->assertFalse((bool) $offer->fresh()->is_available);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.supplier_offers.confirm_availability', $offer->id), $payload)
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertTrue((bool) $offer->fresh()->is_available);
+        $this->assertSame(1, AdminAuditLog::where('action', 'supplier_offer_availability_confirmed')
+            ->where('target_id', $offer->id)->count());
+    }
+
+    public function test_web_availability_route_rejects_expired_confirmation_without_writing_audit(): void
+    {
+        $offer = $this->offer([
+            'availability_confirmed_at' => null,
+            'availability_confirmed_by' => null,
+            'availability_expires_at' => null,
+            'is_available' => false,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->from('/admin')
+            ->post(route('admin.supplier_offers.confirm_availability', $offer->id), [
+                'availability_expires_at' => Carbon::now()->subMinute()->toDateTimeString(),
+                'notes' => 'Expired evidence must not be accepted',
+            ])
+            ->assertSessionHasErrors('availability_expires_at');
+
+        $this->assertFalse((bool) $offer->fresh()->is_available);
+        $this->assertSame(0, AdminAuditLog::where('action', 'supplier_offer_availability_confirmed')
+            ->where('target_id', $offer->id)->count());
+    }
+
     private function createOtherSupplier(string $suffix): array
     {
         $user = User::create([
