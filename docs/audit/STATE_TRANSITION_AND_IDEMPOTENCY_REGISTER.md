@@ -412,3 +412,14 @@ Allowed: `reserved` and not expired -> `inspected_accepted`, or `reserved` and e
 **Changes made:** delivery availability now rejects non-Uyo source shops, no longer uses vendor-configured rider coverage as the route authority, retains Uyo-local default delivery, and fails closed outside Uyo unless a directional active lane exists. Active cross-LGA lanes are labelled `logistics_managed`; Uyo-local delivery is labelled `doorstep`. Logistics assignment now rejects a company whose headquarters LGA/state is not Uyo/Akwa Ibom.
 
 **Verification status:** targeted tests and CI still need to be run/reconciled. Existing tests and callers that depended on automatic nationwide fallback may fail and must be updated to the owner policy. Checkout's selected-shop/single-source limitation is not claimed fixed by these route changes. No merge or deployment is authorized by this audit entry.
+
+
+### VM-AUD-063 — supplier-rejection hold enforced at shared custody/compatibility boundaries (21 October 2026)
+
+**Finding:** HTTP-level rejection and preparation guards alone are insufficient because rider custody and legacy order-level sourcing helpers are callable through other application paths.
+
+**Required invariant:** A retailer order with `sourcing_status=supplier_rejected` must remain on hold at every state-changing boundary. Rider pickup OTP verification must reject before mutating pickup attempts, custody state, delivery status, timestamps, or notifications. The legacy `SourcingAllocationService::confirmSupplierAvailability` helper must refuse retailer orders entirely; retailer sourcing confirmation is exclusively assignment-scoped and row-locked. Existing shared-service guards requiring all suppliers confirmed remain in force.
+
+**Changes on this branch:** Added the hold check inside `OrderSettlementService::verifyRiderPickupOtp` after the paid-order precondition and before the pickup state transition. Disabled the legacy order-level supplier confirmation helper for retailer-model orders. Added a regression assertion to the supplier rejection feature test proving that the legacy helper throws and leaves the paid order on hold. Existing HTTP regressions cover late supplier confirmation (409) and collection preparation (422).
+
+**Verification:** Code and test changes are committed but have not been executed in this session. Do not claim CI or runtime verification. Remaining work includes auditing all direct writers of `sourcing_status`, `order_status`, assignment status and rider custody, and implementing the audited post-payment reassignment/refund resolution workflow. No merge or deployment is authorized.
