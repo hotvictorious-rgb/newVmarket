@@ -1182,7 +1182,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'source' => 'doorstep_partial_rejection',
             'rejection_category' => 'vendor_issue',
             'vendor_return_otp' => '888999',
-            'returned_by_rider_id' => $this->riderProfile->id,
+            'returned_by_rider_id' => $this->riderProfile->user_id,
             'status' => 'in_transit_back_to_vendor',
             'return_reason' => 'damaged_item',
             'total_refundable_amount' => '15000.00',
