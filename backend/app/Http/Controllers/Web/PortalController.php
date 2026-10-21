@@ -1282,12 +1282,13 @@ class PortalController extends Controller
             ->with(['product:id,name,unit_price', 'customer:id,name,phone'])
             ->latest();
         $ordersQuery = Order::where('vendor_id', $vendor->id)
+            ->where('retailer_model_order', false)
             ->with('customer:id,name,phone')
             ->latest();
 
-        $salesQuery = Order::where('vendor_id', $vendor->id);
-        $settledQuery = Order::where('vendor_id', $vendor->id)->where('vendor_settlement_status', 'settled');
-        $pendingQuery = Order::where('vendor_id', $vendor->id)->whereIn('vendor_settlement_status', ['eligible', 'held']);
+        $salesQuery = Order::where('vendor_id', $vendor->id)->where('retailer_model_order', false);
+        $settledQuery = Order::where('vendor_id', $vendor->id)->where('retailer_model_order', false)->where('vendor_settlement_status', 'settled');
+        $pendingQuery = Order::where('vendor_id', $vendor->id)->where('retailer_model_order', false)->whereIn('vendor_settlement_status', ['eligible', 'held']);
 
         if ($selectedShopId) {
             $productsQuery->where('shop_id', $selectedShopId);
@@ -1369,6 +1370,7 @@ class PortalController extends Controller
         }
 
         $ordersQuery = Order::where('vendor_id', $vendor->id)
+            ->where('retailer_model_order', false)
             ->with(['customer:id,name,phone', 'rider.user', 'shop.lga', 'items', 'returnCases'])
             ->latest();
 
@@ -1398,7 +1400,7 @@ class PortalController extends Controller
             'rider_id' => 'required|integer|exists:rider_profiles,id',
         ]);
 
-        $order = Order::where('id', $id)->where('vendor_id', $vendor->id)->firstOrFail();
+        $order = Order::where('id', $id)->where('vendor_id', $vendor->id)->where('retailer_model_order', false)->firstOrFail();
         $rider = RiderProfile::where('id', $validated['rider_id'])->where('vendor_id', $vendor->id)->first();
 
         if (!$rider) {
