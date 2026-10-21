@@ -145,7 +145,7 @@ Do not automatically assign a reservation to a supplier shop, expose a supplier 
 Legacy reservation codes, records and routes remain for historical compatibility, audit and pre-existing obligations only until safe retirement. They do not authorize new public reservation writes.
 ### Coverage and fees
 
-VM owns the customer-facing coverage decision and delivery-fee quote. Fees and logistics-company charges must be based on VM-approved coverage and commercial agreements, not supplier-configured marketplace delivery rates. Exact pricing, corridor rules, logistics-company settlement terms, and fee-margin accounting require explicit approval; this document does not invent amounts or percentages.
+VM owns the customer-facing coverage decision and delivery-fee quote. Fees and logistics-company charges must be based on VM-approved coverage and commercial agreements, not supplier-configured marketplace delivery rates. The approved split is 90% of the captured order-level delivery fee to the logistics company and 10% retained by VM before other expenses, subject to authorized audited override. Base route fees and per-unit bulky surcharges remain configured operational rates; sample/test amounts are not official tariffs.
 
 ### Legacy marketplace delivery records
 
