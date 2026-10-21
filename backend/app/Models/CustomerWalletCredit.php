@@ -48,7 +48,7 @@ class CustomerWalletCredit extends Model
     }
 
     /**
-     * Compute total available 100% spendable refund wallet balance for customer.
+     * Compute the customer's available refund-credit ledger balance. Checkout redemption is disabled at launch.
      */
     public static function getAvailableBalance(int $customerId): string
     {
