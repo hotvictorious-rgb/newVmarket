@@ -331,9 +331,9 @@ class CheckoutExecutionService
             $platformMargin5 = '0.00'; // retailer margin is computed from net real-money merchandise less cost and cashback
             $retailerMerchandiseMargin = '0.00';
 
-            // Default logistics-company payable is 90% of the snapshotted customer
-            // delivery fee. Admin may override the final company amount with audit.
-            // Company payable is set only from the selected company's corridor tariff after supplier confirmation.
+            // No percentage-based company payable is created at checkout.
+            // After payment and supplier confirmation, Super Admin assigns an eligible
+            // company and the payable is calculated from that company's corridor tariff.
             $vendorDeliveryNet90 = '0.00';
             $platformDelivery10 = '0.00';
 
