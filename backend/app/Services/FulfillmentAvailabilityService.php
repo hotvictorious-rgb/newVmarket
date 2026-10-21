@@ -88,6 +88,7 @@ class FulfillmentAvailabilityService
         // Route serviceability is controlled by the explicit directional route matrix, not vendor rider coverage.
 
         $isKekeOrBulky = in_array(strtolower($packageTier), ['keke', 'bulky'], true);
+        $customerPricing = app(CustomerDeliveryPricingService::class)->quote($isKekeOrBulky ? 1 : 0);
 
         $lane = DeliveryLane::where('origin_lga_id', $shop->lga_id)
             ->where('destination_lga_id', $destinationLgaId)
@@ -98,10 +99,9 @@ class FulfillmentAvailabilityService
             // Active lane is used for delivery pricing/serviceability only. New orders are
             // vendor-managed, so an inactive legacy fleet assignment must not block vendor delivery.
 
-            $fee = BcMathService::add($lane->base_fee, '0.00');
-            if ($isKekeOrBulky) {
-                $fee = BcMathService::add($fee, $lane->bulky_surcharge);
-            }
+            // The lane controls serviceability only. Customer pricing is a global
+            // flat per-order fee plus the configured bulky surcharge.
+            $fee = $customerPricing['total_fee'];
 
             $isCrossLga = ($shop->lga_id !== $destinationLgaId);
             $collectionPoints = $isCrossLga ? $this->resolveCollectionPoints($destinationLgaId, $lane->assigned_logistics_company_id) : [];
@@ -112,7 +112,8 @@ class FulfillmentAvailabilityService
                 'origin_lga_id' => $shop->lga_id,
                 'destination_lga_id' => $destinationLgaId,
                 'fee' => $fee,
-                'bulky_surcharge' => number_format((float) $lane->bulky_surcharge, 2, '.', ''),
+                'base_fee' => $customerPricing['base_fee'],
+                'bulky_surcharge' => $customerPricing['bulky_surcharge_per_unit'],
                 'estimated_delivery_hours_min' => $lane->estimated_delivery_hours_min,
                 'estimated_delivery_hours_max' => $lane->estimated_delivery_hours_max,
                 'estimated_time_text' => "{$lane->estimated_delivery_hours_min}-{$lane->estimated_delivery_hours_max} hours",
@@ -152,15 +153,16 @@ class FulfillmentAvailabilityService
             && strtolower(trim((string) ($originLga->state->name ?? ''))) === 'akwa ibom';
 
         if ($isUyoLocal) {
-            $bulkySurcharge = number_format((float) \App\Models\SystemSetting::get('zone_bulky_cargo_surcharge', '1000.00'), 2, '.', '');
-            $baseFee = number_format((float) \App\Models\SystemSetting::get('zone_intra_lga_fee', '500.00'), 2, '.', '');
-            $fee = $isKekeOrBulky ? BcMathService::add($baseFee, $bulkySurcharge) : $baseFee;
+            $baseFee = $customerPricing['base_fee'];
+            $bulkySurcharge = $customerPricing['bulky_surcharge_per_unit'];
+            $fee = $customerPricing['total_fee'];
             return [
                 'is_available' => true,
                 'lane_id' => null,
                 'origin_lga_id' => $shop->lga_id,
                 'destination_lga_id' => $destinationLgaId,
                 'fee' => number_format((float) $fee, 2, '.', ''),
+                'base_fee' => $baseFee,
                 'bulky_surcharge' => $bulkySurcharge,
                 'estimated_delivery_hours_min' => 2,
                 'estimated_delivery_hours_max' => 4,
@@ -184,24 +186,13 @@ class FulfillmentAvailabilityService
      */
     public function checkPickupAvailability(int $shopId): array
     {
-        $shop = Shop::with(['lga', 'state'])->find($shopId);
-        if (!$shop || !$shop->pickup_enabled) {
-            return [
-                'is_available' => false,
-                'message' => 'In-shop pickup is not enabled for this shop.',
-            ];
-        }
-
+        // Supplier locations are private. Public pickup reservations are disabled;
+        // exceptional collection must be arranged by central support only.
         return [
-            'is_available' => true,
-            'shop_id' => $shop->id,
-            'shop_name' => $shop->name,
-            'address' => $shop->address,
-            'lga' => $shop->lga->name ?? null,
-            'state' => $shop->state->name ?? null,
-            'prep_time_minutes' => $shop->pickup_prep_time_minutes,
-            'opening_time' => $shop->pickup_opening_time,
-            'closing_time' => $shop->pickup_closing_time,
+            'is_available' => false,
+            'message' => 'Pickup is not publicly available. Contact Victorious MARKET support for an authorized exception.',
+            'rate_tier' => 'support_managed_exception_only',
+            'is_collection_point' => false,
         ];
     }
 
@@ -332,7 +323,7 @@ class FulfillmentAvailabilityService
                 ];
             }
 
-            $itemBaseFee = (string) ($availability['fee'] ?? '0.00');
+            $itemBaseFee = (string) ($availability['base_fee'] ?? $availability['fee'] ?? '0.00');
             $itemBulkySurcharge = (string) ($availability['bulky_surcharge'] ?? '0.00');
             if ($baseFee === null) {
                 $baseFee = $itemBaseFee;

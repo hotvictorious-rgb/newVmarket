@@ -1,8 +1,8 @@
 @extends('layouts.dashboard')
 
-@section('title', '90% Delivery Fee Wallet & Corporate Payouts — Logistics Fleet')
+@section('title', 'Company Corridor Payable Wallet & Corporate Payouts — Logistics Fleet')
 @section('role_title', 'Logistics Fleet Operations Center')
-@section('page_title', '90% Delivery Fee Wallet & Corporate Payout Desk')
+@section('page_title', 'Company Corridor Payable Wallet & Corporate Payout Desk')
 @section('role_badge', 'LOGISTICS HQ')
 @section('role_badge_class', 'role-badge-logistics')
 
@@ -14,7 +14,7 @@
     <div class="breadcrumb-trail">
         <a href="{{ route('logistics.dashboard') }}">Logistics Fleet</a>
         <span class="breadcrumb-separator">/</span>
-        <span class="breadcrumb-current">90% Delivery Fee Wallet &amp; Payouts</span>
+        <span class="breadcrumb-current">Company Corridor Payable Wallet &amp; Payouts</span>
     </div>
 
     <!-- Page Header -->
@@ -22,10 +22,10 @@
         <div>
             <h1 class="page-header-title">
                 <span style="font-size: 26px;">💼</span>
-                <span>90% Delivery Fee Corporate Wallet &amp; Treasury Desk</span>
+                <span>Company Corridor Payable Wallet &amp; Treasury Desk</span>
             </h1>
             <p class="page-header-subtitle">
-                Automated 90% delivery revenue credited upon verified customer delivery OTP handshake. Victorious Market retains 10% platform fee.
+                Company corridor payables are credited after verified customer delivery OTP and required proof checks. Customer delivery fees and company tariffs are configured independently.
             </p>
         </div>
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -145,7 +145,7 @@
         <div class="dash-card-header">
             <div>
                 <div class="dash-card-title">Corporate Bank Withdrawal Requests ({{ count($payoutRequests ?? []) }})</div>
-                <span class="dash-card-subtitle">Track disbursements of accumulated 90% delivery revenue to your corporate bank account</span>
+                <span class="dash-card-subtitle">Track disbursements of approved corridor payables to your corporate bank account</span>
             </div>
             <button type="button" onclick="document.getElementById('withdrawalModal').style.display='flex'" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 11.5px;">
                 + New Withdrawal
@@ -173,7 +173,7 @@
                             </td>
                             <td>
                                 <strong style="font-size: 14.5px; color: #047857;">₦{{ number_format((float)$req->amount, 2) }}</strong>
-                                <div style="font-size: 10.5px; color: var(--adm-text-muted);">90% delivery fee share</div>
+                                <div style="font-size: 10.5px; color: var(--adm-text-muted);">Approved corridor tariff payable</div>
                             </td>
                             <td>
                                 <div style="font-weight: 700; color: var(--adm-text);">{{ $req->bank_name }}</div>
@@ -302,7 +302,7 @@
                             ₦{{ number_format((float)($company->wallet_balance ?? 0), 2) }}
                         </div>
                         <p style="font-size: 11.5px; color: #15803D; margin: 4px 0 0 0;">
-                            Accumulated 90% delivery fees credited from verified OTP doorstep deliveries.
+                            Company corridor payables credited after verified OTP doorstep deliveries and required proof checks.
                         </p>
                     </div>
 

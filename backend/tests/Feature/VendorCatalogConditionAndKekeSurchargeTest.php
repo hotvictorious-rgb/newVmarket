@@ -7,6 +7,9 @@ use App\Models\AdminAuditLog;
 use App\Models\Country;
 use App\Models\CustomerAddress;
 use App\Models\DeliveryLane;
+use App\Models\DeliveryCorridor;
+use App\Models\LogisticsCompanyCorridorRate;
+use App\Models\LogisticsCompanyProfile;
 use App\Models\Lga;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -87,6 +90,39 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'lga_id' => $this->uyoLga->id,
             'is_active' => true,
             'pickup_enabled' => true,
+        ]);
+
+        $fleetUser = User::create([
+            'name' => 'Vendor Catalog Test Fleet',
+            'email' => 'vendor-catalog-test-fleet@example.test',
+            'phone' => '+2348000000008',
+            'password' => bcrypt('FleetPass123!'),
+            'user_type' => 'logistics_company',
+            'status' => 'active',
+        ]);
+        $fleetCompany = LogisticsCompanyProfile::create([
+            'user_id' => $fleetUser->id,
+            'company_name' => 'Vendor Catalog Test Logistics Ltd',
+            'lga_id' => $this->uyoLga->id,
+            'wallet_balance' => '0.00',
+            'status' => 'active',
+        ]);
+        $corridor = DeliveryCorridor::create([
+            'code' => 'vendor-catalog-test-uyo',
+            'name' => 'Vendor Catalog Test Uyo Corridor',
+            'lga_id' => $this->uyoLga->id,
+            'landmark_aliases' => ['Wellington Bassey Way', 'Ibom Plaza Road', 'Uyo'],
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+        LogisticsCompanyCorridorRate::create([
+            'logistics_company_id' => $fleetCompany->id,
+            'delivery_corridor_id' => $corridor->id,
+            'base_payable' => '900.00',
+            'bulky_surcharge_per_unit' => '200.00',
+            'tariff_version' => 1,
+            'is_active' => true,
         ]);
 
         $this->category = Category::create([
@@ -1426,7 +1462,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'availability_expires_at' => Carbon::now()->addDay(),
         ]);
 
-        $this->vendor->update(['kyc_status' => 'submitted']);
+        $this->vendor->update(['kyc_status' => 'unverified']);
 
         $this->assertNull(Product::marketplaceEligible()->find($product->id));
         $this->assertNull(
