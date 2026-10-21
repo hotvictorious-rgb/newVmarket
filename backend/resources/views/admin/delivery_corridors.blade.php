@@ -13,6 +13,18 @@
 @section('content')
 <div style="max-width:1200px;margin:0 auto;padding:20px;">
     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:24px;">
+        <h2 style="margin-top:0;">Customer delivery pricing (flat per order)</h2>
+        <p>These are the customer-facing charges for delivery anywhere within Uyo: one flat base fee per order, plus a surcharge for each physical unit that cannot safely fit on a bike. These values do not determine what a logistics company earns.</p>
+        <form method="POST" action="{{ route('admin.delivery_corridors.customer_fees.update') }}">
+            @csrf
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
+                <label>Customer flat base fee per order (₦)<input required type="number" min="0" step="0.01" name="customer_base_fee" value="{{ $customerBaseFee }}" style="display:block;width:100%;padding:10px;"></label>
+                <label>Customer bulky surcharge per physical unit (₦)<input required type="number" min="0" step="0.01" name="customer_bulky_surcharge_per_unit" value="{{ $customerBulkySurcharge }}" style="display:block;width:100%;padding:10px;"></label>
+            </div>
+            <button type="submit" style="margin-top:12px;padding:10px 16px;background:#1d4ed8;color:#fff;border:0;border-radius:8px;">Save customer pricing</button>
+        </form>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:24px;">
         <h2 style="margin-top:0;">Create Uyo customer-delivery corridor</h2>
         <p>Customer pricing is separate from every logistics company's negotiated payable. Create a corridor and configure recognised landmarks/aliases so checkout can match the customer's saved address. Unmatched or ambiguous addresses are blocked rather than guessed.</p>
         <form method="POST" action="{{ route('admin.delivery_corridors.store') }}">
@@ -20,8 +32,6 @@
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
                 <label>Corridor code<input required name="code" pattern="[a-z0-9][a-z0-9_-]*" maxlength="80" placeholder="uyo-plaza-to-aka-road" style="display:block;width:100%;padding:10px;"></label>
                 <label>Display name<input required name="name" maxlength="160" placeholder="Plaza / Aka Road corridor" style="display:block;width:100%;padding:10px;"></label>
-                <label>Customer base fee (₦ per order)<input required type="number" min="0" step="0.01" name="customer_base_fee" value="500" style="display:block;width:100%;padding:10px;"></label>
-                <label>Customer bulky surcharge (₦ per bulky unit)<input required type="number" min="0" step="0.01" name="customer_bulky_surcharge_per_unit" value="0" style="display:block;width:100%;padding:10px;"></label>
                 <label>Minimum estimated hours<input required type="number" min="1" max="168" name="estimated_delivery_hours_min" value="2" style="display:block;width:100%;padding:10px;"></label>
                 <label>Maximum estimated hours<input required type="number" min="1" max="168" name="estimated_delivery_hours_max" value="4" style="display:block;width:100%;padding:10px;"></label>
             </div>
@@ -37,7 +47,7 @@
             <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
                 <div>
                     <h2 style="margin:0;">{{ $corridor->name }}</h2>
-                    <p style="margin:6px 0;color:#64748b;">{{ $corridor->code }} · Uyo · Customer base ₦{{ number_format((float)$corridor->customer_base_fee, 2) }} per order · Customer bulky ₦{{ number_format((float)$corridor->customer_bulky_surcharge_per_unit, 2) }} per qualifying unit</p>
+                    <p style="margin:6px 0;color:#64748b;">{{ $corridor->code }} · Uyo · Landmark-matched route used for the selected logistics company's payable tariff.</p>
                     <p style="margin:6px 0;"><strong>Status:</strong> {{ $corridor->is_active ? 'Active' : 'Inactive' }}</p>
                 </div>
             </div>
@@ -46,8 +56,6 @@
                 @method('PUT')
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
                     <label>Name<input required name="name" value="{{ $corridor->name }}" style="display:block;width:100%;padding:9px;"></label>
-                    <label>Customer base fee<input required type="number" min="0" step="0.01" name="customer_base_fee" value="{{ $corridor->customer_base_fee }}" style="display:block;width:100%;padding:9px;"></label>
-                    <label>Customer bulky surcharge per unit<input required type="number" min="0" step="0.01" name="customer_bulky_surcharge_per_unit" value="{{ $corridor->customer_bulky_surcharge_per_unit }}" style="display:block;width:100%;padding:9px;"></label>
                     <label>Minimum hours<input required type="number" min="1" max="168" name="estimated_delivery_hours_min" value="{{ $corridor->estimated_delivery_hours_min }}" style="display:block;width:100%;padding:9px;"></label>
                     <label>Maximum hours<input required type="number" min="1" max="168" name="estimated_delivery_hours_max" value="{{ $corridor->estimated_delivery_hours_max }}" style="display:block;width:100%;padding:9px;"></label>
                 </div>
