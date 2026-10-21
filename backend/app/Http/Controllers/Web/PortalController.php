@@ -4722,6 +4722,11 @@ class PortalController extends Controller
 
     public function createReservation(Request $request)
     {
+        return redirect()->route('storefront')->with(
+            'error',
+            'Public pickup reservations and cash-on-delivery are not available. Victorious MARKET delivers only within Uyo; contact support if you need assistance.'
+        );
+
         if (!Auth::check() || Auth::user()->user_type !== 'customer') {
             return redirect()->route('customer.login')
                 ->with('info', 'Please sign in or create an account to reserve items for in-shop inspection.');
