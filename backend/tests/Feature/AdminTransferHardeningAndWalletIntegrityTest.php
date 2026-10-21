@@ -421,6 +421,25 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'account_name' => $this->company->account_name,
         ]);
 
+        // Model the request-time reservation journal created by logisticsRequestPayout().
+        foreach ([
+            ['account_name' => 'logistics_company_wallet', 'entry_type' => 'debit'],
+            ['account_name' => 'logistics_payout_payable', 'entry_type' => 'credit'],
+        ] as $index => $entry) {
+            FinancialJournalEntry::create([
+                'order_id' => null,
+                'transaction_reference' => 'TEST-FLEET-REQ-' . $payout->id,
+                'event_id' => 'EVT-FLEET-REQ-' . $payout->id,
+                'beneficiary_type' => \App\Models\LogisticsCompanyProfile::class,
+                'beneficiary_id' => $this->company->id,
+                'account_name' => $entry['account_name'],
+                'entry_type' => $entry['entry_type'],
+                'amount' => '15000.00',
+                'currency' => 'NGN',
+                'description' => 'Test request-time wallet reservation.',
+            ]);
+        }
+
         $response = $this->actingAs($this->superAdmin)->post(route('admin.reject.logistics_payout'), [
             'payout_id' => $payout->id,
             'rejection_reason' => 'Discrepancy in dispatch records.',
