@@ -155,48 +155,47 @@ If a vendor sells an item offline and forgets to update their VMARKET status, a 
 
 ## Current-code findings that must be addressed
 
-The initial source inspection found direct mismatches with the adopted rules. These are findings from code review, not claims that fixes have already been implemented:
+The initial source inspection found legacy marketplace code paths that must be re-evaluated for the retailer model. These are audit findings, not claims that fixes have been implemented:
 
-1. **Rider ownership is not exclusive yet.** RiderProfile supports both vendor_id and logistics_company_id, and RiderTerminalApiController permits either vendor-linked or fleet-linked riders. New assignment guards must require one active vendor owner and reject fleet-only riders for new work.
-2. **Rider API exposes prohibited data.** formatOrderForRider currently includes payment_status and delivery_fee and returns the customer's raw phone field. The customer relation is loaded with phone. Replace this with a privacy-minimal projection and protected Call Customer action; audit all list, history, detail, export, log, and error payloads.
-3. **Failed-delivery handler performs financial actions.** RiderTerminalApiController::recordDeliveryAttemptFailed currently creates an immediately available CustomerWalletCredit after the attempt threshold and writes a logistics-company payable journal entry for a retained delivery fee. Both conflict with operational-only riders and the no-platform-rider-payout model. Route remedies through the authorized return/refund and financial-operation services after review.
-4. **Legacy financial and fleet concepts remain active.** RiderTerminalApiController imports/uses LogisticsCompanyProfile, CustomerWalletCredit, FinancialJournalEntry, and OrderSettlementService; rider views include earnings/wallet/payout surfaces; logistics-company models, payout requests, and routes remain. Disable these for new vendor-managed delivery, preserve authorized read-only history, and map every route/job/API consumer before removing anything.
-5. **Pickup needs explicit enforcement.** The customer counter pickup requires BOTH the RES-XXXXXX reservation pass and the separate one-time customer pickup OTP (`pickup_verification_code`); the OTP supplements and never replaces the reservation pass. Tests must prove that in_shop_pickup always costs zero, the owning vendor verifies both credentials at the counter and records the in-shop pickup photo, pickup never requires a rider, and no delivery payout/allocation is created. Rider-to-vendor parcel custody is a separate operational flow.
-6. **Assignment lifecycle needs a custody fence.** Assign/reassign endpoints and services must enforce vendor ownership, active rider status, order state, and an atomic custody transition. Reassignment after pickup must require a recorded return/custody-transfer workflow.
-7. Doorstep COD is disabled. The two permitted paths are pay before delivery through Victorious MARKET checkout, or reserve in-shop pickup through Victorious MARKET and pay at the approved vendor shop through the platform's authorised payment workflow. No marketplace payment may bypass Victorious MARKET; vendors must not collect cash or private-account transfers. Launch rails are Paystack card and standard bank transfer unless separately approved. The existing 24-hour reservation hold remains supported; payment must be verified before item release.
-8. **Commission/cashback documentation had inconsistent bases.** The adopted allocation is 90/5/5 on eligible merchandise (vendor/cashback/platform) and 90/10 on the delivery fee (vendor/platform). Cashback excludes delivery. Reconcile each child order using these separate bases and reverse each component according to the approved refund.
-9. **Doorstep handover service mixes operational and financial work.** DoorstepHandshakeService validates rider handover and item acceptance, but also creates return cases, pending wallet credits and refund reservations, and posts vendor/cashback/platform/delivery-fee journal entries inside the same rider-triggered flow. Preserve required item-level return evidence and the adopted 90/5/5 merchandise plus 90/10 delivery allocation, but separate the handover event from the authorized financial workflow. Financial posting may consume the verified event only through the financial engine, with idempotency, reservation checks, and audit evidence. Do not give riders direct financial permissions or allow a handover callback to create an immediately spendable refund.
-
-
+1. **Rider ownership is not exclusive yet.** RiderProfile supports vendor_id and logistics_company_id, and RiderTerminalApiController permits legacy vendor-linked or fleet-linked riders. New VM delivery assignments must require an active approved logistics company and a rider linked to exactly one active logistics company. Reject supplier/vendor-linked riders for new work.
+2. **Rider API exposes prohibited data.** formatOrderForRider has included payment_status, delivery_fee and raw customer phone. Replace it with a privacy-minimal projection and protected Call Customer action; audit list, history, detail, export, logs and error payloads.
+3. **Failed-delivery handler performs financial actions.** RiderTerminalApiController::recordDeliveryAttemptFailed has created immediately available CustomerWalletCredit and logistics-company payable journal entries. Route customer remedies through the authorized return/refund and financial-operation services. Legitimate logistics-company charges must come from an approved VM/company agreement, not a rider event or the former vendor delivery split.
+4. **Legacy financial and fleet concepts remain active.** Rider views may include earnings/wallet/payout surfaces; logistics-company models, payout requests and routes remain. Audit each route/job/API consumer. Reuse logistics-company records for authorized carrier operations only after validating status, rider linkage, assignment and commercial terms. Preserve historical payouts as history.
+5. **Pickup needs explicit enforcement.** Customer counter pickup requires BOTH the RES-XXXXXX reservation pass and separate one-time customer pickup OTP, plus the in-shop photo. Verify these at the authorized supplier-shop pickup location. Pickup never requires a rider assignment; customer pickup credentials must remain separate from rider-to-logistics-company custody credentials.
+6. **Assignment lifecycle needs a custody fence.** VM authorizes assignment to an approved active logistics company and a rider linked to exactly that company. Validate coverage, order state, active assignment and custody atomically. Reassignment after custody requires a recorded custody-transfer/return workflow.
+7. **Payment and coverage.** Doorstep COD is disabled. Customer payment must use VM's authorized workflow; supplier shops cannot collect off-platform cash/private-account transfers. Uyo is the operating base, and checkout offers delivery only where product sourcing, approved logistics coverage and customer fee are confirmed.
+8. **Supplier offer linkage is not proven.** Existing product/shop/vendor identifiers may not snapshot a selected supplier offer or purchase cost. Add canonical product matching and immutable supplier offer/purchase-cost snapshots on accepted order items.
+9. **Supplier payment and refund boundaries need proof.** Supplier payment eligibility begins only after verified successful customer delivery or pickup and reconciliation. Supplier readiness, VM collection, rider assignment or carrier collection is insufficient. VM remains responsible for valid customer refunds; supplier recovery is separate and requires evidence-backed responsibility and contractual recoverability.
+10. **Retail accounting is not yet approved/implemented.** The old 90/5/5 merchandise split and 90/10 vendor delivery split are not default retailer rules. Keep customer receipts/revenue, supplier purchase costs/payables, delivery charges, logistics-company charges, gateway fees, refunds, any approved cashback and expenses separate. Obtain owner/accountant approval before enabling new cashback accrual or deciding delivery-fee margin.
+11. **Doorstep handover mixes operational and financial work.** DoorstepHandshakeService and related routes must not allow a rider event to approve a refund, create immediately spendable credit, settle supplier payable or post an unauthorized logistics charge. Financial services may consume verified events only through explicit idempotent and authorized transitions.
 
 ### Phase 5: Returns and refunds
 
-1. Assess complaints and return decisions at the affected product/vendor-order level.
-2. Support mixed outcomes within a multi-vendor cart.
-3. Implement the reviewed customer-change-of-mind delivery-fee retention policy only where disclosed, justified, and legally permitted.
-4. Do not automatically penalise customers for vendor fault.
-5. Keep original delivery-fee treatment distinct from any return-transport cost.
-6. Calculate refund amounts from immutable captured payment and line-item allocations, including discounts, commission, cashback, delivery charges, prior refunds, and amounts already paid to vendors.
-7. Never calculate a refund as a percentage of the overall cart total.
-8. Fix idempotency ordering, concurrent refund reservations, refund ceilings, and duplicate gateway attempts after uncertain outcomes.
-9. Reconcile the actual Paystack result before reporting a refund as completed.
-10. Keep approval, financial reservation, provider execution, ledger posting, and reconciliation as distinct auditable steps.
-11. Do not grant spendable wallet credit merely because a complaint or return has been opened or approved.
-12. Do not use hardcoded refund splits that conflict with the order's actual financial allocations.
-13. **Refund responsibility:** Victorious MARKET executes the approved customer refund through the authorized financial-operation/Paystack workflow. The customer must not be redirected to collect the marketplace refund from the vendor.
-14. **Vendor recovery:** where the approved reason and actual allocation make the vendor responsible, recover separately from that vendor. Offset held/unpaid vendor proceeds where authorized; if already disbursed, create an auditable recovery receivable/liability and use an approved future settlement offset or recovery process. Do not debit an exhausted payable as though funds were still held, and do not make customer refund completion depend on vendor recovery completion.
+1. Assess complaints and return decisions at the affected VM order item(s) and fulfilment unit; supplier identity remains private except where disclosure is needed for fulfilment or legal compliance.
+2. Support mixed outcomes for multiple items/suppliers without creating public vendor storefronts or using marketplace child-order commission accounting.
+3. Apply delivery-fee refund policy only where disclosed, justified, evidenced and legally permitted. Keep original delivery charge separate from return-transport/logistics cost.
+4. Do not automatically penalize customers for supplier or logistics-company fault.
+5. Calculate refunds from immutable captured payment and item/discount snapshots, actual delivery fee, prior refunds and any supplier amounts already paid. Do not apply old vendor commission splits.
+6. Never calculate a refund as a percentage of the overall cart total or current supplier price.
+7. Fix idempotency ordering, concurrent refund reservations, refund ceilings and duplicate gateway attempts after uncertain outcomes.
+8. Reconcile the actual Paystack result before reporting a refund as completed.
+9. Keep request, approval, financial reservation, provider execution, ledger posting and reconciliation as distinct auditable steps.
+10. Do not grant spendable wallet credit merely because a complaint or return has been opened or approved.
+11. **Refund responsibility:** Victorious MARKET executes the approved customer refund through the authorized financial-operation/Paystack workflow. The customer must not be redirected to collect the refund from a supplier.
+12. **Supplier recovery:** where evidence and the supplier agreement establish supplier responsibility, record a separate recovery receivable. Offset only where contractually permitted and authorized. Do not debit an exhausted payable as though funds were still held, and do not make customer refund completion depend on supplier recovery completion.
 
 ### Phase 6: Financial integrity
 
 1. Maintain one authoritative payment/financial-operation and ledger architecture.
-2. Ensure journal entries balance and vendor available balances account for outstanding reservations.
-3. Handle vendor proceeds already paid through a defined recovery/liability process.
-4. Prevent duplicate payment confirmation, refund execution, cashback credit, and payout execution.
+2. Record customer receipts/revenue, supplier purchase cost/payables, logistics-company charges/payables, delivery charges, gateway fees, refunds, any separately approved cashback and expenses as distinct linked components.
+3. Keep supplier payable eligibility, payment authorization, payment attempt, provider confirmation and reconciliation as separate states.
+4. Prevent duplicate payment confirmation, supplier payment, refund execution, cashback adjustment and journal posting.
 5. Verify webhook signatures and exact references; make event processing crash-safe and replay-safe.
-6. Use database transactions, appropriate locking, uniqueness constraints, and safe money arithmetic.
+6. Use database transactions, appropriate locking, uniqueness constraints and safe money arithmetic.
 7. Preserve uncertain provider states until reconciled.
-8. Record the actor, reason, amount, decision, provider reference, and state transitions for every sensitive financial operation.
-9. Keep customer refund execution and vendor recovery as separate linked operations: the refund closes only on verified provider confirmation; the recovery tracks its own responsible vendor, amount, offset/receivable, and outstanding balance.
+8. Record actor, reason, amount, decision, provider reference and state transitions for every sensitive financial operation.
+9. Keep customer refund execution and supplier recovery as separate linked operations: the refund closes only on verified provider confirmation; recovery tracks its own evidence, contractual basis, amount, authorization and outstanding balance.
+10. A balanced ledger does not prove sufficient cash is available. Record real liquidity shortfalls, receivables and losses honestly.
 
 ### Phase 7: Security and regression testing
 
