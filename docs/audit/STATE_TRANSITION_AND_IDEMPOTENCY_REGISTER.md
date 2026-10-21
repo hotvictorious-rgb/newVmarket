@@ -1,3 +1,5 @@
+> **Current owner policy (21 October 2026):** This register contains historical marketplace/vendor transitions for audit and migration. For new retailer transactions, the old 90/5/5 merchandise split and vendor delivery earning do not apply. Cashback remains active at 5% of eligible post-discount merchandise funded by verified real Paystack money after redeemed cashback, excluding delivery; existing 24h claim + 24h maturity buffer, 365-day validity from maturity, 50% cart merchandise redemption cap, refund reversal and spent-cashback recovery terms remain. The logistics-company payable defaults to 90% of the snapshotted customer delivery fee, paid to the company rather than its rider, and can be overridden higher/lower by an authorized admin with immutable reason/approver/time audit. Vendor FIFO payout and rider payable transitions below are legacy-only. New supplier payable uses item-level agreed wholesale-cost snapshots. Do not treat this notice as proof that runtime code has been migrated.
+
 # Victorious MARKET — State Transition and Idempotency Register
 
 **Status:** Initial system-wide inventory; implementation verification is intentionally incomplete.
