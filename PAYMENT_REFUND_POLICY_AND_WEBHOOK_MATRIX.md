@@ -357,8 +357,8 @@ The owner has confirmed that **delivery is never mixed with merchandise, and mer
 
 | Component | Approval unit | Included in approved amount | Accounting reversal | Must not include |
 |---|---|---|---|---|
-| Merchandise/item | Specific child order + item/order-line(s) + quantity | Approved merchandise value after the original discount allocation; prior item refunds and cashback adjustments are accounted for | Reverse only the actual 90% vendor / 5% cashback / 5% platform allocation attributable to the approved merchandise amount | Delivery fee or delivery-fee commission |
-| Delivery fee | Specific child order's captured delivery-fee component | Only the independently approved refundable delivery-fee amount | Reverse only the actual 90% vendor / 10% platform delivery-fee allocation | Merchandise value, merchandise commission, or cashback |
+| Merchandise/item | Specific child order + item/order-line(s) + quantity | Approved merchandise value after the original discount allocation; prior item refunds and cashback adjustments are accounted for | Reverse the actual captured retailer accounting entries for the approved merchandise amount and the associated cashback ledger adjustment, if applicable; the old vendor 90/5/5 split is historical-only | Delivery fee or delivery-fee commission |
+| Delivery fee | Specific child order's captured delivery-fee component | Only the independently approved refundable delivery-fee amount | Reverse the actual captured delivery-fee and logistics-company payable/VM margin entries; the default 90% company payable may have an audited admin override | Merchandise value, merchandise commission, or cashback |
 | Both components | Two distinct decisions and financial operations | Each component's independently approved amount | Post separate component-specific reversals and reconcile separately | One combined approval or undifferentiated ledger reversal |
 
 ### Required state and execution rules
@@ -382,7 +382,7 @@ The owner has confirmed that **delivery is never mixed with merchandise, and mer
 - Remove flows that infer delivery-fee approval from merchandise acceptance or infer merchandise approval from delivery outcome.
 - Reuse immutable captured allocation snapshots; never recalculate old refunds using current prices/vendor settings.
 - Ensure component-specific idempotency binds the key to parent capture, child order, component, item scope, amount, reason and approval.
-- Test the full cross-product of merchandise/delivery independent decisions, mixed success/failure/pending states, partial-item refunds, multi-vendor children, zero-fee pickup, concurrent reservations, duplicate webhooks and correct 90/5/5 versus 90/10 journal reversals.
+- Test the full cross-product of merchandise/delivery independent decisions, mixed success/failure/pending states, partial-item refunds, multi-vendor children, zero-fee pickup, concurrent reservations, duplicate webhooks and correct historical 90/5/5 reversals versus current retailer cashback and logistics-company payable/override adjustments.
 
 
 ## Owner-confirmed rule: platform-funded customer refund; separate vendor recovery
