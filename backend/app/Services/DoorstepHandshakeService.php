@@ -69,33 +69,22 @@ class DoorstepHandshakeService
                 ];
             }
 
-            // 1. Verify exact vendor ownership, rider assignment, and active status.
+            // 1. Verify the central logistics-company relationship and exact order assignment.
+            // Vendor/shop associations may remain as private sourcing metadata, but they
+            // must not authorize a rider or dispatch transition.
             $haltReason = null;
-            if (!$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
-                $haltReason = 'Unauthorized: Vendor rider profile or user account is inactive.';
-            } elseif (!$rider->vendor_id || $rider->logistics_company_id) {
-                $haltReason = 'Unauthorized: Delivery handover requires a rider linked exclusively to one vendor.';
-            } elseif ((int) $rider->vendor_id !== (int) $lockedOrder->vendor_id) {
-                $haltReason = 'Unauthorized: Rider does not belong to the vendor that owns this order.';
-            } elseif (!$rider->vendor || $rider->vendor->marketplace_status !== 'active'
-                || ($rider->vendor->user && $rider->vendor->user->status !== 'active')) {
-                $haltReason = 'Unauthorized: Owning vendor account is inactive or suspended.';
-            } elseif ((int) $lockedOrder->rider_id !== (int) $rider->id) {
-                $haltReason = 'Unauthorized: This order is not assigned to the authenticated vendor rider.';
-            } elseif ($lockedOrder->logistics_company_id) {
-                $haltReason = 'Legacy fleet-linked orders must be safely migrated before vendor-managed delivery can complete.';
+            if (!$rider->isEligibleForCentralOrder($lockedOrder)) {
+                $haltReason = 'Unauthorized: Handover requires the assigned active rider to be linked exclusively to the order active logistics company.';
             }
 
-            // The owning vendor and shop remain independently subject to active-status checks.
-
-            if (!$haltReason && $lockedOrder->vendor) {
-                if ($lockedOrder->vendor->marketplace_status !== 'active' || ($lockedOrder->vendor->user && $lockedOrder->vendor->user->status !== 'active')) {
-                    $haltReason = 'Merchant marketplace account is suspended. Delivery settlement halted.';
+            if (!$haltReason && $lockedOrder->logisticsCompany) {
+                if ($lockedOrder->logisticsCompany->deleted_at !== null
+                    || $lockedOrder->logisticsCompany->status !== 'active'
+                    || ($lockedOrder->logisticsCompany->user && $lockedOrder->logisticsCompany->user->status !== 'active')) {
+                    $haltReason = 'Assigned logistics company is inactive or suspended. Delivery handover halted.';
                 }
-            }
-
-            if (!$haltReason && $lockedOrder->shop && !$lockedOrder->shop->is_active) {
-                $haltReason = 'Merchant shop branch is inactive or closed. Delivery settlement halted.';
+            } elseif (!$haltReason) {
+                $haltReason = 'Order has no approved logistics-company assignment. Delivery handover halted.';
             }
 
             if ($haltReason) {
