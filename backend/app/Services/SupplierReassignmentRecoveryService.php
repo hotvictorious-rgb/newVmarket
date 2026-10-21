@@ -106,9 +106,8 @@ class SupplierReassignmentRecoveryService
             if ($rejectedAssignment->status !== 'supplier_rejected') {
                 throw new InvalidArgumentException('The selected assignment is not on supplier-rejection hold.');
             }
-            if ((int) $rejectedAssignment->supplier_vendor_id === $newVendorId
-                && (int) $rejectedAssignment->supplier_shop_id === $newShopId) {
-                throw new InvalidArgumentException('Choose a different supplier shop from the rejected assignment.');
+            if ((int) $rejectedAssignment->supplier_vendor_id === $newVendorId) {
+                throw new InvalidArgumentException('Choose a different supplier account from the rejected assignment.');
             }
 
             $newVendor = VendorProfile::withTrashed()->with('user')->find($newVendorId);
@@ -120,6 +119,9 @@ class SupplierReassignmentRecoveryService
             if (!$newShop || $newShop->trashed() || !$newShop->is_active
                 || (int) $newShop->vendor_id !== (int) $newVendor->id) {
                 throw new InvalidArgumentException('Replacement shop must be active and belong to the replacement supplier.');
+            }
+            if (Shop::where('vendor_id', $newVendor->id)->whereNull('deleted_at')->where('is_active', true)->count() !== 1) {
+                throw new InvalidArgumentException('A private supplier must have exactly one active shop/pickup point.');
             }
             if (strtolower(trim((string) ($newShop->lga->name ?? ''))) !== 'uyo'
                 || strtolower(trim((string) ($newShop->lga->state->name ?? ''))) !== 'akwa ibom') {
