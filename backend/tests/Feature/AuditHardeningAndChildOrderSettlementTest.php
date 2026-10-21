@@ -82,7 +82,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         $fleetCompany = LogisticsCompanyProfile::create([
             'user_id' => $fleetUser->id,
             'company_name' => 'Audit Test Logistics Ltd',
-            'hq_lga_id' => $this->originLga->id,
+            'lga_id' => $this->originLga->id,
             'wallet_balance' => '0.00',
             'status' => 'active',
         ]);
