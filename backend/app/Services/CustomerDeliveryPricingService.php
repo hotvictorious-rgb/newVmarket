@@ -24,11 +24,23 @@ class CustomerDeliveryPricingService
             'base_fee' => $baseFee,
             'bulky_surcharge_per_unit' => $bulkySurcharge,
             'bulky_quantity' => $bulkyQuantity,
-            'total_fee' => BcMathService::add(
-                $baseFee,
-                BcMathService::mul($bulkySurcharge, (string) $bulkyQuantity)
-            ),
+            'total_fee' => self::calculateFee($baseFee, $bulkySurcharge, $bulkyQuantity),
         ];
+    }
+
+    public static function calculateFee(string $baseFee, string $bulkySurcharge, int $bulkyQuantity): string
+    {
+        if ($bulkyQuantity < 0) {
+            throw new InvalidArgumentException('Bulky quantity cannot be negative.');
+        }
+        if (BcMathService::comp($baseFee, '0.00') < 0 || BcMathService::comp($bulkySurcharge, '0.00') < 0) {
+            throw new InvalidArgumentException('Customer delivery fees must be non-negative amounts.');
+        }
+
+        return BcMathService::add(
+            $baseFee,
+            BcMathService::mul($bulkySurcharge, (string) $bulkyQuantity)
+        );
     }
 
     private function moneySetting(string $key, string $fallback): string
