@@ -985,7 +985,7 @@ class SecurityHardeningAndAuditTest extends TestCase
     /**
      * 25. Role Hardening (customer): Unrelated user cannot view another customer's reservation pass.
      */
-    public function test_unrelated_user_cannot_view_another_customer_reservation_pass(): void
+    public function test_legacy_pickup_reservation_pass_is_retired_for_all_customers(): void
     {
         [$vendorUser, $vendor, $shop] = $this->createMerchantWithShop('Pass Merchant', 'pass_merchant@example.com', '08099887799');
         $customer = User::where('user_type', 'customer')->first();
@@ -1025,13 +1025,12 @@ class SecurityHardeningAndAuditTest extends TestCase
             'expires_at' => Carbon::now()->addHours(24),
         ]);
 
-        // Unrelated customer attempts to view pass -> 403 Forbidden
+        // Legacy reservation passes expose private supplier locations and are retired.
         $response = $this->actingAs($unrelatedCustomer)->get(route('reservation.pass', ['code' => $reservation->reservation_code]));
-        $response->assertStatus(403);
+        $response->assertRedirect(route('storefront'));
 
-        // Actual owner customer can view pass -> 200 OK
         $ownerResponse = $this->actingAs($customer)->get(route('reservation.pass', ['code' => $reservation->reservation_code]));
-        $ownerResponse->assertStatus(200);
+        $ownerResponse->assertRedirect(route('storefront'));
     }
 
     public function test_unpaid_order_cannot_transition_to_rider_custody_even_if_legacy_status_says_ready(): void
