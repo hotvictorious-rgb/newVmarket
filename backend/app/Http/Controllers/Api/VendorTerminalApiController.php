@@ -51,6 +51,13 @@ class VendorTerminalApiController extends Controller
                     'supplier_shop_id',
                     'supplier_name_snapshot',
                     'supplier_shop_name_snapshot',
+                    'fulfillment_supplier_offer_id',
+                    'fulfillment_supplier_vendor_id',
+                    'fulfillment_supplier_shop_id',
+                    'fulfillment_supplier_name_snapshot',
+                    'fulfillment_supplier_shop_name_snapshot',
+                    'fulfillment_supplier_cost_snapshot',
+                    'fulfillment_supplier_snapshot_at',
                 ]);
             });
         }
@@ -285,9 +292,9 @@ class VendorTerminalApiController extends Controller
             })
             ->with([
                 'items' => function ($itemsQuery) use ($vendor, $shop, $ctx) {
-                    $itemsQuery->where('supplier_vendor_id', $vendor->id);
+                    $itemsQuery->where('fulfillment_supplier_vendor_id', $vendor->id);
                     if ($ctx['is_employee'] && $shop) {
-                        $itemsQuery->where('supplier_shop_id', $shop->id);
+                        $itemsQuery->where('fulfillment_supplier_shop_id', $shop->id);
                     }
                     $itemsQuery->with('product:id,name,thumbnail');
                 },
@@ -367,9 +374,9 @@ class VendorTerminalApiController extends Controller
             })
             ->with([
                 'items' => function ($itemsQuery) use ($vendor, $shop, $ctx) {
-                    $itemsQuery->where('supplier_vendor_id', $vendor->id);
+                    $itemsQuery->where('fulfillment_supplier_vendor_id', $vendor->id);
                     if ($ctx['is_employee'] && $shop) {
-                        $itemsQuery->where('supplier_shop_id', $shop->id);
+                        $itemsQuery->where('fulfillment_supplier_shop_id', $shop->id);
                     }
                     $itemsQuery->with('product:id,name,thumbnail');
                 },
