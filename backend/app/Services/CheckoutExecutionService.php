@@ -392,8 +392,11 @@ class CheckoutExecutionService
                 'vendor_net_90' => $vendorNet90,
                 'customer_cashback_5' => $customerCashback5,
                 'platform_margin_5' => $platformMargin5,
-                'logistics_fee_retained' => $vendorDeliveryNet90,
-                'platform_delivery_fee' => $platformDelivery10,
+                // Legacy vendor-delivery allocation fields are deliberately zero for
+                // retailer orders. New accounting uses logistics_company_payable_amount
+                // and the captured-fee delta in OrderSettlementService.
+                'logistics_fee_retained' => '0.00',
+                'platform_delivery_fee' => '0.00',
                 'pickup_verification_code' => Order::generateUniquePickupOtp(),
                 'verification_code' => Order::generateUniqueDeliveryOtp(),
                 'vendor_settlement_status' => 'held',
