@@ -23,6 +23,12 @@
     </a>
 </li>
 <li class="sidebar-nav-item">
+    <a href="{{ route('admin.retailer-supplier-payouts.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.retailer-supplier-payouts.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">🏦</span>
+        <span>Retailer Supplier Payables</span>
+    </a>
+</li>
+<li class="sidebar-nav-item">
     <a href="{{ route('admin.announcements.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.announcements.*') ? 'active' : '' }}">
         <span class="nav-link-icon">📢</span>
         <span>Announcement Bar &amp; Care</span>
