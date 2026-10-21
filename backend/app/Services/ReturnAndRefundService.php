@@ -590,6 +590,21 @@ class ReturnAndRefundService
                 && bccomp((string) $order->delivery_fee, '0.00', 2) > 0;
             $deliveryFeeRefund = $deliveryFeeAuthorized ? (string) $order->delivery_fee : '0.00';
 
+            $totalCashRefund = bcadd($merchandiseRefund, $deliveryFeeRefund, 2);
+            if ($order->payment_status !== 'paid'
+                || trim((string) $order->payment_reference) === '') {
+                return [
+                    'valid' => false,
+                    'message' => 'Refund is blocked because the order has no verified paid status and original payment reference. Finance reconciliation is required; no refund was posted.',
+                ];
+            }
+            if (bccomp($totalCashRefund, '0.00', 2) <= 0) {
+                return [
+                    'valid' => false,
+                    'message' => 'Refund amount must be greater than zero. No refund operation or settlement journal was created.',
+                ];
+            }
+
             // Atomically acquire claim token and persist the approved component
             // under the same lock so the final gateway authorization gate can
             // verify it independently of the caller's request.
@@ -597,8 +612,6 @@ class ReturnAndRefundService
             $lockedCase->refund_claimed_at = Carbon::now();
             $lockedCase->refund_delivery_fee = $deliveryFeeAuthorized;
             $lockedCase->save();
-
-            $totalCashRefund = bcadd($merchandiseRefund, $deliveryFeeRefund, 2);
 
             return [
                 'valid' => true,
@@ -727,6 +740,24 @@ class ReturnAndRefundService
                     'message' => 'Refund operation error: ' . $e->getMessage(),
                 ];
             }
+        }
+
+        // Launch policy disables manual bank and wallet refunds. Therefore this
+        // settlement branch is reachable only after FinancialOperationService has
+        // confirmed the Paystack refund and posted its gateway journal. Never fall
+        // through to synthetic cash-out/refund entries when dispatch was skipped,
+        // pending, or otherwise unconfirmed.
+        if (!$gatewayJournalAlreadyPosted) {
+            ReturnCase::where('id', $caseId)->where('refund_claim_token', $claimToken)->update([
+                'refund_claim_token' => null,
+                'refund_claimed_at' => null,
+            ]);
+
+            return [
+                'success' => false,
+                'status' => 'reconciliation_required',
+                'message' => 'Refund settlement is blocked because confirmed Paystack settlement evidence is missing. No refund settlement journal was posted.',
+            ];
         }
 
         // 3. Atomic Financial Journal Entries & State Settlement
