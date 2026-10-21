@@ -292,3 +292,31 @@ Required controls:
 - **Important limitation:** Those changes have not yet been verified by a CI run for their new commit(s). The rider-terminal 403 remains unresolved until a fresh run confirms the explicit fixture is eligible; do not mark the suite green.
 - **Architecture status unchanged:** `CheckoutExecutionService.php` still selects a customer-chosen shop/vendor and writes legacy 90/5/5 and 90/10 economics. Supplier-offer selection and immutable order-item supplier-cost snapshot population remain unimplemented in the runtime. This is still a launch blocker.
 - **Next required work:** Inspect the next CI run and response cause for the rider-terminal 403; then map order/item creation, supplier-offer eligibility, pickup reservation, payment/refund and accounting consumers before changing checkout. Do not merge to `main` or deploy without explicit approval.
+
+
+## 20. Checkout and order-item write-path dependency map — 21 October 2026
+
+### Confirmed write paths
+
+1. **Web storefront:** `PortalController::processCheckout()` receives `CheckoutExecutionService` and is the web entry point to the shared checkout service. It still validates a public product/shop listing before invoking that service, so product ID validation must be separated from supplier selection during the retailer refactor. The web `createReservation()` path creates a `PickupReservation` and must remain a free reservation path; it must not create a paid order at reservation time.
+2. **Customer API checkout:** `CustomerOrderApiController::executeCheckout()` delegates to `CheckoutExecutionService`. Its request contract still requires `shop_id` and item product IDs, which currently makes the customer's checkout payload shop-centric.
+3. **API pickup reservation/payment:** `CheckoutAndReservationApiController::createPickupReservation()` creates the free reservation. The `POST /api/v1/customer/pickup-reservations/{code}/pay` route invokes `payPickupReservation()`, which independently creates an `Order` and `OrderItem` records and initializes Paystack. This is a separate order-item write path from `CheckoutExecutionService`; it must preserve the inspected/accepted reservation gate and never charge at reservation creation.
+4. **Test/support writers:** Numerous tests and demo seeders create historical `OrderItem` rows directly. They need compatibility coverage, but they are not production checkout entry points.
+
+### Confirmed downstream dependencies
+
+- `OrderSettlementService` reconciles parent/child orders using legacy order-level vendor/shop fields and legacy split fields, and its payout paths still credit `vendor_payable` from `vendor_net_90`.
+- `VendorProfile` balance methods, `VendorTerminalApiController`, `NotificationDispatchService`, admin settlement views, storefront order status, and cashback lifecycle code consume legacy vendor/split fields. They must be classified as historical-only, retired, or migrated before those fields can be reinterpreted.
+- Supplier offer references did not appear in repository code-search results outside the newly added snapshot foundation at the time of this scan. This means the new schema has not yet been wired through production order creation.
+- `cost_price` on product/order item is not a substitute for the selected supplier offer's negotiated cost. Both the canonical checkout writer and the API pickup-payment writer need to persist the selected supplier offer and immutable cost/name/currency snapshots.
+- Order-level non-null `vendor_id`/`shop_id` constraints and order-level vendor-centric reporting remain blockers for a customer order containing items sourced from multiple suppliers. A forward migration must preserve existing order history and avoid editing initial migration files.
+
+### Required implementation order
+
+1. Add a shared private supplier-selection/snapshot service with eligibility evidence and deterministic lowest-cost selection; never accept supplier IDs from customer input.
+2. Refactor both canonical checkout entry points to use product identity/quantity as customer input, then select eligible offers server-side. Preserve checkout idempotency and Paystack uncertain-outcome protections.
+3. Wire the pickup reservation flow to the same private supplier selection and snapshot rules, while preserving free reservation creation, inspection acceptance, and payment only at the counter.
+4. Map order-level vendor/shop foreign keys, fulfillment groups, returns/refunds, settlement journals, cashback and all public serialization before making supplier fields authoritative.
+5. Add regression coverage for each entry point and historical rows before changing settlement/reporting consumers.
+
+- **Status:** DEPENDENCY MAP PARTIAL; no runtime checkout behavior changed in this step. Supplier selection, snapshots on all production order-item writers, multi-supplier order schema, and accounting migration remain OPEN.
