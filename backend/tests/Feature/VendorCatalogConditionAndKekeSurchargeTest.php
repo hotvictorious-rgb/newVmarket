@@ -19,6 +19,7 @@ use App\Models\SupplierOffer;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Services\FulfillmentAvailabilityService;
+use App\Services\SourcingAllocationService;
 use App\Services\SupplierOfferSelectionService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -1077,6 +1078,31 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ->selectLowestCost($product, 'doorstep_delivery');
 
         $this->assertNull($selected);
+    }
+
+    public function test_catalog_owner_is_not_a_supplier_without_an_explicit_confirmed_offer(): void
+    {
+        $product = Product::create([
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'category_id' => $this->category->id,
+            'name' => 'No Supplier Offer Must Fail Closed',
+            'slug' => 'no-supplier-offer-must-fail-closed',
+            'unit_price' => '10000.00',
+            'cost_price' => '7000.00',
+            'condition' => 'brand_new',
+            'package_tier' => 'bike',
+            'inventory_quantity' => 5,
+            'is_in_stock' => true,
+            'listing_status' => 'listed',
+            'is_approved' => true,
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+
+        $resolved = app(SourcingAllocationService::class)
+            ->resolveCheapestOffer($product, 1, $this->uyoLga->id, 'doorstep_delivery');
+
+        $this->assertNull($resolved);
     }
 
 }
