@@ -216,7 +216,7 @@
                                             <button type="submit" class="btn-dash btn-dash-primary" style="padding:4px 8px;font-size:11px;">Assign company</button>
                                         </form>
                                     @endif
-                                    @if($order->retailer_model_order && $order->fulfillment_type === 'doorstep_delivery' && $order->logistics_company_id && !$order->rider_id && !$order->received_at && !in_array($order->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true))
+                                    @if($order->retailer_model_order && $order->fulfillment_type === 'doorstep_delivery' && $order->logistics_company_id && !$order->pickup_confirmed_by_rider && !$order->received_at && !in_array($order->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true))
                                         <form method="POST" action="{{ route('admin.orders.logistics_company_payable.override', $order->id) }}" style="display:grid; gap:5px; min-width:190px; margin-top:6px;">
                                             @csrf
                                             <small style="color:var(--adm-text-muted);">Company payable (default 90%): ₦{{ number_format((float)($order->logistics_company_payable_default_amount ?? ((float)$order->delivery_fee * 0.90)), 2) }}</small>
