@@ -5951,13 +5951,9 @@ class PortalController extends Controller
             if (($verify['status'] ?? '') === 'network_exception') {
                 return back()->with('error', 'Paystack Gateway remains unreachable. Timeout hold maintained to prevent duplicate disbursement.');
             }
-            // Transfer was never initiated at gateway: safely unlock to pending
-            $payout->processing_token = null;
-            $payout->processing_started_at = null;
-            $payout->gateway_status = 'failed';
-            $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . 'Reconciled: Gateway confirms transfer was not executed. Payout safely unlocked for retry.';
-            $payout->save();
-            return back()->with('status', "Gateway reconciliation complete: Payout #{$payout->id} was not executed at Paystack. Safely unlocked for review.");
+            // An unsuccessful verification response does not prove that no transfer occurred.
+            // Keep the payout fenced until an authoritative gateway outcome is available.
+            return back()->with('error', 'Transfer status could not be verified authoritatively. The payout remains on hold; do not retry based only on this verification response.');
         }
 
         $status = $verify['status'] ?? 'unknown';
