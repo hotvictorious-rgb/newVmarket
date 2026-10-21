@@ -104,12 +104,6 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284C7" stroke-width="2.2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                     <span>Dispatch Origin: <strong style="color: #0284C7;">Uyo Central Hub, Akwa Ibom</strong></span>
                 </span>
-                @if($product->shop && $product->shop->slug)
-                    <span style="opacity: 0.4;">•</span>
-                    <span style="display: inline-flex; align-items: center; gap: 5px; color: #64748B;">
-                        <span>Sourcing Partner: <a href="{{ route('shop.storefront', $product->shop->slug) }}" style="color: #64748B; text-decoration: none; font-weight: 600;">{{ $product->shop->name }}</a></span>
-                    </span>
-                @endif
             </div>
 
             <!-- Price & Cashback Banner -->
