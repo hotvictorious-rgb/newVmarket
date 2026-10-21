@@ -917,6 +917,7 @@ class FinancialOperationService
                         'description' => "Legacy marketplace delivery platform margin reversed for Return Case #{$returnCase->case_number}",
                     ]);
                 }
+                }
 
                 // Credit Cash Escrow Outflow
                 FinancialJournalEntry::create([
