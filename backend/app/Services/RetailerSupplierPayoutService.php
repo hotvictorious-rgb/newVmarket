@@ -327,6 +327,11 @@ class RetailerSupplierPayoutService
                 && $payout->allocations()->where('status', '!=', 'reversed')->doesntExist()) {
                 return ['success' => true, 'idempotent' => true, 'payout' => $payout];
             }
+            if ($outcome === 'not_submitted'
+                && ($payout->status !== 'pending' || $payout->processing_token
+                    || !in_array($payout->gateway_status, ['not_submitted', null], true))) {
+                return ['success' => false, 'protected' => true, 'message' => 'A payout that may have reached the gateway cannot be manually rejected as unsubmitted.'];
+            }
             if ($payout->status === 'paid' && $outcome !== 'reversed') {
                 return ['success' => false, 'protected' => true, 'message' => 'A paid supplier payout can only be reversed after the gateway confirms a reversal.'];
             }
