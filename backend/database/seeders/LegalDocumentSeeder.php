@@ -15,13 +15,13 @@ class LegalDocumentSeeder extends Seeder
     public function run(): void
     {
         // Legal-document source edits do not update an already-running database until this seeder is deployed/run and publication is reviewed. Keep prior LegalDocumentVersion rows immutable; aligned customer-facing documents use a new version.
-        $effectiveDate = Carbon::create(2026, 10, 20);
+        $effectiveDate = Carbon::create(2026, 10, 21);
 
         // 1. TERMS OF SERVICE
         $termsContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — TERMS AND CONDITIONS OF SERVICE
 **Effective Date:** October 20, 2026  
-**Version:** 1.2.0  
+**Version:** 2.0.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
 
 ---
@@ -104,22 +104,22 @@ MARKDOWN;
             [
                 'title' => 'Terms and Conditions of Service',
                 'category' => 'terms',
-                'current_version' => '1.2.0',
+                'current_version' => '2.0.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
-                'summary' => 'Foundational operating charter covering approved-vendor marketplace transactions, payment verification, vendor-managed fulfilment, handover evidence, customer remedies, and financial controls.',
+                'summary' => 'Retailer terms covering private supplier sourcing, VM-controlled prices and payments, central fulfilment, customer remedies, and financial controls.',
             ]
         );
 
         LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc1->id,
-                'version' => '1.2.0',
+                'version' => '2.0.0',
             ],
             [
                 'title' => 'Terms and Conditions of Service',
                 'content' => $termsContent,
-                'summary_of_changes' => 'Alignment release: corrected payment/refund claims, vendor-managed fulfilment, cashback rules, and consumer-rights safeguards; previous version retained.',
+                'summary_of_changes' => 'Rebased customer terms to the VM retailer/private-supplier model; retired marketplace allocation claims and aligned central fulfilment and customer remedies. Previous version retained.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -447,76 +447,57 @@ MARKDOWN;
 
 **Brand Promise:** Your Trusted Online Market for Quality Products.  
 **Operating Philosophy:** Trust First. Quality Always. Accountability at Every Stage.  
-**Primary launch market:** Uyo, Akwa Ibom State, Federal Republic of Nigeria  
-**Version:** 1.2.0  
+**Primary operating base:** Uyo, Akwa Ibom State, Federal Republic of Nigeria  
+**Version:** 2.0.0
 
 ---
 
-### 1. Executive Overview
-**VICTORIOUS MARKET** is an institutional digital commerce platform designed to make buying and selling safer, more structured, more transparent, and reliably accountable in Nigeria.
+### 1. Who We Are
+Victorious MARKET is a centrally managed online retailer. Customers buy from Victorious MARKET; private suppliers provide products behind the scenes. Suppliers are not independent public sellers on the VM storefront.
 
-The vision is to establish an online marketplace where consumers discover quality products from verified merchants, complete secure payments, receive products through accountable logistics channels, and access fair resolutions when transactions do not go as expected.
+VM reviews supplier offers, controls public product listings and retail prices, accepts and verifies customer payments, coordinates fulfilment, handles customer support and refunds, and maintains the transaction records.
 
-Unlike an unrestricted classifieds board where buyers and sellers negotiate privately and send money through unmonitored bank accounts, VICTORIOUS MARKET is a **managed, centrally governed marketplace**. The platform coordinates merchant verification, catalog governance, escrow custody, directional logistics, delivery OTP handshakes, customer returns, and vendor settlements.
+### 2. How We Build Trust
+- **Controlled catalogue:** VM approves supplier offers, creates one canonical listing for a new product, and maps matching offers to an existing listing instead of creating duplicates.
+- **Transparent products:** Product condition, specifications, included accessories and warranty limitations must be accurately described. No unsupported warranty or quality guarantee is implied.
+- **Authorized payments:** Customers pay through VM's authorized payment workflow. Suppliers must not collect off-platform cash or private-account transfers. Doorstep COD is disabled at launch.
+- **Evidence-based fulfilment:** Doorstep delivery requires server-verified customer OTP and a doorstep photo. Authorized supplier-shop pickup requires the reservation pass, separate one-time customer pickup verification and an in-shop photo.
+- **Central delivery coordination:** VM coordinates delivery through approved logistics companies. Every rider assigned to new VM work must be active and linked to exactly one active logistics company.
+- **Accountable remedies:** Refund approval, gateway submission, provider confirmation and reconciliation are separate states. A customer refund must not wait for supplier recovery.
 
----
+### 3. Retail Accounting
+Supplier purchase cost is a VM cost/payable, not a vendor commission. Customer receipts/revenue, supplier costs/payables, delivery charges, approved logistics-company charges/payables, gateway fees, discounts, refunds, any separately approved cashback and operating expenses must be recorded separately.
 
-### 2. The Problem We Intend to Solve
-Many Nigerian consumers are hesitant to purchase products online, especially from unfamiliar merchants. Common concerns include:
-* Paying for products that are never delivered.
-* Receiving inferior products different from advertised photos.
-* Sellers who block buyers on WhatsApp after receiving bank transfers.
-* Hidden or unexpected delivery charges.
-* Unclear return and refund procedures.
-* Total lack of verifiable evidence when disputes arise.
+The former 90/5/5 merchandise and 90/10 delivery marketplace allocations are retired assumptions, not active retailer rules. New cashback accrual/funding and logistics-company charges require explicit approval; no percentage is inferred.
 
-Merchants also experience significant challenges, including fake orders, customers refusing legitimate deliveries, delayed settlements, stock-management issues, and unreliable delivery partners.
+### 4. Service Area and Delivery
+VM operates from Uyo and serves only destinations where product sourcing, current coverage, an approved logistics company, capacity and the customer-facing delivery charge are confirmed. No nationwide coverage, universal delivery time or unconfirmed fee is promised.
 
-Victorious Market solves these problems through **one coordinated system** where trust does not depend solely on a seller's verbal promise, but is enforced by verification, transparent procedures, financial controls, cryptographic evidence, and enforceable accountability.
-
----
-
-### 3. The Controlled Marketplace Model
-Participation in Victorious Market is subject to verification and accreditation:
-* **Vetted Merchants:** Merchants register a business profile, provide CAC credentials where applicable, and pass physical shop inspections.
-* **Governed Transactions:** Customers see approved business identities, but private phone numbers and off-platform dealing are protected.
-* **Suspension Powers:** Any merchant or courier violating platform standards is suspended, protecting customer funds and overall market integrity.
-
----
-
-### 4. Financial Integrity: The 90/5/5 Allocation
-* **90% Merchant Settlement:** Legitimate merchants receive 90% net earnings upon confirmed delivery.
-* **5% Customer Cashback:** Eligible merchandise cashback matures after fulfilment, the 24-hour standard customer claim window, and a separate additional 24-hour buffer when no blocking case remains. Its 365-day validity period starts at actual maturity, not checkout or delivery.
-* **5% Platform Sustainability Margin:** Powering platform engineering, customer support, and dispute arbitration.
-* **Delivery-fee allocation:** For new vendor-managed orders, 90% of the configured delivery fee is allocated to the owning vendor and 10% to Victorious MARKET. Vendors arrange and pay their own riders outside platform financial systems. The legacy fleet split is inactive for new orders.
-
----
-
-### 5. Geographic Discipline & Expansion
-Our launch focus is **Uyo, Akwa Ibom State**, with service to other destinations only where an approved vendor confirms coverage and a delivery fee. Vendors manage their own riders and fulfilment. Delivery estimates are not guarantees unless explicitly confirmed for the particular order; no central fleet or collection hub is required for new orders.
-MARKDOWN;
+### 5. Supplier Relationship
+Supplier offers are reviewed before use. VM snapshots the selected supplier offer, product/variant, agreed purchase cost, quantity and relevant terms on each accepted order item. Supplier offer changes do not silently change an accepted order. If a supplier cannot fulfil, VM follows an authorized sourcing, cancellation or refund workflow; substitutions require any necessary customer consent.
+MARKDOWN;MARKDOWN;
 
         $doc6 = LegalDocument::updateOrCreate(
             ['slug' => 'about-us'],
             [
                 'title' => 'About Victorious Market — Operating Charter',
                 'category' => 'about',
-                'current_version' => '1.2.0',
+                'current_version' => '2.0.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
-                'summary' => 'Foundational operating philosophy, managed marketplace vision, geographic discipline in Akwa Ibom State, and core brand promise.',
+                'summary' => 'Retailer operating model, private supplier sourcing, central logistics, payment safety and customer trust commitments.',
             ]
         );
 
         LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc6->id,
-                'version' => '1.2.0',
+                'version' => '2.0.0',
             ],
             [
                 'title' => 'About Victorious Market — Operating Charter',
                 'content' => $aboutContent,
-                'summary_of_changes' => 'Alignment release: removed central-fleet and unsupported delivery-guarantee claims; previous version retained.',
+                'summary_of_changes' => 'Replaced public marketplace and 90/5/5 allocation descriptions with the retailer/private-supplier model and central delivery policy.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -532,20 +513,20 @@ MARKDOWN;
 ---
 
 ### 1. Overview
-Victorious MARKET uses a controlled cancellation and refund workflow designed to balance customer flexibility with vendor preparation and fulfilment costs. Payments and refunds must be verified and reconciled; do not represent the service as regulated or segregated escrow unless that arrangement is independently verified.
+Victorious MARKET uses a controlled cancellation and refund workflow designed to balance customer flexibility with supplier preparation and fulfilment costs. Payments and refunds must be verified and reconciled; do not represent the service as regulated or segregated escrow unless that arrangement is independently verified.
 
 ---
 
 ### 2. Pre-Fulfilment Cancellation and Refund Review
-* **Permitted window:** Ordinary cancellation is generally available before the vendor accepts or begins preparing the order, subject to the persisted order state. Once the vendor accepts or prepares it, ordinary cancellation may be restricted, but this does not remove remedies for failed fulfilment, duplicate payment, wrong/defective goods, or rights that cannot lawfully be excluded.
-* **Refund:** A verified refund request is processed under the applicable approval rule. Automatic approval is limited to a verified duplicate successful capture and a verified payment for an order cancelled before any vendor action. Other refunds require persisted authorised human approval before gateway dispatch. Refunds use the original verified Paystack route where supported; wallet-credit refunds are disabled at launch. Delivery-fee refundability is assessed separately. A submitted request is not a completed refund.
+* **Permitted window:** Ordinary cancellation is generally available before VM has committed sourcing/fulfilment work or the order enters a restricted state, subject to the persisted order state. Once the vendor accepts or prepares it, ordinary cancellation may be restricted, but this does not remove remedies for failed fulfilment, duplicate payment, wrong/defective goods, or rights that cannot lawfully be excluded.
+* **Refund:** A verified refund request is processed under the applicable approval rule. Automatic approval is limited to a verified duplicate successful capture and a verified payment for an order cancelled before any supplier action. Other refunds require persisted authorised human approval before gateway dispatch. Refunds use the original verified Paystack route where supported; wallet-credit refunds are disabled at launch. Delivery-fee refundability is assessed separately. A submitted request is not a completed refund.
 * **No invented fee:** Do not invent a cancellation penalty. The refundable amount and any delivery-fee reversal depend on what was actually captured, the reason, the applicable policy, and law.
 
 ---
 
 ### 3. In-Shop Pickup Reservations (24-Hour Expiry)
 * **Reservation Window:** In-shop pickup reservations hold the selected stock for **twenty-four (24) hours**.
-* **Payment and collection:** The customer reserves through Victorious MARKET and pays at the approved vendor shop through Victorious MARKET's authorised payment workflow. The vendor must not accept an off-platform cash/private-account payment and must not release the item until the platform verifies payment.
+* **Payment and collection:** The customer reserves through Victorious MARKET and, where authorized, completes payment at the approved supplier shop through VM's authorized payment workflow. The supplier must not accept an off-platform cash/private-account payment and must not release the item until the platform verifies payment.
 * **Automatic Expiration:** If the customer does not complete the platform-recorded payment and pickup within 24 hours, the reservation may expire and stock may return to active inventory only after confirming there is no successful or uncertain/in-flight payment. Reconcile uncertain payments before releasing stock.
 
 ---
@@ -558,8 +539,8 @@ Victorious MARKET uses a controlled cancellation and refund workflow designed to
 ---
 
 ### 5. Merchant Stockout Cancellations
-* **Customer remedy:** If a vendor cannot fulfil a paid child order because of a stockout or inventory error, stop fulfilment, record the reason, notify the customer, and open a controlled refund/cancellation case. Automatic refund approval is permitted only where the transaction meets the narrow approved exception (including cancellation before any vendor action); otherwise an authorised admin must approve before gateway dispatch. Refund only the amount due under the captured transaction and applicable policy, assess delivery separately, and reconcile provider completion. Other vendors' child orders remain independent.
-* **Merchant Accountability:** Preventable merchant stockouts are logged against the vendor's fulfillment rating. Repeated stockouts trigger temporary catalog delisting.
+* **Customer remedy:** If an approved supplier offer cannot fulfil an accepted paid order item because of a stockout or inventory error, stop fulfilment, record the reason, notify the customer, and open a controlled refund/cancellation case. Automatic refund approval is permitted only where the transaction meets the narrow approved exception (including cancellation before any vendor action); otherwise an authorised admin must approve before gateway dispatch. Refund only the amount due under the captured transaction and applicable policy, assess delivery separately, and reconcile provider completion. Other order items and supplier offers must be reconciled independently; do not expose suppliers as public child-order sellers.
+* **Supplier accountability:** Preventable stockouts are recorded against the supplier offer and reviewed by VM. VM may suspend an offer or supplier relationship under the applicable agreement.
 
 ---
 
@@ -573,22 +554,22 @@ MARKDOWN;
             [
                 'title' => 'Order Cancellation & Pre-Dispatch Policy',
                 'category' => 'returns',
-                'current_version' => '1.2.0',
+                'current_version' => '2.0.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
-                'summary' => 'Guidelines covering ordinary cancellation stages, the 24-hour in-shop reservation hold, controlled refund approval, and customer remedies during fulfilment.',
+                'summary' => 'Guidelines covering VM-controlled cancellation stages, the 24-hour in-shop reservation hold, controlled refunds and customer remedies.',
             ]
         );
 
         LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc7->id,
-                'version' => '1.2.0',
+                'version' => '2.0.0',
             ],
             [
                 'title' => 'Order Cancellation & Pre-Dispatch Policy',
                 'content' => $cancellationContent,
-                'summary_of_changes' => 'Alignment release: corrected cancellation/refund approval, stockout remedies, and cashback reversal; previous version retained.',
+                'summary_of_changes' => 'Aligned cancellation and stockout remedies with VM retailer control and private supplier sourcing; previous version retained.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -596,105 +577,83 @@ MARKDOWN;
 
         // 8. FREQUENTLY ASKED QUESTIONS (FAQ) & KNOWLEDGE BASE
         $faqContent = <<<'MARKDOWN'
-# VICTORIOUS MARKET — FREQUENTLY ASKED QUESTIONS (FAQ)
-**Knowledge Base & Operational Answers**  
-**Effective Date:** October 20, 2026 &bull; Version: 1.2.0  
+# VICTORIOUS MARKET — FREQUENTLY ASKED QUESTIONS
+**Effective Date:** October 21, 2026 &bull; **Version:** 2.0.0
 
 ---
 
-### General & Platform Trust
+### General
 
-#### What is Victorious Market?
-Victorious MARKET is a managed online marketplace in Nigeria. We connect customers with approved vendors, process marketplace payments through the authorised workflow, coordinate customer support and refund decisions, and require recorded handover evidence. The standard operational claim window is 24 hours from confirmed delivery or pickup, subject to applicable consumer rights and valid warranty obligations; it is not a guarantee that every return will be approved.
+#### What is Victorious MARKET?
+Victorious MARKET is a centrally managed online retailer operating from Uyo, Akwa Ibom State. Customers buy from VM. Suppliers are private product sources, not public marketplace sellers.
 
-#### How is Victorious Market different from open classifieds or social media sellers?
-On open social media platforms (like Instagram or WhatsApp), buyers may have limited transaction records. On Victorious MARKET, **we govern the marketplace transaction** through approved vendors, payment verification, documented handover, refund review and reconciliation:
-* Merchants are vetted and physically inspected.
-* Payments are processed through the authorised provider workflow and reconciled to order and financial records. We do not represent the service as a regulated or segregated escrow account unless that arrangement is independently verified.
-* Riders must exchange an OTP before delivery is valid.
-* You can partially reject defective items at your doorstep.
+#### How does Victorious MARKET build trust?
+VM approves supplier offers, controls public listings and retail prices, verifies customer payments, coordinates delivery through approved logistics companies, records pickup/delivery evidence, and handles customer support and refunds. These policies do not mean every application code path has already been migrated.
 
-#### Where are your services currently available?
-We are headquartered in **Uyo, Akwa Ibom State**. Our delivery coverage spans Uyo Local Government Area and primary transit corridors across Akwa Ibom State, with planned expansion into neighboring commercial centers.
+#### Where do you deliver?
+VM serves only destinations where the product can be sourced and current logistics coverage, capacity and customer delivery charges are confirmed. No nationwide coverage or unconfirmed delivery time is promised.
 
----
+### Shopping and Payments
 
-### Shopping, Payments & Cashback
+#### How can I pay?
+Approved launch methods are Paystack card and standard bank transfer through VM's authorized workflow. An authorized supplier-shop reservation/payment-at-location option may be used only when payment is processed and recorded through VM. Suppliers cannot collect off-platform cash or private-account transfers. Doorstep COD is disabled at launch.
 
-#### How are payment and vendor settlement controlled?
-Payments are processed through Victorious MARKET's authorised Paystack workflow and reconciled to the parent checkout and vendor-specific child orders. Vendor earnings do not become payout-eligible until confirmed delivery or pickup, expiry of the applicable 24-hour claim window, and clearance of holds and reconciliation checks. Eligible earnings still require a vendor request and authorised admin approval. This is not a promise of regulated or segregated escrow custody.
+#### Can I reserve an item and pay at a supplier shop?
+Where the option is enabled for the order, VM creates an in-shop reservation that holds the selected stock for 24 hours. At the authorized supplier shop, the customer must use VM's approved payment workflow and complete the required reservation-pass, one-time customer pickup verification and in-shop photo process before the item is released. The supplier must not accept private payment.
 
-#### Can I reserve an item and pay at the vendor shop?
-Yes. Create an in-shop pickup reservation through Victorious MARKET. The reservation holds the item for 24 hours. At the approved vendor shop, inspect the item and complete payment through Victorious MARKET's authorised payment workflow before the item is released. Vendors may not collect cash or private-account transfers outside the platform.
+#### What is the delivery charge?
+The delivery charge is shown/confirmed for the order based on the destination and approved logistics arrangement. If coverage or the charge cannot be confirmed, VM must not promise delivery or invent a fee.
 
-#### What payment methods do you accept?
-Launch payment rails are Paystack card and standard bank transfer through Victorious MARKET. Customers may pay before delivery or reserve in-shop pickup and pay at the vendor shop through the platform's authorised workflow. Legacy wallet-credit checkout tender is disabled; cashback redemption is a separate capped loyalty discount. USSD, DVA, mobile money and other rails are not enabled unless separately approved.
+#### Does cashback apply to every purchase?
+No new cashback accrual is promised by the former 5% marketplace allocation. New cashback can be enabled only after VM approves its funding, accounting, maturity and expiry rules. Any existing recorded cashback obligation is handled under its applicable terms.
 
-#### What is the 5% Customer Cashback Program?
-Eligible post-discount merchandise may accrue 5% cashback; delivery fees are excluded. Cashback remains pending until verified fulfilment, expiry of the 24-hour claim window, and a separate 24-hour maturity buffer, provided no blocking case remains. Its 365-day validity starts at actual maturity. It is non-transferable and not withdrawable to a bank. Redemption is capped at 50% of merchandise subtotal per checkout. If the order is refunded, unspent cashback is reversed; any recoverable spent cashback is tracked separately and offset only against future cashback as it matures.
+### Delivery, Pickup and Returns
 
----
+#### How is doorstep delivery verified?
+Doorstep completion requires server-verified customer delivery OTP and a linked doorstep photo. Keep the OTP private and share it only for the intended handover. Evidence records the handover process; it does not prove product quality or waive consumer rights.
 
-### Delivery, Logistics & Doorstep Handover
+#### How is supplier-shop pickup verified?
+Authorized supplier-shop pickup requires the reservation pass, a separate one-time customer pickup verification and an in-shop photo. Supplier readiness or possession of the item alone does not prove customer pickup.
 
-#### How long does delivery take?
-Delivery availability and estimates depend on the vendor, destination, stock, rider availability, and the specific order confirmation. The platform does not guarantee a universal 1–3 hour or same-day delivery time.
+#### How do I report a problem?
+Report the issue through the order record or official customer-care channel, identify the affected item and attach available evidence. The standard operational claim window is 24 hours from confirmed delivery or pickup, subject to applicable consumer rights and valid warranty obligations. It is not a guarantee that every return is approved or that a gateway refund completes within 24 hours.
 
-#### What is the delivery handover check?
-Doorstep delivery requires server-side verification of the one-time customer delivery OTP and a linked doorstep delivery photo. Keep the OTP private and share it only for the intended handover. OTP/photo evidence records the handover process; it does not prove that the item is correct, defect-free, or free from a later warranty issue.
+#### How are refunds handled?
+An authorized refund decision, Paystack submission, provider processing and provider-confirmed completion are separate states. At launch, approved refunds use the verified original Paystack payment route where supported; wallet-credit refunds are disabled. Provider/bank processing times may vary.
 
-#### What is "Doorstep Partial Rejection"?
-If you order 3 items (e.g. a phone, a case, and a charger) and the charger is wrong or damaged, you do **not** have to reject the whole package! You can accept the phone and case, and reject only the charger right at your doorstep. You will be refunded for the rejected item while keeping the rest.
+### Supplier and Logistics Relationships
 
-#### How are fragile goods transported?
-The owning vendor is responsible for selecting an appropriate and safe delivery method for the product. Any vehicle or handling promise must be confirmed for the specific order; the platform does not guarantee a universal vehicle type.
+#### Can a supplier publish directly on the website?
+No. Suppliers privately submit product offers for VM approval. VM creates one canonical listing for a new product or links an offer to an existing matching listing and controls the public retail price.
 
----
+#### Who delivers my order?
+VM coordinates delivery through an approved logistics company. Each assigned rider must be active and linked to exactly one active logistics company. Suppliers cannot dispatch their own rider as the VM delivery carrier or mark customer delivery complete.
 
-### Returns, Inspections & Refunds
-
-#### How long do I have to report a problem?
-The standard operational window for eligible ordinary claims is **twenty-four (24) hours** from confirmed delivery or in-shop pickup. Applicable consumer rights and valid warranty obligations are not waived; an authorised admin may review legitimate late requests.
-
-#### Where do I drop off a returned product?
-Support/admin will explain the authorised return or inspection process for your case. A platform collection-point or hub drop-off is not mandatory; the item may be returned to the owning vendor for review where appropriate.
-
-#### When will I receive my refund?
-After an authorised admin approves the remedy, the refund is initiated through the verified original Paystack payment route where supported. Provider/bank processing times may vary, and submission is not confirmation of completion. You cannot choose wallet credit at launch.
-* **Original payment route:** At launch, approved refunds are initiated through the verified original Paystack payment route where supported. Wallet-credit refunds are not enabled. Actual provider/bank processing times may vary; submission is not confirmation of completion.
-
----
-
-### Merchant & Logistics Operations
-
-#### How can a merchant sell on Victorious Market?
-Prospective merchants must register via the Vendor Portal, provide business registration documents, and pass a physical shop inspection conducted by our compliance team.
-
-#### What are the product condition rules?
-Merchants must explicitly disclose whether goods are **Brand New** (factory-sealed OEM with warranty) or **UK Used / Pre-Owned** (tested, with disclosed battery health and cosmetic grade). Counterfeits are strictly banned.
-MARKDOWN;
+#### Can suppliers collect money or change the price after I order?
+No. Customer payment goes through VM's authorized workflow. The accepted order snapshots the product, price and selected supplier offer. VM does not silently increase the customer's price or substitute a product; any permitted substitution requires the appropriate authorization and customer consent.
+MARKDOWN;MARKDOWN;
 
         $doc8 = LegalDocument::updateOrCreate(
             ['slug' => 'frequently-asked-questions'],
             [
                 'title' => 'Frequently Asked Questions (FAQ) & Knowledge Base',
                 'category' => 'faq',
-                'current_version' => '1.2.0',
+                'current_version' => '2.0.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
-                'summary' => 'Customer answers covering payment verification, in-shop pickup, doorstep handover, the standard 24-hour claim window, cashback and approved-vendor policies.',
+                'summary' => 'Customer answers covering VM retailer operations, private suppliers, authorized payment, central logistics, pickup and refunds.',
             ]
         );
 
         LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc8->id,
-                'version' => '1.2.0',
+                'version' => '2.0.0',
             ],
             [
                 'title' => 'Frequently Asked Questions (FAQ) & Knowledge Base',
                 'content' => $faqContent,
-                'summary_of_changes' => 'Alignment release: corrected payment, cashback, handover, delivery-estimate, and return-window descriptions; previous version retained.',
+                'summary_of_changes' => 'Replaced obsolete public marketplace, vendor-managed delivery and inherited cashback descriptions with the VM retailer model.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -715,7 +674,7 @@ For assistance with orders, payments, delivery, returns, or disputes, use the of
 * **Phone / WhatsApp:** `09118949035`
 * **Website:** https://victoriousmarket.com.ng
 
-Include your order number and the affected vendor child order/item where relevant. Never send passwords, card security codes, or one-time passwords to customer support.
+Include your order number and the affected VM order/item where relevant. Never send passwords, card security codes, or one-time passwords to customer support.
 
 ---
 
@@ -742,7 +701,7 @@ MARKDOWN;
             [
                 'title' => 'Contact & Customer Care Center',
                 'category' => 'support',
-                'current_version' => '1.2.0',
+                'current_version' => '2.0.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Official customer contact channel, VM-coordinated logistics, authorized supplier-shop pickup and support escalation steps.',
@@ -752,7 +711,7 @@ MARKDOWN;
         LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc9->id,
-                'version' => '1.2.0',
+                'version' => '2.0.0',
             ],
             [
                 'title' => 'Contact & Customer Care Center',
