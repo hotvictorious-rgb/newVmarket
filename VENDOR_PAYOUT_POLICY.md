@@ -1,75 +1,33 @@
-# VICTORIOUS MARKET — Vendor Earnings and Payout Policy
+# Legacy Marketplace Vendor Payout Policy — Superseded for New Retailer Transactions
 
-**Version:** 1.0  
-**Policy date:** 20 October 2026  
-**Status:** Owner-confirmed launch policy; implementation and verification remain open  
-**Authority:** Read with [VICTORIOUS_MARKET_SYSTEM_RULES_V1.md](VICTORIOUS_MARKET_SYSTEM_RULES_V1.md). This policy does not create a vendor wallet, rider payout, or automatic bank transfer.
+> **Status (21 October 2026):** This policy is retained for historical records and compatibility review only. Victorious MARKET is now operating under a centralized retailer model. Suppliers are product sources, not marketplace vendors, and supplier purchase costs must not be calculated using vendor earnings, commission shares or this policy's payout thresholds.
 
-## 1. Vendor earnings eligibility
+## Current authority
 
-1. Vendor earnings become eligible for payout 24 hours after confirmed doorstep delivery or confirmed in-shop pickup, provided the affected earning has no applicable return/dispute/payment hold and all vendor, security and reconciliation checks pass.
-2. The 24-hour eligibility rule does not prevent an authorised admin from opening or approving a legitimate late refund case. If a vendor has already been paid and is responsible for an approved refund, record a separate recovery receivable.
-3. Eligible earnings are not an automatic transfer. Vendors request a payout through the platform, and an authorised administrator manually approves every payout request at launch.
-4. Track merchandise earnings per order-item earning record and delivery-fee earnings as separate records linked to the vendor child order. Use item-level records where practical so an unrelated item is not unnecessarily held.
-5. A held, reserved, paid, reversed, disputed, return-pending, unreconciled, or otherwise blocked earning cannot be selected for a new payout.
+Read [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md), [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md), and [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) for current policy.
 
-## 2. Request thresholds and server-calculated FIFO batch
+## Current supplier-payment rule
 
-- **Minimum payout:** ₦5,000.
-- **Maximum payout:** ₦500,000 per request.
-- The vendor does not enter the payout amount. The server calculates the request from the oldest eligible, unreserved earning records.
-- Select whole earning records in strict FIFO order. Add the oldest record in full while the cumulative total remains at or below ₦500,000.
-- If adding the next oldest whole record would make the total exceed ₦500,000, stop immediately. Do not split that record and do not skip it to select newer records. That record and all newer records remain available for a later batch.
-- If the calculated batch total is below ₦5,000, no request is created until enough eligible records can be included without breaking the cap.
-- If the oldest eligible record alone exceeds ₦500,000, do not split or skip it. Flag the case for authorised finance review and an explicit accounting-safe resolution; do not silently bypass FIFO.
-- Excess eligible earnings remain eligible for later requests, subject to holds and normal checks. Earnings are never forfeited just because they exceed the cap.
+- Supplier payment eligibility begins only after verified successful customer delivery or confirmed customer pickup and required reconciliation.
+- Order placement, customer payment, supplier acceptance/readiness, VM collection, rider assignment, rider collection or a delivery attempt is not enough.
+- Eligibility does not mean an automatic transfer. Payables, authorization, payment attempt, provider confirmation, reversal and reconciliation are separate, idempotent and auditable states.
+- Supplier payable amounts come from the agreed purchase cost snapshot on the selected supplier offer/order item. They are not vendor commission or a percentage of customer sales unless a separate explicit supplier agreement says otherwise.
+- A supplier payment timeout is uncertain, not proof of success or failure. Reconcile before retrying.
+- VM remains responsible for a valid customer refund even if a supplier has already been paid. Supplier recovery requires evidence-backed responsibility and contractual recoverability; it must not delay a customer refund.
+- No replacement payment rail, monetary threshold, payout SLA, approval threshold or accounting percentage is approved by this document. Do not infer one.
 
-### Example
+## Historical marketplace policy retained for migration only
 
-Eligible whole earning records, oldest first: ₦200,000, ₦180,000, ₦170,000.
+The former marketplace rules included a ₦5,000 minimum / ₦500,000 maximum, strict FIFO batches of whole vendor earning records, one active vendor payout request, admin approval and platform-paid vendor transfer fees. Those rules may describe existing historical vendor earnings and transfers, but they **must not be applied to supplier payables** or used to calculate new retailer-model costs.
 
-The first request is **₦380,000**. Adding the next full record would make ₦550,000, so the system stops. It does not split the ₦170,000 record into ₦120,000 and does not skip it. The ₦170,000 record remains for the next payout batch.
+Do not delete or relabel historical vendor earning/payout/recovery records. Before retiring their code paths, map the source order, payment capture, journal entries, provider transfer references, disputes, recoveries, foreign keys and audit history. Any migration/reclassification requires an approved accounting plan and regression tests.
 
-## 3. One active request and reservations
+## Required implementation audit
 
-- A vendor may have only one active payout request while it is pending review, approved but not sent, processing/in-flight, or uncertain/awaiting reconciliation.
-- A new request is allowed only after the previous request is definitively rejected, paid, failed/reversed and reconciled, or otherwise closed with a final auditable outcome.
-- Create the request and reserve its exact earning-record allocations atomically under a database transaction and appropriate row locks/unique constraints.
-- No earning record may support two active requests or be paid twice.
-- Rejection releases the reservation exactly once and preserves the original earnings history.
-- Before approval, admin reviews vendor/KYC status, bank details and the 48-hour bank-change cooldown, open disputes/returns, confirmed recoveries/debts, prior payout status, and available platform/provider funding.
-- Admin approval is separate from transfer initiation and is never proof of payment.
-
-## 4. Vendor debt, disputes and recoveries
-
-- Confirmed vendor debt is tracked in a separate disputes/recoveries ledger, not as a spendable vendor wallet balance.
-- A vendor may repay a confirmed debt by direct bank transfer to the designated Victorious MARKET account. The platform must verify receipt against bank/provider records and attach it to a unique recovery reference, vendor, case, original order and amount. A screenshot or promise alone is not proof of repayment.
-- Alternatively, an authorised admin may approve an offset against the vendor's held or future earnings where the vendor agreement permits it. Do not automatically offset a debt without recorded admin approval.
-- The vendor must be notified and may challenge a proposed recovery. An allegation or unresolved complaint is not a confirmed debt.
-- If the vendor was already paid, record a recovery receivable; do not pretend that a completed bank transfer has been reversed. Direct repayment and approved future-earnings offset are the available recovery paths.
-- Track disputed, confirmed, outstanding, partially repaid, fully recovered and written-off states. Correct errors with linked reversing/adjustment entries, never by deleting the original record.
-
-## 5. Transfer and fee policy
-
-- Victorious MARKET bears outbound vendor payout transfer charges, including applicable transfer fees/stamp duty charged for the payout, as a platform expense. The vendor receives the exact approved payout amount; never deduct payout charges from vendor earnings.
-- Check actual platform/provider funding and account-specific transfer limits before initiation. The ₦500,000 cap is a platform policy limit, not a statement of a statutory bank limit or guarantee of provider approval.
-- Persist a unique transfer reference and processing identity before contacting Paystack.
-- Distinguish pending review, approved, processing/in-flight, successful, failed, reversed and uncertain/needs-reconciliation states.
-- A timeout or unknown result must be reconciled against the same transfer reference before any retry. Never blindly repeat a transfer, treat pending as success, or let a late webhook overwrite a confirmed outcome.
-- Finalise payout and balanced ledger entries exactly once after authoritative confirmation of success. Failed/reversed transfers restore or adjust the same reserved source earnings through an audited, idempotent flow.
-
-## 6. Required implementation and verification
-
-Documentation is not proof of implementation. Before launch, align the web and API request endpoints, vendor dashboard, admin approval/disbursement flow, earnings ledger/reservations, vendor-debt recovery workflow, Paystack transfer initiation/webhooks, reconciliation, notifications, legal wording and tests with this policy.
-
-Required tests include:
-- ₦4,999 minimum boundary and ₦5,000 threshold.
-- ₦500,000 maximum boundary.
-- Whole-record FIFO, stop-on-over-cap, no splitting, no skipping and carry-forward.
-- An oldest record greater than the cap.
-- One active request, duplicate/concurrent submissions and atomic reservations.
-- Admin approval enforcement and rejection release.
-- Admin-approved debt offsets, direct repayments, disputed debt and reversal.
-- Insufficient provider balance, timeout, duplicate/late webhooks, failed/reversed transfer and exact-once ledger posting.
-
-Do not merge broad audit-branch changes into `main` without explicit owner approval.
+1. Identify every route/service/job that creates vendor earnings or payout requests.
+2. Prevent legacy vendor payout code from treating new supplier purchase costs as marketplace earnings.
+3. Introduce or validate supplier-offer and order-item linkage with immutable purchase-cost snapshots.
+4. Enforce verified customer delivery/pickup before supplier payment eligibility.
+5. Enforce idempotent supplier payment attempts and provider reconciliation.
+6. Keep customer refund funding and supplier recovery separate.
+7. Preserve all historical ledger entries and prove migration safety before deployment.
