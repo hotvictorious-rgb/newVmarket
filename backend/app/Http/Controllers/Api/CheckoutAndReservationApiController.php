@@ -663,7 +663,7 @@ class CheckoutAndReservationApiController extends Controller
             }
 
             $supplierUnitCost = (string) ($product->cost_price ?? '0.00');
-            if (BcMathService::comp($supplierUnitCost, '0.00') < 0) {
+            if ($product->cost_price === null || BcMathService::comp($supplierUnitCost, '0.00') <= 0) {
                 return ['error' => true, 'code' => 422, 'message' => 'The supplier cost snapshot is invalid.'];
             }
             $supplierCostTotal = BcMathService::mul($supplierUnitCost, (string) $reservation->quantity);
