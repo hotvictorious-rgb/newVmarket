@@ -235,43 +235,26 @@ class VendorManagedDeliveryRiderTest extends TestCase
     }
 
     /**
-     * Test 3: Vendor assigns their own rider to their order
+     * Retailer-model regression: legacy vendor rider assignment is disabled.
      */
-    public function test_vendor_can_assign_their_rider_to_order_and_blocks_cross_vendor_riders(): void
+    public function test_vendor_cannot_assign_vendor_rider_to_retailer_order(): void
     {
-        // Rider belonging to Vendor A
-        $riderUserA = User::create([
-            'name' => 'Vendor A Rider',
-            'email' => 'riderA@bassey.ng',
+        $riderUser = User::create([
+            'name' => 'Legacy Vendor Rider',
+            'email' => 'legacy-rider@bassey.ng',
             'phone' => '08012345678',
             'password' => bcrypt('password'),
             'user_type' => 'rider',
             'status' => 'active',
         ]);
-        $riderA = RiderProfile::create([
-            'user_id' => $riderUserA->id,
+        $rider = RiderProfile::create([
+            'user_id' => $riderUser->id,
             'vendor_id' => $this->vendorA->id,
             'is_active' => true,
         ]);
 
-        // Rider belonging to Vendor B
-        $riderUserB = User::create([
-            'name' => 'Vendor B Rider',
-            'email' => 'riderB@anietie.ng',
-            'phone' => '08087654321',
-            'password' => bcrypt('password'),
-            'user_type' => 'rider',
-            'status' => 'active',
-        ]);
-        $riderB = RiderProfile::create([
-            'user_id' => $riderUserB->id,
-            'vendor_id' => $this->vendorB->id,
-            'is_active' => true,
-        ]);
-
-        // Create order for Vendor A
-        $orderA = Order::create([
-            'order_number' => 'VM-ORD-VND-001',
+        $order = Order::create([
+            'order_number' => 'VM-ORD-LEGACY-ASSIGNMENT',
             'customer_id' => $this->customer->id,
             'vendor_id' => $this->vendorA->id,
             'shop_id' => $this->shopA->id,
@@ -283,32 +266,13 @@ class VendorManagedDeliveryRiderTest extends TestCase
             'merchandise_subtotal' => '10000.00',
             'delivery_fee' => '1500.00',
             'grand_total' => '11500.00',
-            'vendor_net_90' => '9000.00',
-            'customer_cashback_5' => '500.00',
-            'platform_margin_5' => '500.00',
-            'logistics_fee_retained' => '1350.00',
-            'platform_delivery_fee' => '150.00',
-            'verification_code' => '445566',
         ]);
 
-        // Vendor A attempts to assign Vendor B's rider -> strictly rejected (403)
-        $rejectCross = $this->actingAs($this->vendorUserA, 'sanctum')->postJson("/api/v1/vendor/orders/{$orderA->id}/assign-rider", [
-            'rider_id' => $riderB->id,
-        ]);
-        $rejectCross->assertStatus(403);
-        $rejectCross->assertJson([
-            'status' => false,
-            'message' => 'Unauthorized: This delivery rider does not belong to your merchant account.',
-        ]);
+        $response = $this->actingAs($this->vendorUserA, 'sanctum')
+            ->postJson("/api/v1/vendor/orders/{$order->id}/assign-rider", ['rider_id' => $rider->id]);
 
-        // Vendor A assigns Vendor A's rider -> successful (200)
-        $assignOk = $this->actingAs($this->vendorUserA, 'sanctum')->postJson("/api/v1/vendor/orders/{$orderA->id}/assign-rider", [
-            'rider_id' => $riderA->id,
-        ]);
-        $assignOk->assertStatus(200);
-
-        $orderA->refresh();
-        $this->assertEquals($riderA->id, $orderA->rider_id);
+        $response->assertStatus(410);
+        $this->assertNull($order->fresh()->rider_id);
     }
 
     /**
