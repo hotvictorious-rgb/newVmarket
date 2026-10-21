@@ -2574,7 +2574,7 @@ class PortalController extends Controller
             $payout->save();
 
             $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
-            $hasRequestJournal = \App\Models\FinancialJournalEntry::where('event_id', 'EVT-FLEET-REQ-' . $payout->id)->exists();
+            $hasRequestJournal = app(\\App\\Services\\PayoutFinalizationService::class)->hasLogisticsRequestJournalEvidence($payout);
 
             if ($hasRequestJournal) {
                 // Only restore wallet funds when the original request-time debit/
@@ -3040,7 +3040,7 @@ class PortalController extends Controller
             // Reverse the request-time reclassification only when that journal exists.
             // Legacy rows without a request journal require finance reconciliation rather
             // than fabricated liability movements.
-            $hasRequestJournal = \App\Models\FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REQ-' . $payout->id)->exists();
+            $hasRequestJournal = app(\\App\\Services\\PayoutFinalizationService::class)->hasVendorRequestJournalEvidence($payout);
             $formattedPayoutAmount = bcadd((string)$payout->amount, '0', 2);
             $rejectRef = 'MERCHANT-REJECT-' . $payout->id . '-' . date('YmdHis');
 
