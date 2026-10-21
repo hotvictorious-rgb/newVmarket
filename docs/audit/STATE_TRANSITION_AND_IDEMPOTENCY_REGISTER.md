@@ -612,3 +612,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Makes the admin UI reflect the real financial state, reduces unsafe retry pressure, and keeps the no-duplicate-refund guard intact when Paystack's response is ambiguous.
 
 **Verification boundary:** Source committed; regression test/CI execution pending. No merge or deployment.
+
+
+### VM-AUD-118 — Prevent reconciliation from creating a second refund after an ambiguous timeout (21 October 2026)
+
+**Finding:** If an initial refund operation was left `initiated` after a timeout but had no persisted gateway reference, the background reconciler could enter its “no order refund reference” path and create a *different* financial operation using a different reason-derived idempotency key. The per-operation duplicate-dispatch guard would not protect against this second operation.
+
+**Fix:** The reconciler now checks all existing customer-refund operations for the order before creating an automatic operation. A single open operation with a persisted attempt reference is linked back to the order for verification on the next pass. Open operations with no reference, multiple open operations, and confirmed/reversed operations are held for finance review. If all prior attempts failed, automatic redispatch is blocked and an authorized admin must use the new explicit retry path. Added a regression test proving an ambiguous timeout stays at one operation after reconciliation.
+
+**Business impact:** Prevents a background worker from bypassing per-operation idempotency and submitting a second refund request after an ambiguous gateway timeout. It protects the customer from duplicate refunds and protects Victorious MARKET from duplicate cash outflows.
+
+**Verification boundary:** Code and regression test committed; tests/CI remain pending. No merge or deployment.
