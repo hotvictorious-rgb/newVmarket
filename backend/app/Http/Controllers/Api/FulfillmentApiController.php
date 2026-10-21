@@ -19,9 +19,7 @@ class FulfillmentApiController extends Controller
 
     /**
      * Checks fulfillment availability.
-     * Supports both:
-     * 1) Customer Cart-Centric Schema: { address_id/destination_lga_id, cart_items: [...] }
-     * 2) Single-Shop Corridor Schema: { fulfillment_type, shop_id, destination_lga_id }
+     * Supports customer cart-centric availability only. The legacy single-shop contract is deprecated.
      */
     public function checkAvailability(Request $request): JsonResponse
     {
