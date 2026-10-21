@@ -4,6 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\DeliveryCorridor;
+use App\Models\LogisticsCompanyCorridorRate;
+use App\Models\LogisticsCompanyProfile;
+use App\Models\Lga;
 use App\Models\Shop;
 use App\Models\User;
 use App\Models\VendorProfile;
@@ -51,6 +55,46 @@ class WebCheckoutIdempotencyAndStateTransitionTest extends TestCase
             'listing_confirmed_at' => Carbon::now(),
             'is_in_stock' => true,
             'inventory_quantity' => 20,
+        ]);
+
+        $uyoLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->firstOrFail();
+        $company = LogisticsCompanyProfile::where('status', 'active')
+            ->where('hq_lga_id', $uyoLga->id)
+            ->first();
+        if (!$company) {
+            $fleetUser = User::create([
+                'name' => 'Idempotency Test Fleet',
+                'email' => 'idempotency-test-fleet@example.test',
+                'password' => bcrypt('test-password'),
+                'user_type' => 'logistics_company',
+                'status' => 'active',
+            ]);
+            $company = LogisticsCompanyProfile::create([
+                'user_id' => $fleetUser->id,
+                'company_name' => 'Idempotency Test Fleet Ltd',
+                'hq_lga_id' => $uyoLga->id,
+                'wallet_balance' => '0.00',
+                'status' => 'active',
+            ]);
+        }
+        $corridor = DeliveryCorridor::create([
+            'code' => 'idempotency-test-uyo',
+            'name' => 'Idempotency Test Uyo Corridor',
+            'lga_id' => $uyoLga->id,
+            'landmark_aliases' => ['Uyo'],
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+        LogisticsCompanyCorridorRate::create([
+            'logistics_company_id' => $company->id,
+            'delivery_corridor_id' => $corridor->id,
+            'base_payable' => '900.00',
+            'bulky_surcharge_per_unit' => '200.00',
+            'tariff_version' => 1,
+            'is_active' => true,
         ]);
     }
 
