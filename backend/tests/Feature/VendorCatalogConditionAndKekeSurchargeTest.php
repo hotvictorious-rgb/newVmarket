@@ -489,6 +489,22 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertEquals('supplier_rejected', $orderBike->fresh()->sourcing_status);
         $this->assertEquals('paid', $orderBike->fresh()->payment_status);
 
+        // Exercise the service-level custody boundary directly, not only the API.
+        // The hold must win before rider eligibility or OTP processing can mutate state.
+        $orderBike->forceFill([
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'confirmed',
+        ])->save();
+        $pickupBlocked = app(\\App\\Services\\OrderSettlementService::class)->verifyRiderPickupOtp(
+            $orderBike->fresh(),
+            '123456',
+            new \\App\\Models\\RiderProfile()
+        );
+        $this->assertFalse($pickupBlocked['success']);
+        $this->assertStringContainsString('supplier-rejection hold', $pickupBlocked['message']);
+        $this->assertEquals('confirmed', $orderBike->fresh()->order_status);
+        $this->assertEquals('supplier_rejected', $orderBike->fresh()->sourcing_status);
+
         // The legacy order-level helper must not bypass the retailer assignment workflow.
         $blocked = false;
         try {
