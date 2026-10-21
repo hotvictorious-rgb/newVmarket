@@ -1318,6 +1318,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'account_name' => 'vendor_payable',
         ]);
         $this->assertSame('forfeited', $fixture['cashback']->fresh()->status);
+        $this->assertSame(1, FinancialJournalEntry::where('order_id', $order->id)->where('account_name', 'cash_in_escrow')->where('entry_type', 'credit')->count(), 'The confirmed gateway refund must post exactly one cash outflow journal.');
 
         $debits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
         $credits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
