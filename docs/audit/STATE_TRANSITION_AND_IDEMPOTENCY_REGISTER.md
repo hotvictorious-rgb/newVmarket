@@ -661,7 +661,7 @@ Supplier terminal authentication now requires both the supplier user and supplie
 
 **Finding:** If the final pre-dispatch authorization check failed (for example, the reviewer became inactive after operation creation) or the original payment reference disappeared before submission, the service returned a terminal result without releasing the active reservation. No gateway request had been made, but the refundable balance could remain held.
 
-**Fix:** Pre-dispatch authorization/reference failures now mark the operation failed, record the reason in metadata, and release active reservations atomically. Added a feature test that deactivates the reviewer after operation creation and asserts the gateway is not called and the reservation is released.
+**Fix:** Pre-dispatch authorization/reference failures now mark the operation failed, record the reason in metadata, and release active reservations atomically. The return service also derives terminal status from the returned operation object, ensuring quarantined wallet credits are restored on these no-dispatch failures. Added a feature test that deactivates the reviewer after operation creation and asserts the gateway is not called and the reservation is released.
 
 **Business impact:** Prevents a rejected pre-dispatch attempt from trapping customer refund capacity and makes the reason visible for audit. The guard is safe because these branches occur before a gateway attempt is created.
 
