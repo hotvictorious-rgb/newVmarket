@@ -7,6 +7,8 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+> **Victorious MARKET project note:** This Laravel application is being aligned to a centrally managed retailer model based in Uyo. Suppliers are private product sources linked to approved offers and order items; delivery is coordinated through approved logistics companies, and every assigned rider must be linked to exactly one active logistics company. Supplier payment eligibility follows verified successful customer delivery or pickup and reconciliation. See the [root project README](../README.md), [retailer/supplier operating model](../RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md), and [authoritative system rules](../VICTORIOUS_MARKET_SYSTEM_RULES_V1.md). Documentation changes do not prove the application has completed migration.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
