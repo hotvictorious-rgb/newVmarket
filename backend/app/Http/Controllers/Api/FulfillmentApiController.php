@@ -43,36 +43,13 @@ class FulfillmentApiController extends Controller
             return response()->json($result, $result['available'] ? 200 : 422);
         }
 
-        // 2. Single-Shop Corridor Resolution (Existing Contract)
-        $validated = $request->validate([
-            'fulfillment_type' => 'required|in:doorstep_delivery,in_shop_pickup',
-            'shop_id' => 'required|integer|exists:shops,id',
-            'destination_lga_id' => 'nullable|required_if:fulfillment_type,doorstep_delivery|integer|exists:lgas,id',
-            'package_tier' => 'nullable|string|in:bike,keke,standard,fragile,bulky',
-        ]);
-
-        if ($validated['fulfillment_type'] === 'doorstep_delivery') {
-            $result = $this->fulfillmentService->checkDeliveryAvailability(
-                (int)$validated['shop_id'],
-                (int)$validated['destination_lga_id'],
-                $validated['package_tier'] ?? 'bike'
-            );
-
-            return response()->json([
-                'status' => $result['is_available'],
-                'message' => $result['is_available'] ? 'Delivery corridor is active.' : $result['message'],
-                'data' => $result,
-            ], $result['is_available'] ? 200 : 422);
-        }
-
-        // In-shop pickup check
-        $pickupResult = $this->fulfillmentService->checkPickupAvailability((int)$validated['shop_id']);
-
+        // The old single-shop contract exposed supplier-specific availability and
+        // pickup details. New retailer checkout must be evaluated as one complete cart.
         return response()->json([
-            'status' => $pickupResult['is_available'],
-            'message' => $pickupResult['is_available'] ? 'Shop is active for in-person inspection and pickup.' : $pickupResult['message'],
-            'data' => $pickupResult,
-        ], $pickupResult['is_available'] ? 200 : 422);
+            'status' => false,
+            'code' => 'CART_LEVEL_AVAILABILITY_REQUIRED',
+            'message' => 'Supplier/shop selection and public pickup availability are not supported. Send the complete cart and delivery destination to check availability.',
+        ], 410);
     }
 
     /**
@@ -82,41 +59,47 @@ class FulfillmentApiController extends Controller
     public function deliveryFee(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'shop_id' => 'required|integer|exists:shops,id',
+            'items' => 'required|array|min:1|max:100',
+            'items.*.product_id' => 'required|integer|exists:products,id',
+            'items.*.quantity' => 'required|integer|min:1|max:1000',
             'address_id' => 'nullable|integer|exists:customer_addresses,id',
             'destination_lga_id' => 'nullable|integer|exists:lgas,id',
-            'package_tier' => 'nullable|string|in:bike,keke,standard,fragile,bulky',
         ]);
 
-        $shop = Shop::with('lga')->findOrFail($validated['shop_id']);
-        $destLgaId = $validated['destination_lga_id'] ?? null;
-
-        if (!$destLgaId && !empty($validated['address_id'])) {
-            $address = CustomerAddress::find($validated['address_id']);
-            $destLgaId = $address ? $address->lga_id : null;
+        $destinationLgaId = $validated['destination_lga_id'] ?? null;
+        if (!empty($validated['address_id'])) {
+            $addressQuery = CustomerAddress::whereKey($validated['address_id']);
+            if ($request->user()) {
+                $addressQuery->where('user_id', $request->user()->id);
+            }
+            $address = $addressQuery->firstOrFail();
+            $destinationLgaId = $address->lga_id;
         }
 
-        if (!$destLgaId) {
+        if (!$destinationLgaId) {
             return response()->json([
                 'status' => false,
-                'message' => 'Either destination_lga_id or address_id must be provided.',
+                'message' => 'Provide a valid delivery address or destination LGA.',
             ], 422);
         }
 
-        $result = $this->fulfillmentService->checkDeliveryAvailability(
-            $shop->id,
-            (int)$destLgaId,
-            $validated['package_tier'] ?? 'bike'
+        $result = $this->fulfillmentService->checkCartFulfillmentAvailability(
+            (int) $destinationLgaId,
+            $validated['items']
         );
+        $delivery = $result['fulfillment_options']['delivery'] ?? [];
 
         return response()->json([
-            'status' => $result['is_available'],
-            'origin_lga_id' => $shop->lga_id,
-            'destination_lga_id' => (int)$destLgaId,
-            'delivery_fee' => $result['fee'] ?? '0.00',
-            'estimated_delivery_time' => $result['estimated_time_text'] ?? '2-6 hours',
+            'status' => (bool) ($delivery['available'] ?? false),
+            'base_route_fee' => $delivery['base_route_fee'] ?? '0.00',
+            'bulky_surcharge_per_unit' => $delivery['bulky_surcharge_per_unit'] ?? '0.00',
+            'bulky_quantity' => $delivery['bulky_quantity'] ?? 0,
+            'bulky_surcharge_total' => $delivery['bulky_surcharge_total'] ?? '0.00',
+            'delivery_fee' => $delivery['total_shipping_fee'] ?? '0.00',
             'currency' => 'NGN',
-            'message' => $result['is_available'] ? 'Delivery fee calculated successfully.' : ($result['message'] ?? 'Corridor unserviced.'),
-        ], $result['is_available'] ? 200 : 422);
+            'message' => ($delivery['available'] ?? false)
+                ? 'Order-level delivery fee calculated successfully.'
+                : ($result['message'] ?? 'The complete order cannot currently be delivered to this destination.'),
+        ], ($delivery['available'] ?? false) ? 200 : 422);
     }
 }
