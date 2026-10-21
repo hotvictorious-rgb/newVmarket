@@ -178,7 +178,7 @@ class CustomerExperienceAndHardeningTest extends TestCase
         ]);
     }
 
-    public function test_cart_centric_fulfillment_availability_resolves_lanes_and_pickups(): void
+    public function test_cart_fulfillment_rejects_out_of_uyo_destination_even_with_legacy_lane(): void
     {
         $response = $this->postJson('/api/v1/fulfillment/availability', [
             'address_id' => $this->address->id,
@@ -187,26 +187,24 @@ class CustomerExperienceAndHardeningTest extends TestCase
             ],
         ]);
 
-        $response->assertStatus(200)
-            ->assertJsonPath('status', true)
-            ->assertJsonPath('available', true)
-            ->assertJsonPath('fulfillment_options.delivery.available', true)
-            ->assertJsonPath('fulfillment_options.delivery.total_shipping_fee', '1500.00')
-            ->assertJsonPath('fulfillment_options.delivery.currency', 'NGN')
-            ->assertJsonPath('fulfillment_options.in_shop_pickup.available', true);
+        $response->assertStatus(422)
+            ->assertJsonPath('status', false)
+            ->assertJsonPath('available', false)
+            ->assertJsonPath('fulfillment_options.delivery.available', false);
     }
 
-    public function test_single_lane_delivery_fee_query_succeeds(): void
+    public function test_delivery_fee_query_rejects_out_of_uyo_destination(): void
     {
         $response = $this->postJson('/api/v1/fulfillment/delivery-fee', [
-            'shop_id' => $this->shop->id,
+            'items' => [
+                ['product_id' => $this->product->id, 'quantity' => 1],
+            ],
             'address_id' => $this->address->id,
         ]);
 
-        $response->assertStatus(200)
-            ->assertJsonPath('status', true)
-            ->assertJsonPath('delivery_fee', '1500.00')
-            ->assertJsonPath('currency', 'NGN');
+        $response->assertStatus(422)
+            ->assertJsonPath('status', false)
+            ->assertJsonPath('delivery_fee', '0.00');
     }
 
     public function test_customer_address_book_supports_full_crud_and_zero_idor_security(): void
