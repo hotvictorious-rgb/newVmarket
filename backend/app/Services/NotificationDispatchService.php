@@ -469,41 +469,113 @@ class NotificationDispatchService
         $eventType = 'vendor_return_otp';
         $order = $returnCase->order;
         $orderNumber = $order->order_number ?? $returnCase->case_number;
+        $vendor = $returnCase->vendor;
+        $shopId = $order->shop_id ?? null;
 
-        if ($returnCase->vendor && $returnCase->vendor->user) {
-            $vendorUserId = $returnCase->vendor->user_id;
-            $vendorPhone = $returnCase->vendor->business_phone ?? '+2348000000001';
-            $otp = $returnCase->vendor_return_otp;
-
-            $title = self::renderTemplate($eventType, 'vendor', 'title', ['order_number' => $orderNumber], "Return Package Arrived at Counter");
-            $body = self::renderTemplate($eventType, 'vendor', 'body', [
-                'order_number' => $orderNumber,
-                'otp' => $otp,
-            ], "Courier has arrived with return parcel for Order #{$orderNumber}. Security Return OTP: [{$otp}]. Verify items before releasing OTP.");
-
-            if (self::isChannelActive('in_app', $eventType)) {
-                self::createInApp($vendorUserId, $title, $body, $eventType, ['return_case_id' => $returnCase->id, 'return_otp' => $otp]);
+        $notifyAdmins = static function (string $reason) use ($returnCase, $orderNumber, $eventType): void {
+            Log::critical('Vendor return OTP could not be securely routed.', [
+                'return_case_id' => $returnCase->id,
+                'order_id' => $returnCase->order_id,
+                'reason' => $reason,
+            ]);
+            $admins = User::where('status', 'active')
+                ->whereIn('user_type', ['super_admin', 'admin_employee'])
+                ->get();
+            foreach ($admins as $admin) {
+                self::createInApp(
+                    $admin->id,
+                    'Return Destination Requires Review',
+                    "Return case #{$returnCase->case_number} for Order #{$orderNumber} cannot receive a supplier return OTP until its destination is resolved: {$reason}",
+                    $eventType,
+                    ['return_case_id' => $returnCase->id, 'order_id' => $returnCase->order_id]
+                );
             }
-            if (self::isChannelActive('fcm', $eventType)) {
-                self::dispatchPush($vendorUserId, $title, $body, ['type' => 'return_otp', 'otp' => $otp, 'return_case_id' => $returnCase->id], $eventType);
-            }
-            if (self::isChannelActive('sms', $eventType)) {
-                $dispatches[] = self::record('sms', $vendorPhone, 'Vendor Counter', "Victorious Market: " . $body);
+        };
+
+        // Retailer-model orders have no public vendor_id on ReturnCase. Resolve the
+        // private supplier from the rejected order items, and only issue one OTP if
+        // exactly one active supplier/shop owns the return. Multi-supplier cases
+        // stay held for explicit assignment; one OTP must never cover several shops.
+        if (!$vendor && $order && $order->retailer_model_order) {
+            $supplierIds = \App\Models\ReturnItem::where('return_case_id', $returnCase->id)
+                ->with('orderItem')
+                ->get()
+                ->map(fn ($item) => (int) ($item->orderItem?->fulfillment_supplier_vendor_id ?? 0))
+                ->filter(fn ($id) => $id > 0)
+                ->unique()
+                ->values();
+
+            if ($supplierIds->isEmpty()) {
+                $supplierIds = \App\Models\OrderItem::where('order_id', $order->id)
+                    ->pluck('fulfillment_supplier_vendor_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->filter(fn ($id) => $id > 0)
+                    ->unique()
+                    ->values();
             }
 
-            // Security Hardening: Send Return OTP to active branch counter staff strictly for this shop
-            if (!empty($order->shop_id)) {
-                $counterUserIds = VendorEmployeeProfile::where('shop_id', $order->shop_id)
-                    ->where('is_active', true)
-                    ->pluck('user_id');
+            if ($supplierIds->count() !== 1) {
+                $notifyAdmins('Rejected items belong to zero or multiple suppliers.');
+                return [];
+            }
 
-                foreach ($counterUserIds as $cUserId) {
-                    if (self::isChannelActive('in_app', $eventType)) {
-                        self::createInApp($cUserId, $title, $body, $eventType, ['return_case_id' => $returnCase->id, 'return_otp' => $otp]);
-                    }
-                    if (self::isChannelActive('fcm', $eventType)) {
-                        self::dispatchPush($cUserId, $title, $body, ['type' => 'return_otp', 'otp' => $otp, 'return_case_id' => $returnCase->id], $eventType);
-                    }
+            $vendor = \App\Models\VendorProfile::with('user')->find($supplierIds->first());
+            $shop = $vendor?->shops()->where('is_active', true)->first();
+            if (!$vendor || $vendor->marketplace_status !== 'active'
+                || !$vendor->user || $vendor->user->status !== 'active' || !$shop) {
+                $notifyAdmins('The single assigned supplier, its user, or its active shop is unavailable.');
+                return [];
+            }
+            $shopId = $shop->id;
+        }
+
+        if (!$vendor || !$vendor->user || $vendor->user->status !== 'active') {
+            $notifyAdmins('No active supplier account is available for this return case.');
+            return [];
+        }
+
+        $otp = trim((string) $returnCase->vendor_return_otp);
+        if (!preg_match('/^\\d{6}$/D', $otp)) {
+            $notifyAdmins('The return case has no valid six-digit OTP.');
+            return [];
+        }
+
+        $vendorUserId = (int) $vendor->user_id;
+        $vendorPhone = trim((string) ($vendor->business_phone ?: $vendor->user->phone));
+        $title = self::renderTemplate($eventType, 'vendor', 'title', ['order_number' => $orderNumber], 'Return Package Arrived at Counter');
+        $body = self::renderTemplate($eventType, 'vendor', 'body', [
+            'order_number' => $orderNumber,
+            'otp' => $otp,
+        ], "Courier has arrived with return parcel for Order #{$orderNumber}. Security Return OTP: [{$otp}]. Verify items before releasing OTP.");
+
+        if (self::isChannelActive('in_app', $eventType)) {
+            self::createInApp($vendorUserId, $title, $body, $eventType, ['return_case_id' => $returnCase->id, 'return_otp' => $otp]);
+        }
+        if (self::isChannelActive('fcm', $eventType)) {
+            self::dispatchPush($vendorUserId, $title, $body, ['type' => 'return_otp', 'otp' => $otp, 'return_case_id' => $returnCase->id], $eventType);
+        }
+        if ($vendorPhone !== '' && self::isChannelActive('sms', $eventType)) {
+            $dispatches[] = self::record('sms', $vendorPhone, 'Supplier Counter', 'Victorious Market: ' . $body);
+        } elseif ($vendorPhone === '') {
+            Log::warning('Supplier return OTP has no verified phone destination; only enabled in-app/push channels can deliver it.', [
+                'return_case_id' => $returnCase->id,
+                'supplier_vendor_id' => $vendor->id,
+            ]);
+        }
+
+        // Send the OTP only to active counter staff at the resolved shop. Never
+        // fall back to a placeholder phone number, and never return this OTP to the rider.
+        if ($shopId) {
+            $counterUserIds = VendorEmployeeProfile::where('shop_id', $shopId)
+                ->where('is_active', true)
+                ->pluck('user_id');
+
+            foreach ($counterUserIds as $counterUserId) {
+                if (self::isChannelActive('in_app', $eventType)) {
+                    self::createInApp($counterUserId, $title, $body, $eventType, ['return_case_id' => $returnCase->id, 'return_otp' => $otp]);
+                }
+                if (self::isChannelActive('fcm', $eventType)) {
+                    self::dispatchPush($counterUserId, $title, $body, ['type' => 'return_otp', 'otp' => $otp, 'return_case_id' => $returnCase->id], $eventType);
                 }
             }
         }
