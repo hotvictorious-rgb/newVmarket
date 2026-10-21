@@ -523,3 +523,26 @@ Status: FIXED — focused regression passed. No merge or deployment.
 **Change:** The primary storefront now fixes its destination to Uyo, lists products with confirmed eligible supplier offers rather than filtering by the catalog contributor's shop, removes public shop listings and corridor discovery, and renders product cards as Victorious MARKET with Uyo local delivery messaging. The location selector is limited to Uyo.
 
 **Status:** Source committed on `docs/retailer-central-fulfilment-model`; template/controller tests and branch-head CI remain outstanding. No merge or deployment.
+
+
+## Supplier payout hardening batch — 21 October 2026
+
+The following findings were confirmed during source review and hardened on `docs/retailer-central-fulfilment-model`. These are **code-level fixes with tests pending execution**, not a claim that the entire supplier lifecycle is verified.
+
+| ID | Severity | Finding | Change | Status |
+|---|---|---|---|---|
+| VM-AUD-093 | High | The payout transition service accepted a non-positive admin ID when called outside the current controller. | `markProcessing` rejects missing/invalid admin identity before opening a transaction. | FIXED — CI pending |
+| VM-AUD-094 | High | A blank or excessively long transfer-recipient identifier could reach the payout state transition service. | `markProcessing` requires a bounded, non-empty recipient identifier. | FIXED — CI pending |
+| VM-AUD-095 | High | A weak or empty processing token could be persisted if the service were called outside the controller. | `markProcessing` requires a 12–100 character allow-listed processing token and normalizes it before use. | FIXED — CI pending |
+| VM-AUD-096 | Medium | An uncertainty transition could be recorded without a meaningful reason or with malformed gateway status text. | `markUncertain` validates a bounded reason and normalized status identifier. | FIXED — CI pending |
+| VM-AUD-097 | High | The uncertainty helper did not independently restrict the source state, relying on callers to invoke it only after transfer initiation. | Only `processing` and already-`uncertain` payouts may enter/remain in uncertainty; terminal states remain idempotent. | FIXED — CI pending |
+| VM-AUD-098 | Critical | Finalization checked that an allocation still mapped to an order item, but did not independently require the item's current operational supplier to match the payout beneficiary. | Finalization locks and reloads the affected orders/items and rejects a supplier-beneficiary mismatch before posting settlement entries. | FIXED — CI pending |
+| VM-AUD-099 | Critical | Finalization did not re-check the order's paid/delivered state and active dispute/return holds at the final posting boundary. | Finalization revalidates retailer-model order, paid status, delivered status, expired refund window, and unresolved dispute/return holds before journal posting. | FIXED — CI pending |
+| VM-AUD-100 | High | Finalization relied on allocation checks without taking explicit ordered locks on the affected orders and items. | Finalization locks order rows and item rows in deterministic ID order before checking beneficiary/eligibility and posting entries. | FIXED — CI pending |
+| VM-AUD-101 | High | The finalization service could be called without a persisted transfer recipient code, even though the normal controller flow records one before gateway submission. | Finalization fails closed if the payout lacks its transfer recipient snapshot. | FIXED — CI pending |
+| VM-AUD-102 | Medium | A payout reservation release/reversal could be invoked without an auditable reason. | `reverse` requires a non-empty reason capped at 2,000 characters; unsupported outcomes remain rejected. | FIXED — CI pending |
+| VM-AUD-103 | Medium | Successful payout finalization and reservation release/reversal had no explicit structured service-level log event for later operational investigation. | Added structured notice/warning logs containing payout, supplier, amount, reference and outcome (no full bank account). | FIXED — CI pending |
+
+**Regression tests added:** `backend/tests/Unit/RetailerSupplierPayoutInputGuardTest.php` covers missing admin/recipient/weak token, malformed uncertainty inputs, empty release reason, and unsupported reversal outcome. The feature-level path for finalization beneficiary/hold revalidation still needs execution and, where needed, additional focused regression coverage.
+
+**Verification:** The source and unit-test commits are recorded on the working branch. Tests have not been run in this session; no CI success is claimed. Supplier recovery/refund integration, every payout gateway edge case, and the wider supplier/API authorization audit remain open until independently checked. No merge or deployment.
