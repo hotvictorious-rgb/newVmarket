@@ -132,3 +132,14 @@ A payout-state audit found a high-severity asymmetry: vendor payout rejection al
 - Added regression tests asserting that uncertain logistics payout rejection leaves the payout pending, does not restore the wallet, and creates no rejection journal; vendor rejection with a processing claim likewise leaves status and journal unchanged.
 - Commits: controller a8bb953f5856d8fa1b9d2c0d24964c3e978bfd5b; regression tests 026d7eeeb747b3a3a116d3d0bbdbe20c70125e1d.
 - Verification status: code and test changes are committed on the working branch; the test suite has not been executed. These tests must run before merge/deployment.
+
+## 15. Stale payout claims and transfer-reference fencing (21 October 2026)
+
+Further review found that both payout initiation paths could automatically reclaim a processing token after five minutes if gateway status and transfer code had not yet been persisted. A process can crash after submitting a transfer but before persisting Paystack's response; elapsed time alone does not prove that no transfer occurred. The payout reference is created before recipient/transfer calls, so a reference without a definitive failure is also not proof of a safe retry.
+
+- Vendor and logistics payout initiation now fail closed whenever any processing token remains, regardless of its age. Manual gateway reconciliation is required before retrying an abandoned claim.
+- A persisted transfer reference blocks another initiation unless the recorded gateway state is explicitly failed. Recipient-resolution failures are now recorded as failed before-transfer outcomes, allowing a safe retry/rejection without pretending a transfer was sent.
+- Payout rejection now permits a retained reference only when the gateway outcome is explicitly failed, while any processing token, transfer code, uncertain gateway state or timeout hold continues to block reversal.
+- Added a regression test for stale vendor and logistics processing claims: both requests must remain pending and preserve their claim instead of submitting another gateway transfer.
+- Commits: controller 5adcea40ab11b359a1c10e57378051a9b5288361; regression tests 465d730dd74c125e7c5c8de6fb2c359ebd2b2b76.
+- Verification status: source and test changes are committed on the working branch. PHP tests and CI have not been run. This must be verified before merge/deployment.
