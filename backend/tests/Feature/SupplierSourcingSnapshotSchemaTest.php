@@ -25,8 +25,21 @@ class SupplierSourcingSnapshotSchemaTest extends TestCase
             'supplier_snapshot_at',
         ]));
 
+        $this->assertTrue(Schema::hasColumns('order_items', [
+            'fulfillment_supplier_offer_id',
+            'fulfillment_supplier_vendor_id',
+            'fulfillment_supplier_shop_id',
+            'fulfillment_supplier_name_snapshot',
+            'fulfillment_supplier_shop_name_snapshot',
+            'fulfillment_supplier_cost_snapshot',
+            'fulfillment_supplier_snapshot_at',
+        ]));
+        $this->assertTrue(Schema::hasColumn('orders', 'fulfillment_supplier_cost_total_snapshot'));
         $this->assertContains('supplier_offer_id', (new OrderItem())->getFillable());
         $this->assertContains('supplier_cost_snapshot', (new OrderItem())->getFillable());
+        $this->assertContains('fulfillment_supplier_vendor_id', (new OrderItem())->getFillable());
+        $this->assertContains('fulfillment_supplier_cost_snapshot', (new OrderItem())->getFillable());
+        $this->assertContains('fulfillment_supplier_cost_total_snapshot', (new Order())->getFillable());
         $this->assertContains('wholesale_cost', (new SupplierOffer())->getFillable());
         $this->assertTrue(Schema::hasColumns('supplier_offers', [
             'availability_confirmed_at',
