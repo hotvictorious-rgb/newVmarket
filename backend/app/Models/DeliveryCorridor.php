@@ -46,6 +46,17 @@ class DeliveryCorridor extends Model
         $matches = static::query()
             ->where('lga_id', $lgaId)
             ->where('is_active', true)
+            ->whereHas('companyRates', function ($rates) {
+                $rates->where('is_active', true)
+                    ->whereHas('logisticsCompany', function ($companies) {
+                        $companies->where('status', 'active')
+                            ->whereNull('deleted_at')
+                            ->whereHas('hqLga', function ($lga) {
+                                $lga->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+                                    ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']));
+                            });
+                    });
+            })
             ->get()
             ->filter(function (self $corridor) use ($address) {
                 foreach ((array) $corridor->landmark_aliases as $alias) {
