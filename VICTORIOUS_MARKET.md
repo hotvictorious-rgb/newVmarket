@@ -174,9 +174,9 @@ Legacy vendor earnings, payout thresholds, commissions, and vendor-recovery ledg
 
 The VICTORIOUS MARKET administrative environment handles vendor verification, product governance, order monitoring, security and safety oversight, financial reconciliation, customer disputes, authorized refunds, and operational reporting.
 
-Delivery operation belongs to each vendor. The platform does not run dispatch or manage a shared fleet. Vendors manage their riders and assignments; platform administrators may enforce account safety, suspend a vendor or rider, review incidents, and inspect audit trails, but must not act as a dispatcher or rider payroll manager.
+Delivery is coordinated centrally by Victorious MARKET from Uyo and carried out through approved logistics companies. Every rider assigned to VM work must be active and linked to exactly one active logistics company. Suppliers do not dispatch their own riders for VM customer delivery; VM authorizes delivery assignments and tracks custody and customer handover.
 
-Role-based permissions must separate customers, vendors, vendor-linked riders, and platform administrators. Rider permissions are limited to assigned vendor orders and the minimum operational information required for delivery. Riders cannot access customer financial information, commissions, vendor settlement details, wallet credits, payout routes, or ledger data. Sensitive administrative actions must be authorized and auditable.
+Role-based permissions must separate customers, private suppliers, logistics companies, riders, and VM administrators. Riders can access only assigned deliveries and minimum operational data. They must not access supplier wholesale prices, payment status, amounts due, customer financial data, supplier payables, cashback or payout information. Sensitive administrative actions must be authorized and auditable.
 
 ## 13. Security, Privacy, and Evidence Protection
 
@@ -223,7 +223,7 @@ The goal is to reward genuine participation without allowing the loyalty program
 
 The initial operating focus is intended to be Uyo, Akwa Ibom State, with expansion into additional supported locations as the operational model becomes reliable.
 
-Rather than immediately making every product available nationwide, the platform can expand through verified merchants, vendor-defined delivery areas, vendor-linked riders, and reliable in-shop pickup arrangements.
+Rather than immediately making every product available nationwide, the platform can expand through approved supplier offers, VM-defined delivery coverage from Uyo, logistics-company-linked riders, and reliable supplier-shop pickup arrangements.
 
 This geographic discipline is intended to avoid promising deliveries that the platform cannot consistently fulfill.
 
