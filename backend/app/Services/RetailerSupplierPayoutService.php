@@ -38,8 +38,8 @@ class RetailerSupplierPayoutService
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout is held because an unresolved supplier recovery debt requires finance review.'];
             }
 
-            if ($lockedSupplier->shops()->where('is_active', true)->count() !== 1) {
-                return ['success' => false, 'protected' => true, 'message' => 'Supplier payout requires exactly one active supplier shop.'];
+            if (!$this->hasExactlyOneActiveUyoShop($lockedSupplier)) {
+                return ['success' => false, 'protected' => true, 'message' => 'Supplier payout requires exactly one active shop located in Uyo, Akwa Ibom State.'];
             }
 
             foreach (['bank_name', 'bank_code', 'account_number', 'account_name'] as $field) {
@@ -277,8 +277,8 @@ class RetailerSupplierPayoutService
                     return ['success' => false, 'protected' => true, 'message' => 'Supplier bank details changed after this payout request; reject this request and create a fresh one after the cooldown.'];
                 }
             }
-            if ($supplier->shops()->where('is_active', true)->count() !== 1) {
-                return ['success' => false, 'protected' => true, 'message' => 'Supplier must have exactly one active shop before payout.'];
+            if (!$this->hasExactlyOneActiveUyoShop($supplier)) {
+                return ['success' => false, 'protected' => true, 'message' => 'Supplier must have exactly one active shop located in Uyo, Akwa Ibom State before payout.'];
             }
             if (trim($recipientCode) === '') {
                 return ['success' => false, 'message' => 'A verified Paystack transfer recipient is required.'];
@@ -535,6 +535,22 @@ class RetailerSupplierPayoutService
 
             return ['success' => true, 'payout' => $payout->fresh('allocations')];
         }, 3);
+    }
+
+    private function hasExactlyOneActiveUyoShop(VendorProfile $supplier): bool
+    {
+        $shops = $supplier->shops()
+            ->where('is_active', true)
+            ->with('lga.state')
+            ->get();
+
+        if ($shops->count() !== 1) {
+            return false;
+        }
+
+        $shop = $shops->first();
+        return strtolower(trim((string) ($shop->lga->name ?? ''))) === 'uyo'
+            && strtolower(trim((string) ($shop->lga->state->name ?? ''))) === 'akwa ibom';
     }
 
     private function hasOpenSupplierRecovery(int $supplierId): bool
