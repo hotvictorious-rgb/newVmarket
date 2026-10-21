@@ -2547,7 +2547,7 @@ class PortalController extends Controller
                 return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
             }
 
-            if (\\App\\Models\\FinancialJournalEntry::whereIn('event_id', [
+            if (\App\Models\FinancialJournalEntry::whereIn('event_id', [
                 'EVT-FLEET-PAYOUT-' . $payout->id,
                 'EVT-FLEET-REJECT-' . $payout->id,
             ])->exists()) {
@@ -3014,7 +3014,7 @@ class PortalController extends Controller
                 return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
             }
 
-            if (\\App\\Models\\FinancialJournalEntry::whereIn('event_id', [
+            if (\App\Models\FinancialJournalEntry::whereIn('event_id', [
                 'EVT-VND-PAYOUT-' . $payout->id,
                 'EVT-MERCHANT-REJECT-' . $payout->id,
             ])->exists()) {
