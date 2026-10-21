@@ -1,5 +1,7 @@
 # VICTORIOUS MARKET — Payment, Refund, Settlement & Paystack Webhook Policy
 
+> **Superseding owner decision (21 October 2026):** VM is a retailer operating from Uyo; suppliers are private product sources, not public marketplace sellers. VM owns customer-facing delivery through approved logistics companies, and every assigned rider must be linked to exactly one active logistics company. Authorized supplier-shop pickup remains available. Supplier payment eligibility begins only after verified successful customer delivery or confirmed customer pickup and reconciliation. Former vendor commissions, vendor payout thresholds, 90/5/5 merchandise allocation, 90/10 vendor delivery allocation, and vendor-managed delivery are not defaults for new retailer-model transactions. Existing customer payment/refund security controls remain; new retailer accounting, logistics-company charges and any new cashback funding policy require explicit approval. See [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md).
+
 **Status:** Owner-confirmed policy baseline for payment/refund decisions recorded on 20 October 2026. The business questions in this decision set are resolved; technical implementation and verification gaps remain open. Implementation gaps are not completed fixes.
 **Prepared:** 20 October 2026
 **Branch:** audit/paystack-refund-webhook-safety
@@ -8,7 +10,7 @@
 
 ## 1. Scope and authority
 
-This policy must be read with [VICTORIOUS_MARKET_SYSTEM_RULES_V1.md](VICTORIOUS_MARKET_SYSTEM_RULES_V1.md), the single source of truth. One parent checkout can contain vendor-specific child orders; Victorious MARKET controls order/payment records, payment verification, customer refunds, vendor settlement, disputes and financial audit. Vendors manage their own riders; riders have no financial role. Merchandise allocation remains 90% vendor / 5% customer cashback / 5% platform and delivery-fee allocation 90% vendor / 10% platform, with no rider payable.
+This policy governs payment-provider verification, customer refunds, webhook handling, reconciliation and financial safety. For the current business model, read it with [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md) and [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md). Legacy vendor child-order, commission and payout language below is retained only where needed to describe existing code/history; it is not authority to apply marketplace allocations to new retailer-model transactions.
 
 The owner-confirmed decisions below are binding for the audit plan. Paystack card and standard bank transfer are the approved launch rails. No numeric second-approval threshold has been approved; keep any high-value second-approval threshold configurable and do not hard-code an unapproved amount. These are business decisions; they do not mean implementation is complete. Do not merge to main without explicit owner approval.
 
@@ -52,24 +54,24 @@ Implementation of this policy must be proved by code review and tests; this text
 
 ## 2. Checkout and payment decisions (Q1–Q8)
 
-| Q | Proposed rule | Implementation / control |
+| Q | Binding rule | Implementation / control |
 |---:|---|---|
-| 1 | One Paystack charge for a multi-vendor parent checkout; allocate the verified payment to child orders internally. | Parent amount/reference is authoritative for collection. Child allocations must sum exactly to parent total. Keep per-child fulfilment, fee, merchandise/cashback allocation and settlement eligibility separate. |
-| 2 | A valid webhook or server-side transaction verification may establish payment. | Both entry points call the same authoritative settlement service and enforce exact reference, amount in kobo, currency, customer/order binding and idempotency. Browser redirect data alone never establishes payment. |
-| 3 | Keep one valid payment for an order; a verified duplicate successful charge is eligible for the narrow automatic-refund exception. | Store every Paystack transaction/reference separately. A duplicate must never settle the order or credit cashback twice. Verify exact extra charge identity, amount and currency; confirm the parent checkout is already paid; create an auditable duplicate-charge case and idempotent refund operation; refund only the verified extra capture. |
-| 4 | If payment succeeds after cancellation or stock is unavailable, do not reactivate or fulfil automatically; create a controlled refund case. Automatic refund is permitted only if the order was cancelled before any vendor action and every narrow exception guard passes. | Re-verify payment, lock/recheck inventory and order/vendor state, mark the payment as late/exceptional, prevent vendor settlement, and verify that no vendor accepted/prepared/dispatched/handed over goods and no prior refund covers the same capture. If any condition is uncertain, require authorized human approval. A webhook event alone never grants approval. |
-| 5 | Underpayment: keep the order unpaid/on hold; do not fulfil. | Compare exact integer kobo to the expected parent checkout amount. Record mismatch and verified transaction for manual resolution. Never round, silently mark paid, or credit cashback/vendor proceeds. |
-| 6 | Overpayment/wrong amount: do not fulfil automatically or convert excess to wallet credit. | Flag for reconciliation and refund/resolve only after payment verification. Distinguish a fully mismatched charge from a true excess where possible; do not issue an assumed difference refund without reconciling captured amount and order liability. |
-| 7 | Permitted payment paths: pay before delivery through Victorious MARKET, or reserve in-shop pickup and pay at the vendor shop through Victorious MARKET's authorised workflow. Doorstep COD and off-platform payment are prohibited. | Expose only the two authorised paths. Link reservation, shop payment, customer, amount and vendor child order; do not release the item until platform verification. Launch rails are Paystack card and standard bank transfer. Handle `bank.transfer.rejected` as a reconciliation exception. |
-| 8 | Expired stock holds must not release stock while payment outcome is uncertain. | Verify/reconcile payment before releasing stock where payment may have succeeded or be in-flight. A late verified payment may be fulfilled only after an atomic stock recheck/reservation; otherwise open a controlled refund case. |
+| 1 | Customer checkout is with Victorious MARKET as retailer. Do not expose suppliers as public marketplace sellers or apply multi-vendor commission allocation to new retailer-model orders. | Preserve customer payment/order identity. Link each order item internally to the exact selected supplier offer and immutable agreed purchase-cost snapshot. Existing parent/child structures may remain as legacy implementation artifacts until migrated safely. |
+| 2 | A valid authenticated webhook or server-side transaction verification may establish payment. | Enforce exact reference, amount in integer kobo, NGN currency, correct order/customer binding and idempotency. Browser redirect data alone never establishes payment. |
+| 3 | A verified duplicate successful charge is eligible for the narrow automatic-refund exception. | Store every provider transaction/reference separately. A duplicate must never settle the order or create a second supplier payable. Verify the exact extra charge and create an auditable idempotent refund operation. |
+| 4 | If payment succeeds after cancellation or product unavailability, do not reactivate or fulfil automatically; create a controlled exception/refund case. | Re-verify payment and order/stock state, block fulfilment and supplier payment, and use the authorized refund workflow. Automatic approval is allowed only when all documented pre-action exception guards pass. |
+| 5 | Underpayment: keep the order unpaid/on hold; do not fulfil or pay a supplier. | Compare exact integer kobo to expected amount and preserve mismatch evidence for reconciliation. |
+| 6 | Overpayment/wrong amount: do not fulfil automatically or convert excess to wallet credit. | Flag for reconciliation and resolve only after authoritative payment verification. |
+| 7 | Customer payment is through VM's authorized payment workflow. Supported launch rails remain Paystack card and standard bank transfer. Authorized supplier-shop pickup may retain its reservation/payment-at-location flow only when payment is processed/recorded through VM's authorized workflow. Doorstep COD and off-platform cash/private-account transfers remain prohibited. | Link payment, order, customer, amount and pickup authorization. Supplier shops cannot independently collect payment or bypass VM. Handle `bank.transfer.rejected` as a reconciliation exception. |
+| 8 | An expired stock hold must not release stock while payment outcome is uncertain. | Reconcile payment before releasing stock; a late verified payment requires atomic availability recheck or a controlled refund case. |
 
-### Merchandise and delivery allocation arithmetic (binding)
+### Retail accounting and supplier payable boundary
 
-- Calculate the 90/5/5 merchandise allocation from the actual **post-discount merchandise amount collected**, before adding delivery fee. Do not calculate from list price or an amount the customer did not pay.
-- Allocate eligible merchandise value as 90% vendor, 5% cashback liability, and 5% platform share. Cashback is never calculated on delivery fees.
-- Allocate the separately charged delivery fee 90% to the vendor and 10% to the platform. No part of this delivery allocation becomes a rider payable; vendor-to-rider compensation is paid outside platform systems.
-- Calculate in integer kobo/decimal-safe arithmetic. Preserve the exact checkout allocation snapshot for refunds and settlement. Assign any rounding remainder to the platform share so the vendor share and cashback amount remain deterministic.
-- Refunds must reverse the actual captured child-order allocation for the approved refundable component(s), considering prior refunds, discount allocation, cashback earned/redeemed, delivery-fee decision and whether vendor proceeds have already been paid. Never recompute an old refund from current product prices or current vendor settings.
+The former marketplace 90/5/5 merchandise split and 90/10 vendor delivery-fee split are not binding for new retailer-model transactions. Do not use vendor commission or payout ledgers as supplier payable calculations.
+
+For new retailer-model transactions, keep separate records for verified customer receipts, merchandise revenue, supplier purchase cost/payable, delivery charges, logistics-company charges/payables, gateway fees, discounts, approved refunds, any separately approved cashback liability, and operating expenses. Supplier purchase cost is not a commission. Logistics-company charge terms and delivery-fee margin require explicit approval; do not invent a percentage.
+
+A supplier payable is linked to the accepted order item/sourcing unit. Its purchase-cost snapshot must not change when the supplier's current offer changes. If an order contains items from different suppliers, preserve the supplier cost and fulfilment outcome per item or sourcing unit.
 
 ## 3. Refund and cashback decisions (Q9–Q16)
 
@@ -84,18 +86,19 @@ Implementation of this policy must be proved by code review and tests; this text
 | 15 | `refund.needs-attention`: leave the refund unresolved, alert an authorized admin, and track follow-up. | Keep the customer refund obligation open; do not mark it refunded or release related controls as if complete. At launch, do not route to wallet credit, make an off-platform payment, or submit an alternate bank destination through Paystack's retry endpoint unless a separate owner-approved policy explicitly permits that exception. Record the provider state, exact refund/transaction references, customer communications and next review action. |
 | 16 | `refund.failed`: mark the attempt failed, preserve the outstanding customer refund obligation, alert admin and permit only a controlled retry after reconciliation. | Verify the exact transaction/refund and the provider's merchant-account credit before retry. Never retry blindly or mark the customer obligation resolved because one attempt failed. Customer refund status remains separate from vendor recovery. |
 
-## 4. Vendor settlement, disputes and failed orders (Q17–Q24)
+## 4. Supplier payment eligibility, disputes and failed fulfilment
 
-| Q | Proposed rule | Implementation / control |
-|---:|---|---|
-| 17 | Vendor proceeds remain held while fulfilment is unconfirmed, the configured return/protection window remains open, or a return/dispute blocks release. | Successful customer handover for doorstep_delivery or confirmed vendor-counter handover for in_shop_pickup is necessary but not sufficient. Evaluate each child order independently, with bank-security, vendor eligibility, payout authorization and reconciliation controls. |
-| 18 | A chargeback/dispute immediately flags the related payment/order, blocks unsettled related vendor proceeds, preserves evidence, records the response deadline and opens an admin case. | Resolve by authoritative dispute status and a recorded decision. Never release the hold solely because a reminder is absent. Keep customer/rider/vendor evidence access scoped by role. |
-| 19 | An unmatched or mismatched transfer.success is recorded as unmatched for treasury reconciliation; never create a payout record solely from a webhook. | Match exact transfer/payout reference, expected recipient, amount, currency and operation. Alert authorized finance/admin staff; no automatic ledger repair from unmatched payloads. |
-| 20 | A failed/reversed vendor transfer may be retried only after exact reference/status/amount/currency and returned-funds reconciliation. | Distinguish failed from reversed. Preserve the old attempt and use a new payout attempt/reference only after the financial service establishes retry safety. Do not let a delayed failure overwrite a confirmed success. |
-| 21 | Failed delivery is operational first; financial outcome depends on reason and customer policy. | Record reason, attempt evidence and parcel custody/return-to-vendor. Admin/customer-support workflow decides redelivery, cancellation, delivery-fee refund, customer refund and vendor recovery. Rider endpoints must not create wallet credits or financial journals. |
-| 22 | Never blindly retry an uncertain refund. Reconcile the existing refund first. | Query authoritative provider status using the existing reference where supported; use webhooks and scheduled reconciliation together. An uncertain timeout keeps the reservation/obligation open until status is resolved. |
-| 23 | Vendors may request cancellation/refund and submit evidence; only the authorized platform workflow executes a customer refund. | Enforce authorization in backend services/routes, not only UI. A vendor or rider action cannot call a gateway refund endpoint directly or bypass approval. |
-| 24 | Cancelled orders cannot settle, and cancellation must reconcile payment, refund obligation, cashback and reservations. | **Correction to supplied recommendation:** a refund attempt in failed status is not equivalent to a completed refund. Do not close the customer refund obligation or treat the order as financially resolved merely because the attempt is terminal-failed. Keep an explicit failed/retry-or-manual-review state until the obligation is satisfied or an authorized documented alternative is decided. |
+| Topic | Binding rule | Implementation / control |
+|---|---|---|
+| Supplier payment eligibility | Eligibility begins only after verified successful customer delivery or confirmed customer pickup and required reconciliation. | Order placement, customer payment, supplier acceptance/readiness, VM collection, rider assignment, rider collection or delivery attempt is insufficient. A supplier cannot mark its own payable eligible. |
+| Payment execution | Eligibility is not an automatic transfer. | Require the approved payment authorization and idempotent supplier-payment workflow. Record payable, approval, payment attempt, provider confirmation, reversal and reconciliation separately. Timeout is uncertain and must be reconciled before retry. No supplier payment may be duplicated by repeated events. |
+| Refund after supplier payment | VM remains responsible for an approved customer refund even if the supplier has already been paid. | Refund through the verified original payment route where supported. Supplier recovery is separate and requires evidence-backed responsibility plus contractual recoverability; a complaint alone is not debt. Do not delay a valid customer refund while seeking supplier recovery. |
+| Chargeback/dispute | Flag the related order/payment, preserve evidence and open an authorized case. | Supplier recovery or accounting loss follows evidence and contract; do not automatically turn a dispute into supplier debt. |
+| Failed delivery or pickup | Failed fulfilment is operational first, not automatic refund approval or supplier fault. | Record attempt reason, parcel custody/return, evidence and customer communication. VM determines remedy under the customer policy. No supplier payment eligibility until successful verified handover. |
+| Unmatched transfer/provider event | Reconcile before creating or finalizing a payable/payment state. | Match exact reference, recipient, amount, currency and operation; never repair ledgers from unmatched webhooks alone. |
+| Cancellation | A cancelled order cannot create a new supplier payment. | Reconcile payment, sourcing, refund obligation and stock reservation. Do not close a refund obligation because an attempt failed. |
+
+Supplier payment timing here means the earliest eligibility trigger, not an unapproved payout SLA, payout rail or automatic-transfer instruction. Additional supplier-payment terms must be agreed and approved separately.
 
 ## 5. Payment and refund state matrix
 
@@ -130,48 +133,15 @@ These are business states, not necessarily literal database enum values. Map exi
 
 **Important:** Paystack says a refund reported as processed may still take up to 10 business days for the customer to receive funds. Customer messaging should say “processed” rather than promise instant bank receipt.
 
-### Vendor earning ledger and payout authorization lifecycle
+### Supplier payable and payment authorization lifecycle
 
-Each earning is a separate traceable financial record, not merely a total stored on an order or vendor profile.
+For new retailer-model transactions, do not create marketplace vendor earning records or use the old vendor payout batch as the supplier-payment mechanism.
 
-| Earning type | Required source link | Calculation and lifecycle |
-|---|---|---|
-| Merchandise vendor earning | Parent payment, vendor child order, exact order-item/line ID and immutable line allocation snapshot | 90% of that line's actual post-discount merchandise amount collected, in integer kobo. Hold until that earning passes payment, fulfilment, 24-hour protection-window, return/dispute, vendor/KYC, bank-security, and reconciliation checks. Item refunds/rejections reverse only the affected line's actual vendor allocation. |
-| Delivery vendor earning | Exact vendor child order and immutable captured delivery-fee snapshot | 90% of that child order's delivery fee. Track separately from merchandise lines. Zero for in_shop_pickup. A parent-level aggregate without child attribution is not sufficient. |
-| Platform merchandise share / cashback | Exact item allocation | The remaining 5% platform share and 5% cashback liability are not vendor earnings. Cashback has its own maturity and recovery rules. |
-| Platform delivery share | Exact vendor child order delivery-fee allocation | 10% platform share; never a rider/logistics payable. |
-
-Every earning record must retain amount in kobo, currency, vendor, source IDs, allocation version/snapshot, status, event/idempotency key, and any refund/recovery links. Use independent lifecycle states equivalent to held, withdrawable, reserved, paid, reversed/recovered, or blocked for review. Names may map to existing enums, but the semantics must remain distinct and auditable. The vendor's dashboard totals are derived from these records; they must not replace the source ledger.
-
-#### Capped, reviewed vendor payout flow
-
-1. **Eligibility calculation:** derive unreserved withdrawable funds on the server from earning records that passed all checks. Exclude held, reserved, paid, reversed, disputed, return-pending, unreconciled, or otherwise blocked earnings. Validate vendor/KYC status, verified bank details, 48-hour bank-change cooldown, recovery offsets, and other payout-security controls.
-2. **System-calculated strict FIFO batch:** do not accept a vendor-entered payout amount. Starting with the oldest eligible, unreserved earning record, add each whole record while the running total remains at or below ₦500,000; stop if the next whole record would exceed the cap. Never split or skip. The total must be at least ₦5,000 or no request is created. If the oldest record alone exceeds ₦500,000, flag it for authorised finance resolution.
-3. **Aggregation and carry-forward:** earning records remain itemized by vendor order/earning source, but the normal disbursement aggregates the requested amount into one payout. Eligible balance not included in the approved request remains eligible for a future request. Do not pay each order separately by default.
-4. **Atomic reservation:** calculate the strict FIFO batch and reserve its exact whole earning records under transaction/row locks. Reject duplicate or concurrent requests that would reserve the same funds. Pending reservations reduce the unreserved balance. Do not trust client-supplied amount or balance values.
-5. **Admin review:** every request enters pending review. An authorized admin approves or rejects it, recording actor, timestamp, decision, and reason/notes. Approval must be distinct from transfer execution. Rejection releases the exact reservation once without erasing earning history.
-6. **Admin payment:** only an approved request may be submitted by an authorized admin for Paystack transfer. Persist a unique transfer reference and processing identity before the gateway call. Preserve in-flight/uncertain state on timeout and reconcile before retry.
-7. **Provider confirmation:** only authoritative successful confirmation matching payout reference, recipient, amount, and currency finalizes the payout, writes balanced journals, and marks exact source allocations paid once. Failed/reversed transfers use an audited recovery flow; late events must not overwrite confirmed success.
-8. **Liquidity/provider limits:** ₦500,000 is the marketplace's own request cap, not a statutory Nigerian bank limit or guarantee of provider approval. Check actual Paystack balance, account-specific limits, and charges before transfer. An insufficient or uncertain provider result is not success.
-9. **Transfer fees and stamp duty:** owner decision remains open on whether the platform absorbs or vendors bear outbound transfer charges. Do not silently deduct fees from vendor earnings; record the final owner-approved rule before launch and reconcile charges separately.
-10. **No rider payout:** the vendor pays its own riders outside platform accounting. Do not use this payout flow to pay riders, logistics companies, or another vendor.
-
-| Evidence | Internal result |
-|---|---|
-| No eligible earning records / zero withdrawable balance | Reject request; no payout record or transfer call |
-| Vendor submits ₦5,000–₦500,000 request not exceeding unreserved eligible balance | Reserve exact earning allocations and create pending-review request |
-| Client requests below ₦5,000, above ₦500,000, or above unreserved eligible balance | Reject; do not reserve any earning |
-| Existing active request or concurrent request | Reject or return the existing request; never reserve the same earning twice |
-| Pending-review request | No Paystack transfer call allowed |
-| Admin rejects request | Record actor/reason; release exact reservations once; preserve earning history |
-| Admin approves request | Approved only; no ledger payout-finalization yet |
-| Admin initiates approved request | Persist transfer attempt/reference and move to processing; do not mark paid |
-| transfer.success matching exact approved payout | Confirm transfer once; balanced journal; mark only snapshotted earnings paid |
-| transfer.failed | Preserve obligation, reconcile returned funds; controlled release/retry only after safe reconciliation |
-| transfer.reversed | Reversal state; post balanced reversal only if original disbursement journal exists |
-| Unmatched/conflicting transfer event | Unmatched/manual treasury review; never invent a payout |
-| Late failure after confirmed success | Protect success; unmatched/manual review, no blind reversal |
-| Retry | New audited attempt/reference after reconciliation and re-authorization as required; never reuse a completed attempt as though it were new |
+- Link each supplier payable to the accepted order item/sourcing unit, canonical product, selected supplier offer, agreed purchase cost and currency.
+- Supplier payable eligibility requires verified customer delivery or confirmed pickup, the correct order/offer/quantity, required proof and amount reconciliation.
+- Keep payable state, approval, payment attempt, provider confirmation, reversal and reconciliation separate and idempotent. Do not infer payment success from a timeout or supplier screenshot.
+- Do not use the former vendor payout minimum/maximum, FIFO earning-record selection, vendor debt balance or 90% earning share as supplier payment rules.
+- Existing vendor earning and payout records remain historical and must be preserved/reconciled during migration. Do not relabel old journal entries as supplier costs without an approved accounting migration.
 
 ### Dispute lifecycle
 
@@ -229,23 +199,20 @@ Do not subscribe to subscription, invoice, payment-request, dedicated-account or
 
 ## 8. Confirmed decisions and contradiction resolution
 
-1. **Payment channels:** card + standard Paystack bank-transfer checkout only at launch. DVA, USSD, mobile money and other channels are deferred unless separately approved.
-2. **Refund failure:** a failed Paystack refund attempt does not satisfy the customer refund obligation. Keep the obligation open, reconcile the provider's merchant-account credit and permit only a controlled retry.
-3. **Automatic refund exception:** verified duplicate charge and verified pre-vendor-action cancellation are the only automatic-approval cases. A late payment caused by stock loss is not automatically eligible unless it independently satisfies every pre-vendor-action condition. The webhook event itself never approves or dispatches a refund.
-4. **Cashback recovery:** offset future cashback only at maturity after fulfilment, the 24-hour return/refund window and separate 24-hour cashback-maturity buffer, provided no blocking case remains. Keep recovery separate from spendable wallet funds, disclose it in Terms & Conditions and complete legal/consumer-policy review before release.
-5. **Wallet refunds:** disabled at launch; original Paystack channel only. Any later wallet-credit release requires explicit customer consent, timestamped consent, admin authorization and an audit log.
-6. **Return/refund/protection window:** 24 hours, then a separate 24-hour buffer before eligible cashback matures, subject to blocking cases.
-7. **Delivery-fee refunds:** vendor fault (including wrong/defective goods) and pre-dispatch cancellation may qualify for refund; customer change of mind and unjustified refusal normally do not; partial returns require reason-specific review and recorded decision.
-8. **Commercial allocation:** merchandise split is 90/5/5 from actual post-discount merchandise collected, excluding delivery. Delivery fee is 90% vendor / 10% platform. Rounding remainder belongs to platform share. Preserve immutable allocation snapshots.
-9. **Paystack fees and taxes:** platform bears Paystack processing fees from its own share; do not reduce vendor 90% or cashback 5%. Do not hard-code tax treatment until reviewed by a qualified Nigerian tax adviser.
-10. **Chargeback losses:** vendor recovery is evidence- and fault-based. Recover only when documented vendor fault or approved allocation justifies it. If the platform provided required evidence but still loses, or responsibility remains ambiguous, the platform bears the loss unless an authorized case decision establishes a justified recovery.
-11. **Multi-vendor checkout:** one Paystack charge for the parent checkout, with immutable child-order allocations and independent fulfilment/settlement gates.
-12. **Bank-transfer rejection message:** “Your bank transfer could not be processed. We are checking the status with our payment provider and will update you within 24 hours. If funds left your account, they will be returned to you once confirmed. Please do not attempt another payment until you receive an update.” Never promise a refund until authoritative provider evidence confirms the applicable outcome.
-13. **Vendor earnings/payout:** merchandise earnings are tracked per order-item line; delivery earnings are separate per vendor child order. Payout is a server-calculated strict FIFO batch of whole eligible earning records, not the entire balance and not a vendor-selected partial amount. Admin approval and payment initiation are separate steps, and payment is complete only on verified Paystack success/reconciliation. The strict FIFO batch rules supersede any full-balance-only or vendor-selected-amount rule; existing bank-detail cooldown and other security controls remain. No rider or logistics-company payout is created for new orders.
-
-These business questions are resolved. Technical implementation questions and verification gaps remain open in the checklist below.
-
-14. **COD at launch:** cash on delivery is disabled across the marketplace at launch. Checkout, APIs, vendor settings and legacy payment-method paths must reject it. The two permitted paths are pay before delivery through Victorious MARKET, or reserve in-shop pickup and pay at the vendor shop through Victorious MARKET's authorised workflow; enabled launch rails are Paystack card and standard bank transfer only. In-shop pickup uses the platform reservation flow and is paid at the vendor shop only through Victorious MARKET's authorised payment workflow; it is not doorstep COD. No off-platform cash/private-account transfer is permitted.
+1. **Launch payment rails:** Paystack card and standard bank transfer only unless separately approved. DVA, USSD, mobile money and other channels remain deferred.
+2. **Refund failure:** a failed Paystack refund attempt does not satisfy the customer refund obligation. Keep the obligation open, reconcile provider status and use only a controlled authorized retry.
+3. **Automatic refund exception:** verified duplicate charge and verified paid order cancelled before any supplier/fulfilment action are the only narrow automatic-approval cases, subject to all documented guards. A webhook event itself never approves or dispatches a refund.
+4. **Refund route:** original verified Paystack transaction/channel only at launch where supported. Wallet-credit and off-platform refunds remain disabled unless a separate owner-approved policy permits them.
+5. **Customer claim window:** the standard operational claim window remains 24 hours from verified fulfilment, subject to applicable Nigerian consumer rights and valid warranty obligations. This is not a guarantee that a refund completes within 24 hours.
+6. **Cashback:** preserve and reconcile historical cashback balances and customer obligations. The former 5% merchandise allocation must not automatically fund new retailer-model sales. The owner/accountant must explicitly decide whether and how cashback continues under the retailer model before new accrual rules are enabled.
+7. **Delivery-fee refunds:** decide the refundable delivery component under the approved reason-specific customer policy, evidence, contract and applicable law. Do not automatically refund or retain delivery fees for every reason.
+8. **Retail accounting:** supplier purchase cost is a retailer cost/payable, not vendor commission. The old 90/5/5 merchandise split and 90/10 vendor delivery split are not default rules for new retailer-model transactions. Do not invent replacement percentages.
+9. **Logistics-company charges:** VM coordinates delivery through approved logistics companies, and every assigned rider must be linked to exactly one active logistics company. Carrier rates, customer delivery-fee table, settlement terms and margin require explicit approval; no rider payout or old vendor delivery allocation is assumed.
+10. **Supplier payment:** eligibility begins only after verified successful customer delivery or confirmed customer pickup and reconciliation. Eligibility is not an automatic transfer; payment authorization, provider confirmation and reconciliation remain distinct.
+11. **Refund funding and supplier recovery:** VM remains responsible for the customer refund. Any supplier receivable requires evidence-backed supplier responsibility and contractual recoverability. Never delay customer refund for supplier recovery; a complaint alone is not debt.
+12. **Customer payment at pickup:** supplier-shop pickup may retain the existing reservation and payment-at-location flow only through VM's authorized payment workflow. Supplier must not independently collect off-platform cash or private-account transfer.
+13. **Bank-transfer rejection message:** “Your bank transfer could not be processed. We are checking the status with our payment provider and will update you within 24 hours. If funds left your account, they will be returned to you once confirmed. Please do not attempt another payment until you receive an update.” Never promise a refund until authoritative provider evidence confirms the applicable outcome.
+14. **Implementation status:** these are policy requirements, not a claim that every legacy checkout, supplier-payment, logistics or refund code path has passed verification. The known legacy web checkout bypass of `CheckoutExecutionService` remains open until fixed and tested.
 
 ## 9. Required implementation changes / audit checklist
 
@@ -282,7 +249,7 @@ These are requirements to verify against code; listing them does not mean they a
 - [ ] Preserve partial-refund sibling states; one confirmed partial refund must not falsely mark the entire child order fully refunded/completed.
 - [ ] Keep customer refund status separate from vendor recovery status.
 
-### Vendor settlements and disputes
+### Supplier payables, logistics charges and disputes
 - [ ] Verify payout eligibility per child order after fulfilment, protection window and no blocking return/dispute.
 - [ ] Implement charge.dispute.* handlers with exact names, case/deadline tracking, evidence preservation and affected-settlement hold.
 - [ ] Never create a payout record from unmatched transfer.success.
