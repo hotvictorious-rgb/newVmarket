@@ -52,6 +52,11 @@ class LogisticsCompanyPayableService
             if (!$company) {
                 throw new InvalidArgumentException('The selected logistics company must be active and approved.');
             }
+            $companyHqLga = $company->hqLga()->with('state')->first();
+            if (strtolower(trim((string) ($companyHqLga->name ?? ''))) !== 'uyo'
+                || strtolower(trim((string) ($companyHqLga->state->name ?? ''))) !== 'akwa ibom') {
+                throw new InvalidArgumentException('All approved Victorious MARKET logistics companies must be physically based in Uyo, Akwa Ibom State.');
+            }
 
             $oldCompanyId = $locked->logistics_company_id;
             if ((int) ($oldCompanyId ?? 0) === (int) $company->id
