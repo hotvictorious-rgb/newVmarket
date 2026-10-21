@@ -202,6 +202,20 @@
                                     <a href="{{ route('order.status', $order->order_number) }}" target="_blank" class="btn-dash btn-dash-outline" style="padding: 4px 8px; font-size: 11px;">
                                         Track ↗
                                     </a>
+                                    @if($order->retailer_model_order && $order->fulfillment_type === 'doorstep_delivery' && $order->payment_status === 'paid' && $order->sourcing_status === 'supplier_confirmed' && !$order->received_at && !$order->rider_id && !in_array($order->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true))
+                                        <form method="POST" action="{{ route('admin.orders.logistics_company.assign', $order->id) }}" style="display:grid; gap:5px; min-width:190px; margin-top:6px;">
+                                            @csrf
+                                            <small style="color:var(--adm-text-muted);">Assign approved logistics company</small>
+                                            <select name="logistics_company_id" required style="max-width:220px;">
+                                                <option value="">Select company</option>
+                                                @foreach($activeLogisticsCompanies as $company)
+                                                    <option value="{{ $company->id }}" @selected((int)$order->logistics_company_id === (int)$company->id)>{{ $company->company_name }}</option>
+                                                @endforeach
+                                            </select>
+                                            <input name="reason" type="text" required maxlength="2000" placeholder="Assignment reason" aria-label="Logistics assignment reason" style="max-width:220px;">
+                                            <button type="submit" class="btn-dash btn-dash-primary" style="padding:4px 8px;font-size:11px;">Assign company</button>
+                                        </form>
+                                    @endif
                                     @if($order->retailer_model_order && $order->fulfillment_type === 'doorstep_delivery' && $order->logistics_company_id && !in_array($order->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true))
                                         <form method="POST" action="{{ route('admin.orders.logistics_company_payable.override', $order->id) }}" style="display:grid; gap:5px; min-width:190px; margin-top:6px;">
                                             @csrf
