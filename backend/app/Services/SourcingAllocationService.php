@@ -51,6 +51,20 @@ class SourcingAllocationService
         ?int $preferredLgaId = null,
         string $fulfillmentType = 'doorstep_delivery'
     ): ?array {
+        if (!in_array($fulfillmentType, ['doorstep_delivery', 'in_shop_pickup'], true)) {
+            throw new InvalidArgumentException('Unsupported fulfillment type.');
+        }
+
+        // The fallback offer query below exists to apply the Uyo-origin constraint
+        // across all offers, not to bypass catalog eligibility. Never source an
+        // unapproved, unlisted, out-of-stock, or stale product.
+        if (!$product->is_approved
+            || $product->listing_status !== 'listed'
+            || !$product->is_in_stock
+            || !$product->isFresh()) {
+            return null;
+        }
+
         // 1. If an unexpired confirmed offer exists via SupplierOfferSelectionService, prioritize it
         if ($this->offerSelectionService) {
             try {
@@ -103,6 +117,7 @@ class SourcingAllocationService
             // Must have active shop
             if (!$offer->shop || $offer->shop->trashed() || !$offer->shop->is_active
                 || (int) $offer->shop->vendor_id !== (int) $offer->vendor_id
+                || ($fulfillmentType === 'in_shop_pickup' && !$offer->shop->pickup_enabled)
                 || !$this->isEligibleUyoShop($offer->shop)) {
                 return false;
             }
