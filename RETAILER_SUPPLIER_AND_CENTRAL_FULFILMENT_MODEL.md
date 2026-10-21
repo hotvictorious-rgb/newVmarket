@@ -170,3 +170,16 @@ Customers buy from Victorious MARKET, see one public catalog and VM retail price
 7. Legacy out-of-area rows remain auditable but cannot authorize new orders.
 
 **Customer promise:** *VICTORIOUS MARKET — Your Trusted Online Market in Uyo, Akwa Ibom State. Sourced in Uyo. Delivered within Uyo.*
+
+
+---
+
+## Superseding owner decision: independent customer fees and company corridor tariffs (21 October 2026)
+
+This section supersedes any earlier statement that a logistics company automatically receives 90% of the customer delivery fee. **Do not calculate logistics-company payables as a percentage of customer delivery fees for new retailer orders.**
+
+- **Customer delivery charge:** Admin configures a flat base delivery rate for the applicable customer delivery area/corridor. Charge it once per order, not once per product, supplier, or package. If a product cannot fit safely on a delivery bike, add the customer-facing bulky surcharge for each qualifying physical unit and quantity. The customer-facing base fee and bulky surcharge are a separate tariff schedule.
+- **Logistics-company payable:** Super Admin configures a separate payable for each approved logistics company and each delivery corridor. Each company's corridor tariff has its own base payable and its own bulky-unit surcharge. Calculate the company's order payable from the assigned company's corridor tariff and the actual qualifying bulky-unit quantity, independent of the customer fee.
+- **Snapshots and audit:** At assignment, snapshot the corridor, company, base payable, company bulky surcharge per unit, bulky quantity, total company payable, tariff version, and assignment actor/reason. Keep the customer-fee snapshots separate. Later tariff edits must not alter existing orders.
+- **Financial treatment:** Credit the logistics-company wallet only after verified delivery OTP, completion state, required photo proof, and reconciliation; never pay the rider directly through this company payable. If the agreed company payable exceeds the customer delivery fee, the difference is an explicit VM-funded delivery subsidy/expense. If it is lower, the residual customer delivery revenue remains VM revenue before other expenses. Admin overrides require authorization, reason, immutable audit and a safe pre-handover state; post-handover changes require a separately audited adjustment.
+- **Implementation status:** The current code still contains the old 90%-of-customer-fee fallback. This decision is a required code migration, not evidence that company-specific corridor tariffs are already implemented. Do not mark this control complete until the rate configuration, immutable order snapshots, balanced journal adjustments, admin screens, and regression tests are implemented and verified.
