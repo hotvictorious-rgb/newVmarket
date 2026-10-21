@@ -304,6 +304,63 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
+    public function test_supplier_payout_uncertain_outcome_cannot_be_released_as_unsubmitted(): void
+    {
+        [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
+        $service = app(RetailerSupplierPayoutService::class);
+        $requested = $service->requestPayout($this->vendor);
+        $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
+        $payout = $requested['payout'];
+
+        $processing = $service->markProcessing($payout->id, $this->superAdmin->id, 'RCP_TEST_SUPPLIER', 'SUPPAYOUT-UNCERTAIN-TEST');
+        $this->assertTrue($processing['success'], $processing['message'] ?? 'Supplier payout processing claim failed.');
+        $held = $service->markUncertain($payout->id, 'Simulated connection timeout after transfer submission.', 'UNCERTAIN_TIMEOUT');
+        $this->assertTrue($held['success']);
+        $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
+
+        $unsafeRelease = $service->reverse($payout->id, 'not_submitted', 'Attempt to release an uncertain transfer.');
+        $this->assertFalse($unsafeRelease['success']);
+        $this->assertTrue($unsafeRelease['protected'] ?? false);
+        $this->assertSame('uncertain', $payout->fresh()->status);
+        $this->assertSame('allocated', $payout->allocations()->first()->fresh()->status);
+        $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
+    }
+
+    public function test_supplier_payout_reversal_holds_on_partial_gateway_journal_evidence(): void
+    {
+        [$order, $item] = $this->createSupplierPayableOrderItem('8500.00');
+        $service = app(RetailerSupplierPayoutService::class);
+        $requested = $service->requestPayout($this->vendor);
+        $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
+        $payout = $requested['payout'];
+
+        $processing = $service->markProcessing($payout->id, $this->superAdmin->id, 'RCP_TEST_SUPPLIER', 'SUPPAYOUT-PARTIAL-TEST');
+        $this->assertTrue($processing['success'], $processing['message'] ?? 'Supplier payout processing claim failed.');
+
+        FinancialJournalEntry::create([
+            'order_id' => $order->id,
+            'order_item_id' => $item->id,
+            'transaction_reference' => $payout->transfer_reference,
+            'event_id' => 'EVT-SUPPLIER-PAYOUT-' . $payout->id . '-ITEM-' . $item->id,
+            'idempotency_key' => 'SUPPAYOUT-PARTIAL-' . $payout->id . '-' . $item->id,
+            'beneficiary_type' => VendorProfile::class,
+            'beneficiary_id' => $this->vendor->id,
+            'account_name' => 'supplier_payout_payable',
+            'entry_type' => 'debit',
+            'amount' => '8500.00',
+            'currency' => 'NGN',
+            'description' => 'Intentionally incomplete gateway payout journal fixture.',
+        ]);
+        $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
+
+        $reversal = $service->reverse($payout->id, 'reversed', 'Simulated reversal with incomplete local payout journal.');
+        $this->assertFalse($reversal['success']);
+        $this->assertTrue($reversal['protected'] ?? false);
+        $this->assertSame('processing', $payout->fresh()->status);
+        $this->assertSame('allocated', $payout->allocations()->first()->fresh()->status);
+        $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
+    }
+
     public function test_vendor_payout_disbursement_blocked_if_vendor_is_suspended_or_trashed()
     {
         $this->vendor->update(['marketplace_status' => 'suspended']);
