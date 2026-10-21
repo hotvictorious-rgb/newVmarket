@@ -353,6 +353,13 @@ class CustomerOrderApiController extends Controller
             'financials' => [
                 'merchandise_subtotal' => (float)$order->merchandise_subtotal,
                 'delivery_fee' => (float)$order->delivery_fee,
+                'delivery_base_fee' => (float) ($order->delivery_base_fee_snapshot ?? $order->delivery_fee),
+                'delivery_bulky_surcharge_per_unit' => (float) ($order->delivery_bulky_surcharge_per_unit_snapshot ?? 0),
+                'delivery_bulky_quantity' => (int) ($order->delivery_bulky_quantity_snapshot ?? 0),
+                'delivery_bulky_surcharge_total' => (float) \App\Services\BcMathService::mul(
+                    (string) ($order->delivery_bulky_surcharge_per_unit_snapshot ?? '0.00'),
+                    (string) ($order->delivery_bulky_quantity_snapshot ?? 0)
+                ),
                 'cashback_redeemed' => (float)$order->cashback_redeemed,
                 'grand_total' => (float)$order->grand_total,
                 'customer_cashback_earned' => (float)$order->customer_cashback_5,
