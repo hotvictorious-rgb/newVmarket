@@ -287,7 +287,7 @@ These documents serve different purposes and should remain consistent:
 9. [VENDOR_PAYOUT_POLICY.md](VENDOR_PAYOUT_POLICY.md) — explicitly legacy-only vendor payout rules; not supplier payment policy.
 10. [SHARED_HOSTING_DEPLOYMENT_GUIDE.md](SHARED_HOSTING_DEPLOYMENT_GUIDE.md) — deployment instructions.
 
-If documents conflict, follow the current owner-confirmed retailer model in `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md`, then reconcile the code and every downstream policy before release. This branch is documentation and audit work; it does not claim that the application has already been migrated. The old multi-vendor checkout, vendor commission/payout splits, vendor-managed delivery and vendor-linked riders are legacy assumptions until a separate implementation migration is completed.
+`VICTORIOUS_MARKET_SYSTEM_RULES_V1.md` is the single source of truth for current launch business rules. `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md` defines the business model in detail; `.ai/BUSINESS_RULES.md` defines operational acceptance rules; `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md` defines payment/refund controls. Other documents must agree with these sources. This branch contains documentation and audit work only; it does not prove the application has been migrated. Multi-vendor checkout, vendor commission/payout splits, vendor-managed delivery and vendor-linked riders are retired assumptions for new retailer orders and remain implementation blockers until code paths are disabled/replaced and tested.
 
 ---
 
