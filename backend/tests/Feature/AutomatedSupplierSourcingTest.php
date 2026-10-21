@@ -106,6 +106,7 @@ class AutomatedSupplierSourcingTest extends TestCase
             'user_id' => $user->id,
             'business_name' => $name . ' Enterprises',
             'marketplace_status' => 'active',
+            'kyc_status' => 'verified',
         ]);
 
         $shop = Shop::create([
