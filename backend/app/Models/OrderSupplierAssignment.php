@@ -40,9 +40,7 @@ class OrderSupplierAssignment extends Model
     {
         do {
             $code = (string) random_int(100000, 999999);
-            $exists = self::where('supplier_pickup_code', $code)
-                ->whereIn('status', ['ready_for_collection', 'collected'])
-                ->exists();
+            $exists = self::where('supplier_pickup_code', $code)->exists();
         } while ($exists);
 
         return $code;
