@@ -1301,6 +1301,7 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertSame('initiated', $result['status']);
         $this->assertSame('quarantined', $availableCredit->fresh()->status);
         $this->assertSame('quarantined', $pendingCredit->fresh()->status);
+        $this->assertSame('0.00', CustomerWalletCredit::getAvailableBalance($this->customer->id));
     }
 
     public function test_definitive_gateway_refund_failure_restores_quarantined_wallet_credit(): void
