@@ -544,6 +544,84 @@ class FinancialReconciliationEngine
             $finOpService = app(\App\Services\FinancialOperationService::class);
 
             if (empty($claimedOrder->paystack_refund_reference)) {
+                // Never create a second operation merely because the first request
+                // timed out before persisting a gateway reference. Reconcile the
+                // existing operation first; if it has no reference, keep it held
+                // for manual gateway investigation rather than dispatching again.
+                $existingRefundOperations = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+                    ->whereJsonContains('metadata->order_id', $claimedOrder->id)
+                    ->with('gatewayAttempts')
+                    ->orderBy('id')
+                    ->get();
+
+                if ($existingRefundOperations->isNotEmpty()) {
+                    $openOperations = $existingRefundOperations
+                        ->filter(fn ($operation) => !in_array($operation->status, ['confirmed', 'failed', 'reversed'], true))
+                        ->values();
+
+                    if ($openOperations->count() === 1) {
+                        $openOperation = $openOperations->first();
+                        $attemptReference = $openOperation->gatewayAttempts
+                            ->pluck('gateway_reference')
+                            ->filter()
+                            ->map(fn ($value) => (string) $value)
+                            ->last();
+                        $attemptReference = $attemptReference
+                            ?: ($openOperation->metadata['refund_reference'] ?? null);
+
+                        if ($attemptReference) {
+                            Order::where('id', $claimedOrder->id)
+                                ->where('refund_reconciliation_token', $claimToken)
+                                ->update([
+                                    'paystack_refund_reference' => (string) $attemptReference,
+                                    'paystack_refund_status' => 'pending',
+                                ]);
+                            $releaseClaim('pending');
+                            Log::notice('Recovered a persisted gateway reference for an open refund operation; verification deferred to the next reconciliation pass.', [
+                                'order_id' => $claimedOrder->id,
+                                'operation_id' => $openOperation->id,
+                                'refund_reference' => (string) $attemptReference,
+                            ]);
+                            continue;
+                        }
+
+                        $releaseClaim('pending');
+                        Log::critical('Open refund operation has no persisted gateway reference. Duplicate dispatch blocked; manual gateway investigation is required.', [
+                            'order_id' => $claimedOrder->id,
+                            'operation_id' => $openOperation->id,
+                        ]);
+                        continue;
+                    }
+
+                    if ($openOperations->count() > 1) {
+                        $releaseClaim('pending');
+                        Log::critical('Multiple open refund operations exist without an order-level gateway reference. No new refund was dispatched.', [
+                            'order_id' => $claimedOrder->id,
+                            'operation_ids' => $openOperations->pluck('id')->all(),
+                        ]);
+                        continue;
+                    }
+
+                    if ($existingRefundOperations->contains(fn ($operation) => in_array($operation->status, ['confirmed', 'reversed'], true))) {
+                        $releaseClaim('pending');
+                        Log::critical('Refund operation is already confirmed/reversed but the order has no gateway reference. Automatic redispatch blocked for finance reconciliation.', [
+                            'order_id' => $claimedOrder->id,
+                            'operation_ids' => $existingRefundOperations->pluck('id')->all(),
+                        ]);
+                        continue;
+                    }
+
+                    // Existing attempts are terminally failed. Do not have the
+                    // background worker silently create a fresh refund; an
+                    // authorized admin retry uses a distinct attempt key.
+                    $releaseClaim('failed');
+                    Log::warning('All prior refund operations failed. Automatic redispatch is blocked; an authorized admin must initiate a new attempt.', [
+                        'order_id' => $claimedOrder->id,
+                        'operation_ids' => $existingRefundOperations->pluck('id')->all(),
+                    ]);
+                    continue;
+                }
+
                 $returnCase = $claimedOrder->returnCases()
                     ->whereIn('status', ['refund_pending', 'refund_approved'])
                     ->first();
