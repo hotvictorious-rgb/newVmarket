@@ -134,11 +134,10 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'commission_rate' => 10.00,
         ]);
 
-        // Active delivery riders are vendor-owned; legacy fleet-only profiles cannot
-        // access the new vendor-managed rider terminal.
+        // New retailer deliveries use the accredited logistics company and its linked fleet rider.
         $this->riderProfile->update([
-            'vendor_id' => $this->vendorProfile->id,
-            'logistics_company_id' => null,
+            'vendor_id' => null,
+            'logistics_company_id' => $this->logisticsCompany->id,
         ]);
 
         $this->shop = Shop::create([
@@ -226,6 +225,7 @@ class DoorstepPartialAcceptanceAndVendorReturnTest extends TestCase
             'vendor_id' => $this->vendorProfile->id,
             'shop_id' => $this->shop->id,
             'rider_id' => $this->riderProfile->id,
+            'logistics_company_id' => $this->logisticsCompany->id,
             'customer_address_id' => $this->customerAddress->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'out_for_delivery',
