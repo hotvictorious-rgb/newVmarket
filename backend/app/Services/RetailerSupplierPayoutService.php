@@ -353,12 +353,26 @@ class RetailerSupplierPayoutService
                 return ['success' => false, 'protected' => true, 'message' => 'Gateway failure conflicts with a posted supplier payout journal; finance reconciliation is required.'];
             }
 
+            // Preflight every reversal/release event before writing any leg. A partial
+            // historical event must hold the entire request, not commit a partial repair.
+            foreach ($allocations as $allocation) {
+                $itemId = (int) $allocation->order_item_id;
+                $reverseEvent = 'EVT-SUPPLIER-PAYOUT-REVERSAL-' . $payout->id . '-ITEM-' . $itemId;
+                $releaseEvent = 'EVT-SUPPLIER-PAYOUT-RELEASE-' . $payout->id . '-ITEM-' . $itemId;
+                $reverseCount = FinancialJournalEntry::where('event_id', $reverseEvent)->count();
+                $releaseCount = FinancialJournalEntry::where('event_id', $releaseEvent)->count();
+                if (($reverseCount > 0 && !$this->hasExactPair($reverseEvent, $allocation, 'cash_in_escrow', 'debit', 'supplier_payout_payable', 'credit'))
+                    || ($releaseCount > 0 && !$this->hasExactPair($releaseEvent, $allocation, 'supplier_payout_payable', 'debit', 'supplier_payable', 'credit'))) {
+                    return ['success' => false, 'protected' => true, 'message' => 'Partial supplier payout reversal evidence detected; no journal or allocation was changed.'];
+                }
+            }
+
             foreach ($allocations as $allocation) {
                 $item = OrderItem::whereKey($allocation->order_item_id)->lockForUpdate()->firstOrFail();
                 $paidEvent = 'EVT-SUPPLIER-PAYOUT-' . $payout->id . '-ITEM-' . $item->id;
                 if ($this->hasExactPair($paidEvent, $allocation, 'supplier_payout_payable', 'debit', 'cash_in_escrow', 'credit')) {
                     $reverseEvent = 'EVT-SUPPLIER-PAYOUT-REVERSAL-' . $payout->id . '-ITEM-' . $item->id;
-                    if (!$this->hasExactPair($reverseEvent, $allocation, 'cash_in_escrow', 'debit', 'supplier_payout_payable', 'credit')) {
+                    if (FinancialJournalEntry::where('event_id', $reverseEvent)->count() === 0) {
                         $this->postEntry($item, $payout->supplier_vendor_id, $payout->transfer_reference, $reverseEvent,
                             'SUPPAYOUT-REV-' . $payout->id . '-ITEM-' . $item->id . '-DR',
                             'cash_in_escrow', 'debit', (string) $allocation->amount, 'Reverse confirmed supplier payout cash transfer.');
@@ -369,7 +383,7 @@ class RetailerSupplierPayoutService
                 }
 
                 $releaseEvent = 'EVT-SUPPLIER-PAYOUT-RELEASE-' . $payout->id . '-ITEM-' . $item->id;
-                if (!$this->hasExactPair($releaseEvent, $allocation, 'supplier_payout_payable', 'debit', 'supplier_payable', 'credit')) {
+                if (FinancialJournalEntry::where('event_id', $releaseEvent)->count() === 0) {
                     $this->postEntry($item, $payout->supplier_vendor_id, $payout->transfer_reference, $releaseEvent,
                         'SUPPAYOUT-RELEASE-' . $payout->id . '-ITEM-' . $item->id . '-DR',
                         'supplier_payout_payable', 'debit', (string) $allocation->amount, 'Release supplier payout reservation.');
