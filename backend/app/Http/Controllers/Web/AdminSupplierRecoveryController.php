@@ -17,20 +17,21 @@ class AdminSupplierRecoveryController extends Controller
         SupplierReassignmentRecoveryService $recoveryService
     ): RedirectResponse {
         $validated = $request->validate([
-            'new_supplier_vendor_id' => 'required|integer|exists:vendor_profiles,id',
-            'new_supplier_shop_id' => 'required|integer|exists:shops,id',
+            'replacement_source' => ['required', 'string', 'regex:/^\\d+:\\d+$/'],
             'order_item_ids' => 'required|array|min:1|max:100',
             'order_item_ids.*' => 'required|integer|distinct|exists:order_items,id',
             'reason' => 'required|string|min:5|max:2000',
             'idempotency_key' => ['required', 'string', 'min:8', 'max:80', 'regex:/^[A-Za-z0-9._:-]+$/'],
         ]);
 
+        [$newSupplierVendorId, $newSupplierShopId] = array_map('intval', explode(':', $validated['replacement_source'], 2));
+
         try {
             $result = $recoveryService->reassignRejectedItems(
                 $id,
                 $assignmentId,
-                (int) $validated['new_supplier_vendor_id'],
-                (int) $validated['new_supplier_shop_id'],
+                $newSupplierVendorId,
+                $newSupplierShopId,
                 $validated['order_item_ids'],
                 $request->user(),
                 $validated['reason'],
