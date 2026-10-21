@@ -1483,6 +1483,19 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertNull($case->fresh()->paystack_refund_id);
         $this->assertSame('failed', $order->fresh()->paystack_refund_status);
         $this->assertNull($order->fresh()->paystack_refund_reference);
+
+        $mismatchedReplay = app(\App\Services\FinancialOperationService::class)->finalizeRefundFailure(
+            $operation->fresh(),
+            [
+                'status' => 'failed',
+                'refund_reference' => 'RFD-UNRELATED-REFERENCE',
+                'amount' => 1000000,
+                'currency' => 'NGN',
+            ],
+            'RFD-UNRELATED-REFERENCE'
+        );
+        $this->assertFalse($mismatchedReplay['success']);
+        $this->assertTrue($mismatchedReplay['protected']);
     }
 
     public function test_inactive_admin_cannot_arbitrate_return_dispute(): void
