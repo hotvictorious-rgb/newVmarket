@@ -304,6 +304,37 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
+    public function test_legacy_vendor_payout_request_is_also_blocked_by_open_supplier_recovery_debt(): void
+    {
+        [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
+        $returnCase = ReturnCase::create([
+            'case_number' => 'RET-LEGACY-REC-' . strtoupper(substr(sha1((string) uniqid('', true)), 0, 8)),
+            'customer_id' => $order->customer_id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'under_review',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '8000.00',
+        ]);
+        VendorRecoveryLedger::create([
+            'vendor_id' => $this->vendor->id,
+            'return_case_id' => $returnCase->id,
+            'order_id' => $order->id,
+            'amount' => '1000.00',
+            'status' => 'pending_recovery',
+            'notes' => 'Unresolved supplier recovery fixture.',
+        ]);
+
+        $response = $this->actingAs($this->vendorUser)->post(route('vendor.payout.request'), [
+            'amount' => '5000.00',
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+        $this->assertSame(0, VendorPayoutRequest::where('vendor_id', $this->vendor->id)->count());
+    }
+
     public function test_supplier_payout_is_held_while_recovery_debt_is_unresolved(): void
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
