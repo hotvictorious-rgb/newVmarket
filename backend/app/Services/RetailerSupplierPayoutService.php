@@ -27,8 +27,9 @@ class RetailerSupplierPayoutService
     {
         return DB::transaction(function () use ($supplier) {
             $lockedSupplier = VendorProfile::whereKey($supplier->id)->lockForUpdate()->first();
-            if (!$lockedSupplier || $lockedSupplier->marketplace_status !== 'active') {
-                return ['success' => false, 'message' => 'Only an active supplier can request a supplier-payable payout.'];
+            if (!$lockedSupplier || $lockedSupplier->marketplace_status !== 'active'
+                || !$lockedSupplier->user()->where('status', 'active')->exists()) {
+                return ['success' => false, 'message' => 'Only an active supplier with an active owner account can request a supplier-payable payout.'];
             }
             if (!$lockedSupplier->isKycVerified()) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout is held until the supplier KYC status is verified.'];
@@ -253,8 +254,10 @@ class RetailerSupplierPayoutService
             if ($payout->status !== 'pending' || $payout->processing_token) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout is not available for a new transfer attempt.'];
             }
-            if ($supplier->marketplace_status !== 'active' || !$supplier->isKycVerified()) {
-                return ['success' => false, 'protected' => true, 'message' => 'Supplier is inactive or KYC is no longer verified; payout remains reserved for review.'];
+            if ($supplier->marketplace_status !== 'active'
+                || !$supplier->user()->where('status', 'active')->exists()
+                || !$supplier->isKycVerified()) {
+                return ['success' => false, 'protected' => true, 'message' => 'Supplier or owner account is inactive, or KYC is no longer verified; payout remains reserved for review.'];
             }
             if ($this->hasOpenSupplierRecovery((int) $supplier->id)) {
                 return ['success' => false, 'protected' => true, 'message' => 'An unresolved supplier recovery debt appeared after request creation; payout remains reserved for finance review.'];
