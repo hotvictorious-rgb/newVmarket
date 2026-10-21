@@ -968,13 +968,14 @@ class PortalController extends Controller
      */
     public function adminOrdersPage(Request $request)
     {
-        $recentOrders = Order::with(['customer:id,name,phone', 'vendor:id,business_name', 'shop:id,name', 'rider.user', 'items', 'returnCases'])
+        $recentOrders = Order::with(['customer:id,name,phone', 'vendor:id,business_name', 'shop:id,name', 'logisticsCompany', 'rider.user', 'items', 'returnCases'])
             ->latest()
             ->get();
 
         $pendingSettlementsCount = Order::where('vendor_settlement_status', 'eligible')->count();
+        $activeLogisticsCompanies = LogisticsCompanyProfile::where('status', 'active')->whereNull('deleted_at')->orderBy('company_name')->get(['id', 'company_name']);
 
-        return view('admin.orders', compact('recentOrders', 'pendingSettlementsCount'));
+        return view('admin.orders', compact('recentOrders', 'pendingSettlementsCount', 'activeLogisticsCompanies'));
     }
 
     /**
