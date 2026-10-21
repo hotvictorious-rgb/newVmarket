@@ -22,6 +22,7 @@ class Order extends Model
         'collection_point_id',
         'rider_id',
         'fulfillment_type',
+        'retailer_model_order',
         'order_status',
         'payment_status',
         'paid_at',
@@ -35,6 +36,14 @@ class Order extends Model
         'logistics_company_id',
         'merchandise_subtotal',
         'delivery_fee',
+        'supplier_cost_total_snapshot',
+        'retailer_merchandise_margin',
+        'logistics_company_payable_default_amount',
+        'logistics_company_payable_amount',
+        'logistics_company_payable_override_reason',
+        'logistics_company_payable_override_by',
+        'logistics_company_payable_override_at',
+        'logistics_company_payable_override_revision',
         'cashback_redeemed',
         'wallet_credit_applied',
         'grand_total',
@@ -99,6 +108,12 @@ class Order extends Model
     protected $casts = [
         'merchandise_subtotal' => 'decimal:2',
         'delivery_fee' => 'decimal:2',
+        'supplier_cost_total_snapshot' => 'decimal:2',
+        'retailer_merchandise_margin' => 'decimal:2',
+        'logistics_company_payable_default_amount' => 'decimal:2',
+        'logistics_company_payable_amount' => 'decimal:2',
+        'logistics_company_payable_override_at' => 'datetime',
+        'retailer_model_order' => 'boolean',
         'cashback_redeemed' => 'decimal:2',
         'wallet_credit_applied' => 'decimal:2',
         'grand_total' => 'decimal:2',
@@ -374,12 +389,12 @@ class Order extends Model
     }
 
     /**
-     * Mathematical Commercial Split Engine (90 / 5 / 5 Invariant) via BCMath.
-     * Guarantees Zero Float Drift: Δ = ₦0.00.
+     * Historical marketplace split helper. Do not use for new retailer-model orders;
+     * those use item-level supplier cost, separate active cashback, and a 90% logistics-company default.
      */
     public static function computeSplits(string $merchandiseSubtotal, string $deliveryFee = '0.00'): array
     {
-        // 90% guaranteed to merchant
+        // LEGACY ONLY: 90% merchandise share to marketplace vendor
         $vendorNet = bcmul($merchandiseSubtotal, '0.90', 2);
         
         // 5% customer cashback rewards
@@ -398,7 +413,7 @@ class Order extends Model
             $platformMargin = bcadd($platformMargin, $delta, 2);
         }
 
-        // Delivery fee split: 90% Logistics Company / 10% Victorious Market
+        // LEGACY HELPER ONLY: 90/10 delivery split. New retailer orders persist an auditable company-payable snapshot and override.
         $logisticsNet = bcmul($deliveryFee, '0.90', 2);
         $platformDeliveryFee = bcsub($deliveryFee, $logisticsNet, 2);
 
@@ -415,6 +430,9 @@ class Order extends Model
 
     public function getLogisticsNetCutAttribute(): string
     {
+        if ($this->retailer_model_order) {
+            return (string) ($this->logistics_company_payable_amount ?? $this->logistics_company_payable_default_amount ?? '0.00');
+        }
         return $this->logistics_fee_retained ?? bcmul((string)$this->delivery_fee, '0.90', 2);
     }
 
