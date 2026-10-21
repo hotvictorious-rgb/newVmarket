@@ -377,3 +377,10 @@ Status: FIXED — focused regression passed. No merge or deployment.
 **Change:** The selector now requires `availability_confirmed_at <= now` and non-null `availability_confirmed_by`. Added feature regressions for an otherwise eligible offer without a confirming actor and an offer with a future-dated confirmation timestamp; both assert the selector returns no offer.
 
 **Status:** FIXED — CI/test execution still pending. The regression was added but has not been run in this environment. This does not close the separate post-payment supplier-recovery, balanced payable reclassification, or supplier-specific payout implementation gaps.
+
+## Newly discovered finding — VM-AUD-070 (21 October 2026)
+
+**Severity:** Medium
+**Finding:** The audited pre-payment supplier override checked the replacement offer's availability and price within a transaction but did not lock the offer row. A concurrent update to offer availability or wholesale cost could race the read and the item snapshot update.
+**Change:** The override now captures one timestamp for the offer eligibility check and uses `lockForUpdate()` on the selected offer row before snapshotting its supplier cost. The existing database transaction holds the lock through assignment and cost/margin updates.
+**Status:** Code change committed; automated tests not run. Add concurrency coverage when the repository's test runner is available. This only hardens pre-payment override; it does not implement paid-order recovery or supplier-specific payouts.
