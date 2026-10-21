@@ -16,6 +16,9 @@ Schedule::command('backup:google-drive')->dailyAt('02:00');
 // Automated Gateway Reconciliation for Timeouts and In-Flight Transfers
 Schedule::command('finance:reconcile')->everyFifteenMinutes();
 
+// Daily read-only supplier payable reconciliation; keep this full-ledger scan off the frequent gateway loop.
+Schedule::command('finance:reconcile-supplier-payables')->dailyAt('02:30')->withoutOverlapping();
+
 // Mature eligible cashback after the claim window + maturity buffer and expire lots 365 days after actual maturity.
 Schedule::command('cashback:mature')->everyFifteenMinutes()->withoutOverlapping();
 
