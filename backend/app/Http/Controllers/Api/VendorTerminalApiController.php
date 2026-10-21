@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Order;
+use App\Models\OrderSupplierAssignment;
 use App\Models\PickupReservation;
 use App\Models\Product;
 use App\Models\Shop;
@@ -211,20 +212,26 @@ class VendorTerminalApiController extends Controller
         $vendor = $ctx['vendor'];
         $shop = $ctx['shop'];
 
-        $query = Order::where('vendor_id', $vendor->id)
+        $query = Order::whereHas('supplierAssignments', function ($assignmentQuery) use ($vendor, $shop, $ctx) {
+                $assignmentQuery->where('supplier_vendor_id', $vendor->id);
+                if ($ctx['is_employee'] && $shop) {
+                    $assignmentQuery->where('supplier_shop_id', $shop->id);
+                }
+            })
             ->with([
                 'customer:id,name,phone',
-                'shop:id,name,address',
                 'logisticsCompany:id,company_name,contact_phone',
                 'rider:id,user_id,plate_number,vehicle_type',
                 'rider.user:id,name,phone',
-                'items.product:id,name,unit_price,thumbnail',
+                'items' => function ($itemsQuery) use ($vendor, $shop, $ctx) {
+                    $itemsQuery->where('supplier_vendor_id', $vendor->id);
+                    if ($ctx['is_employee'] && $shop) {
+                        $itemsQuery->where('supplier_shop_id', $shop->id);
+                    }
+                    $itemsQuery->with('product:id,name,unit_price,thumbnail');
+                },
             ])
             ->latest();
-
-        if ($ctx['is_employee'] && $shop) {
-            $query->where('shop_id', $shop->id);
-        }
 
         if ($request->filled('status')) {
             $status = trim($request->query('status'));
@@ -270,19 +277,25 @@ class VendorTerminalApiController extends Controller
         $vendor = $ctx['vendor'];
         $shop = $ctx['shop'];
 
-        $query = Order::where('vendor_id', $vendor->id)
+        $query = Order::whereHas('supplierAssignments', function ($assignmentQuery) use ($vendor, $shop, $ctx) {
+                $assignmentQuery->where('supplier_vendor_id', $vendor->id);
+                if ($ctx['is_employee'] && $shop) {
+                    $assignmentQuery->where('supplier_shop_id', $shop->id);
+                }
+            })
             ->with([
                 'customer:id,name,phone,email',
-                'shop:id,name,address,phone',
                 'logisticsCompany:id,company_name,contact_phone',
                 'rider:id,user_id,plate_number,vehicle_type',
                 'rider.user:id,name,phone',
-                'items.product',
+                'items' => function ($itemsQuery) use ($vendor, $shop, $ctx) {
+                    $itemsQuery->where('supplier_vendor_id', $vendor->id);
+                    if ($ctx['is_employee'] && $shop) {
+                        $itemsQuery->where('supplier_shop_id', $shop->id);
+                    }
+                    $itemsQuery->with('product');
+                },
             ]);
-
-        if ($ctx['is_employee'] && $shop) {
-            $query->where('shop_id', $shop->id);
-        }
 
         $order = $query->findOrFail($id);
 
@@ -290,6 +303,68 @@ class VendorTerminalApiController extends Controller
             'status' => true,
             'data' => $order,
         ]);
+    }
+
+    /**
+     * POST /api/v1/vendor/orders/{id}/confirm-availability
+     * Confirm this supplier's portion of a paid multi-supplier retailer order.
+     */
+    public function confirmOrderAvailability(Request $request, int $id): JsonResponse
+    {
+        $ctx = $this->resolveVendorContext($request);
+        $vendor = $ctx['vendor'];
+        $shop = $ctx['shop'];
+        $validated = $request->validate([
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        $result = DB::transaction(function () use ($id, $vendor, $shop, $ctx, $validated) {
+            $order = Order::whereKey($id)->lockForUpdate()->firstOrFail();
+            $assignmentQuery = OrderSupplierAssignment::where('order_id', $order->id)
+                ->where('supplier_vendor_id', $vendor->id);
+            if ($ctx['is_employee'] && $shop) {
+                $assignmentQuery->where('supplier_shop_id', $shop->id);
+            }
+            $assignment = $assignmentQuery->lockForUpdate()->first();
+
+            if (!$assignment) {
+                return ['success' => false, 'status_code' => 404, 'message' => 'This order has no supplier assignment for your account or shop.'];
+            }
+            if ($order->payment_status !== 'paid' || $order->order_status !== 'confirmed') {
+                return ['success' => false, 'status_code' => 422, 'message' => 'Supplier availability can only be confirmed after payment is verified and the order is confirmed.'];
+            }
+            if ($assignment->status === 'supplier_confirmed') {
+                return ['success' => true, 'message' => 'Your supplier assignment was already confirmed.', 'order' => $order];
+            }
+            if ($assignment->status !== 'awaiting_supplier_confirmation') {
+                return ['success' => false, 'status_code' => 422, 'message' => 'This supplier assignment is not awaiting confirmation.'];
+            }
+
+            $assignment->status = 'supplier_confirmed';
+            $assignment->supplier_confirmed_at = Carbon::now();
+            $assignment->supplier_response_notes = $validated['notes'] ?? null;
+            $assignment->save();
+
+            $hasPending = OrderSupplierAssignment::where('order_id', $order->id)
+                ->where('status', '!=', 'supplier_confirmed')
+                ->exists();
+            $order->sourcing_status = $hasPending ? 'partially_supplier_confirmed' : 'supplier_confirmed';
+            $order->save();
+
+            return [
+                'success' => true,
+                'message' => $hasPending
+                    ? 'Availability confirmed for your items. Victorious MARKET is waiting for the remaining supplier(s).'
+                    : 'All suppliers have confirmed availability. Victorious MARKET can proceed with logistics coordination.',
+                'order' => $order,
+            ];
+        });
+
+        return response()->json([
+            'status' => (bool) ($result['success'] ?? false),
+            'message' => $result['message'] ?? 'Unable to confirm supplier availability.',
+            'data' => $result['order'] ?? null,
+        ], ($result['success'] ?? false) ? 200 : ($result['status_code'] ?? 422));
     }
 
     /**
