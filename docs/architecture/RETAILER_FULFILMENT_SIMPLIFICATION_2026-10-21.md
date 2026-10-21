@@ -143,3 +143,12 @@ Further review found that both payout initiation paths could automatically recla
 - Added a regression test for stale vendor and logistics processing claims: both requests must remain pending and preserve their claim instead of submitting another gateway transfer.
 - Commits: controller 5adcea40ab11b359a1c10e57378051a9b5288361; regression tests 465d730dd74c125e7c5c8de6fb2c359ebd2b2b76.
 - Verification status: source and test changes are committed on the working branch. PHP tests and CI have not been run. This must be verified before merge/deployment.
+
+## 16. Logistics payout rejection must prove the original reservation (21 October 2026)
+
+The logistics rejection path also lacked the vendor path's request-journal existence check. It credited the company's wallet and wrote a reversal even when no request-time journal proved that the wallet had been debited and a payout liability reserved. For legacy/corrupt rows this could create money from an unproven reservation.
+
+- Wallet restoration and the balanced rejection journal now occur only if event EVT-FLEET-REQ-{payout_id} exists. If absent, the payout is marked rejected for operational closure, but no wallet credit or fabricated journal movement is posted; the row is marked REJECTION_JOURNAL_MISSING and a critical finance log is emitted for manual reconciliation.
+- The normal rejection regression test now seeds the two original request-time journal legs. A second test asserts a missing request journal does not credit the wallet or create rejection journal entries.
+- Commits: controller d872ba5ae19f46e9676bd01f8287b4b6503861b1; test fixture ebdb09fa246d14b2e1c469933b849e9962b3f424; missing-journal regression 26be484113394b86130ccacc5a6f7c8d23e20e56.
+- Verification status: committed source and tests have not been executed in PHP or CI. Verify normal and legacy payout rejection cases before release.
