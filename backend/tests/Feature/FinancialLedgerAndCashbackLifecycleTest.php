@@ -56,7 +56,9 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
 
         $this->seed();
 
-        $this->uyoLga = Lga::where('name', 'Uyo')->firstOrFail();
+        $this->uyoLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->firstOrFail();
         $this->ikotEkpeneLga = Lga::where('name', 'Ikot Ekpene')->first() ?? Lga::where('id', '!=', $this->uyoLga->id)->firstOrFail();
 
         // Super Admin
@@ -164,7 +166,9 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         ]);
 
         // Logistics Company & Rider
-        $this->fleetCompany = LogisticsCompanyProfile::first();
+        $this->fleetCompany = LogisticsCompanyProfile::where('status', 'active')
+            ->where('hq_lga_id', $this->uyoLga->id)
+            ->first();
         if (!$this->fleetCompany) {
             $logisticsUser = User::create([
                 'name' => 'Swift Courier Ltd',
