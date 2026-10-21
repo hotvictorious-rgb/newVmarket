@@ -906,8 +906,25 @@ class ReturnAndRefundService
                     }
                 }
 
-                $cashbackReversal = BcMathService::mul($merchandiseRefund, '0.05');
                 $cashbackLot = CustomerCashbackLedger::where('order_id', $order->id)->lockForUpdate()->first();
+                $priorCashbackLiabilityReversed = (string) FinancialJournalEntry::where('order_id', $order->id)
+                    ->where('account_name', 'cashback_liability')
+                    ->where('entry_type', 'debit')
+                    ->where('event_id', 'like', 'EVT-REFUND-CB-REV-%')
+                    ->sum('amount');
+                $priorSpentRecovery = (string) CashbackRecoveryLedger::where('order_id', $order->id)->sum('amount');
+                $alreadyReversed = BcMathService::add($priorCashbackLiabilityReversed, $priorSpentRecovery);
+                $remainingRewardToReverse = BcMathService::sub((string) $order->customer_cashback_5, $alreadyReversed);
+                if (BcMathService::comp($remainingRewardToReverse, '0.00') < 0) {
+                    $remainingRewardToReverse = '0.00';
+                }
+                $cashbackReversal = BcMathService::mul($merchandiseRefund, '0.05');
+                if (BcMathService::comp($cashbackReversal, $remainingRewardToReverse) > 0) {
+                    $cashbackReversal = $remainingRewardToReverse;
+                }
+                if (BcMathService::comp($cashbackReversal, '0.00') > 0 && !$cashbackLot) {
+                    throw new \\RuntimeException('Retailer cashback reversal has no original cashback ledger lot.');
+                }
                 $unspentCashback = '0.00';
                 if ($cashbackLot && in_array($cashbackLot->status, ['pending_maturation', 'available'], true)) {
                     $unspentCashback = BcMathService::comp((string) $cashbackLot->amount, $cashbackReversal) <= 0
