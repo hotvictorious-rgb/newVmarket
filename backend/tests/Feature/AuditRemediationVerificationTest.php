@@ -1366,4 +1366,53 @@ class AuditRemediationVerificationTest extends TestCase
             $this->assertStringContainsString('Unauthorized', $exception->getMessage());
         }
     }
+
+    public function test_definitively_failed_refund_can_be_retried_with_a_new_attempt_key(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+        ]);
+
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldReceive('initiateRefund')->twice()->andReturn(
+            [
+                'success' => false,
+                'code' => 'DEFINITIVE_REJECTION',
+                'is_definitive' => true,
+                'message' => 'Temporary gateway rejection.',
+            ],
+            [
+                'success' => true,
+                'status' => 'pending',
+                'refund_reference' => 'RFD-RETRY-SECOND-ATTEMPT',
+            ]
+        );
+        $service = new ReturnAndRefundService($gateway);
+
+        $first = $service->adminDisburseRefund($this->superAdmin, $case);
+        $this->assertFalse($first['success']);
+
+        $second = $service->adminDisburseRefund($this->superAdmin, $case->fresh());
+        $this->assertTrue($second['success']);
+        $this->assertSame('initiated', $second['status']);
+
+        $operations = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+            ->where('metadata->return_case_id', $case->id)
+            ->orderBy('id')
+            ->get();
+        $this->assertCount(2, $operations);
+        $this->assertSame('failed', $operations[0]->status);
+        $this->assertSame('initiated', $operations[1]->status);
+        $this->assertNotSame($operations[0]->idempotency_key, $operations[1]->idempotency_key);
+    }
 }
