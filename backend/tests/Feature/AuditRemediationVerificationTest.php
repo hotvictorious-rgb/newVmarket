@@ -1231,4 +1231,36 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertTrue($result['protected']);
         $this->assertStringContainsString('active super administrator', $result['message']);
     }
+
+    public function test_inactive_super_admin_cannot_disburse_return_refund(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+        ]);
+        $inactiveAdmin = User::create([
+            'name' => 'Inactive Refund Admin',
+            'email' => 'inactive-refund-admin@vmarket.ng',
+            'password' => bcrypt('AdminPass123!'),
+            'user_type' => 'super_admin',
+            'status' => 'inactive',
+        ]);
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldNotReceive('initiateRefund');
+
+        $result = (new ReturnAndRefundService($gateway))->adminDisburseRefund($inactiveAdmin, $case);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('Only Super Admin', $result['message']);
+        $this->assertNull($case->fresh()->refund_claim_token);
+        $this->assertSame('refund_pending', $case->fresh()->status);
+    }
 }
