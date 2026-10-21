@@ -354,3 +354,14 @@ The legacy web checkout handler `PortalController::processCheckout()` previously
 - Full 11-suite regression suite passed: **194 tests / 1237 assertions (100% pass)**.
 Status: FIXED — focused regression passed. No merge or deployment.
 
+
+
+### VM-AUD-068 — retailer orders must not use legacy order-level vendor disbursement (21 October 2026)
+
+**Finding:** The legacy `OrderSettlementService::disburseVendorSettlement` path pays `order.vendor` from the aggregate `vendor_net_90` amount and writes legacy `vendor_payable` / `cash_in_escrow` entries. That path is incompatible with the retailer model, where the capture journal recognizes item-level private-supplier payables and one customer order may span multiple suppliers. A stale or manually changed `vendor_settlement_status=eligible` value must not authorize that payout.
+
+**Change:** The service now rejects every `retailer_model_order` before checking the legacy eligibility flag or mutating settlement state / payout journals. This is a fail-closed barrier, not a supplier payout implementation. Retailer supplier payouts still require a dedicated supplier-level workflow that proves collection/fulfilment, eligibility, holds, amount reconciliation, idempotency, authorization and bank-transfer evidence.
+
+**Regression coverage added:** The supplier-rejection feature test forces a rejected paid retailer order to the legacy `eligible` state, attempts disbursement, and asserts rejection, unchanged settlement status and unchanged journal-entry count. It also directly invokes rider pickup OTP verification on a supplier-rejection hold and asserts custody remains blocked without order-state mutation.
+
+**Status:** Code and regression assertions committed on `docs/retailer-central-fulfilment-model`; test suite not run in this session. No CI pass, merge, or deployment is claimed. Post-payment supplier recovery, balanced supplier-payable reclassification and dedicated supplier payout remain open.
