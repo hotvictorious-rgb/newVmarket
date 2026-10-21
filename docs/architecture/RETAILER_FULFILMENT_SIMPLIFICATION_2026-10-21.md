@@ -122,3 +122,13 @@ A source trace of the legacy vendor payout path found that it could create new `
 - Verification status: source change committed to the working branch; no PHP test run or CI result is available. Add/execute a regression test that proves missing bank details reverse allocations and leave the payout request retryable before release.
 
 **Still-open supplier money blocker:** the legacy vendor payout allocator explicitly excludes `retailer_model_order=true`, and the legacy order settlement payout is fail-closed for retailer-model orders. That prevents paying a multi-supplier retailer order to the order-level `vendor_id`, but it also means there is no completed supplier-specific payout workflow yet. Supplier-payable journal balances must remain held until a dedicated workflow atomically reserves each supplier's reconciled, fulfilment-eligible order-item payable, excludes disputed/returned/rejected/reassigned items, prevents cross-order or cross-supplier allocation, and finalizes or reverses the gateway transfer idempotently. Do not enable supplier payouts by removing the legacy guard or by using `VendorProfile::getWithdrawableBalance()` alone.
+
+## 14. Prevent rejection/refund of an in-flight payout (21 October 2026)
+
+A payout-state audit found a high-severity asymmetry: vendor payout rejection already attempted to guard uncertain transfers, but logistics payout rejection had no gateway-state guard at all. It could mark a payout rejected, restore the logistics company's wallet and post a reversal while a Paystack transfer was still processing, creating a double-payment risk if the original transfer later succeeded. The vendor guard also failed to explicitly reject any non-empty active processing claim when older data lacked the usual gateway markers.
+
+- Added a fail-closed logistics rejection gate. It refuses rejection while gateway status is pending/processing/OTP/received/unknown, a transfer code/reference exists, any processing token exists, or timeout evidence is present. It also refuses to perform a wallet refund if the company profile is missing/archived.
+- Tightened vendor rejection to block any non-empty processing token, in addition to the existing gateway/reference/timeout checks.
+- Added regression tests asserting that uncertain logistics payout rejection leaves the payout pending, does not restore the wallet, and creates no rejection journal; vendor rejection with a processing claim likewise leaves status and journal unchanged.
+- Commits: controller a8bb953f5856d8fa1b9d2c0d24964c3e978bfd5b; regression tests 026d7eeeb747b3a3a116d3d0bbdbe20c70125e1d.
+- Verification status: code and test changes are committed on the working branch; the test suite has not been executed. These tests must run before merge/deployment.
