@@ -832,7 +832,15 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $this->assertTrue($assigned['success']);
         $this->assertSame($this->fleetCompany->id, (int) $assigned['order']->logistics_company_id);
 
-        $overridden = $service->override($assigned['order'], $this->superAdmin, '1100.00', 'Rain and traffic surcharge agreed with logistics company');
+        // Commercial rate may still be adjusted after rider assignment, but not after
+        // the rider confirms physical parcel custody.
+        $this->rider->update(['logistics_company_id' => $this->fleetCompany->id, 'vendor_id' => null, 'shop_id' => null]);
+        $preCustodyOrder = $assigned['order'];
+        $preCustodyOrder->rider_id = $this->rider->id;
+        $preCustodyOrder->pickup_confirmed_by_rider = false;
+        $preCustodyOrder->save();
+
+        $overridden = $service->override($preCustodyOrder->fresh(), $this->superAdmin, '1100.00', 'Rain and traffic surcharge agreed with logistics company');
         $this->assertTrue($overridden['success']);
         $this->assertSame('1100.00', $overridden['order']->logistics_company_payable_amount);
         $this->assertSame('900.00', $overridden['order']->logistics_company_payable_default_amount);
@@ -849,6 +857,14 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         ]);
 
         $deliveredOrder = $overridden['order'];
+        $deliveredOrder->pickup_confirmed_by_rider = true;
+        $deliveredOrder->save();
+        try {
+            $service->override($deliveredOrder->fresh(), $this->superAdmin, '1200.00', 'Late override after rider custody');
+            $this->fail('Payable override must be rejected after rider custody begins.');
+        } catch (\\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('before rider custody', $exception->getMessage());
+        }
         $deliveredOrder->order_status = 'delivered';
         $deliveredOrder->received_at = Carbon::now();
         $deliveredOrder->delivery_confirmed_by_customer = true;
