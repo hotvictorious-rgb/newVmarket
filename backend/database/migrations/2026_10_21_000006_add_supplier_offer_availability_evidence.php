@@ -23,7 +23,9 @@ return new class extends Migration
             if (!Schema::hasColumn('supplier_offers', 'availability_expires_at')) {
                 $table->timestamp('availability_expires_at')->nullable();
             }
-            $table->index(['product_id', 'is_available', 'availability_expires_at'], 'supplier_offer_eligibility_idx');
+            if (!Schema::hasIndex('supplier_offers', 'supplier_offer_eligibility_idx')) {
+                $table->index(['product_id', 'is_available', 'availability_expires_at'], 'supplier_offer_eligibility_idx');
+            }
         });
     }
 
