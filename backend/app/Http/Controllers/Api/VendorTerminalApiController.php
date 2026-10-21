@@ -293,7 +293,7 @@ class VendorTerminalApiController extends Controller
                     if ($ctx['is_employee'] && $shop) {
                         $itemsQuery->where('supplier_shop_id', $shop->id);
                     }
-                    $itemsQuery->with('product');
+                    $itemsQuery->with('product:id,name,unit_price,thumbnail');
                 },
             ]);
 
