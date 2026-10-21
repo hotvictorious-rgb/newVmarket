@@ -513,3 +513,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Reduces duplicate Paystack recipient records and makes recipient setup failures easier to reconcile. This is not a duplicate-money-transfer fix; transfer initiation already avoids automatic retry and ambiguous transfer results remain held for reconciliation.
 
 **Verification boundary:** Source committed; HTTP-fake regression test and CI remain pending. No merge or deployment.
+
+
+### VM-AUD-109 — Fail closed when refund payment evidence or amount is missing (21 October 2026)
+
+**Finding:** The approved-return refund flow dispatched to Paystack only when an original order payment reference was present. If it was missing, execution could fall through into settlement code, which generated synthetic refund/escrow journal entries. Zero-value cases also lacked an explicit positive-amount guard at this service boundary.
+
+**Fix:** Before acquiring the refund claim, require the order to be marked paid, require a non-empty original payment reference, and require a strictly positive total refund. Add a final guard that releases the claim and refuses settlement unless the Paystack financial-operation workflow returned confirmed settlement evidence. Added feature tests for missing payment reference and zero refund amount, asserting no journal writes and no case completion.
+
+**Business impact:** Prevents a return from being marked refunded in the books when the application cannot even identify the original paid transaction, and prevents zero-value cases from creating artificial financial activity. This does not prove bank settlement on its own; the gateway financial operation remains the authority.
+
+**Verification boundary:** Code and regression tests committed; tests/CI have not run. No merge or deployment.
