@@ -4049,14 +4049,14 @@ class PortalController extends Controller
                         ->where('is_active', true)
                         ->where('is_online', true)
                         ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                        ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
+                        ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'))
                         ->first()
                         ?? RiderProfile::whereNull('vendor_id')
                         ->whereNull('shop_id')
                         ->where('logistics_company_id', $assignedCp->logistics_company_id)
                             ->where('is_active', true)
                             ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                            ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
+                            ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'))
                             ->first();
                 }
             }
@@ -4066,13 +4066,13 @@ class PortalController extends Controller
                     ->where('is_active', true)
                     ->where('is_online', true)
                     ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                    ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
+                    ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'))
                     ->first()
                     ?? RiderProfile::whereNull('vendor_id')
                     ->whereNull('shop_id')
                     ->where('is_active', true)
                         ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                        ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
+                        ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'))
                         ->first();
                 if ($rider && $rider->logistics_company_id) {
                     $logisticsCompanyId = $rider->logistics_company_id;
