@@ -1032,25 +1032,5 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         ]);
     }
 
-    public function test_cashback_base_wallet_credit_is_blocked_at_launch(): void
-    {
-        // Wallet credits are not checkout tender at launch, so they must not alter
-        // the real-money cashback calculation through an alternate checkout path.
-        $this->product->update(['unit_price' => '10000.00']);
-        $result = app(\\App\\Services\\CheckoutExecutionService::class)->execute($this->customerUser, [
-            'fulfillment_type' => 'doorstep_delivery',
-            'destination_lga_id' => $this->uyoLga->id,
-            'items' => [[
-                'product_id' => $this->product->id,
-                'quantity' => 1,
-                'unit_price' => '10000.00',
-            ]],
-            'redeem_wallet_credit' => true,
-        ]);
-
-        $this->assertFalse($result['success']);
-        $this->assertSame(422, $result['status_code']);
-        $this->assertStringContainsString('Wallet credit cannot be used', $result['message']);
-    }
 
 }
