@@ -152,3 +152,13 @@ The logistics rejection path also lacked the vendor path's request-journal exist
 - The normal rejection regression test now seeds the two original request-time journal legs. A second test asserts a missing request journal does not credit the wallet or create rejection journal entries.
 - Commits: controller d872ba5ae19f46e9676bd01f8287b4b6503861b1; test fixture ebdb09fa246d14b2e1c469933b849e9962b3f424; missing-journal regression 26be484113394b86130ccacc5a6f7c8d23e20e56.
 - Verification status: committed source and tests have not been executed in PHP or CI. Verify normal and legacy payout rejection cases before release.
+
+## 17. Logistics payout reversal request-journal evidence (21 October 2026)
+
+The authoritative logistics payout reversal service restored the company's wallet before checking whether the original request-time reservation journal existed. It could also write request-side reversal entries even when no request journal proved the wallet debit and payout liability. This bypassed the request-journal guard added to the manual rejection path.
+
+- The reversal service now checks for EVT-FLEET-REQ-{payout_id} before crediting the wallet. If the request journal is absent, it leaves the wallet unchanged, records REQUEST_JOURNAL_MISSING, emits a critical finance log, and does not create request-side journal entries.
+- If a confirmed payout journal exists, its actual gateway reversal accounting is still recorded. Request-side journal reversal entries are appended only when the corresponding request journal exists.
+- Added a regression test invoking the reversal service on a failed payout with no request journal and asserting no wallet credit and no journal mutation.
+- Commits: service 186fc9c2fc241a05c0bef8a06b75ceb5a7f2ee11; regression test 8ed3cfc6f868b9eebc3ac23c7eaf0d969edf5799.
+- Verification status: source and test changes are committed; PHP tests and CI have not been run. Existing reversal tests must be verified for both request-journal-present and missing-journal paths before release.
