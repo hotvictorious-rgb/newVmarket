@@ -132,7 +132,7 @@ class CheckoutExecutionService
             return [
                 'success' => false,
                 'status_code' => 422,
-                'message' => 'Delivery is vendor-managed at launch. Rider and logistics-fleet assignment happens after checkout, not during customer checkout.',
+                'message' => 'Customers cannot choose a logistics company or rider. Victorious MARKET assigns an approved logistics company after payment and supplier availability confirmation.',
             ];
         }
 
@@ -274,7 +274,7 @@ class CheckoutExecutionService
             foreach ($itemsToCreate as $itemData) {
                 $offer = $itemData['resolved_offer'] ?? null;
                 $unitCost = $offer['wholesale_cost'] ?? null;
-                if ($unitCost === null || BcMathService::comp((string) $unitCost, '0.00') < 0) {
+                if ($unitCost === null || BcMathService::comp((string) $unitCost, '0.00') <= 0) {
                     return [
                         'error' => true,
                         'status_code' => 422,
