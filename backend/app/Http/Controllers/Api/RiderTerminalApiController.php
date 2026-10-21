@@ -366,10 +366,18 @@ class RiderTerminalApiController extends Controller
 
             $maxAttemptsReached = $order->delivery_attempt_count >= 2;
             $returnCase = null;
+            $requiresSupplierAssignment = false;
 
             if ($maxAttemptsReached) {
                 $vendorReturnOtp = sprintf('%06d', random_int(100000, 999999));
                 $caseNumber = 'RET-' . date('Ymd') . '-' . strtoupper(Str::random(4));
+                $supplierIds = \App\Models\OrderItem::where('order_id', $order->id)
+                    ->pluck('fulfillment_supplier_vendor_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->filter(fn ($id) => $id > 0)
+                    ->unique()
+                    ->values();
+                $requiresSupplierAssignment = $order->retailer_model_order && $supplierIds->count() !== 1;
 
                 $returnCase = ReturnCase::create([
                     'case_number' => $caseNumber,
@@ -381,8 +389,8 @@ class RiderTerminalApiController extends Controller
                     'rejection_category' => 'customer_unreachable',
                     'vendor_return_otp' => $vendorReturnOtp,
                     'doorstep_photo_path' => $photoPath,
-                    'returned_by_rider_id' => $rider->id,
-                    'status' => 'in_transit_back_to_vendor',
+                    'returned_by_rider_id' => $rider->user_id,
+                    'status' => $requiresSupplierAssignment ? 'pending_supplier_assignment' : 'in_transit_back_to_vendor',
                     'return_reason' => 'other',
                     'customer_description' => "Customer unreachable after {$order->delivery_attempt_count} delivery attempts ({$validated['reason']}). Parcel returning to vendor shop.",
                     'total_refundable_amount' => $order->merchandise_subtotal,
@@ -392,6 +400,11 @@ class RiderTerminalApiController extends Controller
             }
 
             $order->save();
+
+            if ($returnCase) {
+                NotificationDispatchService::dispatchDoorstepReturnInitiated($returnCase);
+                NotificationDispatchService::dispatchVendorReturnOtpIssued($returnCase);
+            }
 
             AdminAuditLog::create([
                 'user_id' => $rider->user_id,
@@ -425,7 +438,7 @@ class RiderTerminalApiController extends Controller
                     'return_case' => $returnCase ? [
                         'id' => $returnCase->id,
                         'case_number' => $returnCase->case_number,
-                        'vendor_return_otp' => $returnCase->vendor_return_otp,
+                        'return_destination_requires_admin_assignment' => $returnCase->status === 'pending_supplier_assignment',
                         'status' => $returnCase->status,
                     ] : null,
                 ],
