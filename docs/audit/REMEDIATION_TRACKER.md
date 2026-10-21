@@ -483,3 +483,13 @@ Status: FIXED — focused regression passed. No merge or deployment.
 **Change:** The public product eligibility scope now requires `vendor_profiles.kyc_status = verified`, aligning catalog visibility with sourcing eligibility. Added regression coverage for a confirmed offer from a supplier whose KYC status is no longer verified.
 
 **Status:** Source and test committed on `docs/retailer-central-fulfilment-model`; automated tests have not run for this latest commit. No merge or deployment.
+
+
+## VM-AUD-089 — Match web checkout bulky delivery preview to per-unit pricing (21 October 2026)
+
+**Severity:** Medium  
+**Finding:** The web checkout preview applied the bulky surcharge once for the selected product regardless of quantity, while authoritative checkout execution correctly applies the surcharge to each physical bulky unit. A customer ordering multiple bulky units could therefore see an underquoted delivery total before submitting checkout.
+
+**Change:** Checkout preview now calculates the base delivery fee once and adds the configured bulky surcharge multiplied by the selected quantity, matching the authoritative checkout calculation. The preview resolves the confirmed Uyo supplier offer and does not use the catalog contributor's shop as the dispatch origin.
+
+**Status:** Source committed on `docs/retailer-central-fulfilment-model`; automated tests have not run for this latest commit. No merge or deployment.
