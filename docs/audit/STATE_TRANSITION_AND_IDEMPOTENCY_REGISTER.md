@@ -535,3 +535,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Reduces the risk of inactive administrator sessions continuing to operate supplier payout controls. Route-level authorization and service-level authorization now both enforce account activity.
 
 **Verification boundary:** Source committed; route regression tests and CI remain pending. No merge or deployment.
+
+
+### VM-AUD-111 — Require active administrators for return approval and refund actions (21 October 2026)
+
+**Finding:** Return approval/rejection and treasury refund disbursement checked administrator role but did not consistently check that the account was still active. The late-return override also treated an inactive admin account as authorized based on role alone.
+
+**Fix:** Return approval and rejection require an active super-admin/admin-employee; treasury disbursement requires an active super-admin; late-return override requires an active authorized administrator. Added a feature test proving an inactive super-admin cannot initiate a refund.
+
+**Business impact:** Prevents disabled admin accounts from approving customer claims or initiating treasury refunds through a surviving session. It complements, rather than replaces, route middleware and account-session revocation.
+
+**Verification boundary:** Source and regression test committed; test execution and CI remain pending. No merge or deployment.
