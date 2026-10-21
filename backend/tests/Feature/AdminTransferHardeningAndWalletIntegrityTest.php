@@ -42,6 +42,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     protected LogisticsCompanyProfile $company;
     protected Shop $shop;
     protected Lga $uyoLga;
+    protected Lga $eketLga;
     protected User $customer;
 
     protected function setUp(): void
@@ -60,6 +61,10 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->uyoLga = Lga::firstOrCreate(
             ['code' => 'UYO'],
             ['state_id' => $state->id, 'name' => 'Uyo', 'is_active' => true]
+        );
+        $this->eketLga = Lga::firstOrCreate(
+            ['code' => 'EKT'],
+            ['state_id' => $state->id, 'name' => 'Eket', 'is_active' => true]
         );
 
         // Admins
