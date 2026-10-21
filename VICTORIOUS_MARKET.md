@@ -9,8 +9,8 @@
 
 ## Building Nigeria’s Trusted Online Market for Quality Products
 
-**Brand Promise:** Your Trusted Online Market for Quality Products.
-
+**Official Positioning:** YOUR TRUSTED ONLINE MARKET IN UYO, AKWA IBOM STATE.  
+**Brand Promise:** Your Trusted Online Market for Quality Products.  
 **Operating Philosophy:** Trust First. Quality Always. Accountability at Every Stage.
 
 ## 1. Executive Overview
@@ -101,6 +101,31 @@ Before confirming an order, VM must validate the selected supplier offer and its
 ### Central operating base and service coverage
 
 VM operates from Uyo, Akwa Ibom State. It may serve any destination that its current product sourcing and approved logistics arrangements can reliably cover; it must not imply universal or nationwide delivery. Checkout must reject or clearly mark unavailable any destination without a valid current coverage and fee rule. VM owns delivery coverage, customer-facing fee quotes, delivery coordination and customer communication.
+
+### Order-level delivery fee calculation and bulky surcharges
+
+Victorious MARKET charges delivery **per order**, while calculating the fee using the items inside that order. This is customer-friendly, transparent, and fits the model where one logistics partner and rider collect items from multiple suppliers and deliver the complete order:
+
+| Delivery approach | What happens |
+| :--- | :--- |
+| **Fee per product** | Customer may pay multiple separate delivery fees, even though one rider handles the order. |
+| **One flat fee per order** | Simple, but may undercharge for bulky items or expensive delivery routes. |
+| **One order-level fee, calculated from its items** | **Victorious MARKET standard:** One clear total, with fair adjustments for bulky items and the destination. |
+
+**The 5 delivery rules:**
+1. **Base delivery fee per order:** Based on the delivery destination and service corridor (e.g. Uyo municipal door-to-door or enabled regional route).
+2. **Bulky surcharge per qualifying product/unit:** Add the configured surcharge for each product unit that cannot fit on a standard dispatch bike (e.g. standing fan, gas cooker, generator).
+3. **Multiple supplier pickups:** Account for additional collection and consolidation costs behind the scenes without charging a separate base delivery fee for every supplier.
+4. **Total shown before payment:** The customer sees one delivery charge at checkout, with an itemized breakdown (Base Route Fee + Bulky Surcharge).
+5. **Logistics company receives 90%:** The logistics company receives 90% of the actual delivery amount collected for that order, including applicable bulky surcharges. The remaining 10% belongs to Victorious MARKET before other expenses, unless an authorized Super Admin override applies with recorded reason and audit trail.
+
+**Illustrative example:**
+- Base delivery fee: ₦1,000
+- Bulky surcharge for a standing fan: ₦500
+- **Total customer delivery fee:** **₦1,500**
+  - Logistics company payable (90%): **₦1,350**
+  - Victorious MARKET delivery margin (10%): **₦150**
+*(These figures are illustrative, not proposed official tariffs.)*
 
 ### Logistics companies and riders
 
@@ -322,9 +347,8 @@ By combining strict supplier and catalogue governance, quality-focused product l
 **Our Commitment:** To build trust into every stage of the shopping experience—and earn that trust through consistent performance.
 
 ### VICTORIOUS MARKET
-**Your Trusted Online Market for Quality Products.**
-
-*Fast. Safe. Reliable.*
+**YOUR TRUSTED ONLINE MARKET IN UYO, AKWA IBOM STATE.**  
+*Your Trusted Online Market for Quality Products • Fast • Safe • Reliable*
 
 *Development vision and intended operating model — October 2026. Features, policies, and operational commitments remain subject to implementation, testing, and launch readiness.*
 

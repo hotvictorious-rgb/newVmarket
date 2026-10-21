@@ -8,6 +8,7 @@
 > 2. **Support-managed pickup exception:** Pickup is not offered as an automated online checkout or reservation. A customer must contact VM support. Support confirms pickup only after verifying the complete order, physical readiness at one approved collection point, payment arrangement, and customer agreement. No collection address is disclosed before confirmation. Legacy reservation records remain for historical compatibility only.
 > Suppliers are paid their agreed wholesale cost strictly after verified customer delivery or verified counter pickup.
 
+**Official Positioning:** YOUR TRUSTED ONLINE MARKET IN UYO, AKWA IBOM STATE.  
 **Your Trusted Online Market for Quality Products**  
 **Operating principle:** Trust first. Quality always. Accountability at every stage.
 
@@ -287,13 +288,14 @@ Use the implementation audit as the current gap register. Re-check source code a
 
 These documents serve different purposes and should remain consistent:
 
-1. [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md) — current owner-confirmed retailer, supplier, coverage, logistics and payment-eligibility model.
-2. [VICTORIOUS_MARKET.md](VICTORIOUS_MARKET.md) — broader product vision and operating model.
-3. [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md) — legacy source-audit findings plus the binding retailer-model supersession notice at the top.
-4. [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) — payment channels, refund policy, legacy financial history and Paystack event matrix; the retailer-model supersession notice controls new transactions.
-5. [VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md](VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md) — code observations, implementation gaps and verification checklist.
-6. [DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md](DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md) — delivery and accounting implementation plan.
-7. [SHARED_HOSTING_DEPLOYMENT_GUIDE.md](SHARED_HOSTING_DEPLOYMENT_GUIDE.md) — deployment instructions.
+1. [VICTORIOUS_MARKET_BUSINESS_MODEL_AND_VISION.md](VICTORIOUS_MARKET_BUSINESS_MODEL_AND_VISION.md) — canonical business model, Uyo operational positioning and growth vision.
+2. [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md) — current owner-confirmed retailer, supplier, coverage, logistics and payment-eligibility model.
+3. [VICTORIOUS_MARKET.md](VICTORIOUS_MARKET.md) — broader product vision and operating model.
+4. [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md) — legacy source-audit findings plus the binding retailer-model supersession notice at the top.
+5. [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) — payment channels, refund policy, legacy financial history and Paystack event matrix; the retailer-model supersession notice controls new transactions.
+6. [VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md](VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md) — code observations, implementation gaps and verification checklist.
+7. [DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md](DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md) — delivery and accounting implementation plan.
+8. [SHARED_HOSTING_DEPLOYMENT_GUIDE.md](SHARED_HOSTING_DEPLOYMENT_GUIDE.md) — deployment instructions.
 
 If documents conflict, follow the current owner-confirmed retailer model in `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md`, then reconcile the code and every downstream policy before release. This branch is documentation and audit work; it does not claim that the application has already been migrated. The old multi-vendor checkout, vendor commission/payout splits, vendor-managed delivery and vendor-linked riders are legacy assumptions until a separate implementation migration is completed.
 

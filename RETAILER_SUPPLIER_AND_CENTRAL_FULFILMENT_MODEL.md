@@ -59,6 +59,15 @@ If coverage is unconfirmed, checkout blocks delivery. VM controls delivery cover
 7. **Customer Delivery Handshake:** Doorstep delivery completion strictly requires the server-verified customer OTP (`delivery_otp`) plus a mandatory doorstep delivery photo proof.
 8. **Supplier Settlement:** Only after verified customer delivery is the supplier's wholesale payable unlocked and eligible for settlement.
 
+### Order-level delivery fee calculation and bulky surcharges
+
+Victorious MARKET charges delivery **per order**, while calculating the fee using the items inside that order:
+1. **Base Delivery Fee per Order:** Determined by the delivery destination route (e.g. Uyo door-to-door or enabled regional route).
+2. **Bulky Surcharge per Qualifying Unit:** Added for each physical unit that does not fit on a bike (e.g. standing fans, cookers, furniture).
+3. **Multiple Supplier Pickups:** Sourcing across multiple suppliers is coordinated as one fulfilment job without charging multiple base delivery fees to the customer.
+4. **Order-Level Total Snapshotted:** The customer sees one clear delivery charge at checkout (Base Fee + Bulky Surcharge), snapshotted immutably upon payment.
+5. **Logistics Company Receives 90%:** The default payable is 90% of the total captured delivery fee (including bulky surcharges); VM retains 10% delivery margin, subject to audited Super Admin override.
+
 ## 6. Pickup requests: support-managed exception only
 
 **Binding current rule:** doorstep delivery is the only standard online fulfilment method. Customers cannot select in-shop pickup or create an automated pickup reservation at checkout. Customers who prefer pickup must contact Victorious MARKET support by phone or WhatsApp.
