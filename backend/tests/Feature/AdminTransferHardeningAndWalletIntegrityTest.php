@@ -307,7 +307,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     public function test_supplier_payout_is_blocked_until_supplier_kyc_is_verified(): void
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
-        $this->vendor->update(['kyc_status' => 'pending']);
+        $this->vendor->update(['kyc_status' => 'submitted']);
         $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
 
         $result = app(RetailerSupplierPayoutService::class)->requestPayout($this->vendor->fresh());
