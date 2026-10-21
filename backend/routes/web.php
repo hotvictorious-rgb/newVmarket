@@ -164,6 +164,7 @@ Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
     Route::get('/payout-account', [PortalController::class, 'vendorPayoutPage'])->name('vendor.payout.index');
     Route::post('/bank', [PortalController::class, 'vendorUpdateBank'])->name('vendor.bank.update');
     Route::post('/payout-request', [PortalController::class, 'vendorRequestPayout'])->name('vendor.payout.request');
+    Route::post('/supplier-payout-request', [PortalController::class, 'vendorRequestRetailerSupplierPayout'])->name('vendor.supplier-payout.request');
 
     Route::post('/approve-inspection', [PortalController::class, 'vendorApproveInspection'])->name('vendor.approve.inspection');
     Route::post('/orders/{id}/ready-for-handover', [PortalController::class, 'vendorMarkHandoverReady'])->name('vendor.orders.handover_ready');
