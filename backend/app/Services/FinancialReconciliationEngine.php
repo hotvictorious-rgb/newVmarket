@@ -479,7 +479,7 @@ class FinancialReconciliationEngine
         $pendingRefundOrders = Order::where(function ($q) use ($pendingOperationOrderIds) {
             $q->whereIn('paystack_refund_status', ['pending', 'authorized', 'processing'])
               ->orWhereHas('returnCases', function ($sub) {
-                  $sub->whereIn('status', ['refund_pending', 'refund_approved']);
+                  $sub->where('status', 'refund_pending')->where('resolution_type', 'refund');
               })
               ->orWhereIn('id', $pendingOperationOrderIds);
         })->whereNotNull('payment_reference')->get();
@@ -497,7 +497,8 @@ class FinancialReconciliationEngine
                         ->whereNotIn('status', ['confirmed', 'failed', 'reversed'])
                         ->exists();
                     $hasPendingReturnCase = $ord->returnCases()
-                        ->whereIn('status', ['refund_pending', 'refund_approved'])
+                        ->where('status', 'refund_pending')
+                        ->where('resolution_type', 'refund')
                         ->exists();
                     if (!$hasOutstandingOperation && !$hasPendingReturnCase) {
                         return null;
@@ -623,12 +624,15 @@ class FinancialReconciliationEngine
                 }
 
                 $returnCase = $claimedOrder->returnCases()
-                    ->whereIn('status', ['refund_pending', 'refund_approved'])
+                    ->where('status', 'refund_pending')
+                    ->where('resolution_type', 'refund')
+                    ->whereNotNull('reviewed_by_admin_id')
                     ->first();
                 $refundAmount = $returnCase ? $returnCase->total_refundable_amount : (string)$claimedOrder->grand_total;
                 $refundAuthorization = null;
                 if ($returnCase && !empty($returnCase->reviewed_by_admin_id)
-                    && in_array($returnCase->status, ['refund_pending', 'refund_approved'], true)) {
+                    && $returnCase->status === 'refund_pending'
+                    && $returnCase->resolution_type === 'refund') {
                     $refundAuthorization = [
                         'type' => 'admin_approved_return',
                         'approved_by_user_id' => (int) $returnCase->reviewed_by_admin_id,
