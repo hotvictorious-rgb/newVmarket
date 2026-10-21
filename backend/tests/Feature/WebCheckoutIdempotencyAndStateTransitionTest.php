@@ -54,6 +54,7 @@ class WebCheckoutIdempotencyAndStateTransitionTest extends TestCase
             ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
             ->firstOrFail();
         $this->shop->update(['lga_id' => $uyoLga->id, 'state_id' => $uyoLga->state_id, 'is_active' => true]);
+        Shop::where('vendor_id', $this->vendorProfile->id)->where('id', '!=', $this->shop->id)->update(['is_active' => false]);
         $this->vendorProfile->update(['marketplace_status' => 'active', 'kyc_status' => 'verified']);
         $this->product->update([
             'cost_price' => '5000.00',
