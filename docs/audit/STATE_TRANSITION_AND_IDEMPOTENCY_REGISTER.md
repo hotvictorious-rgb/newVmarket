@@ -623,3 +623,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Prevents a background worker from bypassing per-operation idempotency and submitting a second refund request after an ambiguous gateway timeout. It protects the customer from duplicate refunds and protects Victorious MARKET from duplicate cash outflows.
 
 **Verification boundary:** Code and regression test committed; tests/CI remain pending. No merge or deployment.
+
+
+### VM-AUD-119 — Validate evidence before idempotently acknowledging terminal refund failure (21 October 2026)
+
+**Finding:** `finalizeRefundFailure()` returned idempotent success for any already-failed/reversed operation before matching the incoming gateway reference, amount, and currency to a persisted attempt. A mismatched callback could therefore be acknowledged as a valid duplicate.
+
+**Fix:** Terminal-state handling now occurs only after verifying the persisted attempt reference and validating financial evidence when supplied. A replay is idempotent only when the persisted terminal status matches the authoritative gateway outcome; mismatched references/outcomes fail closed. Added a regression assertion for a terminal operation receiving an unrelated reference.
+
+**Business impact:** Improves refund webhook/reconciliation correctness and reduces the chance that a wrong gateway event is reported as a valid duplicate. It does not create or move funds; it prevents false acknowledgement.
+
+**Verification boundary:** Source and regression test committed; CI/test execution pending. No merge or deployment.
