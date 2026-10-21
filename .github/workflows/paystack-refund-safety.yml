@@ -70,6 +70,8 @@ jobs:
           php -l app/Services/NotificationDispatchService.php
           php -l app/Services/CheckoutExecutionService.php
           php -l app/Services/SourcingAllocationService.php
+          php -l app/Services/SupplierReassignmentRecoveryService.php
+          php -l app/Http/Controllers/Web/AdminSupplierRecoveryController.php
           php -l app/Services/OrderSettlementService.php
           php -l app/Models/Order.php
           php -l app/Models/OrderItem.php
