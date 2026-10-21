@@ -119,8 +119,8 @@ class VendorTerminalApiController extends Controller
 
         if ($user->isVendor()) {
             $vendor = VendorProfile::where('user_id', $user->id)->firstOrFail();
-            if ($vendor->marketplace_status === 'suspended') {
-                abort(403, 'Merchant marketplace account is suspended.');
+            if ($vendor->marketplace_status !== 'active') {
+                abort(403, 'Merchant marketplace account is not active.');
             }
             $primaryShop = $vendor->primaryShop ?? Shop::where('vendor_id', $vendor->id)->first();
             return [
@@ -144,8 +144,8 @@ class VendorTerminalApiController extends Controller
                 abort(403, 'Unauthorized: Employee profile is deactivated.');
             }
 
-            if ($employee->vendor && $employee->vendor->marketplace_status === 'suspended') {
-                abort(403, 'Merchant organization is suspended.');
+            if (!$employee->vendor || $employee->vendor->marketplace_status !== 'active') {
+                abort(403, 'Merchant organization is not active.');
             }
 
             return [
