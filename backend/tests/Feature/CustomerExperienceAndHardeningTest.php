@@ -64,11 +64,7 @@ class CustomerExperienceAndHardeningTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->destLga = Lga::create([
-            'state_id' => $this->state->id,
-            'name' => 'Eket',
-            'is_active' => true,
-        ]);
+        // All standard delivery fixtures are Uyo-to-Uyo under the current retailer policy.\n        $this->destLga = $this->originLga;
 
         $this->customer = User::create([
             'name' => 'John Customer',
@@ -178,7 +174,7 @@ class CustomerExperienceAndHardeningTest extends TestCase
         ]);
     }
 
-    public function test_cart_centric_fulfillment_availability_resolves_lanes_and_pickups(): void
+    public function test_cart_centric_fulfillment_availability_resolves_uyo_delivery_and_disables_pickup(): void
     {
         $response = $this->postJson('/api/v1/fulfillment/availability', [
             'address_id' => $this->address->id,
@@ -193,7 +189,7 @@ class CustomerExperienceAndHardeningTest extends TestCase
             ->assertJsonPath('fulfillment_options.delivery.available', true)
             ->assertJsonPath('fulfillment_options.delivery.total_shipping_fee', '1500.00')
             ->assertJsonPath('fulfillment_options.delivery.currency', 'NGN')
-            ->assertJsonPath('fulfillment_options.in_shop_pickup.available', true);
+            ->assertJsonPath('fulfillment_options.in_shop_pickup.available', false);
     }
 
     public function test_single_lane_delivery_fee_query_succeeds(): void
