@@ -4207,7 +4207,7 @@ class PortalController extends Controller
                 ->with('error', 'Each Victorious MARKET supplier may register only one shop/pickup point. Update the existing shop instead.');
         }
 
-        $lga = \\App\\Models\\Lga::with('state')->findOrFail($validated['lga_id']);
+        $lga = \App\Models\Lga::with('state')->findOrFail($validated['lga_id']);
         if (strtolower(trim((string) ($lga->name ?? ''))) !== 'uyo'
             || strtolower(trim((string) ($lga->state->name ?? ''))) !== 'akwa ibom') {
             return redirect()->to(route('vendor.dashboard') . '#shop-branches')
