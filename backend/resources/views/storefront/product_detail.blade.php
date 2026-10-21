@@ -36,7 +36,7 @@
                 <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px; font-size: 12px;">
                     <div style="font-weight: 700; color: #0F172A; margin-bottom: 2px; display: flex; align-items: center; gap: 6px;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vm-primary)" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                        <span>In-Shop Inspection</span>
+                        <span>Uyo Doorstep Delivery</span>
                     </div>
                     <div style="color: #64748B; font-size: 11px; line-height: 1.35;">Quality and delivery support from Victorious MARKET</div>
                 </div>
@@ -208,7 +208,7 @@
                             <span>Route Suspended: {{ $product->shop->lga->name ?? 'Origin' }} &rarr; {{ $activeCity }}</span>
                         </div>
                         <p style="font-size: 11.5px; color: #92400E; margin: 0; line-height: 1.4;">
-                            Doorstep delivery along this corridor is temporarily offline. You can still order for <strong>guaranteed free In-Store Counter Pickup</strong>!
+                            Doorstep delivery along this corridor is temporariDelivery is currently unavailable for this item. Contact Victorious MARKET support; public pickup and cash-on-delivery are not offered.
                         </p>
                     </div>
                 @endif
@@ -309,7 +309,7 @@
                 @if($isProductInStock)
                     <button type="submit" style="width: 100%; background: #F8FAFC; color: #0F172A; border: 1.5px solid #CBD5E1; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.15s ease;">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                        <span>Reserve for Free In-Shop Inspection (&#8358;0.00 Upfront)</span>
+                        <span>Reserve for Free Uyo Doorstep Delivery (&#8358;0.00 Upfront)</span>
                     </button>
                 @else
                     <button type="button" disabled style="width: 100%; background: #F1F5F9; color: #94A3B8; border: 1.5px solid #E2E8F0; font-weight: 700; font-size: 13px; padding: 11px; border-radius: 10px; cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 8px;">
