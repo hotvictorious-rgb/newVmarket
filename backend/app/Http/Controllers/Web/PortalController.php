@@ -4417,7 +4417,11 @@ class PortalController extends Controller
     {
         $product = Product::marketplaceEligible()
             ->where('slug', $slug)
-            ->with(['shop.lga', 'vendor', 'category'])
+            ->whereHas('shop.lga', function ($q) {
+                $q->where('name', 'Uyo')
+                    ->whereHas('state', fn($stateQuery) => $stateQuery->where('name', 'Akwa Ibom'));
+            })
+            ->with(['shop.lga', 'category'])
             ->firstOrFail();
 
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
@@ -4449,7 +4453,13 @@ class PortalController extends Controller
 
         $product = null;
         if ($productId) {
-            $product = Product::marketplaceEligible()->with(['shop.lga', 'vendor'])->find($productId);
+            $product = Product::marketplaceEligible()
+                ->whereHas('shop.lga', function ($q) {
+                    $q->where('name', 'Uyo')
+                        ->whereHas('state', fn($stateQuery) => $stateQuery->where('name', 'Akwa Ibom'));
+                })
+                ->with(['shop.lga'])
+                ->find($productId);
             if (!$product) {
                 return redirect()->route('storefront')->with('error', 'This product listing has expired or is no longer available. Please select an active item.');
             }
