@@ -590,3 +590,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Prevents failed asynchronous refunds from leaving customer wallet credit locked indefinitely, releases funds reserved for a refund that did not settle, and permits a safe manual retry after a definitive failure while still blocking retries for uncertain or already-confirmed operations.
 
 **Verification boundary:** Code, migration and tests committed; test execution and CI remain pending. No merge or deployment.
+
+
+### VM-AUD-116 — Require active administrator for return-dispute arbitration (21 October 2026)
+
+**Finding:** `DoorstepHandshakeService::arbitrateReturnDispute()` checked only whether the actor had a super-admin/admin-employee role. It did not independently reject an inactive account before allowing a ruling that can influence fault allocation and supplier recovery.
+
+**Fix:** Added an active-account check at the service boundary and a regression test proving an inactive admin employee is denied before any return-case lookup or mutation.
+
+**Business impact:** Prevents disabled admin sessions from deciding customer-vs-supplier disputes and influencing who bears refund/delivery costs.
+
+**Verification boundary:** Source and test committed; CI/test execution pending. No merge or deployment.
