@@ -440,7 +440,7 @@ class VendorTerminalApiController extends Controller
             $assignment->save();
 
             $hasPending = OrderSupplierAssignment::where('order_id', $order->id)
-                ->whereNotIn('status', ['supplier_confirmed', 'admin_reassigned'])
+                ->whereIn('status', ['awaiting_supplier_confirmation', 'supplier_rejected'])
                 ->whereExists(function ($query) use ($order) {
                     $query->select(DB::raw(1))
                         ->from('order_items')
