@@ -179,6 +179,22 @@ All payments must be processed and recorded through Victorious MARKET's authoris
 4. Use additive migrations and backfills. Identify vendor ownership for eligible active riders; unresolved/ambiguous riders are suspended from new assignments until manually resolved, not guessed.
 5. Never convert a legacy logistics-company payout into a rider payout or vendor payout without verified financial reconciliation and explicit approval.
 
+## Retailer-model supersession notice (binding for all new transactions)
+
+The numbered marketplace/vendor-managed-delivery rules and the acceptance tests below originated in a legacy operating model. They are retained as migration/audit history and must **not** be treated as current requirements where they conflict with the owner-confirmed retailer model or `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md`.
+
+For new retailer-model work, apply these controlling rules:
+- Victorious MARKET is the single customer-facing retailer; suppliers are private sourcing partners. Do not expose supplier identity/cost or require customers to select a supplier/shop.
+- VM centrally coordinates doorstep delivery through approved logistics companies. Every assigned rider must be active and linked to exactly one active logistics company. Vendor-owned rider assignment and vendor-managed delivery are not valid for new work.
+- Supplier purchase cost is an item-level payable, not a commission. The former 90/5/5 merchandise and 90/10 delivery splits, vendor FIFO payout thresholds and vendor payout-request rules do not govern new supplier or logistics-company payments.
+- Delivery fees and logistics-company charges follow an approved VM/company agreement. No logistics payout percentage is implied.
+- Preserve historical marketplace allocations, cashback, vendor earnings, payouts, foreign keys and audit records. Do not silently recalculate or relabel them as retailer transactions.
+- No new cashback accrual is authorized by the historical 5% allocation alone. Keep new accrual disabled until an explicit owner-approved policy specifies the formula, funding, redemption, maturity, expiry and recovery and is aligned with the system rules, payment/refund matrix, code and customer terms.
+- VM executes approved customer refunds through the authorized workflow; supplier recovery is separate, evidence-backed and contractual, and never delays customer protection.
+- The pickup flow remains unpaid at reservation, inspect-before-pay, VM-authorized Paystack at the counter, and requires distinct reservation pass, pickup OTP and photo proof.
+
+Where the legacy text below conflicts with these rules, it is a historical finding to migrate—not permission to preserve the old behaviour for new orders.
+
 ## 13. Acceptance tests required before release
 
 - A vendor can create/manage its own rider; cannot create a rider for another vendor.
@@ -245,9 +261,9 @@ All payments must be processed and recorded through Victorious MARKET's authoris
 
 ## 15. Source-of-truth and release control
 
-The authoritative consolidated specification is [VICTORIOUS_MARKET_SYSTEM_RULES_V1.md](../VICTORIOUS_MARKET_SYSTEM_RULES_V1.md). It controls where older wording in this audit report conflicts. The current required fulfilment photos are delivery photo and in-shop pickup photo only; no mandatory OTP proof, collection hub return or platform fleet applies to new orders.
+The authoritative consolidated specification is [VICTORIOUS_MARKET_SYSTEM_RULES_V1.md](../VICTORIOUS_MARKET_SYSTEM_RULES_V1.md), followed by [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](../RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md) and [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](../PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md). These current retailer rules control where legacy wording in this audit report conflicts. The current required evidence is server-verified customer delivery OTP plus doorstep photo, or the separate pickup reservation pass, customer pickup OTP and in-shop photo. New delivery riders must be linked to an active logistics company; vendor-linked rider rules are legacy only.
 
-These rules are the authoritative business requirements for vendor-managed fulfilment. Older documents that describe platform-managed logistics, logistics-provider revenue shares, rider earnings, rider payouts, or an unresolved choice to retire/keep the rider app must be updated to this model. Business-rule changes require explicit owner approval and consistent updates to API contracts, database rules, implementation, tests, and customer/vendor policies.
+This file retains historical vendor-managed requirements for audit and migration traceability. They are not authoritative for new retailer transactions. Business-rule changes require explicit owner approval and consistent updates to API contracts, database rules, implementation, tests, and customer-facing policies.
 
 Do not merge to main without the user's explicit approval.
 
