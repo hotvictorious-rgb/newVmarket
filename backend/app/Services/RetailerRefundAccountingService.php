@@ -63,12 +63,12 @@ class RetailerRefundAccountingService
                     ]
                 );
                 if ($recovery->wasRecentlyCreated) {
-                    $this->journal($order, $returnCase, $reference, $financialOperationId, 'SUPPLIER-RECOVERY-' . $returnItem->id, VendorProfile::class, (int) $item->fulfillment_supplier_vendor_id, 'supplier_recovery_receivable', 'debit', $lineCost, 'Authorized recovery of settled supplier cost.');
+                    $this->journal($order, $returnCase, $reference, $financialOperationId, 'SUPPLIER-RECOVERY-' . $returnItem->id, VendorProfile::class, (int) $item->fulfillment_supplier_vendor_id, 'supplier_recovery_receivable', 'debit', $lineCost, 'Authorized recovery of settled supplier cost.', (int) $item->id);
                 }
             } elseif ($order->vendor_settlement_status === 'settled') {
-                $this->journal($order, $returnCase, $reference, $financialOperationId, 'SUPPLIER-LOSS-' . $returnItem->id, User::class, null, 'retailer_supplier_refund_loss_pending_mapping', 'debit', $lineCost, 'Settled supplier cost absorbed pending authorized recovery mapping.');
+                $this->journal($order, $returnCase, $reference, $financialOperationId, 'SUPPLIER-LOSS-' . $returnItem->id, User::class, null, 'retailer_supplier_refund_loss_pending_mapping', 'debit', $lineCost, 'Settled supplier cost absorbed pending authorized recovery mapping.', (int) $item->id);
             } else {
-                $this->journal($order, $returnCase, $reference, $financialOperationId, 'SUPPLIER-PAYABLE-' . $returnItem->id, VendorProfile::class, (int) $item->fulfillment_supplier_vendor_id, 'supplier_payable', 'debit', $lineCost, 'Reverse agreed supplier cost for returned retailer item.');
+                $this->journal($order, $returnCase, $reference, $financialOperationId, 'SUPPLIER-PAYABLE-' . $returnItem->id, VendorProfile::class, (int) $item->fulfillment_supplier_vendor_id, 'supplier_payable', 'debit', $lineCost, 'Reverse agreed supplier cost for returned retailer item.', (int) $item->id);
             }
         }
 
@@ -155,7 +155,8 @@ class RetailerRefundAccountingService
         string $account,
         string $entryType,
         string $amount,
-        string $description
+        string $description,
+        ?int $orderItemId = null
     ): void {
         if (BcMathService::comp($amount, '0.00') <= 0) {
             return;
@@ -163,6 +164,7 @@ class RetailerRefundAccountingService
 
         FinancialJournalEntry::create([
             'order_id' => $order->id,
+            'order_item_id' => $orderItemId,
             'financial_operation_id' => $financialOperationId,
             'transaction_reference' => $reference,
             'event_id' => 'EVT-RETAILER-REFUND-' . $returnCase->id . '-' . $suffix,
