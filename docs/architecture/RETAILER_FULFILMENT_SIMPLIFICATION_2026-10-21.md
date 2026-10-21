@@ -271,3 +271,17 @@ Once journal rows carried order-item IDs, the audit was strengthened to compare 
 - Operational line cost is compared to item-linked supplier payable credits minus debits; completed refund quantities reduce the expected liability only when the exact item-linked refund debit exists. Missing item links and invalid beneficiary types are critical mismatches.
 - Commit: 44bc2323f434a8a768fcfaa04def41bf719152cc.
 - CI verification at that code commit: **214 tests passed, 1,459 assertions**; PHP syntax checks passed, including the new item-link migration and supplier recovery files.
+
+## 29. Introduce the item-level supplier payout lifecycle (21 October 2026)
+
+The earlier fail-closed guard prevented retailer-model supplier payables from entering the legacy order-level vendor payout flow, but did not yet provide an operational supplier-specific payout lifecycle. A dedicated lifecycle is now present on the working branch.
+
+- Supplier payout requests are built only from item-linked net `supplier_payable` balances for active Uyo suppliers, with a single active shop, complete bank details, a 48-hour bank-detail cooldown, delivered paid orders beyond the refund window, and no open dispute/return hold.
+- Requesting a payout reserves each eligible item liability using balanced request journals. Per-item allocation rows prevent the same item payable being reserved twice. The request is capped at ₦500,000, with a ₦5,000 minimum; those are launch guardrails, not supplier contract terms.
+- A super-admin-only treasury controller handles Paystack recipient resolution, transfer initiation, reference/amount/currency verification, reconciliation, definitive failure and reversal. Uncertain outcomes remain held; the controller never retries an ambiguous transfer automatically.
+- Finalization and reversal preflight all affected item journal events before mutating any allocation. Journal evidence is checked against the payout reference, item, order, supplier beneficiary, amount and currency. Active payout allocations block a new return request for that item; completed supplier payouts are accounted for by the refund/recovery path.
+- Supplier payout requests/history are exposed to the supplier account owner; employee accounts cannot initiate or view these supplier payout records. Admin disburse/reconcile/reject attempts are written to the admin audit log.
+- Regression coverage exercises item-payable reservation, successful payout finalization, repeated finalization, reservation release/rejection, repeated reversal, and supplier-payable reconciliation.
+- Relevant commits include payout workflow/controller/UI/routes, regression coverage, bank-detail cooldown and treasury audit logging on this branch. See repository history for exact per-file commits.
+- Verification: GitHub Actions reported **216 tests passed (1,483 assertions)** and PHP syntax checks passed after correcting the refund-accounting model import. A subsequent controller-only audit-log change has triggered a new workflow run; its result must be checked before merge.
+- Remaining release gates: run the migration against a representative existing database, confirm real Paystack transfer verification response shape in a safe test environment, add/execute explicit concurrency tests for simultaneous supplier payout requests and return-versus-payout races, and complete the end-to-end manual treasury review. No deployment or production transfer has been performed by this work.
