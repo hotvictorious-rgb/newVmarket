@@ -4,8 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
-use App\Services\BcMathService;
-use InvalidArgumentException;
 
 class DeliveryCorridor extends Model
 {
@@ -14,8 +12,6 @@ class DeliveryCorridor extends Model
         'name',
         'lga_id',
         'landmark_aliases',
-        'customer_base_fee',
-        'customer_bulky_surcharge_per_unit',
         'estimated_delivery_hours_min',
         'estimated_delivery_hours_max',
         'is_active',
@@ -23,26 +19,12 @@ class DeliveryCorridor extends Model
 
     protected $casts = [
         'landmark_aliases' => 'array',
-        'customer_base_fee' => 'decimal:2',
-        'customer_bulky_surcharge_per_unit' => 'decimal:2',
         'is_active' => 'boolean',
     ];
 
     public function lga()
     {
         return $this->belongsTo(Lga::class);
-    }
-
-    public function calculateCustomerFee(int $bulkyQuantity): string
-    {
-        if ($bulkyQuantity < 0) {
-            throw new InvalidArgumentException('Bulky quantity cannot be negative.');
-        }
-
-        return BcMathService::add(
-            (string) $this->customer_base_fee,
-            BcMathService::mul((string) $this->customer_bulky_surcharge_per_unit, (string) $bulkyQuantity)
-        );
     }
 
     public function companyRates()
