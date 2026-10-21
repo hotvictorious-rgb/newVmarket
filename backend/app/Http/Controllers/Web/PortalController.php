@@ -2800,6 +2800,16 @@ class PortalController extends Controller
             $accountName = trim((string)($vendor->account_name ?? $payout->account_name));
 
             if (empty($accountNum) || empty($accountName)) {
+                // No gateway request has been sent at this point. Release every
+                // allocation created for this pending request so missing bank data
+                // cannot strand eligible order earnings in an allocated state.
+                \\App\\Models\\VendorPayoutAllocation::where('vendor_payout_request_id', $payout->id)
+                    ->where('status', 'allocated')
+                    ->update([
+                        'status' => 'reversed',
+                        'reversed_at' => Carbon::now(),
+                    ]);
+
                 return ['valid' => false, 'message' => 'Disbursement blocked: Incomplete NUBAN bank details on merchant profile.'];
             }
 
