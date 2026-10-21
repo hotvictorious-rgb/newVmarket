@@ -69,6 +69,9 @@ class LogisticsCompanyPayableService
                 ->where('account_name', 'logistics_company_payable')
                 ->where('entry_type', 'credit')
                 ->exists();
+            if (!$baseline) {
+                throw new RuntimeException('The original logistics-company payable journal is missing; reconcile before assigning a company.');
+            }
 
             $ledgerCompanyId = $locked->logistics_company_payable_ledger_company_id;
             if ($baseline && (int) ($ledgerCompanyId ?? 0) !== (int) $company->id
