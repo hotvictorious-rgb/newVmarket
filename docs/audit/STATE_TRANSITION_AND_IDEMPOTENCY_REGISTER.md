@@ -401,3 +401,14 @@ Allowed: `reserved` and not expired -> `inspected_accepted`, or `reserved` and e
 **Forbidden:** public checkout/API creation of a new pickup reservation; automatic address disclosure from product/source data; marking ready before physical readiness; using support override to bypass payment verification, authorization, evidence or idempotency. Existing reservations and states remain readable for legacy obligations and audit, but must not be created anew by the standard customer journey.
 
 **Verification boundary:** this register records policy, not proof of code enforcement. The existing pickup endpoints/views/state handlers must be disabled or gated in a forward-compatible implementation slice, and tests must prove public write rejection, no early address disclosure, preservation of historical reads and idempotent support decisions.
+
+
+## Section 36 — Uyo-only origins and regional delivery mode enforcement (21 October 2026)
+
+**Owner requirement:** all approved supplier shops and logistics-company headquarters are physically based in Uyo, Akwa Ibom State. Uyo-local customer orders use door-to-door delivery. Outside Uyo, including approved Akwa Ibom LGAs and enabled routes to Aba, Calabar and Port Harcourt, the Uyo-based logistics company manages the agreed handoff method; it is not automatically doorstep delivery. Completion still requires order-specific server-verified customer/authorized-recipient OTP and mandatory photo proof.
+
+**Runtime contradiction found:** `FulfillmentAvailabilityService` contained vendor-configured coverage and generic same-state/inter-state nationwide fee fallbacks. Those fallbacks could make an unconfigured destination appear serviceable and contradicted the explicit route-activation policy. Checkout also still requires a selected `shop_id` and restricts each product to that shop, so whole-order multi-supplier retailer checkout remains unresolved.
+
+**Changes made:** delivery availability now rejects non-Uyo source shops, no longer uses vendor-configured rider coverage as the route authority, retains Uyo-local default delivery, and fails closed outside Uyo unless a directional active lane exists. Active cross-LGA lanes are labelled `logistics_managed`; Uyo-local delivery is labelled `doorstep`. Logistics assignment now rejects a company whose headquarters LGA/state is not Uyo/Akwa Ibom.
+
+**Verification status:** targeted tests and CI still need to be run/reconciled. Existing tests and callers that depended on automatic nationwide fallback may fail and must be updated to the owner policy. Checkout's selected-shop/single-source limitation is not claimed fixed by these route changes. No merge or deployment is authorized by this audit entry.
