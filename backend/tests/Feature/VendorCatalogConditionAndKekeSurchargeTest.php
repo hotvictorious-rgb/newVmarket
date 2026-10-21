@@ -1287,6 +1287,34 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ->assertJsonMissingPath('data.shop_id');
     }
 
+    public function test_admin_cannot_onboard_supplier_outside_uyo(): void
+    {
+        $admin = User::create([
+            'name' => 'Super Administrator',
+            'email' => 'admin-uyo-scope@example.com',
+            'phone' => '+2348099000011',
+            'password' => bcrypt('SecurePass123!'),
+            'user_type' => 'super_admin',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->post('/admin/merchants', [
+                'business_name' => 'Out of Zone Supplier',
+                'contact_name' => 'Supplier Contact',
+                'phone' => '+2348099000012',
+                'email' => 'outside-supplier@example.com',
+                'password' => 'SecurePass123!',
+                'shop_name' => 'Eket Shop',
+                'shop_address' => 'Eket',
+                'lga_id' => $this->eketLga->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasErrors('lga_id');
+
+        $this->assertDatabaseMissing('vendor_profiles', ['business_name' => 'Out of Zone Supplier']);
+    }
+
     public function test_supplier_cannot_register_a_second_shop_or_pickup_point(): void
     {
         $this->actingAs($this->vendorUser)
