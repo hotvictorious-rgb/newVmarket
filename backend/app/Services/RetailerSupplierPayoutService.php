@@ -515,11 +515,11 @@ class RetailerSupplierPayoutService
             }
             if (in_array($payout->status, ['rejected', 'failed', 'reversed'], true)
                 && $payout->allocations()->where('status', '!=', 'reversed')->doesntExist()) {
-                $expectedTerminalOutcome = match ($payout->status) {
+                $expectedTerminalOutcome = [
                     'rejected' => 'not_submitted',
                     'failed' => 'failed',
                     'reversed' => 'reversed',
-                };
+                ][$payout->status] ?? null;
                 if ($outcome !== $expectedTerminalOutcome || $payout->gateway_status !== $expectedTerminalOutcome) {
                     return [
                         'success' => false,
