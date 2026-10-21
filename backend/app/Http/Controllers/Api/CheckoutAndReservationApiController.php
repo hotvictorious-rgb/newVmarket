@@ -42,9 +42,10 @@ class CheckoutAndReservationApiController extends Controller
     public function createIntent(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'fulfillment_type' => 'required|in:doorstep_delivery,in_shop_pickup',
+            'fulfillment_type' => 'required|in:doorstep_delivery',
             'customer_address_id' => 'nullable|required_if:fulfillment_type,doorstep_delivery|integer|exists:customer_addresses,id',
-            'shop_id' => 'required|integer|exists:shops,id',
+            // Legacy clients may send shop_id; it does not select or constrain suppliers.
+            'shop_id' => 'nullable|integer|exists:shops,id',
             'items' => 'required|array|min:1|max:100',
             'items.*.product_id' => 'required|integer|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1|max:1000',
@@ -73,7 +74,6 @@ class CheckoutAndReservationApiController extends Controller
             $canonicalRequest = [
                 'fulfillment_type' => $validated['fulfillment_type'],
                 'customer_address_id' => $validated['customer_address_id'] ?? null,
-                'shop_id' => (int) $validated['shop_id'],
                 'items' => array_map(static function (array $item): array {
                     return [
                         'product_id' => (int) $item['product_id'],
@@ -131,48 +131,17 @@ class CheckoutAndReservationApiController extends Controller
             ], 403);
         }
 
-        $shop = Shop::withTrashed()->with(['vendor.user'])->findOrFail($validated['shop_id']);
+        // Customer checkout is delivery-only. Supplier shops are resolved privately
+        // per item; the legacy request shop_id is ignored for sourcing decisions.
 
-        // Guard 1: Shop Branch Invariant
-        if ($shop->trashed() || !$shop->is_active) {
-            return response()->json([
-                'status' => false,
-                'message' => 'The selected shop branch is currently inactive.',
-            ], 422);
-        }
-
-        // Guard 2: Vendor Entity & User Account Invariant
-        if (!$shop->vendor || $shop->vendor->trashed() || $shop->vendor->marketplace_status !== 'active') {
-            return response()->json([
-                'status' => false,
-                'message' => 'The merchant providing this item is currently not active on the marketplace.',
-            ], 422);
-        }
-
-        if (!$shop->vendor->user || $shop->vendor->user->status !== 'active') {
-            return response()->json([
-                'status' => false,
-                'message' => 'The merchant user account is inactive.',
-            ], 422);
-        }
-
-        // Rider and central fleet assignment are deliberately deferred until after checkout.
-
-        // Calculate merchandise subtotal using BCMath
         $merchandiseSubtotal = '0.00';
         $itemsSnapshot = [];
-
-        $orderPackageTier = 'bike';
+        $primarySourceShop = null;
+        $deliveryBulkyQuantity = 0;
+        $deliveryBulkySurchargePerUnit = '0.00';
+        $sourcingService = app(\App\Services\SourcingAllocationService::class);
         foreach ($validated['items'] as $item) {
             $product = Product::marketplaceEligible()->findOrFail($item['product_id']);
-
-            // Multi-tenant check: product must belong to the selected shop branch
-            if ((int)$product->shop_id !== (int)$shop->id) {
-                return response()->json([
-                    'status' => false,
-                    'message' => "Product '{$product->name}' does not belong to the selected shop branch.",
-                ], 422);
-            }
 
             // Inventory check
             if ($product->inventory_quantity < $item['quantity']) {
@@ -182,8 +151,30 @@ class CheckoutAndReservationApiController extends Controller
                 ], 422);
             }
 
-            if (in_array(strtolower($product->package_tier ?? ''), ['keke', 'bulky', 'fragile'], true)) {
-                $orderPackageTier = 'keke';
+            $resolvedOffer = $sourcingService->resolveCheapestOffer($product, (int) $item['quantity'], null, 'doorstep_delivery');
+            if (!$resolvedOffer) {
+                return response()->json([
+                    'status' => false,
+                    'message' => "{$product->name} is temporarily unavailable because no eligible Uyo supplier can fulfil it.",
+                ], 422);
+            }
+
+            $sourceShop = Shop::withTrashed()->with(['lga.state', 'vendor.user'])->find($resolvedOffer['shop_id']);
+            if (!$sourceShop || $sourceShop->trashed() || !$sourceShop->is_active) {
+                return response()->json(['status' => false, 'message' => 'An eligible Uyo supplier shop is unavailable.'], 422);
+            }
+            $sourceLga = strtolower(trim((string) ($sourceShop->lga->name ?? '')));
+            $sourceState = strtolower(trim((string) ($sourceShop->lga->state->name ?? '')));
+            $sourceVendor = \App\Models\VendorProfile::withTrashed()->with('user')->find($resolvedOffer['vendor_id']);
+            if ($sourceLga !== 'uyo' || $sourceState !== 'akwa ibom'
+                || (int) $sourceShop->vendor_id !== (int) $resolvedOffer['vendor_id']
+                || !$sourceVendor || $sourceVendor->trashed() || $sourceVendor->marketplace_status !== 'active'
+                || !$sourceVendor->user || $sourceVendor->user->status !== 'active') {
+                return response()->json(['status' => false, 'message' => 'Every supplier must have an active supplier account and shop in Uyo, Akwa Ibom State.'], 422);
+            }
+            $primarySourceShop ??= $sourceShop;
+            if (in_array(strtolower((string) ($product->package_tier ?? 'bike')), ['keke', 'bulky'], true)) {
+                $deliveryBulkyQuantity += (int) $item['quantity'];
             }
 
             $lineTotal = BcMathService::mul($product->unit_price, (string)$item['quantity']);
@@ -199,19 +190,21 @@ class CheckoutAndReservationApiController extends Controller
         }
 
         $deliveryFee = '0.00';
-        if ($validated['fulfillment_type'] === 'doorstep_delivery') {
-            $address = CustomerAddress::where('user_id', $user->id)->findOrFail($validated['customer_address_id']);
-            $availability = $this->fulfillmentService->checkDeliveryAvailability($shop->id, $address->lga_id, $orderPackageTier);
-
-            if (!$availability['is_available']) {
-                return response()->json([
-                    'status' => false,
-                    'message' => $availability['message'],
-                ], 422);
-            }
-
-            $deliveryFee = $availability['fee'];
+        $deliveryBaseFee = '0.00';
+        if (!$primarySourceShop) {
+            return response()->json(['status' => false, 'message' => 'No eligible supplier is available for this order.'], 422);
         }
+        $address = CustomerAddress::where('user_id', $user->id)->findOrFail($validated['customer_address_id']);
+        $availability = $this->fulfillmentService->checkDeliveryAvailability($primarySourceShop->id, $address->lga_id, 'bike');
+        if (!$availability['is_available']) {
+            return response()->json(['status' => false, 'message' => $availability['message']], 422);
+        }
+        $deliveryBaseFee = (string) $availability['fee'];
+        $deliveryBulkySurchargePerUnit = (string) ($availability['bulky_surcharge'] ?? '0.00');
+        $deliveryFee = BcMathService::add(
+            $deliveryBaseFee,
+            BcMathService::mul($deliveryBulkySurchargePerUnit, (string) $deliveryBulkyQuantity)
+        );
 
         // Customer Cashback Redemption check (50% merchandise cap, 24h maturation)
         $cashbackApplied = '0.00';
@@ -243,12 +236,15 @@ class CheckoutAndReservationApiController extends Controller
 
         $payload = [
             'user_id' => $user->id,
-            'shop_id' => $shop->id,
+            'shop_id' => $primarySourceShop->id,
             'fulfillment_type' => $validated['fulfillment_type'],
             'address_id' => $validated['customer_address_id'] ?? null,
             'items' => $itemsSnapshot,
             'merchandise_subtotal' => $merchandiseSubtotal,
             'delivery_fee' => $deliveryFee,
+            'delivery_base_fee' => $deliveryBaseFee,
+            'delivery_bulky_surcharge_per_unit' => $deliveryBulkySurchargePerUnit,
+            'delivery_bulky_quantity' => $deliveryBulkyQuantity,
             'cashback_applied' => $cashbackApplied,
             'wallet_credit_applied' => $walletCreditApplied,
             'total_payable' => $totalPayable,
@@ -268,7 +264,7 @@ class CheckoutAndReservationApiController extends Controller
             'fingerprint' => $fingerprint,
             'fulfillment_type' => $validated['fulfillment_type'],
             'customer_address_id' => $validated['customer_address_id'] ?? null,
-            'shop_id' => $shop->id,
+            'shop_id' => $primarySourceShop->id,
             'merchandise_subtotal' => $merchandiseSubtotal,
             'delivery_fee' => $deliveryFee,
             'cashback_applied' => $cashbackApplied,
