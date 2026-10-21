@@ -493,3 +493,13 @@ Status: FIXED — focused regression passed. No merge or deployment.
 **Change:** Checkout preview now calculates the base delivery fee once and adds the configured bulky surcharge multiplied by the selected quantity, matching the authoritative checkout calculation. The preview resolves the confirmed Uyo supplier offer and does not use the catalog contributor's shop as the dispatch origin.
 
 **Status:** Source committed on `docs/retailer-central-fulfilment-model`; automated tests have not run for this latest commit. No merge or deployment.
+
+
+## VM-AUD-090 — Close legacy public supplier pickup reservation bypasses (21 October 2026)
+
+**Severity:** High  
+**Finding:** Although the newer API's pickup creation and payment actions were already disabled, legacy web routes could still create a 24-hour reservation against a private supplier shop and show the supplier's shop details to the customer. The public API reservation lookup also exposed legacy reservation details.
+
+**Change:** Legacy web reservation creation and pass pages now redirect customers to Victorious MARKET support; public API reservation detail lookup now returns HTTP 410 without supplier details. Cancellation of a customer's own old reservation remains available so customers can close out stale reservations. Pickup exceptions must be arranged through central support.
+
+**Status:** Source committed on `docs/retailer-central-fulfilment-model`; automated tests have not run for this latest change. No merge or deployment.
