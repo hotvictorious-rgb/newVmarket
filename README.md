@@ -135,17 +135,13 @@ Suppliers receive 100% of their agreed wholesale cost upon verified completion. 
 - **Logistics Dispatch & Delivery:** The Logistics Company dispatches its active fleet rider to collect the packaged item from the supplier's shop and deliver to the customer. Every rider must be active and linked to exactly one active logistics company; unlinked, supplier-owned, or inactive couriers are rejected.
 - **Handover Verification:** Customer delivery completion strictly requires the server-verified customer OTP (`delivery_otp`) plus a mandatory doorstep delivery photo proof. Rider collection or logistics scans alone do not constitute delivery.
 
-### Supplier-shop pickup (Inspect First, Pay at the Shop via Paystack)
+### Supplier-shop pickup — support-managed exception only
 
-- **Online Reservation Pass:** Customer reserves the product online with ₦0 upfront, receiving a unique reservation pass (`RES-XXXXXX`) and customer pickup OTP (`verification_code`).
-- **Automated Location Assignment:** The system automatically assigns the reservation to the supplier shop that has the item available at the cheapest cost. Admin can override and reassign the pickup location if necessary.
-- **Customer Journey & Direct Support:** While traveling to the shop, the customer can **call or chat Victorious MARKET customer support** for directions or assistance.
-- **Arrival & Presentation:** Customer presents their `RES-XXXXXX` reservation code at the designated supplier shop counter, and the supplier verifies it in their terminal.
-- **Physical Inspection First:** Customer **physically inspects the item at the counter first** to confirm quality, condition, and complete satisfaction before any payment is made.
-- **Pay directly to Victorious MARKET via Paystack:** Upon satisfaction, customer completes payment **directly to Victorious MARKET via Paystack** (mobile payment link, counter QR code, or online counter checkout). Strictly NO cash or private vendor bank account transfers.
-- **Verified Release Handshake:** Once payment is confirmed by Paystack, the supplier verifies the customer's pickup OTP (`verification_code`), captures the required in-shop photo proof, and releases the goods.
-- **Zero-Risk Customer Protection:** If the customer is not satisfied upon physical inspection, they simply walk away without paying anything. The reservation is cancelled cleanly with zero refund overhead.
+Pickup is not offered as a standard checkout or online reservation method. Customers who prefer pickup must contact Victorious MARKET support. Support may confirm an exception only after verifying the complete order, confirmed availability of every item, physical readiness at one approved collection point, payment arrangements and customer agreement.
 
+Do not automatically assign a reservation to a supplier shop, expose a supplier address, or tell the customer to travel before confirmation. For multi-product orders, VM must coordinate internal consolidation at one approved point or offer a feasible delivery plan; customers must not be directed to multiple suppliers by default.
+
+Legacy reservation codes, records and routes remain for historical compatibility, audit and pre-existing obligations only until safe retirement. They do not authorize new public reservation writes.
 ### Coverage and fees
 
 VM owns the customer-facing coverage decision and delivery-fee quote. Fees and logistics-company charges must be based on VM-approved coverage and commercial agreements, not supplier-configured marketplace delivery rates. Exact pricing, corridor rules, logistics-company settlement terms, and fee-margin accounting require explicit approval; this document does not invent amounts or percentages.
