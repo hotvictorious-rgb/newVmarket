@@ -475,6 +475,25 @@ This section records source-level findings and one rollback-safety fix. It does 
 - **Verification status:** the previously cited GitHub Actions run `39573855362` passed 166 tests / 1,085 assertions on commit `7a13109b195b0a5aaa4ef77e38120b16e30efbef`. That run predates the catalogue-decoupling commits, so it does not verify Section 31. A new CI run against the latest branch head is required before treating this change as green.
 
 
+## Section 33 — Owner correction: logistics-company 90% default and active cashback retained (21 October 2026)
+
+### Binding current decision
+
+1. **Logistics-company default:** the default payable for a new doorstep delivery is 90% of the customer delivery fee captured in the immutable order snapshot. The remaining 10% is default VM delivery margin. The 90% is paid to the logistics company, never directly to its rider under this rule.
+2. **Admin commercial override:** an authorized admin may set the final logistics-company amount higher or lower when Nigerian route, distance, package, fuel, traffic, weather, urgency, return risk or negotiated company terms justify it. Record default amount, final amount, reason, admin identity and timestamp. A final amount above the customer fee must be recorded as an explicit VM-funded delivery subsidy/expense. No completed financial entry may be edited; a post-posting change requires linked balanced adjustment entries.
+3. **Cashback remains active:** accrue 5% on eligible post-discount merchandise actually funded by real money through verified Paystack payment, after redeemed cashback and excluding delivery. Fund it from VM gross retail margin, never from supplier wholesale cost. Existing terms remain: verified fulfilment, 24-hour claim window, separate 24-hour maturity buffer, no blocking case, 365-day validity from maturity, redemption up to 50% of cart merchandise subtotal, reversal of unspent cashback and separate recovery of spent cashback only against future matured cashback.
+4. **No merchandise commission split:** the former 90/5/5 vendor/cashback/platform merchandise split remains retired. Cashback is a separate loyalty liability and supplier payable remains the immutable agreed wholesale cost.
+5. **Rider boundary:** riders perform operational delivery for their linked logistics company. This 90% company payable does not create a rider payable, rider wallet or rider payout.
+6. **Historical records:** legacy vendor earning and payout rows remain historical and auditable. They must not be relabelled as logistics-company payable or supplier payable. Preserve old allocation snapshots for refunds/reconciliation.
+
+### Deep-read findings and remaining implementation work
+
+- Updated current policy documents: `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md`, `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md`, `VICTORIOUS_MARKET.md`, `README.md`, `.ai/BUSINESS_RULES.md`, `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md`, `DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md`, `backend/VICTORIOUS_MARKET.md`, and the legacy payout/delivery audit notices.
+- The legal-document seeder still contains active legal/FAQ text saying new cashback is disabled and no logistics percentage is approved; it must be corrected before those seeded documents are treated as aligned.
+- Runtime checkout still writes legacy merchandise vendor splits and a delivery 90% field that is later treated as vendor earning when no logistics company is assigned. Pickup checkout also calculates cashback on the full subtotal instead of the eligible real-money-funded merchandise base after cashback redemption. These are code-level contradictions, not merely documentation issues.
+- The current logistics payout model has company-level payout requests, but the order does not yet have a complete audited default/final company-payable override lifecycle. A forward migration, row-locked override operation, balanced journal adjustment, UI/API route, and regression tests are required.
+- No latest CI run has been verified. Documentation alignment is not evidence of runtime correctness. Do not merge to `main` or deploy until code, tests, migration-upgrade paths and legal publication are verified.
+ 
 ## Section 32 — Cross-document retailer-policy alignment pass (21 October 2026)
 
 ### Changes committed on `docs/retailer-central-fulfilment-model`
