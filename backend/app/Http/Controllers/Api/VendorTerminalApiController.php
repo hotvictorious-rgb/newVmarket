@@ -131,6 +131,22 @@ class VendorTerminalApiController extends Controller
             'proof_of_delivery_image',
             'doorstep_rejection_photos',
             'customer_delivery_notes',
+            'refund_window_expires_at',
+            'vendor_settlement_status',
+            'settled_at',
+            'settled_by_admin_id',
+            'settlement_proof_path',
+            'delivery_halted_reason',
+            'delivery_halted_at',
+            'expires_at',
+            'vendor_handover_ready_at',
+            'pickup_confirmed_by_rider',
+            'picked_up_at',
+            'rider_arrived_at',
+            'delivery_confirmed_by_customer',
+            'received_at',
+            'sourcing_status',
+            'sourced_at',
         ]);
     }
 
