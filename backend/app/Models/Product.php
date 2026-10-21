@@ -211,8 +211,15 @@ class Product extends Model
                             });
                     })
                     ->whereHas('shop', function ($shop) {
-                        $shop->whereNull('deleted_at')
-                            ->where('is_active', true);
+                        $shop->whereNull('shops.deleted_at')
+                            ->where('shops.is_active', true)
+                            ->whereColumn('shops.vendor_id', 'supplier_offers.vendor_id')
+                            ->whereHas('lga', function ($lga) {
+                                $lga->whereRaw('LOWER(TRIM(lgas.name)) = ?', ['uyo'])
+                                    ->whereHas('state', function ($state) {
+                                        $state->whereRaw('LOWER(TRIM(states.name)) = ?', ['akwa ibom']);
+                                    });
+                            });
                     });
             });
     }
