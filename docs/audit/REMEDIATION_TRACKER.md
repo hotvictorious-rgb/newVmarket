@@ -407,3 +407,13 @@ Status: FIXED — focused regression passed. No merge or deployment.
 | VM-AUD-080 | High | Customer return-case JSON exposed the private `vendor_id`, supplier relation and supplier return-handover OTP through raw model serialization. | Hide private supplier and vendor-dispute fields on return-case serialization and remove supplier eager-loading from customer return list/detail responses; added customer API regression assertions. | FIXED — CI pending |
 
 | VM-AUD-081 | High | Retailer return cases were assigned to the order's compatibility `vendor_id`, making a private supplier appear to own a Victorious MARKET return and potentially routing it into legacy vendor-return workflows. | Made return-case supplier ownership nullable, create retailer return cases with no private vendor owner, and keep customer return JSON free of supplier identifiers/return OTP. Added a regression assertion for centrally owned retailer returns. | FIXED — CI pending |
+
+
+## Newly discovered finding — VM-AUD-082 (21 October 2026)
+
+**Severity:** High  
+**Finding:** Supplier terminal context rejected only suspended vendor accounts. A vendor profile in any other non-active state (for example, pending approval) could still access supplier terminal endpoints, despite sourcing and supplier selection requiring an active account. Vendor employees could also pass the organization check when the related vendor profile existed but was not active.
+
+**Change:** VendorTerminalApiController::resolveVendorContext() now fails closed unless the supplier marketplace status is exactly active. Employee terminal access also requires a present, active supplier organization. Added test_vendor_terminal_denies_non_active_supplier_accounts covering pending, active and suspended supplier states.
+
+**Status:** Code and regression test committed on docs/retailer-central-fulfilment-model; automated tests have not been run for this change. This does not close the release-blocking supplier-specific payout, recovery concurrency, PostgreSQL or end-to-end verification gates. No merge or deployment.
