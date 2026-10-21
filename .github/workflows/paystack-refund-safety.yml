@@ -53,6 +53,8 @@ jobs:
           php -l app/Services/LogisticsCompanyPayableService.php
           php -l app/Services/CashbackMaturityService.php
           php -l app/Console/Commands/MatureCustomerCashbackCommand.php
+          php -l app/Console/Commands/ReconcileSupplierPayablesCommand.php
+          php -l routes/console.php
           php -l app/Services/DoorstepHandshakeService.php
           php -l app/Services/ReturnAndRefundService.php
           php -l app/Services/FinancialOperationService.php
