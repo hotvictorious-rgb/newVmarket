@@ -39,42 +39,40 @@ This specification does not override applicable Nigerian law, consumer rights, v
 
 ## 4. Cancellation, doorstep acceptance, rejection and redelivery
 
-- Before a vendor accepts an order for fulfilment, a customer cancellation can normally be processed under the pre-fulfilment cancellation policy, subject to payment verification and stock/order state.
-- Once a vendor accepts an order for fulfilment or begins preparation, ordinary customer cancellation is restricted because vendor preparation and delivery costs may already be committed. It is not an absolute bar where the vendor cannot fulfil, payment is duplicated, an order is cancelled before any vendor action, applicable law requires a remedy, or an authorised admin approves a documented exception.
-- Customers should inspect the order at the door where practical. For a multi-item order, accept conforming items and reject only the wrong, visibly damaged, defective or materially non-conforming item where item-level handling is supported.
-- When an item is rejected at the door, the vendor's rider records the operational outcome and takes the rejected item back to the owning vendor. The vendor inspects it and may offer a corrected item or replacement for redelivery. Redelivery requires customer agreement; it must not be forced on the customer or used to delay a refund/right that is legally due.
-- If the customer declines a replacement, the vendor cannot supply a suitable replacement, or the remedy is otherwise inappropriate, an authorised admin reviews the refund or other remedy under this policy and applicable law.
-- Repeated, unsupported refusal of conforming goods may trigger a fair account review; it does not permit automatic forfeiture of statutory rights or money.
-- Failed delivery, refusal at the door, return-to-vendor, redelivery, refund and vendor recovery are distinct states and events. None may silently create a wallet credit, mark a refund complete, release money, or charge a vendor without an authorised and auditable financial decision.
+- Before VM authorizes sourcing/fulfilment, a customer cancellation can normally be processed under the pre-fulfilment cancellation policy, subject to payment verification and order state.
+- Once sourcing or preparation has begun, ordinary cancellation may be restricted under the published policy, but this is not an absolute bar where VM/supplier cannot fulfil, payment is duplicated, no supplier action has begun, applicable law requires a remedy, or an authorized admin approves a documented exception.
+- At doorstep, customers should inspect the product where practical. Where item-level handling is supported, a customer may accept conforming items and report/reject only the wrong, visibly damaged, defective or materially non-conforming item.
+- The assigned logistics company/rider records the operational outcome and follows the authorized return-to-origin/custody process. VM coordinates any correction or replacement. Redelivery requires customer agreement and must not be forced or used to delay a legally owed refund.
+- If replacement is unsuitable, declined, unavailable or inappropriate, VM reviews the refund or other remedy under the approved policy and applicable law.
+- Failed delivery, refusal, return-to-origin, redelivery, refund, supplier fault and supplier recovery are distinct states. None may silently mark a refund complete, release money or create supplier debt without an authorized auditable decision.
 
 ## 5. Required fulfilment evidence and pickup reservation
 
-The only mandatory **photo evidence** types at launch are:
-1. **Doorstep delivery photo** linked to the relevant vendor child order.
-2. **In-shop pickup photo** linked to the relevant vendor child order.
+The only mandatory photo evidence types at launch are:
+1. Doorstep delivery photo linked to the VM order/fulfilment unit.
+2. In-shop pickup photo linked to the VM order/fulfilment unit.
 
 OTP verification remains mandatory alongside the photos:
-- **Doorstep delivery:** the customer delivery OTP must be securely verified and a doorstep delivery photo recorded before the handover is marked complete.
-- **In-shop pickup:** the customer must present the reservation pickup pass (`RES-XXXXXX`) AND complete one-time customer pickup OTP verification; the vendor must securely verify both and record an in-shop pickup photo before completing the handover. The reservation pass and OTP serve distinct security checks; neither replaces the photo.
-- Keep customer counter pickup separate from rider-to-vendor parcel custody. Do not expose OTPs or pickup secrets in ordinary order lists/history, logs, analytics or unauthorised rider views. Verify on the backend, expire credentials where applicable, and prevent reuse.
-- GPS, customer signature, separate rider-pickup photo and collection-point/hub inspection photo are not mandatory at launch.
+- **Doorstep delivery:** server-verify the customer delivery OTP and record the doorstep photo before marking handover complete.
+- **Supplier-shop pickup:** the customer presents the reservation pass (RES-XXXXXX) and completes the separate one-time customer pickup OTP; the authorized pickup actor verifies both and records an in-shop photo.
+- Keep customer pickup credentials separate from rider-to-logistics-company custody credentials. Do not expose OTPs/pickup secrets in ordinary history, logs, analytics or unauthorized rider views. Verify server-side, expire credentials where applicable and prevent reuse.
+- GPS, customer signature, separate rider-pickup photo and hub-inspection photo are not mandatory at launch.
 
-A reservation is created through Victorious MARKET and holds the selected stock for the existing 24-hour window unless an owner-approved rule changes it. The customer pays at the approved vendor shop through Victorious MARKET's authorised payment workflow; the vendor must not release the item on an unpaid or payment-uncertain reservation, accept private off-platform payment, or mark payment successful based on a screenshot alone. On expiry, release the hold only after payment state is safely resolved.
+A reservation is created through VM and holds the selected item for the existing 24-hour window unless the owner changes it. Any payment at a supplier-shop pickup must use VM's authorized payment workflow. Suppliers cannot accept private off-platform payment or mark an order paid from a screenshot. Release stock on expiry only after payment is safely reconciled.
 
-OTP/pass verification confirms the handover process, while a photo provides supporting evidence. Neither proves product quality, customer satisfaction or vendor liability. Admin may request relevant additional claim evidence when reasonable and must record evidence exceptions. Protect photo and credential access and customer privacy.
+OTP/pass and photo evidence support the handover process; they do not prove product quality or automatically establish supplier liability. Protect photo and credential access.
 
 ## 6. Standard return/refund window and admin exceptions
 
-- The standard operational return/refund request window for eligible ordinary claims is **24 hours from confirmed doorstep delivery or confirmed in-shop pickup**.
-- The 24-hour window is not a blanket waiver of consumer rights, a universal product warranty cutoff, or a promise that a payment provider will complete a refund within 24 hours. Applicable law and valid warranty obligations prevail where they require a remedy.
-- Ordinary post-delivery refunds should be low-probability through clear eligible grounds, pre-handover inspection where practical, photo evidence of fulfilment, vendor correction/replacement options, and authorised review—not by unfairly refusing valid claims.
-- Eligible reasons include wrong item, missing item, visible transit damage, defect/non-operation, material listing misdescription, failed fulfilment, verified duplicate charge and other legally required grounds. Product-specific exclusions may apply only where clearly disclosed and lawful.
-- Support may open a case and collect details. At launch, an authorised admin reviews and approves ordinary refunds. Admin may manually open, review and approve a legitimate late case after 24 hours, including when a customer contacts admin directly. Record the reason, evidence, decision maker, approved amount and timestamps.
-- A complaint alone is not proof of vendor fault. Determine whether the vendor, platform, customer or shared cause bears each cost. A vendor's acceptance of an order for fulfilment restricts ordinary cancellation; it does not eliminate remedies for non-conforming goods or non-waivable legal rights.
-- A case filed within the standard window remains open until resolved even if inspection, redelivery, repayment or payment-provider processing takes longer.
-- Distinguish request, review, approval, submission, provider processing, confirmed completion, failure and reconciliation. Never mark a refund complete solely because an admin approved it or the gateway request was sent.
-- Refunds are calculated per affected child order/item and must never exceed the verified parent capture or the remaining refundable amount after prior refunds. Merchandise and delivery-fee refund decisions are made independently according to the reason, actual allocation, published terms and applicable law.
-- At launch, refund through the original verified payment method where supported. A complaint or approval does not automatically establish that the vendor owes money.
+- The standard operational return/refund request window for eligible ordinary claims is 24 hours from verified doorstep delivery or confirmed customer pickup.
+- This is not a blanket waiver of consumer rights, a universal warranty cutoff, or a promise that a provider completes a refund within 24 hours. Applicable law and valid warranty obligations prevail where they require a remedy.
+- Eligible grounds include wrong/missing item, visible transit damage, defect/non-operation, material listing misdescription, failed fulfilment, duplicate charge and other legally required grounds. Product-specific exclusions apply only where clearly disclosed and lawful.
+- Support may open a case and gather evidence. An authorized admin reviews ordinary refunds and may manually review a legitimate late case; record the reason, evidence, decision maker, amount and timestamps.
+- A complaint alone is not proof of supplier fault. Determine responsibility from evidence and the supplier/logistics agreement. A supplier's acceptance of an offer does not eliminate remedies for non-conforming goods or non-waivable legal rights.
+- A case opened within the standard window remains open until resolved even if inspection, replacement, recovery or payment-provider processing takes longer.
+- Distinguish request, review, approval, gateway submission, provider processing, confirmed completion, failure and reconciliation. Approval or submission alone is not proof of refund completion.
+- Refund the approved captured amount against the original verified payment route where supported. Merchandise and delivery-fee refund decisions are independent; enforce component and aggregate capture ceilings, count active reservations and confirmed refunds, and prevent duplicate operations.
+- Customer refund obligation and supplier recovery are separate. VM must not delay a valid customer refund while trying to recover from a supplier.
 
 ## 7. Supplier payment eligibility and execution
 
@@ -117,51 +115,39 @@ OTP/pass verification confirms the handover process, while a photo provides supp
 
 ## 11. Roles, notifications and audit
 
-- Support staff may open cases and gather information. Authorised finance/admin may approve refunds, payouts and offsets within assigned permissions. High-value or exceptional refunds should use a configurable second-approval threshold.
+- Support may open cases and gather evidence. Authorized finance/admin may approve customer refunds, supplier payments and recoveries within assigned permissions. No numeric second-approval threshold is approved; do not hard-code one.
 - Every manual override requires a reason and audit record. Completed financial actions cannot be silently edited or deleted.
-- Notify customers of material refund status changes and vendors of holds, payout decisions, confirmed debts, repayments and offsets.
-- Keep customer, rider, payment and photo data restricted to staff who need it. Retention and access rules must be documented and legally reviewed.
-- Reconcile gateway transactions, refunds, payouts, bank receipts, internal journals, vendor balances and cashback balances regularly.
+- Notify customers of material order/refund status changes; notify suppliers of accepted sourcing commitments, fulfilment issues and payable/payment outcomes as appropriate.
+- Restrict customer, rider, supplier cost, payment and photo data to staff/actors who need it. Retention and access rules must be documented and legally reviewed.
+- Reconcile provider transactions, refunds, supplier payments, logistics-company charges/payments, bank receipts, internal journals and historical cashback/marketplace balances regularly.
 
 ## 12. Pre-implementation gate
 
-Before implementation begins:
-1. Update all business and customer/vendor legal documents to this specification.
-2. Identify and remove conflicting statements, including legacy logistics fleet/hub terms, conflicting OTP/photo requirements, wallet-refund promises, old payout calculation rules, off-platform/in-shop payment ambiguity and incorrect cashback maturity descriptions.
-3. Keep legacy records for audit but clearly mark retired legacy fleet documents/flows as inactive for new orders.
-4. Audit current code and database-seeded legal documents against every rule and mark each item implemented, partial, missing or conflicting.
-5. Prepare a prioritised implementation plan and regression tests. Do not claim code alignment until changes are implemented, tested and reviewed.
+Do not begin a broad code migration until the following are documented and the affected source paths are audited:
 
+1. Supplier-offer schema/linkage, canonical product matching, listing approval and immutable order-item purchase-cost snapshots.
+2. Retailer accounting: supplier purchase cost/payable, customer receipts/revenue, delivery charges, logistics-company charges, fees, discounts, refunds and whether cashback continues.
+3. VM-controlled coverage from Uyo, delivery-fee rules, logistics-company commercial agreements and the mandatory rider-to-company linkage.
+4. Existing checkout, reservation and pickup compatibility, including the legacy web checkout bypass of CheckoutExecutionService.
+5. Supplier payment eligibility only after verified successful customer delivery/pickup, idempotent payment attempts and provider reconciliation.
+6. Historical marketplace/vendor payout and cashback records, foreign keys, legal text, journals and audit dependencies that must be preserved.
+7. Regression/security tests for payment, refund ceilings, customer OTP/photo, supplier-shop pickup, logistics custody, duplicate events, uncertain timeouts and supplier payment.
+8. Legal and accounting review of customer-facing terms, supplier agreements, logistics-company agreements, taxes, cashback and recovery terms.
 
-## 13. Owner-confirmed refund funding and vendor recovery rule (20 October 2026)
+A documentation change is not proof of implementation. Keep the migration branch unmerged and undeployed until the owner approves the change set and the required tests pass.
 
-**Binding owner decision:** When Victorious MARKET approves a valid customer refund after the vendor has already been paid, Victorious MARKET funds and executes the customer refund from platform-controlled available cash/refund liquidity. The customer refund must not be delayed solely because the vendor has not repaid the platform. Where evidence, the approved decision, and the vendor agreement establish that the vendor is responsible, Victorious MARKET records a separate recoverable vendor receivable and pursues recovery through verified repayment or an expressly authorised contractual offset. This rule does not permit automatic debt creation from a complaint.
+## 13. Owner-confirmed refund funding and supplier recovery rule (21 October 2026)
 
-Required accounting treatment:
-- Customer refund obligation, refund execution, platform cash outflow, reversal of original allocations, and vendor recovery are separate linked records/events.
-- Reverse the original eligible vendor/platform/cashback and delivery allocations exactly once for the approved refund components. A refunded unspent cashback liability is reversed; spent-cashback recovery remains a separate cashback-ledger matter.
-- If the vendor's allocation has already been transferred, do not pretend that transfer was reversed. If the approved liability decision makes the paid vendor allocation recoverable, post a separate vendor receivable for the **approved recoverable amount**, normally limited to the vendor-funded allocation attributable to the approved component(s), subject to the vendor agreement, evidence, applicable law, and any approved shared-fault allocation.
-- Do not automatically book the entire customer refund as vendor debt. The platform's own share, gateway fees, delivery allocation, cashback, customer/platform contribution, and fault allocation must be treated according to the actual approved component-level calculation. No double recovery is permitted.
-- If vendor responsibility or the recoverable amount is disputed, keep it as a case under review rather than confirmed debt until an authorised decision is recorded. Vendor recovery can remain outstanding after the customer refund is complete.
-- The platform must maintain adequate working/refund liquidity to pay approved refunds even when vendor proceeds were already paid and recovery is delayed or impossible. Vendor debt is a receivable, not cash and not available refund liquidity. Forecast the cash gap and report overdue/unrecoverable debt separately.
-- Repayment counts only after the platform verifies receipt against its bank/provider records. An authorised offset requires contractual basis, explicit approval, a linked ledger entry, and vendor notification. Write-off requires authorised approval and an audit trail.
+Victorious MARKET remains responsible for funding and executing an approved customer refund even if the supplier has already been paid. Customer remedy must not wait for supplier recovery. Record any potential supplier receivable only after evidence establishes supplier responsibility and the supplier agreement permits recovery. A complaint alone is not debt. Recovery/offset requires authorized approval and a linked audit trail; never pretend a completed transfer was reversed.
 
-Illustrative full-refund case: the customer paid ₦105,000 (₦100,000 merchandise + ₦5,000 delivery). The original allocation was ₦94,500 vendor, ₦5,500 platform, and ₦5,000 cashback liability. If the vendor already received ₦94,500 and the customer is later approved a full ₦105,000 refund, the platform pays the customer ₦105,000 from available platform cash/refund liquidity. It reverses the applicable original allocations; the ₦5,000 unspent cashback liability is cancelled if eligible; and the platform reverses its ₦5,500 share. Only if the documented responsibility decision and vendor contract make the paid vendor allocation recoverable does the platform separately record up to ₦94,500 as vendor receivable in this example. The platform temporarily funds the cash gap; the receivable is not treated as cash until recovered. This example assumes full vendor responsibility and a fully recoverable vendor allocation; actual cases must use the approved component-level liability calculation.
+## 14. Mandatory accounting-balance and loss-recognition controls
 
-Acceptance tests must prove: customer refund completes while vendor recovery is pending; refund liquidity is not overstated by a receivable; a complaint alone creates no confirmed debt; the debt cannot exceed the approved recoverable amount; verified repayments reduce the receivable once; offsets require permission and contractual basis; and a full refund cannot reverse allocations or create debt twice.
+- Supplier payables, logistics-company charges, customer refunds, gateway fees, cashback liabilities, receivables, repayments, write-offs and operating expenses must be separately traceable.
+- Every financial event must have idempotent source identity, correct currency/amount, authorization, balanced journal entries and reconciliation evidence.
+- A balanced ledger can still show an operating loss or liquidity shortfall. Cash and receivables are not interchangeable. A supplier receivable is not cash and must not be used to claim a customer refund is funded.
+- Reverse or adjust prior postings through linked entries; do not delete history or double recover the same loss.
+- Historical marketplace allocations, cashback, vendor earnings and payout records must remain traceable and must not be silently reclassified as retailer transactions.
 
-## Mandatory accounting-balance and loss-recognition controls (20 October 2026)
+## 15. Source-of-truth and release control
 
-This is a binding accounting invariant, not an optional implementation note.
-
-- Every posted journal must balance: total debits equal total credits in the same currency. Required financial postings must be atomic; do not mark a financial operation complete when its required journal fails.
-- Record the customer refund as an actual platform cash outflow when paid through the verified refund route. Reverse original allocations using linked, idempotent entries; never delete or rewrite original entries or pretend a completed vendor bank transfer was reversed.
-- Record a vendor receivable only after an authorised, evidence-backed responsibility decision and contractual basis establish the recoverable amount. The receivable is separate from cash, vendor earnings, customer balances, and platform income.
-- Available cash/refund liquidity must exclude vendor receivables, disputed claims, pending repayments, uncertain transfers, and other funds not actually received and available.
-- Reconcile refund cash movement, original allocation reversals, cashback liability/reversal, vendor payout history, gateway fees, and receivables as distinct components. Retries/webhooks must not duplicate reversals, debt, or recovery.
-- If a vendor receivable becomes unrecoverable, record an authorised impairment/write-off using accountant-approved accounting treatment and preserve the audit trail. A write-off is not a cash receipt and must not conceal the loss.
-- Reports must separately show (1) actual cash and available liquidity, (2) vendor receivables with ageing/status, and (3) platform income, expenses, recognised losses and write-offs. Balanced books do not guarantee profit or sufficient liquidity.
-- Maintain a monitored refund-liquidity reserve/forecast and alert authorised operators when projected obligations exceed available funds. Never count receivables as cash in a reserve calculation.
-- Obtain qualified-accountant review of production journal mapping. Preserve immutable audit events for approvals, postings, repayments, offsets, impairments and write-offs.
-
-**Acceptance criteria:** prove balanced debit/credit journals; customer refund independent of vendor recovery; cash reports exclude receivables; completed vendor transfers remain historical facts; recovery/write-off is authorised and idempotent; and finance reports expose cash shortfalls and losses.
+The canonical current model is [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](../RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md). Detailed payment/refund and webhook requirements remain in [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](../PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md). Historical source-audit findings must be reconciled against these current business rules; do not reintroduce vendor-managed delivery, marketplace payout percentages or supplier-off-platform payment.
