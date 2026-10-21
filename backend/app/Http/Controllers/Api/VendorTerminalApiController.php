@@ -1541,7 +1541,7 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
         $vendor = $ctx['vendor'];
 
         $cases = \App\Models\ReturnCase::where('vendor_id', $vendor->id)
-            ->with(['order:id,order_number', 'items.product', 'returnedByRider:id,name,phone'])
+            ->with(['order:id,order_number', 'items.product', 'items.orderItem:id,product_name', 'returnedByRider:id,name,phone'])
             ->latest()
             ->paginate(15);
 
