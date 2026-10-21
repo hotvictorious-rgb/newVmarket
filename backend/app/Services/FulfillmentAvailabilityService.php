@@ -66,6 +66,25 @@ class FulfillmentAvailabilityService
             ];
         }
 
+        // Binding owner policy: all new customer deliveries must end inside Uyo LGA, Akwa Ibom.
+        // This guard runs before lane lookup so stale/active legacy inter-LGA lanes cannot bypass policy.
+        $destinationLgaName = strtolower(trim((string) ($destLga->name ?? '')));
+        $destinationStateName = strtolower(trim((string) ($destLga->state->name ?? '')));
+        if ($destinationLgaName !== 'uyo' || $destinationStateName !== 'akwa ibom') {
+            return [
+                'is_available' => false,
+                'lane_id' => null,
+                'origin_lga_id' => $shop->lga_id,
+                'destination_lga_id' => $destinationLgaId,
+                'fee' => '0.00',
+                'message' => 'Victorious MARKET delivers only within Uyo LGA, Akwa Ibom State.',
+                'rate_tier' => 'destination_outside_uyo',
+                'delivery_mode' => null,
+                'is_collection_point' => false,
+                'collection_points' => [],
+            ];
+        }
+
         // Route serviceability is controlled by the explicit directional route matrix, not vendor rider coverage.
 
         $isKekeOrBulky = in_array(strtolower($packageTier), ['keke', 'bulky'], true);
@@ -165,24 +184,12 @@ class FulfillmentAvailabilityService
      */
     public function checkPickupAvailability(int $shopId): array
     {
-        $shop = Shop::with(['lga', 'state'])->find($shopId);
-        if (!$shop || !$shop->pickup_enabled) {
-            return [
-                'is_available' => false,
-                'message' => 'In-shop pickup is not enabled for this shop.',
-            ];
-        }
-
+        // Public pickup and reservation are disabled under the current Uyo-only doorstep model.
+        // Support-managed exceptions must not be exposed as an automated public availability API.
         return [
-            'is_available' => true,
-            'shop_id' => $shop->id,
-            'shop_name' => $shop->name,
-            'address' => $shop->address,
-            'lga' => $shop->lga->name ?? null,
-            'state' => $shop->state->name ?? null,
-            'prep_time_minutes' => $shop->pickup_prep_time_minutes,
-            'opening_time' => $shop->pickup_opening_time,
-            'closing_time' => $shop->pickup_closing_time,
+            'is_available' => false,
+            'message' => 'Public pickup is not offered. Standard fulfilment is doorstep delivery within Uyo only. Contact Victorious MARKET support at 09118949035 for assistance.',
+            'rate_tier' => 'support_managed_exception_only',
         ];
     }
 
