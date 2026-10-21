@@ -452,7 +452,7 @@ class ReturnAndRefundService
      */
     public function adminRejectReturn(User $adminUser, ReturnCase $case, string $reason): array
     {
-        if (!$adminUser->isSuperAdmin() && $adminUser->user_type !== 'admin_employee') {
+        if ($adminUser->status !== 'active' || (!$adminUser->isSuperAdmin() && $adminUser->user_type !== 'admin_employee')) {
             return ['success' => false, 'message' => 'Unauthorized: Only administrative staff can reject return cases.'];
         }
 
