@@ -2,11 +2,11 @@
 
 > **Superseding owner decision (21 October 2026):** Victorious MARKET is a retailer operating centrally from Uyo, Akwa Ibom State. Suppliers are private product sources, not public marketplace sellers. They submit offers for VM approval or map offers to existing canonical listings. VM controls customer-facing prices and delivery, uses approved logistics companies, and requires every rider to be linked to exactly one active logistics company. Authorized supplier-shop pickup remains supported using the existing customer verification and photo flow. Supplier payment eligibility begins only after verified successful customer delivery or confirmed pickup and reconciliation. Earlier multi-vendor, vendor-managed delivery, vendor commission/payout and vendor-linked rider rules in this document are legacy assumptions and are superseded for new retailer-model work. Do not infer that code has been migrated. See [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](../RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md).
 
-**Status:** Authoritative business-rule baseline for vendor-managed fulfilment
-**Last reviewed:** 20 October 2026
+**Status:** Authoritative owner-approved retailer and central-fulfilment requirements; legacy vendor-managed sections are historical only
+**Last reviewed:** 21 October 2026
 **Review note:** The rules are approved requirements; Section 14 lists implementation gaps found in the audit branch, not completed fixes.  
 **Scope:** Delivery, vendor-linked riders, in-shop pickup, customer privacy, failed delivery, delivery fees, COD boundaries, and legacy logistics.  
-**Authority:** Read with [VICTORIOUS_MARKET_SYSTEM_RULES_V1.md](../VICTORIOUS_MARKET_SYSTEM_RULES_V1.md), the single source of truth. These rules supersede older descriptions of platform-managed logistics, conflicting OTP/photo requirements, logistics-company dispatch, rider earnings, and rider payouts. Historical records must be preserved. Documentation alignment only; implementation remains unverified.
+**Authority:** For new retailer-model work, use [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](../RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md) as the owner-approved business baseline, together with [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](../PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) for payment/refund controls. `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md` may contain older marketplace assumptions and must not override the newer owner decision where they conflict. Preserve historical records. This document records requirements, not proof of implementation; runtime alignment remains unverified until each finding is tested.
 
 ## Decision record — retailer and central fulfilment model
 
@@ -136,14 +136,14 @@ Operational order information such as order identifier, parcel/product descripti
 2. Doorstep delivery requires verified customer OTP plus a doorstep delivery photo. In-shop pickup requires the valid RES-XXXXXX reservation pass AND one-time customer pickup OTP verification plus an in-shop pickup photo. GPS, customer signature, separate rider-pickup photo and hub/collection-point inspection photo are not mandatory.
 3. Failed-attempt reasons should be enumerated and auditable (for example, customer unreachable, recipient unavailable, wrong address, access blocked, or customer rescheduled).
 4. A failed attempt or photo is operational evidence, not a financial decision. It must not automatically create wallet credit, mark a refund paid, create a rider payable, or release vendor funds.
-5. After doorstep rejection or failed delivery, record the outcome and return the item directly to its owning vendor. The vendor may offer a corrected item or replacement redelivery only with customer agreement. Record return custody and any agreed redelivery. Refund/compensation is separately reviewed.
+5. After doorstep rejection or failed delivery, record the outcome and use an authorised, auditable return-to-source workflow to return the parcel to the selected supplier/shop. Victorious MARKET operations coordinate the return through the assigned logistics company or another approved custody process; supplier receipt must be recorded. The supplier may offer a corrected item or replacement redelivery only with customer agreement. Record every custody transfer and any agreed redelivery. Refund/compensation is separately reviewed.
 6. Delivery proof supports an investigation but is not, by itself, proof that the item was genuine, defect-free, or that a refund is owed.
 
 ## 9. Failed delivery and customer remedies
 
 1. Failed delivery does not automatically mean the customer receives an immediate wallet credit or cash refund.
 2. The system records each attempt and reason, preserves parcel custody history, and applies the configured attempt limit consistently.
-3. When the limit is reached, the rider returns the parcel to the owning vendor and the vendor confirms receipt. The order enters an explicit failed/returned/review state; it must not be marked successfully delivered.
+3. When the limit is reached, the parcel enters an authorised return-to-source workflow coordinated by Victorious MARKET. An approved logistics actor returns it to the selected supplier/shop and the supplier confirms receipt. The order enters an explicit failed/returned/review state; it must not be marked successfully delivered.
 4. Any rescheduling, redelivery fee, cancellation, refund, or vendor recovery is decided under the applicable published customer policy and platform review. It must be linked to the order and use the existing financial-operation/refund engine.
 5. A customer refund is based on the verified original payment and approved refund amount, with exact allocation of merchandise, delivery fee, discounts, commission, cashback, previous refunds, and vendor amounts already paid.
 6. No failed-delivery handler may directly create spendable wallet credit or a logistics/rider journal entry. Financial actions require the authorized financial service and an auditable decision.
