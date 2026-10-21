@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Web\AdminSupplierOfferAvailabilityController;
+use App\Http\Controllers\Web\AdminOrderSupplierAssignmentController;
 use App\Http\Controllers\Web\PaystackPaymentController;
 use App\Http\Controllers\Web\PortalController;
 use App\Http\Controllers\Web\WebAuthController;
@@ -81,6 +82,9 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/orders', [PortalController::class, 'adminOrdersPage'])->name('admin.orders.index');
     Route::post('/orders/{id}/assign-logistics-company', [PortalController::class, 'adminAssignLogisticsCompany'])->whereNumber('id')->name('admin.orders.logistics_company.assign');
     Route::post('/orders/{id}/logistics-company-payable', [PortalController::class, 'adminOverrideLogisticsCompanyPayable'])->whereNumber('id')->name('admin.orders.logistics_company_payable.override');
+    Route::post('/orders/supplier-assignments/{assignmentId}/override', [AdminOrderSupplierAssignmentController::class, 'override'])
+        ->whereNumber('assignmentId')
+        ->name('admin.orders.supplier_assignments.override');
     Route::get('/products', [PortalController::class, 'adminProductsPage'])->name('admin.products.index');
     Route::post('/supplier-offers/{offerId}/confirm-availability', [AdminSupplierOfferAvailabilityController::class, 'confirm'])
         ->whereNumber('offerId')
