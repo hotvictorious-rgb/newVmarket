@@ -475,6 +475,19 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'target_id' => $orderBike->id,
             'action' => 'supplier_rejected_paid_retailer_order',
         ]);
+
+        // The order-wide hold must survive later supplier actions. Neither another
+        // confirmation nor collection preparation may reopen this rejected order.
+        $lateConfirmation = $this->postJson("/api/v1/vendor/orders/{$orderBike->id}/confirm-availability", [
+            'notes' => 'Late confirmation must not clear the administrative hold.',
+        ]);
+        $lateConfirmation->assertStatus(409)
+            ->assertJsonPath('status', false);
+        $blockedPreparation = $this->postJson("/api/v1/vendor/orders/{$orderBike->id}/ready-for-handover");
+        $blockedPreparation->assertStatus(422)
+            ->assertJsonPath('status', false);
+        $this->assertEquals('supplier_rejected', $orderBike->fresh()->sourcing_status);
+        $this->assertEquals('paid', $orderBike->fresh()->payment_status);
     }
 
     public function test_public_product_api_filters_by_condition_and_package_tier(): void
