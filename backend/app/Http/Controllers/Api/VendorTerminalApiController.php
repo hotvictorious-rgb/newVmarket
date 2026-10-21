@@ -56,6 +56,14 @@ class VendorTerminalApiController extends Controller
         }
 
         return $order->makeHidden([
+            'customer_id',
+            'customer_address_id',
+            'origin_lga_id',
+            'destination_lga_id',
+            'delivery_lane_id',
+            'logistics_company_id',
+            'rider_id',
+            'collection_point_id',
             'vendor_id',
             'shop_id',
             'selected_supplier_id',
@@ -265,7 +273,8 @@ class VendorTerminalApiController extends Controller
         $vendor = $ctx['vendor'];
         $shop = $ctx['shop'];
 
-        $query = Order::where('payment_status', 'paid')
+        $query = Order::where('retailer_model_order', true)
+            ->where('payment_status', 'paid')
             ->whereHas('supplierAssignments', function ($assignmentQuery) use ($vendor, $shop, $ctx) {
                 $assignmentQuery->where('supplier_vendor_id', $vendor->id);
                 if ($ctx['is_employee'] && $shop) {
@@ -273,9 +282,6 @@ class VendorTerminalApiController extends Controller
                 }
             })
             ->with([
-                'logisticsCompany:id,company_name,contact_phone',
-                'rider:id,user_id,plate_number,vehicle_type',
-                'rider.user:id,name,phone',
                 'items' => function ($itemsQuery) use ($vendor, $shop, $ctx) {
                     $itemsQuery->where('supplier_vendor_id', $vendor->id);
                     if ($ctx['is_employee'] && $shop) {
@@ -318,11 +324,9 @@ class VendorTerminalApiController extends Controller
         if ($request->filled('search')) {
             $search = trim($request->query('search'));
             $query->where(function ($q) use ($search) {
-                $q->where('order_number', 'like', "%{$search}%")
-                  ->orWhereHas('customer', function ($cq) use ($search) {
-                      $cq->where('name', 'like', "%{$search}%")
-                        ->orWhere('phone', 'like', "%{$search}%");
-                  });
+                // Suppliers may search by the retailer's order reference only.
+                // Customer names and phone numbers are not supplier-facing data.
+                $q->where('order_number', 'like', "%{$search}%");
             });
         }
 
@@ -351,7 +355,8 @@ class VendorTerminalApiController extends Controller
         $vendor = $ctx['vendor'];
         $shop = $ctx['shop'];
 
-        $query = Order::where('payment_status', 'paid')
+        $query = Order::where('retailer_model_order', true)
+            ->where('payment_status', 'paid')
             ->whereHas('supplierAssignments', function ($assignmentQuery) use ($vendor, $shop, $ctx) {
                 $assignmentQuery->where('supplier_vendor_id', $vendor->id);
                 if ($ctx['is_employee'] && $shop) {
