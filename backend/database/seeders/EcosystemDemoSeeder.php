@@ -685,8 +685,9 @@ class EcosystemDemoSeeder extends Seeder
                     'product_id' => $prod->id,
                     'vendor_id' => $prod->vendor_id,
                     'shop_id' => $prod->shop_id,
-                ], [
-                    'wholesale_cost' => $prod->cost_price ?? bcmul((string) $prod->unit_price, '0.85', 2),
+                    'wholesale_cost' => ($prod->cost_price && bccomp((string) $prod->cost_price, '0.00', 2) > 0)
+                        ? (string) $prod->cost_price
+                        : bcmul((string) $prod->unit_price, '0.85', 2),
                     'is_available' => true,
                     'availability_confirmed_at' => Carbon::now()->subHours(2),
                     'availability_confirmed_by' => $superAdmin->id,

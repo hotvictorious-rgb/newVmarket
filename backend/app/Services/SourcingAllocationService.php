@@ -144,7 +144,10 @@ class SourcingAllocationService
             $isShopActive = $shop && !$shop->trashed() && $shop->is_active;
 
             if ($isVendorActive && $isUserActive && $isShopActive) {
-                $cost = bcadd((string)($product->cost_price ?? '0.00'), '0', 2);
+                $fallbackCost = ($product->cost_price && bccomp((string)$product->cost_price, '0.00', 2) > 0)
+                    ? (string)$product->cost_price
+                    : bcmul((string)$product->unit_price, '0.85', 2);
+                $cost = bcadd($fallbackCost, '0', 2);
                 return [
                     'supplier_offer_id' => null,
                     'vendor_id' => (int)$product->vendor_id,
