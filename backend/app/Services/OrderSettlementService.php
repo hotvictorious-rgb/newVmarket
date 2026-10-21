@@ -993,6 +993,80 @@ class OrderSettlementService
                 return ['success' => false, 'message' => 'Unauthorized: Rider must be active and linked exclusively to the active logistics company assigned to this order.'];
             }
 
+            // New retailer orders may contain packages from several private suppliers.
+            // Each supplier has its own one-time collection OTP and mandatory proof photo.
+            if ($lockedOrder->retailer_model_order
+                && \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)->exists()) {
+                if ($lockedOrder->order_status !== 'ready_for_pickup') {
+                    return ['success' => false, 'message' => 'All supplier packages must be marked ready before the rider starts the complete-order collection.'];
+                }
+                if ($lockedOrder->isPickupLocked()) {
+                    $minutesRemaining = max(1, Carbon::now()->diffInMinutes($lockedOrder->pickup_locked_until));
+                    return ['success' => false, 'message' => "Pickup verification is locked. Try again in {$minutesRemaining} minute(s)."];
+                }
+
+                $assignment = \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                    ->where('supplier_pickup_code', trim($otp))
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($assignment && $assignment->status === 'collected') {
+                    return ['success' => true, 'message' => 'This supplier package was already collected and sealed.'];
+                }
+
+                if (!$assignment || $assignment->status !== 'ready_for_collection') {
+                    $lockedOrder->pickup_failed_attempts = (int) $lockedOrder->pickup_failed_attempts + 1;
+                    if ($lockedOrder->pickup_failed_attempts >= 5) {
+                        $lockedOrder->pickup_locked_until = Carbon::now()->addMinutes(15);
+                        $lockedOrder->save();
+                        return ['success' => false, 'message' => 'Pickup verification locked for 15 minutes after 5 incorrect attempts.'];
+                    }
+                    $lockedOrder->save();
+                    return ['success' => false, 'message' => 'Invalid supplier collection OTP. Verify the code for this supplier package.'];
+                }
+
+                $assignment->status = 'collected';
+                $assignment->collected_at = Carbon::now();
+                $assignment->collection_proof_image_path = $proofImagePath;
+                $assignment->collection_notes = $pickupNotes;
+                $assignment->save();
+
+                $lockedOrder->pickup_failed_attempts = 0;
+                $lockedOrder->pickup_locked_until = null;
+                $allCollected = !\App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                    ->where('status', '!=', 'collected')
+                    ->exists();
+
+                if ($allCollected) {
+                    $lockedOrder->order_status = 'out_for_delivery';
+                    $lockedOrder->pickup_confirmed_by_rider = true;
+                    $lockedOrder->picked_up_at = Carbon::now();
+                    $lockedOrder->pickup_proof_image = $proofImagePath;
+                    if ($pickupNotes) {
+                        $lockedOrder->pickup_notes = $pickupNotes;
+                    }
+                    $lockedOrder->save();
+                    NotificationDispatchService::dispatchRiderPickedUp($lockedOrder);
+
+                    return [
+                        'success' => true,
+                        'message' => 'All supplier packages have been collected with separate OTP and photo proof. Order is out for delivery.',
+                        'order' => $lockedOrder,
+                    ];
+                }
+
+                $lockedOrder->save();
+
+                return [
+                    'success' => true,
+                    'message' => 'Supplier package collection verified. Continue to the remaining supplier collection point(s).',
+                    'order' => $lockedOrder,
+                    'remaining_supplier_packages' => \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                        ->where('status', '!=', 'collected')
+                        ->count(),
+                ];
+            }
+
             // Enforce Vendor Handover Readiness
             if (!$lockedOrder->isVendorHandoverReady() && $lockedOrder->order_status !== 'ready_for_pickup') {
                 return [
