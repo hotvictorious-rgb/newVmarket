@@ -162,3 +162,12 @@ The authoritative logistics payout reversal service restored the company's walle
 - Added a regression test invoking the reversal service on a failed payout with no request journal and asserting no wallet credit and no journal mutation.
 - Commits: service 186fc9c2fc241a05c0bef8a06b75ceb5a7f2ee11; regression test 8ed3cfc6f868b9eebc3ac23c7eaf0d969edf5799.
 - Verification status: source and test changes are committed; PHP tests and CI have not been run. Existing reversal tests must be verified for both request-journal-present and missing-journal paths before release.
+
+## 18. Hold logistics payout reversal when beneficiary record is unavailable (21 October 2026)
+
+The logistics payout reversal service could continue accounting mutations when the related company profile was missing/archived. That could produce a wallet ledger credit without a company wallet row to receive it.
+
+- The reversal service now returns a protected finance-reconciliation result before changing payout status, wallet balance, or journals when the company profile cannot be loaded or is archived.
+- Added a regression test that soft-deletes the company and verifies reversal leaves the payout pending and creates no journal entries.
+- Commits: service cc4bbb997a341eebc75035ec13fa0a13d0b26d62; regression test 2ba59c483e3e78d9b7233fb6ec229e972b51a61f.
+- Verification status: committed source and test changes are not yet run in PHP/CI.
