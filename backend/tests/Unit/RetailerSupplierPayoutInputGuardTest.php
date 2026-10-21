@@ -28,10 +28,13 @@ class RetailerSupplierPayoutInputGuardTest extends TestCase
     {
         $emptyReason = $this->service()->markUncertain(1, '  ', 'uncertain');
         $invalidStatus = $this->service()->markUncertain(1, 'Gateway response was not authoritative.', 'unknown status with spaces');
+        $terminalStatus = $this->service()->markUncertain(1, 'Gateway reports final success; reconcile it.', 'success');
 
         $this->assertFalse($emptyReason['success']);
         $this->assertFalse($invalidStatus['success']);
+        $this->assertFalse($terminalStatus['success']);
         $this->assertTrue($emptyReason['protected']);
+        $this->assertTrue($terminalStatus['protected']);
     }
 
     public function test_reversal_rejects_empty_reason_before_database_access(): void
