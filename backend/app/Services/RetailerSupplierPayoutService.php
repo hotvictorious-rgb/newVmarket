@@ -515,6 +515,18 @@ class RetailerSupplierPayoutService
             }
             if (in_array($payout->status, ['rejected', 'failed', 'reversed'], true)
                 && $payout->allocations()->where('status', '!=', 'reversed')->doesntExist()) {
+                $expectedTerminalOutcome = match ($payout->status) {
+                    'rejected' => 'not_submitted',
+                    'failed' => 'failed',
+                    'reversed' => 'reversed',
+                };
+                if ($outcome !== $expectedTerminalOutcome || $payout->gateway_status !== $expectedTerminalOutcome) {
+                    return [
+                        'success' => false,
+                        'protected' => true,
+                        'message' => 'Terminal supplier payout state conflicts with the requested gateway outcome; no idempotent success was returned.',
+                    ];
+                }
                 return ['success' => true, 'idempotent' => true, 'payout' => $payout];
             }
             if ($outcome === 'not_submitted'
