@@ -57,50 +57,44 @@ class PortalController extends Controller
     {
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
         
-        $activeCity = $request->input('city', session('customer_city', 'Uyo'));
-        $activeState = $request->input('state', session('customer_state', 'Akwa Ibom'));
-
-        // Lookup LGA
-        $selectedLga = Lga::where('name', $activeCity)->first();
+        // Public storefront is permanently restricted to Uyo LGA, Akwa Ibom State.
+        $activeCity = 'Uyo';
+        $activeState = 'Akwa Ibom';
+        $selectedLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn($q) => $q->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->first();
         if (!$selectedLga) {
-            $selectedLga = Lga::where('name', 'Uyo')->first();
+            abort(503, 'Victorious MARKET Uyo service area is not configured.');
         }
-        $selectedLgaId = $selectedLga ? $selectedLga->id : 69;
+        $selectedLgaId = (int) $selectedLga->id;
 
-        // Origin LGAs with active fulfillment to destination LGA
+        // Ignore all legacy inter-LGA lanes and non-Uyo sources.
         $eligibleOriginLgaIds = collect([$selectedLgaId]);
-        $activeLanes = DeliveryLane::where('destination_lga_id', $selectedLgaId)
+        $activeLanes = DeliveryLane::where('origin_lga_id', $selectedLgaId)
+            ->where('destination_lga_id', $selectedLgaId)
             ->where('is_active', true)
-            ->with('originLga')
             ->get();
-
-        foreach ($activeLanes as $lane) {
-            $eligibleOriginLgaIds->push($lane->origin_lga_id);
-        }
-        $eligibleOriginLgaIds = $eligibleOriginLgaIds->unique();
-
-        // Check local merchant availability in this LGA
-        $hasLocalShops = Shop::where('lga_id', $selectedLgaId)->where('pickup_enabled', true)->exists();
-
-        // Count local products vs corridor transit products
         $localProductsCount = Product::marketplaceEligible()
-            ->whereHas('shop', function ($q) use ($selectedLgaId) {
-                $q->where('lga_id', $selectedLgaId);
-            })->count();
-
-        $corridorProductsCount = Product::marketplaceEligible()
-            ->whereHas('shop', function ($q) use ($eligibleOriginLgaIds, $selectedLgaId) {
-                $q->whereIn('lga_id', $eligibleOriginLgaIds)->where('lga_id', '!=', $selectedLgaId);
-            })->count();
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+                    ->whereHas('state', fn($stateQuery) => $stateQuery->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']));
+            })
+            ->count();
+        $corridorProductsCount = 0;
+        $hasLocalShops = $localProductsCount > 0;
 
         // Scope: 'local' (vendor shop in this LGA), 'corridor' (transit lanes), or 'all' (delivering to this LGA)
         // If customer selects LGA, default to 'local' if local items exist, otherwise allow 'all' with clear corridor labeling
         $defaultScope = ($localProductsCount > 0) ? 'local' : 'all';
-        $scope = $request->input('scope', $defaultScope);
+        $scope = 'local';
 
         // Query eligible products
         $query = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug']);
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+                    ->whereHas('state', fn($stateQuery) => $stateQuery->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']));
+            })
+            ->with(['category:id,name,slug']);
 
         if ($scope === 'local') {
             $query->whereHas('shop', function ($q) use ($selectedLgaId) {
@@ -148,7 +142,11 @@ class PortalController extends Controller
             if ($scope === 'local' && $corridorProductsCount > 0) {
                 // Fetch corridor products with clear transit indication
                 $products = Product::marketplaceEligible()
-                    ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
+                    ->whereHas('supplierOffers.shop.lga', function ($q) {
+                        $q->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+                            ->whereHas('state', fn($stateQuery) => $stateQuery->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']));
+                    })
+                    ->with(['category:id,name,slug'])
                     ->whereHas('shop', function ($q) use ($eligibleOriginLgaIds, $selectedLgaId) {
                         $q->whereIn('lga_id', $eligibleOriginLgaIds)->where('lga_id', '!=', $selectedLgaId);
                     })
@@ -159,7 +157,11 @@ class PortalController extends Controller
             } elseif ($corridorProductsCount === 0) {
                 // Truly empty LGA: load flagship items as explicit regional dispatch
                 $products = Product::marketplaceEligible()
-                    ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
+                    ->whereHas('supplierOffers.shop.lga', function ($q) {
+                        $q->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+                            ->whereHas('state', fn($stateQuery) => $stateQuery->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']));
+                    })
+                    ->with(['category:id,name,slug'])
                     ->latest()
                     ->take(12)
                     ->get();
@@ -168,35 +170,34 @@ class PortalController extends Controller
         }
 
         $latestProducts = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug'])
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+                    ->whereHas('state', fn($stateQuery) => $stateQuery->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']));
+            })
+            ->with(['category:id,name,slug'])
             ->latest()
             ->take(6)
             ->get();
 
-        // Stores Closer to You: Strictly physical shops located in this LGA
-        $shops = Shop::with('lga:id,name')
-            ->where('pickup_enabled', true)
-            ->where('lga_id', $selectedLgaId)
-            ->take(6)
-            ->get();
-
-        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+        // Supplier shops are private sourcing sources, not public storefronts.
+        $shops = collect();
+        $lgas = collect([$selectedLga]);
 
         // Coverage Status
         if ($hasLocalShops) {
-            $coverageStatus = 'pickup_and_delivery';
-            $statusBadge = '⚡ In-Shop Pickup & Same-Day Delivery Active';
-            $previewStatus = 'Pickup and delivery available in this local government';
+            $coverageStatus = 'uyo_local_delivery';
+            $statusBadge = 'Uyo Doorstep Delivery Only';
+            $previewStatus = 'Service area: Uyo LGA only. Availability is confirmed at checkout.'
         } elseif ($activeLanes->isNotEmpty()) {
             $minHours = $activeLanes->min('estimated_delivery_hours_min') ?? 12;
             $maxHours = $activeLanes->max('estimated_delivery_hours_max') ?? 24;
-            $coverageStatus = 'transit_delivery';
-            $statusBadge = "🚚 Transit Delivery Corridor Active ({$minHours}-{$maxHours} hrs)";
-            $previewStatus = "Delivery corridor active ({$minHours}-{$maxHours} hrs delivery speed)";
+            $coverageStatus = 'uyo_local_delivery';
+            $statusBadge = 'Uyo Doorstep Delivery Only';
+            $previewStatus = 'Service area: Uyo LGA only. Availability is confirmed at checkout.'
         } else {
-            $coverageStatus = 'regional';
-            $statusBadge = '📦 Nationwide Park Dispatch';
-            $previewStatus = 'Delivery options and speeds vary by regional dispatch';
+            $coverageStatus = 'uyo_local_delivery';
+            $statusBadge = 'Uyo Doorstep Delivery Only';
+            $previewStatus = 'Service area: Uyo LGA only. Availability is confirmed at checkout.'
         }
 
         // Return dynamic JSON for AJAX requests
