@@ -1279,7 +1279,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             'status' => 'approved',
         ]);
 
-        $paystack = \\Mockery::mock(\\App\\Services\\PaystackService::class);
+        $paystack = \Mockery::mock(\App\Services\PaystackService::class);
         $paystack->shouldReceive('initiateRefund')
             ->once()
             ->withAnyArgs()
@@ -1289,7 +1289,7 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
                 'refund_reference' => 'rf_retailer_cost_cashback',
                 'data' => ['status' => 'completed', 'reference' => 'rf_retailer_cost_cashback'],
             ]);
-        $this->app->instance(\\App\\Services\\PaystackService::class, $paystack);
+        $this->app->instance(\App\Services\PaystackService::class, $paystack);
 
         $result = app(ReturnAndRefundService::class)->adminDisburseRefund($this->superAdmin, $case);
         $this->assertTrue($result['success']);
