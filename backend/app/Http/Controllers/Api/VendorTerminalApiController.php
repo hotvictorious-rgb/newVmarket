@@ -285,7 +285,7 @@ class VendorTerminalApiController extends Controller
         $query = Order::where('retailer_model_order', true)
             ->where('payment_status', 'paid')
             ->whereHas('supplierAssignments', function ($assignmentQuery) use ($vendor, $shop, $ctx) {
-                $assignmentQuery->where('supplier_vendor_id', $vendor->id);
+                $assignmentQuery->where('supplier_vendor_id', $vendor->id)->where('status', '!=', 'admin_reassigned');
                 if ($ctx['is_employee'] && $shop) {
                     $assignmentQuery->where('supplier_shop_id', $shop->id);
                 }
@@ -299,7 +299,7 @@ class VendorTerminalApiController extends Controller
                     $itemsQuery->with('product:id,name,thumbnail');
                 },
                 'supplierAssignments' => function ($assignmentQuery) use ($vendor, $shop, $ctx) {
-                    $assignmentQuery->where('supplier_vendor_id', $vendor->id);
+                    $assignmentQuery->where('supplier_vendor_id', $vendor->id)->where('status', '!=', 'admin_reassigned');
                     if ($ctx['is_employee'] && $shop) {
                         $assignmentQuery->where('supplier_shop_id', $shop->id);
                     }
@@ -309,7 +309,7 @@ class VendorTerminalApiController extends Controller
                     ]);
                 },
                 'supplierAssignments' => function ($assignmentQuery) use ($vendor, $shop, $ctx) {
-                    $assignmentQuery->where('supplier_vendor_id', $vendor->id);
+                    $assignmentQuery->where('supplier_vendor_id', $vendor->id)->where('status', '!=', 'admin_reassigned');
                     if ($ctx['is_employee'] && $shop) {
                         $assignmentQuery->where('supplier_shop_id', $shop->id);
                     }
@@ -367,7 +367,7 @@ class VendorTerminalApiController extends Controller
         $query = Order::where('retailer_model_order', true)
             ->where('payment_status', 'paid')
             ->whereHas('supplierAssignments', function ($assignmentQuery) use ($vendor, $shop, $ctx) {
-                $assignmentQuery->where('supplier_vendor_id', $vendor->id);
+                $assignmentQuery->where('supplier_vendor_id', $vendor->id)->where('status', '!=', 'admin_reassigned');
                 if ($ctx['is_employee'] && $shop) {
                     $assignmentQuery->where('supplier_shop_id', $shop->id);
                 }
@@ -439,7 +439,15 @@ class VendorTerminalApiController extends Controller
             $assignment->save();
 
             $hasPending = OrderSupplierAssignment::where('order_id', $order->id)
-                ->where('status', '!=', 'supplier_confirmed')
+                ->whereNotIn('status', ['supplier_confirmed', 'admin_reassigned'])
+                ->whereExists(function ($query) use ($order) {
+                    $query->select(DB::raw(1))
+                        ->from('order_items')
+                        ->whereColumn('order_items.order_id', 'order_supplier_assignments.order_id')
+                        ->whereColumn('order_items.fulfillment_supplier_vendor_id', 'order_supplier_assignments.supplier_vendor_id')
+                        ->whereColumn('order_items.fulfillment_supplier_shop_id', 'order_supplier_assignments.supplier_shop_id')
+                        ->where('order_items.order_id', $order->id);
+                })
                 ->exists();
             $order->sourcing_status = $hasPending ? 'partially_supplier_confirmed' : 'supplier_confirmed';
             $order->save();
@@ -622,7 +630,15 @@ class VendorTerminalApiController extends Controller
             $assignment->save();
 
             $allReady = !OrderSupplierAssignment::where('order_id', $lockedOrder->id)
-                ->whereNotIn('status', ['ready_for_collection', 'collected'])
+                ->whereNotIn('status', ['ready_for_collection', 'collected', 'admin_reassigned'])
+                ->whereExists(function ($query) use ($lockedOrder) {
+                    $query->select(DB::raw(1))
+                        ->from('order_items')
+                        ->whereColumn('order_items.order_id', 'order_supplier_assignments.order_id')
+                        ->whereColumn('order_items.fulfillment_supplier_vendor_id', 'order_supplier_assignments.supplier_vendor_id')
+                        ->whereColumn('order_items.fulfillment_supplier_shop_id', 'order_supplier_assignments.supplier_shop_id')
+                        ->where('order_items.order_id', $lockedOrder->id);
+                })
                 ->exists();
 
             if ($allReady) {
