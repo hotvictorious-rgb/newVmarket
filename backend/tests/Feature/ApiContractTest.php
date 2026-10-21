@@ -39,20 +39,26 @@ class ApiContractTest extends TestCase
         $this->assertTrue($lgaNames->contains('Eket'));
     }
 
-    public function test_fulfillment_availability_resolves_directional_lane(): void
+    public function test_cart_fulfillment_availability_is_order_level_and_uyo_only(): void
     {
         $uyo = Lga::where('name', 'Uyo')->firstOrFail();
-        $shop = Shop::where('lga_id', $uyo->id)->firstOrFail();
+        $product = Product::marketplaceEligible()
+            ->whereHas('supplierOffers.shop.lga', function ($query) use ($uyo) {
+                $query->whereKey($uyo->id);
+            })
+            ->firstOrFail();
 
         $response = $this->postJson('/api/v1/fulfillment/availability', [
             'fulfillment_type' => 'doorstep_delivery',
-            'shop_id' => $shop->id,
             'destination_lga_id' => $uyo->id,
+            'items' => [['product_id' => $product->id, 'quantity' => 1]],
         ]);
 
         $response->assertStatus(200)
             ->assertJsonPath('status', true)
-            ->assertJsonPath('data.fee', '500.00');
+            ->assertJsonPath('available', true)
+            ->assertJsonPath('fulfillment_options.delivery.total_shipping_fee', '500.00')
+            ->assertJsonPath('fulfillment_options.in_shop_pickup.available', false);
     }
 
     public function test_customer_authentication_and_token_generation(): void
@@ -77,7 +83,7 @@ class ApiContractTest extends TestCase
         $this->assertGreaterThan(0, $productCount);
     }
 
-    public function test_in_shop_pickup_reservation_creation(): void
+    public function test_public_pickup_reservation_creation_and_lookup_are_disabled(): void
     {
         $customer = User::where('email', 'customer@victoriousmarket.com.ng')->firstOrFail();
         $product = Product::firstOrFail();
@@ -88,17 +94,8 @@ class ApiContractTest extends TestCase
             'quantity' => 1,
         ]);
 
-        $response->assertStatus(201)
-            ->assertJsonPath('status', true)
-            ->assertJsonStructure(['data' => ['reservation_code', 'shop_name', 'estimated_total', 'status']]);
-
-        $code = $response->json('data.reservation_code');
-        $this->assertStringStartsWith('RES-', $code);
-
-        // Public lookup
-        $lookupRes = $this->getJson("/api/v1/pickup-reservations/{$code}");
-        $lookupRes->assertStatus(200)
-            ->assertJsonPath('status', true)
-            ->assertJsonPath('data.reservation_code', $code);
+        $response->assertStatus(410)
+            ->assertJsonPath('status', false)
+            ->assertJsonPath('code', 'SUPPORT_MANAGED_PICKUP_ONLY');
     }
 }
