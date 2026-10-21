@@ -6,6 +6,7 @@ use App\Models\FinancialJournalEntry;
 use App\Models\LogisticsPayoutRequest;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\ReturnCase;
 use App\Models\VendorProfile;
 use App\Models\ProcessedWebhookEvent;
 use App\Models\VendorPayoutRequest;
@@ -218,8 +219,14 @@ class FinancialReconciliationEngine
             ])->groupBy('order_id');
             $entriesByOrder = FinancialJournalEntry::whereIn('order_id', $orderIds)
                 ->where('account_name', 'supplier_payable')
-                ->where('beneficiary_type', VendorProfile::class)
-                ->get(['order_id', 'beneficiary_id', 'entry_type', 'amount'])
+                ->get(['order_id', 'event_id', 'beneficiary_type', 'beneficiary_id', 'entry_type', 'amount'])
+                ->groupBy('order_id');
+
+            $itemsById = $itemsByOrder->flatten(1)->keyBy('id');
+            $refundedCasesByOrder = ReturnCase::whereIn('order_id', $orderIds)
+                ->whereNotNull('refunded_at')
+                ->with('items')
+                ->get()
                 ->groupBy('order_id');
 
             foreach ($orderBatch as $order) {
@@ -244,16 +251,60 @@ class FinancialReconciliationEngine
                 }
 
                 $ledgerBySupplier = [];
-                foreach ($entriesByOrder->get($order->id, collect()) as $entry) {
+                $supplierJournalEntries = $entriesByOrder->get($order->id, collect());
+                foreach ($supplierJournalEntries as $entry) {
                     $supplierId = (int) ($entry->beneficiary_id ?? 0);
-                    if ($supplierId <= 0) {
-                        $orderErrors[] = 'A supplier_payable journal entry has no supplier beneficiary ID.';
+                    if ($supplierId <= 0 || $entry->beneficiary_type !== VendorProfile::class) {
+                        $orderErrors[] = 'A supplier_payable journal entry has an invalid supplier beneficiary.';
                         continue;
                     }
                     $current = $ledgerBySupplier[$supplierId] ?? '0.00';
                     $ledgerBySupplier[$supplierId] = $entry->entry_type === 'credit'
                         ? BcMathService::add($current, (string) $entry->amount)
                         : BcMathService::sub($current, (string) $entry->amount);
+                }
+
+                // A completed refund reverses supplier payable for returned items.
+                // Require the exact matching debit before reducing expected liability;
+                // a refund event alone must not hide a missing supplier-cost reversal.
+                foreach ($refundedCasesByOrder->get($order->id, collect()) as $returnCase) {
+                    foreach ($returnCase->items as $returnItem) {
+                        $item = $itemsById->get($returnItem->order_item_id);
+                        if (!$item || (int) $item->order_id !== (int) $order->id) {
+                            $orderErrors[] = "Refunded return item #{$returnItem->id} does not resolve to an item on this order.";
+                            continue;
+                        }
+                        $supplierId = (int) ($item->fulfillment_supplier_vendor_id ?? 0);
+                        $unitCost = $item->fulfillment_supplier_cost_snapshot;
+                        $returnedQuantity = (int) $returnItem->quantity;
+                        if ($supplierId <= 0 || $unitCost === null || $returnedQuantity <= 0
+                            || $returnedQuantity > (int) $item->quantity) {
+                            $orderErrors[] = "Refunded return item #{$returnItem->id} has invalid supplier/cost/quantity evidence.";
+                            continue;
+                        }
+                        if ($order->vendor_settlement_status === 'settled') {
+                            $orderErrors[] = "Refunded order item #{$item->id} is marked settled; supplier recovery needs separate reconciliation.";
+                            continue;
+                        }
+
+                        $refundSupplierCost = BcMathService::mul((string) $unitCost, (string) $returnedQuantity);
+                        $expectedRefundEvent = 'EVT-RETAILER-REFUND-' . $returnCase->id . '-SUPPLIER-PAYABLE-' . $returnItem->id;
+                        $hasRefundDebit = $supplierJournalEntries->contains(function ($entry) use ($expectedRefundEvent, $supplierId, $refundSupplierCost) {
+                            return $entry->event_id === $expectedRefundEvent
+                                && $entry->beneficiary_type === VendorProfile::class
+                                && (int) $entry->beneficiary_id === $supplierId
+                                && $entry->entry_type === 'debit'
+                                && BcMathService::comp((string) $entry->amount, $refundSupplierCost) === 0;
+                        });
+                        if (!$hasRefundDebit) {
+                            $orderErrors[] = "Refunded return item #{$returnItem->id} is missing its exact supplier_payable reversal journal.";
+                            continue;
+                        }
+                        $expectedBySupplier[$supplierId] = BcMathService::sub(
+                            $expectedBySupplier[$supplierId] ?? '0.00',
+                            $refundSupplierCost
+                        );
+                    }
                 }
 
                 $supplierIds = array_unique(array_merge(array_keys($expectedBySupplier), array_keys($ledgerBySupplier)));
