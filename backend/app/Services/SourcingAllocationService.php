@@ -322,15 +322,19 @@ class SourcingAllocationService
 
             $oldItems = [];
             foreach ($items as $item) {
+                // Lock the offer while checking and snapshotting its cost so a
+                // concurrent availability/cost update cannot race this override.
+                $offerCheckAt = Carbon::now();
                 $offer = SupplierOffer::where('product_id', $item->product_id)
                     ->where('vendor_id', $newVendor->id)
                     ->where('shop_id', $newShop->id)
                     ->where('is_available', true)
                     ->whereNotNull('availability_confirmed_at')
-                    ->where('availability_confirmed_at', '<=', Carbon::now())
+                    ->where('availability_confirmed_at', '<=', $offerCheckAt)
                     ->whereNotNull('availability_confirmed_by')
                     ->whereNotNull('availability_expires_at')
-                    ->where('availability_expires_at', '>', Carbon::now())
+                    ->where('availability_expires_at', '>', $offerCheckAt)
+                    ->lockForUpdate()
                     ->first();
 
                 if (!$offer || BcMathService::comp((string) $offer->wholesale_cost, '0.00') <= 0) {
