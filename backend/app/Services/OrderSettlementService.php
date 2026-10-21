@@ -588,9 +588,9 @@ class OrderSettlementService
                         $lineCost = BcMathService::mul((string) $item->supplier_cost_snapshot, (string) $item->quantity);
                         $supplierCostTotal = BcMathService::add($supplierCostTotal, $lineCost);
                     }
-                    if ($lockedOrder->supplier_cost_total_snapshot !== null
-                        && BcMathService::comp($supplierCostTotal, (string) $lockedOrder->supplier_cost_total_snapshot) !== 0) {
-                        throw new \RuntimeException('Retailer supplier-cost total does not match the immutable order snapshot.');
+                    if ($lockedOrder->supplier_cost_total_snapshot === null
+                        || BcMathService::comp($supplierCostTotal, (string) $lockedOrder->supplier_cost_total_snapshot) !== 0) {
+                        throw new \RuntimeException('Retailer supplier-cost total is missing or does not match the immutable order snapshot.');
                     }
 
                     foreach ($items as $item) {
