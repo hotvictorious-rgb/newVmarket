@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Services\BcMathService;
+use InvalidArgumentException;
 
 class LogisticsCompanyCorridorRate extends Model
 {
@@ -21,6 +23,18 @@ class LogisticsCompanyCorridorRate extends Model
         'tariff_version' => 'integer',
         'is_active' => 'boolean',
     ];
+
+    public function calculatePayable(int $bulkyQuantity): string
+    {
+        if ($bulkyQuantity < 0) {
+            throw new InvalidArgumentException('Bulky quantity cannot be negative.');
+        }
+
+        return BcMathService::add(
+            (string) $this->base_payable,
+            BcMathService::mul((string) $this->bulky_surcharge_per_unit, (string) $bulkyQuantity)
+        );
+    }
 
     public function logisticsCompany()
     {
