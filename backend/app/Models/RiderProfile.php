@@ -73,7 +73,13 @@ class RiderProfile extends Model
      */
     public function isEligibleForCentralDelivery(): bool
     {
-        if (!$this->is_active || $this->vendor_id !== null || !$this->logistics_company_id) {
+        // A central-delivery rider must have exactly one operational owner:
+        // an active logistics company. Legacy vendor OR shop linkage is not
+        // allowed to coexist with central dispatch, even if vendor_id is null.
+        if (!$this->is_active
+            || $this->vendor_id !== null
+            || $this->shop_id !== null
+            || !$this->logistics_company_id) {
             return false;
         }
 
