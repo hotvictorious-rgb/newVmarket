@@ -821,6 +821,22 @@ class PayoutFinalizationService
             }
 
             $company = $lockedPayout->company;
+            if (!$company || $company->trashed()) {
+                $message = 'Logistics company profile is missing or archived; payout reversal held for finance reconciliation.';
+                Log::critical($message, [
+                    'payout_id' => $lockedPayout->id,
+                    'logistics_company_id' => $lockedPayout->logistics_company_id,
+                ]);
+
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'idempotent' => true,
+                    'payout' => $lockedPayout,
+                    'message' => $message,
+                ];
+            }
+
             $hasRequestJournal = FinancialJournalEntry::where('event_id', 'EVT-FLEET-REQ-' . $lockedPayout->id)->exists();
             if ($hasRequestJournal && $company) {
                 $company->wallet_balance = bcadd((string)$company->wallet_balance, (string)$lockedPayout->amount, 2);
