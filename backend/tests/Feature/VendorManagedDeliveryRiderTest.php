@@ -312,13 +312,13 @@ class VendorManagedDeliveryRiderTest extends TestCase
     }
 
     /**
-     * Test 4: Vendor-managed rider accesses rider terminal and completes doorstep delivery
-     * with 90% delivery fee credited to merchant (vendor_payable), not 3rd party logistics
+     * Retailer-model regression: vendor-linked legacy riders cannot access
+     * the central rider terminal or complete a new retailer delivery.
      */
-    public function test_vendor_rider_executes_doorstep_handover_and_credits_merchant_delivery_fee(): void
+    public function test_vendor_rider_is_blocked_from_new_central_delivery_work(): void
     {
         $riderUser = User::create([
-            'name' => 'Bassey Internal Dispatch',
+            'name' => 'Legacy Vendor Dispatch',
             'email' => 'dispatch@bassey.ng',
             'phone' => '08022223333',
             'password' => bcrypt('password'),
@@ -335,22 +335,12 @@ class VendorManagedDeliveryRiderTest extends TestCase
             'is_online' => true,
         ]);
 
-        // Rider accesses dashboard
         $dashRes = $this->actingAs($riderUser, 'sanctum')->getJson('/api/v1/rider/dashboard');
-        $dashRes->assertStatus(200);
-        $dashRes->assertJson([
-            'status' => true,
-            'data' => [
-                'rider' => [
-                    'id' => $rider->id,
-                    'name' => 'Bassey Internal Dispatch',
-                ],
-            ],
-        ]);
+        $dashRes->assertStatus(403);
+        $this->assertFalse($rider->isEligibleForCentralDelivery());
 
-        // Create Order and OrderItem
         $order = Order::create([
-            'order_number' => 'VM-ORD-DOORSTEP-VEND',
+            'order_number' => 'VM-ORD-LEGACY-VENDOR-RIDER',
             'customer_id' => $this->customer->id,
             'vendor_id' => $this->vendorA->id,
             'shop_id' => $this->shopA->id,
@@ -360,7 +350,7 @@ class VendorManagedDeliveryRiderTest extends TestCase
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'out_for_delivery',
             'payment_status' => 'paid',
-            'payment_reference' => 'VM-PAY-TEST-001',
+            'payment_reference' => 'VM-PAY-LEGACY-RIDER-001',
             'merchandise_subtotal' => '10000.00',
             'delivery_fee' => '2000.00',
             'grand_total' => '12000.00',
@@ -381,47 +371,22 @@ class VendorManagedDeliveryRiderTest extends TestCase
             'line_total' => '10000.00',
         ]);
 
-        // Execute doorstep handover via DoorstepHandshakeService
-        $service = app(DoorstepHandshakeService::class);
-        $manifest = [
-            [
+        $result = app(DoorstepHandshakeService::class)->processDoorstepHandover(
+            $order,
+            $rider,
+            [[
                 'order_item_id' => $orderItem->id,
                 'accepted_quantity' => 1,
                 'rejected_quantity' => 0,
-            ],
-        ];
-
-        $handoverResult = $service->processDoorstepHandover(
-            $order,
-            $rider,
-            $manifest,
+            ]],
             '789123',
             'proofs/doorstep_delivered.jpg'
         );
 
-        $this->assertTrue($handoverResult['success']);
-
-        $order->refresh();
-        $this->assertEquals('delivered', $order->order_status);
-
-        // Verify financial entries: Delivery fee was credited to VendorProfile (vendor_payable)
-        $deliveryEntry = FinancialJournalEntry::where('order_id', $order->id)
-            ->where('account_name', 'vendor_payable')
-            ->where('event_id', 'like', '%-VEND-DELIVERY%')
-            ->first();
-
-        $this->assertNotNull($deliveryEntry);
-        $this->assertEquals(0, bccomp((string)$deliveryEntry->amount, '1800.00', 2));
-        $this->assertEquals(VendorProfile::class, $deliveryEntry->beneficiary_type);
-        $this->assertEquals($this->vendorA->id, $deliveryEntry->beneficiary_id);
-
-        // Platform 10% delivery commission = ₦200.00
-        $platEntry = FinancialJournalEntry::where('order_id', $order->id)
-            ->where('account_name', 'platform_revenue')
-            ->where('event_id', 'like', '%-PLAT-D%')
-            ->first();
-        $this->assertNotNull($platEntry);
-        $this->assertEquals(0, bccomp((string)$platEntry->amount, '200.00', 2));
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('active logistics company', $result['message']);
+        $this->assertSame('out_for_delivery', $order->fresh()->order_status);
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
     /**
@@ -449,7 +414,7 @@ class VendorManagedDeliveryRiderTest extends TestCase
         $res->assertStatus(403);
         $res->assertJson([
             'status' => false,
-            'message' => 'Unauthorized: Active delivery work requires one owning vendor; legacy fleet-only or ambiguously linked riders are not eligible.',
+            'message' => 'Unauthorized: New Victorious MARKET delivery work requires an active rider linked exclusively to one active logistics company.',
         ]);
     }
 
