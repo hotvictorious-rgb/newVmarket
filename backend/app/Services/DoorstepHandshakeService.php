@@ -598,8 +598,41 @@ class DoorstepHandshakeService
                 return ['success' => false, 'message' => 'Return case not found.'];
             }
 
+            if ((int) $lockedCase->returned_by_rider_id !== (int) $rider->user_id) {
+                return ['success' => false, 'message' => 'This return case is not assigned to the authenticated rider.'];
+            }
+            if ($lockedCase->status === 'pending_supplier_assignment') {
+                return ['success' => false, 'message' => 'This return contains items from multiple or unresolved suppliers. Admin assignment is required before vendor handover verification.'];
+            }
             if ($lockedCase->status !== 'in_transit_back_to_vendor') {
                 return ['success' => false, 'message' => "Return case is not in transit to vendor (current status: {$lockedCase->status})."];
+            }
+
+            if ($lockedCase->order?->retailer_model_order) {
+                $supplierIds = ReturnItem::where('return_case_id', $lockedCase->id)
+                    ->with('orderItem')
+                    ->get()
+                    ->map(fn ($item) => (int) ($item->orderItem?->fulfillment_supplier_vendor_id ?? 0))
+                    ->filter(fn ($supplierId) => $supplierId > 0)
+                    ->unique()
+                    ->values();
+                if ($supplierIds->isEmpty()) {
+                    $supplierIds = OrderItem::where('order_id', $lockedCase->order_id)
+                        ->pluck('fulfillment_supplier_vendor_id')
+                        ->map(fn ($supplierId) => (int) $supplierId)
+                        ->filter(fn ($supplierId) => $supplierId > 0)
+                        ->unique()
+                        ->values();
+                }
+                if ($supplierIds->count() !== 1) {
+                    return ['success' => false, 'message' => 'A single supplier OTP cannot confirm custody for a multi-supplier return. Admin assignment is required.'];
+                }
+                $supplier = VendorProfile::with('user')->find($supplierIds->first());
+                $activeShop = $supplier?->shops()->where('is_active', true)->first();
+                if (!$supplier || $supplier->marketplace_status !== 'active'
+                    || !$supplier->user || $supplier->user->status !== 'active' || !$activeShop) {
+                    return ['success' => false, 'message' => 'The assigned supplier or shop is inactive. Admin assignment is required before custody can be confirmed.'];
+                }
             }
 
             if (trim((string)$lockedCase->vendor_return_otp) !== trim((string)$otp)) {
