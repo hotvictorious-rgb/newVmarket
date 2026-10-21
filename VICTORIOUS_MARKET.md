@@ -116,11 +116,11 @@ This requires accurate item quantities, evidence, pricing allocations, and finan
 
 ### Preventing abuse
 
-Customer rejection rights must be balanced with merchant and logistics protections.
+Customer rejection rights must be balanced with supplier and logistics protections.
 
 A customer should not automatically receive unrestricted compensation simply by claiming dissatisfaction.
 
-Likewise, a merchant should not be allowed to dismiss a legitimate complaint without review.
+Likewise, a supplier should not be allowed to dismiss a legitimate complaint without review.
 
 The system should distinguish between wrong items, damage, defects, inaccurate descriptions, failed delivery, and a genuine change of mind.
 
@@ -152,7 +152,7 @@ A refund should not be presented to the customer as completed merely because a r
 
 Where parties disagree, VICTORIOUS MARKET should maintain an evidence-based review process.
 
-The system should preserve the relevant order history, delivery records, customer statements, merchant responses, inspection findings, and financial transactions.
+The system should preserve the relevant order history, delivery records, customer statements, supplier responses, inspection findings and financial transactions.
 
 The objective is not to automatically favor the customer or the merchant.
 
@@ -172,7 +172,7 @@ Legacy vendor earnings, payout thresholds, commissions, and vendor-recovery ledg
 
 ## 12. Administration and Governance
 
-The VICTORIOUS MARKET administrative environment handles vendor verification, product governance, order monitoring, security and safety oversight, financial reconciliation, customer disputes, authorized refunds, and operational reporting.
+The VICTORIOUS MARKET administrative environment handles supplier verification, offer approval, product governance, order monitoring, logistics-company authorization, security and safety oversight, financial reconciliation, customer disputes, authorized refunds and operational reporting.
 
 Delivery is coordinated centrally by Victorious MARKET from Uyo and carried out through approved logistics companies. Every rider assigned to VM work must be active and linked to exactly one active logistics company. Suppliers do not dispatch their own riders for VM customer delivery; VM authorizes delivery assignments and tracks custody and customer handover.
 
@@ -182,11 +182,11 @@ Role-based permissions must separate customers, private suppliers, logistics com
 
 Security is a core requirement of the intended marketplace.
 
-VICTORIOUS MARKET is being hardened to protect customer information, merchant records, payment processes, order history, and operational evidence.
+VICTORIOUS MARKET is being hardened to protect customer information, supplier records, payment processes, order history, and operational evidence.
 
 Important security objectives include:
 
-- Preventing unauthorized access across merchants and branches.
+- Preventing unauthorized access across suppliers, logistics companies and operational roles.
 - Protecting against SQL injection, cross-site scripting, server-side request forgery, and other application vulnerabilities.
 - Verifying external payment notifications cryptographically.
 - Preventing replay attacks and duplicate financial operations.
@@ -227,7 +227,7 @@ Rather than immediately making every product available nationwide, the platform 
 
 This geographic discipline is intended to avoid promising deliveries that the platform cannot consistently fulfill.
 
-As VICTORIOUS MARKET matures, the system may support more merchants, branches, product categories, vendor-managed rider teams, and customers.
+As VICTORIOUS MARKET matures, the system may support a wider approved supplier network, more product categories, additional logistics-company partners and more customers.
 
 Expansion should follow demonstrated operational capacity, not merely the availability of technical features.
 
@@ -237,21 +237,21 @@ Expansion should follow demonstrated operational capacity, not merely the availa
 
 The brand promise is not that problems will never occur.
 
-Products can become unavailable. Deliveries can fail. Customers and merchants can disagree. Banks and payment providers can experience delays.
+Products can become unavailable. Deliveries can fail. Customers and suppliers can disagree. Banks and payment providers can experience delays.
 
 The promise must therefore be supported by how the business prevents, detects, communicates, and resolves problems.
 
 VICTORIOUS MARKET intends to earn trust through five principles:
 
-**Verification:** Customers should know that marketplace merchants are subject to identity and business checks.
+**Verification:** Customers should know that Victorious MARKET verifies the product and its supply chain; supplier identities remain private unless disclosure is needed for fulfilment or law.
 
 **Transparency:** Product descriptions, prices, delivery charges, transaction statuses, and customer policies should be clear.
 
 **Protection:** Payments, order fulfillment, and eligible customer remedies should operate through controlled procedures.
 
-**Accountability:** Merchants, riders, administrators, and the platform itself should be accountable for their responsibilities.
+**Accountability:** Suppliers, logistics companies, riders, administrators and the platform itself should be accountable for their responsibilities.
 
-**Consistency:** Customers should receive dependable treatment regardless of which merchant supplies their order.
+**Consistency:** Customers should receive dependable treatment regardless of which approved supplier provides the product.
 
 A trustworthy marketplace is not one that claims never to fail. It is one that has reliable systems for preventing failures and resolving them fairly when they occur.
 
@@ -296,8 +296,8 @@ Victorious MARKET treats merchandise and delivery fees as separate financial com
 - A delivery-fee refund identifies the captured delivery component, records its own reason/evidence/approval, and is accounted for separately from merchandise. The former 90% vendor / 10% platform delivery-fee allocation is not a default retailer rule. Logistics-company charges and delivery-fee margin require approved retailer accounting.
 - Each approved component has its own decision record, amount, idempotent financial operation, reservation, gateway state and customer-facing result. Both operations return funds through the original Paystack payment channel at launch. They may reference the same original parent checkout capture but must not be collapsed into one undifferentiated approval or ledger reversal.
 - The customer can receive one component while the other remains pending, is denied, or fails and requires reconciliation. Customer communications must state each component's decision and confirmed Paystack result separately.
-- The system must enforce the component balance, child-order refund ceiling and shared parent-capture ceiling, counting active reservations and confirmed refunds across all vendors/components. A zero-fee in_shop_pickup order has no delivery fee to refund.
-- Supplier recovery and any cashback adjustment are separate from the customer's gateway refund. A customer refund is complete only when Paystack confirms that specific component; vendor recovery does not delay or replace that confirmation.
+- The system must enforce the component balance, child-order refund ceiling and shared parent-capture ceiling, counting active reservations and confirmed refunds across all order components. A zero-fee in_shop_pickup order has no delivery fee to refund.
+- Supplier recovery and any cashback adjustment are separate from the customer's gateway refund. A customer refund is complete only when Paystack confirms that specific component; supplier recovery does not delay or replace that confirmation.
 - **Shared source history does not mean shared approval or one combined state.** Both component decisions link to the same original parent capture and relevant child-order allocation history, while retaining separate approval records, reservations, gateway operations, and outcomes. Confirmed Paystack refunds plus active refund reservations across all child orders/components share one parent-capture ceiling; the same amount cannot be refunded twice.
 - **Cashback is linked to merchandise history but is not a second customer gateway refund.** A merchandise refund may require reversal of the associated unspent cashback and/or a separately tracked recovery of cashback already spent. That cashback adjustment uses the same originating order/item/refund evidence, but it is accounted for in the cashback ledger and must not be counted again as an additional Paystack cash refund against the parent-capture ceiling. Historical cashback obligations must be reconciled. New retailer-model cashback accrual and its funding/maturity rules require explicit owner/accountant approval; do not assume the former 5% vendor marketplace allocation continues.
 - The existing 24-hour customer return/claim window and separate 24-hour cashback-maturity buffer remain unchanged.
