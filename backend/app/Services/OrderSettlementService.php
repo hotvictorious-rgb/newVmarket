@@ -1021,7 +1021,13 @@ class OrderSettlementService
                     ->first();
 
                 if ($assignment && $assignment->status === 'collected') {
-                    return ['success' => true, 'message' => 'This supplier package was already collected and sealed.'];
+                    return [
+                        'success' => true,
+                        'message' => 'This supplier package was already collected and sealed.',
+                        'remaining_supplier_packages' => \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                            ->where('status', '!=', 'collected')
+                            ->count(),
+                    ];
                 }
 
                 if (!$assignment || $assignment->status !== 'ready_for_collection') {
