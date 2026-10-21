@@ -856,6 +856,11 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'amount' => '100.00',
         ]);
 
+        $lowered = $service->override($overridden['order'], $this->superAdmin, '800.00', 'Negotiated shorter Uyo route with lower fuel cost');
+        $this->assertSame('800.00', $lowered['order']->logistics_company_payable_amount);
+        $overridden = $service->override($lowered['order'], $this->superAdmin, '1100.00', 'Rain and traffic surcharge confirmed before custody');
+        $this->assertSame('1100.00', $overridden['order']->logistics_company_payable_amount);
+
         $deliveredOrder = $overridden['order'];
         $deliveredOrder->pickup_confirmed_by_rider = true;
         $deliveredOrder->save();
