@@ -163,15 +163,15 @@
                         </div>
                         <div>
                             <strong>Doorstep delivery is currently suspended for this destination LGA.</strong><br>
-                            <span>Platform logistics along this corridor is temporarily offline. Your order has been automatically switched to <strong>guaranteed In-Store Counter Pickup at &#8358;0.00</strong>. You can inspect the item physically before OTP release.</span>
+                            <span>Platform logistics along this corridor is temporarily offline. Your order has been please contact Victorious MARKET support. Do not pay for an order until Uyo doorstep delivery availability is confirmed.</span>
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
-                        <!-- In-Store Pickup Card -->
-                        <label id="vmCardPickup" style="border: {{ $isDeliveryAvailable ? '1.5px solid #CBD5E1' : '2px solid #5E17EB' }}; background: {{ $isDeliveryAvailable ? '#FFFFFF' : '#F5F3FF' }}; border-radius: 12px; padding: 16px; cursor: pointer; display: block; transition: all 0.2s ease;">
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 16px;">
+                        <!-- Legacy pickup card is hidden and disabled; public pickup is not offered. -->
+                        <label id="vmCardPickup" style="display:none;">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
-                                <input type="radio" name="fulfillment_type" id="vmRadioPickup" value="in_shop_pickup" {{ $isDeliveryAvailable ? '' : 'checked' }} onchange="vmSelectFulfillment('pickup')" style="accent-color: #5E17EB; width: 18px; height: 18px;">
+                                <input type="radio" name="fulfillment_type" id="vmRadioPickup" value="in_shop_pickup" disabled onchange="vmSelectFulfillment('pickup')" style="display:none;">
                                 <span style="background: #ECFDF5; color: #059669; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px;">FREE (&#8358;0.00)</span>
                             </div>
                             <strong style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #0F172A; margin-bottom: 3px;">
@@ -191,13 +191,13 @@
                             </div>
                             <strong id="vmDeliveryTitle" style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: {{ $isDeliveryAvailable ? '#5E17EB' : '#64748B' }}; margin-bottom: 3px;">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                                <span>Vendor Direct Doorstep Delivery</span>
+                                <span>Victorious MARKET Doorstep Delivery</span>
                             </strong>
                             <span id="vmDeliveryDesc" style="font-size: 12px; color: #64748B; line-height: 1.4; display: block;">
                                 @if(!$isDeliveryAvailable)
                                     Delivery route currently suspended for this destination. In-Shop Pickup active.
                                 @else
-                                    Delivered directly to your door with courier Handshake OTP security.
+                                    Delivered to your Uyo address with delivery OTP and required handover evidence.
                                 @endif
                             </span>
                         </label>
@@ -467,6 +467,22 @@ function vmSelectFulfillment(type) {
     const pickupNotice = document.getElementById('vmPickupPaymentNotice');
     const step3Title = document.getElementById('vmStep3Title');
     const step3Subtitle = document.getElementById('vmStep3Subtitle');
+
+    if (type === 'pickup') {
+        // Public pickup is disabled under the current retailer model. Never switch to an offline payment path.
+        if (radioPickup) radioPickup.checked = false;
+        if (radioDelivery && !radioDelivery.disabled) {
+            radioDelivery.checked = true;
+            type = 'delivery';
+        } else {
+            const notice = document.getElementById('vmPickupPaymentNotice');
+            if (notice) {
+                notice.style.display = 'block';
+                notice.textContent = 'Doorstep delivery within Uyo is unavailable for this order. Contact Victorious MARKET support; pickup and cash-on-delivery are not available through checkout.';
+            }
+            return;
+        }
+    }
 
     if (type === 'pickup') {
         if (radioPickup) radioPickup.checked = true;
