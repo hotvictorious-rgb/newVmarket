@@ -269,3 +269,12 @@ Required controls:
 - **Interpretation:** These are not evidence that the supplier-snapshot changes caused all failures. The failure pattern indicates that existing tests and runtime guards disagree about whether legacy vendor-managed delivery remains supported. The approved retailer model says it does not govern new transactions; tests must be deliberately migrated to the central fulfilment contract, not weakened by removing guards or blindly changing all expected status codes.
 - **Required fix:** For each failing test, identify whether it is (a) an obsolete legacy-flow test that should assert the endpoint is retired, or (b) a valid invariant that must be reimplemented with an active accredited logistics company and its exclusively linked fleet rider. Preserve OTP, photo proof, idempotency, audit and financial invariants. Fix the query exception independently after inspecting its complete trace.
 - **Status:** OPEN / RELEASE BLOCKER. CI has not demonstrated a green full targeted suite. Later workflow runs for commits after this run were still in progress at the time of this note; their results must be checked before claiming verification.
+
+
+## 18. Central-fleet test fixture repair — 21 October 2026
+
+- Updated `DoorstepPartialAcceptanceAndVendorReturnTest` fixtures so the rider is linked to the active accredited logistics company, not to a supplier/vendor, and the order carries that logistics-company assignment. This addresses the test setup's direct contradiction with the approved rider-ownership invariant; it does not weaken runtime authorization.
+- Updated `VendorManagedDeliveryRiderTest`'s legacy-order fixture with the non-null legacy accounting fields required by the existing schema. This fixes a fixture construction failure without making the legacy split fields authoritative for new transactions.
+- Updated two vendor rider-assignment endpoint expectations to HTTP 410, consistent with the endpoint's already-retired behavior and the approved central dispatch model.
+- **Verification:** CI runs triggered for commits `3b4109ad492771a1454ab496b0b672c56c00bcfe` and `713049b6431a6c5b93545068e5f57d3a68f28231`; they were still in progress/queued when recorded. No passing result is claimed.
+- **Still open:** Several old tests assert vendor-managed delivery and vendor-specific denial messages. They must be classified and migrated to central fleet dispatch, not made green by removing safety checks. Runtime checkout remains vendor-managed and does not yet populate supplier offer snapshots.
