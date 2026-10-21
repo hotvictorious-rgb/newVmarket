@@ -33,6 +33,7 @@ class Order extends Model
         'origin_lga_id',
         'destination_lga_id',
         'delivery_lane_id',
+        'delivery_corridor_id',
         'logistics_company_id',
         'merchandise_subtotal',
         'delivery_fee',
@@ -43,6 +44,10 @@ class Order extends Model
         'fulfillment_supplier_cost_total_snapshot',
         'retailer_merchandise_margin',
         'logistics_company_payable_default_amount',
+        'logistics_company_base_payable_snapshot',
+        'logistics_company_bulky_surcharge_per_unit_snapshot',
+        'logistics_company_bulky_quantity_snapshot',
+        'logistics_company_payable_tariff_version_snapshot',
         'logistics_company_payable_amount',
         'logistics_company_payable_ledger_company_id',
         'logistics_company_payable_override_reason',
@@ -122,6 +127,10 @@ class Order extends Model
         'fulfillment_supplier_cost_total_snapshot' => 'decimal:2',
         'retailer_merchandise_margin' => 'decimal:2',
         'logistics_company_payable_default_amount' => 'decimal:2',
+        'logistics_company_base_payable_snapshot' => 'decimal:2',
+        'logistics_company_bulky_surcharge_per_unit_snapshot' => 'decimal:2',
+        'logistics_company_bulky_quantity_snapshot' => 'integer',
+        'logistics_company_payable_tariff_version_snapshot' => 'integer',
         'logistics_company_payable_amount' => 'decimal:2',
         'logistics_company_payable_override_at' => 'datetime',
         'logistics_company_wallet_credited_at' => 'datetime',
@@ -155,6 +164,11 @@ class Order extends Model
         'doorstep_rejection_photos' => 'array',
         'sourced_at' => 'datetime',
     ];
+
+    public function deliveryCorridor()
+    {
+        return $this->belongsTo(DeliveryCorridor::class, 'delivery_corridor_id');
+    }
 
     public function isPickupLocked(): bool
     {
