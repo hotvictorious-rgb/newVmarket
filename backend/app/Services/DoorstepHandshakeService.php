@@ -348,6 +348,7 @@ class DoorstepHandshakeService
                 NotificationDispatchService::dispatchVendorReturnOtpIssued($returnCase);
             }
 
+            if (!$lockedOrder->retailer_model_order) {
             // 7. Post Balanced Double-Entry Journal Entries
             $eventRef = 'EVT-HANDOVER-' . $lockedOrder->order_number . '-' . $lockedOrder->id;
 
@@ -485,6 +486,30 @@ class DoorstepHandshakeService
                     'currency' => 'NGN',
                     'description' => "Escrow release for accepted items & shipping on Order #{$lockedOrder->order_number}",
                 ]);
+            }
+
+
+            } else {
+                // Retailer payment settlement already booked item-cost supplier payables,
+                // the active 5% cashback liability and the 90% company payable snapshot.
+                // Do not post legacy 90/5/5 vendor or delivery journals a second time.
+                $cashbackLedger = CustomerCashbackLedger::where('order_id', $lockedOrder->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (BcMathService::comp((string) $lockedOrder->customer_cashback_5, '0.00') > 0 && !$cashbackLedger) {
+                    throw new \\RuntimeException('Retailer cashback liability exists without its cashback ledger lot.');
+                }
+
+                if ($cashbackLedger && BcMathService::comp($totalAcceptedMerchandise, '0.00') > 0) {
+                    // Maturity starts from verified customer handover, not payment capture.
+                    // The scheduled maturity command sets the 365-day expiry when the lot
+                    // actually becomes available after all blocking cases have cleared.
+                    $cashbackLedger->status = 'pending_maturation';
+                    $cashbackLedger->matures_at = $now->copy()->addHours($refundHours + 24);
+                    $cashbackLedger->expires_at = null;
+                    $cashbackLedger->save();
+                }
             }
 
             // 8. Update Order Lifecycle
