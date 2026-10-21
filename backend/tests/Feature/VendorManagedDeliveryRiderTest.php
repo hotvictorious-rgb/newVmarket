@@ -481,8 +481,8 @@ class VendorManagedDeliveryRiderTest extends TestCase
         $resTransit = $this->actingAs($this->vendorUserA, 'sanctum')->postJson("/api/v1/vendor/orders/{$inTransitOrder->id}/assign-rider", [
             'rider_id' => $rider->id,
         ]);
-        $resTransit->assertStatus(422);
-        $this->assertStringContainsString('Reassignment is blocked once physical custody is taken', $resTransit->json('message'));
+        // The legacy vendor-managed route is retired for every order state.
+        $resTransit->assertStatus(410);
     }
 
     /**
