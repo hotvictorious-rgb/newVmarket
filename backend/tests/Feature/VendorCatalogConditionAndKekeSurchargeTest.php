@@ -728,6 +728,28 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertEquals('confirmed', $orderTwoBulky->fresh()->order_status);
         $this->assertEquals('paid', $orderTwoBulky->fresh()->payment_status);
 
+        // The recurring finance audit must detect a mismatch without attempting
+        // to repair or release money, then return clean after the evidence is restored.
+        $supplierAudit = app(\App\Services\FinancialReconciliationEngine::class)
+            ->reconcileRetailerSupplierPayables($orderTwoBulky->id);
+        $this->assertSame(1, $supplierAudit['orders_checked']);
+        $this->assertSame(0, $supplierAudit['mismatches']);
+
+        $auditedItem = OrderItem::where('order_id', $orderTwoBulky->id)->firstOrFail();
+        $originalOperationalCost = (string) $auditedItem->fulfillment_supplier_cost_snapshot;
+        $auditedItem->fulfillment_supplier_cost_snapshot = \App\Services\BcMathService::add($originalOperationalCost, '1.00');
+        $auditedItem->save();
+        $mismatchAudit = app(\App\Services\FinancialReconciliationEngine::class)
+            ->reconcileRetailerSupplierPayables($orderTwoBulky->id);
+        $this->assertSame(1, $mismatchAudit['mismatches']);
+        $this->assertNotEmpty($mismatchAudit['errors']);
+
+        $auditedItem->fulfillment_supplier_cost_snapshot = $originalOperationalCost;
+        $auditedItem->save();
+        $cleanAudit = app(\App\Services\FinancialReconciliationEngine::class)
+            ->reconcileRetailerSupplierPayables($orderTwoBulky->id);
+        $this->assertSame(0, $cleanAudit['mismatches']);
+
         // A supplier rejection after payment must create an administrative hold,
         // preserve the paid customer order, and never trigger an automatic refund.
         $orderBike->forceFill([
