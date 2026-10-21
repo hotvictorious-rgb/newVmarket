@@ -855,15 +855,16 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $deliveredOrder->proof_of_delivery_image = 'proof/retailer-delivery.jpg';
         $deliveredOrder->save();
 
+        $walletBeforeRelease = (string) $this->fleetCompany->fresh()->wallet_balance;
         $released = $service->releaseAfterVerifiedDelivery($deliveredOrder->fresh());
         $this->assertTrue($released['success']);
         $this->assertFalse($released['replayed']);
-        $this->assertSame('1100.00', (string) $this->fleetCompany->fresh()->wallet_balance);
-        $this->assertSame('1100.00', $released['order']->logistics_company_wallet_credited_amount);
+        $this->assertSame(0, bccomp((string) $this->fleetCompany->fresh()->wallet_balance, bcadd($walletBeforeRelease, '1100.00', 2), 2));
+        $this->assertSame(0, bccomp((string) $released['order']->logistics_company_wallet_credited_amount, '1100.00', 2));
 
         $replayedRelease = $service->releaseAfterVerifiedDelivery($released['order']->fresh());
         $this->assertTrue($replayedRelease['replayed']);
-        $this->assertSame('1100.00', (string) $this->fleetCompany->fresh()->wallet_balance);
+        $this->assertSame(0, bccomp((string) $this->fleetCompany->fresh()->wallet_balance, bcadd($walletBeforeRelease, '1100.00', 2), 2));
 
         $debits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
         $credits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
@@ -944,10 +945,10 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $result = app(\App\Services\CashbackMaturityService::class)->matureOrder($order);
         $this->assertTrue($result['matured']);
         $this->assertSame('available', $lot->fresh()->status);
-        $this->assertSame('400.00', $lot->fresh()->amount);
+        $this->assertSame(0, bccomp((string) $lot->fresh()->amount, '400.00', 2));
         $this->assertEquals($now->copy()->addDays(365)->toIso8601String(), $lot->fresh()->expires_at->toIso8601String());
         $this->assertSame('recovered', $recovery->fresh()->status);
-        $this->assertSame('100.00', $recovery->fresh()->recovered_amount);
+        $this->assertSame(0, bccomp((string) $recovery->fresh()->recovered_amount, '100.00', 2));
         $this->assertDatabaseHas('financial_journal_entries', [
             'order_id' => $order->id,
             'account_name' => 'cashback_recovery_receivable',
