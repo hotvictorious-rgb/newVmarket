@@ -129,11 +129,11 @@ class PortalWebTest extends TestCase
         $response->assertSee('id="vmCorridorModalOverlay"', false);
     }
 
-    public function test_super_admin_can_store_custom_delivery_lane_via_searchable_lga_selection(): void
+    public function test_super_admin_can_store_only_uyo_to_uyo_delivery_lane(): void
     {
         $admin = User::where('user_type', 'super_admin')->first();
-        $origin = Lga::where('name', 'Uyo')->first() ?? Lga::first();
-        $dest = Lga::where('name', 'Eket')->first() ?? Lga::skip(1)->first();
+        $origin = Lga::where('name', 'Uyo')->firstOrFail();
+        $dest = $origin;
 
         $postData = [
             'origin_lga_id' => $origin->id,
