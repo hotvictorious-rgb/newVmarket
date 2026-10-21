@@ -257,6 +257,14 @@ class RetailerSupplierPayoutService
         $processingToken = trim($processingToken);
 
         return DB::transaction(function () use ($payoutId, $adminId, $recipientCode, $processingToken) {
+            $authorizedAdmin = User::whereKey($adminId)
+                ->where('user_type', 'super_admin')
+                ->where('status', 'active')
+                ->exists();
+            if (!$authorizedAdmin) {
+                return ['success' => false, 'protected' => true, 'message' => 'Only an active super administrator may initiate a supplier payout transfer.'];
+            }
+
             // Follow supplier -> payout -> order -> item lock order, matching payout
             // reservation and return/recovery flows as closely as possible.
             $preview = RetailerSupplierPayoutRequest::whereKey($payoutId)->first();
