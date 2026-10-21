@@ -152,6 +152,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'business_name' => 'Beta Fashion Hub',
             'business_phone' => '08099990002',
             'bank_name' => 'Access Bank',
+            'bank_code' => '044',
             'account_number' => '2012345678',
             'account_name' => 'Beta Fashion Hub',
             'bank_updated_at' => Carbon::now()->subDays(10),
