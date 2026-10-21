@@ -289,3 +289,10 @@ Customers buy from Victorious MARKET, see one public catalog and VM retail price
 7. Legacy out-of-area rows remain auditable but cannot authorize new orders.
 
 **Customer promise:** *VICTORIOUS MARKET — Your Trusted Online Market in Uyo, Akwa Ibom State. Sourced in Uyo. Delivered within Uyo.*
+
+
+---
+
+## Superseding owner decision: company corridor tariffs are independent of customer delivery fees
+
+This owner-confirmed rule supersedes earlier 90%-of-customer-fee logistics payable language for new retailer orders. Customer delivery pricing is a separately configured flat base fee per order, plus the customer bulky surcharge for each physical unit that cannot safely fit on a bike. Each approved logistics company must have its own admin-configured payable for each delivery corridor: a corridor base payable plus that company's bulky-unit surcharge. Compute company payable from the assigned company's tariff and actual bulky quantity, not as a percentage of customer fees. Snapshot the corridor, company tariff/version, base payable, company bulky surcharge, bulky quantity and total at assignment; future rate edits must not change existing orders. Release company wallet credit only after verified delivery and reconciliation; do not pay riders directly. Record any company payable above customer delivery revenue as an explicit VM-funded subsidy. Admin overrides require authorization, reason and immutable audit. **Implementation gap:** current runtime code still has a 90% fallback; do not mark this requirement complete until configuration, snapshots, ledger adjustments, admin UI and regression tests are implemented and verified. See `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md` for the detailed rule.
