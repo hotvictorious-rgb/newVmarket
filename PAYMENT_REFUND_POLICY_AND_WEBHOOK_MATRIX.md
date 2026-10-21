@@ -70,7 +70,7 @@ Implementation of this policy must be proved by code review and tests; this text
 
 The former marketplace 90/5/5 merchandise split and 90/10 vendor delivery-fee split are not binding for new retailer-model transactions. Do not use vendor commission or payout ledgers as supplier payable calculations.
 
-For new retailer-model transactions, keep separate records for verified customer receipts, merchandise revenue, supplier purchase cost/payable, delivery charges, logistics-company charges/payables, gateway fees, discounts, approved refunds, the active 5% cashback liability liability, and operating expenses. Supplier purchase cost is not a commission. Logistics-company charge terms and delivery-fee margin require explicit approval; do not invent a percentage.
+For new retailer-model transactions, keep separate records for verified customer receipts, merchandise revenue, supplier purchase cost/payable, delivery charges, logistics-company charges/payables, gateway fees, discounts, approved refunds, the active 5% cashback liability, and operating expenses. Supplier purchase cost is not a commission. Logistics-company charge terms and delivery-fee margin require explicit approval; do not invent a percentage.
 
 A supplier payable is linked to the accepted order item/sourcing unit. Its purchase-cost snapshot must not change when the supplier's current offer changes. If an order contains items from different suppliers, preserve the supplier cost and fulfilment outcome per item or sourcing unit.
 
@@ -315,7 +315,7 @@ Until these are verified with tests, do not describe the implementation as compl
 
 ### Paystack processing fees and tax treatment
 
-- Victorious MARKET bears Paystack processing fees from its own platform share. The vendor's 90% merchandise allocation, customer's 5% cashback allocation, and vendor's 90% delivery-fee allocation must not be reduced to pay gateway fees.
+- For historical marketplace transactions only, preserve the captured vendor/cashback/platform and vendor/platform delivery allocations and do not reduce them to pay gateway fees. For new retailer transactions, Paystack processing fees are VM expenses; supplier payable remains agreed wholesale cost, active cashback remains a separate 5% liability on eligible real-money-funded merchandise, and the logistics company receives the approved company payable.
 - The platform's net revenue may therefore be lower than its nominal 5% merchandise share plus 10% delivery-fee share. Do not silently pass gateway costs to vendors or customers.
 - Do not hard-code VAT, withholding tax, or other tax calculations until a qualified Nigerian tax adviser confirms the applicable treatment, responsible party, base, timing and reporting requirements. Keep tax policy configurable and auditable after review.
 
