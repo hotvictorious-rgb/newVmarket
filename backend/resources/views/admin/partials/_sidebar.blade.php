@@ -12,6 +12,12 @@
     </a>
 </li>
 <li class="sidebar-nav-item">
+    <a href="{{ route('admin.delivery_corridors.manage') }}" class="sidebar-nav-link {{ request()->routeIs('admin.delivery_corridors.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">🧭</span>
+        <span>Uyo Corridor &amp; Company Tariffs</span>
+    </a>
+</li>
+<li class="sidebar-nav-item">
     <a href="{{ route('admin.settlements.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.settlements.*') ? 'active' : '' }}">
         <span class="nav-link-icon">💰</span>
         <span>90/5/5 Settlement Desk</span>
