@@ -62,7 +62,7 @@
                     @endif">
                     @if($isLocalShop)
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                        <span>In-Shop {{ $activeCity }} &bull; Same-Day</span>
+                        <span>Uyo Doorstep Delivery</span>
                     @elseif($lane)
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
                         <span>Transit from {{ $product->shop->lga->name ?? 'Hub' }} (&#8358;{{ number_format((float)$lane->base_fee) }})</span>
