@@ -10,7 +10,7 @@
 
 This audit compared the authoritative business rules with the payment/refund matrix, payout policy, vendor-delivery business rules, implementation audit, delivery/financial-integrity plan, root and backend project overviews, README files, and `backend/database/seeders/LegalDocumentSeeder.php`. It also traced selected checkout, reservation, settlement, and refund service paths.
 
-This is **not** proof that production is aligned. The live database's published legal-document rows, production configuration, provider dashboard, bank records, and deployed runtime were not inspected in this pass. The legal-document seeder source and documentation were changed, but no runtime checkout, payment, fulfilment, refund, cashback, or payout service/controller code was changed in this pass, and no test suite was run here. Source-code findings below are therefore open remediation/verification items, not claims of completed fixes.
+This is **not** proof that production is aligned. The legal-document seeder contains legacy marketplace/vendor terms that must be corrected and then deployed/versioned; changing source text alone does not update already-published database rows. The live database's published legal-document rows, production configuration, provider dashboard, bank records, and deployed runtime were not inspected in this pass. The legal-document seeder source and documentation were changed, but no runtime checkout, payment, fulfilment, refund, cashback, or payout service/controller code was changed in this pass, and no test suite was run here. Source-code findings below are therefore open remediation/verification items, not claims of completed fixes.
 
 ## 1A. Branch and pull-request isolation warning
 
@@ -79,7 +79,7 @@ The following statements are **requirements**, not verified accomplishments:
 - Customer refund completion must not wait for vendor debt recovery. Vendor recovery is a separate receivable and process.
 - An admin approval does not automatically prove a vendor debt. Repayment must be verified against bank/provider records; offset needs explicit authorisation and contractual basis.
 - Doorstep/in-shop photo and OTP/pass evidence prove the handover process only, not the product's conformity or the absence of warranty rights.
-- A 24-hour reservation stock hold, a 24-hour customer claim window, a separate 24-hour cashback maturity buffer, a 24-hour bank-transfer notification target, and actual gateway refund completion are different clocks and must not be conflated.
+- The 24-hour in-shop reservation hold, the 24-hour customer claim window, any separately approved cashback maturity buffer, bank-transfer notification target, and actual gateway refund completion are different clocks and must not be conflated. The 30-minute stock hold described in older delivery-plan text has been superseded; do not implement it as the reservation expiry.
 
 ## 6. Required closure order before implementation or release
 
