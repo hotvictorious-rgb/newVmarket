@@ -384,3 +384,20 @@ CI for the guarded admin return-rejection transition and serialized pickup-reser
 ### VM-AUD-062 — pickup inspection transition serialization
 
 Allowed: `reserved` and not expired -> `inspected_accepted`, or `reserved` and expired -> `expired`, after reloading the reservation under a row lock and rechecking staff/vendor/branch authorization. Forbidden: inspection from `order_placed`, `payment_completed`, `canceled`, `cancelled`, `expired`, `handed_over`, or any other non-`reserved` state. Concurrent cancellation/order creation must serialize against this same reservation row. Regression: VM-AUD-062.
+
+
+## VM-POLICY-2026-10-21-DELIVERY-FIRST — support-managed pickup exception
+
+**Current rule:** new customer orders use doorstep delivery as the only standard online fulfilment method. Automated in-shop pickup reservation is not an allowed new customer-facing transition. A pickup request begins outside checkout through support contact and remains an operational request, not a new `PickupReservation` or order state.
+
+**Support workflow (manual/audited until a dedicated authorized workflow exists):**
+1. Receive customer pickup request through an approved support channel.
+2. Verify all order lines and current source availability.
+3. Confirm that the complete order is physically ready at one approved collection point and confirm payment/handover arrangements.
+4. Record the decision, staff actor, time, collection point, customer agreement and any exception reason.
+5. Only then communicate collection instructions/address. Do not expose supplier identity or address before confirmation.
+6. If a single point cannot fulfil the complete order, offer the standard doorstep delivery plan or contact the customer to agree a feasible alternative. Do not silently direct them to multiple shops.
+
+**Forbidden:** public checkout/API creation of a new pickup reservation; automatic address disclosure from product/source data; marking ready before physical readiness; using support override to bypass payment verification, authorization, evidence or idempotency. Existing reservations and states remain readable for legacy obligations and audit, but must not be created anew by the standard customer journey.
+
+**Verification boundary:** this register records policy, not proof of code enforcement. The existing pickup endpoints/views/state handlers must be disabled or gated in a forward-compatible implementation slice, and tests must prove public write rejection, no early address disclosure, preservation of historical reads and idempotent support decisions.
