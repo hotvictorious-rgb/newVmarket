@@ -447,6 +447,91 @@ class VendorTerminalApiController extends Controller
     }
 
     /**
+     * POST /api/v1/vendor/orders/{id}/reject-availability
+     *
+     * A supplier rejection after payment places the order on a sourcing hold.
+     * It never cancels the paid order, changes the customer's agreed price, or
+     * triggers a refund/second supplier payable automatically.
+     */
+    public function rejectOrderAvailability(Request $request, int $id): JsonResponse
+    {
+        $ctx = $this->resolveVendorContext($request);
+        $vendor = $ctx['vendor'];
+        $shop = $ctx['shop'];
+        $validated = $request->validate([
+            'reason' => 'required|string|min:5|max:1000',
+        ]);
+
+        $result = DB::transaction(function () use ($id, $vendor, $shop, $ctx, $validated, $request) {
+            $order = Order::whereKey($id)->lockForUpdate()->firstOrFail();
+            $assignmentQuery = OrderSupplierAssignment::where('order_id', $order->id)
+                ->where('supplier_vendor_id', $vendor->id);
+            if ($ctx['is_employee'] && $shop) {
+                $assignmentQuery->where('supplier_shop_id', $shop->id);
+            }
+            $assignment = $assignmentQuery->lockForUpdate()->first();
+
+            if (!$assignment) {
+                return ['success' => false, 'status_code' => 404, 'message' => 'This order has no supplier assignment for your account or shop.'];
+            }
+            if (!$order->retailer_model_order || $order->payment_status !== 'paid'
+                || $order->order_status !== 'confirmed') {
+                return ['success' => false, 'status_code' => 422, 'message' => 'Only paid retailer orders awaiting supplier confirmation can be rejected through this workflow.'];
+            }
+            if ($assignment->status === 'supplier_rejected') {
+                return ['success' => true, 'message' => 'This supplier assignment has already been rejected and remains on administrative hold.'];
+            }
+            if ($assignment->status !== 'awaiting_supplier_confirmation') {
+                return ['success' => false, 'status_code' => 422, 'message' => 'Only assignments awaiting supplier confirmation can be rejected.'];
+            }
+
+            $reason = trim($validated['reason']);
+            $assignment->status = 'supplier_rejected';
+            $assignment->supplier_rejected_at = Carbon::now();
+            $assignment->supplier_response_notes = $reason;
+            $assignment->save();
+
+            $order->sourcing_status = 'supplier_rejected';
+            $order->save();
+
+            \App\Models\AdminAuditLog::create([
+                'user_id' => $ctx['user']->id,
+                'action' => 'supplier_rejected_paid_retailer_order',
+                'target_type' => Order::class,
+                'target_id' => $order->id,
+                'old_values' => [
+                    'assignment_id' => $assignment->id,
+                    'assignment_status' => 'awaiting_supplier_confirmation',
+                    'sourcing_status' => 'awaiting_supplier_confirmation',
+                ],
+                'new_values' => [
+                    'assignment_id' => $assignment->id,
+                    'assignment_status' => 'supplier_rejected',
+                    'sourcing_status' => 'supplier_rejected',
+                    'reason' => $reason,
+                    'supplier_vendor_id' => $vendor->id,
+                    'supplier_shop_id' => $assignment->supplier_shop_id,
+                    'resolution_required' => 'admin_reassignment_or_refund_review',
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent() ?? 'System/API',
+            ]);
+
+            return [
+                'success' => true,
+                'message' => 'Rejection recorded. This paid order is now on hold for Victorious MARKET administrative resolution. No automatic refund or supplier payment was triggered.',
+                'sourcing_status' => $order->sourcing_status,
+            ];
+        });
+
+        return response()->json([
+            'status' => (bool) ($result['success'] ?? false),
+            'message' => $result['message'] ?? 'Unable to record supplier rejection.',
+            'sourcing_status' => $result['sourcing_status'] ?? null,
+        ], ($result['success'] ?? false) ? 200 : ($result['status_code'] ?? 422));
+    }
+
+    /**
      * POST /api/v1/vendor/orders/{id}/ready-for-handover
      * Advance order status to ready_for_pickup
      */
