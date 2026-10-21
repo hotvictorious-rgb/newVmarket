@@ -699,3 +699,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Reduces customer confusion and support disputes over why a displayed wallet balance cannot be applied to checkout.
 
 **Verification boundary:** Source and regression test committed; tests/CI pending. No merge or deployment.
+
+
+### VM-AUD-126 — Redact internal refund metadata from vendor return-case listing (21 October 2026)
+
+**Finding:** The vendor terminal return-case listing serialized raw `ReturnCase` models and nested product models. On legacy vendor-owned return cases this could expose claim tokens, gateway/bank references, reviewer IDs, arbitration notes, cost allocation, and fields not intended for the vendor portal.
+
+**Fix:** Vendor return-case listing now uses an explicit allowlist for case status, order number, customer claim summary, item summary, refundable amount, and the returned-rider contact needed for the workflow. It does not serialize raw ReturnCase, Product, ReturnItem, or user relations.
+
+**Business impact:** Keeps financial reconciliation references and internal arbitration details private while preserving the information the vendor needs to handle its own legacy return cases.
+
+**Verification boundary:** Source committed; regression test/CI pending. No merge or deployment.
