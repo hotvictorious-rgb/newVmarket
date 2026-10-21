@@ -326,13 +326,13 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
 
         // Verify balanced journal reversal entries
         $debitEntry = FinancialJournalEntry::where('beneficiary_id', $this->vendor->id)
-            ->where('account_name', 'vendor_payable')
+            ->where('account_name', 'vendor_payout_payable')
             ->where('entry_type', 'debit')
             ->latest('id')
             ->first();
 
         $creditEntry = FinancialJournalEntry::where('beneficiary_id', $this->vendor->id)
-            ->where('account_name', 'vendor_escrow_holding')
+            ->where('account_name', 'vendor_payable')
             ->where('entry_type', 'credit')
             ->latest('id')
             ->first();
