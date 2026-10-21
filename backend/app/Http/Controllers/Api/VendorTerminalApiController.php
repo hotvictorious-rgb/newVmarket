@@ -160,17 +160,19 @@ class VendorTerminalApiController extends Controller
         $shop = $ctx['shop'];
 
         // Strict 90/5/5 Financial Ledger Sums
-        $grossSales = Order::where('vendor_id', $vendor->id)->sum('grand_total') ?? '0.00';
-        $netEarnings = Order::where('vendor_id', $vendor->id)->sum('vendor_net_90') ?? '0.00';
+        $grossSales = Order::where('vendor_id', $vendor->id)->where('retailer_model_order', false)->sum('grand_total') ?? '0.00';
+        $netEarnings = Order::where('vendor_id', $vendor->id)->where('retailer_model_order', false)->sum('vendor_net_90') ?? '0.00';
         $settledAmount = Order::where('vendor_id', $vendor->id)
+            ->where('retailer_model_order', false)
             ->where('vendor_settlement_status', 'settled')
             ->sum('vendor_net_90') ?? '0.00';
         $pendingEscrow = Order::where('vendor_id', $vendor->id)
+            ->where('retailer_model_order', false)
             ->whereIn('vendor_settlement_status', ['eligible', 'held'])
             ->sum('vendor_net_90') ?? '0.00';
 
         // Order Counters
-        $orderQuery = Order::where('vendor_id', $vendor->id);
+        $orderQuery = Order::where('vendor_id', $vendor->id)->where('retailer_model_order', false);
         if ($ctx['is_employee'] && $shop) {
             $orderQuery->where('shop_id', $shop->id);
         }
@@ -1119,6 +1121,7 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
         $vendor = $ctx['vendor'];
 
         $settledOrders = Order::where('vendor_id', $vendor->id)
+            ->where('retailer_model_order', false)
             ->where('vendor_settlement_status', 'settled')
             ->select('id', 'order_number', 'vendor_net_90', 'settled_at', 'settlement_proof_path')
             ->latest('settled_at')
@@ -1126,6 +1129,7 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             ->get();
 
         $eligibleOrders = Order::where('vendor_id', $vendor->id)
+            ->where('retailer_model_order', false)
             ->where('vendor_settlement_status', 'eligible')
             ->select('id', 'order_number', 'vendor_net_90', 'delivered_at')
             ->latest()
