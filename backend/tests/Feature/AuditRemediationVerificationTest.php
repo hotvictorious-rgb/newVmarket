@@ -1803,4 +1803,64 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertFalse($wallet['checkout_redemption_enabled']);
         $this->assertSame('quarantined', $credit->fresh()->status);
     }
+
+    public function test_supplier_order_serialization_hides_payment_reconciliation_and_supplier_cost_fields(): void
+    {
+        $order = new \App\Models\Order([
+            'order_number' => 'VM-PRIVACY-ORDER-001',
+            'checkout_idempotency_key' => 'CHECKOUT-IDEMPOTENCY-SECRET',
+            'checkout_request_hash' => 'CHECKOUT-HASH-SECRET',
+            'paystack_access_code' => 'PAYSTACK-ACCESS-SECRET',
+            'paystack_authorization_url' => 'https://example.invalid/authorization',
+            'payment_reference' => 'PAYMENT-REFERENCE-SECRET',
+            'paystack_refund_reference' => 'REFUND-REFERENCE-SECRET',
+            'refund_reconciliation_token' => 'REFUND-LEASE-SECRET',
+            'settlement_proof_path' => 'private/settlement-proof.png',
+            'grand_total' => '10000.00',
+        ]);
+        $item = new \App\Models\OrderItem([
+            'product_name' => 'Test product',
+            'quantity' => 1,
+            'unit_price' => '10000.00',
+            'line_total' => '10000.00',
+            'supplier_cost_snapshot' => '7000.00',
+            'supplier_cost_currency' => 'NGN',
+            'supplier_snapshot_at' => now(),
+            'supplier_name_snapshot' => 'Private supplier',
+            'fulfillment_supplier_vendor_id' => 123,
+            'fulfillment_supplier_cost_snapshot' => '7000.00',
+        ]);
+        $order->setRelation('items', collect([$item]));
+
+        $controller = app(\App\Http\Controllers\Api\VendorTerminalApiController::class);
+        $method = new \ReflectionMethod($controller, 'hideRetailerInternals');
+        $method->setAccessible(true);
+        $serialized = $method->invoke($controller, $order)->toArray();
+
+        foreach ([
+            'checkout_idempotency_key',
+            'checkout_request_hash',
+            'paystack_access_code',
+            'paystack_authorization_url',
+            'payment_reference',
+            'paystack_refund_reference',
+            'refund_reconciliation_token',
+            'settlement_proof_path',
+            'grand_total',
+        ] as $internalField) {
+            $this->assertArrayNotHasKey($internalField, $serialized, "Supplier order response leaked {$internalField}.");
+        }
+        foreach ([
+            'unit_price',
+            'line_total',
+            'supplier_cost_snapshot',
+            'supplier_cost_currency',
+            'supplier_snapshot_at',
+            'supplier_name_snapshot',
+            'fulfillment_supplier_vendor_id',
+            'fulfillment_supplier_cost_snapshot',
+        ] as $internalField) {
+            $this->assertArrayNotHasKey($internalField, $serialized['items'][0], "Supplier order item leaked {$internalField}.");
+        }
+    }
 }
