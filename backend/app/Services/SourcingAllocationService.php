@@ -55,7 +55,14 @@ class SourcingAllocationService
         if ($this->offerSelectionService) {
             try {
                 $confirmedOffer = $this->offerSelectionService->selectLowestCost($product, $fulfillmentType);
-                if ($confirmedOffer && $this->isEligibleUyoShop($confirmedOffer->shop)) {
+                if ($confirmedOffer
+                    && $this->isEligibleUyoShop($confirmedOffer->shop)
+                    && (int) $confirmedOffer->shop->vendor_id === (int) $confirmedOffer->vendor_id
+                    && $confirmedOffer->vendor
+                    && !$confirmedOffer->vendor->trashed()
+                    && $confirmedOffer->vendor->marketplace_status === 'active'
+                    && $confirmedOffer->vendor->user
+                    && $confirmedOffer->vendor->user->status === 'active') {
                     return [
                         'supplier_offer_id' => $confirmedOffer->id,
                         'vendor_id' => (int)$confirmedOffer->vendor_id,
@@ -94,7 +101,9 @@ class SourcingAllocationService
                 return false;
             }
             // Must have active shop
-            if (!$offer->shop || $offer->shop->trashed() || !$offer->shop->is_active || !$this->isEligibleUyoShop($offer->shop)) {
+            if (!$offer->shop || $offer->shop->trashed() || !$offer->shop->is_active
+                || (int) $offer->shop->vendor_id !== (int) $offer->vendor_id
+                || !$this->isEligibleUyoShop($offer->shop)) {
                 return false;
             }
             // Wholesale cost must be >= 0
