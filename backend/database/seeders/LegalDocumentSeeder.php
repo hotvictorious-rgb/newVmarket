@@ -261,7 +261,7 @@ MARKDOWN;
             [
                 'title' => 'Privacy and Data Protection Policy',
                 'content' => $privacyContent,
-                'summary_of_changes' => 'Initial release in compliance with Nigeria Data Protection Act.',
+                'summary_of_changes' => 'Version 2.0.0: aligned data categories and processing with retailer customers, private suppliers, approved logistics companies/riders, fulfilment evidence and financial records; previous version retained.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
