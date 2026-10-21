@@ -921,6 +921,7 @@ class AuditRemediationVerificationTest extends TestCase
             'status' => 'refund_pending',
             'resolution_type' => 'refund',
             'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
             'refund_claim_token' => 'CLAIM-ACTIVE-12345',
             'refund_claimed_at' => \Illuminate\Support\Carbon::now(),
         ]);
