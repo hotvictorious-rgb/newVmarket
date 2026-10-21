@@ -91,10 +91,13 @@ VM contracts or authorizes logistics companies to carry out delivery. Every ride
 
 Logistics companies and riders manage operational custody and delivery, but cannot change product prices, mark payment successful, approve refunds or create supplier payables. Rider-to-company parcel custody evidence is distinct from proof that the customer received the product. Doorstep completion requires the existing server-verified customer OTP and doorstep photo. A dispatch assignment or rider collection scan alone is not successful fulfilment.
 
-### Supplier-shop pickup
+### Supplier-shop pickup — support-managed exception only
 
-Customer pickup at an authorized supplier shop remains available through the existing reservation flow. VM authorizes the pickup location and order; the customer uses the reservation pass/reference and separate one-time customer pickup verification, and the required in-shop photo is recorded. Supplier readiness does not equal pickup. Only verified customer handover completes fulfilment and makes the supplier payable eligible. The supplier shop is a collection location, not a public storefront or an independent payment channel.
+Doorstep delivery is the only standard online fulfilment method. Automated in-shop pickup reservation is not offered through customer checkout or public APIs. Customers who prefer pickup must contact Victorious MARKET support.
 
+Support may confirm pickup only after verifying the complete order, availability of every item, physical readiness at one approved collection point, payment arrangements and customer agreement. Do not disclose supplier addresses or tell customers to travel before confirmation. Multi-product orders must be consolidated at one approved point or handled through an agreed feasible delivery plan; do not direct customers to multiple suppliers by default.
+
+Legacy reservation records and code are retained only for historical reads, audit and pre-existing obligations until safe retirement. They do not authorize new public reservation writes.
 ### Failed delivery and custody
 
 Failed attempts, returns to origin, custody transfers, damaged/lost parcels, and customer refusal must be recorded as separate operational outcomes. They must not automatically imply refund approval, supplier fault, supplier debt, or successful fulfilment. VM decides the customer remedy under the applicable refund/consumer-rights policy. Supplier recovery requires separate evidence and a contractual basis.
