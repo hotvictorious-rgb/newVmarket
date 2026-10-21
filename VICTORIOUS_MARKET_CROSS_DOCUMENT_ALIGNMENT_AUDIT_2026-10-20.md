@@ -488,7 +488,7 @@ This section records source-level findings and one rollback-safety fix. It does 
 ### Deep-read findings and remaining implementation work
 
 - Updated current policy documents: `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md`, `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md`, `VICTORIOUS_MARKET.md`, `README.md`, `.ai/BUSINESS_RULES.md`, `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md`, `DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md`, `backend/VICTORIOUS_MARKET.md`, and the legacy payout/delivery audit notices.
-- The legal-document seeder still contains active legal/FAQ text saying new cashback is disabled and no logistics percentage is approved; it must be corrected before those seeded documents are treated as aligned.
+- The legal-document seeder source has now been updated to active 5% cashback and the 90% logistics-company default/override policy. Existing published legal-document rows still require a controlled versioned update/reseed and production verification; changing the seeder alone does not prove deployed terms changed.
 - Runtime checkout still writes legacy merchandise vendor splits and a delivery 90% field that is later treated as vendor earning when no logistics company is assigned. Pickup checkout also calculates cashback on the full subtotal instead of the eligible real-money-funded merchandise base after cashback redemption. These are code-level contradictions, not merely documentation issues.
 - The current logistics payout model has company-level payout requests, but the order does not yet have a complete audited default/final company-payable override lifecycle. A forward migration, row-locked override operation, balanced journal adjustment, UI/API route, and regression tests are required.
 - No latest CI run has been verified. Documentation alignment is not evidence of runtime correctness. Do not merge to `main` or deploy until code, tests, migration-upgrade paths and legal publication are verified.
@@ -497,7 +497,7 @@ This section records source-level findings and one rollback-safety fix. It does 
 
 ### Changes committed on `docs/retailer-central-fulfilment-model`
 
-- Updated `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md` to state that the old 90/5/5 and 90/10 splits are retired for new transactions, logistics-company charges require approved VM/company terms, and new cashback accrual remains disabled until a separate owner-approved policy is aligned across policy, code and customer terms.
+- Updated `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md` to retire the old 90/5/5 merchandise split, retain active 5% cashback under existing terms, and set the 90% delivery-fee default as a logistics-company payable subject to audited admin override. This earlier Section 32 note was superseded by Section 33 and must not be read as current policy.
 - Updated `README.md` so its current accounting summary no longer asserts active new 5% cashback accrual or describes legacy vendor-managed rules as binding.
 - Added a prominent supersession notice to `.ai/BUSINESS_RULES.md`; current retailer rules govern new work, while old vendor/rider/payout requirements are retained as migration history. Replaced active cashback and percentage-allocation instructions with historical-versus-new-transaction rules.
 - Updated `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md` to distinguish current payment/refund safeguards from legacy marketplace allocations and payout batches. The legacy FIFO payout checklist is now explicitly historical-only; it is not a supplier-payable rule.
