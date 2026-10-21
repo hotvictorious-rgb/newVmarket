@@ -284,6 +284,7 @@ class RiderTerminalApiController extends Controller
         return response()->json([
             'status' => $result['success'],
             'message' => $result['message'],
+            'remaining_supplier_packages' => $result['remaining_supplier_packages'] ?? 0,
         ], $result['success'] ? 200 : 422);
     }
 
