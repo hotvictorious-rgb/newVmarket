@@ -29,6 +29,10 @@ class RetailerSupplierPayoutService
                 return ['success' => false, 'message' => 'Only an active supplier can request a supplier-payable payout.'];
             }
 
+            if ($lockedSupplier->shops()->where('is_active', true)->count() !== 1) {
+                return ['success' => false, 'protected' => true, 'message' => 'Supplier payout requires exactly one active supplier shop.'];
+            }
+
             foreach (['bank_name', 'bank_code', 'account_number', 'account_name'] as $field) {
                 if (trim((string) $lockedSupplier->{$field}) === '') {
                     return ['success' => false, 'message' => 'Complete and verify the supplier bank details before requesting a payout.'];
@@ -204,6 +208,9 @@ class RetailerSupplierPayoutService
             }
             if ($payout->status !== 'pending' || $payout->processing_token) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout is not available for a new transfer attempt.'];
+            }
+            if (trim($recipientCode) === '') {
+                return ['success' => false, 'message' => 'A verified Paystack transfer recipient is required.'];
             }
             if (!$this->requestJournalComplete($payout)) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout request journal is incomplete; finance reconciliation is required.'];
@@ -391,13 +398,18 @@ class RetailerSupplierPayoutService
         if ($allocations->isEmpty()) {
             return false;
         }
+        $total = '0.00';
         foreach ($allocations as $allocation) {
+            if ((int) $allocation->supplier_vendor_id !== (int) $payout->supplier_vendor_id) {
+                return false;
+            }
+            $total = BcMathService::add($total, (string) $allocation->amount);
             $eventId = 'EVT-SUPPLIER-PAYOUT-REQ-' . $payout->id . '-ITEM-' . $allocation->order_item_id;
             if (!$this->hasExactPair($eventId, $allocation, 'supplier_payable', 'debit', 'supplier_payout_payable', 'credit')) {
                 return false;
             }
         }
-        return true;
+        return BcMathService::comp($total, (string) $payout->amount) === 0;
     }
 
     private function payoutJournalComplete(RetailerSupplierPayoutRequest $payout): bool
