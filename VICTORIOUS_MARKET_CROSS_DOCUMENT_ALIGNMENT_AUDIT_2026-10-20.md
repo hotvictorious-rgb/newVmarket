@@ -238,3 +238,18 @@ Required controls:
 - **Required fix:** Map all producers and consumers of split fields, journals, cashback ledger entries, refunds, reconciliation, reports and settlements. Replace the checkout accounting with explicit retailer economics and approved cashback policy, preserving historical rows and using forward migrations where necessary. Do not invent new percentages or silently reinterpret old ledger entries.
 - **Regression tests required:** Supplier payable equals the selected order-item wholesale-cost snapshot, not a percentage of retail price; VM gross margin reconciles to retail less supplier cost; delivery charges/payables reconcile to the approved logistics agreement; cashback earned only on its approved base, cannot compound on redeemed cashback/discounts, matures only after the approved window, and reversals/refunds reconcile; all journals balance and are idempotent; historical orders retain their original accounting interpretation.
 - **Status:** OPEN — source code still contains legacy split calculations; no accounting code was changed or tested in this pass.
+
+
+## 16. Supplier sourcing schema foundation — 21 October 2026
+
+### VM-ALIGN-008 — Supplier-offer schema existed, but order-item economics had no immutable source snapshot
+- **Severity:** Critical / financial integrity.
+- **Evidence confirmed:** Migration `2026_10_21_000004_create_supplier_offers_and_sourcing_fields.php` creates private supplier offers and adds order-level selected supplier/shop fields, but the inspected `order_items` schema/model did not identify the chosen offer or persist its supplier identity and negotiated wholesale cost. Existing `cost_price` is a product-level field and must not be treated as proof of the selected supplier's cost.
+- **Resolution applied (schema/model foundation only):**
+  - Added forward migration `2026_10_21_000005_add_supplier_snapshots_to_order_items.php` with nullable offer/vendor/shop references plus immutable supplier/shop name snapshots, supplier cost/currency snapshot and snapshot timestamp.
+  - Added `App\\Models\\SupplierOffer` with product/vendor/shop relationships and soft-delete support.
+  - Extended `OrderItem` fillable/casts and relationships for the new snapshot fields.
+  - Nullable snapshot fields preserve compatibility with historical rows; deleting an offer or supplier/shop does not erase the stored name/cost snapshot.
+- **Important limitation:** The current checkout path has **not yet been changed** to select an eligible cheapest offer or populate these new snapshot fields. This is not end-to-end closure and must not be described as implemented retailer sourcing. The old `orders.vendor_id` / `orders.shop_id` constraints and legacy split accounting remain open.
+- **Required regression tests before closure:** migration on clean and previously migrated databases; eligible/ineligible offer filtering; deterministic cheapest-offer selection; no-offer fail-closed behavior; selected offer and cost snapshot persisted for each order item; later offer edits/deletion do not mutate snapshots; admin reassignment audited with explicit cost-change policy; historical order compatibility; all checkout aliases use the canonical service.
+- **Status:** PARTIAL FOUNDATION COMMITTED; runtime selection, snapshot population, tests and accounting migration remain OPEN.
