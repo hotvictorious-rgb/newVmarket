@@ -304,6 +304,21 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
+    public function test_supplier_payout_is_blocked_until_supplier_kyc_is_verified(): void
+    {
+        [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
+        $this->vendor->update(['kyc_status' => 'pending']);
+        $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
+
+        $result = app(RetailerSupplierPayoutService::class)->requestPayout($this->vendor->fresh());
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected'] ?? false);
+        $this->assertStringContainsString('KYC', $result['message'] ?? '');
+        $this->assertSame(0, RetailerSupplierPayoutRequest::where('supplier_vendor_id', $this->vendor->id)->count());
+        $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
+    }
+
     public function test_supplier_payout_uncertain_outcome_cannot_be_released_as_unsubmitted(): void
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
