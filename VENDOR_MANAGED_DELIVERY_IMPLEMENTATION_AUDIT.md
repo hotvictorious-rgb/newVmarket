@@ -42,19 +42,25 @@ Implementation of this policy must be proved by code review and tests; this text
 
 ## 2. Documentation consistency review — retailer-model rebaseline
 
-### Resolved on this branch
+### Documentation updated on this branch
 
-- `.ai/BUSINESS_RULES.md` records the owner’s 15 decisions, customer privacy rule, pickup rule, acceptance criteria, and open source-code findings.
-- Root `VICTORIOUS_MARKET.md` and `README.md` already describe vendor-managed delivery, rider financial separation, the 90/5/5 merchandise allocation, the 90/10 delivery-fee allocation, customer privacy, pickup, and legacy-data preservation.
-- `DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md` already defers to `.ai/BUSINESS_RULES.md` and contains an implementation audit list.
-- `backend/VICTORIOUS_MARKET.md` was updated on this branch to remove its contradictory claims that the platform coordinates logistics companies/routes and pays logistics providers for new delivery orders. It now describes vendor-owned riders, vendor assignment, pickup, privacy, fee allocation, COD boundaries, and financial separation.
-- Cashback clock alignment is partially implemented on this branch: pre-fulfilment `matures_at`/`expires_at` are nullable; checkout/payment leave them unset; the migration backfills legacy pending/quarantined lots from the order's persisted fulfilment-window expiry (or clears dates for unfulfilled orders); verified delivery/pickup sets maturity to `refund_window_expires_at + 24 hours` and expiry to `matures_at + 365 days`. The cashback recovery ledger, persisted-setting audit, and reopening logic after a resolved dispute/return remain open.
+- Root README now states the retailer model, private supplier offers, Uyo operating base, central logistics-company delivery, supplier-shop pickup and supplier payment eligibility.
+- `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md` is the canonical business model and migration checklist.
+- `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md` and `.ai/BUSINESS_RULES.md` define the current policy and acceptance gates.
+- `VICTORIOUS_MARKET.md` and `backend/VICTORIOUS_MARKET.md` describe the retailer and central fulfilment model.
+- `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md` retains payment/refund safeguards while superseding marketplace allocation and vendor payout assumptions for new retailer transactions.
+- `VENDOR_PAYOUT_POLICY.md` is explicitly legacy-only for historical vendor earnings.
+- `DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md` and this audit are rebaselined for central delivery and supplier payables.
+- `SHARED_HOSTING_DEPLOYMENT_GUIDE.md` no longer describes legacy marketplace percentages as current financial policy.
 
 ### Remaining consistency checks before release
 
-1. Search all docs, frontend/mobile text, onboarding screens, route names, notification templates, tests, and API contracts for active “fleet dispatch”, logistics-provider share/payable, rider earnings, rider payouts, or automatic wallet credit language. Historical descriptions must be explicitly labelled historical rather than presented as current behaviour.
-2. **Canonical pickup credential decision:** customer in_shop_pickup requires both the RES-XXXXXX reservation pass and the separate six-digit customer pickup OTP (`pickup_verification_code`). The OTP supplements and never replaces the reservation pass. Preserve legacy values and records, securely verify both at the owning vendor counter, and keep the customer OTP distinct from any rider-to-vendor parcel-custody OTP.
-3. Distinguish the rider collecting a parcel from the vendor (doorstep-delivery custody handover) from a customer collecting an order at the vendor counter. They are separate actors, flows, permissions, secrets, and status transitions. A rider must not be assigned to, or asked to verify, a customer in-shop pickup.
+1. Source code, API contracts, customer/vendor/supplier/logistics UI, notifications, legal-document seeder and published legal pages still require a code-level and runtime audit. Documentation alignment does not prove they have migrated.
+2. Supplier-shop pickup requires the RES-XXXXXX reservation pass, separate one-time customer pickup OTP and in-shop photo. Keep these distinct from any rider-to-logistics-company custody credential; do not leak customer secrets to rider views, logs or history.
+3. Distinguish supplier-to-VM collection, logistics-company/rider custody, customer doorstep handover, supplier-shop customer pickup, failed attempts and return-to-origin. They are separate actors, permissions, credentials and state transitions.
+4. Review the historical cashback maturity/recovery implementation. Preserve historical balances, but do not automatically enable new retailer-model cashback accrual from the old 5% marketplace allocation.
+5. Confirm the production legal-document database contains current retailer, supplier, delivery, pickup, payment and refund terms. Source seeder edits alone do not update already-published records.
+6. Audit every route for the known legacy web checkout bypass of CheckoutExecutionService, and test supplier payable idempotency, central delivery assignment and mandatory rider-to-company linkage.
 
 ## 3. Confirmed source-code gaps
 
