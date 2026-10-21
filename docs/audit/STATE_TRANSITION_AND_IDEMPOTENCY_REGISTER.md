@@ -434,3 +434,12 @@ Allowed: `reserved` and not expired -> `inspected_accepted`, or `reserved` and e
 **Important distinction:** A `supplier_payable` credit posted at capture is not, by itself, proof that payout is eligible. Payout authorization must separately enforce fulfilment, acceptance, reconciliation, and any applicable hold. Do not mutate historical capture journal rows to implement a sourcing change.
 
 ****Status:** Accounting path inspected and documented. The legacy order-level vendor payout path is now blocked for retailer-model orders, and a regression assertion checks that a stale `eligible` settlement flag cannot create legacy payout journal entries. A direct rider-custody regression assertion was also added for supplier-rejection holds. These test edits have not been executed. Post-payment reassignment/refund resolution, balanced payable reclassification, supplier-specific payout authorization, and financial reconciliation tests remain unimplemented. CI/test execution remains unverified. No merge or deployment is authorized.
+
+
+### VM-AUD-069 — Supplier offer confirmation evidence must be attributable and current
+
+- **Invariant:** offer selection requires a non-null confirmer and a confirmation timestamp no later than the current time, in addition to availability and expiry checks.
+- **Code:** `SupplierOfferSelectionService::selectLowestCost()` now enforces both conditions.
+- **Regression coverage added:** offer with a missing confirming actor and offer with a future-dated confirmation timestamp must both return no selection.
+- **Verification status:** Tests are authored but have not been executed in this session; do not treat this as CI-verified.
+- **Not covered by this fix:** paid-order supplier replacement, balanced supplier-payable reclassification, and dedicated supplier payout authorization remain open.
