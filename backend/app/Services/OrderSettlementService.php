@@ -1202,7 +1202,7 @@ class OrderSettlementService
             $lockedOrder->save();
 
             if ($lockedOrder->retailer_model_order) {
-                app(\\App\\Services\\LogisticsCompanyPayableService::class)->releaseAfterVerifiedDelivery($lockedOrder);
+                app(\App\Services\LogisticsCompanyPayableService::class)->releaseAfterVerifiedDelivery($lockedOrder);
             }
 
             // Do not credit a logistics-company or rider wallet from a delivery event.
