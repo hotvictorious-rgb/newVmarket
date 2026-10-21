@@ -140,7 +140,7 @@ class SourcingAllocationService
         }
 
         // 2. Backward compatibility fallback to catalog listing defaults if no supplier_offers exist
-        if ($product->vendor_id && $product->shop_id) {
+        if (!$product->supplierOffers()->exists() && $product->vendor_id && $product->shop_id) {
             $product->loadMissing(['vendor.user', 'shop']);
             $vendor = $product->vendor;
             $shop = $product->shop;
