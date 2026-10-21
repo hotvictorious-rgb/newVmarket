@@ -15,7 +15,7 @@ Victorious MARKET is a centrally managed online retailer operating from Uyo, Akw
 ## At a glance
 
 - **Repository:** [hotvictorious-rgb/newVmarket](https://github.com/hotvictorious-rgb/newVmarket)
-- **Current audit branch:** audit/paystack-refund-webhook-safety
+- **Canonical working branch:** docs/retailer-central-fulfilment-model
 - **Application:** Laravel 12 / PHP 8.2+
 - **Currency:** NGN; payment amounts are validated in integer kobo.
 - **Two Permitted Customer Flows:**
