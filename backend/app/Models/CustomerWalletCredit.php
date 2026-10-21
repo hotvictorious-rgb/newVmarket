@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class CustomerWalletCredit extends Model
 {
+    protected $hidden = [
+        'refund_reserved_from_status',
+    ];
+
     protected $fillable = [
         'customer_id',
         'order_id',
