@@ -35,6 +35,44 @@ class VendorTerminalApiController extends Controller
     }
 
     /**
+     * Remove retailer-wide financial totals and the primary-source compatibility
+     * anchor from supplier-facing order responses.
+     */
+    private function hideRetailerInternals(Order $order): Order
+    {
+        return $order->makeHidden([
+            'vendor_id',
+            'shop_id',
+            'selected_supplier_id',
+            'selected_shop_id',
+            'sourcing_notes',
+            'merchandise_subtotal',
+            'delivery_fee',
+            'delivery_base_fee_snapshot',
+            'delivery_bulky_surcharge_per_unit_snapshot',
+            'delivery_bulky_quantity_snapshot',
+            'supplier_cost_total_snapshot',
+            'retailer_merchandise_margin',
+            'logistics_company_payable_default_amount',
+            'logistics_company_payable_amount',
+            'logistics_company_payable_ledger_company_id',
+            'logistics_company_payable_override_reason',
+            'logistics_company_payable_override_by',
+            'logistics_company_payable_override_at',
+            'logistics_company_wallet_credited_at',
+            'logistics_company_wallet_credited_amount',
+            'cashback_redeemed',
+            'wallet_credit_applied',
+            'grand_total',
+            'vendor_net_90',
+            'customer_cashback_5',
+            'platform_margin_5',
+            'logistics_fee_retained',
+            'platform_delivery_fee',
+        ]);
+    }
+
+    /**
      * Resolve authorized Vendor & Shop context with strict multi-tenant isolation.
      */
     private function resolveVendorContext(Request $request): array
@@ -231,6 +269,16 @@ class VendorTerminalApiController extends Controller
                     }
                     $itemsQuery->with('product:id,name,unit_price,thumbnail');
                 },
+                'supplierAssignments' => function ($assignmentQuery) use ($vendor, $shop, $ctx) {
+                    $assignmentQuery->where('supplier_vendor_id', $vendor->id);
+                    if ($ctx['is_employee'] && $shop) {
+                        $assignmentQuery->where('supplier_shop_id', $shop->id);
+                    }
+                    $assignmentQuery->select([
+                        'id', 'order_id', 'supplier_vendor_id', 'supplier_shop_id', 'status',
+                        'assigned_at', 'supplier_confirmed_at', 'supplier_rejected_at', 'supplier_response_notes',
+                    ]);
+                },
             ])
             ->latest();
 
@@ -256,6 +304,7 @@ class VendorTerminalApiController extends Controller
 
         $perPage = min(50, max(5, (int)$request->query('per_page', 20)));
         $paginated = $query->paginate($perPage);
+        $paginated->getCollection()->each(fn (Order $order) => $this->hideRetailerInternals($order));
 
         return response()->json([
             'status' => true,
@@ -300,6 +349,7 @@ class VendorTerminalApiController extends Controller
             ]);
 
         $order = $query->findOrFail($id);
+        $this->hideRetailerInternals($order);
 
         return response()->json([
             'status' => true,
@@ -361,6 +411,10 @@ class VendorTerminalApiController extends Controller
                 'order' => $order,
             ];
         });
+
+        if (($result['order'] ?? null) instanceof Order) {
+            $this->hideRetailerInternals($result['order']);
+        }
 
         return response()->json([
             'status' => (bool) ($result['success'] ?? false),
