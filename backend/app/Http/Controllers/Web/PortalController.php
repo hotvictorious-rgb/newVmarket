@@ -4043,13 +4043,17 @@ class PortalController extends Controller
                 $assignedCp = \App\Models\LogisticsCollectionPoint::find($collectionPointId);
                 if ($assignedCp && $assignedCp->logistics_company_id) {
                     $logisticsCompanyId = $assignedCp->logistics_company_id;
-                    $rider = RiderProfile::where('logistics_company_id', $assignedCp->logistics_company_id)
+                    $rider = RiderProfile::whereNull('vendor_id')
+                        ->whereNull('shop_id')
+                        ->where('logistics_company_id', $assignedCp->logistics_company_id)
                         ->where('is_active', true)
                         ->where('is_online', true)
                         ->whereHas('user', fn($q) => $q->where('status', 'active'))
                         ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
                         ->first()
-                        ?? RiderProfile::where('logistics_company_id', $assignedCp->logistics_company_id)
+                        ?? RiderProfile::whereNull('vendor_id')
+                        ->whereNull('shop_id')
+                        ->where('logistics_company_id', $assignedCp->logistics_company_id)
                             ->where('is_active', true)
                             ->whereHas('user', fn($q) => $q->where('status', 'active'))
                             ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
@@ -4057,12 +4061,16 @@ class PortalController extends Controller
                 }
             }
             if (!$rider) {
-                $rider = RiderProfile::where('is_active', true)
+                $rider = RiderProfile::whereNull('vendor_id')
+                    ->whereNull('shop_id')
+                    ->where('is_active', true)
                     ->where('is_online', true)
                     ->whereHas('user', fn($q) => $q->where('status', 'active'))
                     ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
                     ->first()
-                    ?? RiderProfile::where('is_active', true)
+                    ?? RiderProfile::whereNull('vendor_id')
+                    ->whereNull('shop_id')
+                    ->where('is_active', true)
                         ->whereHas('user', fn($q) => $q->where('status', 'active'))
                         ->whereHas('logisticsCompany', fn($q) => $q->where('status', 'active'))
                         ->first();
