@@ -4,6 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\AdminAuditLog;
 use App\Models\Category;
+use App\Models\CustomerAddress;
+use App\Models\DeliveryCorridor;
+use App\Models\LogisticsCompanyCorridorRate;
+use App\Models\LogisticsCompanyProfile;
 use App\Models\Country;
 use App\Models\Lga;
 use App\Models\Order;
@@ -59,6 +63,39 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->eketLga = Lga::create([
             'state_id' => $this->state->id,
             'name' => 'Eket',
+            'is_active' => true,
+        ]);
+
+        $fleetUser = User::create([
+            'name' => 'Automated Sourcing Fleet',
+            'email' => 'automated-sourcing-fleet@example.test',
+            'phone' => '08000000009',
+            'user_type' => 'logistics_company',
+            'status' => 'active',
+            'password' => bcrypt('password123'),
+        ]);
+        $fleetCompany = LogisticsCompanyProfile::create([
+            'user_id' => $fleetUser->id,
+            'company_name' => 'Automated Sourcing Logistics Ltd',
+            'hq_lga_id' => $this->uyoLga->id,
+            'wallet_balance' => '0.00',
+            'status' => 'active',
+        ]);
+        $corridor = DeliveryCorridor::create([
+            'code' => 'automated-sourcing-uyo',
+            'name' => 'Automated Sourcing Uyo Corridor',
+            'lga_id' => $this->uyoLga->id,
+            'landmark_aliases' => ['Uyo'],
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+        LogisticsCompanyCorridorRate::create([
+            'logistics_company_id' => $fleetCompany->id,
+            'delivery_corridor_id' => $corridor->id,
+            'base_payable' => '900.00',
+            'bulky_surcharge_per_unit' => '200.00',
+            'tariff_version' => 1,
             'is_active' => true,
         ]);
 
@@ -540,10 +577,21 @@ class AutomatedSupplierSourcingTest extends TestCase
         ]);
 
         $checkoutService = app(\App\Services\CheckoutExecutionService::class);
+        $address = CustomerAddress::create([
+            'user_id' => $this->customerUser->id,
+            'country_id' => $this->country->id,
+            'state_id' => $this->state->id,
+            'lga_id' => $this->uyoLga->id,
+            'address_line' => '12 Uyo Central Road',
+            'contact_name' => $this->customerUser->name,
+            'phone' => $this->customerUser->phone,
+            'is_default' => true,
+        ]);
 
         $result = $checkoutService->execute($this->customerUser, [
             'shop_id' => $shopA->id,
             'fulfillment_type' => 'doorstep_delivery',
+            'customer_address_id' => $address->id,
             'destination_lga_id' => $this->uyoLga->id,
             '_checkout_idempotency_key' => 'IDEMP-TEST-' . uniqid(),
             '_checkout_request_hash' => hash('sha256', 'test-payload'),
