@@ -380,7 +380,9 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ],
         ]);
 
-        $orderResTwoBulky->assertStatus(201);
+        $orderResTwoBulky->assertStatus(201)
+            ->assertJsonPath('data.order.shop.name', 'Victorious MARKET')
+            ->assertJsonMissingPath('data.order.shop.address');
         $orderTwoBulky = Order::where('customer_id', $customer->id)->latest('id')->first();
         $this->assertNotNull($orderTwoBulky);
         $this->assertEquals('2500.00', $orderTwoBulky->delivery_fee);
