@@ -705,6 +705,90 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame(0, FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REJECT-' . $vendorPayout->id)->count());
     }
 
+    public function test_payout_request_journal_evidence_requires_both_exact_legs(): void
+    {
+        $service = app(\\App\\Services\\PayoutFinalizationService::class);
+        $vendorPayout = VendorPayoutRequest::create([
+            'vendor_id' => $this->vendor->id,
+            'amount' => '15000.00',
+            'status' => 'pending',
+        ]);
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'TEST-VND-REQ-EVIDENCE',
+            'event_id' => 'EVT-MERCHANT-REQ-' . $vendorPayout->id,
+            'beneficiary_type' => \\App\\Models\\VendorProfile::class,
+            'beneficiary_id' => $this->vendor->id,
+            'account_name' => 'vendor_payable',
+            'entry_type' => 'debit',
+            'amount' => '15000.00',
+            'currency' => 'NGN',
+            'description' => 'Single leg must not qualify as a request journal.',
+        ]);
+        $this->assertFalse($service->hasVendorRequestJournalEvidence($vendorPayout));
+
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'TEST-VND-REQ-EVIDENCE',
+            'event_id' => 'EVT-MERCHANT-REQ-' . $vendorPayout->id,
+            'beneficiary_type' => \\App\\Models\\VendorProfile::class,
+            'beneficiary_id' => $this->vendor->id,
+            'account_name' => 'vendor_payout_payable',
+            'entry_type' => 'credit',
+            'amount' => '14999.00',
+            'currency' => 'NGN',
+            'description' => 'Wrong amount must not qualify as complete evidence.',
+        ]);
+        $this->assertFalse($service->hasVendorRequestJournalEvidence($vendorPayout));
+
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'TEST-VND-REQ-EVIDENCE',
+            'event_id' => 'EVT-MERCHANT-REQ-' . $vendorPayout->id,
+            'beneficiary_type' => \\App\\Models\\VendorProfile::class,
+            'beneficiary_id' => $this->vendor->id,
+            'account_name' => 'vendor_payout_payable',
+            'entry_type' => 'credit',
+            'amount' => '15000.00',
+            'currency' => 'NGN',
+            'description' => 'Exact matching liability leg.',
+        ]);
+        $this->assertTrue($service->hasVendorRequestJournalEvidence($vendorPayout));
+
+        $fleetPayout = LogisticsPayoutRequest::create([
+            'logistics_company_id' => $this->company->id,
+            'amount' => '12000.00',
+            'status' => 'pending',
+        ]);
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'TEST-FLEET-REQ-EVIDENCE',
+            'event_id' => 'EVT-FLEET-REQ-' . $fleetPayout->id,
+            'beneficiary_type' => \\App\\Models\\LogisticsCompanyProfile::class,
+            'beneficiary_id' => $this->company->id,
+            'account_name' => 'logistics_company_wallet',
+            'entry_type' => 'debit',
+            'amount' => '12000.00',
+            'currency' => 'NGN',
+            'description' => 'Single fleet request leg.',
+        ]);
+        $this->assertFalse($service->hasLogisticsRequestJournalEvidence($fleetPayout));
+
+        FinancialJournalEntry::create([
+            'order_id' => null,
+            'transaction_reference' => 'TEST-FLEET-REQ-EVIDENCE',
+            'event_id' => 'EVT-FLEET-REQ-' . $fleetPayout->id,
+            'beneficiary_type' => \\App\\Models\\LogisticsCompanyProfile::class,
+            'beneficiary_id' => $this->company->id,
+            'account_name' => 'logistics_payout_payable',
+            'entry_type' => 'credit',
+            'amount' => '12000.00',
+            'currency' => 'NGN',
+            'description' => 'Exact matching fleet liability leg.',
+        ]);
+        $this->assertTrue($service->hasLogisticsRequestJournalEvidence($fleetPayout));
+    }
+
     public function test_high_value_vendor_payout_strictly_requires_super_admin()
     {
         $this->createTestOrder([
