@@ -1549,6 +1549,7 @@ class PortalController extends Controller
             // request holding funds when the amount cannot be made from whole records.
             $remainingToMatch = $amount;
             $fifoOrders = Order::where('vendor_id', $lockedVendor->id)
+                ->where('retailer_model_order', false)
                 ->where('vendor_settlement_status', 'eligible')
                 ->where('payment_status', 'paid')
                 ->where('order_status', 'delivered')
@@ -2605,6 +2606,7 @@ class PortalController extends Controller
 
             // Verify they actually sold: must have legitimate delivered and paid orders
             $hasDeliveredSales = Order::where('vendor_id', $vendor->id)
+                ->where('retailer_model_order', false)
                 ->where('payment_status', 'paid')
                 ->where('order_status', 'delivered')
                 ->exists();
@@ -2619,6 +2621,7 @@ class PortalController extends Controller
                 ->get();
             $invalidAllocation = $existingAllocationRows->first(function ($allocation) use ($vendor) {
                 return !$allocation->order
+                    || $allocation->order->retailer_model_order
                     || (int) $allocation->order->vendor_id !== (int) $vendor->id
                     || bccomp((string) $allocation->allocated_amount, '0.00', 2) <= 0;
             });
