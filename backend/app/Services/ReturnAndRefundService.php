@@ -554,18 +554,6 @@ class ReturnAndRefundService
                 ];
             }
 
-            // Check instant doorstep wallet credit constraints (Finding 5)
-            $hasRedeemedWalletCredit = CustomerWalletCredit::where('return_case_id', $lockedCase->id)
-                ->whereIn('status', ['redeemed', 'spent'])
-                ->exists();
-
-            if ($hasRedeemedWalletCredit) {
-                return [
-                    'valid' => false,
-                    'message' => "Cannot disburse cash refund: Customer has already partially or fully redeemed the instant wallet credit issued for this return case.",
-                ];
-            }
-
             // Once a Paystack refund has been recorded, its component scope must
             // remain immutable until reconciliation; changing this flag could make
             // settlement accounting allocate a component the gateway did not refund.
@@ -606,9 +594,33 @@ class ReturnAndRefundService
                 ];
             }
 
-            // Atomically acquire claim token and persist the approved component
-            // under the same lock so the final gateway authorization gate can
-            // verify it independently of the caller's request.
+            // Lock every wallet-credit lot for this return case. A spend and a
+            // cash-refund initiation must serialize so the customer cannot spend an
+            // instant credit while a Paystack refund is pending.
+            $walletCredits = CustomerWalletCredit::where('return_case_id', $lockedCase->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            if ($walletCredits->contains(fn (CustomerWalletCredit $credit) => in_array($credit->status, ['redeemed', 'spent'], true))) {
+                return [
+                    'valid' => false,
+                    'message' => 'Cannot disburse a cash refund because a wallet credit for this return case has already been redeemed or spent.',
+                ];
+            }
+
+            $walletCreditStatuses = [];
+            foreach ($walletCredits as $walletCredit) {
+                if (in_array($walletCredit->status, ['available', 'pending_approval'], true)) {
+                    $walletCreditStatuses[(int) $walletCredit->id] = $walletCredit->status;
+                    $walletCredit->status = 'quarantined';
+                    $walletCredit->notes = trim(($walletCredit->notes ? $walletCredit->notes . ' | ' : '')
+                        . 'Cash refund reserved; credit unavailable pending authoritative Paystack outcome.');
+                    $walletCredit->save();
+                }
+            }
+
+            // Atomically acquire claim token, quarantine spendable credit and persist
+            // the approved component under the same database transaction.
             $lockedCase->refund_claim_token = $claimToken;
             $lockedCase->refund_claimed_at = Carbon::now();
             $lockedCase->refund_delivery_fee = $deliveryFeeAuthorized;
@@ -624,6 +636,7 @@ class ReturnAndRefundService
                 'merchandise_refund' => $merchandiseRefund,
                 'delivery_fee_refund' => $deliveryFeeRefund,
                 'refund_delivery_fee_authorized' => $deliveryFeeAuthorized,
+                'wallet_credit_statuses' => $walletCreditStatuses,
             ];
         });
 
