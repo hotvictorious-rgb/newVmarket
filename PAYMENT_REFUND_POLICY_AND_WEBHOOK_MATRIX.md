@@ -351,7 +351,7 @@ This matrix contains historical marketplace payout/allocation requirements as we
 
 ## 14. Binding rule: merchandise and delivery refunds are approved independently
 
-The owner has confirmed that **delivery is never mixed with merchandise, and merchandise refunds and delivery-fee refunds must be approved independently**. This rule applies to historical multi-vendor parent/child orders and to new retailer orders wherever a delivery-fee component was actually captured. For new retailer transactions, reverse the actual captured component amounts and retailer accounting entries; do not use the legacy vendor percentage allocations below as new-order policy.
+The owner has confirmed that **delivery is never mixed with merchandise, and merchandise refunds and delivery-fee refunds must be approved independently**. This rule applies to historical multi-vendor parent/child orders and to new retailer orders wherever a delivery-fee component was actually captured. For new retailer transactions, reverse the actual captured component amounts and retailer accounting entries; do not use the legacy vendor percentage allocations below as new-order policy. A customer delivery-fee refund is not an automatic clawback of a logistics company's earned trip payable. Record the customer refund independently and handle any company recovery through a separate contract-authorized, audited adjustment; never delay the customer refund.
 
 ### Component decision matrix
 
