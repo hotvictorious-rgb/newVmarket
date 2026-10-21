@@ -150,6 +150,17 @@ class OrderSettlementService
                 ->lockForUpdate()
                 ->get();
 
+            // The central retailer model is one customer order with item-level
+            // supplier assignments. It must never fall into the legacy parent/child
+            // vendor-commission settlement branch.
+            if ($lockedOrder->retailer_model_order && $childOrders->isNotEmpty()) {
+                return [
+                    'success' => false,
+                    'status' => 'RETAILER_PARENT_CHILD_ORDER_FORBIDDEN',
+                    'message' => 'Retailer-model orders cannot settle through legacy child-order vendor accounting.',
+                ];
+            }
+
             if ($childOrders->isNotEmpty()) {
                 $aggregateFields = [
                     'merchandise_subtotal',
