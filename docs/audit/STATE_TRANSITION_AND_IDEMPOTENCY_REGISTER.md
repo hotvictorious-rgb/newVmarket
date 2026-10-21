@@ -568,3 +568,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Prevents disabled admin accounts from changing supplier assignment during checkout, reducing the risk of unauthorized sourcing or supplier cost manipulation.
 
 **Verification boundary:** Source and test committed; CI/test execution pending. No merge or deployment.
+
+
+### VM-AUD-114 — Allow a safe retry only after a definitive refund failure (21 October 2026)
+
+**Finding:** The default refund idempotency key is deterministic for a return case, reason, and amount. After a definitive Paystack rejection, a retry reused the existing terminal failed operation, so the normal customer-refund workflow could not create a new attempt. A stale `paystack_refund_id` could also cause the service to return “initiated” indefinitely even when the linked operation was terminally failed.
+
+**Fix:** Before dispatch, the service now inspects every refund operation linked to the return case. It reuses/holds open operations for reconciliation, blocks new attempts when a prior operation is confirmed or reversed, and clears a stale reference only when all linked attempts are definitively failed. A new, unique attempt key is then used for the next refund. Added a feature test for a definitive failure followed by a second accepted attempt.
+
+**Business impact:** Lets treasury retry a legitimate refund after a clear gateway rejection without risking a duplicate refund while the earlier attempt is still pending or uncertain. It also makes the retry trail explicit for reconciliation and audit.
+
+**Verification boundary:** Code and regression test committed; tests/CI remain pending. Ambiguous gateway outcomes still block retries until reconciliation. No merge or deployment.
