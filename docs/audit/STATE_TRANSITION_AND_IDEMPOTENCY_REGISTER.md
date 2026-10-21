@@ -634,3 +634,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Improves refund webhook/reconciliation correctness and reduces the chance that a wrong gateway event is reported as a valid duplicate. It does not create or move funds; it prevents false acknowledgement.
 
 **Verification boundary:** Source and regression test committed; CI/test execution pending. No merge or deployment.
+
+
+### VM-AUD-120 — Require explicit refund resolution before cash disbursement (21 October 2026)
+
+**Finding:** The disbursement precheck allowed several return-case states, including `approved_for_return` and `resolved`, and did not require `resolution_type=refund`. Because return cases can also be for replacement/repair, inconsistent status and resolution metadata could allow a non-refund case to reach the cash-refund workflow.
+
+**Fix:** Refund disbursement now requires all three: `status=refund_pending`, `resolution_type=refund`, and a recorded reviewer. The explicit administrative “approve for refund” action now persists `resolution_type=refund` even when the customer originally requested another remedy, and records the old/new resolution in the audit log. Added feature tests for rejecting a replacement resolution at disbursement and converting it only through explicit approval.
+
+**Business impact:** Prevents cash leaving Victorious MARKET for a case whose approved remedy is not a refund, while keeping any change of remedy explicit and auditable.
+
+**Verification boundary:** Source and tests committed; tests/CI pending. No merge or deployment.
