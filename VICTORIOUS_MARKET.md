@@ -261,7 +261,7 @@ A trustworthy marketplace is not one that claims never to fail. It is one that h
 
 The repository contains a Laravel application with existing marketplace-oriented data models and financial flows. The retailer and central fulfilment model is the approved business direction, but the code is not yet proven migrated. Existing source-code findings and implementation gaps remain open until fixed and tested.
 
-Before launch, complete supplier-offer/order-item linkage, central delivery and logistics-company rider enforcement, customer checkout compatibility audit, supplier payable accounting, payment/refund safety verification, and operational coverage configuration. If this fresh deployment has no legacy transactions, document that fact and disable/remove obsolete marketplace workflows through a reviewed migration; do not leave old marketplace rules active merely for compatibility. If legacy records are present, preserve them as read-only history until an approved migration plan exists.
+Before launch, complete supplier-offer/order-item linkage, central delivery and logistics-company rider enforcement, customer checkout compatibility audit, supplier payable accounting, payment/refund safety verification, and operational coverage configuration. `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md` is the launch-policy authority. If the fresh deployment has no legacy transactions, document that fact and disable/remove obsolete marketplace workflows through a reviewed migration; do not leave old marketplace rules active merely for compatibility. If legacy records exist, retain them as read-only history until an approved migration plan exists.
 
 ## 18. Long-Term Vision
 
