@@ -611,63 +611,59 @@ class CheckoutExecutionService
                     ]);
                 }
 
-                $deliveryFeeSnapshot = (string) $order->delivery_fee;
-                $companyPayable = (string) ($order->logistics_company_payable_amount
-                    ?? '0.00');
-                $order->logistics_company_payable_default_amount = $order->logistics_company_payable_default_amount
-                    ?? null;
-                $order->logistics_company_payable_amount = $companyPayable;
-                $order->logistics_company_payable_ledger_company_id = $order->logistics_company_id;
-                $order->save();
-
-                if (BcMathService::comp($companyPayable, '0.00') > 0) {
-                    FinancialJournalEntry::create([
-                        'order_id' => $order->id,
-                        'transaction_reference' => $paymentRef,
-                        'event_id' => 'EVT-LOG-COMPANY-PAYABLE-WALLET-' . $order->id . '-' . $paymentRef,
-                        'beneficiary_type' => LogisticsCompanyProfile::class,
-                        'beneficiary_id' => $order->logistics_company_id,
-                        'account_name' => 'logistics_company_payable',
-                        'entry_type' => 'credit',
-                        'amount' => $companyPayable,
-                        'currency' => 'NGN',
-                        'description' => "Default/approved logistics-company payable for wallet-funded Order #{$order->order_number}; not a rider payable.",
-                    ]);
-                }
-
-                $deliveryMargin = BcMathService::comp($deliveryFeeSnapshot, $companyPayable) > 0
-                    ? BcMathService::sub($deliveryFeeSnapshot, $companyPayable)
-                    : '0.00';
-                $deliverySubsidy = BcMathService::comp($companyPayable, $deliveryFeeSnapshot) > 0
-                    ? BcMathService::sub($companyPayable, $deliveryFeeSnapshot)
-                    : '0.00';
-                if (BcMathService::comp($deliveryMargin, '0.00') > 0) {
-                    FinancialJournalEntry::create([
-                        'order_id' => $order->id,
-                        'transaction_reference' => $paymentRef,
-                        'event_id' => 'EVT-PLATFORM-DELIVERY-REV-WALLET-' . $order->id . '-' . $paymentRef,
-                        'beneficiary_type' => User::class,
-                        'beneficiary_id' => null,
-                        'account_name' => 'platform_delivery_revenue',
-                        'entry_type' => 'credit',
-                        'amount' => $deliveryMargin,
-                        'currency' => 'NGN',
-                        'description' => "VM delivery margin after logistics-company payable for wallet-funded Order #{$order->order_number}",
-                    ]);
-                }
-                if (BcMathService::comp($deliverySubsidy, '0.00') > 0) {
-                    FinancialJournalEntry::create([
-                        'order_id' => $order->id,
-                        'transaction_reference' => $paymentRef,
-                        'event_id' => 'EVT-DELIVERY-SUBSIDY-WALLET-' . $order->id . '-' . $paymentRef,
-                        'beneficiary_type' => User::class,
-                        'beneficiary_id' => null,
-                        'account_name' => 'delivery_subsidy_expense',
-                        'entry_type' => 'debit',
-                        'amount' => $deliverySubsidy,
-                        'currency' => 'NGN',
-                        'description' => "VM-funded delivery subsidy for wallet-funded Order #{$order->order_number}",
-                    ]);
+                // Customer checkout never selects a logistics company. Do not post
+                // a provisional payable or delivery margin here; the approved company
+                // corridor tariff is posted later by LogisticsCompanyPayableService.
+                if ($order->logistics_company_id && $order->logistics_company_payable_amount !== null) {
+                    $deliveryFeeSnapshot = (string) $order->delivery_fee;
+                    $companyPayable = (string) $order->logistics_company_payable_amount;
+                    $order->logistics_company_payable_default_amount = $order->logistics_company_payable_default_amount ?? $companyPayable;
+                    $order->logistics_company_payable_ledger_company_id = $order->logistics_company_id;
+                    $order->save();
+                    if (BcMathService::comp($companyPayable, '0.00') > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $order->id,
+                            'transaction_reference' => $paymentRef,
+                            'event_id' => 'EVT-LOG-COMPANY-PAYABLE-WALLET-' . $order->id . '-' . $paymentRef,
+                            'beneficiary_type' => LogisticsCompanyProfile::class,
+                            'beneficiary_id' => $order->logistics_company_id,
+                            'account_name' => 'logistics_company_payable',
+                            'entry_type' => 'credit',
+                            'amount' => $companyPayable,
+                            'currency' => 'NGN',
+                            'description' => "Approved logistics-company corridor payable for wallet-funded Order #{$order->order_number}; not a rider payable.",
+                        ]);
+                    }
+                    $deliveryMargin = BcMathService::comp($deliveryFeeSnapshot, $companyPayable) > 0 ? BcMathService::sub($deliveryFeeSnapshot, $companyPayable) : '0.00';
+                    $deliverySubsidy = BcMathService::comp($companyPayable, $deliveryFeeSnapshot) > 0 ? BcMathService::sub($companyPayable, $deliveryFeeSnapshot) : '0.00';
+                    if (BcMathService::comp($deliveryMargin, '0.00') > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $order->id,
+                            'transaction_reference' => $paymentRef,
+                            'event_id' => 'EVT-PLATFORM-DELIVERY-REV-WALLET-' . $order->id . '-' . $paymentRef,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => null,
+                            'account_name' => 'platform_delivery_revenue',
+                            'entry_type' => 'credit',
+                            'amount' => $deliveryMargin,
+                            'currency' => 'NGN',
+                            'description' => "VM delivery revenue after assigned company corridor payable for wallet-funded Order #{$order->order_number}",
+                        ]);
+                    }
+                    if (BcMathService::comp($deliverySubsidy, '0.00') > 0) {
+                        FinancialJournalEntry::create([
+                            'order_id' => $order->id,
+                            'transaction_reference' => $paymentRef,
+                            'event_id' => 'EVT-DELIVERY-SUBSIDY-WALLET-' . $order->id . '-' . $paymentRef,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => null,
+                            'account_name' => 'delivery_subsidy_expense',
+                            'entry_type' => 'debit',
+                            'amount' => $deliverySubsidy,
+                            'currency' => 'NGN',
+                            'description' => "VM-funded delivery subsidy for wallet-funded Order #{$order->order_number}",
+                        ]);
+                    }
                 }
             }
 
