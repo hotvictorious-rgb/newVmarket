@@ -929,10 +929,10 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
     }
 
 
-    public function test_public_pickup_reservation_lookup_requires_authentication(): void
+    public function test_public_pickup_reservation_lookup_is_disabled_at_launch(): void
     {
         $this->getJson('/api/v1/pickup-reservations/RES-ABC123')
-            ->assertUnauthorized();
+            ->assertStatus(410);
     }
 
 

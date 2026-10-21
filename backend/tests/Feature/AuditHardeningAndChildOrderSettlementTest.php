@@ -7,6 +7,9 @@ use App\Models\CashbackReservation;
 use App\Models\CustomerAddress;
 use App\Models\CustomerCashbackLedger;
 use App\Models\DeliveryLane;
+use App\Models\DeliveryCorridor;
+use App\Models\LogisticsCompanyCorridorRate;
+use App\Models\LogisticsCompanyProfile;
 use App\Models\FinancialJournalEntry;
 use App\Models\Lga;
 use App\Models\Order;
@@ -68,6 +71,38 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         ]);
         $this->originLga = Lga::create(['state_id' => $state->id, 'name' => 'Uyo', 'is_active' => true]);
         $this->destLga = Lga::create(['state_id' => $state->id, 'name' => 'Ikot Ekpene', 'is_active' => true]);
+
+        $fleetUser = User::create([
+            'name' => 'Audit Test Logistics Company',
+            'email' => 'audit-test-fleet@example.test',
+            'password' => bcrypt('FleetPass123!'),
+            'user_type' => 'logistics_company',
+            'status' => 'active',
+        ]);
+        $fleetCompany = LogisticsCompanyProfile::create([
+            'user_id' => $fleetUser->id,
+            'company_name' => 'Audit Test Logistics Ltd',
+            'lga_id' => $this->originLga->id,
+            'wallet_balance' => '0.00',
+            'status' => 'active',
+        ]);
+        $corridor = DeliveryCorridor::create([
+            'code' => 'audit-test-uyo-corridor',
+            'name' => 'Audit Test Uyo Corridor',
+            'lga_id' => $this->originLga->id,
+            'landmark_aliases' => ['Uyo', 'Oron Road'],
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+        LogisticsCompanyCorridorRate::create([
+            'logistics_company_id' => $fleetCompany->id,
+            'delivery_corridor_id' => $corridor->id,
+            'base_payable' => '900.00',
+            'bulky_surcharge_per_unit' => '200.00',
+            'tariff_version' => 1,
+            'is_active' => true,
+        ]);
 
         $this->superAdmin = User::create([
             'name' => 'Super Finance Admin',
@@ -698,4 +733,68 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         // 4. Verify Double-Entry Balance
         $this->assertTrue(FinancialJournalEntry::assertOrderBalanced($parentOrder->id));
     }
+    public function test_retailer_model_order_cannot_enter_legacy_child_order_settlement(): void
+    {
+        $reference = 'VM-RETAILER-CHILD-BLOCK-' . strtoupper(substr(sha1(uniqid('', true)), 0, 8));
+        $parent = Order::create([
+            'order_number' => 'VM-RETAILER-PARENT-' . strtoupper(substr(sha1($reference), 0, 8)),
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendorA->id,
+            'shop_id' => $this->shopA->id,
+            'retailer_model_order' => true,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'pending',
+            'payment_status' => 'pending',
+            'payment_method' => 'paystack',
+            'payment_reference' => $reference,
+            'guest_access_token' => 'guest_retailer_parent_' . substr(sha1($reference), 0, 8),
+            'origin_lga_id' => $this->originLga->id,
+            'destination_lga_id' => $this->originLga->id,
+            'merchandise_subtotal' => '500.00',
+            'delivery_fee' => '500.00',
+            'grand_total' => '1000.00',
+            'supplier_cost_total_snapshot' => '300.00',
+            'vendor_net_90' => '0.00',
+            'customer_cashback_5' => '0.00',
+            'platform_margin_5' => '0.00',
+            'vendor_settlement_status' => 'held',
+        ]);
+
+        Order::create([
+            'order_number' => 'VM-RETAILER-CHILD-' . strtoupper(substr(sha1($reference . '-child'), 0, 8)),
+            'parent_order_id' => $parent->id,
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendorA->id,
+            'shop_id' => $this->shopA->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'pending',
+            'payment_status' => 'pending',
+            'payment_method' => 'paystack',
+            'payment_reference' => $reference,
+            'guest_access_token' => 'guest_retailer_child_' . substr(sha1($reference), 0, 8),
+            'origin_lga_id' => $this->originLga->id,
+            'destination_lga_id' => $this->originLga->id,
+            'merchandise_subtotal' => '500.00',
+            'delivery_fee' => '500.00',
+            'grand_total' => '1000.00',
+            'vendor_net_90' => '0.00',
+            'customer_cashback_5' => '0.00',
+            'platform_margin_5' => '0.00',
+            'vendor_settlement_status' => 'held',
+        ]);
+
+        $result = app(OrderSettlementService::class)->settlePaystackOrder($parent, [
+            'reference' => $reference,
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => 100000,
+            'channel' => 'card',
+        ], $this->customer);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('RETAILER_PARENT_CHILD_ORDER_FORBIDDEN', $result['status']);
+        $this->assertSame('pending', $parent->fresh()->payment_status);
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $parent->id)->count());
+    }
+
 }
