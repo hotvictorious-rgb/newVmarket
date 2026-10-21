@@ -70,7 +70,12 @@ class PortalController extends Controller
         $eligibleOriginLgaIds = collect([$selectedLgaId]);
         $shops = collect();
         $lgas = collect([$selectedLga]);
-        $localProductsCount = Product::marketplaceEligible()->count();
+        $localProductsCount = Product::marketplaceEligible()
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->where('name', 'Uyo')->whereHas('state', function ($stateQuery) {
+                    $stateQuery->where('name', 'Akwa Ibom');
+                });
+            })->count();
         $corridorProductsCount = 0;
         $scope = 'all';
         $hasLocalShops = false;
@@ -80,7 +85,14 @@ class PortalController extends Controller
         $isFallbackCatalog = false;
         $isCorridorCatalog = false;
 
-        $query = Product::marketplaceEligible()->with(['category:id,name,slug']);
+        // Public catalogue contains only products with an eligible sourcing offer from Uyo.
+        $query = Product::marketplaceEligible()
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->where('name', 'Uyo')->whereHas('state', function ($stateQuery) {
+                    $stateQuery->where('name', 'Akwa Ibom');
+                });
+            })
+            ->with(['category:id,name,slug']);
         if ($request->filled('category')) {
             $query->whereHas('category', function ($q) use ($request) {
                 $q->where('slug', $request->input('category'));
@@ -105,6 +117,11 @@ class PortalController extends Controller
 
         $products = $query->latest()->take(12)->get();
         $latestProducts = Product::marketplaceEligible()
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->where('name', 'Uyo')->whereHas('state', function ($stateQuery) {
+                    $stateQuery->where('name', 'Akwa Ibom');
+                });
+            })
             ->with(['category:id,name,slug'])
             ->latest()
             ->take(6)
@@ -175,8 +192,21 @@ class PortalController extends Controller
             $lga = Lga::where('name', 'like', "%{$city}%")->first();
         }
 
-        $lgaId = $lga ? $lga->id : 69;
-        $cityName = $lga ? $lga->name : $city;
+        // Owner policy: customers may select only Uyo LGA, Akwa Ibom State.
+        $isUyo = $lga
+            && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
+            && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
+        if (!$isUyo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Victorious MARKET currently sources and delivers only within Uyo LGA, Akwa Ibom State.',
+                'code' => 'OUTSIDE_UYO_LAUNCH_BOUNDARY',
+            ], 422);
+        }
+
+        $lgaId = (int) $lga->id;
+        $cityName = $lga->name;
+        $state = 'Akwa Ibom';
 
         session([
             'customer_city' => $cityName,
@@ -3609,6 +3639,18 @@ class PortalController extends Controller
     {
         $lane = DeliveryLane::findOrFail($id);
         $oldState = (bool)$lane->is_active;
+        if (!$oldState) {
+            $origin = Lga::with('state')->find($lane->origin_lga_id);
+            $destination = Lga::with('state')->find($lane->destination_lga_id);
+            $isUyo = static fn ($lga): bool => $lga
+                && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
+                && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
+            if (!$isUyo($origin) || !$isUyo($destination)) {
+                return back()->withErrors([
+                    'delivery_lane' => 'Out-of-Uyo delivery lanes cannot be activated under the current retailer policy.',
+                ]);
+            }
+        }
         $lane->is_active = !$lane->is_active;
         $lane->save();
 
@@ -3640,6 +3682,31 @@ class PortalController extends Controller
         ]);
 
         $originLgaId = (int)$validated['origin_lga_id'];
+
+        // State-wide corridors can never be activated under the Uyo-only launch policy.
+        if (!empty($validated['destination_state_id'])) {
+            if (!$request->has('set_active') || (bool) $request->input('set_active')) {
+                return back()->withErrors([
+                    'delivery_lane' => 'State-wide delivery corridors are disabled. Configure Uyo-to-Uyo only.',
+                ]);
+            }
+        }
+
+        // Any attempt to activate/create an inter-LGA corridor is rejected; deactivation remains allowed.
+        if ($request->has('set_active') && (bool) $request->input('set_active')) {
+            $origin = Lga::with('state')->find($originLgaId);
+            $destination = !empty($validated['destination_lga_id'])
+                ? Lga::with('state')->find((int) $validated['destination_lga_id'])
+                : null;
+            $isUyo = static fn ($lga): bool => $lga
+                && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
+                && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
+            if (!$isUyo($origin) || !$isUyo($destination)) {
+                return back()->withErrors([
+                    'delivery_lane' => 'Only Uyo-to-Uyo delivery lanes may be activated.',
+                ]);
+            }
+        }
 
         // Case A: State-Level Corridor Toggle (Out-of-State)
         if (!empty($validated['destination_state_id'])) {
