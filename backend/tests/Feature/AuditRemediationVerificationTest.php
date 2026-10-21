@@ -1543,5 +1543,14 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertStringContainsString('reconciliation is required', $result['message']);
         $this->assertSame('quarantined', $credit->fresh()->status);
         $this->assertSame('initiated', \App\Models\FinancialOperation::where('metadata->return_case_id', $case->id)->firstOrFail()->status);
+
+        $engine = new \App\Services\FinancialReconciliationEngine(
+            $gateway,
+            app(\App\Services\OrderSettlementService::class),
+            app(\App\Services\PayoutFinalizationService::class)
+        );
+        $this->assertSame(0, $engine->reconcileRefunds());
+        $this->assertSame(1, \App\Models\FinancialOperation::where('metadata->return_case_id', $case->id)->count());
+        $this->assertSame('pending', $order->fresh()->paystack_refund_status);
     }
 }
