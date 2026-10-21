@@ -2,7 +2,7 @@
 
 > **Current owner-confirmed business model (21 October 2026):** Victorious MARKET is a centrally managed retailer operating from Uyo, Akwa Ibom State. Customers buy from VM, not public supplier storefronts. Suppliers privately submit product offers for VM approval or map offers to existing canonical listings. VM coordinates delivery through approved logistics companies; every rider must be linked to exactly one active logistics company. Authorized supplier-shop pickup remains available with the existing customer verification and photo evidence. Supplier payment becomes eligible only after verified successful customer delivery or pickup and reconciliation. Legacy marketplace commission, vendor payout and vendor-managed delivery rules are superseded for new retailer-model work and must be migrated deliberately, not renamed blindly.
 
-> **Owner-confirmed payment and handover rule (20 October 2026):** Only pay-before-delivery through Victorious MARKET or reserve in-shop pickup and pay at the vendor shop through Victorious MARKET's authorised payment workflow are permitted. No off-platform payment. Doorstep handover requires customer OTP verification plus a doorstep photo; in-shop pickup requires the RES-XXXXXX reservation pass plus one-time customer pickup OTP verification plus an in-shop photo. GPS, signature, separate rider-pickup photo and hub inspection photo are not mandatory. Payouts use server-calculated strict FIFO batches of whole earning records, with ₦5,000 minimum and ₦500,000 maximum; never split or skip an over-cap record.
+> **Owner-confirmed payment and handover rule (20 October 2026):** Only pay-before-delivery through Victorious MARKET or reserve in-shop pickup and pay at the vendor shop through Victorious MARKET's authorised payment workflow are permitted. No off-platform payment. Doorstep handover requires customer OTP verification plus a doorstep photo; in-shop pickup requires the RES-XXXXXX reservation pass plus one-time customer pickup OTP verification plus an in-shop photo. GPS, signature, separate rider-pickup photo and hub inspection photo are not mandatory. The old strict FIFO vendor payout thresholds (₦5,000–₦500,000) apply only to historical marketplace earning records, not new supplier payables or logistics-company payables.
 
 ## Building Nigeria’s Trusted Online Market for Quality Products
 
@@ -303,7 +303,7 @@ And the platform maintains immutable, balanced records of every transaction.
 
 Approved suppliers should be able to supply VM reliably under private wholesale arrangements, while customers continue to see and transact with Victorious MARKET as the retailer.
 
-Vendor-managed delivery teams should operate through structured and accountable processes.
+Approved logistics companies should operate through structured and accountable processes, with each assigned rider linked to exactly one active company.
 
 And the platform should maintain reliable records of the transactions it facilitates.
 
@@ -313,15 +313,15 @@ It will be whether customers consistently receive what they paid for, merchants 
 
 ## Conclusion
 
-**VICTORIOUS MARKET is building a managed, trust-first online marketplace designed to make quality commerce safer, more transparent, and more accountable in Nigeria.**
+**VICTORIOUS MARKET is building a trust-first online retail business designed to make quality commerce safer, more transparent, and more accountable in Nigeria.**
 
 Its foundation is the belief that online shopping should not require customers to gamble with their money or depend entirely on a stranger's promises.
 
-By combining merchant verification, quality-focused product listings, secure payment processing, controlled fulfillment, transparent financial records, and fair customer protection, VICTORIOUS MARKET intends to establish a more dependable standard for online buying and selling.
+By combining private supplier verification, quality-focused product listings, secure payment processing, centrally coordinated delivery through approved logistics companies, transparent financial records, active cashback under defined terms, and fair customer protection, VICTORIOUS MARKET intends to establish a more dependable standard for online retail.
 
-**Our Vision:** To become a trusted digital marketplace where Nigerians can buy quality products with confidence.
+**Our Vision:** To become a trusted online retailer where Nigerians can buy quality products with confidence.
 
-**Our Mission:** To connect customers with verified merchants through a secure, transparent, reliable, and accountable commerce platform.
+**Our Mission:** To source quality products from private suppliers and deliver them to customers through a secure, transparent, reliable, and accountable retail experience.
 
 **Our Commitment:** To build trust into every stage of the shopping experience—and earn that trust through consistent performance.
 
@@ -340,7 +340,7 @@ Victorious MARKET treats merchandise and delivery fees as separate financial com
 - A delivery-fee refund identifies the captured delivery fee for the VM order, records its own reason/evidence/approval, and reverses the actual delivery-fee and logistics-company payable/margin entries for that transaction. It never includes merchandise value or cashback. Any already-paid logistics-company amount is handled through a separate authorized recovery/adjustment and never delays the customer refund.
 - Each approved component has its own decision record, amount, idempotent financial operation, reservation, gateway state and customer-facing result. Both operations return funds through the original Paystack payment channel at launch. They may reference the same original parent checkout capture but must not be collapsed into one undifferentiated approval or ledger reversal.
 - The customer can receive one component while the other remains pending, is denied, or fails and requires reconciliation. Customer communications must state each component's decision and confirmed Paystack result separately.
-- The system must enforce the component balance, child-order refund ceiling and shared parent-capture ceiling, counting active reservations and confirmed refunds across all vendors/components. A zero-fee in_shop_pickup order has no delivery fee to refund.
+- The system must enforce the component balance, order/item refund ceiling and shared parent-capture ceiling, counting active reservations and confirmed refunds across all applicable order components. A zero-fee in_shop_pickup order has no delivery fee to refund.
 - Supplier recovery, logistics-company recovery and cashback recovery are separate from the customer's gateway refund. A customer refund is complete only when Paystack confirms that specific component; vendor recovery does not delay or replace that confirmation.
 - **Shared source history does not mean shared approval or one combined state.** Both component decisions link to the same original parent capture and relevant child-order allocation history, while retaining separate approval records, reservations, gateway operations, and outcomes. Confirmed Paystack refunds plus active refund reservations across all child orders/components share one parent-capture ceiling; the same amount cannot be refunded twice.
 - **Cashback is linked to merchandise history but is not a second customer gateway refund.** A merchandise refund may require reversal of the associated unspent cashback and/or a separately tracked recovery of cashback already spent. That cashback adjustment uses the same originating order/item/refund evidence, but it is accounted for in the cashback ledger and must not be counted again as an additional Paystack cash refund against the parent-capture ceiling. Cashback maturity remains a separate clock: verified fulfilment, the 24-hour customer claim window, then the further 24-hour maturity buffer, with no blocking case; the 365-day validity period starts at maturity.
