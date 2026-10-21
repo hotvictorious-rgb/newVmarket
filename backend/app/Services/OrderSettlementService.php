@@ -659,6 +659,7 @@ class OrderSettlementService
                     }
                     $companyPayable = (string) ($lockedOrder->logistics_company_payable_amount ?? $defaultCompanyPayable);
                     $lockedOrder->logistics_company_payable_amount = $companyPayable;
+                    $lockedOrder->logistics_company_payable_ledger_company_id = $lockedOrder->logistics_company_id;
                     $lockedOrder->save();
 
                     if (BcMathService::comp($companyPayable, '0.00') > 0) {
