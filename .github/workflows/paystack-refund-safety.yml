@@ -2,7 +2,7 @@ name: Paystack refund safety tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, docs/retailer-central-fulfilment-model]
     paths:
       - "backend/app/Http/Controllers/Web/PaystackPaymentController.php"
       - "backend/app/Services/FinancialReconciliationEngine.php"
@@ -11,7 +11,9 @@ on:
       - "backend/**"
       - ".github/workflows/paystack-refund-safety.yml"
   push:
-    branches: [audit/paystack-refund-webhook-safety]
+    branches:
+      - audit/paystack-refund-webhook-safety
+      - docs/retailer-central-fulfilment-model
   workflow_dispatch:
 
 permissions:
@@ -67,6 +69,8 @@ jobs:
           php -l tests/Feature/VendorPayoutLifecycleTest.php
           php -l tests/Feature/VendorSettlementProtectionWindowTest.php
           php -l tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php
+          php -l tests/Feature/AdminLogisticsAndRiderManagementTest.php
+          php -l tests/Feature/AdminSupplierOnboardingTest.php
 
       - name: Run financial audit and payment hardening proof tests
-        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/VendorManagedDeliveryRiderTest.php tests/Feature/StructuralEntityAndLogisticsInvariantTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php --display-warnings
+        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/VendorManagedDeliveryRiderTest.php tests/Feature/StructuralEntityAndLogisticsInvariantTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php --display-warnings
