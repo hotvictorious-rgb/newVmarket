@@ -43,6 +43,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     protected Shop $shop;
     protected Lga $uyoLga;
     protected Lga $eketLga;
+    protected Lga $eketLga;
     protected User $customer;
 
     protected function setUp(): void
