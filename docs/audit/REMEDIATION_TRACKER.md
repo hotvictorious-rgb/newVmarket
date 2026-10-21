@@ -374,6 +374,6 @@ Status: FIXED — focused regression passed. No merge or deployment.
 
 **Approved rule:** Supplier assignment must rely on explicit, attributable, current availability evidence. Missing actor evidence or a confirmation timestamp in the future must fail closed.
 
-**Change:** The selector now requires `availability_confirmed_at <= now` and non-null `availability_confirmed_by`. Added a feature regression that creates an otherwise eligible offer without a confirming actor and asserts the selector returns no offer.
+**Change:** The selector now requires `availability_confirmed_at <= now` and non-null `availability_confirmed_by`. Added feature regressions for an otherwise eligible offer without a confirming actor and an offer with a future-dated confirmation timestamp; both assert the selector returns no offer.
 
 **Status:** FIXED — CI/test execution still pending. The regression was added but has not been run in this environment. This does not close the separate post-payment supplier-recovery, balanced payable reclassification, or supplier-specific payout implementation gaps.
