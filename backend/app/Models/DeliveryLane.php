@@ -39,10 +39,24 @@ class DeliveryLane extends Model
     }
 
     /**
-     * Resolves directional delivery fee between two LGAs using BCMath.
+     * Legacy directional lane lookup used for serviceability/ETA and historical records.
+     * New retailer customer prices come from CustomerDeliveryPricingService; company
+     * payables come from LogisticsCompanyCorridorRate and never from this lane fee.
      */
     public static function resolveFee(int $originLgaId, int $destinationLgaId, string $packageTier = 'bike'): ?array
     {
+        // Fee resolution is itself fail-closed for any non-Uyo route, including legacy active lanes.
+        $origin = Lga::with('state')->find($originLgaId);
+        $destination = Lga::with('state')->find($destinationLgaId);
+        $isUyoLga = static fn ($lga): bool => $lga
+            && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
+            && $lga->state
+            && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
+
+        if (!$isUyoLga($origin) || !$isUyoLga($destination)) {
+            return null;
+        }
+
         $lane = self::where('origin_lga_id', $originLgaId)
             ->where('destination_lga_id', $destinationLgaId)
             ->where('is_active', true)
