@@ -8,6 +8,7 @@ use App\Models\DeliveryCorridor;
 use App\Models\Lga;
 use App\Models\LogisticsCompanyCorridorRate;
 use App\Models\LogisticsCompanyProfile;
+use App\Models\SystemSetting;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +43,44 @@ class AdminDeliveryCorridorController extends Controller
             ->orderBy('company_name')
             ->get();
 
-        return view('admin.delivery_corridors', compact('uyo', 'corridors', 'companies'));
+        $customerBaseFee = SystemSetting::get('zone_intra_lga_fee', '500.00');
+        $customerBulkySurcharge = SystemSetting::get('zone_bulky_cargo_surcharge', '1000.00');
+
+        return view('admin.delivery_corridors', compact('uyo', 'corridors', 'companies', 'customerBaseFee', 'customerBulkySurcharge'));
+    }
+
+    public function updateCustomerFees(Request $request)
+    {
+        $this->requireSuperAdmin($request);
+        $data = $request->validate([
+            'customer_base_fee' => ['required', 'numeric', 'min:0', 'max:10000000'],
+            'customer_bulky_surcharge_per_unit' => ['required', 'numeric', 'min:0', 'max:10000000'],
+        ]);
+
+        return DB::transaction(function () use ($request, $data) {
+            $old = [
+                'zone_intra_lga_fee' => SystemSetting::get('zone_intra_lga_fee', '500.00'),
+                'zone_bulky_cargo_surcharge' => SystemSetting::get('zone_bulky_cargo_surcharge', '1000.00'),
+            ];
+            SystemSetting::set('zone_intra_lga_fee', number_format((float) $data['customer_base_fee'], 2, '.', ''), 'delivery');
+            SystemSetting::set('zone_bulky_cargo_surcharge', number_format((float) $data['customer_bulky_surcharge_per_unit'], 2, '.', ''), 'delivery');
+            $new = [
+                'zone_intra_lga_fee' => SystemSetting::get('zone_intra_lga_fee', '500.00'),
+                'zone_bulky_cargo_surcharge' => SystemSetting::get('zone_bulky_cargo_surcharge', '1000.00'),
+            ];
+            AdminAuditLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'customer_delivery_pricing_updated',
+                'target_type' => SystemSetting::class,
+                'target_id' => null,
+                'old_values' => $old,
+                'new_values' => $new,
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return redirect()->route('admin.delivery_corridors.manage')->with('status', 'Customer flat delivery pricing updated. Existing orders keep their snapshots.');
+        });
     }
 
     public function index(Request $request)
@@ -78,8 +116,6 @@ class AdminDeliveryCorridorController extends Controller
             'lga_id' => ['required', 'integer', 'exists:lgas,id'],
             'landmark_aliases' => ['required', 'array', 'min:1', 'max:100'],
             'landmark_aliases.*' => ['required', 'string', 'max:160'],
-            'customer_base_fee' => ['required', 'numeric', 'min:0', 'max:10000000'],
-            'customer_bulky_surcharge_per_unit' => ['required', 'numeric', 'min:0', 'max:10000000'],
             'estimated_delivery_hours_min' => ['required', 'integer', 'min:1', 'max:168'],
             'estimated_delivery_hours_max' => ['required', 'integer', 'gte:estimated_delivery_hours_min', 'max:168'],
             'is_active' => ['sometimes', 'boolean'],
@@ -130,8 +166,6 @@ class AdminDeliveryCorridorController extends Controller
             'name' => ['sometimes', 'required', 'string', 'max:160'],
             'landmark_aliases' => ['sometimes', 'required', 'array', 'min:1', 'max:100'],
             'landmark_aliases.*' => ['required', 'string', 'max:160'],
-            'customer_base_fee' => ['sometimes', 'required', 'numeric', 'min:0', 'max:10000000'],
-            'customer_bulky_surcharge_per_unit' => ['sometimes', 'required', 'numeric', 'min:0', 'max:10000000'],
             'estimated_delivery_hours_min' => ['sometimes', 'required', 'integer', 'min:1', 'max:168'],
             'estimated_delivery_hours_max' => ['sometimes', 'required', 'integer', 'min:1', 'max:168'],
             'is_active' => ['sometimes', 'boolean'],
