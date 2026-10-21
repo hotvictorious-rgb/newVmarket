@@ -547,9 +547,12 @@ class PaystackService
         }
 
         try {
+            // Recipient creation is a non-idempotent POST. Do not automatically
+            // retry after a timeout: Paystack may have created the recipient even
+            // when the response was lost. A later payout attempt can safely resolve
+            // a recipient again under explicit admin control.
             $response = Http::withToken($this->getSecretKey())
                 ->timeout(12)
-                ->retry(2, 200)
                 ->post("{$this->baseUrl}/transferrecipient", [
                     'type' => 'nuban',
                     'name' => $accountName,
