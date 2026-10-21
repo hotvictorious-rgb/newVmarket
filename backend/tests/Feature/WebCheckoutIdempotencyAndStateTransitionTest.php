@@ -41,9 +41,8 @@ class WebCheckoutIdempotencyAndStateTransitionTest extends TestCase
         $this->product = Product::where('shop_id', $this->shop->id)->firstOrFail();
 
         // Retailer checkout requires a positive immutable supplier cost snapshot.
-        if ($this->product->cost_price === null) {
-            $this->product->update(['cost_price' => '5000.00']);
-        }
+        // Ensure retailer checkout fixtures have a valid positive wholesale cost.
+        $this->product->update(['cost_price' => '5000.00']);
 
         // Ensure product is freshly listed and in stock
         $this->product->update([
