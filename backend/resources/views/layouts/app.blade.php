@@ -1314,7 +1314,7 @@
 
             <!-- Popular Local Governments Chips -->
             <div class="vm-form-group" style="margin-bottom: 16px;">
-                <span class="vm-chips-heading">POPULAR LOCAL GOVERNMENTS:</span>
+                <span class="vm-chips-heading">SERVICE AREA:</span>
                 <div class="vm-city-chips-grid">
                     @php
                         $popularCities = ['Uyo'];
