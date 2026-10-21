@@ -398,7 +398,7 @@ class PortalWebTest extends TestCase
         $admin = User::where('user_type', 'super_admin')->firstOrFail();
         $this->actingAs($admin)->get('/admin/delivery-corridors/manage')
             ->assertOk()
-            ->assertSee('Create Uyo customer-delivery corridor')
+            ->assertSee('Create Uyo delivery corridor')
             ->assertSee('Independent logistics-company payables')
             ->assertSee('Customer delivery pricing (flat per order)');
 
