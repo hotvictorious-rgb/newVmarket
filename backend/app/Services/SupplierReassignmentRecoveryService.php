@@ -461,7 +461,7 @@ class SupplierReassignmentRecoveryService
             'order_item_id' => $orderItemId,
             'transaction_reference' => $transactionReference,
             'event_id' => 'EVT-' . $transactionReference . '-' . substr(hash('sha256', $keySuffix), 0, 20),
-            'idempotency_key' => $this->journalIdempotencyKey($keySuffix),
+            'idempotency_key' => $this->journalIdempotencyKey((int) $order->id, $keySuffix),
             'beneficiary_type' => User::class,
             'beneficiary_id' => null,
             'account_name' => 'retailer_sourcing_variance',
