@@ -62,6 +62,14 @@ class SupplierOfferAvailabilityService
                 ]);
             }
 
+            $shop->loadMissing('lga.state');
+            if (strtolower(trim((string) ($shop->lga->name ?? ''))) !== 'uyo'
+                || strtolower(trim((string) ($shop->lga->state->name ?? ''))) !== 'akwa ibom') {
+                throw ValidationException::withMessages([
+                    'supplier_offer' => 'Only active supplier shops physically based in Uyo, Akwa Ibom State may be confirmed for retailer sourcing.',
+                ]);
+            }
+
             $normalizedNotes = $notes !== null ? trim($notes) : null;
             $requestedExpiry = $expiresAt->copy()->utc()->startOfSecond();
 
