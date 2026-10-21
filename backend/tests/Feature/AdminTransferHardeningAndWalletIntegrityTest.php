@@ -731,7 +731,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         ]);
         $this->assertFalse($service->hasVendorRequestJournalEvidence($vendorPayout));
 
-        FinancialJournalEntry::create([
+        $wrongCredit = FinancialJournalEntry::create([
             'order_id' => null,
             'transaction_reference' => 'TEST-VND-REQ-EVIDENCE',
             'event_id' => 'EVT-MERCHANT-REQ-' . $vendorPayout->id,
@@ -744,6 +744,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'description' => 'Wrong amount must not qualify as complete evidence.',
         ]);
         $this->assertFalse($service->hasVendorRequestJournalEvidence($vendorPayout));
+        $wrongCredit->delete();
 
         FinancialJournalEntry::create([
             'order_id' => null,
