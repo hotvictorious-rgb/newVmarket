@@ -359,75 +359,22 @@ class CustomerExperienceAndHardeningTest extends TestCase
             ->assertJsonCount(2, 'data');
     }
 
-    public function test_in_shop_pickup_reservation_full_lifecycle_and_pay_after_inspection(): void
+    public function test_public_pickup_reservation_endpoint_is_disabled(): void
     {
         $customerToken = $this->customer->createToken('test')->plainTextToken;
-        $vendorToken = $this->vendorUser->createToken('vendor')->plainTextToken;
 
-        // 1. Customer creates in-shop pickup reservation (Inspect First, Pay Later Engine)
-        $createRes = $this->withHeader('Authorization', 'Bearer ' . $customerToken)
+        $response = $this->withHeader('Authorization', 'Bearer ' . $customerToken)
             ->postJson('/api/v1/customer/pickup-reservations', [
                 'shop_id' => $this->shop->id,
                 'product_id' => $this->product->id,
                 'quantity' => 2,
             ]);
 
-        $createRes->assertStatus(201)
-            ->assertJsonPath('status', true)
-            ->assertJsonPath('data.status', 'reserved');
+        $response->assertStatus(410)
+            ->assertJsonPath('status', false)
+            ->assertJsonPath('code', 'SUPPORT_MANAGED_PICKUP_ONLY');
 
-        $code = $createRes->json('data.reservation_code');
-
-        // 2. Customer attempts to pay BEFORE inspection accepted -> strictly rejected
-        $prematurePay = $this->withHeader('Authorization', 'Bearer ' . $customerToken)
-            ->postJson("/api/v1/customer/pickup-reservations/{$code}/pay");
-
-        $prematurePay->assertStatus(422)
-            ->assertJsonPath('status', false);
-
-        // 3. Customer lists reservations
-        $listRes = $this->withHeader('Authorization', 'Bearer ' . $customerToken)
-            ->getJson('/api/v1/customer/pickup-reservations');
-
-        $listRes->assertStatus(200)
-            ->assertJsonPath('status', true)
-            ->assertJsonCount(1, 'data');
-
-        // 4. Merchant inspects and accepts goods in store
-        app('auth')->forgetGuards();
-        $inspectRes = $this->withHeader('Authorization', 'Bearer ' . $vendorToken)
-            ->postJson('/api/v1/vendor/pickup-reservations/verify-inspection', [
-                'reservation_code' => $code,
-                'action' => 'accept',
-            ]);
-
-        $inspectRes->assertStatus(200)
-            ->assertJsonPath('status', true);
-
-        // 5. Customer digital payment is unlocked -> Pays via Paystack
-        app('auth')->forgetGuards();
-        $initialStock = $this->product->fresh()->inventory_quantity;
-        $payRes = $this->withHeader('Authorization', 'Bearer ' . $customerToken)
-            ->postJson("/api/v1/customer/pickup-reservations/{$code}/pay", [
-                'use_cashback' => false,
-            ]);
-
-        $payRes->assertStatus(200)
-            ->assertJsonPath('status', true)
-            ->assertJsonPath('data.reservation_code', $code);
-
-        $this->assertNotNull($payRes->json('data.order_number'));
-        $createdOrder = Order::where('order_number', $payRes->json('data.order_number'))->first();
-        $this->assertNotNull($createdOrder);
-        $this->assertNotNull($createdOrder->pickup_verification_code);
-
-        // Binary Stock Model Invariant: Stock quantity is NOT decremented at payment initiation
-        $this->assertTrue($this->product->fresh()->is_in_stock);
-
-        // Reservation marked payment_completed and order bound
-        $reservation = PickupReservation::where('reservation_code', $code)->first();
-        $this->assertEquals('payment_completed', $reservation->status);
-        $this->assertNotNull($reservation->order_id);
+        $this->assertDatabaseCount('pickup_reservations', 0);
     }
 
     public function test_post_delivery_24h_dispute_initiation_and_escrow_freeze(): void
