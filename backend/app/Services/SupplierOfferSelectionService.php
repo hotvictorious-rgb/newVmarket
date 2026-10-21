@@ -40,6 +40,8 @@ class SupplierOfferSelectionService
             ->where('is_available', true)
             ->where('wholesale_cost', '>', 0)
             ->whereNotNull('availability_confirmed_at')
+            ->where('availability_confirmed_at', '<=', $now)
+            ->whereNotNull('availability_confirmed_by')
             ->whereNotNull('availability_expires_at')
             ->where('availability_expires_at', '>', $now)
             ->whereHas('vendor', function ($query) {
