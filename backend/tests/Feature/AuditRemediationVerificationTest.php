@@ -1194,4 +1194,41 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertNull($case->fresh()->refund_claim_token);
         $this->assertSame('refund_pending', $case->fresh()->status);
     }
+
+    public function test_supplier_payout_service_rejects_non_super_admin_initiator(): void
+    {
+        $result = app(\App\Services\RetailerSupplierPayoutService::class)->markProcessing(
+            999999,
+            (int) $this->customer->id,
+            'recipient_123',
+            'SUPPAYOUT-VALIDTOKEN-123456'
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected']);
+        $this->assertStringContainsString('active super administrator', $result['message']);
+        $this->assertDatabaseMissing('retailer_supplier_payout_requests', ['id' => 999999]);
+    }
+
+    public function test_supplier_payout_service_rejects_inactive_super_admin_initiator(): void
+    {
+        $inactiveAdmin = User::create([
+            'name' => 'Inactive Treasury Admin',
+            'email' => 'inactive-treasury@vmarket.ng',
+            'password' => bcrypt('AdminPass123!'),
+            'user_type' => 'super_admin',
+            'status' => 'inactive',
+        ]);
+
+        $result = app(\App\Services\RetailerSupplierPayoutService::class)->markProcessing(
+            999999,
+            (int) $inactiveAdmin->id,
+            'recipient_123',
+            'SUPPAYOUT-VALIDTOKEN-123456'
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected']);
+        $this->assertStringContainsString('active super administrator', $result['message']);
+    }
 }
