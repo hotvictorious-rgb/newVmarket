@@ -719,6 +719,9 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'delivery_fee' => '500.00',
             'grand_total' => '1000.00',
             'supplier_cost_total_snapshot' => '300.00',
+            'vendor_net_90' => '0.00',
+            'customer_cashback_5' => '0.00',
+            'platform_margin_5' => '0.00',
             'vendor_settlement_status' => 'held',
         ]);
 
