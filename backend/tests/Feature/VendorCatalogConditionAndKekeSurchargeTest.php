@@ -316,9 +316,26 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'is_active' => true,
             'pickup_enabled' => false,
         ]);
+        $secondSupplierProduct = Product::create([
+            'vendor_id' => $supplierB->id,
+            'shop_id' => $shopB->id,
+            'category_id' => $this->category->id,
+            'name' => 'Supplier B Bluetooth Speaker',
+            'slug' => 'supplier-b-bluetooth-speaker',
+            'unit_price' => '12000.00',
+            'condition' => 'brand_new',
+            'package_tier' => 'bike',
+            'inventory_quantity' => 8,
+            'is_in_stock' => true,
+            'listing_status' => 'listed',
+            'is_approved' => true,
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+
         foreach ([
             [$bikeProduct, $this->vendor, $this->shop, '1000.00', $this->vendorUser],
             [$kekeProduct, $supplierB, $shopB, '20000.00', $supplierUserB],
+            [$secondSupplierProduct, $supplierB, $shopB, '3000.00', $supplierUserB],
         ] as [$product, $supplier, $supplierShop, $cost, $confirmer]) {
             SupplierOffer::create([
                 'product_id' => $product->id,
@@ -380,6 +397,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'items' => [
                 ['product_id' => $bikeProduct->id, 'quantity' => 1],
                 ['product_id' => $kekeProduct->id, 'quantity' => 2],
+                ['product_id' => $secondSupplierProduct->id, 'quantity' => 1],
             ],
         ]);
 
@@ -395,11 +413,13 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
 
         // The customer has one order while private supplier snapshots differ by item.
         $orderItems = OrderItem::where('order_id', $orderTwoBulky->id)->orderBy('id')->get();
-        $this->assertCount(2, $orderItems);
+        $this->assertCount(3, $orderItems);
         $this->assertEquals($this->vendor->id, $orderItems[0]->supplier_vendor_id);
         $this->assertEquals($supplierB->id, $orderItems[1]->supplier_vendor_id);
+        $this->assertEquals($supplierB->id, $orderItems[2]->supplier_vendor_id);
         $this->assertEquals($this->shop->id, $orderItems[0]->supplier_shop_id);
         $this->assertEquals($shopB->id, $orderItems[1]->supplier_shop_id);
+        $this->assertEquals($shopB->id, $orderItems[2]->supplier_shop_id);
         $this->assertNull($orderTwoBulky->selected_supplier_id);
         $this->assertNull($orderTwoBulky->selected_shop_id);
 
@@ -518,7 +538,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'pickup_enabled' => false,
         ]);
         $replacementOffers = [];
-        foreach ([[$productB_Bike, '6500.00'], [$productB_Keke, '210000.00']] as [$recoveryProduct, $replacementCost]) {
+        foreach ([[$secondSupplierProduct, '2500.00'], [$kekeProduct, '25000.00']] as [$recoveryProduct, $replacementCost]) {
             $replacementOffers[$recoveryProduct->id] = SupplierOffer::create([
                 'product_id' => $recoveryProduct->id,
                 'vendor_id' => $recoverySupplier->id,
@@ -547,8 +567,8 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
 
         $recoveryService = app(\\App\\Services\\SupplierReassignmentRecoveryService::class);
         $journalCountBeforeStaleOffer = \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count();
-        $replacementOffers[$productB_Keke->id]->availability_expires_at = Carbon::now()->subMinute();
-        $replacementOffers[$productB_Keke->id]->save();
+        $replacementOffers[$kekeProduct->id]->availability_expires_at = Carbon::now()->subMinute();
+        $replacementOffers[$kekeProduct->id]->save();
         try {
             $recoveryService->reassignRejectedItems(
                 $orderTwoBulky->id,
@@ -566,8 +586,8 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         }
         $this->assertSame($journalCountBeforeStaleOffer, \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count());
         $this->assertEquals('supplier_rejected', $orderTwoBulky->fresh()->sourcing_status);
-        $replacementOffers[$productB_Keke->id]->availability_expires_at = Carbon::now()->addDay();
-        $replacementOffers[$productB_Keke->id]->save();
+        $replacementOffers[$kekeProduct->id]->availability_expires_at = Carbon::now()->addDay();
+        $replacementOffers[$kekeProduct->id]->save();
 
         $firstItem = $rejectedItems->first();
         $secondItem = $rejectedItems->last();
