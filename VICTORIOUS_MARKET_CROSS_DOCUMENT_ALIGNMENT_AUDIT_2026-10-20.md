@@ -255,3 +255,17 @@ Required controls:
 - **Required regression tests before closure:** migration on clean and previously migrated databases; eligible/ineligible offer filtering; deterministic cheapest-offer selection; no-offer fail-closed behavior; selected offer and cost snapshot persisted for each order item; later offer edits/deletion do not mutate snapshots; admin reassignment audited with explicit cost-change policy; historical order compatibility; all checkout aliases use the canonical service.
 - **Verification status:** Test file added but not executed in this session. No test result is claimed.
 - **Status:** PARTIAL FOUNDATION COMMITTED; runtime selection, snapshot population, tests and accounting migration remain OPEN.
+
+
+## 17. CI regression evidence — 21 October 2026
+
+- **Workflow:** `Paystack refund safety tests` — [run 39568460464](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39568460464), commit `10fd7182b5c42c67712027446283643b0e6376ed`.
+- **Observed result:** PHP syntax-check step passed; the selected feature-test step failed with **27 failed, 176 passed, 1,169 assertions**.
+- **Failure clusters observed in logs:**
+  1. `DoorstepPartialAcceptanceAndVendorReturnTest`: many tests expect successful vendor/rider-controlled delivery operations but receive HTTP 403 under the current central-fleet eligibility guard.
+  2. `VendorManagedDeliveryRiderTest`: tests expect legacy vendor rider-assignment behavior/statuses, while retired endpoint behavior returns HTTP 410; one additional database query exception needs its full stack/context reviewed.
+  3. `StructuralEntityAndLogisticsInvariantTest`: tests expect vendor-owned rider/shop-specific denial messages, but the current service rejects the legacy vendor-managed handover path earlier with the central-fleet eligibility message.
+  4. `AuditHardeningAndChildOrderSettlementTest`: a legacy rider assignment test expects HTTP 200 but receives HTTP 403.
+- **Interpretation:** These are not evidence that the supplier-snapshot changes caused all failures. The failure pattern indicates that existing tests and runtime guards disagree about whether legacy vendor-managed delivery remains supported. The approved retailer model says it does not govern new transactions; tests must be deliberately migrated to the central fulfilment contract, not weakened by removing guards or blindly changing all expected status codes.
+- **Required fix:** For each failing test, identify whether it is (a) an obsolete legacy-flow test that should assert the endpoint is retired, or (b) a valid invariant that must be reimplemented with an active accredited logistics company and its exclusively linked fleet rider. Preserve OTP, photo proof, idempotency, audit and financial invariants. Fix the query exception independently after inspecting its complete trace.
+- **Status:** OPEN / RELEASE BLOCKER. CI has not demonstrated a green full targeted suite. Later workflow runs for commits after this run were still in progress at the time of this note; their results must be checked before claiming verification.
