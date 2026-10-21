@@ -598,6 +598,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             $simulatedCaptureSupplierTotal = \App\Services\BcMathService::add($simulatedCaptureSupplierTotal, $captureLineCost);
             \App\Models\FinancialJournalEntry::create([
                 'order_id' => $orderTwoBulky->id,
+                'order_item_id' => $captureItem->id,
                 'transaction_reference' => 'TEST-CAPTURE-' . $orderTwoBulky->id,
                 'event_id' => 'TEST-CAPTURE-SUPPLIER-' . $orderTwoBulky->id . '-' . $captureItem->id,
                 'idempotency_key' => 'TEST-CAPTURE-SUPPLIER-' . $orderTwoBulky->id . '-' . $captureItem->id,
