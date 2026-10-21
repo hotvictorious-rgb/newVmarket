@@ -90,30 +90,14 @@ If coverage is unconfirmed, checkout blocks delivery. VM controls delivery cover
 
 ## 8. Retail accounting replacing marketplace splits
 
-The legacy multi-vendor marketplace commission rules (90% vendor / 5% cashback / 5% platform merchandise split; 90% vendor / 10% platform delivery split) are **superseded and retired** for the retailer model.
+The legacy multi-vendor marketplace commission rules (90% vendor / 5% cashback / 5% platform merchandise split; 90% vendor / 10% platform delivery split) are **retired for new retailer-model transactions**.
 
 In the retailer model:
-- **Merchandise Accounting:**
-  - `Customer Payment = Retail Price (VM Revenue)`.
-  - `Supplier Payable = Wholesale Cost (Cost of Goods Sold - COGS)`.
-  - `VM Retail Margin = Retail Price - Wholesale Cost (Gross Margin)`.
-- **Customer 5% Cashback Retention (Owner Decision — 21 October 2026):**
-  - Victorious MARKET **actively retains the customer 5% cashback loyalty feature** on every verified purchase to drive repeat customer retention.
-  - **Funding Source:** In the retailer model, the 5% cashback liability is funded **directly out of Victorious MARKET's gross retail margin** (`Retail Selling Price - Supplier Wholesale Cost`), NEVER deducted from the supplier's wholesale cost.
-  - **Mathematical Formula:** `VM Net Profit = (Retail Price - Supplier Wholesale Cost) - 5% Customer Cashback Liability`.
-  - **Non-Compounding Loyalty Invariant (Real-Money Rule):** Cashback CANNOT be earned on the portion of an order covered by existing redeemed cashback or discounts. Cashback is strictly earned only on **real money paid through Paystack** for eligible merchandise:
-    `Cashback Earned = (Merchandise Subtotal - Cashback Redeemed) * 5%`.
-    For example, on a ₦10,000 item where the customer redeems ₦2,000 in cashback and pays ₦8,000 via Paystack, the customer earns 5% only on the ₦8,000 real cash paid (₦400 reward), NEVER on the ₦2,000 covered by existing cashback.
-  - **Accrual & Maturation:** Accrues as `pending_maturation` upon checkout; matures into the customer's wallet (`status = 'available'`) 24 hours after the post-delivery/pickup inspection window closes with zero disputes.
-  - **Redemption:** The customer can redeem their matured cashback balance on future checkouts, capped at up to 50% of the cart merchandise subtotal.
-  - **Return / Cancellation Forfeiture:** If an order is returned, cancelled, or rejected at shop inspection, pending cashback is automatically cancelled/forfeited in the ledger.
-- **Delivery Accounting:**
-  - Customer delivery fee collected is VM delivery revenue.
-  - Logistics company charge is VM delivery expense.
-  - Delivery margin = Customer fee collected - Logistics company cost.
-- **Supplier Settlement:**
-  - Suppliers receive 100% of their agreed wholesale cost upon verified completion.
-  - No percentage commission or cashback deductions from suppliers; suppliers are paid in full.
+- **Merchandise accounting:** customer receipts/revenue, discounts, supplier wholesale cost/COGS, gateway fees, refunds, taxes and operating expenses must be separately recorded. VM gross margin before other costs is `Retail Price - Supplier Wholesale Cost`.
+- **Supplier payable:** the agreed wholesale cost (`cost_price * quantity`) is snapshotted against the selected offer and becomes eligible only after verified customer handover and reconciliation. It is not a commission percentage.
+- **Delivery accounting:** the customer delivery fee is VM-collected revenue; the approved logistics-company charge is a separate expense/payable. The applicable company rate and payment terms must come from an approved agreement. Do not reuse the former 90/10 vendor delivery split or invent a replacement percentage.
+- **Cashback policy gate:** preserve historical cashback balances, lots, redemption/reversal records and customer obligations. The old 5% cashback allocation and 90/5/5 split do not authorize new accruals in the retailer model. New cashback accrual, its funding formula, redemption cap, maturity, expiry and recovery rules must remain disabled for new retailer sales until a separate explicit owner-approved policy is recorded consistently in the authoritative system rules, payment/refund matrix, implementation and customer terms. Do not infer or hard-code the proposed 5% formula from legacy allocation data.
+- **Financial invariants:** each approved payment, refund, supplier payment, logistics payment, discount, fee, receivable and adjustment must be authorized, idempotent, balanced and reconcilable. Supplier recovery is separate from customer refunds; a customer refund must not wait for supplier recovery.
 
 ## 9. Customer payments, refunds and safety controls retained
 
