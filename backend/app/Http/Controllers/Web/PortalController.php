@@ -3894,7 +3894,7 @@ class PortalController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category_id' => 'required|integer|exists:categories,id',
-            'shop_id' => 'nullable|integer|exists:shops,id',
+            'shop_id' => 'prohibited',
             'condition' => 'nullable|string|in:brand_new,uk_used',
             'unit_price' => 'required|numeric|min:0.01|max:100000000',
             'slash_price' => 'nullable|numeric|gt:unit_price|max:100000000',
@@ -4439,37 +4439,18 @@ class PortalController extends Controller
             $availableCashback = number_format((float)$cashbackSum, 2, '.', '');
         }
 
-        // Active and inactive lane configs originating from this shop's LGA for client-side instant check
-        $shop = $product->shop;
-        $shopLgaId = $shop->lga_id ?? 69;
-
-        // Pre-fetch covered LGA IDs and covered State IDs for $shop to enforce vendor delivery coverage
-        $coveredLgaIds = $shop ? $shop->deliveryCoverages()->where('is_active', true)->whereNotNull('lga_id')->pluck('lga_id')->all() : [];
-        $coveredStateIds = $shop ? $shop->deliveryCoverages()->where('is_active', true)->whereNull('lga_id')->pluck('state_id')->all() : [];
-
-        $activeLanesMap = DeliveryLane::where('origin_lga_id', $shopLgaId)
-            ->with('destinationLga')
-            ->get()
-            ->mapWithKeys(function ($lane) use ($coveredLgaIds, $coveredStateIds) {
-                $destLgaId = (int)$lane->destination_lga_id;
-                $destStateId = (int)($lane->destinationLga->state_id ?? 0);
-                $isCoveredByShop = in_array($destLgaId, $coveredLgaIds, true) || ($destStateId && in_array($destStateId, $coveredStateIds, true));
-
-                return [$destLgaId => [
-                    'is_active' => (bool)($lane->is_active && $isCoveredByShop),
-                    'base_fee' => (float)$lane->base_fee,
-                    'estimated_hours_min' => $lane->estimated_delivery_hours_min,
-                    'estimated_hours_max' => $lane->estimated_delivery_hours_max,
-                    'eta_text' => "{$lane->estimated_delivery_hours_min}-{$lane->estimated_delivery_hours_max} hours",
-                ]];
-            })
-            ->toArray();
-
-        // Active collection points in destination LGA
-        $collectionPoints = \App\Models\LogisticsCollectionPoint::where('lga_id', $destLga->id)
-            ->where('is_active', true)
-            ->with('logisticsCompany')
-            ->get();
+        // The public checkout supports one centrally managed Uyo delivery mode only.
+        // Legacy lane maps, supplier coverage and supplier pickup points are not customer inputs.
+        $activeLanesMap = [
+            $destLga->id => [
+                'is_active' => (bool) ($deliveryCheck['is_available'] ?? false),
+                'base_fee' => (float) $deliveryFee,
+                'estimated_hours_min' => $deliveryCheck['estimated_delivery_hours_min'] ?? 2,
+                'estimated_hours_max' => $deliveryCheck['estimated_delivery_hours_max'] ?? 4,
+                'eta_text' => $deliveryCheck['estimated_time_text'] ?? '2-4 hours',
+            ],
+        ];
+        $collectionPoints = collect();
 
         return view('storefront.checkout', compact('product', 'quantity', 'merchandiseSubtotal', 'deliveryFee', 'totalPayable', 'deliveryCheck', 'pickupCheck', 'destLga', 'lgas', 'allShops', 'availableCashback', 'activeCity', 'activeLanesMap', 'collectionPoints'));
     }
@@ -4486,11 +4467,11 @@ class PortalController extends Controller
         $validated = $request->validate([
             'product_id' => 'required|integer|exists:products,id',
             'quantity' => 'required|integer|min:1',
-            'fulfillment_type' => 'required|in:doorstep_delivery,in_shop_pickup',
+            'fulfillment_type' => 'required|in:doorstep_delivery',
             'customer_name' => 'required|string|max:150',
             'customer_phone' => 'required|string|max:30',
             'destination_lga_id' => 'nullable|integer|exists:lgas,id',
-            'collection_point_id' => 'nullable|integer|exists:logistics_collection_points,id',
+            'collection_point_id' => 'prohibited',
             'delivery_address' => 'nullable|string|max:255',
             'shop_id' => 'nullable|integer|exists:shops,id',
             'redeem_cashback' => 'nullable',
