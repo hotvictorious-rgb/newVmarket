@@ -34,7 +34,7 @@ class ProductApiController extends Controller
         }
 
         if ($request->filled('lga_id')) {
-            $requestedLga = \\App\\Models\\Lga::with('state')->find($request->integer('lga_id'));
+            $requestedLga = \App\Models\Lga::with('state')->find($request->integer('lga_id'));
             if (!$requestedLga
                 || strtolower(trim((string) $requestedLga->name)) !== 'uyo'
                 || strtolower(trim((string) ($requestedLga->state->name ?? ''))) !== 'akwa ibom') {
@@ -135,4 +135,5 @@ class ProductApiController extends Controller
             'message' => 'Supplier shop discovery is retired. Browse products through Victorious MARKET; any pickup exception must be arranged through central support.',
             'data' => [],
         ], 410);
-    }}
+    }
+}
