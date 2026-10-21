@@ -190,3 +190,11 @@ A further audit found that payout paths treated any journal row with a request e
 - Added regression coverage for single-leg, mismatched-amount and complete two-leg request journal evidence for both payout types.
 - Commits: initial service helper c8622583c5c2dcbd8c876d2aa3bfd6ecf94e20b8; exact-leg hardening 5fa24b5311def21084545cbb64479a41fe79225f and transaction/currency checks 800b7c991b46de42949b869c53ee957a98588cf2; controller call sites 11fd47cb2234df5917a3f2dce6f756985699aae2; regression test 6f6b0f1610121d3bf75177aa8c796c9c7be02c76; fixture hardening 7de78a5d7bb0f026794ac9108f3f519295e6c530 and 6e8c8f1c3516fd8edcb13d877c2a7637e9edf456; vendor rejection test alignment 92351466bc3f3db2ce2571497d0106e8ace0b176 and request-journal seed 127e8795eacced83dbccdc66d4dda7ff7bdaa40f.
 - Verification status: changes committed but tests/CI have not run. Ensure the test fixtures satisfy all schema constraints and execute the relevant payout suite before release.
+
+## 21. Serialize logistics wallet credits during payout reversal (21 October 2026)
+
+The logistics company wallet model's credit method performs a read/modify/save. The manual rejection and gateway reversal paths previously loaded the company relation without locking its row, while verified delivery release already uses a row lock. Concurrent delivery credits and payout reversals could therefore overwrite one another's wallet balance update.
+
+- Both logistics payout rejection and payout reversal now reload the active company row with a database row lock before applying wallet changes. The payout row is locked first, and the company wallet mutation remains inside the same transaction as payout state and journal changes.
+- Commits: controller bea588c68c5c1b3f5f8434ce00d273a103276bbb; service 54f6ef469cf6fdff3f48f05db4797bc8cf2d6f47.
+- Verification status: source change committed; PHP syntax and payout regression workflows are still pending.
