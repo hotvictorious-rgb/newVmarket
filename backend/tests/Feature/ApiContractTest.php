@@ -73,14 +73,23 @@ class ApiContractTest extends TestCase
             ->assertJsonStructure(['token', 'user' => ['id', 'name', 'email', 'user_type']]);
     }
 
-    public function test_product_catalog_listing_and_freshness(): void
+    public function test_product_catalog_is_uyo_sourced_and_hides_supplier_details(): void
     {
         $response = $this->getJson('/api/v1/products');
         $response->assertStatus(200)
             ->assertJsonPath('status', true);
 
-        $productCount = count($response->json('data.data'));
-        $this->assertGreaterThan(0, $productCount);
+        foreach ((array) $response->json('data.data') as $product) {
+            foreach (['vendor_id', 'shop_id', 'cost_price', 'supplierOffers', 'vendor', 'shop'] as $privateField) {
+                $this->assertArrayNotHasKey($privateField, $product);
+            }
+        }
+
+        $eket = Lga::where('name', 'Eket')->firstOrFail();
+        $outside = $this->getJson('/api/v1/products?lga_id=' . $eket->id);
+        $outside->assertStatus(422)
+            ->assertJsonPath('status', false)
+            ->assertJsonPath('data', []);
     }
 
     public function test_public_pickup_reservation_creation_and_lookup_are_disabled(): void
