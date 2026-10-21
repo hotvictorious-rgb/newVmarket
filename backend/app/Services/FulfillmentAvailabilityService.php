@@ -275,6 +275,9 @@ class FulfillmentAvailabilityService
 
         $vendorLanes = [];
         $totalShippingFee = '0.00';
+        $orderBaseFee = null;
+        $orderBulkySurchargePerUnit = null;
+        $totalBulkyQuantity = 0;
         $allDeliverable = true;
         $anyDeliverable = false;
 
@@ -286,22 +289,31 @@ class FulfillmentAvailabilityService
 
             // 1. Delivery evaluation
             if ($destinationLgaId) {
-                $groupTier = 'bike';
+                // Every source shop is checked for route serviceability, but the customer
+                // pays one base route fee for the complete order. Bulky charges accumulate
+                // per physical unit across all source groups.
+                $deliveryRes = $this->checkDeliveryAvailability($shop->id, $destinationLgaId, 'bike');
+                $isLaneAvail = $deliveryRes['is_available'] ?? false;
+                $baseFee = $isLaneAvail ? (string) ($deliveryRes['fee'] ?? '0.00') : '0.00';
+                $groupBulkyQuantity = 0;
                 foreach ($group['products'] as $groupProduct) {
-                    $pTier = $groupProduct['product']->package_tier ?? 'bike';
-                    if (in_array(strtolower($pTier), ['keke', 'bulky'], true)) {
-                        $groupTier = 'keke';
-                        break;
+                    $pTier = strtolower((string) ($groupProduct['product']->package_tier ?? 'bike'));
+                    if (in_array($pTier, ['keke', 'bulky'], true)) {
+                        $groupBulkyQuantity += (int) ($groupProduct['quantity'] ?? 1);
                     }
                 }
-
-                $deliveryRes = $this->checkDeliveryAvailability($shop->id, $destinationLgaId, $groupTier);
-                $isLaneAvail = $deliveryRes['is_available'] ?? false;
-                $fee = $isLaneAvail ? ($deliveryRes['fee'] ?? '0.00') : '0.00';
+                $groupSurcharge = (string) ($deliveryRes['bulky_surcharge'] ?? '0.00');
+                $groupBulkyTotal = BcMathService::mul($groupSurcharge, (string) $groupBulkyQuantity);
 
                 if ($isLaneAvail) {
                     $anyDeliverable = true;
-                    $totalShippingFee = BcMathService::add($totalShippingFee, $fee);
+                    if ($orderBaseFee === null) {
+                        $orderBaseFee = $baseFee;
+                        $orderBulkySurchargePerUnit = $groupSurcharge;
+                    } elseif (BcMathService::comp($orderBaseFee, $baseFee) !== 0 || BcMathService::comp((string) $orderBulkySurchargePerUnit, $groupSurcharge) !== 0) {
+                        $allDeliverable = false;
+                    }
+                    $totalBulkyQuantity += $groupBulkyQuantity;
                 } else {
                     $allDeliverable = false;
                 }
@@ -311,7 +323,10 @@ class FulfillmentAvailabilityService
                     'seller_id' => $shop->vendor_id,
                     'shop_name' => $shop->name,
                     'origin_lga' => $shop->lga ? ['id' => $shop->lga->id, 'name' => $shop->lga->name] : null,
-                    'delivery_fee' => $fee,
+                    // Component only; the order-level base fee is exposed once below.
+                    'delivery_fee' => $groupBulkyTotal,
+                    'bulky_quantity' => $groupBulkyQuantity,
+                    'bulky_surcharge_total' => $groupBulkyTotal,
                     'estimated_delivery_time' => $deliveryRes['estimated_time_text'] ?? '24-48 hours',
                     'is_available' => $isLaneAvail,
                     'unavailability_reason' => $isLaneAvail ? null : ($deliveryRes['message'] ?? 'Lane unserviced'),
@@ -337,6 +352,13 @@ class FulfillmentAvailabilityService
             }
         }
 
+        if ($destinationLgaId && $allDeliverable && $orderBaseFee !== null) {
+            $totalShippingFee = BcMathService::add(
+                $orderBaseFee,
+                BcMathService::mul((string) ($orderBulkySurchargePerUnit ?? '0.00'), (string) $totalBulkyQuantity)
+            );
+        }
+
         $overallAvailable = ($destinationLgaId && $allDeliverable) || $anyPickupAvailable;
 
         return [
@@ -345,6 +367,10 @@ class FulfillmentAvailabilityService
             'fulfillment_options' => [
                 'delivery' => [
                     'available' => (bool)($destinationLgaId && $allDeliverable),
+                    'base_route_fee' => $orderBaseFee ?? '0.00',
+                    'bulky_surcharge_per_unit' => $orderBulkySurchargePerUnit ?? '0.00',
+                    'bulky_quantity' => $totalBulkyQuantity,
+                    'bulky_surcharge_total' => BcMathService::mul((string) ($orderBulkySurchargePerUnit ?? '0.00'), (string) $totalBulkyQuantity),
                     'total_shipping_fee' => $totalShippingFee,
                     'currency' => 'NGN',
                     'destination_lga' => $destLga ? ['id' => $destLga->id, 'name' => $destLga->name] : null,
