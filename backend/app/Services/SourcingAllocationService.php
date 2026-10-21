@@ -75,6 +75,7 @@ class SourcingAllocationService
                     && $confirmedOffer->vendor
                     && !$confirmedOffer->vendor->trashed()
                     && $confirmedOffer->vendor->marketplace_status === 'active'
+                    && $confirmedOffer->vendor->isKycVerified()
                     && $confirmedOffer->vendor->user
                     && $confirmedOffer->vendor->user->status === 'active') {
                     return [
@@ -111,7 +112,8 @@ class SourcingAllocationService
             if (!$offer->vendor || $offer->vendor->trashed() || $offer->vendor->marketplace_status !== 'active') {
                 return false;
             }
-            if (!$offer->vendor->user || $offer->vendor->user->status !== 'active') {
+            if (!$offer->vendor->user || $offer->vendor->user->status !== 'active'
+                || !$offer->vendor->isKycVerified()) {
                 return false;
             }
             // Must have active shop
