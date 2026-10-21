@@ -108,6 +108,8 @@ class ProductApiController extends Controller
             ], 404);
         }
 
+        $product->makeHidden(['shop_id', 'shop']);
+
         return response()->json([
             'status' => true,
             'data' => $product,
