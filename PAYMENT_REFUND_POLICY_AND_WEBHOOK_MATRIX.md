@@ -335,6 +335,18 @@ Until these are verified with tests, do not describe the implementation as compl
 
 These sources describe Paystack's event vocabulary and provider status meanings. Victorious MARKET must still apply its own authorization, identity matching, idempotency, ledger, and reconciliation rules.
 
+## Retailer-model supersession for new transactions (binding)
+
+This matrix contains historical marketplace payout/allocation requirements as well as current payment/refund safety controls. For new retailer-model transactions, the owner-confirmed retailer model and `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md` supersede legacy vendor allocations.
+
+- The 90/5/5 merchandise split, 90/10 vendor delivery split, vendor FIFO payout thresholds, and vendor payout requests are historical only. Do not use them to calculate new supplier payables or logistics-company charges.
+- A supplier payable equals the immutable agreed wholesale cost for the selected supplier offer/order item and becomes eligible only after verified customer handover and reconciliation.
+- Logistics-company charges and terms come from an approved VM/company agreement; no percentage split is implied.
+- VM remains responsible for approved customer refunds. Supplier recovery is separate, evidence-backed and contract-dependent and must not delay the refund.
+- Preserve legacy allocation snapshots and reverse them only according to the original historical transaction. Never rewrite old transactions using new retailer rules.
+- Historical cashback balances and obligations remain auditable. The old 5% allocation does not authorize new cashback accrual. New accrual stays disabled until a separate owner-approved policy defines funding, calculation, redemption, maturity, expiry and recovery, consistently across policy, code and customer terms.
+- The independent merchandise-versus-delivery refund decision, original payment route, provider verification, idempotency, refund ceilings, balanced journals and reconciliation requirements remain applicable. For new retailer transactions, component amounts must be based on their actual captured snapshots, not legacy percentages.
+
 ## 14. Binding rule: merchandise and delivery refunds are approved independently
 
 The owner has confirmed that **delivery is never mixed with merchandise, and merchandise refunds and delivery-fee refunds must be approved independently**. This rule applies to a single-vendor order and to every child order inside a multi-vendor parent checkout.
