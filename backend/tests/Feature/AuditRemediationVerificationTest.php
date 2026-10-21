@@ -1415,4 +1415,72 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertSame('initiated', $operations[1]->status);
         $this->assertNotSame($operations[0]->idempotency_key, $operations[1]->idempotency_key);
     }
+
+    public function test_reconciler_restores_quarantined_wallet_credit_after_verified_async_refund_failure(): void
+    {
+        $fixture = $this->createOrder('delivered', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'return_reason' => 'defective_product',
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+        ]);
+        $credit = CustomerWalletCredit::create([
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'return_case_id' => $case->id,
+            'amount' => '10000.00',
+            'credit_type' => 'doorstep_refund_credit',
+            'status' => 'available',
+        ]);
+
+        $gateway = Mockery::mock(PaystackService::class);
+        $gateway->shouldReceive('initiateRefund')->once()->andReturn([
+            'success' => true,
+            'status' => 'pending',
+            'refund_reference' => 'RFD-ASYNC-FAILED-001',
+        ]);
+        $gateway->shouldReceive('verifyRefund')->once()->with('RFD-ASYNC-FAILED-001')->andReturn([
+            'success' => true,
+            'status' => 'failed',
+            'refund_reference' => 'RFD-ASYNC-FAILED-001',
+            'amount' => 1000000,
+            'currency' => 'NGN',
+            'data' => [
+                'status' => 'failed',
+                'reference' => 'RFD-ASYNC-FAILED-001',
+                'amount' => 1000000,
+                'currency' => 'NGN',
+            ],
+        ]);
+
+        $disbursement = (new ReturnAndRefundService($gateway))->adminDisburseRefund($this->superAdmin, $case);
+        $this->assertTrue($disbursement['success']);
+        $this->assertSame('quarantined', $credit->fresh()->status);
+
+        $engine = new \App\Services\FinancialReconciliationEngine(
+            $gateway,
+            app(\App\Services\OrderSettlementService::class),
+            app(\App\Services\PayoutFinalizationService::class)
+        );
+        $reconciled = $engine->reconcileRefunds();
+
+        $operation = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+            ->where('metadata->return_case_id', $case->id)
+            ->firstOrFail();
+        $this->assertSame(1, $reconciled);
+        $this->assertSame('failed', $operation->fresh()->status);
+        $this->assertSame('available', $credit->fresh()->status);
+        $this->assertNull($credit->fresh()->refund_reserved_from_status);
+        $this->assertSame('refund_pending', $case->fresh()->status);
+        $this->assertNull($case->fresh()->paystack_refund_id);
+        $this->assertSame('failed', $order->fresh()->paystack_refund_status);
+        $this->assertNull($order->fresh()->paystack_refund_reference);
+    }
 }
