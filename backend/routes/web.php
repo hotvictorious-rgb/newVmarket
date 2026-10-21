@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Web\AdminSupplierOfferAvailabilityController;
 use App\Http\Controllers\Web\PaystackPaymentController;
 use App\Http\Controllers\Web\PortalController;
 use App\Http\Controllers\Web\WebAuthController;
