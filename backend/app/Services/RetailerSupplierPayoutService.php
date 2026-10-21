@@ -365,6 +365,9 @@ class RetailerSupplierPayoutService
             if (in_array($payout->status, ['paid', 'reversed', 'failed', 'rejected'], true)) {
                 return ['success' => true, 'idempotent' => true, 'payout' => $payout];
             }
+            if (!in_array($payout->status, ['processing', 'uncertain'], true)) {
+                return ['success' => false, 'protected' => true, 'message' => 'Only an initiated or already uncertain transfer can be placed on a gateway-reconciliation hold.'];
+            }
 
             $payout->status = 'uncertain';
             $payout->gateway_status = strtolower($gatewayStatus) ?: 'uncertain';
@@ -393,6 +396,7 @@ class RetailerSupplierPayoutService
                 return ['success' => true, 'idempotent' => true, 'payout' => $payout];
             }
             if (!in_array($payout->status, ['processing', 'uncertain'], true)
+                || trim((string) $payout->recipient_code) === ''
                 || $payout->transfer_reference !== $transferReference
                 || BcMathService::comp((string) $payout->amount, $verifiedAmount) !== 0) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout finalization does not match the active request, reference, and amount.'];
@@ -454,6 +458,14 @@ class RetailerSupplierPayoutService
             $payout->disbursed_at = now();
             $payout->processing_token = null;
             $payout->save();
+
+            Log::notice('Retailer supplier payout finalized after verified gateway success.', [
+                'payout_id' => $payout->id,
+                'supplier_vendor_id' => $payout->supplier_vendor_id,
+                'amount' => (string) $payout->amount,
+                'transfer_reference' => $payout->transfer_reference,
+                'transfer_code_present' => trim((string) $transferCode) !== '',
+            ]);
 
             return ['success' => true, 'payout' => $payout->fresh('allocations')];
         }, 3);
@@ -568,6 +580,15 @@ class RetailerSupplierPayoutService
             $payout->processing_token = null;
             $payout->admin_notes = trim(($payout->admin_notes ? $payout->admin_notes . "\n" : '') . 'Reservation released: ' . $reason);
             $payout->save();
+
+            Log::warning('Retailer supplier payout reservation was released or reversed.', [
+                'payout_id' => $payout->id,
+                'supplier_vendor_id' => $payout->supplier_vendor_id,
+                'amount' => (string) $payout->amount,
+                'transfer_reference' => $payout->transfer_reference,
+                'outcome' => $outcome,
+                'reason' => $reason,
+            ]);
 
             return ['success' => true, 'payout' => $payout->fresh('allocations')];
         }, 3);
