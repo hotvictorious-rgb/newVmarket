@@ -224,3 +224,12 @@ The supplier-payable reconciliation is intentionally not executed inside the 15-
 
 - Commits: dedicated command e584f2188bfa5435829fc021c0677fd253936118; schedule a2289a3a31be77a778aaba0a96770e31dc2b6033; workflow syntax coverage 4af42102732a162971fc04b0b0e844be7b0bb13d.
 - Verification status: command and schedule are committed; the latest branch-head CI run is still pending.
+
+## 24. Make supplier-payable reconciliation return-aware (21 October 2026)
+
+The first supplier liability audit compared the full operational item cost with the net supplier_payable ledger. That would incorrectly report a mismatch after a completed refund correctly debited supplier payable for returned items, and it could overlook malformed beneficiary types in the ledger query.
+
+- The audit now includes all supplier_payable entries for the order, validates beneficiary type/ID, and accounts for completed return cases only after finding the exact supplier-payable debit event for each refunded return item. A missing or wrong-amount reversal remains a reported mismatch; a settled order needing supplier recovery is explicitly escalated rather than silently netted.
+- No journal, return case, supplier assignment, or payout state is modified by the audit.
+- Commit: 9af7c1209e5de49e0e19146534741a628b98d354.
+- Verification status: committed source; latest syntax/test workflow is pending after the previously discovered namespace errors were corrected.
