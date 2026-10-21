@@ -149,6 +149,9 @@ class AutomatedSupplierSourcingTest extends TestCase
             'is_in_stock' => true,
             'inventory_quantity' => 20,
             'status' => 'approved',
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now(),
             'freshness_confirmed_at' => Carbon::now(),
         ]);
 
@@ -195,6 +198,9 @@ class AutomatedSupplierSourcingTest extends TestCase
             'is_in_stock' => true,
             'inventory_quantity' => 15,
             'status' => 'approved',
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now(),
             'freshness_confirmed_at' => Carbon::now(),
         ]);
 
@@ -249,6 +255,9 @@ class AutomatedSupplierSourcingTest extends TestCase
             'is_in_stock' => true,
             'inventory_quantity' => 10,
             'status' => 'approved',
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now(),
             'freshness_confirmed_at' => Carbon::now(),
         ]);
 
@@ -276,6 +285,9 @@ class AutomatedSupplierSourcingTest extends TestCase
             'is_in_stock' => true,
             'inventory_quantity' => 50,
             'status' => 'approved',
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now(),
             'freshness_confirmed_at' => Carbon::now(),
         ]);
 
@@ -359,6 +371,9 @@ class AutomatedSupplierSourcingTest extends TestCase
             'is_in_stock' => true,
             'inventory_quantity' => 10,
             'status' => 'approved',
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now(),
             'freshness_confirmed_at' => Carbon::now(),
         ]);
 
