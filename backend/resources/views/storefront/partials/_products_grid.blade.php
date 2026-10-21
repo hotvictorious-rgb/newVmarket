@@ -20,9 +20,10 @@
 
 @forelse($products as $product)
     @php
-        $shopLgaId = $product->shop->lga_id ?? null;
-        $isLocalShop = ($shopLgaId == $selectedLgaId);
-        $lane = $activeLanes ? $activeLanes->firstWhere('origin_lga_id', $shopLgaId) : null;
+        // Product cards represent the central retailer, not the private catalog contributor.
+        $shopLgaId = $selectedLgaId;
+        $isLocalShop = true;
+        $lane = null;
     @endphp
     <div class="vm-product-card">
         
@@ -62,13 +63,13 @@
                     @endif">
                     @if($isLocalShop)
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                        <span>In-Shop {{ $activeCity }} &bull; Same-Day</span>
+                        <span>Uyo local delivery</span>
                     @elseif($lane)
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
                         <span>Uyo local delivery</span>
                     @else
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                        <span>Regional Transit</span>
+                        <span>Uyo local delivery</span>
                     @endif
                 </span>
             </div>
@@ -78,7 +79,7 @@
                 <div class="vm-product-shop" style="display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: #64748B; margin-bottom: 5px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
                     <a href="{{ route('storefront') }}" style="color: #475569; text-decoration: none; font-weight: 600;">
-                        {{ Str::limit($product->shop->name ?? 'Verified Merchant Plaza', 20) }}
+                        Victorious MARKET
                     </a>
                     <span style="opacity: 0.5;">•</span>
                     <span style="color: #94A3B8;">Uyo</span>
