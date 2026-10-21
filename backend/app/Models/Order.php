@@ -275,6 +275,11 @@ class Order extends Model
         return $this->belongsTo(Shop::class, 'shop_id')->withTrashed();
     }
 
+    public function supplierAssignments()
+    {
+        return $this->hasMany(OrderSupplierAssignment::class);
+    }
+
     public function selectedSupplier()
     {
         return $this->belongsTo(VendorProfile::class, 'selected_supplier_id')->withTrashed();
