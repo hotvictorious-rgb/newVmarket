@@ -1341,4 +1341,29 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertNull($case->fresh()->refund_claim_token);
         $this->assertSame('refund_pending', $case->fresh()->status);
     }
+
+    public function test_inactive_admin_cannot_override_supplier_assignment(): void
+    {
+        $inactiveAdmin = User::create([
+            'name' => 'Inactive Sourcing Admin',
+            'email' => 'inactive-sourcing-admin@vmarket.ng',
+            'password' => bcrypt('AdminPass123!'),
+            'user_type' => 'admin_employee',
+            'status' => 'inactive',
+        ]);
+
+        try {
+            app(\App\Services\SourcingAllocationService::class)->overrideSupplierAssignmentGroup(
+                new \App\Models\OrderSupplierAssignment(),
+                1,
+                1,
+                [1],
+                $inactiveAdmin,
+                'Inactive administrator must not override sourcing'
+            );
+            $this->fail('Inactive administrator should not be authorized to override supplier sourcing.');
+        } catch (\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('Unauthorized', $exception->getMessage());
+        }
+    }
 }
