@@ -1900,4 +1900,33 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertTrue(\App\Models\FinancialOperation::where('metadata->return_case_id', $case->id)->doesntExist());
         $this->assertNull($case->fresh()->refund_claim_token);
     }
+
+    public function test_rider_cannot_verify_vendor_return_for_another_riders_case(): void
+    {
+        $fixture = $this->createOrder('returned', 1);
+        $order = $fixture['order'];
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => $this->vendor->id,
+            'returned_by_rider_id' => $this->vendorUser->id,
+            'return_reason' => 'damaged_in_transit',
+            'status' => 'in_transit_back_to_vendor',
+            'resolution_type' => 'refund',
+            'vendor_return_otp' => '123456',
+            'total_refundable_amount' => '10000.00',
+        ]);
+
+        $result = app(DoorstepHandshakeService::class)->verifyVendorReturnOtp(
+            $case,
+            $this->rider,
+            '123456',
+            null
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('not assigned to the authenticated rider', $result['message']);
+        $this->assertSame('in_transit_back_to_vendor', $case->fresh()->status);
+    }
 }
