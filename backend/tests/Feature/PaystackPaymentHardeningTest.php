@@ -14,6 +14,7 @@ use App\Models\FinancialJournalEntry;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Shop;
+use App\Models\SupplierOffer;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Services\OrderSettlementService;
@@ -64,8 +65,31 @@ class PaystackPaymentHardeningTest extends TestCase
         $this->vendorProfile = $this->vendorUser->vendorProfile ?? VendorProfile::first();
         $this->shop = Shop::where('vendor_id', $this->vendorProfile->id)->first();
         $this->product = Product::where('shop_id', $this->shop->id)->first();
+        $uyoLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->firstOrFail();
+        $this->shop->update(['lga_id' => $uyoLga->id, 'state_id' => $uyoLga->state_id, 'is_active' => true]);
+        $this->vendorProfile->update(['marketplace_status' => 'active', 'kyc_status' => 'verified']);
         if ($this->product) {
-            $this->product->update(['cost_price' => '5000.00']);
+            $this->product->update([
+                'cost_price' => '5000.00',
+                'is_approved' => true,
+                'listing_status' => 'listed',
+                'listing_confirmed_at' => now(),
+                'is_in_stock' => true,
+                'inventory_quantity' => 20,
+            ]);
+            SupplierOffer::updateOrCreate([
+                'product_id' => $this->product->id,
+                'vendor_id' => $this->vendorProfile->id,
+                'shop_id' => $this->shop->id,
+            ], [
+                'wholesale_cost' => '5000.00',
+                'is_available' => true,
+                'availability_confirmed_at' => now(),
+                'availability_confirmed_by' => $this->vendorUser->id,
+                'availability_expires_at' => now()->addDay(),
+            ]);
         }
 
         $uyoLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
