@@ -73,7 +73,7 @@ Victorious MARKET is a centrally managed retailer, not a public multi-vendor mar
 
 ### 7. Returns & 24-Hour Inspection Policy
 * **24-Hour Standard Window:** Eligible ordinary issues should be reported within twenty-four (24) hours of confirmed doorstep delivery or in-shop pickup. This operational window does not waive statutory rights or valid warranty obligations; authorised admins may review legitimate late requests.
-* **Return handling:** Support/admin may arrange return to the owning vendor for inspection. A platform collection-point/hub handover is not mandatory. Applicable law and valid warranty obligations prevail.
+* **Return handling:** Support/admin coordinates the authorized return/inspection route and may involve the private supplier. A platform collection-point/hub handover is not mandatory. Applicable law and valid warranty obligations prevail.
 * **Late requests and legal rights:** The standard operational request window is 24 hours from confirmed delivery or in-shop pickup. This is not a blanket waiver of statutory rights or warranties; an authorised admin may review legitimate late requests and must record the decision.
 
 ---
@@ -182,7 +182,7 @@ MARKDOWN;
             [
                 'title' => 'Return, Refund & Doorstep Acceptance Policy',
                 'category' => 'returns',
-                'current_version' => '1.2.0',
+                'current_version' => '2.0.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'Guidelines covering item-level partial rejection, the standard 24-hour claim window, admin-reviewed exceptions, and original-payment-route refunds.',
@@ -192,12 +192,12 @@ MARKDOWN;
         LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc2->id,
-                'version' => '1.2.0',
+                'version' => '2.0.0',
             ],
             [
                 'title' => 'Return, Refund & Doorstep Acceptance Policy',
                 'content' => $refundContent,
-                'summary_of_changes' => 'Alignment release: clarified claim-window exceptions, evidence limits, original-channel refunds, and provider reconciliation; previous version retained.',
+                'summary_of_changes' => 'Rebased returns and refund policy on VM retailer control, private supplier sourcing, original-channel refunds and provider reconciliation; previous version retained.',
                 'effective_date' => $effectiveDate,
                 'ip_address' => '127.0.0.1',
             ]
@@ -207,19 +207,19 @@ MARKDOWN;
         $privacyContent = <<<'MARKDOWN'
 # VICTORIOUS MARKET — PRIVACY & DATA PROTECTION POLICY
 **Effective Date:** October 21, 2026  
-**Version:** 1.1.0  
+**Version:** 2.0.0  
 **Regulatory Compliance:** Nigeria Data Protection Act (NDPA) & NDPR  
 
 ---
 
 ### 1. Overview
-Victorious Market is committed to protecting the privacy, identity, and personal records of our customers, merchants, and logistics partners. This policy outlines how your data is collected, processed, and safeguarded.
+Victorious Market is committed to protecting the privacy, identity, and personal records of customers, private suppliers, logistics companies/riders and VM personnel. This policy outlines how personal data is collected, processed and safeguarded.
 
 ---
 
 ### 2. Information We Collect
 * **Account Identity:** Full name, verified mobile telephone number, email address, and delivery coordinates.
-* **Merchant KYB Data:** CAC registration certificates, director identity proofs, physical shop addresses, and verified bank settlement account numbers.
+* **Supplier verification data:** business/identity documents, source location, contact details and verified bank account details needed for authorized supplier payments.
 * **Fulfillment Data:** GPS delivery coordinates, OTP handshake timestamps, and photographic evidence of package handovers stored in Cloudflare R2 media storage.
 * **Financial Transaction Records:** Paystack transaction IDs and double-entry ledger entries. We do **not** store full credit/debit card numbers or CVV codes on our servers.
 
@@ -246,7 +246,7 @@ MARKDOWN;
             [
                 'title' => 'Privacy and Data Protection Policy',
                 'category' => 'privacy',
-                'current_version' => '1.1.0',
+                'current_version' => '2.0.0',
                 'effective_date' => $effectiveDate,
                 'is_published' => true,
                 'summary' => 'NDPA/NDPR compliant privacy policy covering KYC handling, Cloudflare R2 media encryption, and zero payment credential retention.',
@@ -256,7 +256,7 @@ MARKDOWN;
         LegalDocumentVersion::firstOrCreate(
             [
                 'legal_document_id' => $doc3->id,
-                'version' => '1.1.0',
+                'version' => '2.0.0',
             ],
             [
                 'title' => 'Privacy and Data Protection Policy',
@@ -339,7 +339,7 @@ MARKDOWN;
         $logisticsContent = <<<'MARKDOWN'
 # LEGACY — LOGISTICS FLEET OPERATIONS & CHAIN-OF-CUSTODY SLA (INACTIVE FOR NEW ORDERS)
 
-> **Historical record only:** Victorious MARKET does not assign new orders to a central fleet, operate collection hubs for new fulfilment, or pay rider/logistics compensation for new vendor-managed orders. This document is retained for audit and historical obligations only; it is not the active policy for new orders.
+> **Historical record only:** This legacy fleet/hub agreement and its payout allocations do not govern new retailer-model deliveries. VM coordinates delivery through approved logistics companies under separately approved company terms. Every rider assigned to new VM work must be active and linked to exactly one active logistics company. This legacy document is retained for audit only; its old fleet payout percentage, hub workflow and vendor-managed dispatch rules must not be applied to new orders.
 **Effective Date:** October 21, 2026  
 **Version:** 1.1.0  
 **Governing Territory:** Akwa Ibom State, Federal Republic of Nigeria  
@@ -538,7 +538,7 @@ Victorious MARKET uses a controlled cancellation and refund workflow designed to
 
 ---
 
-### 5. Merchant Stockout Cancellations
+### 5. Supplier Stockout Cancellations
 * **Customer remedy:** If an approved supplier offer cannot fulfil an accepted paid order item because of a stockout or inventory error, stop fulfilment, record the reason, notify the customer, and open a controlled refund/cancellation case. Automatic refund approval is permitted only where the transaction meets the narrow approved exception (including cancellation before any vendor action); otherwise an authorised admin must approve before gateway dispatch. Refund only the amount due under the captured transaction and applicable policy, assess delivery separately, and reconcile provider completion. Other order items and supplier offers must be reconciled independently; do not expose suppliers as public child-order sellers.
 * **Supplier accountability:** Preventable stockouts are recorded against the supplier offer and reviewed by VM. VM may suspend an offer or supplier relationship under the applicable agreement.
 
