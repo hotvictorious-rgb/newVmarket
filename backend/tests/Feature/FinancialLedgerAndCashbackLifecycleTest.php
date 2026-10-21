@@ -18,6 +18,7 @@ use App\Models\Product;
 use App\Models\RiderProfile;
 use App\Models\ReturnCase;
 use App\Models\Shop;
+use App\Models\SupplierOffer;
 use App\Models\State;
 use App\Models\SystemSetting;
 use App\Models\VendorProfile;
@@ -120,7 +121,23 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'package_tier' => 'standard',
         ]);
 
-        $this->product->update(['cost_price' => '5000.00']);
+        $this->product->update([
+            'cost_price' => '5000.00',
+            'listing_status' => 'listed',
+            'is_approved' => true,
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+
+        SupplierOffer::create([
+            'product_id' => $this->product->id,
+            'vendor_id' => $this->vendorProfile->id,
+            'shop_id' => $this->shop->id,
+            'wholesale_cost' => '5000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now(),
+            'availability_confirmed_by' => $this->vendorUser->id,
+            'availability_expires_at' => Carbon::now()->addHour(),
+        ]);
 
         // Customer
         $this->customerUser = User::where('user_type', 'customer')->first();
@@ -631,7 +648,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'slug' => 'emeka-ikot-ekpene-branch',
             'address' => '2 Hospital Road, Ikot Ekpene',
             'pickup_enabled' => true,
-            'is_active' => true,
+            'is_active' => false,
             'country_id' => $this->shop->country_id ?? 1,
             'state_id' => $this->shop->state_id ?? 1,
         ]);
