@@ -536,6 +536,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ->firstOrFail();
         $rejectedItems = OrderItem::where('order_id', $orderTwoBulky->id)
             ->where('fulfillment_supplier_vendor_id', $supplierB->id)
+            ->orderBy('id')
             ->get();
         $this->assertCount(2, $rejectedItems);
         $captureSupplierIds = $rejectedItems->pluck('supplier_vendor_id')->all();
@@ -544,19 +545,50 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $cashbackBeforeRecovery = $orderTwoBulky->fresh()->customer_cashback_5;
 
         $recoveryService = app(\\App\\Services\\SupplierReassignmentRecoveryService::class);
-        $recoveryArgs = [
+        $firstItem = $rejectedItems->first();
+        $secondItem = $rejectedItems->last();
+        $firstRecoveryArgs = [
             $orderTwoBulky->id,
             $rejectedAssignment->id,
             $recoverySupplier->id,
             $recoveryShop->id,
-            $rejectedItems->pluck('id')->all(),
+            [$firstItem->id],
             $recoveryAdmin,
             'Rejected supplier could not fulfil the accepted order.',
             'supplier-recovery-test-001',
         ];
-        $recovery = $recoveryService->reassignRejectedItems(...$recoveryArgs);
-        $this->assertTrue($recovery['success']);
-        $this->assertFalse($recovery['replayed']);
+        $firstRecovery = $recoveryService->reassignRejectedItems(...$firstRecoveryArgs);
+        $this->assertTrue($firstRecovery['success']);
+        $this->assertFalse($firstRecovery['replayed']);
+        $this->assertEquals('supplier_rejected', $rejectedAssignment->fresh()->status);
+        $this->assertEquals('supplier_rejected', $orderTwoBulky->fresh()->sourcing_status);
+
+        $journalCountAfterFirstRecovery = \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count();
+        $replay = $recoveryService->reassignRejectedItems(...$firstRecoveryArgs);
+        $this->assertTrue($replay['replayed']);
+        $this->assertSame($journalCountAfterFirstRecovery, \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count());
+
+        $conflictingArgs = $firstRecoveryArgs;
+        $conflictingArgs[6] = 'Different instruction with the same idempotency key.';
+        try {
+            $recoveryService->reassignRejectedItems(...$conflictingArgs);
+            $this->fail('Reusing a recovery idempotency key with different instructions must fail.');
+        } catch (\\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('different supplier recovery instruction', $exception->getMessage());
+        }
+
+        $secondRecovery = $recoveryService->reassignRejectedItems(
+            $orderTwoBulky->id,
+            $rejectedAssignment->id,
+            $recoverySupplier->id,
+            $recoveryShop->id,
+            [$secondItem->id],
+            $recoveryAdmin,
+            'Recover the remaining rejected supplier item.',
+            'supplier-recovery-test-002'
+        );
+        $this->assertTrue($secondRecovery['success']);
+        $this->assertFalse($secondRecovery['replayed']);
         $this->assertEquals('admin_reassigned', $rejectedAssignment->fresh()->status);
         $this->assertEquals('partially_supplier_confirmed', $orderTwoBulky->fresh()->sourcing_status);
         $this->assertEquals($captureCostTotal, $orderTwoBulky->fresh()->supplier_cost_total_snapshot);
@@ -569,23 +601,14 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         );
         $this->assertTrue(\\App\\Models\\FinancialJournalEntry::assertOrderBalanced($orderTwoBulky->id));
 
-        $journalCountAfterRecovery = \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count();
-        $replay = $recoveryService->reassignRejectedItems(...$recoveryArgs);
-        $this->assertTrue($replay['replayed']);
-        $this->assertSame($journalCountAfterRecovery, \\App\\Models\\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count());
-
         Sanctum::actingAs($recoverySupplierUser, ['*']);
         $replacementConfirmation = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
             'notes' => 'Replacement items confirmed in stock.',
         ]);
         $replacementConfirmation->assertOk()
             ->assertJsonPath('data.sourcing_status', 'supplier_confirmed');
-        Sanctum::actingAs($recoverySupplierUser, ['*']);
         $replacementReady = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/ready-for-handover");
-        $replacementReady->assertOk()->assertJsonPath('all_suppliers_ready', false);
-        Sanctum::actingAs($this->vendorUser, ['*']);
-        $remainingReady = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/ready-for-handover");
-        $remainingReady->assertOk()->assertJsonPath('all_suppliers_ready', true);
+        $replacementReady->assertOk()->assertJsonPath('all_suppliers_ready', true);
         $this->assertEquals('ready_for_pickup', $orderTwoBulky->fresh()->order_status);
 
         // A supplier rejection after payment must create an administrative hold,
