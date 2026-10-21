@@ -241,7 +241,7 @@ class PortalController extends Controller
         ]);
 
         $city = trim((string)$request->input('city'));
-        $state = $request->input('state', 'Akwa Ibom');
+        $state = 'Akwa Ibom';
 
         // Prioritize finding LGA by city name so a stale or mismatched lga_id never overrides user selection
         $lga = Lga::where('name', $city)->first();
@@ -276,25 +276,10 @@ class PortalController extends Controller
             'customer_lga_id' => $lgaId,
         ]);
 
-        // Calculate coverage info
-        $hasLocalShops = Shop::where('lga_id', $lgaId)->where('pickup_enabled', true)->exists();
-        $activeLanes = DeliveryLane::where('destination_lga_id', $lgaId)->where('is_active', true)->get();
-
-        if ($hasLocalShops) {
-            $coverageStatus = 'pickup_and_delivery';
-            $statusBadge = '⚡ In-Shop Pickup & Same-Day Delivery Active';
-            $previewStatus = 'Pickup and delivery available in this local government';
-        } elseif ($activeLanes->isNotEmpty()) {
-            $minHours = $activeLanes->min('estimated_delivery_hours_min') ?? 12;
-            $maxHours = $activeLanes->max('estimated_delivery_hours_max') ?? 24;
-            $coverageStatus = 'transit_delivery';
-            $statusBadge = "🚚 Transit Delivery Corridor Active ({$minHours}-{$maxHours} hrs)";
-            $previewStatus = "Delivery corridor active ({$minHours}-{$maxHours} hrs delivery speed)";
-        } else {
-            $coverageStatus = 'regional';
-            $statusBadge = '📦 Nationwide Park Dispatch';
-            $previewStatus = 'Delivery options and speeds vary by regional dispatch';
-        }
+        // Fixed public service-area response; no pickup, corridor or nationwide status is advertised.
+        $coverageStatus = 'uyo_local_delivery';
+        $statusBadge = 'Uyo Doorstep Delivery Only';
+        $previewStatus = 'Service area: Uyo LGA only. Delivery availability is confirmed at checkout.';
 
         return response()->json([
             'success' => true,
