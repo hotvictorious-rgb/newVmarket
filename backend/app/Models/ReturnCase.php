@@ -6,6 +6,21 @@ use Illuminate\Database\Eloquent\Model;
 
 class ReturnCase extends Model
 {
+    protected static function booted(): void
+    {
+        static::saving(function (ReturnCase $returnCase): void {
+            $order = $returnCase->order_id ? Order::find($returnCase->order_id) : null;
+            $parentOrder = $returnCase->parent_order_id ? Order::find($returnCase->parent_order_id) : null;
+
+            // Retailer returns belong to Victorious MARKET centrally, never to a
+            // private supplier or supplier-specific collection point.
+            if (($order && $order->retailer_model_order) || ($parentOrder && $parentOrder->retailer_model_order)) {
+                $returnCase->vendor_id = null;
+                $returnCase->collection_point_id = null;
+            }
+        });
+    }
+
     protected $hidden = [
         'vendor_id',
         'vendor_return_otp',
