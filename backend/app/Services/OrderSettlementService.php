@@ -1441,33 +1441,39 @@ class OrderSettlementService
             return;
         }
 
-        DB::transaction(function () use ($order) {
+        $shouldMatureCashback = false;
+        DB::transaction(function () use ($order, &$shouldMatureCashback) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+            if (!$lockedOrder) {
+                return;
+            }
 
-            // Check if active dispute exists or active return case exists
             $hasDispute = $lockedOrder->dispute()->whereIn('status', ['filed', 'under_review'])->exists();
             $hasReturnCase = $lockedOrder->returnCases()->whereNotIn('status', ['resolved', 'refunded', 'replacement_completed', 'rejected', 'closed'])->exists();
 
             if ($hasDispute || $hasReturnCase) {
-                $lockedOrder->vendor_settlement_status = 'disputed';
-                $lockedOrder->save();
-
-                CustomerCashbackLedger::where('order_id', $lockedOrder->id)->update([
-                    'status' => 'quarantined_dispute',
-                ]);
+                // Preserve legacy quarantine semantics for historical vendor settlement.
+                // Retailer cashback remains pending so it can mature after the case is resolved.
+                if (!$lockedOrder->retailer_model_order) {
+                    $lockedOrder->vendor_settlement_status = 'disputed';
+                    $lockedOrder->save();
+                    CustomerCashbackLedger::where('order_id', $lockedOrder->id)->update([
+                        'status' => 'quarantined_dispute',
+                    ]);
+                }
                 return;
             }
 
-            if ($lockedOrder->vendor_settlement_status === 'held') {
+            if (!$lockedOrder->retailer_model_order && $lockedOrder->vendor_settlement_status === 'held') {
                 $lockedOrder->vendor_settlement_status = 'eligible';
                 $lockedOrder->save();
             }
-
-            CustomerCashbackLedger::where('order_id', $lockedOrder->id)
-                ->where('status', 'pending_maturation')
-                ->where('matures_at', '<=', Carbon::now())
-                ->update(['status' => 'available']);
+            $shouldMatureCashback = true;
         });
+
+        if ($shouldMatureCashback) {
+            app(CashbackMaturityService::class)->matureOrder($order);
+        }
     }
 
     /**
