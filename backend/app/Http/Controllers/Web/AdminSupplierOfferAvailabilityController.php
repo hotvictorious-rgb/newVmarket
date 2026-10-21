@@ -1,13 +1,13 @@
 <?php
 
-namespace App\\Http\\Controllers\\Web;
+namespace App\Http\Controllers\Web;
 
-use App\\Http\\Controllers\\Controller;
-use App\\Models\\SupplierOffer;
-use App\\Services\\SupplierOfferAvailabilityService;
-use Carbon\\Carbon;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
+use App\Http\Controllers\Controller;
+use App\Models\SupplierOffer;
+use App\Services\SupplierOfferAvailabilityService;
+use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 
 class AdminSupplierOfferAvailabilityController extends Controller
 {
