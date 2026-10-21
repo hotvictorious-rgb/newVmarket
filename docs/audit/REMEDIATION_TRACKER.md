@@ -461,3 +461,15 @@ Status: FIXED — focused regression passed. No merge or deployment.
 **Change:** Product detail and checkout now resolve availability from the sourcing service's confirmed Uyo offer, set the customer destination to Uyo only, and no longer populate public checkout with private shop or collection-point choices. The standard web checkout accepts only doorstep delivery, prohibits customer-supplied shop/collection-point IDs, and fails closed rather than switching to an unsupported pickup flow when delivery is unavailable. Public product detail no longer advertises direct supplier inspection reservations.
 
 **Status:** Source changes committed on `docs/retailer-central-fulfilment-model`; automated tests have not run for these latest web changes. No merge or deployment.
+
+
+## VM-AUD-087 — Restrict supplier and logistics onboarding to Uyo (21 October 2026)
+
+**Severity:** High  
+**Finding:** The administrator's supplier onboarding and logistics-company onboarding forms accepted any LGA, allowing new supply or logistics partners to be based outside the approved Uyo launch area.
+
+**Change:** Both onboarding handlers now validate the selected LGA and state before creating accounts or shops. Only Uyo, Akwa Ibom is accepted. The supplier's shop is created as the single primary pickup point; the supplier web portal cannot add another active/non-deleted shop or expand delivery coverage.
+
+**Regression coverage added:** an administrator's attempt to onboard an Eket supplier is rejected before a vendor profile is created.
+
+**Status:** Source and regression test committed on `docs/retailer-central-fulfilment-model`; tests/CI have not run for these latest commits. No merge or deployment.
