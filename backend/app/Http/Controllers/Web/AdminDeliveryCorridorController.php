@@ -93,8 +93,9 @@ class AdminDeliveryCorridorController extends Controller
             'corridors' => DeliveryCorridor::with(['lga.state', 'companyRates.logisticsCompany'])
                 ->orderBy('name')
                 ->get(),
-            'eligible_logistics_companies' => LogisticsCompanyProfile::with('hqLga.state')
+            'eligible_logistics_companies' => LogisticsCompanyProfile::with(['hqLga.state', 'user'])
                 ->where('status', 'active')
+                ->whereHas('user', fn ($user) => $user->where('status', 'active'))
                 ->whereHas('hqLga', function ($q) {
                     $q->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
                         ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']));
