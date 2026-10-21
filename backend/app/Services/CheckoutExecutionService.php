@@ -429,8 +429,9 @@ class CheckoutExecutionService
                 'customer_cashback_5' => $customerCashback5,
                 'platform_margin_5' => $platformMargin5,
                 // Legacy vendor-delivery allocation fields are deliberately zero for
-                // retailer orders. New accounting uses logistics_company_payable_amount
-                // and the captured-fee delta in OrderSettlementService.
+                // retailer orders. Customer delivery pricing is snapshotted here; the
+                // assigned company's corridor payable and any VM-funded fee delta are
+                // posted by LogisticsCompanyPayableService after payment and supplier confirmation.
                 'logistics_fee_retained' => '0.00',
                 'platform_delivery_fee' => '0.00',
                 'pickup_verification_code' => Order::generateUniquePickupOtp(),
