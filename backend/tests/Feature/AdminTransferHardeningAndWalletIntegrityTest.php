@@ -404,6 +404,23 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
+    public function test_supplier_payout_is_held_if_owner_account_becomes_inactive(): void
+    {
+        [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
+        $service = app(RetailerSupplierPayoutService::class);
+        $requested = $service->requestPayout($this->vendor);
+        $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
+        $payout = $requested['payout'];
+
+        $this->vendorUser->update(['status' => 'suspended']);
+        $processing = $service->markProcessing($payout->id, $this->superAdmin->id, 'RCP_TEST_SUPPLIER', 'SUPPAYOUT-OWNER-INACTIVE');
+
+        $this->assertFalse($processing['success']);
+        $this->assertTrue($processing['protected'] ?? false);
+        $this->assertSame('pending', $payout->fresh()->status);
+        $this->assertSame('allocated', $payout->allocations()->first()->fresh()->status);
+    }
+
     public function test_supplier_payout_revalidates_kyc_before_gateway_submission(): void
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
