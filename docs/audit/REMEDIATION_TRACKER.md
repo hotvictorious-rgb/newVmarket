@@ -417,3 +417,13 @@ Status: FIXED — focused regression passed. No merge or deployment.
 **Change:** VendorTerminalApiController::resolveVendorContext() now fails closed unless the supplier marketplace status is exactly active. Employee terminal access also requires a present, active supplier organization. Added test_vendor_terminal_denies_non_active_supplier_accounts covering pending, active and suspended supplier states.
 
 **Status:** Code and regression test committed on docs/retailer-central-fulfilment-model; automated tests have not been run for this change. This does not close the release-blocking supplier-specific payout, recovery concurrency, PostgreSQL or end-to-end verification gates. No merge or deployment.
+
+
+## VM-AUD-083 — Enforce the permanent Uyo-only delivery boundary (21 October 2026)
+
+**Severity:** Critical  
+**Finding:** The delivery availability service accepted any active directional delivery lane after validating the sourcing shop's Uyo origin. A legacy or administrator-created Uyo-to-Eket (or other inter-LGA) lane could therefore re-enable destinations outside Victorious MARKET's permanent launch scope. The admin lane editor also allowed such lanes to be created.
+
+**Change:** Delivery availability now rejects every destination outside Uyo, Akwa Ibom before consulting legacy route lanes or collection points. The admin lane editor refuses to create or update lanes unless both origin and destination resolve to Uyo, Akwa Ibom. Added regression coverage proving an active legacy Uyo-to-Eket lane does not make Eket serviceable. Existing out-of-scope lanes may remain in the database but are ineffective at runtime.
+
+**Status:** Source and regression test committed on `docs/retailer-central-fulfilment-model`; automated tests have not been executed for this change. Review admin route validation and all checkout entry points, then run branch-head CI. No merge or deployment.
