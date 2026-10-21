@@ -696,6 +696,7 @@ class FinancialOperationService
                 foreach ($walletCredits as $walletCredit) {
                     $walletCredit->update([
                         'status' => 'reversed_for_cash_refund',
+                        'refund_reserved_from_status' => null,
                         'notes' => trim(($walletCredit->notes ? $walletCredit->notes . ' | ' : '')
                             . 'Reversed upon verified gateway cash refund disbursement.'),
                     ]);
