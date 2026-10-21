@@ -42,6 +42,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     protected LogisticsCompanyProfile $company;
     protected Shop $shop;
     protected Lga $uyoLga;
+    protected Lga $eketLga;
     protected User $customer;
 
     protected function setUp(): void
@@ -60,6 +61,10 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->uyoLga = Lga::firstOrCreate(
             ['code' => 'UYO'],
             ['state_id' => $state->id, 'name' => 'Uyo', 'is_active' => true]
+        );
+        $this->eketLga = Lga::firstOrCreate(
+            ['code' => 'EKT'],
+            ['state_id' => $state->id, 'name' => 'Eket', 'is_active' => true]
         );
 
         // Admins
@@ -237,6 +242,36 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         ]);
 
         return [$order, $item];
+    }
+
+    public function test_supplier_payout_request_does_not_reserve_funds_during_bank_cooldown(): void
+    {
+        $this->vendor->update(['bank_updated_at' => Carbon::now()]);
+
+        $result = app(RetailerSupplierPayoutService::class)->requestPayout($this->vendor->fresh());
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected'] ?? false);
+        $this->assertStringContainsString('48-hour security cooldown', $result['message']);
+        $this->assertDatabaseCount('retailer_supplier_payout_requests', 0);
+        $this->assertDatabaseCount('retailer_supplier_payout_allocations', 0);
+    }
+
+    public function test_supplier_payout_request_rejects_shop_outside_uyo(): void
+    {
+        $eketLga = Lga::firstOrCreate(
+            ['state_id' => $this->uyoLga->state_id, 'name' => 'Eket'],
+            ['is_active' => true]
+        );
+        $this->shop->update(['lga_id' => $eketLga->id]);
+
+        $result = app(RetailerSupplierPayoutService::class)->requestPayout($this->vendor->fresh());
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected'] ?? false);
+        $this->assertStringContainsString('Uyo, Akwa Ibom State', $result['message']);
+        $this->assertDatabaseCount('retailer_supplier_payout_requests', 0);
+        $this->assertDatabaseCount('retailer_supplier_payout_allocations', 0);
     }
 
     public function test_retailer_supplier_payout_reserves_and_finalizes_item_payable_idempotently(): void
