@@ -429,4 +429,42 @@ class SupplierOfferSelectionServiceTest extends TestCase
 
         return ['vendor' => $vendor, 'shop' => $shop];
     }
+    public function test_non_uyo_supplier_offer_is_not_selectable_or_confirmable(): void
+    {
+        $eket = Lga::create([
+            'state_id' => $this->shop->state_id,
+            'name' => 'Eket',
+            'is_active' => true,
+        ]);
+        $outsideShop = Shop::create([
+            'vendor_id' => $this->vendor->id,
+            'country_id' => $this->shop->country_id,
+            'state_id' => $this->shop->state_id,
+            'lga_id' => $eket->id,
+            'name' => 'Outside Uyo Shop',
+            'slug' => 'outside-uyo-shop',
+            'address' => 'Eket',
+            'phone' => '08030000002',
+            'is_active' => true,
+            'pickup_enabled' => true,
+        ]);
+        $offer = $this->offer(['shop_id' => $outsideShop->id]);
+
+        $selected = app(SupplierOfferSelectionService::class)
+            ->selectLowestCost($this->product, 'doorstep_delivery');
+        $this->assertNull($selected);
+
+        try {
+            app(SupplierOfferAvailabilityService::class)->confirm(
+                $offer->id,
+                $this->admin,
+                Carbon::now()->addHour(),
+                'Must be sourced from Uyo'
+            );
+            $this->fail('Offers from outside Uyo must not receive sourcing confirmation.');
+        } catch (\\Illuminate\\Validation\\ValidationException $exception) {
+            $this->assertArrayHasKey('supplier_offer', $exception->errors());
+        }
+    }
+
 }
