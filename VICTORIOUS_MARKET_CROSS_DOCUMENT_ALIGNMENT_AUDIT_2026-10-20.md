@@ -251,5 +251,7 @@ Required controls:
   - Extended `OrderItem` fillable/casts and relationships for the new snapshot fields.
   - Nullable snapshot fields preserve compatibility with historical rows; deleting an offer or supplier/shop does not erase the stored name/cost snapshot.
 - **Important limitation:** The current checkout path has **not yet been changed** to select an eligible cheapest offer or populate these new snapshot fields. This is not end-to-end closure and must not be described as implemented retailer sourcing. The old `orders.vendor_id` / `orders.shop_id` constraints and legacy split accounting remain open.
+- **Regression-test file added:** `backend/tests/Feature/SupplierSourcingSnapshotSchemaTest.php` checks the new snapshot columns and model fillable fields. This is a schema-contract test only; it does not prove selection or order-item snapshot population.
 - **Required regression tests before closure:** migration on clean and previously migrated databases; eligible/ineligible offer filtering; deterministic cheapest-offer selection; no-offer fail-closed behavior; selected offer and cost snapshot persisted for each order item; later offer edits/deletion do not mutate snapshots; admin reassignment audited with explicit cost-change policy; historical order compatibility; all checkout aliases use the canonical service.
+- **Verification status:** Test file added but not executed in this session. No test result is claimed.
 - **Status:** PARTIAL FOUNDATION COMMITTED; runtime selection, snapshot population, tests and accounting migration remain OPEN.
