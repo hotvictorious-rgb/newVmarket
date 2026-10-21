@@ -70,7 +70,12 @@ class PortalController extends Controller
         $eligibleOriginLgaIds = collect([$selectedLgaId]);
         $shops = collect();
         $lgas = collect([$selectedLga]);
-        $localProductsCount = Product::marketplaceEligible()->count();
+        $localProductsCount = Product::marketplaceEligible()
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+                    ->whereHas('state', fn ($stateQuery) => $stateQuery->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']));
+            })
+            ->count();
         $corridorProductsCount = 0;
         $scope = 'all';
         $hasLocalShops = false;
@@ -80,7 +85,12 @@ class PortalController extends Controller
         $isFallbackCatalog = false;
         $isCorridorCatalog = false;
 
-        $query = Product::marketplaceEligible()->with(['category:id,name,slug']);
+        $query = Product::marketplaceEligible()
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+                    ->whereHas('state', fn ($stateQuery) => $stateQuery->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']));
+            })
+            ->with(['category:id,name,slug']);
         if ($request->filled('category')) {
             $query->whereHas('category', function ($q) use ($request) {
                 $q->where('slug', $request->input('category'));
@@ -105,6 +115,10 @@ class PortalController extends Controller
 
         $products = $query->latest()->take(12)->get();
         $latestProducts = Product::marketplaceEligible()
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+                    ->whereHas('state', fn ($stateQuery) => $stateQuery->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']));
+            })
             ->with(['category:id,name,slug'])
             ->latest()
             ->take(6)
@@ -160,49 +174,31 @@ class PortalController extends Controller
             'lga_id' => 'nullable|integer',
         ]);
 
-        $city = trim((string)$request->input('city'));
-        $state = $request->input('state', 'Akwa Ibom');
-
-        // Prioritize finding LGA by city name so a stale or mismatched lga_id never overrides user selection
-        $lga = Lga::where('name', $city)->first();
-        if (!$lga && $request->filled('lga_id')) {
-            $candidate = Lga::find($request->input('lga_id'));
-            if ($candidate && (empty($city) || strcasecmp($candidate->name, $city) === 0)) {
-                $lga = $candidate;
-            }
-        }
-        if (!$lga) {
-            $lga = Lga::where('name', 'like', "%{$city}%")->first();
+        $city = trim((string) $request->input('city'));
+        $lga = Lga::with('state')->whereRaw('LOWER(TRIM(name)) = ?', [strtolower($city)])->first();
+        if (
+            !$lga
+            || strtolower(trim((string) $lga->name)) !== 'uyo'
+            || strtolower(trim((string) ($lga->state->name ?? ''))) !== 'akwa ibom'
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Victorious MARKET currently sources and delivers only within Uyo LGA, Akwa Ibom State.',
+            ], 422);
         }
 
-        $lgaId = $lga ? $lga->id : 69;
-        $cityName = $lga ? $lga->name : $city;
-
+        $state = 'Akwa Ibom';
+        $lgaId = (int) $lga->id;
+        $cityName = 'Uyo';
         session([
             'customer_city' => $cityName,
             'customer_state' => $state,
             'customer_lga_id' => $lgaId,
         ]);
 
-        // Calculate coverage info
-        $hasLocalShops = Shop::where('lga_id', $lgaId)->where('pickup_enabled', true)->exists();
-        $activeLanes = DeliveryLane::where('destination_lga_id', $lgaId)->where('is_active', true)->get();
-
-        if ($hasLocalShops) {
-            $coverageStatus = 'pickup_and_delivery';
-            $statusBadge = '⚡ In-Shop Pickup & Same-Day Delivery Active';
-            $previewStatus = 'Pickup and delivery available in this local government';
-        } elseif ($activeLanes->isNotEmpty()) {
-            $minHours = $activeLanes->min('estimated_delivery_hours_min') ?? 12;
-            $maxHours = $activeLanes->max('estimated_delivery_hours_max') ?? 24;
-            $coverageStatus = 'transit_delivery';
-            $statusBadge = "🚚 Transit Delivery Corridor Active ({$minHours}-{$maxHours} hrs)";
-            $previewStatus = "Delivery corridor active ({$minHours}-{$maxHours} hrs delivery speed)";
-        } else {
-            $coverageStatus = 'regional';
-            $statusBadge = '📦 Nationwide Park Dispatch';
-            $previewStatus = 'Delivery options and speeds vary by regional dispatch';
-        }
+        $coverageStatus = 'uyo_local_delivery';
+        $statusBadge = 'Uyo Doorstep Delivery Only';
+        $previewStatus = 'Service area: Uyo LGA only. Delivery availability is confirmed at checkout.';
 
         return response()->json([
             'success' => true,
@@ -3608,6 +3604,18 @@ class PortalController extends Controller
     {
         $lane = DeliveryLane::findOrFail($id);
         $oldState = (bool)$lane->is_active;
+        if (!$oldState) {
+            $origin = Lga::with('state')->find($lane->origin_lga_id);
+            $destination = Lga::with('state')->find($lane->destination_lga_id);
+            $isUyo = static fn ($lga): bool => $lga
+                && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
+                && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
+            if (!$isUyo($origin) || !$isUyo($destination)) {
+                return back()->withErrors([
+                    'delivery_lane' => 'Out-of-Uyo delivery lanes cannot be activated under the current retailer policy.',
+                ]);
+            }
+        }
         $lane->is_active = !$lane->is_active;
         $lane->save();
 
@@ -3639,6 +3647,24 @@ class PortalController extends Controller
         ]);
 
         $originLgaId = (int)$validated['origin_lga_id'];
+
+        if (!empty($validated['destination_state_id'])) {
+            return back()->withErrors([
+                'destination_state_id' => 'Victorious MARKET does not offer out-of-Uyo or interstate delivery corridors.',
+            ]);
+        }
+        $originPolicyLga = Lga::with('state')->find($originLgaId);
+        $destinationPolicyLga = !empty($validated['destination_lga_id'])
+            ? Lga::with('state')->find((int) $validated['destination_lga_id'])
+            : null;
+        $isUyoPolicyLga = static fn ($lga): bool => $lga
+            && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
+            && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
+        if (!$isUyoPolicyLga($originPolicyLga) || !$isUyoPolicyLga($destinationPolicyLga)) {
+            return back()->withErrors([
+                'destination_lga_id' => 'Only Uyo-to-Uyo delivery configuration is allowed.',
+            ]);
+        }
 
         // Case A: State-Level Corridor Toggle (Out-of-State)
         if (!empty($validated['destination_state_id'])) {
