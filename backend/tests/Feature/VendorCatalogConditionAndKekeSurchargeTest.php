@@ -940,7 +940,6 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $response = $this->actingAs($this->vendorUser)->post('/vendor/products', [
             'name' => 'MacBook Pro M2 UK Used',
             'category_id' => $this->category->id,
-            'shop_id' => $this->shop->id,
             'condition' => 'uk_used',
             'package_tier' => 'bike',
             'warranty_type' => 'in_store_testing',
@@ -1466,7 +1465,6 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $response = $this->actingAs($this->vendorUser)->post('/vendor/products', [
             'name' => 'Sony PlayStation 5 Disc Edition',
             'category_id' => $this->category->id,
-            'shop_id' => $this->shop->id,
             'condition' => 'brand_new',
             'package_tier' => 'keke',
             'warranty_type' => '7_days_replacement',
@@ -1494,7 +1492,6 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $response = $this->actingAs($this->vendorUser)->from('/vendor/products')->post('/vendor/products', [
             'name' => 'Invalid Discount Item',
             'category_id' => $this->category->id,
-            'shop_id' => $this->shop->id,
             'condition' => 'brand_new',
             'package_tier' => 'bike',
             'unit_price' => 60000.00,
@@ -1514,7 +1511,6 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $response = $this->actingAs($this->vendorUser)->post('/vendor/products', [
             'name' => 'iPhone 14 Pro Max 256GB',
             'category_id' => $this->category->id,
-            'shop_id' => $this->shop->id,
             'condition' => 'uk_used',
             'package_tier' => 'bike',
             'warranty_type' => 'in_store_testing',
@@ -1541,7 +1537,6 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ->post('/vendor/products', [
                 'name' => 'Camera Lens Without Photo',
                 'category_id' => $this->category->id,
-                'shop_id' => $this->shop->id,
                 'condition' => 'brand_new',
                 'package_tier' => 'bike',
                 'unit_price' => 120000.00,
