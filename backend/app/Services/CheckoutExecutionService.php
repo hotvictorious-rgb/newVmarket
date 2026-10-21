@@ -206,6 +206,9 @@ class CheckoutExecutionService
 
             // Delivery Fee & Corridor Resolution
             $deliveryFee = '0.00';
+            $deliveryBaseFee = '0.00';
+            $deliveryBulkySurcharge = '0.00';
+            $deliveryBulkyQuantity = 0;
             $destLgaId = $shop->lga_id;
             $laneId = null;
             $collectionPointId = null;
@@ -231,15 +234,20 @@ class CheckoutExecutionService
                     ];
                 }
 
-                $deliveryFee = $availability['fee'];
+                $deliveryBaseFee = (string) $availability['fee'];
+                $laneId = $availability['lane_id'] ?? null;
                 $bulkySurcharge = (string) ($availability['bulky_surcharge'] ?? '0.00');
                 foreach ($itemsToCreate as $it) {
                     $tier = strtolower((string) ($it['product']->package_tier ?? 'bike'));
                     if (in_array($tier, ['keke', 'bulky'], true)) {
-                        $perUnitSurcharge = BcMathService::mul($bulkySurcharge, (string) $it['quantity']);
-                        $deliveryFee = BcMathService::add($deliveryFee, $perUnitSurcharge);
+                        $deliveryBulkyQuantity += (int) $it['quantity'];
                     }
                 }
+                $deliveryBulkySurcharge = $bulkySurcharge;
+                $deliveryFee = BcMathService::add(
+                    $deliveryBaseFee,
+                    BcMathService::mul($deliveryBulkySurcharge, (string) $deliveryBulkyQuantity)
+                );
             }
 
             // Cashback Redemption Check under Pessimistic Balance Reservation
@@ -359,6 +367,9 @@ class CheckoutExecutionService
                 'delivery_lane_id' => $laneId,
                 'merchandise_subtotal' => $merchandiseSubtotal,
                 'delivery_fee' => $deliveryFee,
+                'delivery_base_fee_snapshot' => $deliveryBaseFee,
+                'delivery_bulky_surcharge_per_unit_snapshot' => $deliveryBulkySurcharge,
+                'delivery_bulky_quantity_snapshot' => $deliveryBulkyQuantity,
                 'supplier_cost_total_snapshot' => $supplierCostTotal,
                 'retailer_merchandise_margin' => $retailerMerchandiseMargin,
                 'logistics_company_payable_default_amount' => $vendorDeliveryNet90,
