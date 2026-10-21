@@ -65,20 +65,15 @@ If coverage is unconfirmed, checkout blocks delivery. VM controls delivery cover
 7. **Customer Delivery Handshake:** Doorstep delivery completion strictly requires the server-verified customer OTP (`delivery_otp`) plus a mandatory doorstep delivery photo proof.
 8. **Supplier Settlement:** Only after verified customer delivery is the supplier's wholesale payable unlocked and eligible for settlement.
 
-## 6. In-shop pickup: automated reservation, inspect first, pay at shop to Paystack
+## 6. Pickup requests: support-managed exception only
 
-**Binding rule: In-shop pickup allows the customer to inspect the physical item first at the supplier shop, and pay directly to Victorious MARKET via Paystack upon satisfaction.**
+**Binding current rule:** doorstep delivery is the only standard online fulfilment method. Customers cannot select in-shop pickup or create an automated pickup reservation at checkout. Customers who prefer pickup must contact Victorious MARKET support by phone or WhatsApp.
 
-1. **Online Reservation (₦0 Upfront):** The customer selects "In-Shop Pickup" at checkout. No money is paid online upfront.
-2. **Automated Location Assignment:** The system automatically assigns the reservation to the supplier shop that has the item available and cheapest, issuing a unique reservation pass (`RES-XXXXXX`) and customer pickup OTP (`verification_code`).
-3. **Admin Location Override:** The customer sees the reservation location assigned by the system, but Admin has full authority to override and reassign the reservation to another supplier branch.
-4. **Customer Journey & Direct Support:** While travelling to the shop, the customer can **call or chat Victorious MARKET customer support** directly for assistance, directions, or inquiries.
-5. **Arrival & Reservation Verification:** The customer arrives at the designated supplier shop and presents their `RES-XXXXXX` reservation code. The supplier verifies the reservation code in their terminal.
-6. **Physical Inspection First:** The customer **physically inspects the item at the shop counter** to confirm quality, condition, and complete satisfaction before making any payment.
-7. **Payment to Paystack at the Counter:** Once satisfied, the customer makes payment **directly to Victorious MARKET via Paystack** (via mobile Paystack payment link, counter QR code, or online counter checkout). Strictly NO cash or private vendor bank account transfers.
-8. **Secure Handover Handshake:** Once payment is confirmed as `paid` by Paystack, the supplier verifies the customer's pickup OTP (`verification_code`), captures the mandatory in-shop pickup photo proof, and hands over the product.
-9. **Customer Walk-Away (Zero Friction Cancellation):** If the customer is not satisfied upon inspection, they simply do not pay. The reservation is cancelled cleanly with zero financial refund overhead.
+Support may confirm pickup only after verifying the complete order, confirmed availability of every line, physical readiness of all items at one approved collection point, the payment arrangement, and the customer's agreement. Support must record the responsible staff member, timestamp, decision, approved location, readiness evidence and any exception reason. Do not disclose a supplier address or instruct the customer to travel before confirmation.
 
+A multi-product order must not default to multiple supplier visits. If all items cannot be made ready at one approved point, VM coordinates internal consolidation or offers a feasible doorstep-delivery plan and communicates any material change for customer agreement. Do not silently add another customer delivery fee or change the snapshotted fee.
+
+Legacy reservation records, tables, states and handlers remain only for historical reads, audit, financial reconciliation and resolution of pre-existing obligations until their dependencies can be safely retired. Their existence does not authorize new public reservation writes. No existing historical record may be mass-deleted or reclassified by this policy.
 ## 7. Supplier payment eligibility
 
 **Binding owner rule: Pay suppliers their agreed wholesale cost strictly after verified customer delivery or verified counter pickup.**
