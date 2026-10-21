@@ -705,7 +705,7 @@ Supplier terminal authentication now requires both the supplier user and supplie
 
 **Finding:** The vendor terminal return-case listing serialized raw `ReturnCase` models and nested product models. On legacy vendor-owned return cases this could expose claim tokens, gateway/bank references, reviewer IDs, arbitration notes, cost allocation, and fields not intended for the vendor portal.
 
-**Fix:** Vendor return-case listing now uses an explicit allowlist for case status, order number, customer claim summary, item summary, refundable amount, and the returned-rider contact needed for the workflow. It does not serialize raw ReturnCase, Product, ReturnItem, or user relations.
+**Fix:** Vendor return-case listing and dispute responses now use an explicit allowlist for case status, order number, customer claim summary, item summary, refundable amount, and the returned-rider contact needed for the workflow. They do not serialize raw ReturnCase, Product, ReturnItem, or user relations.
 
 **Business impact:** Keeps financial reconciliation references and internal arbitration details private while preserving the information the vendor needs to handle its own legacy return cases.
 
@@ -716,7 +716,7 @@ Supplier terminal authentication now requires both the supplier user and supplie
 
 **Finding:** The supplier order endpoint called `hideRetailerInternals()`, but the hidden-field allowlist omitted checkout idempotency keys/hashes, Paystack access/authorization data, refund reconciliation references/tokens, settlement proof paths, delivery/customer evidence, and legacy supplier cost snapshots on OrderItem. Those fields could be serialized to a supplier terminal even though major supplier totals were already hidden.
 
-**Fix:** Expanded the Order and OrderItem hidden-field lists to omit payment initialization data, checkout keys/hashes, refund/reconciliation state, settlement proof, customer delivery evidence, and all supplier cost/name snapshots. Added a serialization regression test using representative internal values.
+**Fix:** Expanded the Order and OrderItem hidden-field lists to omit payment initialization data, checkout keys/hashes, refund/reconciliation state, settlement proof, customer delivery evidence, and all supplier cost/name snapshots. The legacy vendor handover response now returns an allowlisted summary instead of the raw Order. Added a serialization regression test using representative internal values.
 
 **Business impact:** Reduces leakage of payment workflow metadata, internal reconciliation references, private settlement evidence, and supplier cost snapshots through supplier order detail/list responses.
 
