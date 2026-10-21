@@ -502,3 +502,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Reduces the chance that a non-admin or inactive account can initiate a supplier transfer through an alternate code path. This is an additional control; it does not replace route authorization, 2FA, or gateway-side controls.
 
 **Verification boundary:** Source committed; a database-backed authorization regression test and CI execution remain pending. No merge or deployment.
+
+
+### VM-AUD-108 — Avoid retrying non-idempotent Paystack recipient creation (21 October 2026)
+
+**Finding:** `createTransferRecipient()` retried the transfer-recipient creation POST automatically. A timeout can occur after Paystack has created the recipient but before the response reaches the application, so a retry may create duplicate recipient records.
+
+**Fix:** Removed automatic HTTP retries for this POST. A failed or ambiguous recipient-resolution response is handled before the payout transfer is submitted; the controller's release path remains gated to the payout still being pending and not submitted.
+
+**Business impact:** Reduces duplicate Paystack recipient records and makes recipient setup failures easier to reconcile. This is not a duplicate-money-transfer fix; transfer initiation already avoids automatic retry and ambiguous transfer results remain held for reconciliation.
+
+**Verification boundary:** Source committed; HTTP-fake regression test and CI remain pending. No merge or deployment.
