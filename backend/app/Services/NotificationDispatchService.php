@@ -542,19 +542,27 @@ class NotificationDispatchService
 
         $vendorUserId = (int) $vendor->user_id;
         $vendorPhone = trim((string) ($vendor->business_phone ?: $vendor->user->phone));
+        $inAppEnabled = self::isChannelActive('in_app', $eventType);
+        $pushEnabled = self::isChannelActive('fcm', $eventType);
+        $smsEnabled = $vendorPhone !== '' && self::isChannelActive('sms', $eventType);
+        if (!$inAppEnabled && !$pushEnabled && !$smsEnabled) {
+            $notifyAdmins('No active notification channel can deliver the supplier return OTP.');
+            return [];
+        }
+
         // This security-sensitive message intentionally bypasses editable templates:
         // a stale template could falsely say the courier has arrived and encourage
         // premature disclosure of the custody OTP.
         $title = 'Return OTP Issued — Keep Confidential';
         $body = "A return parcel for Order #{$orderNumber} is expected at your shop. Keep this OTP private and share it only with the assigned rider after the parcel physically arrives and the items match. Return OTP: {$otp}.";
 
-        if (self::isChannelActive('in_app', $eventType)) {
+        if ($inAppEnabled) {
             self::createInApp($vendorUserId, $title, $body, $eventType, ['return_case_id' => $returnCase->id, 'return_otp' => $otp]);
         }
-        if (self::isChannelActive('fcm', $eventType)) {
+        if ($pushEnabled) {
             self::dispatchPush($vendorUserId, $title, $body, ['type' => 'return_otp', 'otp' => $otp, 'return_case_id' => $returnCase->id], $eventType);
         }
-        if ($vendorPhone !== '' && self::isChannelActive('sms', $eventType)) {
+        if ($smsEnabled) {
             $dispatches[] = self::record('sms', $vendorPhone, 'Supplier Counter', 'Victorious Market: ' . $body);
         } elseif ($vendorPhone === '') {
             Log::warning('Supplier return OTP has no verified phone destination; only enabled in-app/push channels can deliver it.', [
