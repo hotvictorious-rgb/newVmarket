@@ -1,3 +1,5 @@
+> **Current owner-policy correction (21 October 2026):** For new retailer orders, logistics-company payable defaults to 90% of the snapshotted customer delivery fee; the company is the payee, not the rider. Authorized admin can override higher/lower with default/final amount, reason, admin and timestamp recorded; post-posting changes require linked balanced adjustments. Cashback remains active at 5% of eligible post-discount merchandise actually funded by verified real Paystack money after redeemed cashback, excluding delivery, with the existing maturity, validity, redemption-cap, refund reversal and spent-cashback recovery terms. Legacy vendor 90/5/5 allocations, vendor delivery earning and vendor payout FIFO rules apply only to historical records. Code findings in this tracker remain open until tested; this policy correction alone does not close them.
+
 # Victorious MARKET — Audit and Remediation Tracker
 
 **Working branch:** `audit/paystack-refund-webhook-safety`  
