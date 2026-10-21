@@ -1055,4 +1055,61 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $this->assertSame(0, bccomp($debits, $credits, 2), 'Fully wallet-funded retailer journals must balance.');
     }
 
+    public function test_cashback_base_excludes_wallet_credit_applied_to_merchandise(): void
+    {
+        $pastOrder = Order::create([
+            'order_number' => 'ORD-PAST-WALLET-CB-' . strtoupper(substr(sha1(uniqid('', true)), 0, 8)),
+            'customer_id' => $this->customerUser->id,
+            'vendor_id' => $this->shop->vendor_id,
+            'shop_id' => $this->shop->id,
+            'origin_lga_id' => $this->shop->lga_id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'payment_method' => 'paystack',
+            'payment_reference' => Order::generateUniquePaymentReference(),
+            'merchandise_subtotal' => '20000.00',
+            'grand_total' => '20000.00',
+            'vendor_net_90' => '18000.00',
+            'customer_cashback_5' => '1000.00',
+            'platform_margin_5' => '1000.00',
+        ]);
+        CustomerCashbackLedger::create([
+            'customer_id' => $this->customerUser->id,
+            'order_id' => $pastOrder->id,
+            'amount' => '1000.00',
+            'status' => 'available',
+            'matures_at' => Carbon::now()->subDay(),
+            'expires_at' => Carbon::now()->addDays(365),
+        ]);
+        CustomerWalletCredit::create([
+            'customer_id' => $this->customerUser->id,
+            'amount' => '1000.00',
+            'credit_type' => 'refund',
+            'status' => 'available',
+            'notes' => 'Wallet cashback-base regression test',
+        ]);
+
+        $this->product->update(['unit_price' => '1450000.00']);
+        $result = app(\\App\\Services\\CheckoutExecutionService::class)->execute($this->customerUser, [
+            'fulfillment_type' => 'doorstep_delivery',
+            'destination_lga_id' => $this->uyoLga->id,
+            'items' => [[
+                'product_id' => $this->product->id,
+                'quantity' => 1,
+                'unit_price' => '1450000.00',
+            ]],
+            'redeem_cashback' => true,
+            'redeem_wallet_credit' => true,
+        ]);
+
+        $this->assertTrue($result['success'], $result['message'] ?? 'Checkout failed.');
+        $order = $result['order'];
+        $this->assertSame('1000.00', (string) $order->cashback_redeemed);
+        $this->assertSame('1000.00', (string) $order->wallet_credit_applied);
+        $this->assertSame('72400.00', (string) $order->customer_cashback_5,
+            'Cashback must exclude both redeemed cashback and wallet credit from eligible merchandise.');
+    }
+
 }
