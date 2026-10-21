@@ -2345,7 +2345,14 @@ class PortalController extends Controller
                 return ['valid' => false, 'message' => "Payout request #{$payout->id} is locked in GATEWAY TIMEOUT hold state. An automated transfer was already dispatched to Paystack and may have completed. You must perform Gateway Reconciliation before any retry."];
             }
 
-            if ($payout->gateway_status === 'processing' || !empty($payout->paystack_transfer_code)) {
+            // Never auto-reclaim an old claim: the transfer may have reached Paystack
+            // before the process crashed and failed to persist its response.
+            if (!empty($payout->processing_token)) {
+                return ['valid' => false, 'message' => "Payout request #{$payout->id} has an existing processing claim. Reconcile the previous attempt before retrying."];
+            }
+
+            if (($payout->gateway_status !== 'failed' && !empty($payout->transfer_reference))
+                || $payout->gateway_status === 'processing' || !empty($payout->paystack_transfer_code)) {
                 $codeMsg = !empty($payout->paystack_transfer_code) ? " (Transfer code: {$payout->paystack_transfer_code})" : "";
                 return ['valid' => false, 'message' => "Disbursement is already in-flight with Paystack gateway{$codeMsg}. Re-submission is prohibited."];
             }
@@ -2421,7 +2428,8 @@ class PortalController extends Controller
                 LogisticsPayoutRequest::where('id', $payoutId)->update([
                     'processing_token' => null,
                     'processing_started_at' => null,
-                    'admin_notes' => 'Recipient resolution failed: ' . ($recipientRes['message'] ?? 'NIBSS resolution failed'),
+                    'gateway_status' => 'failed',
+                    'admin_notes' => 'Recipient resolution failed before transfer submission: ' . ($recipientRes['message'] ?? 'NIBSS resolution failed'),
                 ]);
             });
             return back()->with('error', 'Paystack Transfer Recipient Error: ' . ($recipientRes['message'] ?? 'Unable to resolve bank account on NIBSS.'));
@@ -2544,7 +2552,7 @@ class PortalController extends Controller
             // or its gateway outcome is uncertain; reconcile it first.
             if (in_array((string) $payout->gateway_status, ['pending', 'processing', 'otp', 'received', 'unknown'], true)
                 || !empty($payout->paystack_transfer_code)
-                || !empty($payout->transfer_reference)
+                || (!empty($payout->transfer_reference) && $payout->gateway_status !== 'failed')
                 || !empty($payout->processing_token)
                 || str_contains((string) $payout->admin_notes, 'GATEWAY_TIMEOUT')) {
                 return back()->with('error', "Logistics payout request #{$payout->id} has a gateway submission or uncertain outcome. Reconcile with Paystack before it can be rejected.");
@@ -2642,7 +2650,14 @@ class PortalController extends Controller
                 return ['valid' => false, 'message' => "Payout request #{$payout->id} is locked in GATEWAY TIMEOUT state. An automated transfer was already dispatched to Paystack and may have completed. You must perform Gateway Reconciliation before any retry."];
             }
 
-            if ($payout->gateway_status === 'processing' || !empty($payout->paystack_transfer_code)) {
+            // A stale claim is not proof that the gateway call never happened.
+            // Never reclaim it automatically; reconciliation must resolve the old attempt.
+            if (!empty($payout->processing_token)) {
+                return ['valid' => false, 'message' => "Payout request #{$payout->id} has an existing processing claim. Reconcile the previous attempt before retrying."];
+            }
+
+            if (($payout->gateway_status !== 'failed' && !empty($payout->transfer_reference))
+                || $payout->gateway_status === 'processing' || !empty($payout->paystack_transfer_code)) {
                 $codeMsg = !empty($payout->paystack_transfer_code) ? " (Transfer code: {$payout->paystack_transfer_code})" : "";
                 return ['valid' => false, 'message' => "Disbursement is already in-flight with Paystack gateway{$codeMsg}. Re-submission is prohibited."];
             }
@@ -2875,7 +2890,8 @@ class PortalController extends Controller
                 \App\Models\VendorPayoutRequest::where('id', $payoutId)->update([
                     'processing_token' => null,
                     'processing_started_at' => null,
-                    'admin_notes' => 'Recipient resolution failed: ' . ($recipientRes['message'] ?? 'NIBSS resolution failed'),
+                    'gateway_status' => 'failed',
+                    'admin_notes' => 'Recipient resolution failed before transfer submission: ' . ($recipientRes['message'] ?? 'NIBSS resolution failed'),
                 ]);
                 \App\Models\VendorPayoutAllocation::where('vendor_payout_request_id', $payoutId)->where('status', 'allocated')->update([
                     'status' => 'reversed',
@@ -2986,7 +3002,7 @@ class PortalController extends Controller
             // processing, uncertain, or already associated with a transfer code/reference.
             if (in_array((string) $payout->gateway_status, ['pending', 'processing', 'otp', 'received', 'unknown'], true)
                 || !empty($payout->paystack_transfer_code)
-                || !empty($payout->transfer_reference)
+                || (!empty($payout->transfer_reference) && $payout->gateway_status !== 'failed')
                 || !empty($payout->processing_token)
                 || str_contains((string) $payout->admin_notes, 'GATEWAY_TIMEOUT')) {
                 return back()->with('error', "Payout request #{$payout->id} has a gateway submission or uncertain outcome. Reconcile with Paystack before it can be rejected.");
