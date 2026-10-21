@@ -207,3 +207,13 @@ The existing Paystack safety workflow did not syntax-check PayoutFinalizationSer
 - Extended the feature-test command to run AdminTransferHardeningAndWalletIntegrityTest and FinancialJournalIdempotencySchemaTest with the existing financial hardening suite.
 - Commit: df5f8fd4d74266375e19c5776bb9b476b5c470bd.
 - Verification status: workflow update committed; the resulting run is pending. Do not treat CI as green until the latest branch-head run completes successfully.
+
+## 23. Add read-only retailer supplier-payable reconciliation to the finance scan (21 October 2026)
+
+The recurring financial reconciliation engine previously handled vendor/logistics gateway payouts and customer refunds but did not audit retailer-model supplier liabilities. Recovery had a local reconciliation guard, yet ordinary paid retailer orders could have an operational supplier/cost projection that diverged from their net supplier_payable ledger without the scheduled finance scan reporting it.
+
+- Added a read-only reconciliation pass over paid retailer-model orders. It groups operational fulfillment costs by supplier and compares them with net supplier_payable journal credits minus debits per order/supplier. Missing item evidence, missing supplier IDs, or any ledger mismatch is logged at critical level and included in the reconciliation result.
+- The scan never repairs journals, changes supplier assignments, authorizes payout, or releases money. Any discrepancy remains held for finance review.
+- Added regression coverage that verifies a recovered multi-supplier order reconciles cleanly, a deliberately altered operational cost is reported as a mismatch, and restoring the snapshot clears the mismatch.
+- Commits: reconciliation engine 6abb5bbef0f1f2c8514923270f0720eda3816780; regression test 77d797791d9f036c07514d14e9fdf665fcf96eb0.
+- Verification status: code/test committed; the expanded workflow run is pending. This does not implement supplier-specific payouts, which remain intentionally fail-closed until reservation, payout, reversal, and lifecycle tests are complete.
