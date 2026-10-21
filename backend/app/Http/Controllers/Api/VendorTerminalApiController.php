@@ -1545,9 +1545,42 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             ->latest()
             ->paginate(15);
 
+        $formattedCases = collect($cases->items())->map(fn (\App\Models\ReturnCase $case) => [
+            'id' => $case->id,
+            'case_number' => $case->case_number,
+            'order_number' => $case->order?->order_number,
+            'return_reason' => $case->return_reason,
+            'customer_description' => $case->customer_description,
+            'source' => $case->source,
+            'rejection_category' => $case->rejection_category,
+            'status' => $case->status,
+            'resolution_type' => $case->resolution_type,
+            'total_refundable_amount' => $case->total_refundable_amount,
+            'refund_delivery_fee' => (bool) $case->refund_delivery_fee,
+            'delivery_fee_refunded' => $case->delivery_fee_refunded,
+            'refunded_amount' => $case->refunded_amount,
+            'created_at' => $case->created_at?->toIso8601String(),
+            'updated_at' => $case->updated_at?->toIso8601String(),
+            'items' => $case->items->map(fn (\App\Models\ReturnItem $item) => [
+                'id' => $item->id,
+                'product_id' => $item->product_id,
+                'product_name' => $item->product?->name ?? $item->orderItem?->product_name,
+                'product_thumbnail' => $item->product?->thumbnail ? url($item->product->thumbnail) : null,
+                'quantity' => (int) $item->quantity,
+                'item_condition' => $item->item_condition,
+                'status' => $item->status,
+                'refundable_amount' => $item->refundable_amount,
+            ])->values(),
+            'returned_by_rider' => $case->returnedByRider ? [
+                'id' => $case->returnedByRider->id,
+                'name' => $case->returnedByRider->name,
+                'phone' => $case->returnedByRider->phone,
+            ] : null,
+        ])->values();
+
         return response()->json([
             'status' => true,
-            'data' => $cases->items(),
+            'data' => $formattedCases,
             'meta' => [
                 'current_page' => $cases->currentPage(),
                 'last_page' => $cases->lastPage(),
