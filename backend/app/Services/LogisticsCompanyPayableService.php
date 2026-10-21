@@ -220,7 +220,7 @@ class LogisticsCompanyPayableService
                 throw new InvalidArgumentException('The customer payment must be verified before setting a logistics-company payable.');
             }
             if (in_array($locked->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true)
-                || $locked->received_at !== null) {
+                || $locked->received_at !== null || $locked->rider_id !== null) {
                 throw new InvalidArgumentException('The payable cannot be overridden after customer handover or a terminal order outcome.');
             }
             if (!$locked->logistics_company_id) {
