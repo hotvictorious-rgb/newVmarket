@@ -76,4 +76,6 @@ class DeliveryLane extends Model
             'max_hours' => $lane->estimated_delivery_hours_max,
             'is_available' => true,
         ];
-    }}
+    }
+}
+
