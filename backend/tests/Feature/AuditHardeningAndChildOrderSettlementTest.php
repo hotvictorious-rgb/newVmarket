@@ -7,6 +7,9 @@ use App\Models\CashbackReservation;
 use App\Models\CustomerAddress;
 use App\Models\CustomerCashbackLedger;
 use App\Models\DeliveryLane;
+use App\Models\DeliveryCorridor;
+use App\Models\LogisticsCompanyCorridorRate;
+use App\Models\LogisticsCompanyProfile;
 use App\Models\FinancialJournalEntry;
 use App\Models\Lga;
 use App\Models\Order;
@@ -68,6 +71,38 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         ]);
         $this->originLga = Lga::create(['state_id' => $state->id, 'name' => 'Uyo', 'is_active' => true]);
         $this->destLga = Lga::create(['state_id' => $state->id, 'name' => 'Ikot Ekpene', 'is_active' => true]);
+
+        $fleetUser = User::create([
+            'name' => 'Audit Test Logistics Company',
+            'email' => 'audit-test-fleet@example.test',
+            'password' => bcrypt('FleetPass123!'),
+            'user_type' => 'logistics_company',
+            'status' => 'active',
+        ]);
+        $fleetCompany = LogisticsCompanyProfile::create([
+            'user_id' => $fleetUser->id,
+            'company_name' => 'Audit Test Logistics Ltd',
+            'hq_lga_id' => $this->originLga->id,
+            'wallet_balance' => '0.00',
+            'status' => 'active',
+        ]);
+        $corridor = DeliveryCorridor::create([
+            'code' => 'audit-test-uyo-corridor',
+            'name' => 'Audit Test Uyo Corridor',
+            'lga_id' => $this->originLga->id,
+            'landmark_aliases' => ['Uyo', 'Oron Road'],
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+        LogisticsCompanyCorridorRate::create([
+            'logistics_company_id' => $fleetCompany->id,
+            'delivery_corridor_id' => $corridor->id,
+            'base_payable' => '900.00',
+            'bulky_surcharge_per_unit' => '200.00',
+            'tariff_version' => 1,
+            'is_active' => true,
+        ]);
 
         $this->superAdmin = User::create([
             'name' => 'Super Finance Admin',
