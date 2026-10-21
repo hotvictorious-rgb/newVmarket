@@ -21,87 +21,61 @@ class StorefrontWiringAndShopTest extends TestCase
         $this->seed();
     }
 
-    public function test_storefront_renders_with_category_and_merchant_links()
+    public function test_storefront_renders_central_retailer_catalog(): void
     {
         $response = $this->get('/');
 
         $response->assertStatus(200);
-        // Verify category filters are wired to query parameters instead of dead anchors
         $response->assertSee('category=home-appliances');
         $response->assertSee('category=electronics-gadgets');
         $response->assertSee('category=groceries-farm-produce');
-
-        // Verify search queries are wired on discovery tiles
         $response->assertSee('search=Blender');
         $response->assertSee('search=Phone');
-
-        // Verify verified merchant cards link to dedicated storefronts
-        $response->assertSee('/shop/');
+        $response->assertSee('Trusted shopping, delivered within Uyo');
+        $response->assertDontSee('href="/shop/');
     }
 
-    public function test_dedicated_shop_storefront_loads_with_profile_and_catalog()
+    public function test_supplier_shop_storefront_redirects_to_central_retailer(): void
     {
         $shop = Shop::where('pickup_enabled', true)->first();
         $this->assertNotNull($shop, 'A shop should exist from seeder');
 
         $response = $this->get('/shop/' . $shop->slug);
-
-        $response->assertStatus(200);
-        $response->assertSee($shop->name);
-        $response->assertSee($shop->address);
-        $response->assertSee('ACCREDITED MERCHANT');
-        $response->assertSee('Store Operating Hours');
-
-        // Strict Platform Anti-Disintermediation Rules: Never expose vendor direct phone or WhatsApp
-        if (!empty($shop->phone)) {
-            $response->assertDontSee($shop->phone);
-        }
-        $response->assertDontSee('Call Store');
-        $response->assertDontSee('WhatsApp Merchant');
-
-        // Shop's products should appear in the catalog
-        $shopProduct = Product::where('shop_id', $shop->id)->first();
-        if ($shopProduct) {
-            $response->assertSee($shopProduct->name);
-        }
+        $response->assertRedirect(route('storefront'));
+        $response->assertSessionHas('info');
+        $response->assertDontSee($shop->address);
     }
 
-    public function test_shop_storefront_supports_in_store_search_and_category_filtering()
+    public function test_supplier_shop_search_and_category_pages_are_not_public(): void
     {
         $shop = Shop::where('pickup_enabled', true)->first();
-        $product = Product::where('shop_id', $shop->id)->first();
+        $this->assertNotNull($shop);
 
-        if ($product) {
-            // Search filter
-            $searchResponse = $this->get('/shop/' . $shop->slug . '?search=' . urlencode(substr($product->name, 0, 5)));
-            $searchResponse->assertStatus(200);
-            $searchResponse->assertSee($product->name);
-
-            // Category filter
-            if ($product->category) {
-                $catResponse = $this->get('/shop/' . $shop->slug . '?category=' . $product->category->slug);
-                $catResponse->assertStatus(200);
-                $catResponse->assertSee($product->name);
-            }
-        }
+        $response = $this->get('/shop/' . $shop->slug . '?search=phone&category=electronics');
+        $response->assertRedirect(route('storefront'));
+        $response->assertSessionHas('info');
     }
 
-    public function test_shop_storefront_returns_404_for_unknown_slug()
+    public function test_unknown_supplier_shop_slug_redirects_to_central_retailer(): void
     {
         $response = $this->get('/shop/nonexistent-store-slug-xyz');
-        $response->assertStatus(404);
+        $response->assertRedirect(route('storefront'));
     }
 
-    public function test_product_detail_page_links_to_vendor_storefront()
+    public function test_product_detail_does_not_link_to_supplier_storefront(): void
     {
-        $product = Product::with('shop')->first();
-        $this->assertNotNull($product, 'A product should exist');
+        $uyo = Lga::where('name', 'Uyo')->firstOrFail();
+        $product = Product::marketplaceEligible()
+            ->whereHas('supplierOffers.shop.lga', function ($query) use ($uyo) {
+                $query->whereKey($uyo->id);
+            })
+            ->first();
+        $this->assertNotNull($product, 'A product with a Uyo sourcing offer should exist');
 
         $response = $this->get('/product/' . $product->slug);
-
         $response->assertStatus(200);
         $response->assertSee($product->name);
-        $response->assertSee('/shop/' . $product->shop->slug);
+        $response->assertDontSee('/shop/');
         $response->assertSee('ESCROW SECURED');
     }
 
@@ -181,19 +155,13 @@ class StorefrontWiringAndShopTest extends TestCase
         $response->assertSee('vmOpenAuthModal');
     }
 
-    public function test_storefront_filters_products_by_vendor_shop_lga()
+    public function test_storefront_never_switches_to_out_of_uyo_catalog(): void
     {
-        // When user chooses Eket, it should prioritize products where vendor shop is in Eket
         $response = $this->get('/?city=Eket');
         $response->assertStatus(200);
-        $response->assertSee('Stores Closer to You in');
-        $response->assertSee('Eket');
-
-        // Check Ibom Fresh Eket Coldroom & Depot exists in Eket
-        $eketShop = Shop::whereHas('lga', fn($q) => $q->where('name', 'Eket'))->first();
-        if ($eketShop) {
-            $response->assertSee($eketShop->name);
-        }
+        $response->assertSee('Uyo Local Delivery');
+        $response->assertSee('Uyo');
+        $response->assertDontSee('Stores Closer to You in Eket');
     }
 
     public function test_storefront_supports_condition_filtering()
@@ -208,49 +176,37 @@ class StorefrontWiringAndShopTest extends TestCase
         $responseUk->assertSee('UK Used');
     }
 
-    public function test_storefront_ajax_location_switch_returns_expected_json_and_scope()
+    public function test_storefront_ajax_location_switch_keeps_uyo_boundary(): void
     {
+        $uyo = Lga::where('name', 'Uyo')->firstOrFail();
         $response = $this->getJson('/?ajax=1&city=Eket&state=Akwa+Ibom');
         $response->assertStatus(200);
         $response->assertJsonStructure([
-            'success',
-            'city',
-            'state',
-            'lga_id',
-            'coverage_status',
-            'status_badge',
-            'preview_status',
-            'products_count',
-            'local_products_count',
-            'corridor_products_count',
-            'scope',
-            'products_html',
-            'shops_html',
+            'success', 'city', 'state', 'lga_id', 'coverage_status',
+            'status_badge', 'preview_status', 'products_count',
+            'local_products_count', 'corridor_products_count', 'scope',
+            'products_html', 'shops_html',
         ]);
         $response->assertJson([
             'success' => true,
-            'city' => 'Eket',
+            'city' => 'Uyo',
+            'lga_id' => $uyo->id,
         ]);
+        $this->assertStringNotContainsString('supplier_shop_name', (string) $response->getContent());
     }
 
-    public function test_set_location_prioritizes_city_name_over_mismatched_stale_lga_id()
+    public function test_set_location_rejects_out_of_uyo_city_even_with_stale_lga_id(): void
     {
-        // When client sends city "Eket" with old/stale lga_id 69 (Uyo), it must resolve to Eket
-        $eketLga = Lga::where('name', 'Eket')->firstOrFail();
+        Lga::where('name', 'Eket')->firstOrFail();
         $response = $this->postJson(route('set.location'), [
             'city' => 'Eket',
             'state' => 'Akwa Ibom',
-            'lga_id' => 69, // Deliberately passing Uyo's ID to test resilient resolution
+            'lga_id' => 69,
         ]);
 
-        $response->assertStatus(200);
-        $response->assertJson([
-            'success' => true,
-            'city' => 'Eket',
-            'lga_id' => $eketLga->id,
-        ]);
-
-        $this->assertEquals('Eket', session('customer_city'));
-        $this->assertEquals($eketLga->id, session('customer_lga_id'));
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'OUTSIDE_UYO_LAUNCH_BOUNDARY');
     }
+
 }
