@@ -743,4 +743,110 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $this->assertEquals('1000.00', $order->cashback_redeemed);
         $this->assertEquals('72450.00', $order->customer_cashback_5, 'Cashback must be 5% of real money paid (1,449,000.00), not gross subtotal.');
     }
+
+    public function test_retailer_order_uses_item_cost_cashback_and_audited_logistics_company_override(): void
+    {
+        $reference = Order::generateUniquePaymentReference();
+        $order = Order::create([
+            'order_number' => 'VM-RETAILER-FIN-' . strtoupper(substr(sha1($reference), 0, 8)),
+            'customer_id' => $this->customerUser->id,
+            'vendor_id' => $this->shop->vendor_id,
+            'shop_id' => $this->shop->id,
+            'origin_lga_id' => $this->shop->lga_id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'retailer_model_order' => true,
+            'order_status' => 'pending',
+            'payment_status' => 'pending',
+            'payment_method' => 'paystack',
+            'payment_reference' => $reference,
+            'merchandise_subtotal' => '10000.00',
+            'delivery_fee' => '1000.00',
+            'cashback_redeemed' => '0.00',
+            'grand_total' => '11000.00',
+            'supplier_cost_total_snapshot' => '6000.00',
+            'retailer_merchandise_margin' => '3500.00',
+            'vendor_net_90' => '0.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '0.00',
+            'logistics_fee_retained' => '900.00',
+            'platform_delivery_fee' => '100.00',
+            'logistics_company_payable_default_amount' => '900.00',
+            'logistics_company_payable_amount' => '900.00',
+            'sourcing_status' => 'supplier_confirmed',
+            'vendor_settlement_status' => 'held',
+            'verification_code' => '123456',
+            'pickup_verification_code' => '654321',
+        ]);
+
+        OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $this->product->id,
+            'product_name' => $this->product->name,
+            'quantity' => 1,
+            'unit_price' => '10000.00',
+            'line_total' => '10000.00',
+            'supplier_offer_id' => null,
+            'supplier_vendor_id' => $this->vendorProfile->id,
+            'supplier_shop_id' => $this->shop->id,
+            'supplier_name_snapshot' => $this->vendorProfile->business_name,
+            'supplier_shop_name_snapshot' => $this->shop->name,
+            'supplier_cost_snapshot' => '6000.00',
+            'supplier_cost_currency' => 'NGN',
+            'supplier_snapshot_at' => Carbon::now(),
+        ]);
+
+        $settlement = app(OrderSettlementService::class)->settlePaystackOrder($order, [
+            'reference' => $reference,
+            'status' => 'success',
+            'amount' => 1100000,
+            'currency' => 'NGN',
+            'channel' => 'card',
+        ], $this->customerUser, 'retailer_finance_test');
+
+        $this->assertTrue($settlement['success']);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'supplier_payable',
+            'entry_type' => 'credit',
+            'amount' => '6000.00',
+        ]);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'logistics_company_payable',
+            'entry_type' => 'credit',
+            'amount' => '900.00',
+            'beneficiary_id' => null,
+        ]);
+        $this->assertDatabaseMissing('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'vendor_payable',
+        ]);
+
+        $service = app(\\App\\Services\\LogisticsCompanyPayableService::class);
+        $assigned = $service->assignCompany($order->fresh(), $this->superAdmin, $this->fleetCompany->id, 'Uyo route covered by approved fleet');
+        $this->assertTrue($assigned['success']);
+        $this->assertSame($this->fleetCompany->id, (int) $assigned['order']->logistics_company_id);
+
+        $overridden = $service->override($assigned['order'], $this->superAdmin, '1100.00', 'Rain and traffic surcharge agreed with logistics company');
+        $this->assertTrue($overridden['success']);
+        $this->assertSame('1100.00', $overridden['order']->logistics_company_payable_amount);
+        $this->assertSame('900.00', $overridden['order']->logistics_company_payable_default_amount);
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'target_type' => Order::class,
+            'target_id' => $order->id,
+            'action' => 'logistics_company_payable_overridden',
+        ]);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'delivery_subsidy_expense',
+            'entry_type' => 'debit',
+            'amount' => '100.00',
+        ]);
+
+        $debits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
+        $credits = (string) FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
+        $this->assertSame(0, bccomp($debits, $credits, 2), 'Retailer settlement and company override adjustments must remain balanced.');
+    }
+
 }
