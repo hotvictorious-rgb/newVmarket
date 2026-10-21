@@ -28,6 +28,8 @@
         </div>
     </div>
 
+    @include('vendor.partials._shop_switcher')
+
     <!-- 4 KPI Cards -->
     <div class="stat-grid-4">
         <div class="stat-card stat-card-border-purple">

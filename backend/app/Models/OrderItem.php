@@ -11,6 +11,7 @@ class OrderItem extends Model
         'product_id',
         'product_name',
         'unit_price',
+        'cost_price',
         'quantity',
         'line_total',
         'accepted_quantity',
@@ -23,6 +24,7 @@ class OrderItem extends Model
 
     protected $casts = [
         'unit_price' => 'string',
+        'cost_price' => 'string',
         'line_total' => 'string',
         'quantity' => 'integer',
         'accepted_quantity' => 'integer',

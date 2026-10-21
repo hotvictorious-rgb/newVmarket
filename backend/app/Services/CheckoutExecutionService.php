@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Models\VendorProfile;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
 class CheckoutExecutionService
@@ -204,8 +205,14 @@ class CheckoutExecutionService
             $collectionPointId = null;
 
             if ($validated['fulfillment_type'] === 'doorstep_delivery') {
-                $address = CustomerAddress::where('user_id', $user->id)->findOrFail($validated['customer_address_id']);
-                $destLgaId = $address->lga_id;
+                if (!empty($validated['customer_address_id'])) {
+                    $address = CustomerAddress::where('user_id', $user->id)->findOrFail($validated['customer_address_id']);
+                    $destLgaId = $address->lga_id;
+                } elseif (!empty($validated['destination_lga_id'])) {
+                    $destLgaId = (int)$validated['destination_lga_id'];
+                } else {
+                    $destLgaId = $shop->lga_id;
+                }
 
                 $orderPackageTier = 'bike';
                 foreach ($itemsToCreate as $it) {
@@ -251,18 +258,18 @@ class CheckoutExecutionService
                 }
             }
 
-            // Mathematical Splits (90% Vendor Net, 5% Margin, 5% Cashback)
+            // Instant Refund Wallet Credit & Net Merchandise after Cashback
+            $subtotalAfterCashback = BcMathService::sub($merchandiseSubtotal, $cashbackApplied);
+            $totalBeforeWallet = BcMathService::add($subtotalAfterCashback, $deliveryFee);
+
+            // Mathematical Splits: Cashback is earned ONLY on real money paid (subtotalAfterCashback), never on cashback-funded value
+            $customerCashback5 = BcMathService::mul($subtotalAfterCashback, '0.05');
             $vendorNet90 = BcMathService::mul($merchandiseSubtotal, '0.90');
-            $customerCashback5 = BcMathService::mul($merchandiseSubtotal, '0.05');
             $platformMargin5 = BcMathService::mul($merchandiseSubtotal, '0.05');
 
             // Delivery fee split: 90% vendor delivery earning, 10% platform. No rider/fleet payable.
             $vendorDeliveryNet90 = BcMathService::mul($deliveryFee, '0.90');
             $platformDelivery10 = BcMathService::mul($deliveryFee, '0.10');
-
-            // Instant Refund Wallet Credit redemption (100% spendable, covers up to 100% of order payable)
-            $subtotalAfterCashback = BcMathService::sub($merchandiseSubtotal, $cashbackApplied);
-            $totalBeforeWallet = BcMathService::add($subtotalAfterCashback, $deliveryFee);
 
             $walletCreditApplied = '0.00';
             if (!empty($validated['redeem_wallet_credit'])) {
@@ -282,8 +289,8 @@ class CheckoutExecutionService
             }
 
             $isFullyWalletPaid = (BcMathService::comp($grandTotal, '0.00') === 0);
-            $paymentMethod = $isFullyWalletPaid ? 'wallet_credit' : ($validated['payment_method'] ?? 'paystack');
-            $orderStatus = $isFullyWalletPaid ? 'confirmed' : 'pending';
+            $paymentMethod = $isFullyWalletPaid ? 'wallet_credit' : ($validated['payment_method'] ?? ($validated['fulfillment_type'] === 'in_shop_pickup' ? 'in_shop_counter' : 'paystack'));
+            $orderStatus = $isFullyWalletPaid ? 'confirmed' : ($validated['fulfillment_type'] === 'in_shop_pickup' ? 'ready_for_pickup' : 'pending');
             $paymentStatus = $isFullyWalletPaid ? 'paid' : 'pending';
             $paidAt = $isFullyWalletPaid ? Carbon::now() : null;
 
@@ -351,6 +358,7 @@ class CheckoutExecutionService
                     'product_name' => $itemData['product']->name,
                     'quantity' => $itemData['quantity'],
                     'unit_price' => $itemData['unit_price'],
+                    'cost_price' => $itemData['product']->cost_price ?? '0.00',
                     'line_total' => $itemData['line_total'],
                 ]);
             }
@@ -516,7 +524,8 @@ class CheckoutExecutionService
                 $order->forceFill(['paystack_initialization_status' => 'initializing'])->save();
             }
 
-            $callbackUrl = route('storefront') . '?order_success=' . $order->order_number;
+            $callbackUrl = $validated['callback_url']
+                ?? (Route::has('payment.paystack.callback') ? route('payment.paystack.callback') : route('storefront') . '?order_success=' . $order->order_number);
             $paystackInit = $this->paystackService->initializeTransaction($order, $callbackUrl, $user->email);
 
             if ($idempotencyKey !== null) {

@@ -29,6 +29,8 @@
         </div>
     </div>
 
+    @include('vendor.partials._shop_switcher')
+
     <div class="dash-card">
         <div class="dash-card-header">
             <div>

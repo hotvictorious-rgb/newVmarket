@@ -31,7 +31,9 @@ use App\Models\ReturnInspection;
 use App\Models\ReturnEvidence;
 use App\Models\LegalDocument;
 use App\Models\LegalDocumentVersion;
+use App\Models\CustomerAddress;
 use App\Services\BcMathService;
+use App\Services\CheckoutExecutionService;
 use App\Services\OrderSettlementService;
 use App\Services\ReturnAndRefundService;
 use App\Services\DoorstepHandshakeService;
@@ -39,6 +41,8 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class PortalController extends Controller
 {
@@ -759,10 +763,203 @@ class PortalController extends Controller
      */
     public function adminMerchantsPage(Request $request)
     {
-        $allVendors = VendorProfile::with(['user', 'shops'])->latest()->get();
+        $allVendors = VendorProfile::with(['user', 'shops.lga'])->latest()->get();
+        $pendingSettlementsCount = Order::where('vendor_settlement_status', 'eligible')->count();
+        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+
+        return view('admin.merchants', compact('allVendors', 'pendingSettlementsCount', 'lgas'));
+    }
+
+    /**
+     * Admin Action: Onboard New Supplier & Physical Shop (Admin-Only Sourcing)
+     */
+    public function adminStoreSupplier(Request $request)
+    {
+        $validated = $request->validate([
+            'business_name' => 'required|string|max:255',
+            'contact_name' => 'required|string|max:255',
+            'phone' => 'required|string|max:25|unique:users,phone',
+            'email' => 'nullable|email|max:150|unique:users,email',
+            'password' => 'nullable|string|min:8',
+            'shop_name' => 'required|string|max:255',
+            'shop_address' => 'required|string|max:500',
+            'lga_id' => 'required|exists:lgas,id',
+            'bank_name' => 'nullable|string|max:100',
+            'account_number' => 'nullable|string|max:20',
+            'account_name' => 'nullable|string|max:255',
+        ]);
+
+        return DB::transaction(function () use ($validated) {
+            $cleanPhone = preg_replace('/[^0-9+]/', '', $validated['phone']);
+            $email = !empty($validated['email']) ? strtolower(trim($validated['email'])) : 'supplier_' . Str::lower(Str::random(8)) . '@victoriousmarket.ng';
+            $password = !empty($validated['password']) ? $validated['password'] : Str::random(12);
+
+            $user = User::create([
+                'name' => strip_tags(trim($validated['contact_name'])),
+                'email' => $email,
+                'phone' => $cleanPhone,
+                'user_type' => 'vendor',
+                'status' => 'active',
+                'password' => Hash::make($password),
+            ]);
+
+            $vendor = VendorProfile::create([
+                'user_id' => $user->id,
+                'business_name' => strip_tags(trim($validated['business_name'])),
+                'kyc_status' => 'verified',
+                'kyc_reviewed_at' => now(),
+                'bank_name' => $validated['bank_name'] ?? null,
+                'account_number' => $validated['account_number'] ?? null,
+                'account_name' => $validated['account_name'] ?? $validated['business_name'],
+                'marketplace_status' => 'active',
+            ]);
+
+            $lga = Lga::findOrFail($validated['lga_id']);
+
+            $shop = Shop::create([
+                'vendor_id' => $vendor->id,
+                'name' => strip_tags(trim($validated['shop_name'])),
+                'slug' => Str::slug($validated['shop_name']) . '-' . Str::lower(Str::random(5)),
+                'address' => strip_tags(trim($validated['shop_address'])),
+                'country_id' => $lga->country_id ?? 1,
+                'state_id' => $lga->state_id,
+                'lga_id' => $lga->id,
+                'phone' => $cleanPhone,
+                'email' => $email,
+                'is_primary_branch' => true,
+                'is_active' => true,
+                'pickup_enabled' => true,
+                'pickup_prep_time_minutes' => 30,
+            ]);
+
+            AdminAuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'SUPPLIER_ONBOARDED',
+                'target_type' => 'VendorProfile',
+                'target_id' => $vendor->id,
+                'new_values' => [
+                    'supplier_name' => $vendor->business_name,
+                    'contact_name' => $user->name,
+                    'phone' => $user->phone,
+                    'shop_name' => $shop->name,
+                    'lga' => $lga->name,
+                ],
+            ]);
+
+            return redirect()->route('admin.merchants.index')->with('success', "Supplier '{$vendor->business_name}' and physical shop in {$lga->name} successfully onboarded!");
+        });
+    }
+
+    /**
+     * Dedicated Page: Admin Logistics Companies Accreditation Desk
+     */
+    public function adminLogisticsCompaniesPage(Request $request)
+    {
+        $companies = LogisticsCompanyProfile::with(['user', 'hqLga.state', 'riders.user'])->latest()->get();
+        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+        $totalRiders = RiderProfile::whereNotNull('logistics_company_id')->count();
+        $activeRiders = RiderProfile::whereNotNull('logistics_company_id')->where('is_active', true)->count();
         $pendingSettlementsCount = Order::where('vendor_settlement_status', 'eligible')->count();
 
-        return view('admin.merchants', compact('allVendors', 'pendingSettlementsCount'));
+        return view('admin.logistics_companies', compact('companies', 'lgas', 'totalRiders', 'activeRiders', 'pendingSettlementsCount'));
+    }
+
+    /**
+     * Admin Action: Onboard New Logistics Company (Admin-Only Fleet Accreditation)
+     */
+    public function adminStoreLogisticsCompany(Request $request)
+    {
+        $validated = $request->validate([
+            'company_name' => 'required|string|max:255',
+            'contact_name' => 'required|string|max:255',
+            'phone' => 'required|string|max:25|unique:users,phone',
+            'email' => 'nullable|email|max:150|unique:users,email',
+            'password' => 'nullable|string|min:8',
+            'registration_number' => 'nullable|string|max:100',
+            'hq_address' => 'required|string|max:500',
+            'lga_id' => 'required|exists:lgas,id',
+            'fleet_size' => 'nullable|integer|min:1|max:1000',
+            'commission_rate' => 'nullable|numeric|min:0|max:100',
+            'bank_name' => 'nullable|string|max:100',
+            'account_number' => 'nullable|string|max:20',
+            'account_name' => 'nullable|string|max:255',
+        ]);
+
+        return DB::transaction(function () use ($validated) {
+            $cleanPhone = preg_replace('/[^0-9+]/', '', $validated['phone']);
+            $email = !empty($validated['email']) ? strtolower(trim($validated['email'])) : 'logistics_' . Str::lower(Str::random(8)) . '@victoriousmarket.ng';
+            $password = !empty($validated['password']) ? $validated['password'] : Str::random(12);
+
+            $user = User::create([
+                'name' => strip_tags(trim($validated['contact_name'])),
+                'email' => $email,
+                'phone' => $cleanPhone,
+                'user_type' => 'logistics_company',
+                'status' => 'active',
+                'password' => Hash::make($password),
+            ]);
+
+            $lga = Lga::findOrFail($validated['lga_id']);
+
+            $company = LogisticsCompanyProfile::create([
+                'user_id' => $user->id,
+                'company_name' => strip_tags(trim($validated['company_name'])),
+                'registration_number' => $validated['registration_number'] ?? null,
+                'contact_email' => $email,
+                'contact_phone' => $cleanPhone,
+                'hq_address' => strip_tags(trim($validated['hq_address'])),
+                'lga_id' => $lga->id,
+                'fleet_size' => $validated['fleet_size'] ?? 10,
+                'commission_rate' => $validated['commission_rate'] ?? 0.00,
+                'status' => 'active',
+                'bank_name' => $validated['bank_name'] ?? null,
+                'account_number' => $validated['account_number'] ?? null,
+                'account_name' => $validated['account_name'] ?? $validated['company_name'],
+                'bank_updated_at' => !empty($validated['account_number']) ? now() : null,
+            ]);
+
+            AdminAuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'LOGISTICS_COMPANY_ONBOARDED',
+                'target_type' => 'LogisticsCompanyProfile',
+                'target_id' => $company->id,
+                'new_values' => [
+                    'company_name' => $company->company_name,
+                    'contact_name' => $user->name,
+                    'phone' => $user->phone,
+                    'lga' => $lga->name,
+                    'fleet_size' => $company->fleet_size,
+                ],
+            ]);
+
+            return redirect()->route('admin.logistics_companies.index')->with('success', "Logistics company '{$company->company_name}' successfully accredited and onboarded!");
+        });
+    }
+
+    /**
+     * Admin Action: Toggle Logistics Company Active/Suspended Status
+     */
+    public function adminToggleLogisticsCompanyStatus($id)
+    {
+        $company = LogisticsCompanyProfile::findOrFail($id);
+        $newStatus = $company->status === 'active' ? 'suspended' : 'active';
+        $company->status = $newStatus;
+        $company->save();
+
+        if ($company->user) {
+            $company->user->status = $newStatus;
+            $company->user->save();
+        }
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'LOGISTICS_COMPANY_STATUS_TOGGLED',
+            'target_type' => 'LogisticsCompanyProfile',
+            'target_id' => $company->id,
+            'new_values' => ['status' => $newStatus],
+        ]);
+
+        return redirect()->route('admin.logistics_companies.index')->with('success', "Logistics company '{$company->company_name}' status updated to {$newStatus}.");
     }
 
     /**
@@ -1004,25 +1201,48 @@ class PortalController extends Controller
     public function vendorDashboard(Request $request)
     {
         $vendor = $this->resolveVendorProfile();
-        $primaryShop = $vendor->primaryShop ?? Shop::where('vendor_id', $vendor->id)->first();
+        $shops = Shop::where('vendor_id', $vendor->id)->with('lga.state')->get();
+        $primaryShop = $vendor->primaryShop ?? $shops->first();
 
-        $products = Product::where('vendor_id', $vendor->id)->with('category')->get();
-        $reservations = PickupReservation::where('vendor_id', $vendor->id)
+        $selectedShopId = $request->query('shop_id');
+        if ($selectedShopId !== null && $selectedShopId !== '' && $selectedShopId !== 'all') {
+            $selectedShopId = (int)$selectedShopId;
+            if (!$shops->contains('id', $selectedShopId)) {
+                $selectedShopId = null;
+            }
+        } else {
+            $selectedShopId = null;
+        }
+
+        $productsQuery = Product::where('vendor_id', $vendor->id)->with('category');
+        $reservationsQuery = PickupReservation::where('vendor_id', $vendor->id)
             ->with(['product:id,name,unit_price', 'customer:id,name,phone'])
-            ->latest()
-            ->take(10)
-            ->get();
-
-        $orders = Order::where('vendor_id', $vendor->id)
+            ->latest();
+        $ordersQuery = Order::where('vendor_id', $vendor->id)
             ->with('customer:id,name,phone')
-            ->latest()
-            ->take(10)
-            ->get();
+            ->latest();
 
-        $grossSales = Order::where('vendor_id', $vendor->id)->sum('total_amount');
-        $netEarnings = Order::where('vendor_id', $vendor->id)->sum('vendor_earning_90');
-        $settledAmount = Order::where('vendor_id', $vendor->id)->where('vendor_settlement_status', 'settled')->sum('vendor_earning_90');
-        $pendingSettlement = Order::where('vendor_id', $vendor->id)->whereIn('vendor_settlement_status', ['eligible', 'held'])->sum('vendor_earning_90');
+        $salesQuery = Order::where('vendor_id', $vendor->id);
+        $settledQuery = Order::where('vendor_id', $vendor->id)->where('vendor_settlement_status', 'settled');
+        $pendingQuery = Order::where('vendor_id', $vendor->id)->whereIn('vendor_settlement_status', ['eligible', 'held']);
+
+        if ($selectedShopId) {
+            $productsQuery->where('shop_id', $selectedShopId);
+            $reservationsQuery->where('shop_id', $selectedShopId);
+            $ordersQuery->where('shop_id', $selectedShopId);
+            $salesQuery->where('shop_id', $selectedShopId);
+            $settledQuery->where('shop_id', $selectedShopId);
+            $pendingQuery->where('shop_id', $selectedShopId);
+        }
+
+        $products = $productsQuery->get();
+        $reservations = $reservationsQuery->take(10)->get();
+        $orders = $ordersQuery->take(10)->get();
+
+        $grossSales = $salesQuery->sum('total_amount');
+        $netEarnings = $salesQuery->sum('vendor_earning_90');
+        $settledAmount = $settledQuery->sum('vendor_earning_90');
+        $pendingSettlement = $pendingQuery->sum('vendor_earning_90');
 
         $vendorMetrics = [
             'gross_sales' => $grossSales,
@@ -1034,9 +1254,8 @@ class PortalController extends Controller
         ];
 
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
-        $shops = Shop::where('vendor_id', $vendor->id)->get();
         $allLgas = Lga::with('state')->where('is_active', true)->orderBy('name', 'asc')->get();
-        return view('vendor.dashboard', compact('vendor', 'primaryShop', 'products', 'reservations', 'orders', 'vendorMetrics', 'categories', 'shops', 'allLgas'));
+        return view('vendor.dashboard', compact('vendor', 'primaryShop', 'products', 'reservations', 'orders', 'vendorMetrics', 'categories', 'shops', 'allLgas', 'selectedShopId'));
     }
 
     /**
@@ -1045,11 +1264,27 @@ class PortalController extends Controller
     public function vendorProductsPage(Request $request)
     {
         $vendor = $this->resolveVendorProfile();
-        $products = Product::where('vendor_id', $vendor->id)->with(['category', 'shop'])->latest()->get();
-        $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
-        $shops = Shop::where('vendor_id', $vendor->id)->where('is_active', true)->get();
+        $shops = Shop::where('vendor_id', $vendor->id)->with('lga.state')->where('is_active', true)->get();
 
-        return view('vendor.products', compact('vendor', 'products', 'categories', 'shops'));
+        $selectedShopId = $request->query('shop_id');
+        if ($selectedShopId !== null && $selectedShopId !== '' && $selectedShopId !== 'all') {
+            $selectedShopId = (int)$selectedShopId;
+            if (!$shops->contains('id', $selectedShopId)) {
+                $selectedShopId = null;
+            }
+        } else {
+            $selectedShopId = null;
+        }
+
+        $productsQuery = Product::where('vendor_id', $vendor->id)->with(['category', 'shop'])->latest();
+        if ($selectedShopId) {
+            $productsQuery->where('shop_id', $selectedShopId);
+        }
+        $products = $productsQuery->get();
+
+        $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
+
+        return view('vendor.products', compact('vendor', 'products', 'categories', 'shops', 'selectedShopId'));
     }
 
     /**
@@ -1058,10 +1293,27 @@ class PortalController extends Controller
     public function vendorOrdersPage(Request $request)
     {
         $vendor = $this->resolveVendorProfile();
-        $orders = Order::where('vendor_id', $vendor->id)
-            ->with(['customer:id,name,phone', 'rider.user', 'shop', 'items', 'returnCases'])
-            ->latest()
-            ->get();
+        $shops = Shop::where('vendor_id', $vendor->id)->with('lga.state')->get();
+
+        $selectedShopId = $request->query('shop_id');
+        if ($selectedShopId !== null && $selectedShopId !== '' && $selectedShopId !== 'all') {
+            $selectedShopId = (int)$selectedShopId;
+            if (!$shops->contains('id', $selectedShopId)) {
+                $selectedShopId = null;
+            }
+        } else {
+            $selectedShopId = null;
+        }
+
+        $ordersQuery = Order::where('vendor_id', $vendor->id)
+            ->with(['customer:id,name,phone', 'rider.user', 'shop.lga', 'items', 'returnCases'])
+            ->latest();
+
+        if ($selectedShopId) {
+            $ordersQuery->where('shop_id', $selectedShopId);
+        }
+
+        $orders = $ordersQuery->get();
 
         $riders = RiderProfile::where('vendor_id', $vendor->id)
             ->where('is_active', true)
@@ -1069,7 +1321,7 @@ class PortalController extends Controller
             ->with('user')
             ->get();
 
-        return view('vendor.orders', compact('vendor', 'orders', 'riders'));
+        return view('vendor.orders', compact('vendor', 'orders', 'riders', 'shops', 'selectedShopId'));
     }
 
     /**
@@ -1077,9 +1329,39 @@ class PortalController extends Controller
      */
     public function vendorAssignRider(Request $request, $id)
     {
-        // Keep the legacy route graceful for existing UI links, but do not permit
-        // vendor-owned dispatch in the centrally managed retailer model.
-        return back()->with('error', 'Vendor-managed rider assignment is retired. Victorious MARKET deliveries must be assigned through central dispatch.');
+        $vendor = $this->resolveVendorProfile();
+
+        $validated = $request->validate([
+            'rider_id' => 'required|integer|exists:rider_profiles,id',
+        ]);
+
+        $order = Order::where('id', $id)->where('vendor_id', $vendor->id)->firstOrFail();
+        $rider = RiderProfile::where('id', $validated['rider_id'])->where('vendor_id', $vendor->id)->first();
+
+        if (!$rider) {
+            return back()->with('error', 'Unauthorized: This delivery rider does not belong to your merchant account.');
+        }
+
+        if (!$rider->is_active) {
+            return back()->with('error', 'This delivery rider is currently inactive.');
+        }
+
+        if (!empty($rider->logistics_company_id)) {
+            return back()->with('error', 'Unauthorized: Legacy or fleet-linked riders cannot receive new vendor deliveries.');
+        }
+
+        if ($order->fulfillment_type !== 'doorstep_delivery') {
+            return back()->with('error', 'Cannot assign delivery rider: this order is configured for in-shop pickup.');
+        }
+
+        if (in_array($order->order_status, ['out_for_delivery', 'delivered', 'cancelled', 'returned', 'disputed'])) {
+            return back()->with('error', "Cannot reassign rider: order is in '{$order->order_status}' status. Reassignment is blocked once physical custody is taken.");
+        }
+
+        $order->rider_id = $rider->id;
+        $order->save();
+
+        return back()->with('success', "Order #{$order->order_number} assigned to delivery person {$rider->user->name}.");
     }
 
     /**
@@ -1088,12 +1370,29 @@ class PortalController extends Controller
     public function vendorReservationsPage(Request $request)
     {
         $vendor = $this->resolveVendorProfile();
-        $reservations = PickupReservation::where('vendor_id', $vendor->id)
-            ->with(['product:id,name,unit_price', 'customer:id,name,phone'])
-            ->latest()
-            ->get();
+        $shops = Shop::where('vendor_id', $vendor->id)->with('lga.state')->get();
 
-        return view('vendor.reservations', compact('vendor', 'reservations'));
+        $selectedShopId = $request->query('shop_id');
+        if ($selectedShopId !== null && $selectedShopId !== '' && $selectedShopId !== 'all') {
+            $selectedShopId = (int)$selectedShopId;
+            if (!$shops->contains('id', $selectedShopId)) {
+                $selectedShopId = null;
+            }
+        } else {
+            $selectedShopId = null;
+        }
+
+        $reservationsQuery = PickupReservation::where('vendor_id', $vendor->id)
+            ->with(['product:id,name,unit_price', 'customer:id,name,phone'])
+            ->latest();
+
+        if ($selectedShopId) {
+            $reservationsQuery->where('shop_id', $selectedShopId);
+        }
+
+        $reservations = $reservationsQuery->get();
+
+        return view('vendor.reservations', compact('vendor', 'reservations', 'shops', 'selectedShopId'));
     }
 
     /**
@@ -1372,12 +1671,79 @@ class PortalController extends Controller
     public function logisticsRidersPage()
     {
         $company = $this->resolveLogisticsCompany();
-        $activeRiders = RiderProfile::where('logistics_company_id', $company->id)
-            ->where('is_active', true)
+        $allRiders = RiderProfile::where('logistics_company_id', $company->id)
             ->with(['user', 'assignedLga'])
+            ->latest()
             ->get();
+        $activeRiders = $allRiders->where('is_active', true);
+        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
 
-        return view('logistics.riders', compact('company', 'activeRiders'));
+        return view('logistics.riders', compact('company', 'allRiders', 'activeRiders', 'lgas'));
+    }
+
+    /**
+     * Logistics Company Action: Onboard Dispatch Rider to Fleet
+     */
+    public function logisticsStoreRider(Request $request)
+    {
+        $company = $this->resolveLogisticsCompany();
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'phone' => 'required|string|max:25|unique:users,phone',
+            'email' => 'nullable|email|max:150|unique:users,email',
+            'password' => 'nullable|string|min:8',
+            'assigned_lga_id' => 'required|exists:lgas,id',
+            'vehicle_type' => 'required|in:motorcycle,bicycle,van,transit_waybill',
+            'license_plate' => 'required|string|max:50',
+            'nin_number' => 'nullable|string|max:50',
+        ]);
+
+        return DB::transaction(function () use ($validated, $company) {
+            $cleanPhone = preg_replace('/[^0-9+]/', '', $validated['phone']);
+            $email = !empty($validated['email']) ? strtolower(trim($validated['email'])) : 'rider_' . Str::lower(Str::random(8)) . '@victoriousmarket.ng';
+            $password = !empty($validated['password']) ? $validated['password'] : Str::random(12);
+
+            $user = User::create([
+                'name' => strip_tags(trim($validated['name'])),
+                'email' => $email,
+                'phone' => $cleanPhone,
+                'user_type' => 'rider',
+                'status' => 'active',
+                'password' => Hash::make($password),
+            ]);
+
+            $rider = RiderProfile::create([
+                'user_id' => $user->id,
+                'logistics_company_id' => $company->id,
+                'assigned_lga_id' => $validated['assigned_lga_id'],
+                'vehicle_type' => $validated['vehicle_type'],
+                'license_plate' => strtoupper(strip_tags(trim($validated['license_plate']))),
+                'nin_number' => !empty($validated['nin_number']) ? strip_tags(trim($validated['nin_number'])) : null,
+                'is_active' => true,
+                'is_online' => false,
+            ]);
+
+            return redirect()->route('logistics.riders.index')->with('status', "Dispatch rider '{$user->name}' successfully added to your fleet roster!");
+        });
+    }
+
+    /**
+     * Logistics Company Action: Toggle Courier Active/Inactive Duty Status
+     */
+    public function logisticsToggleRiderActive($id)
+    {
+        $company = $this->resolveLogisticsCompany();
+        $rider = RiderProfile::where('logistics_company_id', $company->id)->findOrFail($id);
+
+        $rider->is_active = !$rider->is_active;
+        if (!$rider->is_active) {
+            $rider->is_online = false; // Cannot be online if deactivated
+        }
+        $rider->save();
+
+        $statusLabel = $rider->is_active ? 'activated' : 'deactivated';
+        return redirect()->route('logistics.riders.index')->with('status', "Courier '{$rider->user->name}' has been {$statusLabel}.");
     }
 
     /**
@@ -1674,20 +2040,20 @@ class PortalController extends Controller
 
 
 
-        $nameParts = explode(' ', $customer->name ?? 'Emeka Okonkwo', 2);
-        $f_name = $nameParts[0] ?? 'Emeka';
-        $l_name = $nameParts[1] ?? 'Okonkwo';
+        $nameParts = explode(' ', $customer->name ?? '', 2);
+        $f_name = !empty($nameParts[0]) ? $nameParts[0] : 'Valued';
+        $l_name = !empty($nameParts[1]) ? $nameParts[1] : 'Customer';
 
         $total_order = $orders->count();
         $wishlists = 3;
-        $total_loyalty_point = (int)($cashbackAvailable > 0 ? $cashbackAvailable * 10 : 250);
-        $cashbackNairaValue = (float)($cashbackAvailable > 0 ? $cashbackAvailable : 2500.00);
+        $total_loyalty_point = (int)($cashbackAvailable * 10);
+        $cashbackNairaValue = (float)$cashbackAvailable;
 
         $customerMetrics = [
             'total_orders' => $orders->count(),
             'active_orders' => $activeOrders->count(),
-            'cashback_available' => $cashbackAvailable > 0 ? $cashbackAvailable : 2500.00,
-            'cashback_pending' => $cashbackPending,
+            'cashback_available' => (float)$cashbackAvailable,
+            'cashback_pending' => (float)$cashbackPending,
             'saved_addresses' => $addresses->count(),
         ];
 
@@ -3863,12 +4229,23 @@ class PortalController extends Controller
         }
 
         // Active and inactive lane configs originating from this shop's LGA for client-side instant check
-        $shopLgaId = $product->shop->lga_id ?? 69;
+        $shop = $product->shop;
+        $shopLgaId = $shop->lga_id ?? 69;
+
+        // Pre-fetch covered LGA IDs and covered State IDs for $shop to enforce vendor delivery coverage
+        $coveredLgaIds = $shop ? $shop->deliveryCoverages()->where('is_active', true)->whereNotNull('lga_id')->pluck('lga_id')->all() : [];
+        $coveredStateIds = $shop ? $shop->deliveryCoverages()->where('is_active', true)->whereNull('lga_id')->pluck('state_id')->all() : [];
+
         $activeLanesMap = DeliveryLane::where('origin_lga_id', $shopLgaId)
+            ->with('destinationLga')
             ->get()
-            ->mapWithKeys(function ($lane) {
-                return [$lane->destination_lga_id => [
-                    'is_active' => (bool)$lane->is_active,
+            ->mapWithKeys(function ($lane) use ($coveredLgaIds, $coveredStateIds) {
+                $destLgaId = (int)$lane->destination_lga_id;
+                $destStateId = (int)($lane->destinationLga->state_id ?? 0);
+                $isCoveredByShop = in_array($destLgaId, $coveredLgaIds, true) || ($destStateId && in_array($destStateId, $coveredStateIds, true));
+
+                return [$destLgaId => [
+                    'is_active' => (bool)($lane->is_active && $isCoveredByShop),
                     'base_fee' => (float)$lane->base_fee,
                     'estimated_hours_min' => $lane->estimated_delivery_hours_min,
                     'estimated_hours_max' => $lane->estimated_delivery_hours_max,
@@ -3886,12 +4263,14 @@ class PortalController extends Controller
         return view('storefront.checkout', compact('product', 'quantity', 'merchandiseSubtotal', 'deliveryFee', 'totalPayable', 'deliveryCheck', 'pickupCheck', 'destLga', 'lgas', 'allShops', 'availableCashback', 'activeCity', 'activeLanesMap', 'collectionPoints'));
     }
 
-    public function processCheckout(Request $request)
+    public function processCheckout(Request $request, CheckoutExecutionService $checkoutExecutionService)
     {
         if (!Auth::check() || Auth::user()->user_type !== 'customer') {
             return redirect()->route('customer.login')
                 ->with('error', 'Authentication required. Please sign in or create a customer account to place an order.');
         }
+
+        $user = Auth::user();
 
         $validated = $request->validate([
             'product_id' => 'required|integer|exists:products,id',
@@ -3904,248 +4283,167 @@ class PortalController extends Controller
             'delivery_address' => 'nullable|string|max:255',
             'shop_id' => 'nullable|integer|exists:shops,id',
             'redeem_cashback' => 'nullable',
+            '_checkout_idempotency_key' => 'nullable|string|max:100',
         ]);
 
-        $order = DB::transaction(function () use ($validated, $request) {
-            // Atomic Stock Locking & Eligibility Guard (Enforces 7-day freshness & marketplace rules under lock)
-            $product = Product::marketplaceEligible()
-                ->with(['shop', 'vendor'])
-                ->where('id', $validated['product_id'])
-                ->lockForUpdate()
-                ->first();
+        $product = Product::marketplaceEligible()
+            ->with(['shop', 'vendor'])
+            ->where('id', $validated['product_id'])
+            ->first();
 
-            if (!$product) {
-                return back()->withErrors([
-                    'product_id' => 'This product listing has expired or is no longer eligible for checkout.'
-                ])->withInput();
-            }
-
-            // 7-Day Freshness & Marketplace Eligibility Guard
-            if (!$product->isFresh() || !$product->is_approved || $product->listing_status !== 'listed') {
-                return back()->withErrors([
-                    'product_id' => "This product listing has expired or is no longer eligible for checkout. The merchant must confirm product freshness before it can be purchased."
-                ])->withInput();
-            }
-
-            if ($product->shop && (!$product->shop->is_active || $product->shop->trashed())) {
-                return back()->withErrors([
-                    'product_id' => 'The shop branch offering this item is currently closed or inactive.'
-                ])->withInput();
-            }
-
-            $quantity = (int)$validated['quantity'];
-            if (!$product->is_in_stock || !$product->is_available_for_sale) {
-                return back()->withErrors([
-                    'product_id' => "Product '{$product->name}' is currently out of stock."
-                ])->withInput();
-            }
-
-            if (isset($product->inventory_quantity) && (int)$product->inventory_quantity > 0 && (int)$product->inventory_quantity < $quantity) {
-                return back()->withErrors([
-                    'quantity' => "Insufficient stock. Only {$product->inventory_quantity} units available for '{$product->name}'."
-                ])->withInput();
-            }
-
-            if ($product->vendor && ($product->vendor->trashed() || $product->vendor->marketplace_status !== 'active')) {
-                return back()->withErrors([
-                    'product_id' => 'The merchant providing this item is currently not active on the marketplace.'
-                ])->withInput();
-            }
-
-            if ($product->vendor && $product->vendor->user && $product->vendor->user->status !== 'active') {
-                return back()->withErrors([
-                    'product_id' => 'The merchant user account is inactive.'
-                ])->withInput();
-            }
-
-            $merchandiseSubtotal = \App\Services\BcMathService::mul($product->unit_price, (string)$quantity);
-            
-            // Triple Consistency Guard: Shop must belong to product's vendor AND match product branch
-            if (!empty($validated['shop_id'])) {
-                $shop = Shop::withTrashed()->where('vendor_id', $product->vendor_id)->findOrFail($validated['shop_id']);
-                if ($product->shop_id && (int)$shop->id !== (int)$product->shop_id) {
-                    return back()->withErrors([
-                        'shop_id' => 'Selected shop branch does not stock this product.'
-                    ])->withInput();
-                }
-            } else {
-                $shop = $product->shop;
-            }
-
-            if (!$shop || $shop->trashed() || !$shop->is_active) {
-                return back()->withErrors([
-                    'shop_id' => 'The selected shop branch is currently inactive.'
-                ])->withInput();
-            }
-
-            // Delivery fee calculation with corridor serviceability guard
-            $deliveryFee = '0.00';
-            $laneId = null;
-            $destLgaId = $validated['destination_lga_id'] ?? $shop->lga_id;
-            $collectionPointId = null;
-
-            if ($validated['fulfillment_type'] === 'doorstep_delivery') {
-                $fulfillmentService = new \App\Services\FulfillmentAvailabilityService();
-                $check = $fulfillmentService->checkDeliveryAvailability($shop->id, $destLgaId, $product->package_tier ?? 'standard');
-                
-                if (!$check['is_available']) {
-                    return back()->withErrors([
-                        'fulfillment_type' => 'Delivery is currently suspended or unavailable for this route corridor. Please choose In-Store Pickup or choose a serviced destination LGA.'
-                    ])->withInput();
-                }
-
-                $deliveryFee = $check['fee'];
-                $laneId = $check['lane_id'] ?? null;
-
-                // Inter-LGA / Inter-State Collection Point Resolution (Per-LGA System)
-                if ((int)$shop->lga_id !== (int)$destLgaId || !empty($validated['collection_point_id'])) {
-                    if (!empty($validated['collection_point_id'])) {
-                        $cp = \App\Models\LogisticsCollectionPoint::where('id', $validated['collection_point_id'])
-                            ->where('is_active', true)
-                            ->first();
-                        $collectionPointId = $cp ? $cp->id : null;
-                    }
-                    if (!$collectionPointId) {
-                        $fallbackCp = \App\Models\LogisticsCollectionPoint::where('lga_id', $destLgaId)
-                            ->where('is_active', true)
-                            ->first();
-                        $collectionPointId = $fallbackCp ? $fallbackCp->id : null;
-                    }
-                }
-            }
-
-            $splits = \App\Services\BcMathService::computeCommercialSplits($merchandiseSubtotal, $deliveryFee);
-
-            // Strictly Verified Customer Account
-            $user = Auth::user();
-
-            // Two-Phase Intent Snapshot & SHA-256 Fingerprint
-            $payload = [
-                'user_id' => $user->id,
-                'product_id' => $product->id,
-                'quantity' => $quantity,
-                'fulfillment_type' => $validated['fulfillment_type'],
-                'total_payable' => $splits['grand_total'],
-                'timestamp' => Carbon::now()->timestamp,
-            ];
-            $fingerprint = \App\Models\CheckoutIntent::generateFingerprint($payload);
-
-            // Order Number, Security Tokens & OTPs
-            $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(4));
-            $deliveryOtp = Order::generateUniqueDeliveryOtp();
-            $pickupOtp = Order::generateUniquePickupOtp();
-            $guestAccessToken = bin2hex(random_bytes(32));
-
-            // Assign active accredited rider and freeze handling logistics company
-            $rider = null;
-            $logisticsCompanyId = null;
-            if ($collectionPointId) {
-                $assignedCp = \App\Models\LogisticsCollectionPoint::find($collectionPointId);
-                if ($assignedCp && $assignedCp->logistics_company_id) {
-                    $logisticsCompanyId = $assignedCp->logistics_company_id;
-                    $rider = RiderProfile::whereNull('vendor_id')
-                        ->whereNull('shop_id')
-                        ->where('logistics_company_id', $assignedCp->logistics_company_id)
-                        ->where('is_active', true)
-                        ->where('is_online', true)
-                        ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                        ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'))
-                        ->first()
-                        ?? RiderProfile::whereNull('vendor_id')
-                        ->whereNull('shop_id')
-                        ->where('logistics_company_id', $assignedCp->logistics_company_id)
-                            ->where('is_active', true)
-                            ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                            ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'))
-                            ->first();
-                }
-            }
-            if (!$rider) {
-                $rider = RiderProfile::whereNull('vendor_id')
-                    ->whereNull('shop_id')
-                    ->where('is_active', true)
-                    ->where('is_online', true)
-                    ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                    ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'))
-                    ->first()
-                    ?? RiderProfile::whereNull('vendor_id')
-                    ->whereNull('shop_id')
-                    ->where('is_active', true)
-                        ->whereHas('user', fn($q) => $q->where('status', 'active'))
-                        ->whereHas('logisticsCompany', fn($q) => $q->whereNull('deleted_at')->where('status', 'active'))
-                        ->first();
-                if ($rider && $rider->logistics_company_id) {
-                    $logisticsCompanyId = $rider->logistics_company_id;
-                }
-            }
-            if (!$logisticsCompanyId && $laneId) {
-                $assignedLane = \App\Models\DeliveryLane::find($laneId);
-                if ($assignedLane && $assignedLane->assigned_logistics_company_id) {
-                    $activeCompany = \App\Models\LogisticsCompanyProfile::where('id', $assignedLane->assigned_logistics_company_id)
-                        ->whereNull('deleted_at')
-                        ->where('status', 'active')
-                        ->first();
-                    if ($activeCompany) {
-                        $logisticsCompanyId = $activeCompany->id;
-                    }
-                }
-            }
-
-            // Cryptographic CSPRNG Payment Reference Initialization
-            $paymentRef = Order::generateUniquePaymentReference();
-
-            $order = Order::create([
-                'order_number' => $orderNumber,
-                'customer_id' => $user->id,
-                'vendor_id' => $product->vendor_id,
-                'shop_id' => $shop->id,
-                'collection_point_id' => $collectionPointId,
-                'rider_id' => $rider ? $rider->id : null,
-                'logistics_company_id' => $logisticsCompanyId,
-                'fulfillment_type' => $validated['fulfillment_type'],
-                'order_status' => ($validated['fulfillment_type'] === 'in_shop_pickup' ? 'ready_for_pickup' : 'pending'),
-                'payment_status' => 'pending',
-                'payment_method' => ($validated['fulfillment_type'] === 'in_shop_pickup' ? 'in_shop_counter' : 'paystack_direct'),
-                'payment_reference' => $paymentRef,
-                'guest_access_token' => $guestAccessToken,
-                'origin_lga_id' => $shop->lga_id,
-                'destination_lga_id' => $destLgaId,
-                'delivery_lane_id' => $laneId,
-                'merchandise_subtotal' => $splits['merchandise_subtotal'],
-                'delivery_fee' => $splits['delivery_fee_segregated'],
-                'cashback_redeemed' => '0.00',
-                'grand_total' => $splits['grand_total'],
-                'vendor_net_90' => $splits['vendor_net_90'],
-                'customer_cashback_5' => $splits['customer_cashback_5'],
-                'platform_margin_5' => $splits['platform_retained_5'],
-                'logistics_fee_retained' => $splits['logistics_net_90'],
-                'platform_delivery_fee' => $splits['platform_delivery_cut_10'],
-                'pickup_verification_code' => $pickupOtp,
-                'verification_code' => $deliveryOtp,
-                'vendor_settlement_status' => 'held',
-                'expires_at' => Carbon::now()->addMinutes(30),
-            ]);
-
-            OrderItem::create([
-                'order_id' => $order->id,
-                'product_id' => $product->id,
-                'product_name' => $product->name,
-                'unit_price' => $product->unit_price,
-                'quantity' => $quantity,
-                'line_total' => $merchandiseSubtotal,
-            ]);
-
-            // Store guest token in session for seamless tracking access
-            session(['order_guest_token_' . $orderNumber => $guestAccessToken]);
-
-            return $order;
-        });
-
-        if ($order instanceof \Illuminate\Http\RedirectResponse) {
-            return $order;
+        if (!$product) {
+            return back()->withErrors([
+                'product_id' => 'This product listing has expired or is no longer eligible for checkout.'
+            ])->withInput();
         }
 
-        // For In-Shop Pickup: Customer pays AFTER physical inspection at the vendor shop counter (₦0.00 online upfront)
+        // 7-Day Freshness & Marketplace Eligibility Guard
+        if (!$product->isFresh() || !$product->is_approved || $product->listing_status !== 'listed') {
+            return back()->withErrors([
+                'product_id' => "This product listing has expired or is no longer eligible for checkout. The merchant must confirm product freshness before it can be purchased."
+            ])->withInput();
+        }
+
+        if ($product->shop && (!$product->shop->is_active || $product->shop->trashed())) {
+            return back()->withErrors([
+                'product_id' => 'The shop branch offering this item is currently closed or inactive.'
+            ])->withInput();
+        }
+
+        $quantity = (int)$validated['quantity'];
+        if (!$product->is_in_stock || !$product->is_available_for_sale) {
+            return back()->withErrors([
+                'product_id' => "Product '{$product->name}' is currently out of stock."
+            ])->withInput();
+        }
+
+        if (isset($product->inventory_quantity) && (int)$product->inventory_quantity > 0 && (int)$product->inventory_quantity < $quantity) {
+            return back()->withErrors([
+                'quantity' => "Insufficient stock. Only {$product->inventory_quantity} units available for '{$product->name}'."
+            ])->withInput();
+        }
+
+        if ($product->vendor && ($product->vendor->trashed() || $product->vendor->marketplace_status !== 'active')) {
+            return back()->withErrors([
+                'product_id' => 'The merchant providing this item is currently not active on the marketplace.'
+            ])->withInput();
+        }
+
+        if ($product->vendor && $product->vendor->user && $product->vendor->user->status !== 'active') {
+            return back()->withErrors([
+                'product_id' => 'The merchant user account is inactive.'
+            ])->withInput();
+        }
+
+        // Triple Consistency Guard: Shop must belong to product's vendor AND match product branch
+        if (!empty($validated['shop_id'])) {
+            $shop = Shop::withTrashed()->where('vendor_id', $product->vendor_id)->findOrFail($validated['shop_id']);
+            if ($product->shop_id && (int)$shop->id !== (int)$product->shop_id) {
+                return back()->withErrors([
+                    'shop_id' => 'Selected shop branch does not stock this product.'
+                ])->withInput();
+            }
+        } else {
+            $shop = $product->shop;
+        }
+
+        if (!$shop || $shop->trashed() || !$shop->is_active) {
+            return back()->withErrors([
+                'shop_id' => 'The selected shop branch is currently inactive.'
+            ])->withInput();
+        }
+
+        $servicePayload = [
+            'shop_id' => (int) $shop->id,
+            'fulfillment_type' => $validated['fulfillment_type'],
+            'items' => [
+                [
+                    'product_id' => (int) $product->id,
+                    'quantity' => $quantity,
+                ]
+            ],
+            'redeem_cashback' => !empty($validated['redeem_cashback']),
+            'payment_method' => ($validated['fulfillment_type'] === 'in_shop_pickup') ? 'in_shop_counter' : 'paystack',
+            'callback_url' => route('payment.paystack.callback'),
+        ];
+
+        if ($validated['fulfillment_type'] === 'doorstep_delivery') {
+            $destLgaId = $validated['destination_lga_id'] ?? $shop->lga_id;
+            $servicePayload['destination_lga_id'] = (int) $destLgaId;
+
+            $lgaModel = Lga::with('state')->find($destLgaId);
+            $stateId = $lgaModel?->state_id ?? 1;
+            $countryId = $lgaModel?->state?->country_id ?? \App\Models\Country::first()?->id ?? 1;
+
+            // Resolve or create CustomerAddress
+            $customerAddress = CustomerAddress::firstOrCreate([
+                'user_id' => $user->id,
+                'lga_id' => $destLgaId,
+                'address_line' => $validated['delivery_address'] ?? 'Customer Delivery Address',
+            ], [
+                'contact_name' => $validated['customer_name'] ?? $user->name,
+                'phone' => $validated['customer_phone'] ?? $user->phone,
+                'state_id' => $stateId,
+                'country_id' => $countryId,
+                'landmark' => $request->input('landmark'),
+                'is_default' => false,
+            ]);
+            $servicePayload['customer_address_id'] = $customerAddress->id;
+        }
+
+        // Order-level Idempotency Guard (VM-AUD-065 & VM-AUD-067)
+        $idempotencyKey = $request->input('_checkout_idempotency_key')
+            ?: $request->header('Idempotency-Key');
+
+        if ($idempotencyKey !== null) {
+            $idempotencyKey = trim($idempotencyKey);
+            if ($idempotencyKey === '' || strlen($idempotencyKey) > 100) {
+                return back()->withErrors(['_checkout_idempotency_key' => 'Idempotency-Key must contain between 1 and 100 characters.'])->withInput();
+            }
+
+            $canonical = [
+                'intent_id' => null,
+                'shop_id' => (int) $shop->id,
+                'fulfillment_type' => $validated['fulfillment_type'],
+                'customer_address_id' => isset($servicePayload['customer_address_id']) ? (int) $servicePayload['customer_address_id'] : null,
+                'destination_lga_id' => isset($servicePayload['destination_lga_id']) ? (int) $servicePayload['destination_lga_id'] : (int) $shop->lga_id,
+                'items' => [
+                    [
+                        'product_id' => (int) $product->id,
+                        'quantity' => $quantity,
+                    ]
+                ],
+                'redeem_cashback' => (bool) !empty($validated['redeem_cashback']),
+                'payment_method' => $servicePayload['payment_method'],
+            ];
+            $servicePayload['_checkout_idempotency_key'] = $idempotencyKey;
+            $servicePayload['_checkout_request_hash'] = hash('sha256', json_encode($canonical));
+        }
+
+        $result = $checkoutExecutionService->execute($user, $servicePayload);
+
+        if (!$result['success']) {
+            if (($result['status_code'] ?? 422) === 409) {
+                return back()->withErrors([
+                    '_checkout_idempotency_key' => $result['message']
+                ])->withInput();
+            }
+
+            $errorMsg = strtolower($result['message'] ?? '');
+            $errorKey = (str_contains($errorMsg, 'corridor') || str_contains($errorMsg, 'delivery') || str_contains($errorMsg, 'lane'))
+                ? 'fulfillment_type'
+                : 'product_id';
+
+            return back()->withErrors([$errorKey => $result['message']])->withInput();
+        }
+
+        $order = $result['order'];
+
+        // Store guest tracking token and order number in session
+        session(['order_guest_token_' . $order->order_number => $order->guest_access_token]);
+        session(['checkout_order_number' => $order->order_number]);
+
+        // For In-Shop Pickup: Customer pays after inspection at shop counter
         if ($validated['fulfillment_type'] === 'in_shop_pickup') {
             $shopName = $order->shop->name ?? 'the shop';
             $shopAddress = $order->shop->address ?? 'the branch counter';
@@ -4155,17 +4453,16 @@ class PortalController extends Controller
             ])->with('success', "Your order has been reserved for in-store pickup! Visit {$shopName} at {$shopAddress} to inspect your items. You will pay at the shop counter after inspecting.");
         }
 
-        // For Doorstep Delivery: Payment first online via Paystack escrow
-        $paystackService = app(\App\Services\PaystackService::class);
-        $callbackUrl = route('payment.paystack.callback');
-        $paystackInit = $paystackService->initializeTransaction($order, $callbackUrl, Auth::user()->email);
-
-        if (!$paystackInit['success'] || empty($paystackInit['authorization_url'])) {
-            return redirect()->route('order.status', ['order_number' => $order->order_number, 'token' => $order->guest_access_token])
-                ->with('error', $paystackInit['message'] ?? 'Unable to initialize Paystack payment gateway.');
+        // For Doorstep Delivery: Paystack escrow
+        $paystack = $result['paystack'] ?? null;
+        if (!empty($paystack['authorization_url'])) {
+            return redirect()->away($paystack['authorization_url']);
         }
 
-        return redirect()->away($paystackInit['authorization_url']);
+        return redirect()->route('order.status', [
+            'order_number' => $order->order_number,
+            'token' => $order->guest_access_token,
+        ])->with('error', $paystack['message'] ?? 'Unable to initialize Paystack payment gateway.');
     }
 
     public function createReservation(Request $request)
@@ -4641,9 +4938,9 @@ class PortalController extends Controller
                 ['user_id' => $user->id],
                 [
                     'company_name' => $user->name,
-                    'hq_lga_id' => $lga ? $lga->id : 1,
+                    'lga_id' => $lga ? $lga->id : 1,
                     'fleet_size' => 10,
-                    'is_active' => true,
+                    'status' => 'active',
                 ]
             );
         }

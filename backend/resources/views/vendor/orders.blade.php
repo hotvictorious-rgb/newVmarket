@@ -57,6 +57,8 @@
         </div>
     @endif
 
+    @include('vendor.partials._shop_switcher')
+
     <div class="dash-card">
         <div class="dash-card-header">
             <div>
@@ -84,6 +86,11 @@
                             <td>
                                 <div style="font-weight: 700; color: var(--adm-primary);">{{ $order->order_number }}</div>
                                 <span style="font-size: 11.5px; color: var(--adm-text-muted);">{{ $order->created_at->format('d M, Y H:i') }}</span>
+                                @if($order->shop)
+                                    <div style="font-size: 11px; color: #0284C7; font-weight: 600; margin-top: 2px;">
+                                        🏬 {{ $order->shop->name }} (📍 {{ $order->shop->lga->name ?? 'LGA' }})
+                                    </div>
+                                @endif
                             </td>
                             <td>
                                 <div style="font-weight: 600; color: var(--adm-text);">{{ $order->customer->name ?? 'Shopper' }}</div>

@@ -10,7 +10,7 @@
 
 ## Mission
 
-Align and migrate the existing Laravel application to Victorious MARKET's owner-confirmed retailer model: VM controls the public catalogue, retail prices, customer payment workflow, customer relationship, sourcing decisions, and fulfilment coordination from Uyo. Suppliers are private sources, not public marketplace sellers. Delivery is coordinated by VM through approved logistics companies; authorized supplier-shop pickup remains available. Preserve proven payment, refund, idempotency, evidence, and financial-integrity controls. This is a migration plan, not a statement that migration is complete.
+Audit and migrate the existing Laravel application from marketplace/vendor-managed fulfilment to Victorious MARKET as a centralized retailer operating from Uyo. Preserve proven payment, refund, idempotency, evidence, and financial-integrity controls. Do not rebuild from scratch, make only frontend changes, or delete legacy logistics/financial data before mapping dependencies.
 
 ## Authoritative business-rule source
 
@@ -18,34 +18,49 @@ The current model is defined in [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.
 
 ## Operating model
 
-- Suppliers submit product information and wholesale offers for VM approval. VM creates one canonical listing for a new product or maps an offer to an existing listing.
-- Each accepted order item snapshots the selected supplier offer, purchase cost, product/variant and relevant terms.
-- VM controls public product descriptions, retail prices, order acceptance, customer payment workflow, service coverage and delivery coordination.
-- Uyo is the central operating base. Delivery is offered only where product sourcing, coverage, approved logistics company capacity and customer-facing fee are confirmed.
-- Every rider assigned to new VM delivery must be active and linked to exactly one active logistics company. Supplier/vendor-linked riders are not eligible for new delivery assignments.
-- Authorized supplier-shop pickup remains supported with the existing reservation pass, separate one-time customer pickup verification and in-shop photo evidence.
-- Supplier payment eligibility begins only after verified successful customer delivery or confirmed customer pickup and reconciliation. It is not an automatic transfer.
-- Keep customer receipts/revenue, supplier purchase costs/payables, delivery charges, logistics-company charges/payables, fees, refunds, any separately approved cashback liability and expenses distinct in the ledger.
-- The old 90/5/5 merchandise split, 90/10 vendor delivery split, vendor earning balances, vendor payout thresholds and vendor debt rules are not default retailer accounting. Do not invent replacement percentages or assume cashback continues without owner/accountant approval.
+- **Private Wholesale Sourcing:** Suppliers provide physical products, inventory availability in Uyo, and wholesale cost prices. VM adds its profit margin and publishes the canonical public retail selling price (`Retail Price = Wholesale Cost + VM Profit Margin`).
+- **Automated Sourcing Assignment (Cheapest & Available):** When multiple suppliers offer the same product, the system automatically assigns the order (upon payment for delivery, or reservation for pickup) to the supplier that is available and cheapest in Uyo (`cost_price` lowest).
+- **Admin Sourcing Override:** Admin maintains complete supervisory control and can override the automated supplier or shop assignment at any time.
+- **Doorstep Delivery Flow (Pay First, Sourced & Dispatched):**
+  1. Customer pays the full retail selling price plus delivery fee upfront online via Paystack. Strictly NO Cash on Delivery (COD).
+  2. System automatically assigns the order to the cheapest available supplier in Uyo. Admin can override this assignment.
+  3. The assigned supplier verifies their physical inventory and confirms product availability in their portal.
+  4. Once availability is confirmed, Admin assigns the order to an accredited Logistics Company (onboarded strictly by Admin).
+  5. The Logistics Company dispatches its active fleet rider to collect the item from the supplier's shop and deliver to the customer.
+  6. Delivery completion strictly requires customer verification OTP (`delivery_otp`) plus doorstep photo proof.
+- **In-Shop Pickup Flow (Inspect First, Pay at Shop via Paystack):**
+  1. Customer reserves online for free (₦0 upfront).
+  2. System automatically assigns the reservation to the supplier shop with the cheapest wholesale cost and available stock, issuing a unique reservation pass (`RES-XXXXXX`) and customer pickup OTP (`verification_code`).
+  3. Admin can override the assigned reservation pickup location if necessary.
+  4. Customer journeys to the designated shop and can call or chat Victorious MARKET customer support for assistance or directions.
+  5. Customer arrives at the supplier shop, presents the reservation code, and the supplier confirms the reservation.
+  6. Customer **physically inspects the item at the counter first** to ensure complete satisfaction.
+  7. Upon satisfaction, customer pays **directly to Victorious MARKET via Paystack** (mobile payment link, counter QR, or online counter checkout). Strictly NO cash or private vendor bank transfer.
+  8. Once Paystack confirms payment, supplier verifies the customer's pickup OTP (`verification_code`), records mandatory photo proof, and hands over the item.
+  9. If customer is dissatisfied upon inspection, they walk away without paying; the reservation is cancelled cleanly with zero refund overhead.
+- **Operating Base:** Uyo, Akwa Ibom State is the central operating base. Delivery is offered only where local supplier sourcing and accredited logistics partner coverage are confirmed.
+- **Delivery Riders:** Every rider assigned to new VM delivery must be active and linked to exactly one approved logistics company. Supplier-owned/vendor-linked riders are not eligible for new delivery assignments.
+- **Supplier Payment Eligibility:** Suppliers are paid their agreed wholesale cost strictly after verified successful customer delivery or confirmed in-shop pickup. Order placement, customer payment, or rider collection alone never unlocks supplier payment.
+- **Retail Accounting & Customer 5% Cashback Retention:** The legacy 90/5/5 marketplace split is superseded, but the **5% customer cashback feature is actively retained** as VM's core customer loyalty engine. Accounting follows retail margin: `Customer Retail Price - Supplier Wholesale Cost = VM Gross Margin`. The 5% customer cashback liability is funded directly out of VM's gross retail margin (never deducted from the supplier's wholesale cost). Suppliers receive 100% of agreed wholesale cost upon verified completion. **Non-Compounding Rule:** Cashback CANNOT be earned on amounts covered by redeemed cashback or discounts; it is earned strictly on real money paid through Paystack on eligible merchandise (`(Merchandise Subtotal - Cashback Redeemed) * 5%`). Cashback matures 24 hours after the return window closes and is redeemable on future checkouts up to 50% of the cart value.
 
 ## Retail accounting and refund safeguards
 
-- Supplier purchase cost is a cost/payable, not marketplace commission.
+- Supplier purchase cost is a cost/payable (`cost_price * quantity`), not a marketplace commission.
 - Reconcile the exact order-item, selected supplier offer, quantity, agreed cost and verified fulfilment before supplier payment eligibility.
 - Keep payable, authorization, payment attempt, provider confirmation, reversal and reconciliation as separate idempotent states. Timeout means uncertain and must be reconciled before retry.
 - VM remains responsible for an approved customer refund even if a supplier has been paid. Supplier receivable/recovery requires evidence-backed supplier responsibility and contractual recoverability; a complaint alone is not debt.
 - Preserve existing payment verification, webhook authentication, refund authorization, original payment route, refund ceilings, immutable journal and reconciliation controls.
 - The legacy web checkout bypass of CheckoutExecutionService remains open until fixed and tested.
 
-## 24-Hour Reservation Hold and Late-Payment Reconciliation Policy
+## 30-Minute Stock-Hold and Late-Payment Reconciliation Policy
 
-For Victorious MARKET, the currently documented supplier-shop reservation hold is 24 hours. If a payment is confirmed after a reservation expires, the system must verify the payment first, recheck stock atomically, and then either confirm the order if stock is still available or initiate a controlled refund. Payment confirmation alone does not prove stock remains available.
+For VICTORIOUS MARKET, if a customer pays after the 30-minute stock hold expires, the system should verify the payment first, check the stock again, and then either confirm the order or initiate a controlled refund. It should never assume that payment automatically means stock is still available.
 
-The reservation expiry is a stock-control boundary, not a deadline that makes a customer's money disappear. Payment verification and refund obligations continue after expiry.
+The important distinction is that 30 minutes is the stock-hold duration, not a deadline that makes a customer's money disappear.
 
 ### How it should work
 
-1. **The 24-hour reservation expires**  
+1. **The 30-minute hold expires**  
    The system marks the hold as expired or awaiting reconciliation. If Paystack confirms that payment failed or was abandoned, the system releases the reserved quantity so another customer can buy it.
 
 2. **The customer actually pays late, but stock is still available**  
@@ -75,7 +90,7 @@ In the final step, the first customer's payment cannot be used to fulfil an orde
 
 Implement these rules:
 
-- The reservation expires after 24 hours, but payment verification and refund handling continue beyond that deadline.
+- The hold expires after 30 minutes, but payment verification and refund handling continue beyond that deadline.
 - A late payment can still be fulfilled if sufficient stock remains and the backend can safely allocate it.
 - Never oversell: use a database transaction and row-level locking or an equivalent atomic inventory mechanism.
 - Never refund based only on the browser's message. Verify the payment with Paystack first.
@@ -95,7 +110,7 @@ The V1 vendor interface uses a simple **In Stock / Out of Stock** toggle. Vendor
 1. **Binary listing mode:** The vendor's status is the source of truth for whether the listing is offered for sale. The backend must lock the product/listing during checkout, reject an out-of-stock listing, and prevent conflicting concurrent changes to the same listing. The platform cannot guarantee that the physical item remains available if the vendor sells it offline and fails to update the toggle.
 2. **Quantity-tracked mode, when available:** If the product has an authoritative physical count, the backend maintains physical, allocated, and held quantities. Available quantity is physical minus allocated minus active holds, clamped at zero. The invariant is allocated + held less than or equal to physical. The vendor UI may remain simple even if the backend maintains a verified quantity.
 3. **No invented quantities:** Do not infer a physical stock count from an In Stock toggle. Do not show customers a numeric quantity unless it comes from authoritative inventory.
-4. **24-hour reservation hold:** A reservation is temporary and must be enforced atomically. The documented supplier-shop reservation expires after 24 hours. Do not release stock while payment is pending or uncertain until the authoritative gateway outcome is reconciled. Any different checkout inventory hold must be separately specified and approved; do not conflate it with the supplier-shop reservation.
+4. **30-minute payment hold:** A checkout hold is a temporary reservation for the capacity the backend can actually enforce. The hold expires after 30 minutes, but payment verification continues beyond that deadline. Do not release a reservation while payment is pending or uncertain until the authoritative gateway outcome is reconciled.
 5. **Verified successful payment:** Convert the relevant active reservation into the order's allocation atomically. If the listing uses quantity-tracked inventory, decrement/allocate exactly once under database locks. If the vendor's offline sale made the item unavailable and the vendor's binary status was stale, do not silently cancel or pretend the item was delivered; move the paid order into an explicit paid-stock-unavailable review/refund workflow.
 6. **Failed payment:** Release the reservation only after the gateway result is authoritatively failed/abandoned or reconciliation establishes that no payment succeeded. Repeated callbacks must not release or allocate stock twice.
 7. **Concurrency:** Use database transactions, row locks, unique/idempotency constraints, and explicit reservation state. These controls prevent conflicting updates for tracked inventory. They do not reveal unreported offline sales or magically create a physical stock count.
@@ -155,47 +170,48 @@ If a vendor sells an item offline and forgets to update their VMARKET status, a 
 
 ## Current-code findings that must be addressed
 
-The initial source inspection found legacy marketplace code paths that must be re-evaluated for the retailer model. These are audit findings, not claims that fixes have been implemented:
+The initial source inspection found direct mismatches with the adopted rules. These are findings from code review, not claims that fixes have already been implemented:
 
-1. **Rider ownership is not exclusive yet.** RiderProfile supports vendor_id and logistics_company_id, and RiderTerminalApiController permits legacy vendor-linked or fleet-linked riders. New VM delivery assignments must require an active approved logistics company and a rider linked to exactly one active logistics company. Reject supplier/vendor-linked riders for new work.
-2. **Rider API exposes prohibited data.** formatOrderForRider has included payment_status, delivery_fee and raw customer phone. Replace it with a privacy-minimal projection and protected Call Customer action; audit list, history, detail, export, logs and error payloads.
-3. **Failed-delivery handler performs financial actions.** RiderTerminalApiController::recordDeliveryAttemptFailed has created immediately available CustomerWalletCredit and logistics-company payable journal entries. Route customer remedies through the authorized return/refund and financial-operation services. Legitimate logistics-company charges must come from an approved VM/company agreement, not a rider event or the former vendor delivery split.
-4. **Legacy financial and fleet concepts remain active.** Rider views may include earnings/wallet/payout surfaces; logistics-company models, payout requests and routes remain. Audit each route/job/API consumer. Reuse logistics-company records for authorized carrier operations only after validating status, rider linkage, assignment and commercial terms. Preserve historical payouts as history.
-5. **Pickup needs explicit enforcement.** Customer counter pickup requires BOTH the RES-XXXXXX reservation pass and separate one-time customer pickup OTP, plus the in-shop photo. Verify these at the authorized supplier-shop pickup location. Pickup never requires a rider assignment; customer pickup credentials must remain separate from rider-to-logistics-company custody credentials.
-6. **Assignment lifecycle needs a custody fence.** VM authorizes assignment to an approved active logistics company and a rider linked to exactly that company. Validate coverage, order state, active assignment and custody atomically. Reassignment after custody requires a recorded custody-transfer/return workflow.
-7. **Payment and coverage.** Doorstep COD is disabled. Customer payment must use VM's authorized workflow; supplier shops cannot collect off-platform cash/private-account transfers. Uyo is the operating base, and checkout offers delivery only where product sourcing, approved logistics coverage and customer fee are confirmed.
-8. **Supplier offer linkage is not proven.** Existing product/shop/vendor identifiers may not snapshot a selected supplier offer or purchase cost. Add canonical product matching and immutable supplier offer/purchase-cost snapshots on accepted order items.
-9. **Supplier payment and refund boundaries need proof.** Supplier payment eligibility begins only after verified successful customer delivery or pickup and reconciliation. Supplier readiness, VM collection, rider assignment or carrier collection is insufficient. VM remains responsible for valid customer refunds; supplier recovery is separate and requires evidence-backed responsibility and contractual recoverability.
-10. **Retail accounting is not yet approved/implemented.** The old 90/5/5 merchandise split and 90/10 vendor delivery split are not default retailer rules. Keep customer receipts/revenue, supplier purchase costs/payables, delivery charges, logistics-company charges, gateway fees, refunds, any approved cashback and expenses separate. Obtain owner/accountant approval before enabling new cashback accrual or deciding delivery-fee margin.
-11. **Doorstep handover mixes operational and financial work.** DoorstepHandshakeService and related routes must not allow a rider event to approve a refund, create immediately spendable credit, settle supplier payable or post an unauthorized logistics charge. Financial services may consume verified events only through explicit idempotent and authorized transitions.
+1. **Rider ownership is not exclusive yet.** RiderProfile supports both vendor_id and logistics_company_id, and RiderTerminalApiController permits either vendor-linked or fleet-linked riders. New assignment guards must require one active vendor owner and reject fleet-only riders for new work.
+2. **Rider API exposes prohibited data.** formatOrderForRider currently includes payment_status and delivery_fee and returns the customer's raw phone field. The customer relation is loaded with phone. Replace this with a privacy-minimal projection and protected Call Customer action; audit all list, history, detail, export, log, and error payloads.
+3. **Failed-delivery handler performs financial actions.** RiderTerminalApiController::recordDeliveryAttemptFailed currently creates an immediately available CustomerWalletCredit after the attempt threshold and writes a logistics-company payable journal entry for a retained delivery fee. Both conflict with operational-only riders and the no-platform-rider-payout model. Route remedies through the authorized return/refund and financial-operation services after review.
+4. **Legacy financial and fleet concepts remain active.** RiderTerminalApiController imports/uses LogisticsCompanyProfile, CustomerWalletCredit, FinancialJournalEntry, and OrderSettlementService; rider views include earnings/wallet/payout surfaces; logistics-company models, payout requests, and routes remain. Disable these for new vendor-managed delivery, preserve authorized read-only history, and map every route/job/API consumer before removing anything.
+5. **Pickup needs explicit enforcement.** The customer counter pickup requires BOTH the RES-XXXXXX reservation pass and the separate one-time customer pickup OTP (`pickup_verification_code`); the OTP supplements and never replaces the reservation pass. Tests must prove that in_shop_pickup always costs zero, the owning vendor verifies both credentials at the counter and records the in-shop pickup photo, pickup never requires a rider, and no delivery payout/allocation is created. Rider-to-vendor parcel custody is a separate operational flow.
+6. **Assignment lifecycle needs a custody fence.** Assign/reassign endpoints and services must enforce vendor ownership, active rider status, order state, and an atomic custody transition. Reassignment after pickup must require a recorded return/custody-transfer workflow.
+7. Doorstep COD is disabled. The two permitted paths are pay before delivery through Victorious MARKET checkout, or reserve in-shop pickup through Victorious MARKET and pay at the approved vendor shop through the platform's authorised payment workflow. No marketplace payment may bypass Victorious MARKET; vendors must not collect cash or private-account transfers. Launch rails are Paystack card and standard bank transfer unless separately approved. The existing 24-hour reservation hold remains supported; payment must be verified before item release.
+8. **Commission/cashback documentation had inconsistent bases.** The adopted allocation is 90/5/5 on eligible merchandise (vendor/cashback/platform) and 90/10 on the delivery fee (vendor/platform). Cashback excludes delivery. Reconcile each child order using these separate bases and reverse each component according to the approved refund.
+9. **Doorstep handover service mixes operational and financial work.** DoorstepHandshakeService validates rider handover and item acceptance, but also creates return cases, pending wallet credits and refund reservations, and posts vendor/cashback/platform/delivery-fee journal entries inside the same rider-triggered flow. Preserve required item-level return evidence and the adopted 90/5/5 merchandise plus 90/10 delivery allocation, but separate the handover event from the authorized financial workflow. Financial posting may consume the verified event only through the financial engine, with idempotency, reservation checks, and audit evidence. Do not give riders direct financial permissions or allow a handover callback to create an immediately spendable refund.
+
+
 
 ### Phase 5: Returns and refunds
 
-1. Assess complaints and return decisions at the affected VM order item(s) and fulfilment unit; supplier identity remains private except where disclosure is needed for fulfilment or legal compliance.
-2. Support mixed outcomes for multiple items/suppliers without creating public vendor storefronts or using marketplace child-order commission accounting.
-3. Apply delivery-fee refund policy only where disclosed, justified, evidenced and legally permitted. Keep original delivery charge separate from return-transport/logistics cost.
-4. Do not automatically penalize customers for supplier or logistics-company fault.
-5. Calculate refunds from immutable captured payment and item/discount snapshots, actual delivery fee, prior refunds and any supplier amounts already paid. Do not apply old vendor commission splits.
-6. Never calculate a refund as a percentage of the overall cart total or current supplier price.
-7. Fix idempotency ordering, concurrent refund reservations, refund ceilings and duplicate gateway attempts after uncertain outcomes.
-8. Reconcile the actual Paystack result before reporting a refund as completed.
-9. Keep request, approval, financial reservation, provider execution, ledger posting and reconciliation as distinct auditable steps.
-10. Do not grant spendable wallet credit merely because a complaint or return has been opened or approved.
-11. **Refund responsibility:** Victorious MARKET executes the approved customer refund through the authorized financial-operation/Paystack workflow. The customer must not be redirected to collect the refund from a supplier.
-12. **Supplier recovery:** where evidence and the supplier agreement establish supplier responsibility, record a separate recovery receivable. Offset only where contractually permitted and authorized. Do not debit an exhausted payable as though funds were still held, and do not make customer refund completion depend on supplier recovery completion.
+1. Assess complaints and return decisions at the affected product/vendor-order level.
+2. Support mixed outcomes within a multi-vendor cart.
+3. Implement the reviewed customer-change-of-mind delivery-fee retention policy only where disclosed, justified, and legally permitted.
+4. Do not automatically penalise customers for vendor fault.
+5. Keep original delivery-fee treatment distinct from any return-transport cost.
+6. Calculate refund amounts from immutable captured payment and line-item allocations, including discounts, commission, cashback, delivery charges, prior refunds, and amounts already paid to vendors.
+7. Never calculate a refund as a percentage of the overall cart total.
+8. Fix idempotency ordering, concurrent refund reservations, refund ceilings, and duplicate gateway attempts after uncertain outcomes.
+9. Reconcile the actual Paystack result before reporting a refund as completed.
+10. Keep approval, financial reservation, provider execution, ledger posting, and reconciliation as distinct auditable steps.
+11. Do not grant spendable wallet credit merely because a complaint or return has been opened or approved.
+12. Do not use hardcoded refund splits that conflict with the order's actual financial allocations.
+13. **Refund responsibility:** Victorious MARKET executes the approved customer refund through the authorized financial-operation/Paystack workflow. The customer must not be redirected to collect the marketplace refund from the vendor.
+14. **Vendor recovery:** where the approved reason and actual allocation make the vendor responsible, recover separately from that vendor. Offset held/unpaid vendor proceeds where authorized; if already disbursed, create an auditable recovery receivable/liability and use an approved future settlement offset or recovery process. Do not debit an exhausted payable as though funds were still held, and do not make customer refund completion depend on vendor recovery completion.
 
 ### Phase 6: Financial integrity
 
 1. Maintain one authoritative payment/financial-operation and ledger architecture.
-2. Record customer receipts/revenue, supplier purchase cost/payables, logistics-company charges/payables, delivery charges, gateway fees, refunds, any separately approved cashback and expenses as distinct linked components.
-3. Keep supplier payable eligibility, payment authorization, payment attempt, provider confirmation and reconciliation as separate states.
-4. Prevent duplicate payment confirmation, supplier payment, refund execution, cashback adjustment and journal posting.
+2. Ensure journal entries balance and vendor available balances account for outstanding reservations.
+3. Handle vendor proceeds already paid through a defined recovery/liability process.
+4. Prevent duplicate payment confirmation, refund execution, cashback credit, and payout execution.
 5. Verify webhook signatures and exact references; make event processing crash-safe and replay-safe.
-6. Use database transactions, appropriate locking, uniqueness constraints and safe money arithmetic.
+6. Use database transactions, appropriate locking, uniqueness constraints, and safe money arithmetic.
 7. Preserve uncertain provider states until reconciled.
-8. Record actor, reason, amount, decision, provider reference and state transitions for every sensitive financial operation.
-9. Keep customer refund execution and supplier recovery as separate linked operations: the refund closes only on verified provider confirmation; recovery tracks its own evidence, contractual basis, amount, authorization and outstanding balance.
-10. A balanced ledger does not prove sufficient cash is available. Record real liquidity shortfalls, receivables and losses honestly.
+8. Record the actor, reason, amount, decision, provider reference, and state transitions for every sensitive financial operation.
+9. Keep customer refund execution and vendor recovery as separate linked operations: the refund closes only on verified provider confirmation; the recovery tracks its own responsible vendor, amount, offset/receivable, and outstanding balance.
 
 ### Phase 7: Security and regression testing
 
@@ -220,14 +236,14 @@ Work in small, reviewable commits on a dedicated feature branch. Never silently 
 
 ## Independent merchandise and delivery-fee refund approval (binding)
 
-Merchandise and delivery are different customer-charge components and must not be mixed in a single approval decision. One customer case may contain both, but the backend must create and audit two independent component decisions. For new retailer-model transactions, refunds are based on the original VM capture, item/discount snapshots, actual delivery fee and prior refund reservations—not marketplace commission shares or public vendor child orders. The former 90/5/5 and 90/10 allocations below are legacy-only and are not current retailer accounting.
+Merchandise and delivery are different captured components and must not be mixed in a single approval decision. One customer case may contain both, but the backend must create and audit two independent component decisions.
 
-- Merchandise refund approval covers only identified VM order items, quantities and the refundable merchandise amount after the original discount allocation. Do not apply a 90/5/5 allocation to new retailer-model transactions. Cashback adjustments, if applicable to an existing obligation, are a separate ledger operation and not an additional gateway refund.
-- Delivery-fee refund approval covers only the actual VM delivery fee captured for the fulfilment/order and must have its own reason, evidence, approved amount, actor/time and decision. Do not apply a 90/10 vendor/platform allocation to new retailer-model transactions. Delivery approval is not implied by item approval, and item approval is not implied by delivery approval.
-- Each approved component creates its own idempotent refund operation and reservation, linked to the verified original VM Paystack capture and exact affected order/item or delivery component. Do not require a public vendor child order for the retailer model. At launch, initiate refunds through Paystack against the verified original transaction; wallet refunds remain disabled. If Paystack emits `refund.needs-attention`, leave the component unresolved for authorized review; do not route to a wallet, make an off-platform payment, or use an alternate bank destination unless a separate owner-approved policy explicitly permits it.
+- Merchandise refund approval covers only identified item/order-line quantities and the merchandise amount after original discount allocation. It reverses only the actual merchandise vendor/cashback/platform allocation (90/5/5).
+- Delivery-fee refund approval covers only the delivery fee captured for the specific vendor child order and must have its own reason, evidence, approved amount, actor/time and decision. It reverses only the actual delivery vendor/platform allocation (90/10). Delivery approval is not implied by item approval, and item approval is not implied by delivery approval.
+- Each approved component creates its own idempotent refund operation and reservation, linked to the same original parent Paystack capture and the correct child vendor order. At launch, initiate refunds through Paystack against the verified original transaction; wallet refunds remain disabled. If Paystack emits `refund.needs-attention`, leave the component unresolved for authorized review; do not route to a wallet, make an off-platform payment, or use an alternate bank destination unless a separate owner-approved policy explicitly permits it.
 - A component may be approved, rejected, pending, or confirmed independently of its sibling. Webhook events, failures, timeouts and reconciliation update only the exact matching component operation.
-- Enforce item/component and shared original-capture ceilings under locks, counting confirmed refunds and active reservations. Supplier offers are internal sourcing records, not public seller accounts. An `in_shop_pickup` order has zero delivery fee and therefore no delivery-fee refund.
-- Do not calculate a refund using current product prices or current delivery settings. Use immutable checkout, captured-amount, discount and delivery-fee snapshots and previously refunded/reserved amounts.
+- Enforce component and child-order ceilings plus the shared parent-capture ceiling under locks, counting confirmed refunds and active reservations across all child orders/components. A in_shop_pickup order has zero delivery fee and therefore no delivery-fee refund.
+- Do not calculate a refund using current product prices or current vendor delivery settings. Use immutable checkout allocation snapshots and previously refunded/reserved amounts.
 - Vendor recovery and cashback recovery are separate accounting operations. They do not authorize a refund and do not make customer refund completion dependent on vendor recovery.
 - The 24-hour return/claim window starts at verified delivery or confirmed in-shop pickup. Cashback's earliest maturity is `refund_window_expires_at + 24 hours` (equivalent to `+ 1 day`), provided no blocking return/dispute or fulfilment exception remains. This extra buffer affects cashback maturity only; it does not extend the customer claim window or promise Paystack refund completion within 24 hours.
 
@@ -239,5 +255,5 @@ Approval is not completion: each component is reported as refunded only after th
 - Both components approved through two separate decision/operation records.
 - One component remains pending/failed while the other confirms.
 - Zero-fee in-shop pickup rejects a delivery-fee refund.
-- Discounts, partial quantities, multiple supplier sources, concurrent reservations and aggregate original-capture limits remain correct without public vendor child-order commission accounting.
-- Each webhook and idempotency key is bound to the exact component, amount, VM order/item and original capture.
+- Discounts, partial quantities, multiple vendors, concurrent reservations and aggregate parent-capture limits remain correct.
+- Each webhook and idempotency key is bound to the exact component, amount, child order and original capture.

@@ -8,111 +8,112 @@ Victorious MARKET (VM) is a centrally managed online retailer operating from Uyo
 
 VM controls the public catalogue, retail prices, order acceptance, customer payment workflow, fulfilment coordination, delivery coverage, customer support, refund decisions, and financial records.
 
-## 2. Supplier offer and catalogue workflow
+## 2. Supplier offer, pricing and catalogue workflow
 
-A supplier may submit:
-- product photographs and product identity;
-- brand, model, specifications, condition and included accessories;
-- warranty/return information and known limitations;
-- wholesale/purchase price and its validity period;
-- current availability and expected replenishment time;
-- source/pickup location and any product handling requirements.
+Victorious MARKET operates as a Direct-to-Consumer (1P) Retailer with Just-in-Time Private Supplier Sourcing:
+1. **Admin-Only Onboarding (Zero Public Self-Registration):** Suppliers must only be created and onboarded by Victorious MARKET Admin staff. Public self-registration for suppliers or vendors is strictly prohibited across all web and mobile endpoints.
+2. **Wholesale Sourcing:** Suppliers provide their physical products, inventory availability, physical shop locations in Uyo, and wholesale cost prices (e.g., ₦10,000).
+3. **Retail Markup:** Victorious MARKET sets the customer-facing retail selling price by adding its own profit margin (e.g., wholesale ₦10,000 + VM markup ₦4,000 = retail selling price ₦14,000).
+4. **Public Product Listing:** VM creates and controls one canonical public listing. Customers only see Victorious MARKET as the seller at the retail price. Supplier identity and wholesale cost remain strictly private to VM.
+5. **Multiple Supplier Offers:** When multiple suppliers offer the same product, VM links each supplier's offer (wholesale price, shop location in Uyo, stock availability) to the canonical listing. VM selects the supplier offer that is **available and cheapest** when fulfilling orders.
 
-Supplier submission is a proposal, not automatic publication or a guarantee that VM will purchase.
+A supplier submission is a wholesale proposal, never an auto-published marketplace listing. VM reviews, approves, and owns all customer-facing titles, descriptions, categories, images, and prices.
 
-### New product
-VM reviews the supplier and offer, creates one canonical public product record, writes/approves the customer-facing title, description, category, attributes, retail price, images and terms, then publishes it.
+## 3. Customer order sourcing and supplier selection
 
-### Existing product
-If the product identity matches an existing canonical listing, VM links the supplier offer to that listing instead of creating a duplicate. Offers must not be merged merely because two products look similar; identity, model, variant, condition and specifications must match. Different variants/conditions may require distinct listings.
-
-### Privacy and ownership
-The public listing is owned/controlled by VM. Supplier identity, wholesale price and supplier-specific commercial terms remain private, except where disclosure is needed for fulfilment, consumer rights or legal compliance. Suppliers cannot directly publish, alter VM's retail price, or contact customers outside authorized fulfilment/support procedures.
-
-## 3. Supplier-to-order linkage
-
-Every accepted order item must preserve an immutable snapshot of:
-- canonical VM product/listing and variant;
-- selected supplier and supplier-offer identifier;
-- agreed supplier purchase price and currency;
-- relevant availability, condition/warranty and supply terms;
-- source/collection location and selection time;
-- quantity and the identity of the offer selected at order confirmation.
-
-Later edits to the supplier offer must not silently change an existing order's cost, product identity or fulfilment terms. If a supplier cannot fulfill, VM must use an authorized exception/cancellation/refund workflow. Substitution requires an explicit authorized process and any required customer consent; never silently substitute or raise the customer's price.
-
-Where an order contains items sourced from multiple suppliers, track supplier payables and sourcing/fulfilment outcomes per order item or supplier-specific fulfilment unit. Customer checkout remains a VM transaction; supplier identity does not create a public vendor sub-order or seller storefront.
+When a customer places an order on Victorious MARKET:
+1. The customer orders the canonical product from Victorious MARKET at the published retail price.
+2. For **Doorstep Delivery**, the customer pays upfront online via Paystack (+ delivery fee).
+3. For **In-Shop Pickup (Reservation)**, the customer reserves online for free (₦0 upfront) to inspect at the designated supplier shop.
+4. **Automated Sourcing Assignment (Cheapest + Available):**
+   - As soon as the customer completes checkout (payment verified for delivery, or reservation created for in-shop pickup), the system **automatically assigns the order/item to the accredited supplier that has the product in stock and offers the cheapest wholesale cost price (`cost_price`)**.
+5. **Admin Override Authority:**
+   - The Admin console maintains full supervisory control: Admin can review the automated assignment and **override it at any time**, manually reassigning the order or reservation to another accredited supplier/shop (e.g., for operational balancing, branch proximity, or relationship management).
+6. **Immutable Snapshot:** The order item records an immutable snapshot of:
+   - Canonical product and variant;
+   - Selected supplier ID and supplier shop ID;
+   - Agreed supplier wholesale purchase cost (`cost_price`);
+   - Customer retail selling price (`unit_price`);
+   - VM gross profit margin (`unit_price - cost_price`).
+7. Later edits to supplier wholesale prices never alter historical or active order snapshots.
 
 ## 4. Central operating base and service coverage
 
-VM's central operating base is Uyo, Akwa Ibom State. VM may serve any destination it can actually cover through current product sourcing and approved logistics arrangements. This is not a claim of nationwide delivery.
+VM's central operating base is Uyo, Akwa Ibom State. VM serves destinations reliably covered by local supplier sourcing and accredited logistics partners.
 
-Before offering delivery at checkout, VM must verify:
-1. the product can be sourced and made ready;
-2. the destination is within a currently supported delivery coverage rule;
-3. an approved logistics company can serve the route/time window;
-4. the applicable customer delivery charge and fulfilment commitment are known;
-5. any required capacity, handling or delivery restrictions are satisfied.
+Before offering delivery at checkout, VM verifies:
+1. The product can be sourced from an active supplier shop in Uyo;
+2. The destination is within an active logistics coverage rule;
+3. An approved logistics company can serve the route;
+4. The customer-facing delivery fee is confirmed and quoted.
 
-If a coverage or fee rule is absent, stale, contradictory or unconfirmed, do not promise delivery or invent a fee. VM controls coverage and the customer-facing fee; suppliers do not configure marketplace delivery rates. The exact coverage zones, price table, logistics rate cards, service-level promises and delivery-fee margin require owner approval and must be versioned/snapshotted on accepted orders.
+If coverage is unconfirmed, checkout blocks delivery. VM controls delivery coverage and quotes; suppliers do not configure delivery prices.
 
-## 5. Central delivery and rider affiliation
+## 5. Doorstep delivery: customer pays first, automated sourcing, admin logistics dispatch
 
-VM owns customer-facing delivery coordination. Delivery work is carried by a logistics company approved/authorized by VM.
+**Binding rule: Doorstep delivery requires pre-payment online via Paystack. Strictly NO Cash on Delivery (COD).**
 
-**Mandatory rider invariant:** every rider assigned to new VM work must be active and linked to exactly one active logistics company. Reject riders who have no company link, are linked to multiple companies, are linked only to a supplier/legacy vendor, or belong to an inactive/unapproved company. Company and rider status must be rechecked at assignment and at relevant custody transitions.
+1. **Customer Checkout (Pay First):** The customer pays the full retail price plus delivery fee online via Paystack (card or bank transfer).
+2. **Automated Sourcing Assignment:** Upon verified Paystack payment, the system automatically assigns the order to the supplier that has the item available (`is_in_stock = true`) and cheapest (`cost_price` lowest).
+3. **Admin Sourcing Override:** Admin can review the auto-assigned supplier and override the assignment by selecting a different accredited supplier if necessary.
+4. **Supplier Availability Confirmation:** The assigned supplier receives the sourcing notification in their portal and physically inspects their inventory to **confirm product availability**.
+5. **Admin Logistics Company Assignment:** Once the supplier confirms availability, the order transitions to Admin dispatch. Admin assigns the order to an accredited **Logistics Company** (onboarded strictly by Admin; zero public self-registration).
+6. **Fleet Pickup & Handover:** The Logistics Company assigns one of its active fleet riders. The rider visits the supplier's shop, picks up the package, and transports it to the customer.
+7. **Customer Delivery Handshake:** Doorstep delivery completion strictly requires the server-verified customer OTP (`delivery_otp`) plus a mandatory doorstep delivery photo proof.
+8. **Supplier Settlement:** Only after verified customer delivery is the supplier's wholesale payable unlocked and eligible for settlement.
 
-Every assignment must identify the order/fulfilment unit, logistics company, rider, assigning actor, timestamp, current state and required custody evidence. A supplier cannot dispatch its own rider as the VM delivery carrier or mark customer delivery complete.
+## 6. In-shop pickup: automated reservation, inspect first, pay at shop to Paystack
 
-Separate these events:
-- supplier makes the product ready;
-- VM or its authorized collector receives the product from the supplier;
-- logistics company/rider accepts custody;
-- rider attempts delivery;
-- customer successfully receives the product;
-- parcel is returned or custody is transferred.
+**Binding rule: In-shop pickup allows the customer to inspect the physical item first at the supplier shop, and pay directly to Victorious MARKET via Paystack upon satisfaction.**
 
-Rider-to-company/supplier custody proof is not customer handover proof. Customer doorstep completion requires server-verified customer OTP and doorstep photo under the existing fulfilment policy. Rider collection, GPS, dispatch assignment, a supplier's assertion, or a delivery status supplied by an untrusted client is not enough.
-
-Riders are operational actors, not financial approvers. They must not approve refunds, alter retail or supplier prices, mark payment successful, create supplier payables, or access supplier wholesale prices or unnecessary customer financial data. Use minimum necessary customer information and protected contact mechanisms.
-
-## 6. Supplier-shop pickup
-
-Pickup at an authorized supplier shop remains an allowed exception/option within VM's existing reservation and pickup flow:
-1. VM confirms the order and authorizes the specific pickup location.
-2. The customer receives the approved pickup location and instructions.
-3. The customer presents the existing reservation pass/reference and completes the separate one-time customer pickup verification.
-4. The required in-shop pickup photo and actor/timestamp evidence are recorded.
-5. Only verified customer handover completes fulfilment.
-
-Supplier readiness or a reservation alone is not fulfilment. The pickup pass and customer OTP are customer credentials, not rider credentials. Supplier-shop pickup does not make the supplier a public seller. Supplier shops may not bypass VM's authorized customer payment process or collect off-platform payments.
+1. **Online Reservation (₦0 Upfront):** The customer selects "In-Shop Pickup" at checkout. No money is paid online upfront.
+2. **Automated Location Assignment:** The system automatically assigns the reservation to the supplier shop that has the item available and cheapest, issuing a unique reservation pass (`RES-XXXXXX`) and customer pickup OTP (`verification_code`).
+3. **Admin Location Override:** The customer sees the reservation location assigned by the system, but Admin has full authority to override and reassign the reservation to another supplier branch.
+4. **Customer Journey & Direct Support:** While travelling to the shop, the customer can **call or chat Victorious MARKET customer support** directly for assistance, directions, or inquiries.
+5. **Arrival & Reservation Verification:** The customer arrives at the designated supplier shop and presents their `RES-XXXXXX` reservation code. The supplier verifies the reservation code in their terminal.
+6. **Physical Inspection First:** The customer **physically inspects the item at the shop counter** to confirm quality, condition, and complete satisfaction before making any payment.
+7. **Payment to Paystack at the Counter:** Once satisfied, the customer makes payment **directly to Victorious MARKET via Paystack** (via mobile Paystack payment link, counter QR code, or online counter checkout). Strictly NO cash or private vendor bank account transfers.
+8. **Secure Handover Handshake:** Once payment is confirmed as `paid` by Paystack, the supplier verifies the customer's pickup OTP (`verification_code`), captures the mandatory in-shop pickup photo proof, and hands over the product.
+9. **Customer Walk-Away (Zero Friction Cancellation):** If the customer is not satisfied upon inspection, they simply do not pay. The reservation is cancelled cleanly with zero financial refund overhead.
 
 ## 7. Supplier payment eligibility
 
-**Binding owner rule:** pay suppliers only after successful, verified customer delivery or confirmed customer pickup.
+**Binding owner rule: Pay suppliers their agreed wholesale cost strictly after verified customer delivery or verified counter pickup.**
 
-The following do not make a supplier payable eligible by themselves: order placement, customer payment, supplier acceptance, supplier readiness, product collection by VM, rider assignment, rider collection, delivery attempt, customer refusal, or an unverified completion event.
+- Order placement, customer payment, supplier readiness, rider assignment, or rider collection alone never unlocks supplier payment.
+- **Supplier Payable Amount:** Equals the agreed wholesale cost (`cost_price * quantity`) snapshotted at sourcing. It is NOT a percentage commission.
+- **VM Gross Margin:** `Customer Retail Selling Price - Supplier Wholesale Cost = VM Gross Profit`.
+- Once delivery or pickup is verified with mandatory OTP and photo evidence:
+  - The supplier payable transitions to `eligible_for_payment`.
+  - Payment is disbursed to the supplier via authorized banking/Paystack transfer.
+- If a customer refund is approved after delivery, VM handles the customer remedy. Supplier recovery is tracked separately based on supplier warranty/fault agreements and never delays customer protection.
 
-After verified fulfilment, reconcile the order item, quantity, selected supplier offer, agreed purchase cost, actual fulfilment outcome and any applicable authorized adjustments. Supplier payment eligibility is not an automatic transfer; payment must follow an authorized, idempotent and auditable payment process. A timeout is an uncertain outcome, not proof of failure or success; reconcile before retrying.
+## 8. Retail accounting replacing marketplace splits
 
-A supplier payable is the purchase cost owed under the supplier agreement, not a marketplace commission, vendor earning or wallet balance. Record the payable, approval, payment attempt, provider confirmation, reversal and reconciliation as separate linked states. Do not duplicate supplier payments after repeated events.
+The legacy multi-vendor marketplace commission rules (90% vendor / 5% cashback / 5% platform merchandise split; 90% vendor / 10% platform delivery split) are **superseded and retired** for the retailer model.
 
-If a customer refund is owed after a supplier has already been paid, VM remains responsible for the customer remedy. Supplier recovery is separate: create a receivable only where evidence supports supplier responsibility and the contract permits recovery. A complaint alone does not create a debt, and customer refunds must not wait for supplier recovery.
-
-Supplier payment terms must be agreed with suppliers. This baseline specifies the eligibility trigger, not an invented payment SLA, payout rail, approval threshold or settlement date.
-
-## 8. Retail accounting: rules to retire or reassess
-
-The following are retired marketplace assumptions only and must not be used as active requirements for the fresh retailer model:
-- former 90% vendor / 5% cashback / 5% platform merchandise split;
-- former 90% vendor / 10% platform delivery-fee split;
-- vendor earning balances, vendor payout thresholds and marketplace commission;
-- automatic or contractual vendor-debt recovery logic treated as supplier debt;
-- supplier/vendor-managed rider payables and vendor-configured delivery fee settings.
-
-A supplier purchase cost is a retailer cost/payable. VM must separately record customer receipts/revenue, supplier purchase costs and payables, delivery revenue/charges, logistics-company charges/payables, gateway fees, discounts, taxes, refunds, cashback liabilities only if separately confirmed, and operating expenses. Balanced journals must not conceal a cash shortfall or operating loss.
-
-The owner/accountant must explicitly approve the retailer chart of accounts, whether customer cashback remains active and how it is funded, logistics-company charges and payment terms, supplier payment authorization, delivery-fee margin, taxes/discount treatment and any recovery policy. No replacement percentage or unapproved monetary threshold is inferred here.
+In the retailer model:
+- **Merchandise Accounting:**
+  - `Customer Payment = Retail Price (VM Revenue)`.
+  - `Supplier Payable = Wholesale Cost (Cost of Goods Sold - COGS)`.
+  - `VM Retail Margin = Retail Price - Wholesale Cost (Gross Margin)`.
+- **Customer 5% Cashback Retention (Owner Decision — 21 October 2026):**
+  - Victorious MARKET **actively retains the customer 5% cashback loyalty feature** on every verified purchase to drive repeat customer retention.
+  - **Funding Source:** In the retailer model, the 5% cashback liability is funded **directly out of Victorious MARKET's gross retail margin** (`Retail Selling Price - Supplier Wholesale Cost`), NEVER deducted from the supplier's wholesale cost.
+  - **Mathematical Formula:** `VM Net Profit = (Retail Price - Supplier Wholesale Cost) - 5% Customer Cashback Liability`.
+  - **Non-Compounding Loyalty Invariant (Real-Money Rule):** Cashback CANNOT be earned on the portion of an order covered by existing redeemed cashback or discounts. Cashback is strictly earned only on **real money paid through Paystack** for eligible merchandise:
+    `Cashback Earned = (Merchandise Subtotal - Cashback Redeemed) * 5%`.
+    For example, on a ₦10,000 item where the customer redeems ₦2,000 in cashback and pays ₦8,000 via Paystack, the customer earns 5% only on the ₦8,000 real cash paid (₦400 reward), NEVER on the ₦2,000 covered by existing cashback.
+  - **Accrual & Maturation:** Accrues as `pending_maturation` upon checkout; matures into the customer's wallet (`status = 'available'`) 24 hours after the post-delivery/pickup inspection window closes with zero disputes.
+  - **Redemption:** The customer can redeem their matured cashback balance on future checkouts, capped at up to 50% of the cart merchandise subtotal.
+  - **Return / Cancellation Forfeiture:** If an order is returned, cancelled, or rejected at shop inspection, pending cashback is automatically cancelled/forfeited in the ledger.
+- **Delivery Accounting:**
+  - Customer delivery fee collected is VM delivery revenue.
+  - Logistics company charge is VM delivery expense.
+  - Delivery margin = Customer fee collected - Logistics company cost.
+- **Supplier Settlement:**
+  - Suppliers receive 100% of their agreed wholesale cost upon verified completion.
+  - No percentage commission or cashback deductions from suppliers; suppliers are paid in full.
 
 ## 9. Customer payments, refunds and safety controls retained
 

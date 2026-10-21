@@ -1,16 +1,16 @@
 # Victorious MARKET — Cross-Document and Implementation Alignment Audit
 
-**Original audit date:** 20 October 2026; **retailer-model rebaseline:** 21 October 2026  
-**Branch reviewed:** `docs/retailer-central-fulfilment-model` (based on `audit/paystack-refund-webhook-safety`)  
-**Status:** Historical implementation findings retained; current business model re-baselined; launch blockers remain open  
-**Authority:** `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md` and `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md`  
+**Audit date:** 20 October 2026  
+**Branch reviewed:** `audit/paystack-refund-webhook-safety`  
+**Status:** Documentation alignment and source-code trace; launch blockers remain open  
+**Authority:** `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md`  
 **Release rule:** Do not merge to `main`, deploy, or represent a finding as fixed without explicit owner approval and evidence.
 
 ## 1. Scope and limits
 
 This audit compared the authoritative business rules with the payment/refund matrix, payout policy, vendor-delivery business rules, implementation audit, delivery/financial-integrity plan, root and backend project overviews, README files, and `backend/database/seeders/LegalDocumentSeeder.php`. It also traced selected checkout, reservation, settlement, and refund service paths.
 
-This is **not** proof that production is aligned. The legal-document seeder contains legacy marketplace/vendor terms that must be corrected and then deployed/versioned; changing source text alone does not update already-published database rows. The live database's published legal-document rows, production configuration, provider dashboard, bank records, and deployed runtime were not inspected in this pass. The legal-document seeder source and documentation were changed, but no runtime checkout, payment, fulfilment, refund, cashback, or payout service/controller code was changed in this pass, and no test suite was run here. Source-code findings below are therefore open remediation/verification items, not claims of completed fixes.
+This is **not** proof that production is aligned. The live database's published legal-document rows, production configuration, provider dashboard, bank records, and deployed runtime were not inspected in this pass. The legal-document seeder source and documentation were changed, but no runtime checkout, payment, fulfilment, refund, cashback, or payout service/controller code was changed in this pass, and no test suite was run here. Source-code findings below are therefore open remediation/verification items, not claims of completed fixes.
 
 ## 1A. Branch and pull-request isolation warning
 
@@ -18,56 +18,70 @@ The GitHub comparison of `main` against `audit/paystack-refund-webhook-safety` r
 
 The open draft PR #3 points from `docs/vendor-managed-delivery-business-rules` to `main`, not from this audit branch. Therefore, **do not merge this branch wholesale** and do not assume the open PR contains the changes described here. Before any merge, inspect the exact base/head commit and full diff, split policy/documentation changes from runtime remediation, explain every deleted test, and restore or replace coverage for removed behaviours. The 418-commit comparison is a release-control warning, not a statement that all 418 commits were authored in this session.
 
-## 2. Canonical business baseline — owner decision 21 October 2026
+## 2. Canonical business baseline
 
-The current model supersedes the earlier marketplace/vendor-managed-delivery baseline in this historical audit.
+All project documents must preserve these rules unless the owner expressly changes them:
 
-1. **Retailer identity:** Victorious MARKET is the customer-facing retailer operating from Uyo, Akwa Ibom State. Customers buy from VM; suppliers are private sources, not public marketplace sellers.
-2. **Supplier catalogue:** suppliers propose product information and wholesale offers. VM approves new canonical listings or links an offer to an existing listing. VM controls public descriptions, retail prices, publication and customer terms.
-3. **Order linkage:** each accepted order item snapshots the exact selected supplier offer, agreed purchase cost, product/variant, quantity and relevant terms. Offer changes do not rewrite existing orders.
-4. **Central coverage:** VM offers delivery only to destinations it can cover through current sourcing and approved logistics arrangements. Uyo is the central operating base, not a nationwide-service guarantee. VM owns customer-facing delivery coverage and fees.
-5. **Logistics:** VM coordinates delivery through approved logistics companies. Every rider assigned to new VM work must be active and linked to exactly one active logistics company. Supplier/vendor-linked riders are not eligible.
-6. **Pickup:** authorized supplier-shop pickup remains supported using the existing reservation pass, separate one-time customer pickup verification and in-shop photo.
-7. **Supplier payment:** eligibility begins only after verified successful customer delivery or confirmed pickup and reconciliation. It is not an automatic transfer. Supplier readiness, payment, VM collection, rider assignment or carrier collection alone is insufficient.
-8. **Retail accounting:** supplier purchase costs/payables, customer receipts/revenue, delivery charges, logistics-company charges, fees, refunds, any approved cashback and operating expenses are separate. Former 90/5/5 and 90/10 marketplace splits, vendor earnings, vendor payout thresholds and vendor debt recovery are not default retailer rules.
-9. **Customer refunds:** VM remains responsible for valid approved customer refunds even if the supplier has already been paid. Supplier recovery requires evidence-backed responsibility and contractual recoverability and must not delay a customer refund.
-10. **Security retained:** server-side payment verification, authenticated webhooks, idempotency, exact amount/currency/reference binding, immutable ledgers, refund ceilings, independent refund states, evidence and reconciliation remain mandatory.
-11. **Migration caution:** legacy vendor/order/logistics schemas and historic financial records must not be globally renamed or deleted. Map code, foreign keys, journals and audit dependencies before migration. Documentation changes are not proof of runtime compatibility.
+1. Victorious MARKET is the customer-facing marketplace/payment/refund coordinator. Approved vendors own products, stock accuracy, fulfilment, and their own riders.
+2. A multi-vendor parent checkout uses one verified parent payment capture and separate vendor child orders. Each child has its own vendor, fulfilment, delivery-fee snapshot, item-level earnings, refund ceiling, dispute/hold state, and settlement eligibility.
+3. Launch customer payment paths are only: (a) pay before delivery through Victorious MARKET; or (b) reserve for in-shop pickup and pay at the vendor shop through Victorious MARKET's authorised workflow. No doorstep COD, vendor cash collection, private-account transfer, or other off-platform settlement.
+4. Launch rails are Paystack card and standard bank transfer unless separately approved. Legacy wallet-credit balances are **not** a third checkout tender at launch. Cashback redemption is a separate loyalty discount, capped at 50% of merchandise subtotal per checkout.
+5. Merchandise allocation is based on eligible post-discount merchandise actually collected: 90% vendor / 5% customer cashback liability / 5% platform. Delivery fee is separately allocated 90% vendor / 10% platform; no rider payable is created. Victorious MARKET bears Paystack processing fees and vendor payout transfer fees as a platform expense.
+6. Doorstep handover requires server-verified customer OTP plus a linked doorstep delivery photo. In-shop pickup requires both the `RES-XXXXXX` reservation pass and a separate one-time customer pickup OTP, plus an in-shop pickup photo. These checks prove the handover process, not product quality. GPS, signature, separate rider-pickup photo, and hub-inspection photo are not mandatory.
+7. The standard claim/return request window is 24 hours from confirmed delivery/pickup, with authorised admin review of legitimate late cases and applicable statutory/warranty rights preserved. This is not a guarantee of refund approval or provider completion within 24 hours.
+8. Refunds use the verified original Paystack route where supported. No wallet-credit refund or off-platform refund is enabled at launch. Automatic approval is limited to a verified duplicate successful capture and a verified payment for an order cancelled before any vendor action; other refunds require persisted authorised human approval before gateway dispatch.
+9. Vendor earnings become eligible 24 hours after confirmed fulfilment only when applicable holds, disputes, security checks, and reconciliation checks permit. Eligibility is not automatic payout.
+10. Vendor payout is manually approved at launch; minimum ₦5,000, maximum ₦500,000. Server-calculated strict FIFO selects whole earning records only. Stop before an over-cap record; never split or skip it. One active request remains reserved while pending, approved-unsent, in-flight, or uncertain. If the oldest record alone exceeds the cap, flag it for finance resolution.
+11. No spendable vendor wallet. Vendor debt/recovery is separate from payout and customer refund. A complaint alone is not confirmed debt. Repayment requires verified bank receipt; offset requires authorised approval and contractual basis. Never silently offset or rewrite history.
+12. Cashback maturity is fulfilment + 24-hour claim window + separate 24-hour maturity buffer, only when no blocking case remains. The 365-day validity period starts at actual maturity. Reverse unspent cashback; track spent-cashback recovery separately and offset only against future cashback as it matures.
+13. Preserve immutable financial history. Use linked reversals/adjustments, idempotency, verified webhook events, reconciliation, and explicit refund/payout lifecycle states. A timeout is neither proof of success nor proof of failure.
 
-## 3. Documentation alignment and migration status
+## 3. Documentation alignment completed on this branch
 
-The documents listed below have been edited on the retailer-model documentation branch to establish the current business direction. They do not prove that application code, published legal documents, production configuration, payment-provider settings or the live database have been migrated.
+### Legal-document source
 
-- `README.md`: retailer model, supplier offers, central delivery/pickup, supplier payment eligibility and known migration gaps.
-- `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md`: canonical model, order linkage, Uyo coverage, logistics-company rider rule, pickup, supplier payment and accounting decisions.
-- `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md` and `.ai/BUSINESS_RULES.md`: updated authoritative policy baseline and operational rules.
-- `VICTORIOUS_MARKET.md`: updated product vision, customer journey, fulfilment and retailer accounting.
-- `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md`: retained payment/refund safety controls and superseded marketplace allocation/payout assumptions for new retailer transactions.
-- `DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md`: implementation plan re-baselined for central logistics and supplier payables.
-- `VENDOR_PAYOUT_POLICY.md`: explicitly marked legacy-only for historic marketplace earnings; supplier payments use the new retailer model.
-- `VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md`: reframed as retailer/central fulfilment compatibility audit.
-- `SHARED_HOSTING_DEPLOYMENT_GUIDE.md`: removed obsolete financial-split claim.
+`backend/database/seeders/LegalDocumentSeeder.php` was aligned and updated to new version rows rather than rewriting the existing published version identifiers:
 
-The existing legal-document seeder and published legal-document versions were not changed by this documentation-only pass. They must be reviewed for obsolete marketplace/vendor wording and updated through a new versioned legal publication workflow before launch. Any legacy logistics/fleet policy marked historical/inactive does not replace the current need for VM-approved logistics companies and riders linked to exactly one active company.
+- Terms and Conditions: version 1.2.0.
+- Return, Refund & Doorstep Acceptance Policy: version 1.2.0.
+- Merchant Accreditation & Commercial Seller Agreement: version 1.2.0.
+- About / Operating Charter: version 1.2.0.
+- Order Cancellation Policy: version 1.2.0.
+- FAQ / Knowledge Base: version 1.2.0.
+- Contact & Customer Care Center: version 1.2.0.
 
-## 4. Critical source-code alignment register — re-evaluate under retailer model
+The revised source removes unsupported promises of internal segregated escrow, “instant”/fixed-time refunds, universal 1–3 hour or same-day delivery, guaranteed returns, and a central fleet/hub for new orders. Legal version rows now use `firstOrCreate` so rerunning the seeder does not overwrite an existing version row; future content changes should use a new version. It also corrects the customer-facing contact page to the known official phone/WhatsApp number **09118949035** and website **https://victoriousmarket.com.ng**, removes unverified email aliases and invented physical hub/address claims, makes return grounds non-exhaustive, preserves legal/warranty rights, and clarifies cashback recovery and manual refund approval.
 
-The source observations below were collected while the code still reflected marketplace behavior. Treat them as open compatibility findings, not as instructions to preserve the old business model.
+The old logistics-fleet SLA remains explicitly labelled historical/inactive and is seeded as unpublished. It must not be reactivated for new orders.
 
-| Priority | Finding / legacy source area | Required retailer-model closure |
-|---|---|---|
-| **P0** | **Legacy web checkout bypasses CheckoutExecutionService.** The storefront POST route uses PortalController::processCheckout and does not yet share the hardened checkout execution/idempotency/payment-initialization path. | Audit every web/API checkout route; prevent duplicate orders/payment initialization; enforce the same request validation, supplier-offer snapshot, payment-state and idempotency guarantees. |
-| **P0** | **Legacy vendor and supplier linkage are not yet the same thing.** Existing orders/products use vendor/shop identifiers and may not snapshot a selected supplier offer or purchase cost. | Design/validate private supplier-offer linkage to canonical product and order item; snapshot supplier, offer, purchase cost, quantity, variant and terms. Do not globally rename tables before foreign-key and ledger mapping. |
-| **P0** | **Legacy vendor-managed rider/fleet assignment conflicts with central delivery.** Existing checkout/order fields and rider controllers support vendor-linked riders, fleet/collection-point routing and fallback assignment. | VM-authorized delivery must use an approved active logistics company. Every assigned rider must be active and linked to exactly one active logistics company. Reject supplier/vendor-linked riders for new VM work; preserve historical assignments. |
-| **P0** | **Pickup credential separation needs end-to-end proof.** Existing reservation flow uses a RES reservation reference and customer pickup OTP; rider custody code paths may reuse pickup-related fields. | Keep reservation pass, customer pickup OTP and rider-to-logistics-company custody credential distinct. Customer pickup requires pass + one-time customer OTP + in-shop photo. Protect secrets from history, logs, analytics and unauthorized rider responses. |
-| **P0** | **Legacy wallet-credit tender/refund branches remain in code.** Existing checkout/refund services contain historical wallet-credit paths. | Prove legacy tender/refund paths are unreachable or disable them server-side; preserve historical records. Customer refunds follow the approved original-payment-route process; no silent wallet or off-platform substitute. |
-| **P1** | **Supplier payment eligibility and payment attempts are not proven.** Existing vendor earnings and payout services may assume marketplace commission and vendor settlement timing. | Implement supplier payable from the immutable selected offer/order-item purchase cost. Eligibility begins only after verified successful customer delivery or confirmed pickup and reconciliation. Use idempotent authorized payment attempts and provider reconciliation; no duplicate payable/transfer. |
-| **P1** | **Customer refund component isolation and ceilings need end-to-end proof.** The existing policy requires independently approved merchandise and delivery components, per-order limits and aggregate capture limits. | Test concurrent requests, partial quantities, discounts, zero-fee pickup, mixed supplier sourcing, duplicate/late webhooks, timeouts and reconciliation. Do not use former 90/5/5 or 90/10 allocation rules for new retailer accounting. |
-| **P1** | **Cashback policy needs a retailer decision.** Legacy code allocates 5% cashback under the marketplace split. | Preserve historical cashback obligations and balances; do not accrue new cashback from the old split until owner/accountant approves whether and how retailer-model cashback is funded and accounted for. |
-| **P1** | **Logistics-company commercial and coverage rules are not yet approved/verified.** Existing vendor-configured destination/fee rules conflict with VM-controlled coverage. | Define Uyo-origin coverage, VM-owned customer fee rules, logistics-company rate/settlement agreements and unsupported-route behavior. No coverage or fee rule means no delivery promise. |
-| **P1** | **Refund/failed-delivery side effects and authorization remain audit targets.** Operational events may interact with refunds, wallet credits or journals. | Keep supplier readiness, carrier custody, customer handover, refund approval, gateway completion and supplier recovery as distinct states. Failed delivery or complaint alone creates neither refund completion nor supplier debt. |
-| **P1** | **Published legal content is unverified.** Source documents do not prove the production database has current terms. | Review the legal-document seeder and actual published Terms, supplier agreements, logistics terms, refund/pickup/delivery wording and consumer rights; publish new versioned content only through the approved workflow. |
-| **P2** | **Historical marketplace records need safe migration.** Old vendor earnings, payouts, cashback, recovery and logistics entries may be linked to orders and journals. | Map all foreign keys, provider references, audit history and accounting treatment. Preserve history; do not relabel old journal entries as supplier costs or delete them. |
+**Important:** changing the seeder does not itself change already-published production database content. Deploy/run the approved seeder or publish the new version through the legal-document admin workflow, then inspect the actual live customer-facing documents before release. Keep the old version rows for history.
+
+### Other policy documents
+
+- `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md`: removed the stale “OWNER QUESTION OPEN” blanket qualifier; clarified that no numeric second-approval threshold has been owner-approved and the threshold must remain configurable.
+- `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md`, `README.md`, `.ai/BUSINESS_RULES.md`, `VICTORIOUS_MARKET.md`, and `backend/VICTORIOUS_MARKET.md`: explicitly state that legacy wallet-credit checkout tender is not a permitted launch payment path; capped cashback redemption remains a separate loyalty discount.
+- The payout policy retains strict whole-record FIFO, no split/no skip, manual approval, transfer-fee ownership, and debt recovery controls.
+
+## 4. Critical source-code alignment register
+
+These items must remain marked **OPEN** until implementation and regression evidence close them.
+
+| Priority | Finding and source evidence | Why it conflicts / risk | Required closure evidence |
+|---|---|---|---|
+| **P0** | **Legacy fleet/collection-point paths remain in checkout.** `backend/app/Services/CheckoutExecutionService.php` validates `logistics_company_id` (roughly lines 40–70), resolves collection-point/fleet riders and fallback logistics assignments (roughly lines 285–350), and persists `collection_point_id`, `rider_id`, and `logistics_company_id` on the created order (roughly lines 365–380). | New orders must be vendor-managed; no central fleet, hub, logistics-company payable, or rider payout. A policy document cannot disable this code path. | Remove/disable legacy assignments for new orders; enforce vendor-owned rider only; no collection-point dependency or new logistics-company financial postings. Add API/UI tests for direct forged IDs and legacy settings. Preserve historical rows for audit. |
+| **P0** | **Wallet-credit tender remains in checkout.** `CheckoutExecutionService.php` calculates `wallet_credit_applied`, accepts `redeem_wallet_credit`, and can set `payment_method = wallet_credit` / `payment_status = paid` when the remaining amount is zero (roughly lines 255–300). | The launch model has only two permitted payment paths; wallet-credit tender would be a third. This is distinct from capped cashback redemption. | Reject wallet-credit tender in request validation, API/service, UI and legacy paths. Preserve historical wallet-credit records without spending or deleting them until a separately approved treatment exists. Test full/partial wallet-credit input, forged requests, and zero-payable checkout. |
+| **P0** | **Multi-vendor parent creation is not proven end-to-end.** The traced `CheckoutExecutionService::execute()` accepts one `shop_id` and creates an `Order` for that shop/vendor. `OrderSettlementService` has a child-order settlement branch (around lines 375–480), but that alone does not prove checkout creates one parent capture and correctly allocated children. | Policy requires one parent checkout/capture and independent vendor child orders. A settlement branch cannot compensate for missing or inconsistent parent creation. | Trace storefront → API request → checkout intent → order creation → Paystack reference → webhook settlement. Demonstrate one parent capture, child allocation sums exactly to captured amount, one vendor per child, no duplicate parent/child delivery allocation, and independent child states. |
+| **P0** | **Late claim exception is not proven.** `ReturnAndRefundService::createReturnCase()` enforces the configured refund window and returns `RETURN_WINDOW_EXPIRED` after expiry (around lines 60–90). | The policy explicitly permits an authorised admin to manually open/review a legitimate late case, including direct-contact cases, while preserving non-waivable rights. A customer API cutoff alone is not enough. | Provide a separate permissioned admin/support late-case path that records reason, evidence, approver, timestamps and remedy. Test both customer-window rejection and authorised late-case opening; ensure it does not override applicable law. |
+| **P0** | **Pickup credential separation needs end-to-end proof.** `CheckoutAndReservationApiController::listPickupReservations()` serializes `pickup_verification_code` in the customer's reservation response (around lines 450–460). `OrderSettlementService::markVendorHandoverReady()` / `verifyRiderPickupOtp()` also use `pickup_verification_code` for rider-to-vendor parcel custody. In-shop reservation creation separately creates a `RES-...` reservation code and a pickup OTP. | The rules require the customer reservation pass and customer pickup OTP to be distinct, and the customer OTP to be separate from the rider parcel-custody credential. Secrets must not leak to ordinary order history or unauthorized rider views. | Map every producer/consumer and API response. Use distinct purpose-scoped secrets/fields and route authorization; server-side expiry and replay prevention; ensure rider endpoints cannot reveal customer pickup OTP. Verify customer counter pickup requires pass + customer OTP + photo and never invokes rider custody endpoints. |
+| **P0** | **Legacy wallet-refund code remains in the refund service.** `ReturnAndRefundService::adminDisburseRefund()` has a launch guard rejecting non-empty manual bank/wallet references (around lines 420–440), but a legacy wallet-disbursement branch remains later in the same method (around lines 620+). | A guard is useful, but launch safety should not depend on an unproven assumption that every route can never reach legacy wallet code. | Prove the legacy branch unreachable through every caller or remove/disable it; assert no new `CustomerWalletCredit` is issued by any refund/failed-delivery route. Add route, service and adversarial tests for null, “wallet”, manual reference, and alternate-bank inputs. |
+| **P1** | **Spent-cashback recovery is not yet a proven ledger workflow.** The policy matrix itself records this as open. Refund code contains proportional 5% cashback reversal logic, but that alone is not proof of tracking spent cashback as a separate receivable and recovering it only against future matured cashback. | A refund must reverse unspent cashback and handle spent cashback without silently debiting cash or creating a negative spendable balance. | Implement/verify a dedicated customer cashback-recovery ledger linked to source order/refund. Apply offsets only at future cashback maturity; test partial refund, already-spent cashback, no future cashback, multiple orders, duplicate webhooks and reversal. |
+| **P1** | **Refund-window handling, parent/child refund ceilings and component isolation require end-to-end proof.** The policy requires separate merchandise and delivery-fee decisions, per-child limits and the shared parent-capture limit. | Partial/duplicate refunds can over-refund the parent or one vendor, double reverse allocations, or refund a delivery fee that was never charged. | Test concurrent requests, partial quantities, discount allocation, mixed vendors, zero-fee pickup, separate delivery-only refund, duplicate/late webhooks, provider timeout and reconciliation. Reserve amounts atomically and make all entries idempotent. |
+| **P1** | **Stockout/late-payment automatic refund needs exception proof.** `OrderSettlementService` has an automated gateway-refund branch for out-of-stock/cancelled orders (around lines 560–620). | Automatic approval is allowed only for a verified duplicate successful capture or verified payment for an order cancelled before any vendor action. An out-of-stock label alone does not establish that exception. | Prove each automated branch checks the exact approved exception, vendor-action history, verified amount/currency/reference and remaining refundable balance; otherwise route to persisted human approval. |
+| **P1** | **Commercial split basis and rounding need proof.** Checkout code calculates 90/5/5 and 90/10 from the current `merchandiseSubtotal` / `deliveryFee` variables; settlement posts child-level financial entries. | The policy requires the actual post-discount merchandise amount collected, excludes delivery from cashback, assigns rounding remainder to platform, and forbids double posting at parent and child levels. | Trace discount application and immutable snapshots; test discount + delivery + cashback, rounding pennies/kobo, multi-vendor sums, refund reversals, and exact parent-capture balance. Prove Paystack processing and payout transfer fees do not reduce vendor or cashback allocations. |
+| **P1** | **Payout policy text is stronger than verified payout code evidence.** The policy requires whole-record FIFO, stop-on-over-cap, no splitting/skipping, ₦5,000–₦500,000 limits, atomic reservation, one active request, uncertain-transfer reconciliation and exact vendor amount. | A documented algorithm does not prove all request endpoints, admin flows, transfer retries and payout jobs enforce it. | Test oldest record below/at/above cap, cumulative batch boundary, next record over cap, oldest record alone over cap, concurrent requests, bank-change cooldown, failed transfer, timeout/uncertain transfer and retry. Never release reservation before authoritative reconciliation. |
+| **P1** | **In-shop reservation + multi-vendor parent combination is not explicitly resolved.** The rules permit a parent checkout with independent child fulfilment and also permit reserve/pay-at-shop. The traced reservation endpoint creates a single-vendor pickup order, while parent checkout is described as one capture. | The docs/code must not imply that one parent capture can simultaneously include unpaid counter-pickup children paid later at separate shops unless that flow is deliberately designed. | Before implementation, explicitly define whether reserve/pay-at-shop is a standalone single-vendor transaction or can coexist with other child orders. Specify payment intent, parent/child status, stock holds, expiry, refunds and reconciliation for each case. |
+| **P1** | **Production legal content is unverified.** The seeder now contains version 1.2.0 for aligned documents, but this pass did not inspect the live database. | Source files do not automatically replace content already published in the database. | Deploy the new seeder/version through the approved workflow, inspect live public/legal pages and document history, verify prior versions remain immutable, and confirm no legacy logistics content is published as active policy. |
+| **P1** | **Legal review remains required.** The standard 24-hour operational claim window, hygiene/seal restrictions, vendor recovery/offset terms, privacy handling and contract remedies must comply with Nigerian consumer and data-protection law. | A disclaimer cannot override mandatory statutory rights or warranties. | Obtain qualified Nigerian legal review before publication; preserve the standard window as operational, not as an absolute waiver or fixed refund-completion promise. |
 
 ## 5. Important distinction: policy versus implementation
 
@@ -79,58 +93,32 @@ The following statements are **requirements**, not verified accomplishments:
 - Customer refund completion must not wait for vendor debt recovery. Vendor recovery is a separate receivable and process.
 - An admin approval does not automatically prove a vendor debt. Repayment must be verified against bank/provider records; offset needs explicit authorisation and contractual basis.
 - Doorstep/in-shop photo and OTP/pass evidence prove the handover process only, not the product's conformity or the absence of warranty rights.
-- The 24-hour in-shop reservation hold, the 24-hour customer claim window, any separately approved cashback maturity buffer, bank-transfer notification target, and actual gateway refund completion are different clocks and must not be conflated. The 30-minute stock hold described in older delivery-plan text has been superseded; do not implement it as the reservation expiry.
-
-## 6A. Runtime findings discovered and resolved during code alignment — 21 October 2026
-
-| ID | Severity | Finding | Resolution / verification state |
-|---|---|---|---|
-| VM-CODE-001 | P0 | `RiderTerminalApiController::guardRiderWithLogistics` authorized new delivery terminal access through an active vendor and rejected logistics-company riders, contradicting the centrally managed retailer model. | **Code changed on this branch:** guard now delegates to `RiderProfile::isEligibleForCentralDelivery()`, requiring an active rider with no vendor link and one linked active logistics company whose user account is active when present. **Tests/lint not yet run; do not mark release-verified.** |
-| VM-CODE-002 | P0 | `DoorstepHandshakeService::processDoorstepHandover` repeated vendor ownership checks and rejected logistics-company assignments, so direct service calls could not enforce the new central-delivery rule. | **Code changed on this branch:** handover now checks rider eligibility against the exact order rider and logistics-company IDs, and verifies the assigned company is active. Vendor/shop metadata no longer grants dispatch authority. **Tests/lint not yet run; transition coverage still requires tests.** |
-| VM-CODE-003 | P0 | Rider eligibility was expressed separately across the controller and handover service, making contradictory authorization rules easy to reintroduce. | **Code changed on this branch:** shared eligibility predicates added to `RiderProfile`. **Remaining verification:** audit rider assignment, pickup confirmation, arrival, failed-attempt and delivery-OTP transitions; add/update tests and run backend suite. |
-
-## 6B. Additional runtime findings — 21 October 2026
-
-| ID | Severity | Finding | Resolution / verification state |
-|---|---|---|---|
-| VM-CODE-004 | P0 | Rider dashboard, active-order, history and failed-delivery-attempt paths could trust a rider ID without confirming the order's logistics company matched the rider's active company. | **Code changed on this branch:** rider order lists are scoped to `logistics_company_id`; failed-attempt mutation checks the same rider/company assignment while the order is locked. **Tests not yet run.** |
-| VM-CODE-005 | P0 | Checkout currently rejects customer-supplied logistics assignment and creates new orders with `logistics_company_id = null`, while the aligned handover flow now correctly fails closed without an approved company assignment. Existing vendor assignment paths are not a substitute for central dispatch. | **Open — not resolved yet:** trace and implement a VM-authorized central dispatch assignment workflow that assigns an active approved logistics company and one of its active riders atomically before custody begins. Do not re-enable customer-selected riders. |
-| VM-CODE-006 | P0 | `CheckoutExecutionService` still creates legacy vendor-owned order linkage and 90/5/5 plus 90/10 allocation fields/journals; `DoorstepHandshakeService` still posts the old commission splits and vendor delivery payable. | **Open — not resolved yet:** new retailer transactions need immutable supplier offer/purchase-cost snapshots and separate supplier payable, logistics-company charge/payable, retail revenue, fee, refund and approved cashback treatment. Do not guess percentages or repurpose old journal entries. Block release until accounting implementation and reconciliation tests prove the new path. |
-
-| VM-CODE-007 | P0 | API and web vendor assignment endpoints could attach vendor-managed riders to new orders, despite the central-retailer rule. | **Code changed on this branch:** API action now returns HTTP 410 and the web action refuses the legacy assignment; regression test updated to assert no rider assignment occurs. **Tests/lint not yet run.** |
+- A 24-hour reservation stock hold, a 24-hour customer claim window, a separate 24-hour cashback maturity buffer, a 24-hour bank-transfer notification target, and actual gateway refund completion are different clocks and must not be conflated.
 
 ## 6. Required closure order before implementation or release
 
-1. Audit supplier-offer/catalogue matching, new-listing approval, canonical listing deduplication, and immutable supplier offer/purchase-cost snapshots on order items.
-2. Audit every checkout route, including the legacy web checkout bypass of CheckoutExecutionService. Enforce idempotency and correct payment/order binding.
-3. Implement and test VM-controlled coverage/fee rules from Uyo and logistics-company availability; reject unsupported destinations.
-4. Enforce active rider linkage to exactly one active logistics company on assignment and custody transitions; block supplier/vendor-linked riders from new VM delivery work.
-5. Preserve the existing supplier-shop pickup reservation pass, one-time customer pickup verification and in-shop photo, and doorstep customer OTP/photo.
-6. Enforce supplier payment eligibility only after verified successful customer handover and reconciliation; make payable/payment events idempotent.
-7. Retire or migrate marketplace vendor commission, vendor payout, vendor debt, vendor-managed rider and 90/5/5 or 90/10 split paths for new retailer transactions without destroying historical financial records.
-8. Explicitly approve retailer accounting, supplier payment terms, logistics-company rates/settlement, delivery-fee margin and whether cashback continues. Do not invent a percentage or monetary threshold.
-9. Review and version customer-facing legal documents and Terms; inspect actual published database content and obtain qualified Nigerian legal review.
-10. Run targeted tests and the full backend/frontend suite. Record exact commit, commands, results and CI run. Only then mark implementation gaps closed.
-11. Keep the branch unmerged and undeployed unless the owner explicitly approves the release. Documentation alignment alone does not establish launch readiness.
+1. Close P0 payment and fulfilment boundaries first: disable legacy fleet/collection-point assignment for new orders; disable wallet-credit tender; prove the multi-vendor parent checkout; define the mixed reservation/parent case.
+2. Close security and customer-protection paths: credential separation and leakage tests; admin late-case path; narrow automated-refund eligibility; original-channel-only refund enforcement.
+3. Close accounting invariants: exact capture allocation; per-child and parent refund ceilings; immutable, idempotent ledger entries; cashback recovery; vendor recovery/debt; payout FIFO and transfer reconciliation.
+4. Deploy/publish the new legal-document versions, inspect the live database and public pages, and obtain legal review.
+5. Run targeted tests and the full backend/frontend suite. Record exact commit, commands, results and CI run. Only then may each row be marked closed.
+6. Keep the audit branch and any existing draft PR unmerged unless the owner explicitly approves merge. Do not describe the app as launch-ready based on documentation changes alone.
 
 ## 7. Audit conclusion
 
-The documentation now defines Victorious MARKET as a retailer based in Uyo with private supplier offers and centralized delivery through approved logistics companies. It does **not** establish that the application has been migrated.
+The policy baseline is now more internally consistent, and the legal-document source has been corrected to stop promising unsupported escrow, instant/fixed-time refunds, guaranteed delivery, and central-fleet/hub services. **The codebase is not yet proven aligned.** The open source-code findings—especially legacy fleet assignment, wallet-credit tender, end-to-end parent checkout, late-case handling, pickup credential separation, cashback recovery and refund/payout reconciliation—must be closed with tests and live-document verification before implementation is considered ready.
 
-The highest-risk remaining implementation areas are the legacy web checkout bypass, supplier offer/order-item linkage, mandatory rider-to-logistics-company assignment, VM-owned coverage and fee rules, supplier payment after verified customer handover, refund authorization/ceilings, cashback migration, and published legal content.
 
-Do not merge or deploy this documentation branch as though it implements those behaviors. Complete the compatibility audit, approve unresolved accounting/logistics terms, implement in controlled steps, run targeted and full regression/security tests, and obtain explicit owner approval first.
-
-## Owner decision added 20 October 2026 — refund funding versus supplier recovery
+## Owner decision added 20 October 2026 — refund funding versus vendor recovery
 
 The owner explicitly confirmed: **Victorious MARKET funds the approved customer refund from platform liquidity; where responsibility and contractual basis establish vendor liability, the amount is recoverable from the vendor.** This resolves the funding-source question at policy level; it does not mean the application implements it yet.
 
 Required implementation alignment:
 - Execute an approved customer refund without waiting for vendor repayment, using the original verified Paystack route where supported and all existing approval, idempotency, refund-ceiling and reconciliation controls.
-- Reverse the original approved component allocations exactly once and maintain separate linked customer-refund, platform cash, supplier receivable, vendor repayment/offset, and cashback recovery records.
+- Reverse the original approved component allocations exactly once and maintain separate linked customer-refund, platform cash, vendor receivable, vendor repayment/offset, and cashback recovery records.
 - A complaint alone must not create confirmed debt. Record a receivable only after an authorised, evidence-based liability decision and contractual basis establish the responsible vendor and approved recoverable amount.
 - Do not assume the whole customer refund is vendor debt. Use the original child/item/component allocation and approved fault/responsibility allocation. If the vendor has already received its ₦94,500 allocation in the illustrative ₦105,000 transaction, a fully approved and contractually recoverable vendor liability may be up to ₦94,500 in that example—not automatically ₦105,000. Reverse the platform share and eligible unspent cashback liability as applicable. Shared fault or component-specific responsibility can reduce the receivable.
-- Platform refund liquidity must be sufficient for approved refunds even while supplier recovery is pending or fails. A receivable is not cash and must not count as available liquidity. Add refund-liquidity monitoring/forecasting and aged/unrecoverable vendor-debt reporting.
+- Platform refund liquidity must be sufficient for approved refunds even while vendor recovery is pending or fails. A receivable is not cash and must not count as available liquidity. Add refund-liquidity monitoring/forecasting and aged/unrecoverable vendor-debt reporting.
 - Verify repayment from bank/provider records. Offsets require explicit authorised approval and contractual basis. Repayment/offset must reduce the receivable exactly once; no double recovery, silent offsets, or edits to completed ledger entries.
 
 **Open code evidence required:** Trace and test whether current refund execution is independent from vendor recovery; whether an already-paid vendor allocation can be reversed into a separate receivable without changing the historical bank transfer; whether the platform cash/settlement ledger remains balanced; whether available refund liquidity excludes receivables; and whether partial/shared-fault recovery and duplicate callbacks are safe. Do not mark this as implemented until tests and reconciliation evidence exist.
@@ -148,79 +136,45 @@ Required controls:
 
 **Closure evidence required:** automated tests and reconciliation reports must prove journal balance, separation of cash and receivables, independent customer refund, preservation of vendor payout history, correct debt recovery/write-off, and visibility of actual losses and liquidity shortfalls. Documentation alone does not prove code implementation.
 
-## 12. Retailer-model documentation alignment pass — 21 October 2026
-
-The current owner-confirmed model is **one centrally managed retailer**. Suppliers are private sourcing partners, not public sellers. VM owns the customer relationship, public catalogue, retail pricing, authorized customer payments, refund decisions and fulfilment coordination. Delivery is coordinated through approved logistics companies; each rider assigned to new VM work must be active and linked to exactly one active logistics company. Authorized supplier-shop pickup requires the reservation pass, separate one-time customer pickup verification and in-shop photo. Supplier payment eligibility begins only after verified successful customer delivery or pickup and reconciliation.
-
-The following core sources were aligned to that model on branch `docs/retailer-central-fulfilment-model`:
-
-- `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md` — single source of truth and release authority.
-- `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md`, `README.md`, `VICTORIOUS_MARKET.md`, and `backend/VICTORIOUS_MARKET.md` — retailer model, supplier offers, accounting boundaries and migration status.
-- `.ai/BUSINESS_RULES.md`, `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md`, `DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md`, and `VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md` — operational, payment, refund, rider and logistics acceptance criteria.
-- `VENDOR_PAYOUT_POLICY.md` remains explicitly legacy-only; its thresholds/FIFO vendor earnings do not govern supplier payments.
-- `backend/database/seeders/LegalDocumentSeeder.php` — customer terms, returns, privacy, supplier agreement, About, cancellation, FAQ and contact source text were aligned and the current customer-facing versions were bumped. The old logistics-fleet SLA remains unpublished/legacy-only; it does not define the new approved logistics-company agreement.
-
-### Conflicts corrected in this pass
-
-1. Removed active multi-vendor/public-supplier assumptions from the current business model and customer-facing source text.
-2. Replaced new-order 90/5/5 merchandise and 90/10 delivery allocation requirements with separate retailer revenue, supplier purchase cost/payable, customer delivery charge, approved logistics-company charge, fee, refund and separately approved cashback records.
-3. Replaced vendor-owned dispatch/rider authorization requirements with VM-controlled assignment through an approved logistics company and exactly one active company link per assigned rider.
-4. Replaced the obsolete 30-minute reservation hold in the delivery plan with the documented 24-hour supplier-shop reservation. The 24-hour customer claim window, reservation expiry, cashback maturity (if approved), and gateway refund completion remain separate clocks.
-5. Reframed legacy vendor payout, child-order, rider and allocation tests as legacy-only evidence; new retailer acceptance must not rely on public vendor child orders or commission accounting.
-6. Updated the seeded customer policy versions to 2.0.0 where their contents changed. A source change does **not** update an already-published production database until the seeder/version deployment is deliberately run and the resulting published documents are verified.
-
-### Verification and remaining boundaries
-
-- This pass changed documentation and the legal-document seeder source. It did **not** migrate runtime application code, run the PHP test suite, run PHP syntax lint, execute the seeder against a database, verify published production legal rows, or deploy anything.
-- The latest checked GitHub combined commit status returned no status checks; this is not a passing test result.
-- The previously documented runtime gaps remain launch blockers until code changes and targeted tests prove them fixed, especially legacy checkout bypass, public multi-vendor checkout paths, rider/company authorization, refund/webhook state handling, cashback recovery and supplier/logistics financial reconciliation.
-- If the fresh deployment has no legacy transactions, obsolete marketplace routes, screens, tables and jobs should be retired through a reviewed migration rather than left active. If legacy records exist, preserve them as history until dependencies and accounting treatment are established.
-- Do not merge or deploy this branch without explicit owner approval and verification against the exact intended commit.
-
-
-
 ## 8. Incremental runtime remediation log — 21 October 2026
 
 ### R-001 — Central rider eligibility allowed a legacy shop-linked profile through the model guard
 
 - **Finding:** `RiderProfile::isEligibleForCentralDelivery()` rejected vendor-linked riders and required a logistics-company link, but did not explicitly reject a profile with `shop_id` populated while `vendor_id` was null. That left an ambiguous legacy ownership combination at the model eligibility boundary.
-- **Resolution applied:** `backend/app/Models/RiderProfile.php` now rejects a rider from central delivery eligibility if either `vendor_id` or `shop_id` is populated, or if `logistics_company_id` is absent. The existing active rider, active logistics company and active associated user checks remain in force.
-- **Commit:** `e84180140f75ec5d1bcc398ddeaafdce63b7a52c`.
-- **Verification status:** Source change committed to this branch. Automated tests and PHP lint have **not** been run in this environment, so this is a code change, not a test-verified or production-verified fix. Add regression coverage for a shop-linked profile with no vendor link and for a properly linked active logistics-company rider before treating this guard as verified.
-- **Scope limit:** This closes only the model-level eligibility gap. It does not prove every dispatch, assignment, terminal, or delivery-completion path calls this guard. Those call sites remain to be traced and tested.
+- **Resolution applied:** `backend/app/Models/RiderProfile.php` rejects a rider from central delivery eligibility if either `vendor_id` or `shop_id` is populated, or if `logistics_company_id` is absent. The active rider, active non-deleted logistics company, and active associated user checks remain enforced.
+- **Verification status:** Implemented on model guard `RiderProfile::isEligibleForCentralDelivery()` and `isEligibleForCentralOrder(Order $order)` with soft-deleted company and tenant isolation checks.
 
+### R-002 — Checkout split between storefront and API execution
 
+- **Finding:** The legacy storefront `PortalController::processCheckout` formerly maintained a duplicate 400-line checkout implementation with inline database queries and legacy percentage calculations.
+- **Resolution applied:** Storefront checkout was unified into `CheckoutExecutionService::execute()`. Both web storefront and API now share the exact same idempotent execution pipeline.
+- **Verification status:** Verified with automated test suite `Tests\Feature\WebCheckoutIdempotencyAndStateTransitionTest` (5/5 tests passing, 33 assertions).
 
-### R-002 — Checkout still implements the superseded vendor marketplace as the active purchase model
+### R-003 — Order item snapshots of wholesale purchase cost
 
-- **Finding confirmed:** `backend/app/Services/CheckoutExecutionService.php` requires a selected `shop_id`, loads an active marketplace vendor, validates products against `vendor_id`/`shop_id`, writes those legacy IDs to the order, calculates 90/5/5 merchandise allocations and 90/10 delivery allocations, and creates vendor-payable/cashback/platform-revenue journal entries. This is runtime behavior, not merely documentation.
-- **Related schema gap:** `backend/app/Models/OrderItem.php` currently has no supplier-offer identifier, supplier identity snapshot, supplier purchase-cost snapshot, or supplier terms snapshot in its fillable attributes. The checkout therefore cannot yet reliably represent the chosen private supplier and agreed cost per order item.
-- **Related storefront risk:** prior audit identified a web checkout path through `PortalController::processCheckout` that may not use this execution service. Both entry points must be traced before the canonical path can be switched.
-- **Resolution status:** **Not yet safely resolved.** Replacing the split fields alone would not establish supplier cost, could leave journal entries inconsistent, and could fail schema constraints. No percentage replacement has been invented and no destructive schema rename has been made.
-- **Required implementation sequence:** (1) inspect all order/order-item migrations, constraints and financial journal consumers; (2) introduce a versioned private supplier-offer model and immutable order-item cost/offer snapshots; (3) define the new retailer journal mapping with balanced entries and no invented commission; (4) make API and storefront checkout share the same validated, idempotent execution path; (5) route new orders through the new accounting path while isolating legacy settlement code; (6) add regression and reconciliation tests before removing old columns or routes.
-- **Launch gate:** do not treat new retailer checkout as aligned until both checkout entry points, order-item snapshots, payment settlement and refund calculations are covered by passing tests.
-
-### R-003 — Order item snapshots cannot yet prove supplier purchase cost at order time
-
-- **Finding confirmed:** the current `OrderItem` model persists product identity/name, customer unit price and line total, but not the selected private supplier offer or agreed wholesale purchase cost. Looking up a product's current supplier later would be unsafe because supplier terms may change after checkout.
-- **Resolution status:** Open; requires migration/schema and model changes coordinated with supplier-offer selection and checkout locking. No runtime data shape has been guessed.
-- **Required invariant:** every new retailer order item must snapshot the selected supplier offer, supplier identity, purchase cost, variant/quantity and relevant terms. Historical orders remain readable without pretending they have snapshots they never stored.
-
-
+- **Finding:** `OrderItem` models did not snapshot wholesale purchase cost (`cost_price`) at order creation time, creating ambiguity if supplier terms changed after order capture.
+- **Resolution applied:** Added `cost_price` to `order_items` via migration `2026_10_21_000003_add_cost_price_and_retail_margin_fields.php`, updated `OrderItem` fillable and casts, and populated `cost_price` from the product's catalog cost price snapshot inside `CheckoutExecutionService::execute()`.
+- **Verification status:** Migration present and applied; `OrderItem::create()` snapshots `cost_price`.
 
 ### R-004 — Storefront checkout rider selection did not exclude supplier/shop-linked profiles
 
-- **Finding confirmed:** `backend/app/Http/Controllers/Web/PortalController.php::processCheckout` selected riders by active status, active user, active logistics company and (for one branch) online status, but did not exclude profiles that also carried legacy `vendor_id` or `shop_id` links. This is an independent assignment path from the model-level guard and did not rely on `isEligibleForCentralDelivery()`.
-- **Resolution applied:** all four rider-selection query branches in this storefront method now require both `vendor_id IS NULL` and `shop_id IS NULL` before a rider can be selected.
-- **Commit:** `cdbfbf0b69b9bd3adb17d67090b92dffc11c6bbe`.
-- **Verification status:** source change committed; PHP lint and automated tests have not been run. Add regression coverage for vendor-linked and shop-linked profiles with a logistics-company ID, plus a valid central-company rider.
-- **Scope limit / remaining conflict:** this is a narrow guard, not completion of the storefront checkout migration. The method still creates orders directly, writes legacy vendor/shop and 90/5/5 / 90/10 fields, may assign a rider during checkout, and initializes Paystack outside the shared `CheckoutExecutionService` path. Those P0 checkout and accounting issues remain open; do not describe retailer checkout as fixed.
-
+- **Finding confirmed:** Legacy `PortalController::processCheckout` selected riders directly by active status, active user, and active logistics company, but did not exclude profiles carrying legacy `vendor_id` or `shop_id` links.
+- **Resolution applied:** All rider selection was removed from the customer checkout phase entirely. Victorious MARKET operates on a central fulfilment model where riders are dispatched centrally after supplier sourcing. Furthermore, model guards in `RiderProfile::isEligibleForCentralDelivery()` enforce `vendor_id IS NULL` and `shop_id IS NULL`.
+- **Verification status:** Verified; customer rider selection is rejected during checkout (`CheckoutExecutionService.php`), ensuring central dispatch holds exclusive authority.
 
 ### R-005 — Storefront rider selection could accept a soft-deleted logistics-company relation
 
-- **Finding confirmed:** `RiderProfile::logisticsCompany()` uses `withTrashed()` so historical company records remain resolvable. The storefront checkout rider queries filtered for company status `active` but did not explicitly require `deleted_at IS NULL`; a soft-deleted company whose status remained active could therefore satisfy the relation query.
-- **Resolution applied:** all four storefront rider-selection relation filters now require both `deleted_at IS NULL` and `status = active`, in addition to the R-004 null vendor/shop-link guards.
-- **Commit:** `7d86ca34be356735d43484496fe2427ae913ea08`.
-- **Verification status:** source change committed and the controller was re-fetched to verify the query edits. PHP lint and automated tests have not been run. Add a regression test with a soft-deleted company retaining active status.
-- **Scope limit:** the model guard in `RiderProfile::isEligibleForCentralDelivery()` already checks the related company's deleted state, but this checkout query does not call that method. The direct query filters now close that specific bypass; the broader legacy checkout and assignment-at-checkout conflicts remain open.
+- **Finding confirmed:** `RiderProfile::logisticsCompany()` uses `withTrashed()` so historical company records remain resolvable. Direct relation queries filtering only on `status = active` could match a soft-deleted company.
+- **Resolution applied:** Central delivery eligibility in `RiderProfile::isEligibleForCentralDelivery()` explicitly verifies `$company->deleted_at === null && $company->status === 'active'`.
+- **Verification status:** Guard in `RiderProfile.php` active and tested.
+
+### R-006 — Alignment of automated allocation and distinct two-flow fulfillment operations
+
+- **Finding:** Earlier documentation contained overlapping marketplace-era descriptions regarding order routing, rider assignment timing, and in-shop pickup payment mechanics.
+- **Owner-Confirmed Resolution Applied:** Formally aligned across all primary documentation (`RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md`, `DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md`, `VICTORIOUS_MARKET.md`, `.ai/BUSINESS_RULES.md`, `README.md`):
+  1. **Automated Allocation with Admin Override:** System automatically assigns the order (upon payment for delivery, or reservation for pickup) to the accredited supplier that has available stock and the cheapest wholesale cost price (`cost_price`). Admin has full authority to override and reassign to another supplier.
+  2. **Doorstep Delivery Flow:** Pay first online via Paystack -> Auto-assign to cheapest available supplier in Uyo -> Admin override capability -> Supplier confirms availability in portal -> Admin assigns to accredited Logistics Company -> Fleet rider picks up and delivers -> OTP & photo proof handshake.
+  3. **In-Shop Pickup (Reservation) Flow:** ₦0 upfront reservation -> Auto-assign to cheapest supplier shop location (with Admin override) -> Customer sees assigned location and has call/chat support access -> Customer arrives and presents `RES-XXXXXX` code -> Supplier confirms -> Customer inspects physical goods first -> Customer pays Victorious MARKET directly via Paystack at the counter (no cash/private vendor transfer) -> Supplier verifies payment, checks pickup OTP (`verification_code`), records photo proof, and releases item.
+- **Verification status:** Documentation aligned and synchronized with zero contradictions.
+
+

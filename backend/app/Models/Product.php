@@ -22,6 +22,7 @@ class Product extends Model
         'youtube_video_id',
         'images',
         'unit_price',
+        'cost_price',
         'is_in_stock',
         'inventory_quantity',
         'physical_quantity',
@@ -41,6 +42,7 @@ class Product extends Model
 
     protected $casts = [
         'unit_price' => 'decimal:2',
+        'cost_price' => 'decimal:2',
         'slash_price' => 'decimal:2',
         'rating' => 'decimal:2',
         'reviews_count' => 'integer',

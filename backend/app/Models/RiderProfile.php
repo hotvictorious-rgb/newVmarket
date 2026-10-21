@@ -69,7 +69,7 @@ class RiderProfile extends Model
 
     /**
      * New Victorious MARKET delivery work is centrally dispatched through one
-     * active logistics company. Vendor-linked riders remain historical only.
+     * active logistics company. Vendor-linked or shop-linked riders remain historical only.
      */
     public function isEligibleForCentralDelivery(): bool
     {

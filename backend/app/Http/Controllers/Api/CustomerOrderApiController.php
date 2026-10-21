@@ -544,7 +544,7 @@ class CustomerOrderApiController extends Controller
      */
     public function trackOrder(Request $request): JsonResponse
     {
-        $user = $request->user();
+        $user = $request->user('sanctum') ?? $request->user();
         $orderId = $request->input('order_id');
         $orderNumber = $request->input('order_number');
         $guestToken = $request->input('guest_access_token');

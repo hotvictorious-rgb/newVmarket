@@ -320,6 +320,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'origin_lga_id' => $this->shop->lga_id,
             'destination_lga_id' => $this->uyoLga->id,
             'rider_id' => $this->rider->id,
+            'logistics_company_id' => $this->fleetCompany->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'out_for_delivery',
             'payment_status' => 'paid',
@@ -337,13 +338,16 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'vendor_settlement_status' => 'held',
         ]);
 
+        $this->rider->update(['vendor_id' => null, 'shop_id' => null, 'logistics_company_id' => $this->fleetCompany->id]);
+        $this->rider->refresh();
+
         $fleetWalletBefore = (float)$this->fleetCompany->wallet_balance;
         $riderBalanceBefore = (float)($this->rider->current_balance ?? 0);
 
         $service = app(OrderSettlementService::class);
         $result = $service->verifyCustomerDeliveryOtp($order, '987654', $this->rider, '/test/doorstep-proof.jpg');
 
-        $this->assertTrue($result['success']);
+        $this->assertTrue($result['success'], $result['message'] ?? 'Failed');
 
         $this->fleetCompany->refresh();
         $this->rider->refresh();
@@ -447,6 +451,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'origin_lga_id' => $this->shop->lga_id,
             'destination_lga_id' => $this->uyoLga->id,
             'rider_id' => $this->rider->id,
+            'logistics_company_id' => $this->fleetCompany->id,
             'fulfillment_type' => 'doorstep_delivery',
             'order_status' => 'out_for_delivery',
             'payment_status' => 'paid',
@@ -463,6 +468,9 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'rider_arrived_at' => $baseTime,
             'vendor_settlement_status' => 'held',
         ]);
+
+        $this->rider->update(['vendor_id' => null, 'shop_id' => null, 'logistics_company_id' => $this->fleetCompany->id]);
+        $this->rider->refresh();
 
         $service = app(OrderSettlementService::class);
         $result = $service->verifyCustomerDeliveryOtp($order, '445566', $this->rider, '/test/doorstep-proof.jpg');
@@ -672,5 +680,67 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'return_to' => '//evil-phishing-domain.com',
         ]);
         $response3->assertRedirect(route('customer.dashboard'));
+    }
+
+    /**
+     * Test 9: Non-Compounding Rule: Cashback is earned strictly on real money paid (excluding redeemed cashback).
+     */
+    public function test_cashback_earned_strictly_on_real_money_paid_excluding_redeemed_cashback(): void
+    {
+        // 1. Create a verified past order that generated ₦1,000 in matured cashback
+        $pastOrder = Order::create([
+            'order_number' => 'ORD-PAST-REWARD-001',
+            'customer_id' => $this->customerUser->id,
+            'vendor_id' => $this->shop->vendor_id,
+            'shop_id' => $this->shop->id,
+            'origin_lga_id' => $this->shop->lga_id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'delivered',
+            'payment_status' => 'paid',
+            'payment_method' => 'paystack',
+            'payment_reference' => Order::generateUniquePaymentReference(),
+            'merchandise_subtotal' => '20000.00',
+            'grand_total' => '20000.00',
+            'vendor_net_90' => '18000.00',
+            'customer_cashback_5' => '1000.00',
+            'platform_margin_5' => '1000.00',
+        ]);
+
+        CustomerCashbackLedger::create([
+            'customer_id' => $this->customerUser->id,
+            'order_id' => $pastOrder->id,
+            'amount' => '1000.00',
+            'status' => 'available',
+            'matures_at' => Carbon::now()->subDay(),
+            'expires_at' => Carbon::now()->addDays(365),
+        ]);
+
+        $checkoutService = app(\App\Services\CheckoutExecutionService::class);
+
+        $payload = [
+            'shop_id' => $this->shop->id,
+            'fulfillment_type' => 'in_shop_pickup',
+            'items' => [
+                [
+                    'product_id' => $this->product->id, // unit_price = 10000.00
+                    'quantity' => 1,
+                    'unit_price' => 10000.00,
+                ],
+            ],
+            'redeem_cashback' => true, // Redeem available cashback
+        ];
+
+        $result = $checkoutService->execute($this->customerUser, $payload);
+        $this->assertTrue($result['success']);
+        $order = $result['order'];
+
+        // Merchandise subtotal = $this->product->unit_price (1,450,000.00)
+        // Cashback redeemed = 1,000.00
+        // Real money paid for merchandise = 1,450,000.00 - 1,000.00 = 1,449,000.00
+        // 5% cashback earned MUST be 5% of 1,449,000.00 = 72,450.00, NEVER 5% of 1,450,000.00 (72,500.00)!
+        $this->assertEquals((string)$this->product->unit_price, $order->merchandise_subtotal);
+        $this->assertEquals('1000.00', $order->cashback_redeemed);
+        $this->assertEquals('72450.00', $order->customer_cashback_5, 'Cashback must be 5% of real money paid (1,449,000.00), not gross subtotal.');
     }
 }
