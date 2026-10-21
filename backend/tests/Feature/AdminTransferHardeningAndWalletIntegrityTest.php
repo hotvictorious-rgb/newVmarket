@@ -319,6 +319,25 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
+    public function test_supplier_payout_revalidates_kyc_before_gateway_submission(): void
+    {
+        [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
+        $service = app(RetailerSupplierPayoutService::class);
+        $requested = $service->requestPayout($this->vendor);
+        $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
+        $payout = $requested['payout'];
+
+        $this->vendor->update(['kyc_status' => 'pending']);
+        $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
+        $processing = $service->markProcessing($payout->id, $this->superAdmin->id, 'RCP_TEST_SUPPLIER', 'SUPPAYOUT-KYC-RECHECK');
+
+        $this->assertFalse($processing['success']);
+        $this->assertTrue($processing['protected'] ?? false);
+        $this->assertSame('pending', $payout->fresh()->status);
+        $this->assertSame('allocated', $payout->allocations()->first()->fresh()->status);
+        $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
+    }
+
     public function test_supplier_payout_uncertain_outcome_cannot_be_released_as_unsubmitted(): void
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
