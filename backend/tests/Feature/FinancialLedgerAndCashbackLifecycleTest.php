@@ -862,7 +862,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         try {
             $service->override($deliveredOrder->fresh(), $this->superAdmin, '1200.00', 'Late override after rider custody');
             $this->fail('Payable override must be rejected after rider custody begins.');
-        } catch (\\InvalidArgumentException $exception) {
+        } catch (\InvalidArgumentException $exception) {
             $this->assertStringContainsString('before rider custody', $exception->getMessage());
         }
         $deliveredOrder->order_status = 'delivered';
