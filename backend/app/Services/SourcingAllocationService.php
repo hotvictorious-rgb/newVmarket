@@ -509,6 +509,13 @@ class SourcingAllocationService
      */
     public function confirmSupplierAvailability(Order $order, int $vendorId, ?string $notes = null): Order
     {
+        // This order-level compatibility method cannot authorize new retailer
+        // orders: they require per-supplier assignment rows and the row-locked
+        // confirmation endpoint. In particular, never let it clear a rejection hold.
+        if ($order->retailer_model_order) {
+            throw new InvalidArgumentException('Retailer orders must use the supplier-assignment confirmation workflow; order-level confirmation is disabled.');
+        }
+
         if ((int)$order->selected_supplier_id !== (int)$vendorId) {
             throw new InvalidArgumentException('Unauthorized: order is not assigned to this supplier.');
         }
