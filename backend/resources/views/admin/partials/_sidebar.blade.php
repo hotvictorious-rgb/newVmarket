@@ -8,7 +8,7 @@
 <li class="sidebar-nav-item">
     <a href="{{ route('admin.delivery_lanes.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.delivery_lanes.*') ? 'active' : '' }}">
         <span class="nav-link-icon">🛣️</span>
-        <span>Standard Delivery Fee Matrix</span>
+        <span>Legacy Lane Serviceability</span>
     </a>
 </li>
 <li class="sidebar-nav-item">
