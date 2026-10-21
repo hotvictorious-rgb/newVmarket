@@ -524,3 +524,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Prevents a return from being marked refunded in the books when the application cannot even identify the original paid transaction, and prevents zero-value cases from creating artificial financial activity. This does not prove bank settlement on its own; the gateway financial operation remains the authority.
 
 **Verification boundary:** Code and regression tests committed; tests/CI have not run. No merge or deployment.
+
+
+### VM-AUD-110 — Require active super-admin status for payout review actions (21 October 2026)
+
+**Finding:** The supplier payout controller's authorization helper checked only `isSuperAdmin()`. If an administrator's account had been deactivated while a session remained valid, the controller did not independently reject listing, reconciliation, rejection, or disbursement requests based on account status.
+
+**Fix:** Controller authorization now requires a logged-in super administrator whose persisted account status is `active`. The payout service independently checks the same active role before a transfer can enter processing.
+
+**Business impact:** Reduces the risk of inactive administrator sessions continuing to operate supplier payout controls. Route-level authorization and service-level authorization now both enforce account activity.
+
+**Verification boundary:** Source committed; route regression tests and CI remain pending. No merge or deployment.
