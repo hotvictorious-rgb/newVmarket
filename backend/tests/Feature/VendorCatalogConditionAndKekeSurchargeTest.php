@@ -427,6 +427,23 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         ]);
         $responseA->assertOk();
         $this->assertEquals('supplier_confirmed', $orderTwoBulky->fresh()->sourcing_status);
+
+        // Each supplier independently marks its own package ready and receives a
+        // separate collection OTP. The whole order becomes ready only after both.
+        Sanctum::actingAs($supplierUserB, ['*']);
+        $readyB = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/ready-for-handover");
+        $readyB->assertOk()->assertJsonPath('all_suppliers_ready', false);
+        $otpB = $readyB->json('pickup_otp');
+        $this->assertMatchesRegularExpression('/^[0-9]{6}$/', (string) $otpB);
+        $this->assertEquals('confirmed', $orderTwoBulky->fresh()->order_status);
+
+        Sanctum::actingAs($this->vendorUser, ['*']);
+        $readyA = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/ready-for-handover");
+        $readyA->assertOk()->assertJsonPath('all_suppliers_ready', true);
+        $otpA = $readyA->json('pickup_otp');
+        $this->assertMatchesRegularExpression('/^[0-9]{6}$/', (string) $otpA);
+        $this->assertNotSame($otpA, $otpB);
+        $this->assertEquals('ready_for_pickup', $orderTwoBulky->fresh()->order_status);
     }
 
     public function test_public_product_api_filters_by_condition_and_package_tier(): void
