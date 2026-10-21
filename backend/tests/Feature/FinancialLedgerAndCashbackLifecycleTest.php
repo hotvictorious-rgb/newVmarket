@@ -664,7 +664,8 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'shop_id' => $otherBranch->id, // Mismatched branch!
         ]);
 
-        $response->assertSessionHasErrors(['fulfillment_type']);\n        $this->assertDatabaseMissing('orders', ['customer_id' => $this->customerUser->id]);
+        $response->assertSessionHasErrors(['fulfillment_type']);
+        $this->assertDatabaseMissing('orders', ['customer_id' => $this->customerUser->id]);
     }
 
     /**
