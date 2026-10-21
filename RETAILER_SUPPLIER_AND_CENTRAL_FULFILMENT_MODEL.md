@@ -23,16 +23,19 @@ A supplier submission is a wholesale proposal, never an auto-published marketpla
 
 When a customer places an order on Victorious MARKET:
 1. The customer orders the canonical product from Victorious MARKET at the published retail price.
-2. For doorstep delivery, the customer pays upfront online via Paystack (+ delivery fee).
-3. For in-shop pickup, the customer reserves online for free (₦0 upfront) to inspect at the designated supplier shop.
-4. **Supplier Offer Selection:** VM operations links the order item to the specific supplier offer chosen (the available and cheapest supplier in Uyo).
-5. **Immutable Snapshot:** The order item records an immutable snapshot of:
+2. For **Doorstep Delivery**, the customer pays upfront online via Paystack (+ delivery fee).
+3. For **In-Shop Pickup (Reservation)**, the customer reserves online for free (₦0 upfront) to inspect at the designated supplier shop.
+4. **Automated Sourcing Assignment (Cheapest + Available):**
+   - As soon as the customer completes checkout (payment verified for delivery, or reservation created for in-shop pickup), the system **automatically assigns the order/item to the accredited supplier that has the product in stock and offers the cheapest wholesale cost price (`cost_price`)**.
+5. **Admin Override Authority:**
+   - The Admin console maintains full supervisory control: Admin can review the automated assignment and **override it at any time**, manually reassigning the order or reservation to another accredited supplier/shop (e.g., for operational balancing, branch proximity, or relationship management).
+6. **Immutable Snapshot:** The order item records an immutable snapshot of:
    - Canonical product and variant;
    - Selected supplier ID and supplier shop ID;
    - Agreed supplier wholesale purchase cost (`cost_price`);
    - Customer retail selling price (`unit_price`);
    - VM gross profit margin (`unit_price - cost_price`).
-6. Later edits to supplier wholesale prices never alter historical or active order snapshots.
+7. Later edits to supplier wholesale prices never alter historical or active order snapshots.
 
 ## 4. Central operating base and service coverage
 
@@ -46,27 +49,32 @@ Before offering delivery at checkout, VM verifies:
 
 If coverage is unconfirmed, checkout blocks delivery. VM controls delivery coverage and quotes; suppliers do not configure delivery prices.
 
-## 5. Doorstep delivery: customer must pay first online
+## 5. Doorstep delivery: customer pays first, automated sourcing, admin logistics dispatch
 
 **Binding rule: Doorstep delivery requires pre-payment online via Paystack. Strictly NO Cash on Delivery (COD).**
 
-1. **Customer Checkout:** The customer pays the full retail price plus delivery fee online via Paystack card or bank transfer.
-2. **Sourcing:** Once payment is verified, VM selects the best supplier offer (cheapest and available), secures the item from the supplier's physical shop in Uyo.
-3. **Logistics Dispatch:** VM assigns delivery to an approved logistics company and rider. Logistics companies can strictly only be added by Admin (zero public self-registration). Each accredited logistics company manages their own dispatch riders. Every rider assigned must be active and linked to exactly one approved logistics company.
-4. **Custody & Delivery:** The rider collects the item from the supplier/VM hub and delivers to the customer's address.
-5. **Customer Handshake:** Customer delivery completion requires server-verified customer OTP (`delivery_otp`) plus a mandatory doorstep delivery photo.
-6. **Supplier Settlement:** Only after verified customer delivery is the supplier's wholesale payable unlocked and eligible for settlement.
+1. **Customer Checkout (Pay First):** The customer pays the full retail price plus delivery fee online via Paystack (card or bank transfer).
+2. **Automated Sourcing Assignment:** Upon verified Paystack payment, the system automatically assigns the order to the supplier that has the item available (`is_in_stock = true`) and cheapest (`cost_price` lowest).
+3. **Admin Sourcing Override:** Admin can review the auto-assigned supplier and override the assignment by selecting a different accredited supplier if necessary.
+4. **Supplier Availability Confirmation:** The assigned supplier receives the sourcing notification in their portal and physically inspects their inventory to **confirm product availability**.
+5. **Admin Logistics Company Assignment:** Once the supplier confirms availability, the order transitions to Admin dispatch. Admin assigns the order to an accredited **Logistics Company** (onboarded strictly by Admin; zero public self-registration).
+6. **Fleet Pickup & Handover:** The Logistics Company assigns one of its active fleet riders. The rider visits the supplier's shop, picks up the package, and transports it to the customer.
+7. **Customer Delivery Handshake:** Doorstep delivery completion strictly requires the server-verified customer OTP (`delivery_otp`) plus a mandatory doorstep delivery photo proof.
+8. **Supplier Settlement:** Only after verified customer delivery is the supplier's wholesale payable unlocked and eligible for settlement.
 
-## 6. In-shop pickup: inspect first, pay at the shop
+## 6. In-shop pickup: automated reservation, inspect first, pay at shop to Paystack
 
-**Binding rule: In-shop pickup allows the customer to inspect the physical item first at the supplier shop, and pay at the shop counter upon satisfaction.**
+**Binding rule: In-shop pickup allows the customer to inspect the physical item first at the supplier shop, and pay directly to Victorious MARKET via Paystack upon satisfaction.**
 
-1. **Online Reservation:** The customer selects "In-Shop Pickup" at checkout. The checkout fee is ₦0 upfront.
-2. **Reservation Pass Issued:** The system issues a unique reservation pass (`RES-XXXXXX`) and 6-digit pickup OTP (`pickup_verification_code`), directing the customer to the designated supplier shop in Uyo with a 24-hour stock hold.
-3. **Inspect First:** The customer arrives at the supplier's physical shop counter, presents their reservation pass, and **physically inspects the item first** to verify quality, condition, and satisfaction.
-4. **Payment at the Shop:** Once completely satisfied, the customer completes verification and payment through VM's authorized workflow at the shop counter before goods are released.
-5. **Handover Evidence:** The supplier verifies the reservation pass and customer pickup OTP, records the mandatory in-shop pickup photo, and marks the item collected.
-6. **Customer Rejection / Walk-Away:** If the customer is dissatisfied upon physical inspection, they do not pay, no funds are lost, and the reservation is cancelled cleanly without refund complications.
+1. **Online Reservation (₦0 Upfront):** The customer selects "In-Shop Pickup" at checkout. No money is paid online upfront.
+2. **Automated Location Assignment:** The system automatically assigns the reservation to the supplier shop that has the item available and cheapest, issuing a unique reservation pass (`RES-XXXXXX`) and customer pickup OTP (`verification_code`).
+3. **Admin Location Override:** The customer sees the reservation location assigned by the system, but Admin has full authority to override and reassign the reservation to another supplier branch.
+4. **Customer Journey & Direct Support:** While travelling to the shop, the customer can **call or chat Victorious MARKET customer support** directly for assistance, directions, or inquiries.
+5. **Arrival & Reservation Verification:** The customer arrives at the designated supplier shop and presents their `RES-XXXXXX` reservation code. The supplier verifies the reservation code in their terminal.
+6. **Physical Inspection First:** The customer **physically inspects the item at the shop counter** to confirm quality, condition, and complete satisfaction before making any payment.
+7. **Payment to Paystack at the Counter:** Once satisfied, the customer makes payment **directly to Victorious MARKET via Paystack** (via mobile Paystack payment link, counter QR code, or online counter checkout). Strictly NO cash or private vendor bank account transfers.
+8. **Secure Handover Handshake:** Once payment is confirmed as `paid` by Paystack, the supplier verifies the customer's pickup OTP (`verification_code`), captures the mandatory in-shop pickup photo proof, and hands over the product.
+9. **Customer Walk-Away (Zero Friction Cancellation):** If the customer is not satisfied upon inspection, they simply do not pay. The reservation is cancelled cleanly with zero financial refund overhead.
 
 ## 7. Supplier payment eligibility
 

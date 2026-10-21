@@ -19,9 +19,25 @@ The current model is defined in [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.
 ## Operating model
 
 - **Private Wholesale Sourcing:** Suppliers provide physical products, inventory availability in Uyo, and wholesale cost prices. VM adds its profit margin and publishes the canonical public retail selling price (`Retail Price = Wholesale Cost + VM Profit Margin`).
-- **Cheapest & Available Sourcing:** When multiple suppliers offer the same product, VM maps them to the canonical listing and fulfills from the supplier that is available and cheapest in Uyo.
-- **Doorstep Delivery — Pay First Online:** Customer must pay the full retail selling price plus delivery fee upfront online via Paystack. Cash on delivery is completely disabled. Handover requires customer OTP (`delivery_otp`) and doorstep photo.
-- **In-Shop Pickup — Inspect First, Pay at Shop:** Customer reserves online for free (₦0 upfront, `RES-XXXXXX` pass). Customer visits the supplier's physical shop in Uyo, **inspects the physical item first**, and only pays at the shop counter through VM's authorized workflow upon satisfaction before goods release. Handover requires customer pickup OTP (`pickup_verification_code`) and in-shop photo.
+- **Automated Sourcing Assignment (Cheapest & Available):** When multiple suppliers offer the same product, the system automatically assigns the order (upon payment for delivery, or reservation for pickup) to the supplier that is available and cheapest in Uyo (`cost_price` lowest).
+- **Admin Sourcing Override:** Admin maintains complete supervisory control and can override the automated supplier or shop assignment at any time.
+- **Doorstep Delivery Flow (Pay First, Sourced & Dispatched):**
+  1. Customer pays the full retail selling price plus delivery fee upfront online via Paystack. Strictly NO Cash on Delivery (COD).
+  2. System automatically assigns the order to the cheapest available supplier in Uyo. Admin can override this assignment.
+  3. The assigned supplier verifies their physical inventory and confirms product availability in their portal.
+  4. Once availability is confirmed, Admin assigns the order to an accredited Logistics Company (onboarded strictly by Admin).
+  5. The Logistics Company dispatches its active fleet rider to collect the item from the supplier's shop and deliver to the customer.
+  6. Delivery completion strictly requires customer verification OTP (`delivery_otp`) plus doorstep photo proof.
+- **In-Shop Pickup Flow (Inspect First, Pay at Shop via Paystack):**
+  1. Customer reserves online for free (₦0 upfront).
+  2. System automatically assigns the reservation to the supplier shop with the cheapest wholesale cost and available stock, issuing a unique reservation pass (`RES-XXXXXX`) and customer pickup OTP (`verification_code`).
+  3. Admin can override the assigned reservation pickup location if necessary.
+  4. Customer journeys to the designated shop and can call or chat Victorious MARKET customer support for assistance or directions.
+  5. Customer arrives at the supplier shop, presents the reservation code, and the supplier confirms the reservation.
+  6. Customer **physically inspects the item at the counter first** to ensure complete satisfaction.
+  7. Upon satisfaction, customer pays **directly to Victorious MARKET via Paystack** (mobile payment link, counter QR, or online counter checkout). Strictly NO cash or private vendor bank transfer.
+  8. Once Paystack confirms payment, supplier verifies the customer's pickup OTP (`verification_code`), records mandatory photo proof, and hands over the item.
+  9. If customer is dissatisfied upon inspection, they walk away without paying; the reservation is cancelled cleanly with zero refund overhead.
 - **Operating Base:** Uyo, Akwa Ibom State is the central operating base. Delivery is offered only where local supplier sourcing and accredited logistics partner coverage are confirmed.
 - **Delivery Riders:** Every rider assigned to new VM delivery must be active and linked to exactly one approved logistics company. Supplier-owned/vendor-linked riders are not eligible for new delivery assignments.
 - **Supplier Payment Eligibility:** Suppliers are paid their agreed wholesale cost strictly after verified successful customer delivery or confirmed in-shop pickup. Order placement, customer payment, or rider collection alone never unlocks supplier payment.

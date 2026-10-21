@@ -19,11 +19,11 @@ Victorious MARKET is a centrally managed online retailer operating from Uyo, Akw
 - **Application:** Laravel 12 / PHP 8.2+
 - **Currency:** NGN; payment amounts are validated in integer kobo.
 - **Two Permitted Customer Flows:**
-  - **Doorstep Delivery:** Pay first online via Paystack. Sourced from cheapest/available supplier offer in Uyo. Dispatched via accredited logistics rider. Zero COD.
-  - **In-Shop Pickup:** Reserve online for ₦0 upfront. Inspect physical item first at supplier shop counter. Pay at the shop counter upon satisfaction before goods release. Zero delivery fee.
-- **Retail Accounting:** `Customer Retail Price - Supplier Wholesale Cost = VM Gross Margin`. Suppliers receive 100% of agreed wholesale cost upon verified completion. Legacy 90/5/5 splits are retired.
+  - **Doorstep Delivery (Pay First Online, Sourced & Dispatched):** Customer pays upfront online via Paystack. System automatically assigns order to the cheapest available supplier in Uyo (with Admin override capability). Supplier confirms availability in portal. Admin assigns order to an accredited Logistics Company. Fleet rider picks up and delivers. Verified handover with customer OTP (`delivery_otp`) and doorstep photo proof. Strictly zero COD.
+  - **In-Shop Pickup (Inspect First, Pay at Shop via Paystack):** Customer reserves online for ₦0 upfront. System automatically assigns reservation to the cheapest available supplier shop location in Uyo (with Admin override capability). Customer sees assigned branch and has direct call/chat support access. Customer arrives, presents reservation pass (`RES-XXXXXX`), and **inspects the item physically first**. Upon satisfaction, customer pays **directly to Victorious MARKET via Paystack** at the counter. Supplier verifies payment, checks pickup OTP (`verification_code`), records in-shop photo proof, and hands over goods. Zero delivery fee.
+- **Retail Accounting:** `Customer Retail Price - Supplier Wholesale Cost = VM Gross Margin`. Suppliers receive 100% of agreed wholesale cost upon verified completion. Customer 5% cashback is funded from retail margin on real money paid. Legacy 90/5/5 splits are retired.
 - **No off-platform payment:** Suppliers may not collect cash or private-account transfers for orders. Launch payment rails are Paystack card and standard bank transfer only. Doorstep COD is completely disabled.
-- **Reservation:** In-shop reservation features a 24-hour stock hold at the supplier shop.
+- **Reservation:** In-shop reservation features a 24-hour stock hold at the assigned supplier shop.
 - **Operating base and coverage:** Uyo, Akwa Ibom State; serves destinations where VM has confirmed supplier sourcing and logistics coverage.
 - **Primary policy documents:** see [Business and implementation documents](#business-and-implementation-documents).
 
@@ -125,21 +125,23 @@ Suppliers receive 100% of their agreed wholesale cost upon verified completion. 
 ### Delivery controlled by Victorious MARKET (Pay First Online)
 
 - **Pay First Online:** Customer must pay the retail selling price plus delivery fee upfront online via Paystack. Strictly NO Cash on Delivery (COD).
-- VM coordinates delivery from its Uyo operating base, sourcing items from the cheapest available local supplier offer.
-- Delivery is fulfilled through an approved logistics company. Every rider assigned to VM work must be active and linked to exactly one active logistics company; an unlinked rider, supplier-owned rider, inactive company, or ambiguous company association must be rejected.
-- A logistics-company assignment must be authorized and recorded against the relevant order or fulfilment unit. A supplier cannot independently dispatch a rider or mark delivery complete.
-- The logistics company and rider perform operational custody and handover tasks. They cannot approve refunds, alter prices, mark customer payments successful, or create supplier-payment entries.
-- Do not expose supplier wholesale costs, customer payment/refund information, or unnecessary customer data to riders.
-- Customer delivery completion requires server-verified customer OTP (`delivery_otp`) and doorstep photo. Rider collection or a logistics-company scan alone is not fulfilment.
+- **Automated Sourcing Assignment:** Upon verified Paystack payment, the system automatically assigns the order to the accredited supplier in Uyo offering the lowest wholesale cost price (`cost_price`) with available stock.
+- **Admin Sourcing Override:** Admin maintains supervisory authority and can override the automated assignment to reassign the order to another accredited supplier whenever needed.
+- **Supplier Availability Confirmation:** The assigned supplier inspects inventory and confirms physical availability in their portal.
+- **Admin Logistics Assignment:** Once availability is confirmed, Admin assigns the order to an accredited Logistics Company (onboarded strictly by Admin; zero public self-registration).
+- **Logistics Dispatch & Delivery:** The Logistics Company dispatches its active fleet rider to collect the packaged item from the supplier's shop and deliver to the customer. Every rider must be active and linked to exactly one active logistics company; unlinked, supplier-owned, or inactive couriers are rejected.
+- **Handover Verification:** Customer delivery completion strictly requires the server-verified customer OTP (`delivery_otp`) plus a mandatory doorstep delivery photo proof. Rider collection or logistics scans alone do not constitute delivery.
 
-### Supplier-shop pickup (Inspect First, Pay at the Shop)
+### Supplier-shop pickup (Inspect First, Pay at the Shop via Paystack)
 
-- **Online Reservation Pass:** Customer reserves the product online with ₦0 upfront, receiving a reservation pass (`RES-XXXXXX`) and 24-hour stock hold at the designated supplier shop in Uyo.
-- **Inspect First:** The customer visits the supplier shop counter and **physically inspects the item first** to verify condition, authenticity, and satisfaction before making any payment.
-- **Pay at Counter Upon Satisfaction:** If satisfied, the customer completes payment through VM's authorized workflow at the shop counter and provides the one-time customer pickup OTP (`pickup_verification_code`).
-- The supplier records the required in-shop photo, verifies the payment and pickup OTP, and hands over the item.
-- If the customer is not satisfied upon inspection, they simply walk away without paying anything.
-- Only verified counter handover completes fulfilment and makes the supplier's wholesale payable eligible.
+- **Online Reservation Pass:** Customer reserves the product online with ₦0 upfront, receiving a unique reservation pass (`RES-XXXXXX`) and customer pickup OTP (`verification_code`).
+- **Automated Location Assignment:** The system automatically assigns the reservation to the supplier shop that has the item available at the cheapest cost. Admin can override and reassign the pickup location if necessary.
+- **Customer Journey & Direct Support:** While traveling to the shop, the customer can **call or chat Victorious MARKET customer support** for directions or assistance.
+- **Arrival & Presentation:** Customer presents their `RES-XXXXXX` reservation code at the designated supplier shop counter, and the supplier verifies it in their terminal.
+- **Physical Inspection First:** Customer **physically inspects the item at the counter first** to confirm quality, condition, and complete satisfaction before any payment is made.
+- **Pay directly to Victorious MARKET via Paystack:** Upon satisfaction, customer completes payment **directly to Victorious MARKET via Paystack** (mobile payment link, counter QR code, or online counter checkout). Strictly NO cash or private vendor bank account transfers.
+- **Verified Release Handshake:** Once payment is confirmed by Paystack, the supplier verifies the customer's pickup OTP (`verification_code`), captures the required in-shop photo proof, and releases the goods.
+- **Zero-Risk Customer Protection:** If the customer is not satisfied upon physical inspection, they simply walk away without paying anything. The reservation is cancelled cleanly with zero refund overhead.
 
 ### Coverage and fees
 

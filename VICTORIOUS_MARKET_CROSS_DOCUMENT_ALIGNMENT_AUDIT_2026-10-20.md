@@ -168,3 +168,13 @@ Required controls:
 - **Resolution applied:** Central delivery eligibility in `RiderProfile::isEligibleForCentralDelivery()` explicitly verifies `$company->deleted_at === null && $company->status === 'active'`.
 - **Verification status:** Guard in `RiderProfile.php` active and tested.
 
+### R-006 — Alignment of automated allocation and distinct two-flow fulfillment operations
+
+- **Finding:** Earlier documentation contained overlapping marketplace-era descriptions regarding order routing, rider assignment timing, and in-shop pickup payment mechanics.
+- **Owner-Confirmed Resolution Applied:** Formally aligned across all primary documentation (`RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md`, `DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md`, `VICTORIOUS_MARKET.md`, `.ai/BUSINESS_RULES.md`, `README.md`):
+  1. **Automated Allocation with Admin Override:** System automatically assigns the order (upon payment for delivery, or reservation for pickup) to the accredited supplier that has available stock and the cheapest wholesale cost price (`cost_price`). Admin has full authority to override and reassign to another supplier.
+  2. **Doorstep Delivery Flow:** Pay first online via Paystack -> Auto-assign to cheapest available supplier in Uyo -> Admin override capability -> Supplier confirms availability in portal -> Admin assigns to accredited Logistics Company -> Fleet rider picks up and delivers -> OTP & photo proof handshake.
+  3. **In-Shop Pickup (Reservation) Flow:** ₦0 upfront reservation -> Auto-assign to cheapest supplier shop location (with Admin override) -> Customer sees assigned location and has call/chat support access -> Customer arrives and presents `RES-XXXXXX` code -> Supplier confirms -> Customer inspects physical goods first -> Customer pays Victorious MARKET directly via Paystack at the counter (no cash/private vendor transfer) -> Supplier verifies payment, checks pickup OTP (`verification_code`), records photo proof, and releases item.
+- **Verification status:** Documentation aligned and synchronized with zero contradictions.
+
+
