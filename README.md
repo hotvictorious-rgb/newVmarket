@@ -5,7 +5,7 @@
 
 > **Owner-confirmed business model & payment rules (21 October 2026):** Victorious MARKET operates as a Direct-to-Consumer (1P) Retailer with Just-in-Time Private Supplier Sourcing based in Uyo, Akwa Ibom State. Customers buy from Victorious MARKET. Suppliers provide wholesale cost prices, and VM adds its profit margin (`Retail Selling Price = Wholesale Cost + VM Margin`). Sourcing selects the cheapest available local supplier offer. Only two fulfilment & payment paths are permitted:
 > 1. **Doorstep Delivery:** Customer **must pay first online** via Paystack (card or bank transfer) + delivery fee. Strictly NO Cash on Delivery (COD). Handover verified via customer Handshake OTP (`delivery_otp`) plus doorstep photo.
-> 2. **In-Shop Pickup:** Customer reserves online for free (₦0 upfront, `RES-XXXXXX` pass), visits the designated supplier shop in Uyo, **inspects the physical item first**, and pays at the shop counter through VM's authorized workflow upon satisfaction before goods release. Handover verified via customer pickup OTP (`pickup_verification_code`) plus in-shop photo.
+> 2. **Support-managed pickup exception:** Pickup is not offered as an automated online checkout or reservation. A customer must contact VM support. Support confirms pickup only after verifying the complete order, physical readiness at one approved collection point, payment arrangement, and customer agreement. No collection address is disclosed before confirmation. Legacy reservation records remain for historical compatibility only.
 > Suppliers are paid their agreed wholesale cost strictly after verified customer delivery or verified counter pickup.
 
 **Your Trusted Online Market for Quality Products**  
@@ -23,7 +23,7 @@ Victorious MARKET is a centrally managed online retailer operating from Uyo, Akw
 - **Currency:** NGN; payment amounts are validated in integer kobo.
 - **Two Permitted Customer Flows:**
   - **Doorstep Delivery (Pay First Online, Sourced & Dispatched):** Customer pays upfront online via Paystack. System automatically assigns order to the cheapest available supplier in Uyo (with Admin override capability). Supplier confirms availability in portal. Admin assigns order to an accredited Logistics Company. Fleet rider picks up and delivers. Verified handover with customer OTP (`delivery_otp`) and doorstep photo proof. Strictly zero COD.
-  - **In-Shop Pickup (Inspect First, Pay at Shop via Paystack):** Customer reserves online for ₦0 upfront. System automatically assigns reservation to the cheapest available supplier shop location in Uyo (with Admin override capability). Customer sees assigned branch and has direct call/chat support access. Customer arrives, presents reservation pass (`RES-XXXXXX`), and **inspects the item physically first**. Upon satisfaction, customer pays **directly to Victorious MARKET via Paystack** at the counter. Supplier verifies payment, checks pickup OTP (`verification_code`), records in-shop photo proof, and hands over goods. Zero delivery fee.
+  - **Pickup requests:** Not available through standard checkout or public reservation APIs. Customers must call or WhatsApp support. Support may confirm a one-point collection exception only after complete-order availability, physical readiness, payment arrangements and customer agreement are verified. Never disclose a supplier address or mark an order ready prematurely. Existing reservation code/data is legacy-only until safely retired.
 - **Retail Accounting:** `Retail Price - Supplier Wholesale Cost = VM Gross Margin` before other costs. Suppliers receive their agreed wholesale cost only after verified completion and reconciliation. Legacy 90/5/5 merchandise and vendor 90/10 delivery earning splits do not apply to new retailer transactions. New doorstep delivery defaults to 90% of the customer delivery fee payable to the logistics company and 10% VM delivery margin, subject to audited admin override. Cashback remains active at 5% on eligible post-discount merchandise actually funded by real Paystack money, after redeemed cashback and excluding delivery; existing maturity, 365-day validity-from-maturity, 50% redemption cap, refund reversal and spent-cashback recovery terms remain in force.
 - **No off-platform payment:** Suppliers may not collect cash or private-account transfers for orders. Launch payment rails are Paystack card and standard bank transfer only. Doorstep COD is completely disabled.
 - **Reservation:** In-shop reservation features a 24-hour stock hold at the assigned supplier shop.
@@ -74,7 +74,7 @@ Existing approved customer payment paths and Paystack verification safeguards re
 
 ### Customer return/refund window: 24 hours
 
-The standard customer return/claim window is **24 hours from verified doorstep delivery or confirmed in-shop pickup**. This is a customer-protection window; it is **not** a promise that Paystack will process a refund within 24 hours.
+The standard customer return/claim window is **24 hours from verified doorstep delivery**. A support-managed pickup exception must use the same approved customer-protection rules and its own recorded handover evidence; it does not reinstate automated pickup reservations. This is a customer-protection window; it is **not** a promise that Paystack will process a refund within 24 hours.
 
 - The backend must use the approved 24-hour setting consistently across customer interfaces, APIs, services, jobs, and vendor settlement eligibility, evaluated independently per vendor child order.
 - The 24-hour period is the standard operational claim/reporting window, not a blanket waiver of rights that cannot lawfully be excluded. It must not be presented as eliminating remedies available under the Federal Competition and Consumer Protection Act or other applicable Nigerian law, including where goods are defective, unsafe, misdescribed, or non-conforming. Applicable law and valid warranty obligations prevail where they provide a stronger remedy; obtain qualified Nigerian legal review of customer-facing Terms before launch.
@@ -266,7 +266,7 @@ Before release, verify at minimum:
 - Original-channel-only refunds, approval provenance, refund ceilings and refund reconciliation.
 - Cashback reversal/recovery without silent wallet debit.
 - Vendor-only rider assignments, protected Call Customer action and rider response privacy.
-- Zero-fee in-shop pickup with RES-XXXXXX, no rider assignment, and no ambiguity with rider parcel codes.
+- Delivery-first checkout and support-managed pickup exceptions only; no new public RES-XXXXXX pickup reservations.
 - Supplier payable eligibility after verified customer handover and reconciliation; approved logistics-company charges; provider transfer verification and balanced journals. Legacy vendor FIFO payout batching is not a new supplier-payment rule.
 - Legacy logistics paths blocked for new work while historical records remain auditable.
 
@@ -304,3 +304,8 @@ If documents conflict, follow the current owner-confirmed retailer model in `RET
 
 **Victorious MARKET — Your Trusted Online Market for Quality Products.**  
 *Trust first. Quality always. Accountability at every stage.*
+
+
+## Delivery-first simplification — implementation boundary (21 October 2026)
+
+The active product policy is delivery-first. Any earlier README paragraphs or architecture descriptions that still describe automatic pickup reservation, customer-facing supplier/shop selection, or multi-vendor checkout are historical compatibility descriptions and must not be treated as current requirements. Runtime code currently still contains pickup pages, routes, reservation services and legacy marketplace paths; those are explicit migration blockers, not proof that the active policy is already enforced. Disable new public writes/address disclosure, update storefront and API/OpenAPI behavior, preserve historical reads, and test before release. See `docs/architecture/RETAILER_FULFILMENT_SIMPLIFICATION_2026-10-21.md`.
