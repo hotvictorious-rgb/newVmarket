@@ -24,6 +24,7 @@ use App\Models\VendorProfile;
 use App\Models\VendorEmployeeProfile;
 use App\Models\LogisticsPayoutRequest;
 use App\Models\VendorPayoutRequest;
+use App\Models\RetailerSupplierPayoutRequest;
 use App\Models\AdminAuditLog;
 use App\Models\ReturnCase;
 use App\Models\ReturnItem;
@@ -37,6 +38,7 @@ use App\Services\CheckoutExecutionService;
 use App\Services\OrderSettlementService;
 use App\Services\LogisticsCompanyPayableService;
 use App\Services\ReturnAndRefundService;
+use App\Services\RetailerSupplierPayoutService;
 use App\Services\DoorstepHandshakeService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -1537,8 +1539,31 @@ class PortalController extends Controller
             ->latest()
             ->take(20)
             ->get();
+        $retailerSupplierPayoutRequests = RetailerSupplierPayoutRequest::where('supplier_vendor_id', $vendor->id)
+            ->with('allocations')
+            ->latest('id')
+            ->take(20)
+            ->get();
 
-        return view('vendor.payout', compact('vendor', 'vendorMetrics', 'payoutRequests'));
+        return view('vendor.payout', compact('vendor', 'vendorMetrics', 'payoutRequests', 'retailerSupplierPayoutRequests'));
+    }
+
+    /**
+     * Request the separate item-level supplier payable balance from retailer-model orders.
+     */
+    public function vendorRequestRetailerSupplierPayout(Request $request, RetailerSupplierPayoutService $service)
+    {
+        $vendor = $this->resolveVendorProfile();
+        if (!$request->user() || !$request->user()->isVendor()) {
+            abort(403, 'Only the supplier account owner can request supplier-payable payouts.');
+        }
+
+        $result = $service->requestPayout($vendor);
+        if (!$result['success']) {
+            return back()->with('error', $result['message'] ?? 'Supplier payable payout request could not be created.');
+        }
+
+        return back()->with('status', 'Supplier payable payout request #' . $result['payout']->id . ' has been reserved for treasury review. It is separate from legacy merchant sales payouts.');
     }
 
     /**
