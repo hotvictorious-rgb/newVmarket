@@ -103,12 +103,12 @@ Supplier payment terms must be agreed with suppliers. This baseline specifies th
 
 ## 8. Retail accounting: rules to retire or reassess
 
-The prior marketplace rules below must not be carried over as retailer defaults:
-- 90% vendor / 5% cashback / 5% platform merchandise split;
-- 90% vendor / 10% platform delivery-fee split;
+The following are retired marketplace assumptions only and must not be used as active requirements for the fresh retailer model:
+- former 90% vendor / 5% cashback / 5% platform merchandise split;
+- former 90% vendor / 10% platform delivery-fee split;
 - vendor earning balances, vendor payout thresholds and marketplace commission;
 - automatic or contractual vendor-debt recovery logic treated as supplier debt;
-- supplier/vendor-managed rider payables and delivery fee settings.
+- supplier/vendor-managed rider payables and vendor-configured delivery fee settings.
 
 A supplier purchase cost is a retailer cost/payable. VM must separately record customer receipts/revenue, supplier purchase costs and payables, delivery revenue/charges, logistics-company charges/payables, gateway fees, discounts, taxes, refunds, cashback liabilities only if separately confirmed, and operating expenses. Balanced journals must not conceal a cash shortfall or operating loss.
 
