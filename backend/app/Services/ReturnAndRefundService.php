@@ -549,13 +549,19 @@ class ReturnAndRefundService
             $lockedCase = ReturnCase::where('id', $caseId)->lockForUpdate()->firstOrFail();
             $order = Order::where('id', $lockedCase->order_id)->lockForUpdate()->firstOrFail();
 
-            // Strict Financial Approval State Machine: requires prior explicit approval
+            // Strict Financial Approval State Machine: requires an explicit
+            // refund decision and a currently active administrator who recorded it.
+            $reviewerIsActive = !empty($lockedCase->reviewed_by_admin_id)
+                && User::whereKey($lockedCase->reviewed_by_admin_id)
+                    ->where('status', 'active')
+                    ->whereIn('user_type', ['super_admin', 'admin_employee'])
+                    ->exists();
             if ($lockedCase->status !== 'refund_pending'
                 || $lockedCase->resolution_type !== 'refund'
-                || !$lockedCase->reviewed_by_admin_id) {
+                || !$reviewerIsActive) {
                 return [
                     'valid' => false,
-                    'message' => "Cannot disburse refund unless the case is explicitly approved with resolution_type=refund and status=refund_pending by an administrator.",
+                    'message' => "Cannot disburse refund unless the case is explicitly approved with resolution_type=refund and status=refund_pending by an active administrator.",
                 ];
             }
 
