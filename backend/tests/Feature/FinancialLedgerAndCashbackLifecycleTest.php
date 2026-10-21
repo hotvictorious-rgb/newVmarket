@@ -118,6 +118,10 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'package_tier' => 'standard',
         ]);
 
+        if ($this->product->cost_price === null) {
+            $this->product->update(['cost_price' => '5000.00']);
+        }
+
         // Customer
         $this->customerUser = User::where('user_type', 'customer')->first();
         if (!$this->customerUser) {
