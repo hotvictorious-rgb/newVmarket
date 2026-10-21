@@ -192,7 +192,6 @@ class Product extends Model
 
         return $query->where('is_approved', true)
             ->where('listing_status', 'listed')
-            ->where('is_in_stock', true)
             ->whereNotNull('listing_confirmed_at')
             ->where('listing_confirmed_at', '>', $sevenDaysAgo)
             ->where('listing_confirmed_at', '<=', $now)
