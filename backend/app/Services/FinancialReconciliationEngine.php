@@ -630,7 +630,12 @@ class FinancialReconciliationEngine
                     ->first();
                 $refundAmount = $returnCase ? $returnCase->total_refundable_amount : (string)$claimedOrder->grand_total;
                 $refundAuthorization = null;
-                if ($returnCase && !empty($returnCase->reviewed_by_admin_id)
+                $activeReturnReviewer = $returnCase && !empty($returnCase->reviewed_by_admin_id)
+                    && \App\Models\User::whereKey($returnCase->reviewed_by_admin_id)
+                        ->where('status', 'active')
+                        ->whereIn('user_type', ['super_admin', 'admin_employee'])
+                        ->exists();
+                if ($returnCase && $activeReturnReviewer
                     && $returnCase->status === 'refund_pending'
                     && $returnCase->resolution_type === 'refund') {
                     $refundAuthorization = [
