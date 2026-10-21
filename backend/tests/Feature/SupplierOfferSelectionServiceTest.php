@@ -462,7 +462,7 @@ class SupplierOfferSelectionServiceTest extends TestCase
                 'Must be sourced from Uyo'
             );
             $this->fail('Offers from outside Uyo must not receive sourcing confirmation.');
-        } catch (\\Illuminate\\Validation\\ValidationException $exception) {
+        } catch (\Illuminate\Validation\ValidationException $exception) {
             $this->assertArrayHasKey('supplier_offer', $exception->errors());
         }
     }
