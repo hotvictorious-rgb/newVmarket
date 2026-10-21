@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use App\Services\BcMathService;
+use InvalidArgumentException;
 
 class DeliveryCorridor extends Model
 {
@@ -29,6 +31,18 @@ class DeliveryCorridor extends Model
     public function lga()
     {
         return $this->belongsTo(Lga::class);
+    }
+
+    public function calculateCustomerFee(int $bulkyQuantity): string
+    {
+        if ($bulkyQuantity < 0) {
+            throw new InvalidArgumentException('Bulky quantity cannot be negative.');
+        }
+
+        return BcMathService::add(
+            (string) $this->customer_base_fee,
+            BcMathService::mul((string) $this->customer_bulky_surcharge_per_unit, (string) $bulkyQuantity)
+        );
     }
 
     public function companyRates()
