@@ -16,7 +16,7 @@
 
 ## Delivery and money controls
 - Delivery fee is one base fee per customer order, not per product or supplier, plus the configured surcharge for each eligible bulky unit. Show the total before payment.
-- Baseline logistics-company share is 90% of the delivery fee, payable to the logistics company—not directly to its rider. Authorized admin overrides must record the amount/rate, actor, reason and audit event.
+- For new retailer orders, the logistics-company payable is the assigned company's active Uyo corridor base payable plus its per-bulky-unit surcharge, payable to the company—not directly to its rider. This is independent of the customer's flat per-order fee. The former 90% share is historical-only. Authorized admin overrides must record amount, actor, reason and audit event.
 - Supplier payable is based on immutable wholesale-cost snapshots and stays held until delivery is verified and financial reconciliation passes.
 - Delivery completion requires the customer's valid OTP and mandatory doorstep photo proof, with auditable timestamps/actor records.
 - Cashback remains 5% of eligible real customer money applied to merchandise, funded from Victorious MARKET gross margin. Exclude delivery fees and redeemed wallet/cashback credit from the eligible base; preserve configured caps, maturation, reversal and refund rules.
