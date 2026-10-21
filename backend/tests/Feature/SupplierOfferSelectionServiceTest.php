@@ -340,6 +340,65 @@ class SupplierOfferSelectionServiceTest extends TestCase
             ->where('target_id', $offer->id)->count());
     }
 
+    public function test_catalogue_eligibility_requires_a_fresh_verified_offer_not_the_legacy_product_owner(): void
+    {
+        $this->assertFalse(
+            Product::marketplaceEligible()->whereKey($this->product->id)->exists(),
+            'A listed product without a verified eligible supplier offer must not be publicly eligible.'
+        );
+
+        $otherSupplier = $this->createOtherSupplier('catalogue-decoupling');
+        $offer = $this->offer([
+            'vendor_id' => $otherSupplier['vendor']->id,
+            'shop_id' => $otherSupplier['shop']->id,
+            'wholesale_cost' => '4200.00',
+        ]);
+
+        // The original legacy/default supplier is no longer active. The canonical
+        // product remains eligible because a different verified supplier is active.
+        $this->vendor->update(['marketplace_status' => 'suspended']);
+        $this->shop->update(['is_active' => false]);
+
+        $this->assertTrue(
+            Product::marketplaceEligible()->whereKey($this->product->id)->exists()
+        );
+
+        $offer->update(['availability_expires_at' => Carbon::now()->subSecond()]);
+
+        $this->assertFalse(
+            Product::marketplaceEligible()->whereKey($this->product->id)->exists(),
+            'Expired supplier evidence must remove the product from public sale eligibility.'
+        );
+    }
+
+    public function test_canonical_product_can_exist_without_legacy_vendor_or_shop_ownership(): void
+    {
+        $canonical = Product::create([
+            'vendor_id' => null,
+            'shop_id' => null,
+            'category_id' => $this->product->category_id,
+            'name' => 'VM-Owned Canonical Product',
+            'slug' => 'vm-owned-canonical-product',
+            'unit_price' => '12000.00',
+            'inventory_quantity' => 5,
+            'is_in_stock' => true,
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now()->subMinute(),
+        ]);
+
+        $this->offer([
+            'product_id' => $canonical->id,
+            'wholesale_cost' => '6500.00',
+        ]);
+
+        $this->assertNull($canonical->fresh()->vendor_id);
+        $this->assertNull($canonical->fresh()->shop_id);
+        $this->assertTrue(
+            Product::marketplaceEligible()->whereKey($canonical->id)->exists()
+        );
+    }
+
     private function createOtherSupplier(string $suffix): array
     {
         $user = User::create([
