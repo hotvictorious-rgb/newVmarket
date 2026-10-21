@@ -404,9 +404,12 @@ class SupplierReassignmentRecoveryService
      * column limit even when the admin-supplied request key is at its 80-char max.
      * Never persist raw caller keys in journal rows.
      */
-    private function journalIdempotencyKey(string $keySuffix): string
+    private function journalIdempotencyKey(int $orderId, string $keySuffix): string
     {
-        return 'SUPREC-' . hash('sha256', $keySuffix);
+        // The journal key has a database-wide unique constraint, while recovery
+        // idempotency keys are scoped to an order. Include order identity so the
+        // same caller key on two different orders cannot collide globally.
+        return 'SUPREC-' . hash('sha256', $orderId . ':' . $keySuffix);
     }
 
     private function postSupplierJournalEntry(
@@ -429,7 +432,7 @@ class SupplierReassignmentRecoveryService
             'order_item_id' => $orderItemId,
             'transaction_reference' => $transactionReference,
             'event_id' => 'EVT-' . $transactionReference . '-' . substr(hash('sha256', $keySuffix), 0, 20),
-            'idempotency_key' => $this->journalIdempotencyKey($keySuffix),
+            'idempotency_key' => $this->journalIdempotencyKey((int) $order->id, $keySuffix),
             'beneficiary_type' => VendorProfile::class,
             'beneficiary_id' => $vendorId,
             'account_name' => 'supplier_payable',
