@@ -1,6 +1,8 @@
 # VICTORIOUS MARKET
 
-> **Owner-confirmed payment and handover rule (20 October 2026):** Only pay-before-delivery through Victorious MARKET or reserve in-shop pickup and pay at the vendor shop through Victorious MARKET's authorised payment workflow are permitted. No off-platform payment. Doorstep handover requires customer OTP verification plus a doorstep photo; in-shop pickup requires the RES-XXXXXX reservation pass plus one-time customer pickup OTP verification plus an in-shop photo. GPS, signature, separate rider-pickup photo and hub inspection photo are not mandatory. Payouts use server-calculated strict FIFO batches of whole earning records, with ₦5,000 minimum and ₦500,000 maximum; never split or skip an over-cap record.
+> **Current owner-confirmed business model (21 October 2026):** Victorious MARKET is a centrally managed retailer operating from Uyo, Akwa Ibom State. Customers buy from VM, not public supplier storefronts. Suppliers privately submit product offers for VM approval or map offers to existing canonical listings. VM coordinates delivery through approved logistics companies; every rider must be linked to exactly one active logistics company. Authorized supplier-shop pickup remains available with the existing customer verification and photo evidence. Supplier payment becomes eligible only after verified successful customer delivery or pickup and reconciliation. Legacy marketplace commission, vendor payout and vendor-managed delivery rules are superseded for new retailer-model work and must be migrated deliberately, not renamed blindly.
+
+> **Payment safety:** Use VM's authorized customer payment workflow. Doorstep handover requires server-verified customer OTP plus doorstep photo; supplier-shop pickup requires the reservation pass, separate one-time customer pickup verification and in-shop photo. No off-platform supplier payment is permitted. Historical vendor payout thresholds are not supplier payment rules.
 
 ## Building Nigeria’s Trusted Online Market for Quality Products
 
@@ -10,276 +12,89 @@
 
 ## 1. Executive Overview
 
-VICTORIOUS MARKET is being developed as a Nigerian digital commerce platform designed to make buying and selling safer, more structured, more transparent, and more reliable.
+Victorious MARKET is a centrally managed online retailer operating from Uyo, Akwa Ibom State. Its promise is to help customers buy quality products through one trusted retail brand, with controlled product approval, payment, pickup, delivery, customer support and remedies.
 
-The vision is to create an online marketplace where customers can confidently discover quality products from verified merchants, make secure payments, receive products through accountable delivery channels, and access fair resolutions when transactions do not go as expected.
-
-Unlike an unrestricted online marketplace where buyers and sellers negotiate privately and arrange payments outside the platform, VICTORIOUS MARKET is being designed as a **managed, centrally governed marketplace**.
-
-The platform governs merchant verification, product listings, pricing, checkout, payment verification, customer protection, audit evidence, returns, refunds, and vendor settlements. Each vendor manages fulfilment of its own orders and manually assigns its own eligible orders to riders linked to that vendor. Victorious MARKET does not operate a central logistics fleet, dispatch service, logistics-company fulfilment network, rider payroll, or rider-payout programme for new orders.
-
-The goal is not merely to connect buyers with sellers. It is to establish a trustworthy commerce environment where every participant has defined responsibilities and every transaction follows a documented process.
-
-VICTORIOUS MARKET is currently evolving from a conventional e-commerce concept into a technology-enabled commerce and fulfillment ecosystem, with financial accountability and customer protection at the center of its architecture.
-
----
+VM sources products from private suppliers and resells them to customers. Suppliers are operational partners, not public marketplace sellers. VM owns the customer relationship and the public retail offer.
 
 ## 2. The Problem VICTORIOUS MARKET Intends to Solve
 
-Many Nigerian consumers are hesitant to purchase products online, particularly from unfamiliar merchants.
+Customers need confidence that product information is accurate, payments are handled safely, delivery commitments are realistic, and complaints have a clear owner. VM addresses these needs through approved catalogue information, verified payments, documented fulfilment, evidence-backed handover, and auditable refund decisions.
 
-Common concerns include:
+## 3. The Retailer and Supplier Model
 
-- Paying for products that are never delivered.
-- Receiving products different from those advertised.
-- Encountering sellers who disappear after payment.
-- Difficulty verifying whether a merchant is genuine.
-- Unexpected delivery charges.
-- Disputes over damaged, defective, or incorrect products.
-- Unclear return and refund procedures.
-- Lack of reliable evidence when something goes wrong.
+### Supplier offers
 
-Merchants also experience significant challenges, including fraudulent orders, customers refusing legitimate deliveries, delayed settlements, stock-management problems, and unreliable delivery arrangements.
+Suppliers may submit product photos, brand/model, specifications, condition, warranty information, wholesale price, availability, and pickup/source location. Submission does not publish a listing or guarantee that VM will purchase the product.
 
-Vendors face delivery challenges including unverified handovers, failed attempts, customer-contact difficulties, disputes over responsibility, and uncertainty about delivery evidence and customer remedies.
+### Catalogue approval and merging
 
-VICTORIOUS MARKET aims to address these problems through one coordinated system rather than leaving customers, merchants, and delivery partners to manage transactions independently.
+VM reviews each offer. For a genuinely new product, VM creates and approves one canonical public product listing. When a supplier offers a product already in the catalogue, VM maps that offer to the existing listing instead of creating a duplicate. VM controls public descriptions, titles, categories, retail price, publication, customer-facing terms, and corrections.
 
-Its central proposition is simple:
+Supplier identity, wholesale price, and private terms remain internal except where disclosure is necessary for fulfilment, consumer rights, or legal compliance. Each order item must snapshot the exact selected supplier offer, agreed purchase cost and relevant terms so later offer changes cannot rewrite an existing order.
 
-**Trust should not depend solely on what a seller promises. It should be supported by verification, transparent procedures, financial controls, evidence, and enforceable accountability.**
+### Supplier responsibilities
 
----
-
-## 3. The Marketplace Model: Controlled, Not Completely Open
-
-VICTORIOUS MARKET is intended to operate as a managed multi-vendor marketplace.
-
-Merchants can participate in selling through the platform, but participation in the public marketplace will be subject to verification and approval.
-
-A business may register and access permitted merchant-management tools, but registration alone should not automatically authorize it to sell to customers.
-
-### Merchant onboarding
-
-A prospective merchant will register a business profile and provide the information required for verification.
-
-This may include business identity, ownership details, shop information, operating location, and settlement bank details.
-
-The platform administration will review the application and determine whether the merchant qualifies for marketplace participation.
-
-Approved merchants can then manage their authorized product listings, inventory, orders, and fulfillment responsibilities.
-
-### Merchant visibility
-
-Customers will see the merchant's approved business identity where appropriate, but private contact details and sensitive shop information will be protected.
-
-Customers will not be required to contact merchants privately, negotiate through personal WhatsApp accounts, or send money directly to sellers.
-
-The intended principle is:
-
-**Merchants supply and fulfill products. VICTORIOUS MARKET governs the transaction.**
-
-### Merchant suspension and enforcement
-
-If a merchant violates platform rules, misrepresents products, repeatedly fails fulfillment obligations, or presents a security risk, the platform should be able to suspend marketplace activity.
-
-Suspension must also affect related operational privileges, including new order acceptance and financial actions where appropriate, while preserving legitimate customer obligations and existing records.
-
-This ensures that merchant verification is an ongoing responsibility rather than a one-time badge.
-
----
+Suppliers provide accurate product information, disclose availability and material condition/warranty details, honor accepted supply commitments, and make the item available for VM collection or authorized customer pickup. Suppliers do not independently set the public retail price, collect customer payment outside VM's authorized workflow, control customer refunds, or act as public sellers within the platform.
 
 ## 4. Product Quality and Catalog Governance
 
-VICTORIOUS MARKET is being designed to maintain a structured product catalog.
-
-Every product should have accurate information that enables customers to make informed purchasing decisions.
-
-Product information may include the name, category, brand, specifications, condition, photographs, price, availability, warranty information where applicable, and relevant delivery characteristics.
-
-### Product condition transparency
-
-Products should be clearly identified by their actual condition.
-
-For example:
-
-- Brand New
-- UK Used or other accurately described pre-owned condition
-
-A used product must not be presented as brand new. Any defects, limitations, missing accessories, or relevant condition differences should be disclosed.
-
-### Catalog responsibility
-
-Merchants may be permitted to create and manage listings, but the platform should retain authority to review, restrict, correct, or remove listings that violate quality and accuracy standards.
-
-Product photographs and descriptions should represent the actual goods being offered.
-
-The long-term objective is to make the VICTORIOUS MARKET catalog a reliable source of product information, not merely a collection of advertisements.
-
----
+VM is responsible for the public catalogue. Every listing must accurately represent product identity, brand/model, specifications, condition, photographs, warranty terms and availability. Used goods must not be described as brand new. VM may reject, suspend or correct an offer or listing that is inaccurate, unsafe, counterfeit, misleading or commercially unsuitable.
 
 ## 5. How Customers Will Shop
 
-The intended customer journey begins with product discovery.
+1. Customers browse products listed by Victorious MARKET.
+2. Checkout confirms the product, quantity, current availability, price, payment method, destination and available fulfilment option.
+3. VM accepts the order only where product sourcing and the requested fulfilment option can be supported.
+4. The customer pays through VM's authorized payment workflow, subject to the existing approved reservation/pickup option.
+5. VM coordinates sourcing and either delivery through an approved logistics company or verified pickup at an authorized supplier shop.
+6. Customer handover is recorded using the required verification and evidence.
+7. VM handles support, returns, claims and refunds under the binding refund policy.
 
-A customer visits the website or mobile application and browses products available within supported service locations.
+## 6. Secure Payments and Retail Accounting
 
-The system may use geographic information, including state, local government area, and delivery-service coverage, to determine which products and fulfillment options are available.
+Customer payment must be verified against authoritative payment-provider information, the expected reference, exact amount in integer kobo, NGN currency and the correct order/customer. Browser redirects, screenshots, supplier claims or rider scans alone are not payment proof.
 
-### Shopping journey
+### Retail accounting replaces marketplace commission accounting
 
-**Step 1 — Discover:** The customer browses categories, searches for products, compares options, and reviews product information.
+The former 90% vendor / 5% cashback / 5% platform merchandise split and 90% vendor / 10% platform delivery split are not default rules for the retailer model. A supplier's wholesale purchase price is a product cost/payable, not a marketplace commission or vendor earning. Do not rename vendor payout records and continue treating them as supplier payables.
 
-**Step 2 — Select:** The customer chooses the required products, quantities, and available variants.
+Record customer receipts, merchandise revenue, supplier purchase cost, delivery revenue/charges, logistics-company charges, payment fees, approved discounts/refunds, any owner-approved cashback liability, supplier amounts owed and transfers separately. Entries must be linked, immutable and reconcilable. A balanced journal does not prove that cash is available; liquidity shortfalls and losses must be shown honestly.
 
-**Step 3 — Review:** The cart presents item prices, quantities, applicable discounts, delivery charges, and the total amount payable.
+### Supplier payment eligibility
 
-**Step 4 — Choose fulfillment:** The customer selects an available delivery option or approved pickup arrangement.
+A supplier payment must not become eligible when an order is merely placed, paid, accepted, or marked ready. Eligibility begins only after verified successful customer delivery or confirmed customer pickup and the required order/amount reconciliation. Eligibility is not an automatic transfer: apply authorized payment controls and record actual payment confirmation. If a customer refund is owed after a supplier has already been paid, VM remains responsible for the customer remedy. Any supplier recovery is separate, evidence-based, contractually supportable and must not delay a valid customer refund.
 
-**Step 5 — Pay:** The customer completes payment through an authorized payment channel integrated into the platform.
+The owner/accountant must approve the retailer chart of accounts, whether cashback remains active and how it is funded, the logistics-company charging/payment terms, supplier payment authorization, delivery-fee margin, and treatment of discounts, taxes and gateway fees. Do not infer the old marketplace percentages as new retailer policy.
 
-**Step 6 — Track:** The customer receives order status updates as the transaction progresses.
+### Existing payment and refund safeguards
 
-**Step 7 — Receive and verify:** The customer receives the product through a controlled handover process and can report eligible problems through defined channels.
+The current payment, webhook, idempotency, refund authorization, original-payment-route, parent/child refund-ceiling and reconciliation controls remain required where applicable. Policy documentation is not proof that all code paths comply. The legacy web checkout bypass identified in the implementation audit remains open until corrected and tested. Customer statutory rights and valid warranty obligations override any narrower operational policy where applicable.
 
-The intention is to give customers a consistent shopping experience regardless of which verified merchant supplies a product.
+## 7. Supplier Operations and Availability
 
----
+VM can source products after customer order, hold stock for selected fast-moving products, or use a hybrid approach. The system must clearly distinguish supplier-reported availability, VM-confirmed availability, stock actually held by VM, and a product reserved for an order. Supplier availability is not a guaranteed physical stock count unless verified.
 
-## 6. Secure Payments and Financial Accountability
+Before confirming an order, VM must validate the selected supplier offer and its current availability, agreed purchase cost, fulfilment location, and ability to meet the expected delivery/pickup commitment. The order item snapshots the chosen offer and cost. If the supplier cannot fulfill, the system must stop fulfilment and follow the authorized cancellation/refund workflow rather than silently substituting a different offer or increasing the customer's price.
 
-Financial trust is one of the most important foundations of VICTORIOUS MARKET.
+## 8. Central Delivery and Supplier-Shop Pickup
 
-The platform is being developed to use Paystack for payment processing and verification, while maintaining its own internal financial records.
+### Central operating base and service coverage
 
-A customer payment should not be accepted as successful simply because a browser redirects to a success page or a user submits a screenshot.
+VM operates from Uyo, Akwa Ibom State. It may serve any destination that its current product sourcing and approved logistics arrangements can reliably cover; it must not imply universal or nationwide delivery. Checkout must reject or clearly mark unavailable any destination without a valid current coverage and fee rule. VM owns delivery coverage, customer-facing fee quotes, delivery coordination and customer communication.
 
-Payment status must be established using trusted payment-provider information and checked against the actual order.
+### Logistics companies and riders
 
-### Controlled settlement
+VM contracts or authorizes logistics companies to carry out delivery. Every rider assigned to VM work must be active and linked to exactly one active logistics company. A rider without a company link, a rider linked to multiple companies, a rider linked only to a supplier/vendor, or a rider belonging to an inactive company must not receive new work. The assignment must be recorded against the order or fulfilment unit and authorized by VM.
 
-Customer funds are intended to remain under controlled platform settlement procedures until the relevant transaction conditions have been satisfied.
+Logistics companies and riders manage operational custody and delivery, but cannot change product prices, mark payment successful, approve refunds or create supplier payables. Rider-to-company parcel custody evidence is distinct from proof that the customer received the product. Doorstep completion requires the existing server-verified customer OTP and doorstep photo. A dispatch assignment or rider collection scan alone is not successful fulfilment.
 
-Merchant earnings should become eligible for withdrawal only after the required fulfillment and customer-protection conditions have been met.
+### Supplier-shop pickup
 
-### Vendor payout launch policy
+Customer pickup at an authorized supplier shop remains available through the existing reservation flow. VM authorizes the pickup location and order; the customer uses the reservation pass/reference and separate one-time customer pickup verification, and the required in-shop photo is recorded. Supplier readiness does not equal pickup. Only verified customer handover completes fulfilment and makes the supplier payable eligible. The supplier shop is a collection location, not a public storefront or an independent payment channel.
 
-Vendor requests must be at least ₦5,000 and no more than ₦500,000 per request. Vendors may request whenever their unreserved eligible balance reaches ₦5,000; this does not trigger automatic payment. Every request requires authorized admin approval before a transfer. Earnings remain tracked per order/earning record but are normally aggregated into one payout, not paid out per order. Eligible excess not included in a request remains eligible for a future request. The system must reserve the exact requested amount atomically, prevent duplicate/concurrent claims, and reconcile Paystack outcomes before finalizing the ledger. The ₦500,000 cap is a platform control, not a claim about a statutory Nigerian bank limit or a guarantee of Paystack approval. The owner must decide who bears transfer fees and stamp duty before launch; no charge may be silently deducted from vendor earnings.
+### Failed delivery and custody
 
-This approach aims to reduce the risk of merchants receiving payment for products that were not properly delivered.
-
-The platform's internal escrow-style accounting must be supported by real payment-provider balances and appropriate financial arrangements. Internal ledger labels alone do not constitute a legally regulated escrow service.
-
-### Merchandise revenue structure
-
-The currently intended merchandise allocation is:
-
-| Allocation | Percentage |
-|---|---:|
-| Merchant earnings | 90% |
-| Customer cashback or loyalty allocation | 5% |
-| Platform revenue | 5% |
-| **Total** | **100%** |
-
-For example, on an eligible ₦20,000 merchandise transaction:
-
-| Beneficiary | Amount |
-|---|---:|
-| Merchant | ₦18,000 |
-| Customer cashback allocation | ₦1,000 |
-| VICTORIOUS MARKET | ₦1,000 |
-
-This is an illustrative allocation before any separately applicable fees, refunds, taxes, adjustments, or exceptional circumstances.
-
-The cashback mechanism is intended to reward customers and encourage repeat purchases, subject to clearly defined eligibility and redemption rules.
-
-### Delivery-fee allocation under vendor-managed delivery
-
-A delivery fee belongs to the relevant vendor child order and is not a logistics-company fare or rider payable. For new vendor-managed orders, 90% of the delivery-fee allocation belongs to the vendor and 10% is the platform delivery-fee share. The vendor separately compensates its rider outside Victorious MARKET; the platform must not calculate, reserve, collect, disburse, or reconcile rider compensation. In-shop pickup (`in_shop_pickup`) always has a zero delivery fee and creates no rider assignment or delivery-fee allocation.
-
-### Financial correctness
-
-Every payment, settlement, refund, wallet credit, reversal, and withdrawal must be recorded accurately.
-
-The system is being hardened around exact-decimal calculations, transaction locking, financial journals, audit trails, controlled authorization, and payment-provider reconciliation.
-
-The intended outcome is that money cannot legitimately be spent, withdrawn, refunded, or credited twice because of duplicate requests, concurrent activity, or repeated notifications.
-
-This remains a critical engineering objective requiring extensive testing and independent verification before production use.
-
----
-
-## 7. Merchant Operations and Inventory
-
-VICTORIOUS MARKET intends to provide merchants with tools to manage their business operations while maintaining central marketplace control.
-
-Approved merchants should be able to manage products, stock quantities, pricing within permitted policies, incoming orders, fulfillment responsibilities, and settlement information.
-
-The system is also intended to support branch-level operations and point-of-sale capabilities.
-
-This creates an opportunity for merchants to use the platform not only as an online sales channel but also as a business-management tool.
-
-### Inventory integrity
-
-Product availability must be based on authoritative inventory records.
-
-When customers place orders, stock should be reserved or deducted according to a defined lifecycle that prevents overselling.
-
-If a payment fails, expires, or an order is cancelled, the inventory system must release or restore stock correctly.
-
-Merchants should not be able to fulfill more units than they actually have available.
-
-The long-term vision is a unified environment in which online sales, branch stock, and permitted POS transactions can operate consistently.
-
----
-
-## 8. Vendor-Managed Delivery and In-Shop Pickup
-
-VICTORIOUS MARKET does not operate a central logistics company, fleet, dispatch hub, route-dispatch service, or shared rider pool for new orders. Each vendor manages delivery for its own orders and adds/manages its own riders through authenticated vendor workflows. Every rider eligible for new work must be linked to exactly one active owning vendor; fleet-only or ambiguous legacy rider profiles cannot receive new assignments.
-
-### Vendor assignment and custody
-
-The vendor manually assigns each doorstep-delivery child order to one active rider linked to that same vendor. A rider can access only orders explicitly assigned to them and belonging to their owning vendor. Assignment and reassignment must be server-authorized, atomic, and audited. Reassignment is permitted before physical custody; after custody begins, use an audited return-to-vendor or custody-transfer flow. Multi-vendor checkout retains one parent checkout with separate vendor child orders, each with its own fulfilment type, delivery fee, and at most one active rider assignment.
-
-### Operational handover
-
-The vendor prepares the goods and hands the parcel to its assigned rider. The system records readiness, assignment, custody, delivery attempts, final handover, and required proof as distinct operational events. A rider's delivery confirmation is evidence only: it does not by itself approve a refund, create spendable wallet credit, post a rider/logistics payable, or release vendor funds.
-
-### Customer privacy for riders
-
-The rider may see only the customer's name, delivery address, and a protected **Call Customer** action as customer information. The raw customer phone number must not appear in rider API payloads, page markup, logs, analytics, or exports. Riders must never see payment status, total paid, amount due, card/bank details, payment references, delivery-fee financial fields, refunds, wallet balance, cashback, platform commission, vendor settlement, or payout information. Verification secrets must not appear in rider lists or history responses.
-
-### In-shop pickup
-
-`in_shop_pickup` remains a first-class option. The customer collects the order at the owning vendor's physical shop/counter. Delivery fee is always zero, enforced server-side regardless of client input or delivery-zone settings. The customer presents the **RES-XXXXXX** reservation pass AND completes one-time customer pickup OTP verification; the vendor verifies both and records the mandatory in-shop pickup photo. The customer reserves through Victorious MARKET and pays at the approved vendor shop through Victorious MARKET's authorised payment workflow before release. The existing 24-hour reservation hold remains in force unless separately changed by the owner. Pickup has separate status transitions; it requires no rider assignment and creates no delivery fee, rider compensation, or logistics payout.
-
-### Vendor-configured delivery areas and fees
-
-Each vendor configures the destinations it serves and the delivery fee for each supported destination. An explicit LGA fee takes precedence over a state-level fallback. Unsupported destinations fail closed. The fulfilment type, destination, agreed fee, and applicable fee-rule version are snapshotted to the vendor child order at checkout. For new vendor-managed orders, the delivery-fee allocation is 90% vendor and 10% platform; it creates no rider payable. Merchandise allocation remains a separate base: 90% vendor, 5% customer cashback, and 5% platform on eligible merchandise; cashback does not apply to delivery fees.
-
-### Failed delivery and COD
-
-A failed attempt records its reason, actor, timestamp, and required evidence. Once the configured threshold is reached, the parcel returns to its owning vendor and the vendor confirms receipt. A failed attempt must not automatically create a wallet credit/refund, rider or logistics payable, or release vendor funds; remedies follow the authorized review and financial-operation workflow. Doorstep COD is disabled. Customers may pay before delivery through Victorious MARKET, or reserve in-shop pickup through Victorious MARKET and pay at the approved vendor shop through Victorious MARKET's authorised payment workflow. Vendors must not accept cash, private-account transfers or other off-platform payments. Launch rails are Paystack card and standard bank transfer unless separately approved. Legacy wallet-credit checkout tender is disabled; capped cashback redemption is a separate loyalty discount, not a payment rail.
-
-### Proof of handover
-
-The platform is introducing photographic evidence and controlled OTP-based verification at important fulfillment stages.
-
-These mechanisms are intended to establish who transferred possession, when the transfer occurred, and what condition was documented.
-
-Evidence must be securely stored and protected against unauthorized modification.
-
-However, photographs and OTPs are supporting evidence, not automatic proof that a product is genuine or free from defects.
-
-### Delivery options
-
-The intended system supports geographically defined delivery coverage, delivery charges, collection points, and pickup options.
-
-Larger, fragile, or difficult-to-transport products may require special delivery handling and pricing.
-
-The long-term objective is a reliable, scalable logistics structure that can expand beyond the initial operating area without sacrificing accountability.
-
----
+Failed attempts, returns to origin, custody transfers, damaged/lost parcels, and customer refusal must be recorded as separate operational outcomes. They must not automatically imply refund approval, supplier fault, supplier debt, or successful fulfilment. VM decides the customer remedy under the applicable refund/consumer-rights policy. Supplier recovery requires separate evidence and a contractual basis.
 
 ## 9. Doorstep Acceptance and Partial Rejection
 
@@ -345,39 +160,23 @@ The objective is not to automatically favor the customer or the merchant.
 
 ---
 
-## 11. Vendor Settlements and Financial Controls
+## 11. Supplier Payables and Financial Controls
 
-Vendors must be paid accurately and predictably. Riders are not marketplace financial beneficiaries, and the platform does not maintain rider earnings, rider wallets, rider payout requests, or logistics-company payouts for new vendor-managed orders.
+The retailer model does not use marketplace vendor earnings as the default supplier payment mechanism. Supplier payables arise from the agreed purchase cost of goods sourced for VM, linked to the relevant supplier offer and order item.
 
-Vendor proceeds are not eligible for release before verified successful doorstep delivery or confirmed customer in-shop pickup. This fulfilment event is the earliest eligibility trigger, not an override of the configured refund/return window, active disputes/returns, vendor account restrictions, bank-security cooldown, authorization, or required transfer proof. Evaluate eligibility per vendor child order; a rider's operational status alone is not a payout instruction.
+No supplier payment eligibility before verified successful customer delivery or confirmed customer pickup. Keep supplier payable, payment request/authorization, payment attempt, actual transfer confirmation, customer refund, and any supplier recovery as distinct records and states. Duplicate events or retries must not duplicate the payable or payment. Timeouts are uncertain outcomes and require reconciliation before another payment is sent.
 
-VICTORIOUS MARKET is developing controlled withdrawal and payout workflows using Paystack bank-transfer capabilities.
+Customer refunds remain VM's responsibility and must follow the authorized original-payment-route policy where supported. If VM has already paid the supplier, a later customer refund does not automatically establish supplier debt. Record a supplier receivable only when evidence identifies supplier responsibility and the agreement permits recovery. Never delay an owed customer refund while attempting supplier recovery.
 
-Before funds are released, the platform should verify the recipient's eligibility, available balance, bank details, outstanding obligations, and applicable settlement conditions.
-
-A bank transfer should pass through clearly defined states, such as requested, authorized, processing, confirmed successful, failed, or reversed.
-
-The system must distinguish a transfer being initiated from a transfer actually being completed.
-
-Failed transfers must restore the appropriate financial obligations without incorrectly reopening previously settled orders or creating duplicate balances.
-
-The platform also intends to track merchant recovery obligations where a legitimate refund or adjustment occurs after a merchant has already been paid.
-
-This is essential to protecting both customer funds and the platform's financial integrity.
-
----
+Legacy vendor earnings, payout thresholds, commissions, and vendor-recovery ledgers must be mapped before migration or retirement. Preserve historical financial records and audit references; do not destructively rename tables or reclassify old entries without an approved migration and accounting treatment.
 
 ## 12. Administration and Governance
 
-The VICTORIOUS MARKET administrative environment is the central business-control system. Its responsibilities include vendor verification, product governance, order monitoring, security and safety oversight, financial reconciliation, customer disputes, authorized refunds, and operational reporting. It does not operate dispatch, select riders for vendors, manage routes/shifts, or pay riders. Role-based permissions separate administrators, vendors, vendor-linked riders, branch personnel, and customers. Legacy logistics-company roles and records may remain available only to authorized users for historical audit/reconciliation and must not receive new assignments or new-order financial activity.
+The VICTORIOUS MARKET administrative environment handles vendor verification, product governance, order monitoring, security and safety oversight, financial reconciliation, customer disputes, authorized refunds, and operational reporting.
 
-Sensitive activities should be protected through authorization checks and audit trails.
+Delivery operation belongs to each vendor. The platform does not run dispatch or manage a shared fleet. Vendors manage their riders and assignments; platform administrators may enforce account safety, suspend a vendor or rider, review incidents, and inspect audit trails, but must not act as a dispatcher or rider payroll manager.
 
-For example, ordinary staff should not be able to modify financial records or release large merchant payouts simply because they can access an administrative dashboard.
-
-Administrative power should be constrained, traceable, and subject to appropriate oversight.
-
----
+Role-based permissions must separate customers, vendors, vendor-linked riders, and platform administrators. Rider permissions are limited to assigned vendor orders and the minimum operational information required for delivery. Riders cannot access customer financial information, commissions, vendor settlement details, wallet credits, payout routes, or ledger data. Sensitive administrative actions must be authorized and auditable.
 
 ## 13. Security, Privacy, and Evidence Protection
 
@@ -424,11 +223,11 @@ The goal is to reward genuine participation without allowing the loyalty program
 
 The initial operating focus is intended to be Uyo, Akwa Ibom State, with expansion into additional supported locations as the operational model becomes reliable.
 
-Rather than immediately making every product available nationwide, the platform can expand through verified merchants, controlled service areas, approved logistics coverage, and reliable collection points.
+Rather than immediately making every product available nationwide, the platform can expand through verified merchants, vendor-defined delivery areas, vendor-linked riders, and reliable in-shop pickup arrangements.
 
 This geographic discipline is intended to avoid promising deliveries that the platform cannot consistently fulfill.
 
-As VICTORIOUS MARKET matures, the system may support more merchants, branches, product categories, vendor-managed delivery teams, and customers.
+As VICTORIOUS MARKET matures, the system may support more merchants, branches, product categories, vendor-managed rider teams, and customers.
 
 Expansion should follow demonstrated operational capacity, not merely the availability of technical features.
 
@@ -460,47 +259,25 @@ A trustworthy marketplace is not one that claims never to fail. It is one that h
 
 ## 17. Current Development Position
 
-VICTORIOUS MARKET is actively developing the technical foundations required to support this model.
+The repository contains a Laravel application with existing marketplace-oriented data models and financial flows. The retailer and central fulfilment model is the approved business direction, but the code is not yet proven migrated. Existing source-code findings and implementation gaps remain open until fixed and tested.
 
-Its current engineering direction includes managed merchant onboarding, structured catalogs, checkout and inventory controls, Paystack integration, internal financial accounting, controlled delivery handovers, return workflows, automated payouts, evidence storage, and disaster-recovery capabilities.
-
-These features are at different stages of implementation and verification.
-
-The platform is not yet being represented as independently security-certified or operationally proven at scale.
-
-Before broad public launch, the most important milestones are financial correctness testing, security validation, complete customer-journey testing, operational readiness, merchant onboarding, logistics reliability, and real-world pilot transactions.
-
----
+Before launch, complete the supplier-offer/order-item linkage, central delivery and logistics-company rider enforcement, customer checkout compatibility audit, supplier payable accounting, payment/refund safety verification, operational coverage configuration, and migration of historical marketplace records without losing audit trails.
 
 ## 18. Long-Term Vision
 
-VICTORIOUS MARKET aims to become more than a website where people buy products.
+Victorious MARKET aims to become a trusted online retailer serving Uyo and other destinations it can reliably cover. It will maintain one customer-facing brand, a controlled catalogue, private supplier relationships, accountable delivery partners, and transparent customer remedies.
 
-The long-term ambition is to create a dependable digital commerce infrastructure connecting verified merchants, customers, vendor-managed delivery teams, and controlled financial operations.
-
-Customers should be able to shop with confidence.
-
-Merchants should be able to reach more customers and manage their businesses more efficiently.
-
-Logistics partners should operate through structured and accountable processes.
-
-And the platform should maintain reliable records of the transactions it facilitates.
-
-The ultimate measure of success will not be the number of features, merchants, or products available.
-
-It will be whether customers consistently receive what they paid for, merchants receive the money they legitimately earn, delivery partners fulfill their responsibilities, and disputes are resolved fairly.
+The measure of success is whether customers receive the products they ordered, supplier and logistics obligations are paid correctly, customer refunds are handled fairly, and every important operational and financial transition can be verified.
 
 ## Conclusion
 
-**VICTORIOUS MARKET is building a managed, trust-first online marketplace designed to make quality commerce safer, more transparent, and more accountable in Nigeria.**
+**Victorious MARKET is building a trust-first online retail business with centrally coordinated fulfilment and private supplier relationships.**
 
-Its foundation is the belief that online shopping should not require customers to gamble with their money or depend entirely on a stranger's promises.
+VM controls public product listings, customer pricing, payment, delivery coordination, pickup verification, support and refunds. Suppliers propose and provide products; approved logistics companies carry deliveries; riders must be linked to an active logistics company. Supplier payment eligibility follows verified successful customer delivery or pickup and reconciliation.
 
-By combining merchant verification, quality-focused product listings, secure payment processing, controlled fulfillment, transparent financial records, and fair customer protection, VICTORIOUS MARKET intends to establish a more dependable standard for online buying and selling.
+**Our Vision:** To become a trusted online retailer where customers can buy quality products with confidence.
 
-**Our Vision:** To become a trusted digital marketplace where Nigerians can buy quality products with confidence.
-
-**Our Mission:** To connect customers with verified merchants through a secure, transparent, reliable, and accountable commerce platform.
+**Our Mission:** To provide quality products through a secure, transparent, reliable and accountable shopping experience.
 
 **Our Commitment:** To build trust into every stage of the shopping experience—and earn that trust through consistent performance.
 
@@ -510,3 +287,19 @@ By combining merchant verification, quality-focused product listings, secure pay
 *Fast. Safe. Reliable.*
 
 *Development vision and intended operating model — October 2026. Features, policies, and operational commitments remain subject to implementation, testing, and launch readiness.*
+
+### Independent merchandise and delivery-fee refund decisions
+
+Victorious MARKET treats merchandise and delivery fees as separate financial components. A customer may raise one case about both, but **the merchandise refund and delivery-fee refund must be approved independently**. Approval of a product refund never automatically approves delivery-fee refundability, and approval of a delivery-fee refund never automatically approves the product refund.
+
+- A merchandise refund identifies the affected VM order item(s), quantity and original captured amount/discount. Refund amounts must be based on immutable checkout/payment records, not the former 90% vendor / 5% cashback / 5% platform split, which is not a default retailer allocation.
+- A delivery-fee refund identifies the captured delivery component, records its own reason/evidence/approval, and is accounted for separately from merchandise. The former 90% vendor / 10% platform delivery-fee allocation is not a default retailer rule. Logistics-company charges and delivery-fee margin require approved retailer accounting.
+- Each approved component has its own decision record, amount, idempotent financial operation, reservation, gateway state and customer-facing result. Both operations return funds through the original Paystack payment channel at launch. They may reference the same original parent checkout capture but must not be collapsed into one undifferentiated approval or ledger reversal.
+- The customer can receive one component while the other remains pending, is denied, or fails and requires reconciliation. Customer communications must state each component's decision and confirmed Paystack result separately.
+- The system must enforce the component balance, child-order refund ceiling and shared parent-capture ceiling, counting active reservations and confirmed refunds across all vendors/components. A zero-fee in_shop_pickup order has no delivery fee to refund.
+- Supplier recovery and any cashback adjustment are separate from the customer's gateway refund. A customer refund is complete only when Paystack confirms that specific component; vendor recovery does not delay or replace that confirmation.
+- **Shared source history does not mean shared approval or one combined state.** Both component decisions link to the same original parent capture and relevant child-order allocation history, while retaining separate approval records, reservations, gateway operations, and outcomes. Confirmed Paystack refunds plus active refund reservations across all child orders/components share one parent-capture ceiling; the same amount cannot be refunded twice.
+- **Cashback is linked to merchandise history but is not a second customer gateway refund.** A merchandise refund may require reversal of the associated unspent cashback and/or a separately tracked recovery of cashback already spent. That cashback adjustment uses the same originating order/item/refund evidence, but it is accounted for in the cashback ledger and must not be counted again as an additional Paystack cash refund against the parent-capture ceiling. Historical cashback obligations must be reconciled. New retailer-model cashback accrual and its funding/maturity rules require explicit owner/accountant approval; do not assume the former 5% vendor marketplace allocation continues.
+- The existing 24-hour customer return/claim window and separate 24-hour cashback-maturity buffer remain unchanged.
+
+These are binding business requirements, not a statement that the current code already supports independent component approvals. See the payment/refund matrix and implementation audit for required changes and tests.
