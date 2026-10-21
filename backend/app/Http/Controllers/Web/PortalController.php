@@ -1504,8 +1504,9 @@ class PortalController extends Controller
             return back()->with('error', 'Unauthorized: Merchant store is inactive or suspended.');
         }
 
-        if (empty($vendor->account_number) || empty($vendor->bank_name)) {
-            return back()->with('error', 'Please configure your verified commercial bank account before requesting withdrawal.');
+        if (empty($vendor->account_number) || empty($vendor->bank_name)
+            || empty($vendor->bank_code) || empty($vendor->account_name)) {
+            return back()->with('error', 'Please configure a complete verified NUBAN account name, number, bank name, and bank code before requesting withdrawal.');
         }
 
         if (!$vendor->bank_updated_at || $vendor->isWithinBankCooldown()) {
@@ -2328,8 +2329,8 @@ class PortalController extends Controller
             $bankCode = trim((string)($company->bank_code ?? ''));
             $accountName = trim((string)($company->account_name ?? $payout->account_name));
 
-            if (empty($accountNum) || empty($accountName)) {
-                return ['valid' => false, 'message' => 'Disbursement blocked: Incomplete corporate NUBAN bank details on company profile.'];
+            if (empty($accountNum) || empty($accountName) || empty($bankName) || empty($bankCode)) {
+                return ['valid' => false, 'message' => 'Disbursement blocked: Complete corporate NUBAN bank name, bank code, account name, and account number are required.'];
             }
 
             $createdTs = $payout->created_at ? $payout->created_at->format('YmdHis') : date('YmdHis');
@@ -2806,7 +2807,7 @@ class PortalController extends Controller
             $bankCode = trim((string)($vendor->bank_code ?? ''));
             $accountName = trim((string)($vendor->account_name ?? $payout->account_name));
 
-            if (empty($accountNum) || empty($accountName)) {
+            if (empty($accountNum) || empty($accountName) || empty($bankName) || empty($bankCode)) {
                 // No gateway request has been sent at this point. Release every
                 // allocation created for this pending request so missing bank data
                 // cannot strand eligible order earnings in an allocated state.
@@ -2817,7 +2818,7 @@ class PortalController extends Controller
                         'reversed_at' => Carbon::now(),
                     ]);
 
-                return ['valid' => false, 'message' => 'Disbursement blocked: Incomplete NUBAN bank details on merchant profile.'];
+                return ['valid' => false, 'message' => 'Disbursement blocked: Incomplete NUBAN bank name, bank code, account name, or account number on merchant profile.'];
             }
 
             $createdTs = $payout->created_at ? $payout->created_at->format('YmdHis') : date('YmdHis');
