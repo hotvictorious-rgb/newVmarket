@@ -500,6 +500,9 @@ class AutomatedSupplierSourcingTest extends TestCase
             'shop_id' => $shopA->id,
             'wholesale_cost' => '26500.00',
             'is_available' => true,
+            'availability_confirmed_at' => Carbon::now(),
+            'availability_confirmed_by' => $this->adminUser->id,
+            'availability_expires_at' => Carbon::now()->addHours(24),
         ]);
 
         $checkoutService = app(\App\Services\CheckoutExecutionService::class);

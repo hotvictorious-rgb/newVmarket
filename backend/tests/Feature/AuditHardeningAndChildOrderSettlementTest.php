@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\RiderProfile;
 use App\Models\Shop;
 use App\Models\State;
+use App\Models\SupplierOffer;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Services\OrderSettlementService;
@@ -179,6 +180,28 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
             'listing_status' => 'listed',
             'listing_confirmed_at' => Carbon::now(),
             'is_vmarket_flagship' => true,
+        ]);
+
+        SupplierOffer::create([
+            'product_id' => $this->productA->id,
+            'vendor_id' => $this->vendorA->id,
+            'shop_id' => $this->shopA->id,
+            'wholesale_cost' => '8500.00',
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now()->subHour(),
+            'availability_confirmed_by' => $this->superAdmin->id,
+            'availability_expires_at' => Carbon::now()->addDays(7),
+        ]);
+
+        SupplierOffer::create([
+            'product_id' => $this->productB->id,
+            'vendor_id' => $this->vendorB->id,
+            'shop_id' => $this->shopB->id,
+            'wholesale_cost' => '17000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now()->subHour(),
+            'availability_confirmed_by' => $this->superAdmin->id,
+            'availability_expires_at' => Carbon::now()->addDays(7),
         ]);
 
         $logisticsUser = User::create([

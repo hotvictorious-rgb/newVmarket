@@ -20,6 +20,7 @@ use App\Models\Review;
 use App\Models\RiderProfile;
 use App\Models\Shop;
 use App\Models\State;
+use App\Models\SupplierOffer;
 use App\Models\User;
 use App\Models\VendorEmployeeProfile;
 use App\Models\VendorProfile;
@@ -676,6 +677,23 @@ class EcosystemDemoSeeder extends Seeder
         $baseShop = $seededShops['vendor@victoriousmarket.com.ng'];
         $prodTech1->update(['vendor_id' => $baseVendor->id, 'shop_id' => $baseShop->id]);
         $prodFresh1->update(['vendor_id' => $baseVendor->id, 'shop_id' => $baseShop->id]);
+
+        // Seed active, confirmed supplier offers for all demo products (retailer sourcing model)
+        foreach (Product::all() as $prod) {
+            if ($prod->vendor_id && $prod->shop_id) {
+                SupplierOffer::updateOrCreate([
+                    'product_id' => $prod->id,
+                    'vendor_id' => $prod->vendor_id,
+                    'shop_id' => $prod->shop_id,
+                ], [
+                    'wholesale_cost' => $prod->cost_price ?? bcmul((string) $prod->unit_price, '0.85', 2),
+                    'is_available' => true,
+                    'availability_confirmed_at' => Carbon::now()->subHours(2),
+                    'availability_confirmed_by' => $superAdmin->id,
+                    'availability_expires_at' => Carbon::now()->addDays(7),
+                ]);
+            }
+        }
 
         // =========================================================================
         // 9. ORDERS & REWARDS ACROSS ALL WORKFLOW STAGES

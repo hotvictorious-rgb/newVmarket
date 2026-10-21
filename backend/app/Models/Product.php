@@ -196,7 +196,7 @@ class Product extends Model
             ->whereNotNull('listing_confirmed_at')
             ->where('listing_confirmed_at', '>', $sevenDaysAgo)
             ->where('listing_confirmed_at', '<=', $now)
-            ->whereHas('supplierOffers', function ($offers) use ($now) {
+            ->whereHas('supplierOffers', function (Builder $offers) use ($now) {
                 $offers->where('is_available', true)
                     ->whereNotNull('availability_confirmed_at')
                     ->whereNotNull('availability_confirmed_by')
