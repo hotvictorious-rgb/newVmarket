@@ -2539,7 +2539,21 @@ class PortalController extends Controller
                 return back()->with('error', "Payout request #{$payout->id} has already been {$payout->status}.");
             }
 
+            // A logistics payout can remain "pending" after its transfer claim was
+            // acquired. Never restore the wallet while a transfer may be in flight
+            // or its gateway outcome is uncertain; reconcile it first.
+            if (in_array((string) $payout->gateway_status, ['pending', 'processing', 'otp', 'received', 'unknown'], true)
+                || !empty($payout->paystack_transfer_code)
+                || !empty($payout->transfer_reference)
+                || !empty($payout->processing_token)
+                || str_contains((string) $payout->admin_notes, 'GATEWAY_TIMEOUT')) {
+                return back()->with('error', "Logistics payout request #{$payout->id} has a gateway submission or uncertain outcome. Reconcile with Paystack before it can be rejected.");
+            }
+
             $company = $payout->company;
+            if (!$company || $company->trashed()) {
+                return back()->with('error', 'Cannot reject payout: logistics company record is missing or archived. Finance reconciliation is required.');
+            }
             $payout->status = 'rejected';
             $payout->rejection_reason = strip_tags(trim($validated['rejection_reason']));
             $payout->save();
@@ -2973,7 +2987,7 @@ class PortalController extends Controller
             if (in_array((string) $payout->gateway_status, ['pending', 'processing', 'otp', 'received', 'unknown'], true)
                 || !empty($payout->paystack_transfer_code)
                 || !empty($payout->transfer_reference)
-                || $payout->processing_token === 'HOLD_TIMEOUT_RECONCILIATION'
+                || !empty($payout->processing_token)
                 || str_contains((string) $payout->admin_notes, 'GATEWAY_TIMEOUT')) {
                 return back()->with('error', "Payout request #{$payout->id} has a gateway submission or uncertain outcome. Reconcile with Paystack before it can be rejected.");
             }
