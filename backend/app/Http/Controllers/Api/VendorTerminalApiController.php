@@ -1448,6 +1448,7 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             'message' => 'Designated bank account details updated successfully. 48-Hour Anti-Fraud Cooldown is now active.',
             'data' => [
                 'bank_name' => $vendor->bank_name,
+                'bank_code' => $vendor->bank_code,
                 'account_number_masked' => '******' . substr($vendor->account_number, -4),
                 'account_name' => $vendor->account_name,
                 'cooldown_active' => true,
