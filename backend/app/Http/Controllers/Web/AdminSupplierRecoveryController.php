@@ -1,11 +1,11 @@
 <?php
 
-namespace App\\Http\\Controllers\\Web;
+namespace App\Http\Controllers\Web;
 
-use App\\Http\\Controllers\\Controller;
-use App\\Services\\SupplierReassignmentRecoveryService;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
+use App\Http\Controllers\Controller;
+use App\Services\SupplierReassignmentRecoveryService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use InvalidArgumentException;
 
 class AdminSupplierRecoveryController extends Controller
@@ -17,7 +17,7 @@ class AdminSupplierRecoveryController extends Controller
         SupplierReassignmentRecoveryService $recoveryService
     ): RedirectResponse {
         $validated = $request->validate([
-            'replacement_source' => ['required', 'string', 'regex:/^\\d+:\\d+$/'],
+            'replacement_source' => ['required', 'string', 'regex:/^\d+:\d+$/'],
             'order_item_ids' => 'required|array|min:1|max:100',
             'order_item_ids.*' => 'required|integer|distinct|exists:order_items,id',
             'reason' => 'required|string|min:5|max:2000',
