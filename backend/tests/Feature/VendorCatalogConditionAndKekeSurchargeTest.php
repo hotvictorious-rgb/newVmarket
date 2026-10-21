@@ -96,6 +96,22 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         ]);
     }
 
+    public function test_vendor_terminal_denies_non_active_supplier_accounts(): void
+    {
+        Sanctum::actingAs($this->vendorUser, ['*']);
+
+        $this->vendor->update(['marketplace_status' => 'pending']);
+
+        $this->getJson('/api/v1/vendor/orders')
+            ->assertForbidden();
+
+        $this->vendor->update(['marketplace_status' => 'active']);
+        $this->getJson('/api/v1/vendor/orders')->assertOk();
+
+        $this->vendor->update(['marketplace_status' => 'suspended']);
+        $this->getJson('/api/v1/vendor/orders')->assertForbidden();
+    }
+
     public function test_vendor_can_list_brand_new_item_with_bike_delivery(): void
     {
         Sanctum::actingAs($this->vendorUser, ['*']);
