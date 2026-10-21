@@ -646,6 +646,8 @@ class ReturnAndRefundService
 
         $totalCashRefund = $preValidation['total_cash_refund'];
         $paystackRefundId = $preValidation['existing_paystack_refund_id'];
+        $walletCreditStatuses = $preValidation['wallet_credit_statuses'] ?? [];
+        $dispatchAttempted = false;
 
         // A supplied bank reference means the administrator is recording an already
         // executed manual bank transfer. Do not also initiate a Paystack refund.
@@ -707,10 +709,16 @@ class ReturnAndRefundService
                     ]
                 );
 
+                $dispatchAttempted = true;
                 $dispatchRes = $finOpService->dispatchRefund($op);
 
                 if (empty($dispatchRes['success'])) {
-                    // Gateway definitively rejected or failed
+                    // Restore wallet credits only for an authoritative terminal
+                    // gateway failure. An initiated/uncertain outcome keeps them
+                    // quarantined until reconciliation.
+                    if (($dispatchRes['status'] ?? '') === 'failed') {
+                        $this->restoreWalletCreditsAfterDefinitiveFailure($walletCreditStatuses);
+                    }
                     ReturnCase::where('id', $caseId)->update([
                         'refund_claim_token' => null,
                         'refund_claimed_at' => null,
@@ -745,7 +753,10 @@ class ReturnAndRefundService
                     ];
                 }
             } catch (\Throwable $e) {
-                ReturnCase::where('id', $caseId)->update([
+                if (!$dispatchAttempted) {
+                    $this->restoreWalletCreditsAfterDefinitiveFailure($walletCreditStatuses);
+                }
+                ReturnCase::where('id', $caseId)->where('refund_claim_token', $claimToken)->update([
                     'refund_claim_token' => null,
                     'refund_claimed_at' => null,
                 ]);
@@ -1163,4 +1174,34 @@ class ReturnAndRefundService
             ];
         });
     }
+    /**
+     * Restore wallet-credit lots only when no gateway refund could still be in
+     * flight. Ambiguous outcomes intentionally keep credits quarantined.
+     */
+    private function restoreWalletCreditsAfterDefinitiveFailure(array $walletCreditStatuses): void
+    {
+        if (!$walletCreditStatuses) {
+            return;
+        }
+
+        DB::transaction(function () use ($walletCreditStatuses): void {
+            foreach ($walletCreditStatuses as $creditId => $previousStatus) {
+                if (!in_array($previousStatus, ['available', 'pending_approval'], true)) {
+                    continue;
+                }
+                $credit = CustomerWalletCredit::whereKey((int) $creditId)
+                    ->lockForUpdate()
+                    ->first();
+                if (!$credit || $credit->status !== 'quarantined') {
+                    continue;
+                }
+
+                $credit->status = $previousStatus;
+                $credit->notes = trim(($credit->notes ? $credit->notes . ' | ' : '')
+                    . 'Wallet credit restored after authoritative refund failure/no dispatch.');
+                $credit->save();
+            }
+        }, 3);
+    }
+
 }
