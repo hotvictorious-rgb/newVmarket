@@ -70,7 +70,7 @@ These findings were confirmed by source inspection of the audit branch. They rem
 #### A. Rider authorization still accepts legacy fleet riders
 **File:** `backend/app/Http/Controllers/Api/RiderTerminalApiController.php`, `guardRiderWithLogistics()`
 
-The guard permits either a vendor relationship or a logistics-company relationship. It must instead require an active user, active rider profile, exactly one active owning vendor, and no ambiguous simultaneous fleet ownership for new work. Preserve legacy fields/history, but deny fleet-only/ambiguous profiles new delivery actions.
+The guard permits legacy vendor or logistics-company relationships. For new retailer work, it must require an active user, active rider profile and exactly one active logistics-company link, with that company active/approved. Supplier/vendor links do not authorize delivery work. Preserve legacy fields only where required for historical reads, and deny unlinked, multiply linked, inactive or ambiguous profiles new delivery actions.
 
 #### B. Rider APIs expose customer and financial information
 **File:** `backend/app/Http/Controllers/Api/RiderTerminalApiController.php`, `formatOrderForRider()`, `dashboard()`, `history()`, `activeReturns()`
@@ -92,14 +92,14 @@ Implement the protected contact action without placing the phone number in rider
 #### E. Rider actions can act on unassigned orders
 **File:** `backend/app/Http/Controllers/Api/RiderTerminalApiController.php`
 
-Several guards reject an order only if it is assigned to a *different non-null* rider; an order with `rider_id = null` can therefore pass that particular check. Every rider mutation must require exact assignment to the authenticated rider and same vendor. Use `rider_id === authenticated rider profile id`, not “null or me”.
+Several guards reject an order only if it is assigned to a *different non-null* rider; an order with `rider_id = null` can therefore pass that particular check. Every rider mutation must require exact assignment to the authenticated rider and the exact authorized delivery/fulfilment unit, with its approved logistics-company relationship. Use `rider_id === authenticated rider profile id`, not “null or me”; vendor ownership is not the new retailer authorization rule.
 
 ### P1 — Required for policy-compliant operation
 
 #### F. Assignment lacks atomic custody/state enforcement
 **File:** `backend/app/Http/Controllers/Api/VendorTerminalApiController.php`, `assignRiderToOrder()`
 
-The current method checks order/vendor and rider/vendor match and rider active status, then assigns without a transaction/row lock, order-state validation, fulfilment-type validation, custody check, vendor/user status check for the rider, or assignment audit event. Add an atomic state-checked assignment with audit metadata (actor, previous rider, new rider, timestamp, reason/state). Reject `in_shop_pickup`, non-doorstep orders, ineligible riders, and states outside approved ready-for-assignment states. Prevent reassignment after custody unless the return/custody-transfer process completes.
+The current method checks legacy order/vendor and rider/vendor relationships, then assigns without a transaction/row lock, order-state validation, fulfilment-type validation, custody check, active logistics-company verification or assignment audit event. Replace with atomic state-checked assignment controlled by VM operations, require an active approved logistics company and a rider linked to exactly that one active company, and record actor, previous/new rider, timestamp, reason and state. Reject `in_shop_pickup`, non-doorstep orders, ineligible riders and states outside approved ready-for-assignment states. Prevent reassignment after custody unless the return/custody-transfer process completes.
 
 #### G. Rider deactivation can ignore parcel custody
 **File:** `backend/app/Http/Controllers/Api/VendorTerminalApiController.php`, `updateRiderStatus()`
@@ -109,7 +109,7 @@ The current method toggles `is_active` without checking whether the rider has a 
 #### H. Checkout accepts legacy rider/fleet identifiers
 **File:** `backend/app/Http/Controllers/Api/CheckoutAndReservationApiController.php`, `createIntent()`
 
-The customer checkout request still validates `rider_id` and `logistics_company_id`, and includes legacy logistics/rider eligibility checks. Rider assignment belongs to the vendor after checkout, not the customer. Remove these inputs from the new checkout API contract and ensure no customer-supplied rider/fleet ID can influence order assignment. Preserve old order fields for historical reads and migrations.
+The customer checkout request still validates `rider_id` and `logistics_company_id`, and includes legacy logistics/rider eligibility checks. Rider assignment belongs to VM operations through an approved logistics company, not to the customer or private supplier. Remove these inputs from the new checkout API contract and ensure no customer-supplied rider/fleet ID can influence order assignment. Preserve old order fields for historical reads and migrations.
 
 #### I. Pickup pass and rider parcel custody are conflated
 **Files:** `backend/app/Models/PickupReservation.php`, `backend/app/Models/Order.php`, `backend/app/Http/Controllers/Api/CheckoutAndReservationApiController.php`, rider terminal routes/services.
@@ -119,7 +119,7 @@ The customer checkout request still validates `rider_id` and `logistics_company_
 #### J. Rider onboarding needs safer credential handling and unique identity
 **File:** `backend/app/Http/Controllers/Api/VendorTerminalApiController.php`, `storeRider()`
 
-The vendor creates a rider user and sets the user status active immediately, accepting a password in the request. Keep vendor-led onboarding, but review whether credentials should be established through a one-time invitation/password setup rather than a vendor-selected rider password. Enforce one rider profile per user and ensure vendor identity always comes from the authenticated vendor context. Do not add central dispatch approval; platform account/safety suspension remains allowed.
+The legacy vendor endpoint creates rider users and sets the user active immediately, accepting a password in the request. For new retailer delivery, onboarding and company affiliation must be authorized by VM and the approved logistics company, credentials should be established through a secure invitation/password setup, one rider profile per user must be enforced, and rider-to-company linkage must be unique and active. Platform account/safety suspension remains allowed.
 
 #### K. Legacy logistics and rider financial surfaces remain active
 **Areas:** web routes/controllers/views, logistics-company models, rider UI, payout services, API routes, jobs, and reports.
