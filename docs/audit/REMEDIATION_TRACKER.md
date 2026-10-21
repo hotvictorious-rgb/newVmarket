@@ -513,3 +513,13 @@ Status: FIXED — focused regression passed. No merge or deployment.
 **Change:** Supplier-profile authorization now applies only to legacy non-retailer orders. Customer tracking shows Victorious MARKET and describes supplier settlement as privately controlled; it no longer prints the legacy 90% vendor payout for retailer orders or identifies the supplier pickup shop.
 
 **Status:** Source committed on `docs/retailer-central-fulfilment-model`; regression test and full branch-head CI verification remain outstanding. No merge or deployment.
+
+
+## VM-AUD-092 — Lock the primary storefront to Uyo and the single retailer identity (21 October 2026)
+
+**Severity:** Critical  
+**Finding:** The primary storefront still accepted city/state and local/corridor scope parameters, listed supplier shops, filtered products using the catalog contributor's physical shop, and labelled products with supplier/branch names. This contradicted the permanent Uyo-only operating boundary and could hide a product whose actual eligible sourcing offer was in Uyo or reveal a private supplier's identity.
+
+**Change:** The primary storefront now fixes its destination to Uyo, lists products with confirmed eligible supplier offers rather than filtering by the catalog contributor's shop, removes public shop listings and corridor discovery, and renders product cards as Victorious MARKET with Uyo local delivery messaging. The location selector is limited to Uyo.
+
+**Status:** Source committed on `docs/retailer-central-fulfilment-model`; template/controller tests and branch-head CI remain outstanding. No merge or deployment.
