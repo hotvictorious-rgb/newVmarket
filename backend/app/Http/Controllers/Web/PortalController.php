@@ -972,10 +972,50 @@ class PortalController extends Controller
             ->latest()
             ->get();
 
-        $pendingSettlementsCount = Order::where('vendor_settlement_status', 'eligible')->count();
+        $pendingSettlementsCount = Order::where('retailer_model_order', false)
+            ->where('vendor_settlement_status', 'eligible')
+            ->count();
         $activeLogisticsCompanies = LogisticsCompanyProfile::where('status', 'active')->whereNull('deleted_at')->orderBy('company_name')->get(['id', 'company_name']);
 
-        return view('admin.orders', compact('recentOrders', 'pendingSettlementsCount', 'activeLogisticsCompanies'));
+        $supplierRecoveryOrders = Order::where('retailer_model_order', true)
+            ->where('payment_status', 'paid')
+            ->where('order_status', 'confirmed')
+            ->where('sourcing_status', 'supplier_rejected')
+            ->with(['items', 'supplierAssignments.supplier', 'supplierAssignments.shop'])
+            ->latest()
+            ->get();
+
+        $activeUyoSupplierShops = Shop::with(['vendor.user', 'lga.state'])
+            ->whereNull('shops.deleted_at')
+            ->where('shops.is_active', true)
+            ->whereRaw('(select count(*) from shops as active_supplier_shops where active_supplier_shops.vendor_id = shops.vendor_id and active_supplier_shops.deleted_at is null and active_supplier_shops.is_active = 1) = 1')
+            ->whereHas('vendor', function ($vendorQuery) {
+                $vendorQuery->whereNull('vendor_profiles.deleted_at')
+                    ->where('marketplace_status', 'active')
+                    ->whereHas('user', fn ($userQuery) => $userQuery->where('status', 'active'));
+            })
+            ->whereHas('lga', function ($lgaQuery) {
+                $lgaQuery->whereRaw('LOWER(TRIM(lgas.name)) = ?', ['uyo'])
+                    ->whereHas('state', fn ($stateQuery) => $stateQuery->whereRaw('LOWER(TRIM(states.name)) = ?', ['akwa ibom']));
+            })
+            ->orderBy('shops.name')
+            ->get();
+
+        $supplierRecoveryKeys = [];
+        foreach ($supplierRecoveryOrders as $recoveryOrder) {
+            foreach ($recoveryOrder->supplierAssignments->where('status', 'supplier_rejected') as $rejectedAssignment) {
+                $supplierRecoveryKeys[$recoveryOrder->id][$rejectedAssignment->id] = (string) \Illuminate\Support\Str::uuid();
+            }
+        }
+
+        return view('admin.orders', compact(
+            'recentOrders',
+            'pendingSettlementsCount',
+            'activeLogisticsCompanies',
+            'supplierRecoveryOrders',
+            'activeUyoSupplierShops',
+            'supplierRecoveryKeys'
+        ));
     }
 
     /**
