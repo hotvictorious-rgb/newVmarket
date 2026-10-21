@@ -1291,12 +1291,12 @@
                     <span class="vm-flag-tag">NG</span>
                     <span class="vm-country-name">Nigeria</span>
                 </div>
-                <span class="vm-country-sub">Nationwide Local Governments</span>
+                <span class="vm-country-sub">Uyo Service Area</span>
             </div>
 
             <!-- Search Input with Autocomplete -->
             <div class="vm-form-group vm-lga-search-group">
-                <label for="vmLgaSearchInput" class="vm-form-label">Type your residential lga</label>
+                <label for="vmLgaSearchInput" class="vm-form-label">Confirm your Uyo delivery area</label>
                 <div class="vm-input-icon-wrap">
                     <span class="vm-input-lead-icon">
                         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -1304,8 +1304,8 @@
                             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
                     </span>
-                    <input type="text" id="vmLgaSearchInput" class="vm-modal-input vm-lga-search-input" placeholder="Type your residential lga" value="{{ session('customer_city', 'Uyo') }}" autocomplete="off">
-                    <button type="button" class="vm-input-clear-btn" id="vmLgaClearBtn" aria-label="Clear">×</button>
+                    <input type="text" id="vmLgaSearchInput" class="vm-modal-input vm-lga-search-input" placeholder="Confirm your Uyo delivery area" value="Uyo" autocomplete="off" readonly>
+                    <button type="button" class="vm-input-clear-btn" id="vmLgaClearBtn" aria-label="Clear" style="display:none;">×</button>
                 </div>
 
                 <!-- Autocomplete Dropdown List -->
@@ -1314,11 +1314,11 @@
 
             <!-- Popular Local Governments Chips -->
             <div class="vm-form-group" style="margin-bottom: 16px;">
-                <span class="vm-chips-heading">POPULAR LOCAL GOVERNMENTS:</span>
+                <span class="vm-chips-heading">SERVICE AREA:</span>
                 <div class="vm-city-chips-grid">
                     @php
-                        $popularCities = ['Abak', 'Eket', 'Ikot Abasi', 'Ikot Ekpene', 'Oron', 'Uyo'];
-                        $currentActiveCity = session('customer_city', 'Uyo');
+                        $popularCities = ['Uyo'];
+                        $currentActiveCity = 'Uyo';
                         $popularLgas = \App\Models\Lga::whereIn('name', $popularCities)->pluck('id', 'name')->toArray();
                     @endphp
                     @foreach($popularCities as $pCity)
@@ -1344,7 +1344,7 @@
                     </span>
                     <div>
                         <strong class="vm-selected-city-text" id="vmPreviewCity">{{ session('customer_city', 'Uyo') }}, {{ session('customer_state', 'Akwa Ibom') }}</strong>
-                        <small class="vm-selected-status-text" id="vmPreviewStatus">Pickup and delivery available in this local government</small>
+                        <small class="vm-selected-status-text" id="vmPreviewStatus">Doorstep delivery is available within Uyo only.</small>
                     </div>
                 </div>
             </div>
@@ -1360,8 +1360,10 @@
 
     <!-- Embedded Canonical LGA List Dataset -->
     @php
-        $canonicalLgasList = \Illuminate\Support\Facades\Cache::remember('vmarket_canonical_lgas_min', 86400, function () {
+        $canonicalLgasList = \Illuminate\Support\Facades\Cache::remember('vmarket_canonical_lgas_uyo_v1', 86400, function () {
             return \App\Models\Lga::where('is_active', true)
+                ->where('name', 'Uyo')
+                ->whereHas('state', fn($q) => $q->where('name', 'Akwa Ibom'))
                 ->with('state:id,name')
                 ->orderBy('name')
                 ->get()
@@ -1735,7 +1737,7 @@
                     if (statusText) {
                         previewStatus.textContent = statusText;
                     } else if (selectedCity.toLowerCase() === 'uyo') {
-                        previewStatus.textContent = 'Pickup and delivery available in this local government';
+                        previewStatus.textContent = 'Doorstep delivery is available within Uyo only.';
                         previewStatus.style.color = '#16A34A';
                     } else if (['eket', 'ikot ekpene', 'oron'].includes(selectedCity.toLowerCase())) {
                         previewStatus.textContent = 'Delivery corridor active (12-24 hrs delivery speed)';
