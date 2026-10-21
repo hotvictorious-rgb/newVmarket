@@ -181,7 +181,13 @@ class SourcingAllocationService
 
         $shop->loadMissing('lga.state');
 
-        return strtolower(trim((string) ($shop->lga->name ?? ''))) === 'uyo'
+        $activeShopCount = Shop::where('vendor_id', $shop->vendor_id)
+            ->whereNull('deleted_at')
+            ->where('is_active', true)
+            ->count();
+
+        return $activeShopCount === 1
+            && strtolower(trim((string) ($shop->lga->name ?? ''))) === 'uyo'
             && strtolower(trim((string) ($shop->lga->state->name ?? ''))) === 'akwa ibom';
     }
 
