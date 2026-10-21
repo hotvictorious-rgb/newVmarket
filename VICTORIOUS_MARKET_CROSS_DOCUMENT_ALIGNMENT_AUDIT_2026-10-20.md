@@ -129,3 +129,33 @@ Required controls:
 - Ensure atomic balanced postings, idempotent webhooks/retries, verified repayments, authorised contract-based offsets, no double recovery, and a monitored refund reserve/forecast. Obtain qualified-accountant review of production journal mappings.
 
 **Closure evidence required:** automated tests and reconciliation reports must prove journal balance, separation of cash and receivables, independent customer refund, preservation of vendor payout history, correct debt recovery/write-off, and visibility of actual losses and liquidity shortfalls. Documentation alone does not prove code implementation.
+
+## 12. Retailer-model documentation alignment pass — 21 October 2026
+
+The current owner-confirmed model is **one centrally managed retailer**. Suppliers are private sourcing partners, not public sellers. VM owns the customer relationship, public catalogue, retail pricing, authorized customer payments, refund decisions and fulfilment coordination. Delivery is coordinated through approved logistics companies; each rider assigned to new VM work must be active and linked to exactly one active logistics company. Authorized supplier-shop pickup requires the reservation pass, separate one-time customer pickup verification and in-shop photo. Supplier payment eligibility begins only after verified successful customer delivery or pickup and reconciliation.
+
+The following core sources were aligned to that model on branch `docs/retailer-central-fulfilment-model`:
+
+- `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md` — single source of truth and release authority.
+- `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md`, `README.md`, `VICTORIOUS_MARKET.md`, and `backend/VICTORIOUS_MARKET.md` — retailer model, supplier offers, accounting boundaries and migration status.
+- `.ai/BUSINESS_RULES.md`, `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md`, `DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md`, and `VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md` — operational, payment, refund, rider and logistics acceptance criteria.
+- `VENDOR_PAYOUT_POLICY.md` remains explicitly legacy-only; its thresholds/FIFO vendor earnings do not govern supplier payments.
+- `backend/database/seeders/LegalDocumentSeeder.php` — customer terms, returns, privacy, supplier agreement, About, cancellation, FAQ and contact source text were aligned and the current customer-facing versions were bumped. The old logistics-fleet SLA remains unpublished/legacy-only; it does not define the new approved logistics-company agreement.
+
+### Conflicts corrected in this pass
+
+1. Removed active multi-vendor/public-supplier assumptions from the current business model and customer-facing source text.
+2. Replaced new-order 90/5/5 merchandise and 90/10 delivery allocation requirements with separate retailer revenue, supplier purchase cost/payable, customer delivery charge, approved logistics-company charge, fee, refund and separately approved cashback records.
+3. Replaced vendor-owned dispatch/rider authorization requirements with VM-controlled assignment through an approved logistics company and exactly one active company link per assigned rider.
+4. Replaced the obsolete 30-minute reservation hold in the delivery plan with the documented 24-hour supplier-shop reservation. The 24-hour customer claim window, reservation expiry, cashback maturity (if approved), and gateway refund completion remain separate clocks.
+5. Reframed legacy vendor payout, child-order, rider and allocation tests as legacy-only evidence; new retailer acceptance must not rely on public vendor child orders or commission accounting.
+6. Updated the seeded customer policy versions to 2.0.0 where their contents changed. A source change does **not** update an already-published production database until the seeder/version deployment is deliberately run and the resulting published documents are verified.
+
+### Verification and remaining boundaries
+
+- This pass changed documentation and the legal-document seeder source. It did **not** migrate runtime application code, run the PHP test suite, run PHP syntax lint, execute the seeder against a database, verify published production legal rows, or deploy anything.
+- The latest checked GitHub combined commit status returned no status checks; this is not a passing test result.
+- The previously documented runtime gaps remain launch blockers until code changes and targeted tests prove them fixed, especially legacy checkout bypass, public multi-vendor checkout paths, rider/company authorization, refund/webhook state handling, cashback recovery and supplier/logistics financial reconciliation.
+- If the fresh deployment has no legacy transactions, obsolete marketplace routes, screens, tables and jobs should be retired through a reviewed migration rather than left active. If legacy records exist, preserve them as history until dependencies and accounting treatment are established.
+- Do not merge or deploy this branch without explicit owner approval and verification against the exact intended commit.
+
