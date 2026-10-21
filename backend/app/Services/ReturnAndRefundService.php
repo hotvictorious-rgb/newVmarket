@@ -612,6 +612,7 @@ class ReturnAndRefundService
             foreach ($walletCredits as $walletCredit) {
                 if (in_array($walletCredit->status, ['available', 'pending_approval'], true)) {
                     $walletCreditStatuses[(int) $walletCredit->id] = $walletCredit->status;
+                    $walletCredit->refund_reserved_from_status = $walletCredit->status;
                     $walletCredit->status = 'quarantined';
                     $walletCredit->notes = trim(($walletCredit->notes ? $walletCredit->notes . ' | ' : '')
                         . 'Cash refund reserved; credit unavailable pending authoritative Paystack outcome.');
@@ -1235,7 +1236,11 @@ class ReturnAndRefundService
                     continue;
                 }
 
-                $credit->status = $previousStatus;
+                $restoreStatus = in_array($credit->refund_reserved_from_status, ['available', 'pending_approval'], true)
+                    ? $credit->refund_reserved_from_status
+                    : $previousStatus;
+                $credit->status = $restoreStatus;
+                $credit->refund_reserved_from_status = null;
                 $credit->notes = trim(($credit->notes ? $credit->notes . ' | ' : '')
                     . 'Wallet credit restored after authoritative refund failure/no dispatch.');
                 $credit->save();
