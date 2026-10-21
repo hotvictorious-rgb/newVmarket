@@ -217,3 +217,10 @@ The recurring financial reconciliation engine previously handled vendor/logistic
 - Added regression coverage that verifies a recovered multi-supplier order reconciles cleanly, a deliberately altered operational cost is reported as a mismatch, and restoring the snapshot clears the mismatch.
 - Commits: reconciliation engine 6abb5bbef0f1f2c8514923270f0720eda3816780; regression test 77d797791d9f036c07514d14e9fdf665fcf96eb0.
 - Verification status: code/test committed; the expanded workflow run is pending. This does not implement supplier-specific payouts, which remain intentionally fail-closed until reservation, payout, reversal, and lifecycle tests are complete.
+
+### 23a. Run the full supplier liability scan off the frequent gateway loop
+
+The supplier-payable reconciliation is intentionally not executed inside the 15-minute gateway payout loop, to avoid making every transfer-reconciliation run scan the entire retailer order history. It is exposed as `finance:reconcile-supplier-payables`, supports an optional `--order=ID` focused audit, reports critical mismatches, exits non-zero when mismatches are found, and is scheduled daily at 02:30 with overlap prevention.
+
+- Commits: dedicated command e584f2188bfa5435829fc021c0677fd253936118; schedule a2289a3a31be77a778aaba0a96770e31dc2b6033; workflow syntax coverage 4af42102732a162971fc04b0b0e844be7b0bb13d.
+- Verification status: command and schedule are committed; the latest branch-head CI run is still pending.
