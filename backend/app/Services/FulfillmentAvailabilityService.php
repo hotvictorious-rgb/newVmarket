@@ -184,24 +184,13 @@ class FulfillmentAvailabilityService
      */
     public function checkPickupAvailability(int $shopId): array
     {
-        $shop = Shop::with(['lga', 'state'])->find($shopId);
-        if (!$shop || !$shop->pickup_enabled) {
-            return [
-                'is_available' => false,
-                'message' => 'In-shop pickup is not enabled for this shop.',
-            ];
-        }
-
+        // Supplier locations are private. Public pickup reservations are disabled;
+        // exceptional collection must be arranged by central support only.
         return [
-            'is_available' => true,
-            'shop_id' => $shop->id,
-            'shop_name' => $shop->name,
-            'address' => $shop->address,
-            'lga' => $shop->lga->name ?? null,
-            'state' => $shop->state->name ?? null,
-            'prep_time_minutes' => $shop->pickup_prep_time_minutes,
-            'opening_time' => $shop->pickup_opening_time,
-            'closing_time' => $shop->pickup_closing_time,
+            'is_available' => false,
+            'message' => 'Pickup is not publicly available. Contact Victorious MARKET support for an authorized exception.',
+            'rate_tier' => 'support_managed_exception_only',
+            'is_collection_point' => false,
         ];
     }
 
