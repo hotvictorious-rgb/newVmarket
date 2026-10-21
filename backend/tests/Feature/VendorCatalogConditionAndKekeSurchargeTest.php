@@ -493,7 +493,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $blocked = false;
         try {
             app('App\\Services\\SourcingAllocationService')->confirmSupplierAvailability($orderBike->fresh(), (int) $this->vendor->id, 'late legacy confirmation');
-        } catch (\\InvalidArgumentException $exception) {
+        } catch (\InvalidArgumentException $exception) {
             $blocked = str_contains($exception->getMessage(), 'supplier-assignment confirmation workflow');
         }
         $this->assertTrue($blocked, 'Legacy order-level supplier confirmation must reject retailer orders.');
