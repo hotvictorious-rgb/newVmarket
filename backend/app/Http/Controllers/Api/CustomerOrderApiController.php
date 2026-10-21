@@ -307,7 +307,7 @@ class CustomerOrderApiController extends Controller
             'grand_total' => (float)$order->grand_total,
             'formatted_total' => '₦' . number_format((float)$order->grand_total, 2),
             'items_count' => $order->items->sum('quantity'),
-            'shop_name' => $order->shop->name ?? 'Verified Merchant',
+            'shop_name' => 'Victorious MARKET',
             'created_at' => $order->created_at ? $order->created_at->toIso8601String() : null,
             'is_handshake_pending' => $order->isCustomerHandshakePending(),
         ];
@@ -365,11 +365,8 @@ class CustomerOrderApiController extends Controller
                 'customer_cashback_earned' => (float)$order->customer_cashback_5,
                 'formatted_grand_total' => '₦' . number_format((float)$order->grand_total, 2),
             ],
-            'shop' => $order->shop ? [
-                'id' => $order->shop->id,
-                'name' => $order->shop->name,
-                'address' => $order->shop->address,
-            ] : null,
+            // Supplier identities and addresses are private sourcing metadata.
+            'shop' => ['name' => 'Victorious MARKET'],
             'rider' => $order->rider ? [
                 'name' => $order->rider->user->name ?? 'Assigned Rider',
                 'phone' => $order->rider->user->phone ?? null,
