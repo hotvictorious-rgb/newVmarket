@@ -296,9 +296,8 @@ class SourcingAllocationService
                 || $order->order_status !== 'pending' || $lockedAssignment->status !== 'awaiting_payment') {
                 throw new InvalidArgumentException('Supplier overrides are allowed only before payment while the order and assignment are still pending.');
             }
-            if ((int) $lockedAssignment->supplier_vendor_id === $newVendorId
-                && (int) $lockedAssignment->supplier_shop_id === $newShopId) {
-                throw new InvalidArgumentException('Choose a different supplier shop for an override.');
+            if ((int) $lockedAssignment->supplier_vendor_id === $newVendorId) {
+                throw new InvalidArgumentException('Choose a different supplier account for an override.');
             }
             if ($order->expires_at && Carbon::now()->gte($order->expires_at)) {
                 throw new InvalidArgumentException('This checkout reservation has expired; create a new checkout before changing suppliers.');
@@ -313,6 +312,9 @@ class SourcingAllocationService
             if (!$newShop || $newShop->trashed() || !$newShop->is_active
                 || (int) $newShop->vendor_id !== (int) $newVendor->id) {
                 throw new InvalidArgumentException('The replacement shop must be active and belong to the replacement supplier.');
+            }
+            if (Shop::where('vendor_id', $newVendor->id)->whereNull('deleted_at')->where('is_active', true)->count() !== 1) {
+                throw new InvalidArgumentException('A private supplier must have exactly one active shop/pickup point.');
             }
             if (strtolower(trim((string) ($newShop->lga->name ?? ''))) !== 'uyo'
                 || strtolower(trim((string) ($newShop->lga->state->name ?? ''))) !== 'akwa ibom') {
