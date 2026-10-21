@@ -71,14 +71,17 @@ class RiderTerminalApiController extends Controller
         $vendorName = $rider->vendor?->business_name ?? 'Vendor Delivery';
 
         $activeOrders = Order::where('rider_id', $rider->id)
+            ->where('logistics_company_id', $rider->logistics_company_id)
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
             ->count();
 
         $completedOrders = Order::where('rider_id', $rider->id)
+            ->where('logistics_company_id', $rider->logistics_company_id)
             ->where('order_status', 'delivered')
             ->count();
 
         $activeOrdersList = Order::where('rider_id', $rider->id)
+            ->where('logistics_company_id', $rider->logistics_company_id)
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
             ->with(['shop:id,name,address,phone,lga_id', 'customer:id,name', 'customerAddress.lga', 'customerAddress.state', 'items:id,order_id,product_name,quantity', 'destinationLga:id,name'])
             ->get();
@@ -137,6 +140,7 @@ class RiderTerminalApiController extends Controller
 
         $rider = $request->user()->riderProfile;
         $orders = Order::where('rider_id', $rider->id)
+            ->where('logistics_company_id', $rider->logistics_company_id)
             ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_pickup', 'out_for_delivery'])
             ->with(['shop:id,name,address,phone,lga_id', 'customer:id,name,phone', 'items:id,order_id,product_name,quantity', 'destinationLga:id,name'])
             ->get();
@@ -156,6 +160,7 @@ class RiderTerminalApiController extends Controller
 
         $rider = $request->user()->riderProfile;
         $history = Order::where('rider_id', $rider->id)
+            ->where('logistics_company_id', $rider->logistics_company_id)
             ->where('order_status', 'delivered')
             ->with(['shop:id,name,address,phone', 'customer:id,name,phone', 'items:id,order_id,product_name,quantity', 'destinationLga:id,name'])
             ->orderBy('updated_at', 'desc')
@@ -335,8 +340,9 @@ class RiderTerminalApiController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ((int) $order->rider_id !== (int) $rider->id) {
-                return response()->json(['status' => false, 'message' => 'Unauthorized: This order is assigned to another delivery courier.'], 403);
+            if ((int) $order->rider_id !== (int) $rider->id
+                || !$rider->isEligibleForCentralOrder($order)) {
+                return response()->json(['status' => false, 'message' => 'Unauthorized: This order is not assigned to this active rider through the same active logistics company.'], 403);
             }
 
             if ($order->payment_status !== 'paid') {
