@@ -189,3 +189,20 @@ The following core sources were aligned to that model on branch `docs/retailer-c
 - **Verification status:** Source change committed to this branch. Automated tests and PHP lint have **not** been run in this environment, so this is a code change, not a test-verified or production-verified fix. Add regression coverage for a shop-linked profile with no vendor link and for a properly linked active logistics-company rider before treating this guard as verified.
 - **Scope limit:** This closes only the model-level eligibility gap. It does not prove every dispatch, assignment, terminal, or delivery-completion path calls this guard. Those call sites remain to be traced and tested.
 
+
+
+### R-002 — Checkout still implements the superseded vendor marketplace as the active purchase model
+
+- **Finding confirmed:** `backend/app/Services/CheckoutExecutionService.php` requires a selected `shop_id`, loads an active marketplace vendor, validates products against `vendor_id`/`shop_id`, writes those legacy IDs to the order, calculates 90/5/5 merchandise allocations and 90/10 delivery allocations, and creates vendor-payable/cashback/platform-revenue journal entries. This is runtime behavior, not merely documentation.
+- **Related schema gap:** `backend/app/Models/OrderItem.php` currently has no supplier-offer identifier, supplier identity snapshot, supplier purchase-cost snapshot, or supplier terms snapshot in its fillable attributes. The checkout therefore cannot yet reliably represent the chosen private supplier and agreed cost per order item.
+- **Related storefront risk:** prior audit identified a web checkout path through `PortalController::processCheckout` that may not use this execution service. Both entry points must be traced before the canonical path can be switched.
+- **Resolution status:** **Not yet safely resolved.** Replacing the split fields alone would not establish supplier cost, could leave journal entries inconsistent, and could fail schema constraints. No percentage replacement has been invented and no destructive schema rename has been made.
+- **Required implementation sequence:** (1) inspect all order/order-item migrations, constraints and financial journal consumers; (2) introduce a versioned private supplier-offer model and immutable order-item cost/offer snapshots; (3) define the new retailer journal mapping with balanced entries and no invented commission; (4) make API and storefront checkout share the same validated, idempotent execution path; (5) route new orders through the new accounting path while isolating legacy settlement code; (6) add regression and reconciliation tests before removing old columns or routes.
+- **Launch gate:** do not treat new retailer checkout as aligned until both checkout entry points, order-item snapshots, payment settlement and refund calculations are covered by passing tests.
+
+### R-003 — Order item snapshots cannot yet prove supplier purchase cost at order time
+
+- **Finding confirmed:** the current `OrderItem` model persists product identity/name, customer unit price and line total, but not the selected private supplier offer or agreed wholesale purchase cost. Looking up a product's current supplier later would be unsafe because supplier terms may change after checkout.
+- **Resolution status:** Open; requires migration/schema and model changes coordinated with supplier-offer selection and checkout locking. No runtime data shape has been guessed.
+- **Required invariant:** every new retailer order item must snapshot the selected supplier offer, supplier identity, purchase cost, variant/quantity and relevant terms. Historical orders remain readable without pretending they have snapshots they never stored.
+
