@@ -409,6 +409,10 @@ class ReturnAndRefundService
                 }
             }
 
+            // This action explicitly approves a cash refund, even if the
+            // customer originally requested replacement/repair. Persist the chosen
+            // financial resolution instead of inheriting an ambiguous request type.
+            $lockedCase->resolution_type = 'refund';
             $lockedCase->status = 'refund_pending';
             $lockedCase->reviewed_by_admin_id = $adminUser->id;
             $lockedCase->admin_notes = $adminNotes;
@@ -432,8 +436,15 @@ class ReturnAndRefundService
                 'action' => 'return_case_approved_for_refund',
                 'target_type' => ReturnCase::class,
                 'target_id' => $lockedCase->id,
-                'old_values' => ['status' => $case->status],
-                'new_values' => ['status' => 'refund_pending', 'reviewed_by_admin_id' => $adminUser->id],
+                'old_values' => [
+                    'status' => $case->status,
+                    'resolution_type' => $case->resolution_type,
+                ],
+                'new_values' => [
+                    'status' => 'refund_pending',
+                    'resolution_type' => 'refund',
+                    'reviewed_by_admin_id' => $adminUser->id,
+                ],
                 'ip_address' => request()->ip() ?? '127.0.0.1',
                 'user_agent' => request()->userAgent(),
             ]);
@@ -539,10 +550,12 @@ class ReturnAndRefundService
             $order = Order::where('id', $lockedCase->order_id)->lockForUpdate()->firstOrFail();
 
             // Strict Financial Approval State Machine: requires prior explicit approval
-            if (!in_array($lockedCase->status, ['refund_pending', 'approved_for_return', 'resolved'], true)) {
+            if ($lockedCase->status !== 'refund_pending'
+                || $lockedCase->resolution_type !== 'refund'
+                || !$lockedCase->reviewed_by_admin_id) {
                 return [
                     'valid' => false,
-                    'message' => "Cannot disburse refund for case in '{$lockedCase->status}' status. Requires prior Super Admin approval into 'refund_pending'.",
+                    'message' => "Cannot disburse refund unless the case is explicitly approved with resolution_type=refund and status=refund_pending by an administrator.",
                 ];
             }
 
