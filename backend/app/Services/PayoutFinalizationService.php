@@ -94,7 +94,7 @@ class PayoutFinalizationService
                     '0.00'
                 );
             $hasJournalEntry = FinancialJournalEntry::where('event_id', 'EVT-VND-PAYOUT-' . $lockedPayout->id)->exists();
-            $hasRequestJournal = FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REQ-' . $lockedPayout->id)->exists();
+            $hasRequestJournal = $this->hasVendorRequestJournalEvidence($lockedPayout);
 
             // 1. Idempotency Guard: If already allocated and journaled, ensure terminal state without duplicating ledger/allocations
             if ($lockedPayout->status === 'approved' && $lockedPayout->gateway_status === 'success' && $hasJournalEntry) {
@@ -621,7 +621,7 @@ class PayoutFinalizationService
             // A queued/failed transfer may never have posted the disbursement journal.
             // Only write a financial reversal when the original payout journal exists;
             // otherwise release allocations/state without fabricating a cash movement.
-            $hasRequestJournal = FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REQ-' . $lockedPayout->id)->exists();
+            $hasRequestJournal = $this->hasVendorRequestJournalEvidence($lockedPayout);
 
             if ($hasOriginalPayoutJournal && $hasRequestJournal) {
                 // A confirmed transfer was reversed. Undo cash movement and restore
@@ -837,7 +837,7 @@ class PayoutFinalizationService
                 ];
             }
 
-            $hasRequestJournal = FinancialJournalEntry::where('event_id', 'EVT-FLEET-REQ-' . $lockedPayout->id)->exists();
+            $hasRequestJournal = $this->hasLogisticsRequestJournalEvidence($lockedPayout);
             if ($hasRequestJournal && $company) {
                 $company->wallet_balance = bcadd((string)$company->wallet_balance, (string)$lockedPayout->amount, 2);
                 $company->save();
@@ -963,6 +963,35 @@ class PayoutFinalizationService
         }
 
         return $result;
+    }
+
+    /**
+     * A request journal is evidence only when both expected legs exist for the
+     * same beneficiary and exact payout amount. A single row sharing the event ID
+     * must never authorize a wallet credit or liability reversal.
+     */
+    public function hasVendorRequestJournalEvidence(VendorPayoutRequest $payout): bool
+    {
+        $amount = bcadd((string) $payout->amount, '0', 2);
+        $base = FinancialJournalEntry::where('event_id', 'EVT-MERCHANT-REQ-' . $payout->id)
+            ->where('beneficiary_type', VendorProfile::class)
+            ->where('beneficiary_id', $payout->vendor_id)
+            ->where('amount', $amount);
+
+        return (clone $base)->where('account_name', 'vendor_payable')->where('entry_type', 'debit')->exists()
+            && (clone $base)->where('account_name', 'vendor_payout_payable')->where('entry_type', 'credit')->exists();
+    }
+
+    public function hasLogisticsRequestJournalEvidence(LogisticsPayoutRequest $payout): bool
+    {
+        $amount = bcadd((string) $payout->amount, '0', 2);
+        $base = FinancialJournalEntry::where('event_id', 'EVT-FLEET-REQ-' . $payout->id)
+            ->where('beneficiary_type', LogisticsCompanyProfile::class)
+            ->where('beneficiary_id', $payout->logistics_company_id)
+            ->where('amount', $amount);
+
+        return (clone $base)->where('account_name', 'logistics_company_wallet')->where('entry_type', 'debit')->exists()
+            && (clone $base)->where('account_name', 'logistics_payout_payable')->where('entry_type', 'credit')->exists();
     }
 
     /**
