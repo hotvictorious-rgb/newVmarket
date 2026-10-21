@@ -163,16 +163,14 @@ If a vendor sells an item offline and forgets to update their VMARKET status, a 
 4. Preserve the approved customer payment paths. Supplier-shop pickup payment, where supported, must remain within VM's authorized payment workflow.
 5. Audit every web/API checkout route. The legacy web checkout bypass of CheckoutExecutionService must be corrected before release.
 
-### Phase 4: Central fulfilment and supplier pickup
+### Phase 4: Central fulfilment and support-managed pickup exceptions
 
-1. VM coordinates product sourcing and dispatch through an approved logistics company.
-2. Validate logistics-company status and the rider's exclusive active link to that company on assignment and relevant custody transitions.
-3. Separate supplier-to-VM collection, logistics-company custody, delivery attempts, customer handover and return-to-origin events.
-4. Doorstep completion requires server-verified customer OTP and doorstep photo. Supplier-shop pickup requires the reservation pass, separate one-time customer pickup verification and in-shop photo.
-5. Only verified customer handover makes the supplier payable eligible, after order/amount reconciliation. Eligibility does not trigger automatic payment.
-6. Remove or block new-order vendor-controlled dispatch, vendor-linked rider assignments, vendor commission payouts and legacy fleet payment paths after dependencies are mapped; preserve historical records.
-7. A failed delivery or customer refusal is not automatic refund approval, supplier fault or debt.
-
+1. Treat doorstep delivery as the only standard online fulfilment method. Every online order has one customer destination and one published delivery fee snapshotted at checkout.
+2. Resolve eligible private sources for every line using current confirmed availability, active source status and valid delivery coverage. Assess the complete order; do not make the customer coordinate separate suppliers.
+3. Confirm the required products and feasible fulfilment plan before making a readiness or delivery promise. For multiple suppliers, VM coordinates internal collection/consolidation or communicates an alternative plan and obtains customer agreement before any material change.
+4. Customers who prefer pickup must contact support; there is no automated pickup checkout/reservation. Support confirms only after every item is physically ready at one approved collection point and payment arrangements and customer agreement are recorded.
+5. Never disclose a supplier/collection address before the approved plan is confirmed. Never silently add a fee, change the fee snapshot, or direct the customer to multiple supplier shops by default.
+6. Preserve existing pickup reservations, states and associated financial/audit history for compatibility and pre-existing obligations. Prevent new public reservation writes and early address disclosure before safely removing dependent routes, views, jobs and schema.
 ## Current-code findings that must be addressed
 
 The initial source inspection found direct mismatches with the adopted rules. These are findings from code review, not claims that fixes have already been implemented:
