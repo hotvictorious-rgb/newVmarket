@@ -422,8 +422,8 @@ class PortalWebTest extends TestCase
             'customer_bulky_surcharge_per_unit' => '400.00',
         ]);
         $pricingResponse->assertRedirect();
-        $this->assertSame('650.00', (string) SystemSetting::get('zone_intra_lga_fee'));
-        $this->assertSame('400.00', (string) SystemSetting::get('zone_bulky_cargo_surcharge'));
+        $this->assertSame('650.00', number_format((float) SystemSetting::get('zone_intra_lga_fee'), 2, '.', ''));
+        $this->assertSame('400.00', number_format((float) SystemSetting::get('zone_bulky_cargo_surcharge'), 2, '.', ''));
 
         $company = LogisticsCompanyProfile::where('status', 'active')
             ->whereHas('hqLga', fn ($q) => $q->where('name', 'Uyo')->whereHas('state', fn ($state) => $state->where('name', 'Akwa Ibom')))
