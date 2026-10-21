@@ -6,6 +6,7 @@ use App\Models\DeliveryLane;
 use App\Models\DeliveryCorridor;
 use App\Models\LogisticsCompanyCorridorRate;
 use App\Models\LogisticsCompanyProfile;
+use App\Models\SystemSetting;
 use App\Models\Lga;
 use App\Models\User;
 use App\Services\DemoAccountRegistry;
@@ -399,7 +400,7 @@ class PortalWebTest extends TestCase
             ->assertOk()
             ->assertSee('Create Uyo customer-delivery corridor')
             ->assertSee('Independent logistics-company payables')
-            ->assertSee('Customer base fee');
+            ->assertSee('Customer delivery pricing (flat per order)');
 
         $uyo = Lga::where('name', 'Uyo')->whereHas('state', fn ($q) => $q->where('name', 'Akwa Ibom'))->firstOrFail();
         $response = $this->actingAs($admin)->post('/admin/delivery-corridors', [
@@ -407,8 +408,6 @@ class PortalWebTest extends TestCase
             'name' => 'Uyo Plaza Corridor',
             'lga_id' => $uyo->id,
             'landmark_aliases' => ['Ibom Plaza', 'Plaza Uyo'],
-            'customer_base_fee' => '650.00',
-            'customer_bulky_surcharge_per_unit' => '400.00',
             'estimated_delivery_hours_min' => 2,
             'estimated_delivery_hours_max' => 4,
             'is_active' => true,
@@ -416,9 +415,15 @@ class PortalWebTest extends TestCase
 
         $response->assertCreated()->assertJsonPath('corridor.code', 'uyo-plaza-demo');
         $corridor = DeliveryCorridor::where('code', 'uyo-plaza-demo')->firstOrFail();
-        $this->assertSame('650.00', $corridor->customer_base_fee);
-        $this->assertSame('400.00', $corridor->customer_bulky_surcharge_per_unit);
         $this->assertSame($corridor->id, DeliveryCorridor::resolveForAddress($uyo->id, '12 Ibom Plaza Road', null)?->id);
+
+        $pricingResponse = $this->actingAs($admin)->post('/admin/delivery-corridors/customer-fees', [
+            'customer_base_fee' => '650.00',
+            'customer_bulky_surcharge_per_unit' => '400.00',
+        ]);
+        $pricingResponse->assertRedirect();
+        $this->assertSame('650.00', (string) SystemSetting::get('zone_intra_lga_fee'));
+        $this->assertSame('400.00', (string) SystemSetting::get('zone_bulky_cargo_surcharge'));
 
         $company = LogisticsCompanyProfile::where('status', 'active')
             ->whereHas('hqLga', fn ($q) => $q->where('name', 'Uyo')->whereHas('state', fn ($state) => $state->where('name', 'Akwa Ibom')))
@@ -446,8 +451,6 @@ class PortalWebTest extends TestCase
             'name' => 'Alias One',
             'lga_id' => $uyo->id,
             'landmark_aliases' => ['Plaza'],
-            'customer_base_fee' => '500.00',
-            'customer_bulky_surcharge_per_unit' => '300.00',
             'estimated_delivery_hours_min' => 2,
             'estimated_delivery_hours_max' => 4,
             'is_active' => true,
@@ -457,8 +460,6 @@ class PortalWebTest extends TestCase
             'name' => 'Alias Two',
             'lga_id' => $uyo->id,
             'landmark_aliases' => ['Plaza Road'],
-            'customer_base_fee' => '600.00',
-            'customer_bulky_surcharge_per_unit' => '350.00',
             'estimated_delivery_hours_min' => 2,
             'estimated_delivery_hours_max' => 4,
             'is_active' => true,
