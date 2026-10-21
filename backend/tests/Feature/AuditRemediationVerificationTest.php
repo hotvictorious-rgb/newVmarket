@@ -1138,7 +1138,7 @@ class AuditRemediationVerificationTest extends TestCase
         $fixture = $this->createOrder('delivered', 1);
         /** @var Order $order */
         $order = $fixture['order'];
-        $order->update(['payment_reference' => null, 'payment_status' => 'paid']);
+        $order->update(['payment_reference' => '', 'payment_status' => 'paid']);
 
         $case = ReturnCase::create([
             'case_number' => ReturnCase::generateCaseNumber(),
