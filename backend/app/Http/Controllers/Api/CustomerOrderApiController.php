@@ -748,7 +748,9 @@ class CustomerOrderApiController extends Controller
             'data' => [
                 'available_wallet_credit' => $balance,
                 'currency' => 'NGN',
-                'spendable_rate' => '100%',
+                'spendable_rate' => '0%',
+                'checkout_redemption_enabled' => false,
+                'message' => 'Refund wallet credit is tracked here but cannot be used as checkout tender at launch.',
                 'history' => $credits,
             ],
         ]);
