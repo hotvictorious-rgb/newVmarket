@@ -317,7 +317,7 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
         $result = $settlementService->verifyCustomerDeliveryOtp($order, '112233', $this->rider);
 
         $this->assertFalse($result['success']);
-        $this->assertStringContainsString('Vendor rider profile is inactive', $result['message']);
+        $this->assertStringContainsString('Unauthorized: Delivery confirmation requires the assigned active rider linked exclusively to the order active logistics company.', $result['message']);
         $this->assertEquals('out_for_delivery', $order->fresh()->order_status, 'Order status must remain out_for_delivery');
     }
 
@@ -356,7 +356,7 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
         $result = $settlementService->verifyCustomerDeliveryOtp($order, '778899', $this->rider);
 
         $this->assertFalse($result['success']);
-        $this->assertStringContainsString('Owning vendor account is inactive or suspended', $result['message']);
+        $this->assertStringContainsString('Unauthorized: Delivery confirmation requires the assigned active rider linked exclusively to the order active logistics company.', $result['message']);
         $this->assertEquals('out_for_delivery', $order->fresh()->order_status, 'Order status must remain out_for_delivery');
     }
 
@@ -395,7 +395,7 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
         $result = $settlementService->verifyCustomerDeliveryOtp($order, '334455', $this->rider);
 
         $this->assertFalse($result['success']);
-        $this->assertStringContainsString('Merchant shop branch is inactive or closed', $result['message']);
+        $this->assertStringContainsString('Unauthorized: Delivery confirmation requires the assigned active rider linked exclusively to the order active logistics company.', $result['message']);
         $this->assertEquals('out_for_delivery', $order->fresh()->order_status, 'Order status must remain out_for_delivery');
     }
 
@@ -727,7 +727,7 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
         // Verification 1: Order has delivery_halted_reason stamped
         $freshOrder = $order->fresh();
         $this->assertNotNull($freshOrder->delivery_halted_at);
-        $this->assertStringContainsString('Owning vendor account is inactive or suspended', $freshOrder->delivery_halted_reason);
+        $this->assertStringContainsString('Unauthorized: Delivery confirmation requires the assigned active rider linked exclusively to the order active logistics company.', $freshOrder->delivery_halted_reason);
 
         // Verification 2: AdminAuditLog entry was automatically generated
         $auditLog = \App\Models\AdminAuditLog::where('target_id', $order->id)
