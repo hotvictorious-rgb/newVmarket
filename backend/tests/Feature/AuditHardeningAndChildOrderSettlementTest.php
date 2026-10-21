@@ -205,6 +205,8 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         ]);
         $this->riderA = RiderProfile::create([
             'user_id' => $this->riderUserA->id,
+            'vendor_id' => null,
+            'shop_id' => null,
             'logistics_company_id' => $this->logisticsCompany->id,
             'assigned_lga_id' => $this->originLga->id,
             'vehicle_type' => 'motorcycle',
