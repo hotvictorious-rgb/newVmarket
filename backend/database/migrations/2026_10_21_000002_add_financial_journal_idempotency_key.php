@@ -19,7 +19,21 @@ return new class extends Migration
 
         if (!Schema::hasColumn('financial_journal_entries', 'idempotency_key')) {
             Schema::table('financial_journal_entries', function (Blueprint $table) {
-                $table->string('idempotency_key', 100)->nullable()->unique();
+                $table->string('idempotency_key', 100)->nullable();
+            });
+        }
+
+        // A partially applied/manual schema may already have the column without
+        // the unique index. Column existence alone is not sufficient protection
+        // against concurrent duplicate journal writes.
+        $hasUniqueIdempotencyIndex = collect(Schema::getIndexes('financial_journal_entries'))
+            ->contains(function (array $index): bool {
+                return !empty($index['unique'])
+                    && ($index['columns'] ?? []) === ['idempotency_key'];
+            });
+        if (!$hasUniqueIdempotencyIndex) {
+            Schema::table('financial_journal_entries', function (Blueprint $table) {
+                $table->unique('idempotency_key', 'financial_journal_entries_idempotency_key_unique');
             });
         }
     }
@@ -31,8 +45,18 @@ return new class extends Migration
             return;
         }
 
+        $indexes = collect(Schema::getIndexes('financial_journal_entries'))
+            ->filter(function (array $index): bool {
+                return !empty($index['unique'])
+                    && ($index['columns'] ?? []) === ['idempotency_key'];
+            });
+        foreach ($indexes as $index) {
+            Schema::table('financial_journal_entries', function (Blueprint $table) use ($index) {
+                $table->dropUnique($index['name']);
+            });
+        }
+
         Schema::table('financial_journal_entries', function (Blueprint $table) {
-            $table->dropUnique(['idempotency_key']);
             $table->dropColumn('idempotency_key');
         });
     }
