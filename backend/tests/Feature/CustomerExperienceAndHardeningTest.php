@@ -14,6 +14,7 @@ use App\Models\PickupReservation;
 use App\Models\Product;
 use App\Models\Shop;
 use App\Models\ShopDeliveryCoverage;
+use App\Models\SupplierOffer;
 use App\Models\State;
 use App\Models\User;
 use App\Models\VendorProfile;
@@ -146,6 +147,17 @@ class CustomerExperienceAndHardeningTest extends TestCase
             'listing_status' => 'listed',
             'listing_confirmed_at' => Carbon::now(),
             'freshness_verified_at' => Carbon::now(),
+        ]);
+
+        SupplierOffer::create([
+            'product_id' => $this->product->id,
+            'vendor_id' => $vendorProfile->id,
+            'shop_id' => $this->shop->id,
+            'wholesale_cost' => '7000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now(),
+            'availability_confirmed_by' => $this->customer->id,
+            'availability_expires_at' => Carbon::now()->addDays(7),
         ]);
 
         $this->lane = DeliveryLane::create([

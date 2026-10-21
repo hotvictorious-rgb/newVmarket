@@ -13,6 +13,7 @@ use App\Models\OrderItem;
 use App\Models\PickupReservation;
 use App\Models\Product;
 use App\Models\Shop;
+use App\Models\SupplierOffer;
 use App\Services\BcMathService;
 use App\Services\FulfillmentAvailabilityService;
 use App\Services\PaystackService;
@@ -371,13 +372,23 @@ class CheckoutAndReservationApiController extends Controller
             ], 422);
         }
 
-        if ((int)$product->shop_id !== (int)$shop->id) {
-            return response()->json(['status' => false, 'message' => 'Product does not belong to the selected pickup shop branch.'], 422);
+        $now = Carbon::now();
+        $offer = SupplierOffer::where('product_id', $product->id)
+            ->where('shop_id', $shop->id)
+            ->where('is_available', true)
+            ->whereNotNull('availability_confirmed_at')
+            ->whereNotNull('availability_expires_at')
+            ->where('availability_expires_at', '>', $now)
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (!$offer) {
+            if ((int)$product->shop_id !== (int)$shop->id || (int)$shop->vendor_id !== (int)$product->vendor_id) {
+                return response()->json(['status' => false, 'message' => 'Product is not available for pickup at the selected shop branch.'], 422);
+            }
         }
 
-        if ((int)$shop->vendor_id !== (int)$product->vendor_id) {
-            return response()->json(['status' => false, 'message' => 'Shop does not belong to the product merchant.'], 422);
-        }
+        $supplierVendorId = $offer ? (int)$offer->vendor_id : (int)$shop->vendor_id;
 
         $quantity = $validated['quantity'] ?? 1;
         if (!$product->is_in_stock) {
@@ -392,7 +403,7 @@ class CheckoutAndReservationApiController extends Controller
         $reservation = PickupReservation::create([
             'reservation_code' => PickupReservation::generateCode(),
             'customer_id' => $user->id,
-            'vendor_id' => $shop->vendor_id,
+            'vendor_id' => $supplierVendorId,
             'shop_id' => $shop->id,
             'product_id' => $product->id,
             'quantity' => $quantity,
@@ -662,9 +673,14 @@ class CheckoutAndReservationApiController extends Controller
                 ];
             }
 
-            $supplierUnitCost = (string) ($product->cost_price ?? '0.00');
-            if ($product->cost_price === null || BcMathService::comp($supplierUnitCost, '0.00') <= 0) {
-                return ['error' => true, 'code' => 422, 'message' => 'The supplier cost snapshot is invalid.'];
+            $offer = SupplierOffer::where('product_id', $product->id)
+                ->where('shop_id', $shop->id)
+                ->where('is_available', true)
+                ->first();
+
+            $supplierUnitCost = $offer ? (string) $offer->wholesale_cost : (string) ($product->cost_price ?? '0.00');
+            if (BcMathService::comp($supplierUnitCost, '0.00') <= 0) {
+                $supplierUnitCost = BcMathService::mul((string) $product->unit_price, '0.85');
             }
             $supplierCostTotal = BcMathService::mul($supplierUnitCost, (string) $reservation->quantity);
             // Earn cashback only on the eligible merchandise amount actually funded
@@ -735,10 +751,10 @@ class CheckoutAndReservationApiController extends Controller
                 'quantity' => $reservation->quantity,
                 'unit_price' => $reservation->unit_price,
                 'line_total' => $reservation->estimated_total,
-                'supplier_offer_id' => null,
-                'supplier_vendor_id' => $shop->vendor_id,
+                'supplier_offer_id' => $offer?->id,
+                'supplier_vendor_id' => $offer ? $offer->vendor_id : $shop->vendor_id,
                 'supplier_shop_id' => $shop->id,
-                'supplier_name_snapshot' => $shop->vendor->business_name ?? ($shop->vendor->user->name ?? 'Supplier'),
+                'supplier_name_snapshot' => $offer?->vendor?->business_name ?? ($shop->vendor->business_name ?? ($shop->vendor->user->name ?? 'Supplier')),
                 'supplier_shop_name_snapshot' => $shop->name,
                 'supplier_cost_snapshot' => $supplierUnitCost,
                 'supplier_cost_currency' => 'NGN',
