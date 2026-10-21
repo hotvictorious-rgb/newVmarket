@@ -166,10 +166,10 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         ]);
 
         // Logistics Company & Rider
-        $this->fleetCompany = LogisticsCompanyProfile::where('status', 'active')
+        $fleetCompany = LogisticsCompanyProfile::where('status', 'active')
             ->where('hq_lga_id', $this->uyoLga->id)
             ->first();
-        if (!$this->fleetCompany) {
+        if (!$fleetCompany) {
             $logisticsUser = User::create([
                 'name' => 'Swift Courier Ltd',
                 'email' => 'swift@fleet.com',
@@ -179,7 +179,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
                 'status' => 'active',
             ]);
 
-            $this->fleetCompany = LogisticsCompanyProfile::create([
+            $fleetCompany = LogisticsCompanyProfile::create([
                 'user_id' => $logisticsUser->id,
                 'company_name' => 'Swift Fleet Logistics',
                 'hq_lga_id' => $this->uyoLga->id,
@@ -187,6 +187,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
                 'status' => 'active',
             ]);
         }
+        $this->fleetCompany = $fleetCompany;
 
         $existingVendorRider = RiderProfile::where('vendor_id', $this->vendorProfile->id)->first();
         if ($existingVendorRider) {
