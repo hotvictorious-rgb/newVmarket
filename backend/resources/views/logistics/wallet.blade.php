@@ -25,7 +25,7 @@
                 <span>Company Corridor Payable Wallet &amp; Treasury Desk</span>
             </h1>
             <p class="page-header-subtitle">
-                Automated 90% delivery revenue credited upon verified customer delivery OTP handshake. Victorious Market retains 10% platform fee.
+                Company corridor payables are credited after verified customer delivery OTP and required proof checks. Customer delivery fees and company tariffs are configured independently.
             </p>
         </div>
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -145,7 +145,7 @@
         <div class="dash-card-header">
             <div>
                 <div class="dash-card-title">Corporate Bank Withdrawal Requests ({{ count($payoutRequests ?? []) }})</div>
-                <span class="dash-card-subtitle">Track disbursements of accumulated 90% delivery revenue to your corporate bank account</span>
+                <span class="dash-card-subtitle">Track disbursements of approved corridor payables to your corporate bank account</span>
             </div>
             <button type="button" onclick="document.getElementById('withdrawalModal').style.display='flex'" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 11.5px;">
                 + New Withdrawal
