@@ -1929,4 +1929,56 @@ class AuditRemediationVerificationTest extends TestCase
         $this->assertStringContainsString('not assigned to the authenticated rider', $result['message']);
         $this->assertSame('in_transit_back_to_vendor', $case->fresh()->status);
     }
+
+    public function test_multi_supplier_return_does_not_issue_one_shared_vendor_otp(): void
+    {
+        $fixture = $this->createOrder('returned', 1);
+        $order = $fixture['order'];
+        $order->retailer_model_order = true;
+        $order->vendor_id = null;
+        $order->shop_id = null;
+        $order->save();
+
+        $firstItem = $order->items()->firstOrFail();
+        $firstItem->fulfillment_supplier_vendor_id = $this->vendor->id;
+        $firstItem->save();
+
+        $secondSupplierUser = User::create([
+            'name' => 'Vendor Beta',
+            'email' => 'beta@merchant.ng',
+            'password' => bcrypt('VendorPass123!'),
+            'user_type' => 'vendor',
+            'status' => 'active',
+        ]);
+        $secondSupplier = VendorProfile::create([
+            'user_id' => $secondSupplierUser->id,
+            'business_name' => 'Beta Appliances',
+            'business_phone' => '08088889999',
+            'bank_name' => 'Access Bank',
+            'account_number' => '1000000002',
+            'account_name' => 'Beta Appliances',
+            'marketplace_status' => 'active',
+        ]);
+        $secondItem = $firstItem->replicate();
+        $secondItem->fulfillment_supplier_vendor_id = $secondSupplier->id;
+        $secondItem->save();
+
+        $case = ReturnCase::create([
+            'case_number' => ReturnCase::generateCaseNumber(),
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'vendor_id' => null,
+            'return_reason' => 'damaged_in_transit',
+            'source' => 'doorstep_partial_rejection',
+            'status' => 'pending_supplier_assignment',
+            'resolution_type' => 'refund',
+            'vendor_return_otp' => '654321',
+            'total_refundable_amount' => '20000.00',
+        ]);
+
+        $dispatches = NotificationDispatchService::dispatchVendorReturnOtpIssued($case);
+
+        $this->assertSame([], $dispatches);
+        $this->assertSame('pending_supplier_assignment', $case->fresh()->status);
+    }
 }
