@@ -290,6 +290,20 @@ class OrderSettlementService
                 // Transition any associated pickup reservation to payment_completed upon confirmed gateway settlement
                 \App\Models\PickupReservation::where('order_id', $lockedOrder->id)->update(['status' => 'payment_completed']);
             }
+            // Retailer sourcing acceptance begins only after verified payment. Do not
+            // mark supplier assignments confirmed here; each source must accept separately.
+            if ($lockedOrder->retailer_model_order && $lockedOrder->payment_status === 'paid'
+                && $lockedOrder->order_status === 'confirmed') {
+                \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                    ->where('status', 'awaiting_payment')
+                    ->update([
+                        'status' => 'awaiting_supplier_confirmation',
+                        'assigned_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                $lockedOrder->sourcing_status = 'awaiting_supplier_confirmation';
+            }
+
             $lockedOrder->save();
 
             // 9. Isolated Refund-Only Settlement Branch (Late Payment Depleted Stock)
