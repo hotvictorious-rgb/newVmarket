@@ -167,7 +167,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
 
         // Logistics Company & Rider
         $fleetCompany = LogisticsCompanyProfile::where('status', 'active')
-            ->where('hq_lga_id', $this->uyoLga->id)
+            ->where('lga_id', $this->uyoLga->id)
             ->first();
         if (!$fleetCompany) {
             $logisticsUser = User::create([
@@ -182,7 +182,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             $fleetCompany = LogisticsCompanyProfile::create([
                 'user_id' => $logisticsUser->id,
                 'company_name' => 'Swift Fleet Logistics',
-                'hq_lga_id' => $this->uyoLga->id,
+                'lga_id' => $this->uyoLga->id,
                 'wallet_balance' => '0.00',
                 'status' => 'active',
             ]);
