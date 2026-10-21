@@ -488,6 +488,17 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ->assertJsonPath('status', false);
         $this->assertEquals('supplier_rejected', $orderBike->fresh()->sourcing_status);
         $this->assertEquals('paid', $orderBike->fresh()->payment_status);
+
+        // The legacy order-level helper must not bypass the retailer assignment workflow.
+        $blocked = false;
+        try {
+            app('App\\Services\\SourcingAllocationService')->confirmSupplierAvailability($orderBike->fresh(), (int) $this->vendor->id, 'late legacy confirmation');
+        } catch (\\InvalidArgumentException $exception) {
+            $blocked = str_contains($exception->getMessage(), 'supplier-assignment confirmation workflow');
+        }
+        $this->assertTrue($blocked, 'Legacy order-level supplier confirmation must reject retailer orders.');
+        $this->assertEquals('supplier_rejected', $orderBike->fresh()->sourcing_status);
+        $this->assertEquals('paid', $orderBike->fresh()->payment_status);
     }
 
     public function test_public_product_api_filters_by_condition_and_package_tier(): void
