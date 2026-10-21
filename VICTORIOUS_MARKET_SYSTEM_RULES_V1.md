@@ -150,4 +150,4 @@ Victorious MARKET remains responsible for funding and executing an approved cust
 
 ## 15. Source-of-truth and release control
 
-The canonical current model is [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](../RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md). Detailed payment/refund and webhook requirements remain in [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](../PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md). Historical source-audit findings must be reconciled against these current business rules; do not reintroduce vendor-managed delivery, marketplace payout percentages or supplier-off-platform payment.
+The canonical current model is [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md). Detailed payment/refund and webhook requirements remain in [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](../PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md). Historical source-audit findings must be reconciled against these current business rules; do not reintroduce vendor-managed delivery, marketplace payout percentages or supplier-off-platform payment.
