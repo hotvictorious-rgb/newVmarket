@@ -480,3 +480,14 @@ Supplier terminal authentication now requires both the supplier user and supplie
 **Business impact:** Reduces the risk of a wrong or misrouted transfer notification being treated as a successful duplicate, improves gateway reconciliation and auditability, and preserves the no-double-posting behavior for genuine retries.
 
 **Verification boundary:** Code and tests are committed; tests have not been executed. A database-backed regression test for an already-paid payout receiving a mismatched reference/amount is still required. No merge or deployment is authorized.
+
+
+### VM-AUD-106 — Do not represent terminal gateway outcomes as uncertain (21 October 2026)
+
+**Finding:** The payout uncertainty helper accepted terminal gateway statuses such as `success`, `failed`, and `reversed`; it could persist a terminal gateway result while setting the internal payout state to `uncertain`. It also returned idempotent success when asked to place an already-terminal payout on hold, which could mask a contradictory transition request.
+
+**Fix:** Reject known terminal gateway statuses before transaction/database work and return a protected failure when an already-terminal payout is passed to the uncertainty transition. Added a unit guard for `success`.
+
+**Business impact:** Keeps gateway outcome and internal payout state consistent, reduces confusing admin reconciliation screens, and prevents an invalid transition from being reported as successful. It does not replace verification of the actual Paystack transfer.
+
+**Verification boundary:** Source and test are committed; automated tests have not been executed. No merge or deployment.
