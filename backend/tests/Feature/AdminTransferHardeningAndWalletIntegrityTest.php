@@ -445,6 +445,28 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
+    public function test_treasury_cannot_reconcile_supplier_transfer_before_submission_response_is_persisted(): void
+    {
+        [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
+        $service = app(RetailerSupplierPayoutService::class);
+        $requested = $service->requestPayout($this->vendor);
+        $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
+        $payout = $requested['payout'];
+        $processing = $service->markProcessing($payout->id, $this->superAdmin->id, 'RCP_TEST_SUPPLIER', 'SUPPAYOUT-IN-FLIGHT-RECON');
+        $this->assertTrue($processing['success'], $processing['message'] ?? 'Supplier payout processing claim failed.');
+
+        $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
+        $response = $this->actingAs($this->superAdmin)->post(
+            route('admin.retailer-supplier-payouts.reconcile', $payout->id)
+        );
+
+        $response->assertRedirect();
+        $this->assertSame('uncertain', $payout->fresh()->status);
+        $this->assertSame('submission_outcome_unknown', $payout->fresh()->gateway_status);
+        $this->assertSame('allocated', $payout->allocations()->first()->fresh()->status);
+        $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
+    }
+
     public function test_verified_success_can_finalize_supplier_payout_after_uncertain_hold(): void
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
