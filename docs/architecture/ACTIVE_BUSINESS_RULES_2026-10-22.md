@@ -7,7 +7,8 @@ This document records the owner's active decisions. If older documents conflict 
 ## 1. Retailer and service area
 - Victorious MARKET is the single customer-facing retailer, operating within Uyo LGA, Akwa Ibom State.
 - Suppliers remain behind the scenes. Customers buy from Victorious MARKET, not from individual supplier storefronts.
-- Each supplier may operate from one admin-approved shop or pickup location anywhere within the approved Uyo operating boundary. Plaza is one possible location, not a mandatory hub.
+- Only an authorized Victorious MARKET admin may register/create a supplier account; suppliers cannot self-register or independently activate their own accounts. Only an authorized admin may approve, activate or suspend a supplier. Each supplier may operate from one admin-approved shop or pickup location anywhere within the approved Uyo operating boundary. Plaza is one possible location, not a mandatory hub.
+- A suspended supplier is immediately ineligible for new sourcing/allocation. Suspension must not silently erase records or automatically cancel/refund already-paid orders; an authorized admin must review and explicitly resolve affected in-flight assignments. Reactivation requires an authorized admin action and a recorded audit trail.
 - The configured eight delivery corridors remain Oron Road, Nwaniba Road, Aka Road, Abak Road, Ikot Ekpene Road, Itu Road, Ikpa Road and Plaza. The admin must maintain unambiguous landmark-to-corridor mappings. Unknown or out-of-boundary destinations fail closed.
 
 ## 2. Product listing lifecycle is separate from order allocation
@@ -53,6 +54,8 @@ This document records the owner's active decisions. If older documents conflict 
 
 ## 8. Financial integrity
 - Supplier payables use immutable agreed wholesale-cost snapshots and become eligible only after verified delivery or an explicitly authorized completion exception followed by reconciliation. Supplier stock acceptance alone does not make a payable due.
+- **Supplier payable disbursement limits:** each supplier-payment request/disbursement must be at least ₦5,000 and no more than ₦1,000,000 at a time. Do not silently split an over-cap request into multiple transfers; it must be reduced to an allowed amount or handled through a separately authorized decision.
+- **No FIFO:** do not use FIFO, oldest-earning-first, oldest-order-first, or automatic FIFO allocation to decide which eligible supplier payables are included in a payment. Selection must use an authorized, auditable non-FIFO process. Do not invent an automatic alternative ranking/selection algorithm without owner approval. Admin approval, reconciliation, idempotency and provider-confirmed payment remain required; eligibility is not automatic payment.
 - Keep customer receipts, refunds, supplier payables, logistics-company payables, retailer margin, delivery revenue/costs, bulky surcharges, cashback and recovery/reconciliation as distinct money paths.
 - Cashback remains a separate 5% loyalty benefit on eligible post-discount merchandise actually funded by verified Paystack money, subject to existing caps, maturity and reversal rules. Former 90/5/5 merchandise splits and vendor-managed delivery allocations are historical only.
 - All sensitive assignments, overrides, refunds, tariff changes and financial adjustments require role-based authorization, a reason where applicable, and immutable audit records.
