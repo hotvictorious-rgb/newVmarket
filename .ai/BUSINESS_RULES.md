@@ -208,7 +208,7 @@ Where the legacy text below conflicts with these rules, it is a historical findi
 - Rider API and UI do not expose raw customer phone, payment status, delivery fee, total/amount due, card data, commission, cashback, vendor settlement, or payouts.
 - Call Customer works without revealing the raw number in API/UI/logs.
 - A support-managed pickup exception is not a public reservation or checkout flow. Any customer delivery-fee adjustment must be explicitly authorized and recorded; do not assume every exception has zero fee. Require one approved collection point, complete-order readiness, authorized payment status, customer agreement, one-time pickup verification and mandatory photo. Legacy RES passes/stock holds are historical-only for new orders.
-- Doorstep delivery requires verified customer OTP plus a linked delivery photo. GPS/signature/separate rider-pickup photo are not mandatory.
+- Every supplier stop requires its own single-use shop-specific pickup OTP and mandatory pickup photo. Final doorstep delivery requires the customer's server-verified OTP and mandatory geo-tagged delivery photo. Do not substitute one supplier's OTP/photo for another stop. Pickup photos are required; GPS at supplier pickup is not a replacement for the photo.
 - Failed attempts create operational records only; no automatic wallet credit, rider/logistics payable, refund, or vendor settlement release.
 - Repeated delivery callbacks, failed attempts, assignment requests, and pickup confirmation cannot duplicate state transitions or financial entries.
 - Historical vendor settlement rule only. For new orders, supplier payables and logistics-company payables are separate, and both require their own verified completion evidence and reconciliation gates.
