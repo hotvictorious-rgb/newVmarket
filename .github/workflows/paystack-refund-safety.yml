@@ -2,7 +2,7 @@ name: Paystack refund safety tests
 
 on:
   pull_request:
-    branches: [main, docs/retailer-central-fulfilment-model]
+    branches: [main]
     paths:
       - "backend/app/Http/Controllers/Web/PaystackPaymentController.php"
       - "backend/app/Services/FinancialReconciliationEngine.php"
@@ -12,8 +12,7 @@ on:
       - ".github/workflows/paystack-refund-safety.yml"
   push:
     branches:
-      - audit/paystack-refund-webhook-safety
-      - docs/retailer-central-fulfilment-model
+      - main
   workflow_dispatch:
 
 permissions:
