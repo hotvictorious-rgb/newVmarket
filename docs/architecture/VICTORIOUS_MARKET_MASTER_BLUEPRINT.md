@@ -1,3 +1,5 @@
+> **Active-policy precedence (22 October 2026):** [Active Business Rules](../architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md) governs current business behaviour. This document retains detailed architecture/history, but any Plaza-only supplier assumption, binding pre-payment supplier assignment/reservation, public pickup reservation/stock hold, automatic refund on allocation failure, or 90%-of-customer-delivery-fee logistics rule is superseded. Do not treat this document as evidence that runtime code conforms.
+
 # Victorious MARKET: Comprehensive Master Operational & Architectural Blueprint
 
 This document provides an exhaustive, end-to-end engineering and operational breakdown of **Victorious MARKET**. Built specifically for the economic, geographic, and physical realities of **Uyo, Akwa Ibom State**, this system replaces open-market chaos with a deterministic, high-margin retail and logistics engine. Every component—from database schema decisions to physical Keke loading—is designed to protect working capital, eliminate inventory shrinkage, and maximize speed.
@@ -12,7 +14,7 @@ Victorious MARKET enforces a **fail-closed, hyper-localized architecture** built
 
 1. **The Plaza Centralization Law (Zero Distance Complexity):** Every supplier is physically situated within the **Plaza** commercial hub in central Uyo. Because all pickups originate from this single unified cluster, the platform requires zero Google Maps API distance calculations, zero dynamic per-kilometer routing fees, and zero complex geo-fencing. Distance from Plaza to any neighborhood is governed strictly by arterial road corridors.
 2. **SKU-Level Deterministic Sourcing:** Suppliers in Plaza sell dozens of distinct categories. All stock availability, pricing, and penalty rules operate strictly at the individual product (`product_id`) level, never as a blanket shop-wide guess.
-3. **One Order, One Rider Accountability:** A customer order—even if it contains five items sourced from three different Plaza shops—is owned from pickup to doorstep by **one single delivery person**. Splitting a single customer's order across multiple riders is prohibited.
+3. **One Order, One Rider Accountability:** A customer order—even if it contains five items sourced from three different approved supplier locations within Uyo—is owned from pickup to doorstep by **one single delivery person**. Splitting a single customer's order across multiple riders is prohibited.
 4. **The "Bulky Contagion" & Keke Isolation Law:** If a customer order contains even one bulky item (`is_bulky = true`), the *entire order* becomes classified as bulky, is forced onto a **Keke (Tricycle)**, and locks that Keke into a **100% exclusive trip** for that customer alone.
 5. **Cryptographic Proof Over Trust:** No item moves, no status changes, and no naira is paid out without dual verification (**OTP + Photo Proof**) at every single handoff point.
 
@@ -26,7 +28,7 @@ When customers browse `victoriousmarket.com.ng`, they do not see individual vend
 
 * **Retail Selling Price (`unit_price`):** The customer-facing price set by Victorious MARKET.
 * **Payload Classification (`is_bulky`):** A strict boolean flag (`true` or `false`). Items like smartphones, chargers, blenders, and clippers are `false` (Standard/Small). Items like 4x6 virgin foam mattresses, standing gas cookers, large generators, and deep freezers are `true` (Bulky).
-* **Active Supplier Backing:** A product only displays as purchasable on the frontend if at least one KYC-verified Plaza supplier currently has an active, unpenalized `in_stock` offer linked to it.
+* **Active Supplier Backing:** A product only displays as purchasable on the frontend if at least one KYC-verified approved Uyo supplier currently has an active, unpenalized `in_stock` offer linked to it.
 
 ### 2.2 Address Capture & The 8 Major Uyo Road Corridors
 
@@ -66,7 +68,7 @@ The exact millisecond Paystack confirms payment, the backend executes the **Mult
 
 For every distinct `product_id` in the customer's order, the engine queries the `supplier_offers` table and immediately disqualifies any supplier offer that fails any of these four mandatory checks:
 
-1. **KYC & Geographic Boundary Check:** The supplier account must have `kyc_verified = true`, `status = 'active'`, and `location_hub = 'Plaza_Uyo'`.
+1. **KYC & Geographic Boundary Check:** The supplier account must have `kyc_verified = true`, `status = 'active'`, and `approved supplier location within the Uyo LGA operating boundary`.
 2. **Explicit Product Stock Flag:** The supplier's specific offer for *that exact product* must be marked `stock_status = 'in_stock'` and have sufficient quantity.
 3. **The 24-Hour Unavailability Penalty (Self-Healing Shield):** The engine queries the `supplier_unavailability_logs` table. Did this supplier mark *this specific product* as "Out of Stock / Unavailable" within the last 24 hours? If **Yes**, the offer is **discarded**. This stops the system from repeatedly sending orders to a merchant who ran out of stock earlier that day.
 4. **Pending Handover Overload Cap (Bottleneck Prevention):** The engine counts how many active order items are currently sitting with this supplier in `assigned` or `confirmed` status waiting for rider pickup. If the supplier has **5 or more pending handovers** ($\text{Pending Handovers} \ge 5$), they are **temporarily discarded**. This ensures orders never pile up in a slow or crowded shop.
@@ -95,7 +97,7 @@ If two suppliers offer the exact same wholesale price and consolidation coverage
 
 ## 4. Phase 3: Major-Road Logistics & Dispatch Architecture (Delivery Side)
 
-Once every item in the customer order is confirmed ready by the Plaza supplier(s), the order moves to the **Logistics Dispatch Queue**. Victorious MARKET does not manage random freelance riders; it integrates accredited **Third-Party Logistics (3PL) Companies** operating in Uyo.
+Once every item in the customer order is confirmed ready by the approved Uyo supplier(s), the order moves to the **Logistics Dispatch Queue**. Victorious MARKET does not manage random freelance riders; it integrates accredited **Third-Party Logistics (3PL) Companies** operating in Uyo.
 
 ### 4.1 The 3PL Partner Portal & The 8 Road Tabs
 
@@ -128,7 +130,7 @@ To eliminate inventory theft, "rider said / supplier said" arguments, and fake d
 
 ### 5.1 Stage 1: Plaza Shop Pickup Protocol (Per Stop)
 
-Suppose Rider Emmanuel (driving a Keke) is assigned Order #800, which has 2 items sourced from two different Plaza shops (Shop Alpha and Shop Beta):
+Suppose Rider Emmanuel (driving a Keke) is assigned Order #800, which has 2 items sourced from two different approved supplier locations within Uyo (Shop Alpha and Shop Beta):
 
 1. **Arrival at Shop Alpha:** Emmanuel arrives at Shop Alpha's table. The merchant hands over Item 1.
 2. **Shop Pickup Photo #1:** Emmanuel uses his app to snap a clear, live camera photo of Item 1 at the shop counter (gallery uploads are disabled; live camera capture is forced).
@@ -155,7 +157,7 @@ Victorious MARKET never relies on manual spreadsheet calculations to figure out 
 When a customer pays via Paystack at checkout, 100% of the funds sit in the Victorious MARKET settlement account. The moment the final Doorstep Delivery OTP is entered, the ledger splits the revenue into three distinct buckets:
 
 1. **Supplier Payable Ledger (Paid Per Item Fulfilled):**
-Each Plaza supplier who contributed an item to the order has their wallet/payout ledger credited with the exact locked `cost_price` snapshot recorded at the moment of allocation.
+Each approved Uyo supplier who contributed an item to the order has their wallet/payout ledger credited with the exact locked `cost_price` snapshot recorded at the moment of allocation.
 2. **3PL Logistics Payable Ledger (Paid Per Customer Order Trip):**
 The 3PL company is **never** paid per item or per shop stop; they are paid **one pre-negotiated flat corridor rate per completed customer order trip**, based on the road corridor and vehicle type:
 * *Standard Bike Order Trip:* Credited at the flat Bike rate for that specific road corridor.
@@ -167,7 +169,7 @@ $$\text{Net Profit} = \sum(\text{Retail Price} - \text{Supplier Wholesale Cost})
 
 ### 6.2 Settlement Cycles
 
-* **Plaza Suppliers:** Settled instantly or via daily automated bank transfers for all verified picked-up and delivered orders, keeping their cash turnover ultra-fast so they prioritize Victorious MARKET above walk-in credit buyers.
+* **approved Uyo suppliers:** Settled instantly or via daily automated bank transfers for all verified picked-up and delivered orders, keeping their cash turnover ultra-fast so they prioritize Victorious MARKET above walk-in credit buyers.
 * **3PL Logistics Companies:** Settled on a clean, automated weekly batch cycle (e.g., every Monday morning), accompanied by an itemized digital manifest showing every completed Order ID, Road Corridor, Vehicle Type, and OTP timestamp.
 
 ---
@@ -194,6 +196,6 @@ To ensure your AI coding partner builds this system without cutting corners, her
 
 3. **Role-Based Portals (UI/Frontend Views):**
 * **Customer Storefront:** Fast catalog, landmark-driven checkout, Paystack integration, and OTP tracking page.
-* **Plaza Supplier Portal:** Ultra-simple mobile-first screen to toggle stock, view assigned orders, read out Shop Pickup OTPs, or click "Unavailable" (triggering the 24h penalty).
+* **approved Uyo supplier Portal:** Ultra-simple mobile-first screen to toggle stock, view assigned orders, read out Shop Pickup OTPs, or click "Unavailable" (triggering the 24h penalty).
 * **3PL Logistics Portal & Rider View:** The 8 Road Corridor tabs, vehicle assignment validation, and camera/OTP capture screens.
 * **Victorious Admin Command Center:** Live order monitor, manual supplier override modal, stuck-order alerts, and weekly payout reconciliation dashboard.
