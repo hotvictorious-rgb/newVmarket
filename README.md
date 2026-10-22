@@ -163,7 +163,7 @@ The platform must enforce these controls server-side, not only in the UI:
 5. **Refund ceilings:** confirmed refunds plus active reservations must remain within the child-order and parent-capture limits. Validate currency, amount, original payment identity, and operation status before finalizing.
 6. **Balanced accounting:** financial journal events must balance. Reversals must reverse real prior postings; never fabricate a cash outflow for a transfer that never disbursed.
 7. **Evidence and audit:** preserve provider payload identity, attempt history, approval provenance, operational proof, state transitions, and reconciliation decisions.
-8. **Least privilege:** enforce vendor ownership, rider-to-vendor linkage, and minimum data projections on every route and response.
+8. **Least privilege:** enforce retailer/admin/logistics-company ownership, rider-to-logistics-company linkage for new work, legacy vendor ownership only for historical routes, and minimum data projections on every route and response.
 9. **Fail closed:** ambiguous payment, refund, transfer, custody, or ownership evidence goes to a visible review/reconciliation state, not an assumed success.
 10. **No false escrow claim:** internal holds, reservations and ledgers are accounting controls; do not describe them as a legally regulated escrow service unless that status has been independently established.
 
