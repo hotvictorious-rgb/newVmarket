@@ -38,7 +38,7 @@ return new class extends Migration
             Schema::create('retailer_supplier_payout_allocations', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('retailer_supplier_payout_request_id')
-                    ->constrained('retailer_supplier_payout_requests')->cascadeOnDelete();
+                    ->constrained('retailer_supplier_payout_requests', 'id', 'rspa_payout_req_foreign')->cascadeOnDelete();
                 $table->foreignId('supplier_vendor_id')->constrained('vendor_profiles')->restrictOnDelete();
                 $table->foreignId('order_id')->constrained('orders')->restrictOnDelete();
                 $table->foreignId('order_item_id')->constrained('order_items')->restrictOnDelete();

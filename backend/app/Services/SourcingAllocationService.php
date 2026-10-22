@@ -45,131 +45,247 @@ class SourcingAllocationService
      * @param string $fulfillmentType
      * @return array|null
      */
+    /**
+     * Resolves the optimal whole-order sourcing plan across all cart items.
+     *
+     * Selection Policy (The Binding Consolidated Sourcing Law):
+     * 1. Evaluates all eligible candidate offers for every cart item.
+     * 2. Forms feasible whole-order combinatorial plans capable of fulfilling the COMPLETE order.
+     * 3. Sorts feasible plans deterministically in this strict priority:
+     *    - FEWEST distinct supplier pickup locations (consolidate stops, eliminate dispatch sprawl).
+     *    - LOWEST total wholesale cost among plans with the same minimal pickup location count.
+     *    - HIGHEST supplier historical fulfilment reliability score.
+     *    - Deterministic tie-break by ID.
+     * 4. Returns null if any item cannot be fulfilled by an eligible Uyo supplier.
+     */
+    public function resolveOptimalWholeOrderPlan(
+        array $items,
+        string $fulfillmentType = 'doorstep_delivery',
+        ?int $preferredLgaId = null
+    ): ?array {
+        if (empty($items)) {
+            return null;
+        }
+
+        // 1. Gather all eligible candidate offers for each cart item
+        $candidatesPerItem = [];
+        foreach ($items as $idx => $cartItem) {
+            $product = $cartItem['product'] ?? null;
+            $quantity = max(1, (int) ($cartItem['quantity'] ?? 1));
+
+            if (!$product instanceof Product) {
+                return null;
+            }
+
+            if (!$product->is_approved || $product->listing_status !== 'listed' || !$product->is_in_stock || !$product->isFresh()) {
+                return null;
+            }
+
+            $rawOffers = $this->offerSelectionService
+                ? $this->offerSelectionService->getEligibleOffers($product, $fulfillmentType)
+                : collect();
+
+            $eligible = [];
+            foreach ($rawOffers as $offer) {
+                if ($this->isEligibleUyoShop($offer->shop)
+                    && (int) $offer->shop->vendor_id === (int) $offer->vendor_id
+                    && $offer->vendor
+                    && !$offer->vendor->trashed()
+                    && $offer->vendor->marketplace_status === 'active'
+                    && $offer->vendor->isKycVerified()
+                    && $offer->vendor->user
+                    && $offer->vendor->user->status === 'active'
+                    && !$offer->isPenaltyActive()
+                    && bccomp((string) $offer->wholesale_cost, '0.00', 2) > 0
+                ) {
+                    $eligible[] = [
+                        'supplier_offer_id' => $offer->id,
+                        'vendor_id' => (int) $offer->vendor_id,
+                        'shop_id' => (int) $offer->shop_id,
+                        'supplier_name' => $offer->vendor->business_name ?? ($offer->vendor->user->name ?? 'Supplier'),
+                        'shop_name' => $offer->shop->name ?? 'Shop Branch',
+                        'wholesale_cost' => bcadd((string) $offer->wholesale_cost, '0', 2),
+                        'currency' => 'NGN',
+                        'source_type' => 'supplier_offer',
+                        'offer_model' => $offer,
+                        'reliability' => $this->getSupplierReliabilityScore((int) $offer->vendor_id),
+                    ];
+                }
+            }
+
+            if (empty($eligible)) {
+                // Whole-order feasibility failure: one or more items cannot be sourced
+                return null;
+            }
+
+            $candidatesPerItem[$idx] = [
+                'product' => $product,
+                'quantity' => $quantity,
+                'offers' => $eligible,
+            ];
+        }
+
+        // 2. Generate and evaluate Cartesian feasible plans
+        $plans = $this->generateCombinatorialPlans($candidatesPerItem);
+        if (empty($plans)) {
+            return null;
+        }
+
+        // 3. Sort feasible plans according to the Consolidated Sourcing Law
+        usort($plans, function ($planA, $planB) use ($preferredLgaId) {
+            // Priority 1: Fewest distinct supplier pickup locations
+            $locCountA = count($planA['distinct_shops']);
+            $locCountB = count($planB['distinct_shops']);
+            if ($locCountA !== $locCountB) {
+                return $locCountA <=> $locCountB;
+            }
+
+            // Priority 2: Lowest total wholesale cost among equally consolidated plans
+            $costComp = bccomp($planA['total_wholesale_cost'], $planB['total_wholesale_cost'], 2);
+            if ($costComp !== 0) {
+                return $costComp;
+            }
+
+            // Priority 3: Reliability (higher average reliability wins)
+            if (abs($planA['avg_reliability'] - $planB['avg_reliability']) > 0.001) {
+                return $planB['avg_reliability'] <=> $planA['avg_reliability'];
+            }
+
+            // Priority 4: Preferred LGA match if specified
+            if ($preferredLgaId !== null) {
+                $aMatch = in_array($preferredLgaId, $planA['lga_ids'], true) ? 1 : 0;
+                $bMatch = in_array($preferredLgaId, $planB['lga_ids'], true) ? 1 : 0;
+                if ($aMatch !== $bMatch) {
+                    return $bMatch <=> $aMatch;
+                }
+            }
+
+            // Deterministic tie-breaker
+            return strcmp($planA['deterministic_key'], $planB['deterministic_key']);
+        });
+
+        $bestPlan = $plans[0];
+
+        return [
+            'locations_count' => count($bestPlan['distinct_shops']),
+            'distinct_shop_ids' => array_values($bestPlan['distinct_shops']),
+            'total_wholesale_cost' => $bestPlan['total_wholesale_cost'],
+            'avg_reliability' => $bestPlan['avg_reliability'],
+            'items' => $bestPlan['items'],
+            'primary_shop_id' => $bestPlan['items'][0]['resolved_offer']['shop_id'] ?? null,
+            'primary_vendor_id' => $bestPlan['items'][0]['resolved_offer']['vendor_id'] ?? null,
+        ];
+    }
+
+    /**
+     * Generates all feasible whole-order combinatorial plans.
+     */
+    private function generateCombinatorialPlans(array $candidatesPerItem): array
+    {
+        $itemKeys = array_keys($candidatesPerItem);
+        $totalItems = count($itemKeys);
+
+        $buildCombinations = function ($index) use (&$buildCombinations, $candidatesPerItem, $itemKeys, $totalItems) {
+            if ($index === $totalItems) {
+                return [[]];
+            }
+
+            $currentKey = $itemKeys[$index];
+            $itemData = $candidatesPerItem[$currentKey];
+            $product = $itemData['product'];
+            $quantity = $itemData['quantity'];
+            $offers = $itemData['offers'];
+
+            $subCombinations = $buildCombinations($index + 1);
+            $results = [];
+
+            foreach ($offers as $offer) {
+                $line = [
+                    'product' => $product,
+                    'quantity' => $quantity,
+                    'resolved_offer' => $offer,
+                ];
+                foreach ($subCombinations as $sub) {
+                    $results[] = array_merge([$line], $sub);
+                }
+            }
+
+            return $results;
+        };
+
+        $rawCombinations = $buildCombinations(0);
+        $plans = [];
+
+        foreach ($rawCombinations as $combo) {
+            $distinctShops = [];
+            $lgaIds = [];
+            $totalCost = '0.00';
+            $totalReliability = 0.0;
+            $offerIds = [];
+
+            foreach ($combo as $line) {
+                $offer = $line['resolved_offer'];
+                $distinctShops[$offer['shop_id']] = $offer['shop_id'];
+                if ($offer['offer_model'] && $offer['offer_model']->shop) {
+                    $lgaIds[] = $offer['offer_model']->shop->lga_id;
+                }
+                $itemCost = bcmul((string) $offer['wholesale_cost'], (string) $line['quantity'], 2);
+                $totalCost = bcadd($totalCost, $itemCost, 2);
+                $totalReliability += (float) ($offer['reliability'] ?? 100.0);
+                $offerIds[] = $offer['supplier_offer_id'];
+            }
+
+            sort($offerIds);
+            $plans[] = [
+                'items' => $combo,
+                'distinct_shops' => array_values($distinctShops),
+                'lga_ids' => array_unique($lgaIds),
+                'total_wholesale_cost' => $totalCost,
+                'avg_reliability' => count($combo) > 0 ? round($totalReliability / count($combo), 2) : 100.0,
+                'deterministic_key' => implode('-', $offerIds),
+            ];
+        }
+
+        return $plans;
+    }
+
+    /**
+     * Compute dynamic supplier historical fulfilment reliability score (0-100%).
+     */
+    public function getSupplierReliabilityScore(int $vendorId): float
+    {
+        $completed = OrderSupplierAssignment::where('supplier_vendor_id', $vendorId)
+            ->whereIn('status', ['collected', 'completed'])
+            ->count();
+        $breaches = OrderSupplierAssignment::where('supplier_vendor_id', $vendorId)
+            ->whereIn('status', ['supplier_rejected', 'timed_out'])
+            ->count();
+
+        $total = $completed + $breaches;
+        if ($total === 0) {
+            return 100.0; // Standard 100% baseline for verified suppliers
+        }
+
+        return round(($completed / $total) * 100, 2);
+    }
+
+    /**
+     * Resolves the cheapest eligible and available private supplier offer for a given product.
+     * Backwards-compatible single-item interface to whole-order consolidation logic.
+     */
     public function resolveCheapestOffer(
         Product $product,
         int $quantity = 1,
         ?int $preferredLgaId = null,
         string $fulfillmentType = 'doorstep_delivery'
     ): ?array {
-        if (!in_array($fulfillmentType, ['doorstep_delivery', 'in_shop_pickup'], true)) {
-            throw new InvalidArgumentException('Unsupported fulfillment type.');
-        }
+        $plan = $this->resolveOptimalWholeOrderPlan(
+            [['product' => $product, 'quantity' => $quantity]],
+            $fulfillmentType,
+            $preferredLgaId
+        );
 
-        // The fallback offer query below exists to apply the Uyo-origin constraint
-        // across all offers, not to bypass catalog eligibility. Never source an
-        // unapproved, unlisted, out-of-stock, or stale product.
-        if (!$product->is_approved
-            || $product->listing_status !== 'listed'
-            || !$product->is_in_stock
-            || !$product->isFresh()) {
-            return null;
-        }
-
-        // 1. If an unexpired confirmed offer exists via SupplierOfferSelectionService, prioritize it
-        if ($this->offerSelectionService) {
-            try {
-                $confirmedOffer = $this->offerSelectionService->selectLowestCost($product, $fulfillmentType);
-                if ($confirmedOffer
-                    && $this->isEligibleUyoShop($confirmedOffer->shop)
-                    && (int) $confirmedOffer->shop->vendor_id === (int) $confirmedOffer->vendor_id
-                    && $confirmedOffer->vendor
-                    && !$confirmedOffer->vendor->trashed()
-                    && $confirmedOffer->vendor->marketplace_status === 'active'
-                    && $confirmedOffer->vendor->isKycVerified()
-                    && $confirmedOffer->vendor->user
-                    && $confirmedOffer->vendor->user->status === 'active') {
-                    return [
-                        'supplier_offer_id' => $confirmedOffer->id,
-                        'vendor_id' => (int)$confirmedOffer->vendor_id,
-                        'shop_id' => (int)$confirmedOffer->shop_id,
-                        'supplier_name' => $confirmedOffer->vendor->business_name ?? ($confirmedOffer->vendor->user->name ?? 'Supplier'),
-                        'shop_name' => $confirmedOffer->shop->name ?? 'Shop Branch',
-                        'wholesale_cost' => bcadd((string)$confirmedOffer->wholesale_cost, '0', 2),
-                        'currency' => 'NGN',
-                        'source_type' => 'supplier_offer',
-                        'offer_model' => $confirmedOffer,
-                    ];
-                }
-            } catch (\Throwable) {
-                // Fall through to general active offer query
-            }
-        }
-
-        // 2. Query explicit private supplier offers
-        $now = Carbon::now();
-        $offers = SupplierOffer::where('product_id', $product->id)
-            ->where('is_available', true)
-            ->whereNotNull('availability_confirmed_at')
-            ->where('availability_confirmed_at', '<=', $now)
-            ->whereNotNull('availability_confirmed_by')
-            ->whereNotNull('availability_expires_at')
-            ->where('availability_expires_at', '>', $now)
-            ->with(['vendor.user', 'shop'])
-            ->get();
-
-        $eligibleOffers = $offers->filter(function (SupplierOffer $offer) {
-            // Must have active vendor profile and active user
-            if (!$offer->vendor || $offer->vendor->trashed() || $offer->vendor->marketplace_status !== 'active') {
-                return false;
-            }
-            if (!$offer->vendor->user || $offer->vendor->user->status !== 'active'
-                || !$offer->vendor->isKycVerified()) {
-                return false;
-            }
-            // Must have active shop
-            if (!$offer->shop || $offer->shop->trashed() || !$offer->shop->is_active
-                || (int) $offer->shop->vendor_id !== (int) $offer->vendor_id
-                || ($fulfillmentType === 'in_shop_pickup' && !$offer->shop->pickup_enabled)
-                || !$this->isEligibleUyoShop($offer->shop)) {
-                return false;
-            }
-            // Wholesale cost must be >= 0
-            if (bccomp((string)$offer->wholesale_cost, '0.00', 2) <= 0) {
-                return false;
-            }
-            return true;
-        });
-
-        if ($eligibleOffers->isNotEmpty()) {
-            // Sort deterministically: cheapest wholesale_cost first
-            $sorted = $eligibleOffers->sort(function (SupplierOffer $a, SupplierOffer $b) use ($preferredLgaId) {
-                $costComp = bccomp((string)$a->wholesale_cost, (string)$b->wholesale_cost, 2);
-                if ($costComp !== 0) {
-                    return $costComp;
-                }
-
-                // If cost is identical and preferred LGA is given, match LGA
-                if ($preferredLgaId !== null) {
-                    $aMatch = ($a->shop && (int)$a->shop->lga_id === (int)$preferredLgaId) ? 1 : 0;
-                    $bMatch = ($b->shop && (int)$b->shop->lga_id === (int)$preferredLgaId) ? 1 : 0;
-                    if ($aMatch !== $bMatch) {
-                        return $bMatch <=> $aMatch; // 1 before 0
-                    }
-                }
-
-                // Deterministic tie-breaker
-                return $a->id <=> $b->id;
-            });
-
-            $bestOffer = $sorted->first();
-
-            return [
-                'supplier_offer_id' => $bestOffer->id,
-                'vendor_id' => (int)$bestOffer->vendor_id,
-                'shop_id' => (int)$bestOffer->shop_id,
-                'supplier_name' => $bestOffer->vendor->business_name ?? ($bestOffer->vendor->user->name ?? 'Supplier'),
-                'shop_name' => $bestOffer->shop->name ?? 'Shop Branch',
-                'wholesale_cost' => bcadd((string)$bestOffer->wholesale_cost, '0', 2),
-                'currency' => 'NGN',
-                'source_type' => 'supplier_offer',
-                'offer_model' => $bestOffer,
-            ];
-        }
-
-        // New retailer sourcing must have an explicit, attributable, unexpired
-        // supplier offer. Catalog ownership/cost defaults are not stock evidence and
-        // must never silently create a supplier payable for a private supplier.
-        return null;
+        return $plan ? ($plan['items'][0]['resolved_offer'] ?? null) : null;
     }
 
     /**
@@ -209,7 +325,8 @@ class SourcingAllocationService
         Product $product,
         int $quantity,
         string $unitPrice,
-        string $lineTotal
+        string $lineTotal,
+        string $packageTier = 'bike'
     ): array {
         return [
             'product_id' => $product->id,
@@ -218,6 +335,7 @@ class SourcingAllocationService
             'unit_price' => $unitPrice,
             'cost_price' => $resolvedOffer['wholesale_cost'],
             'line_total' => $lineTotal,
+            'package_tier' => $packageTier,
             'supplier_offer_id' => $resolvedOffer['supplier_offer_id'],
             'supplier_vendor_id' => $resolvedOffer['vendor_id'],
             'supplier_shop_id' => $resolvedOffer['shop_id'],
@@ -295,14 +413,23 @@ class SourcingAllocationService
             $lockedAssignment = OrderSupplierAssignment::whereKey($assignment->id)->lockForUpdate()->firstOrFail();
             $order = Order::whereKey($lockedAssignment->order_id)->lockForUpdate()->firstOrFail();
 
-            if (!$order->retailer_model_order || $order->payment_status !== 'pending'
-                || $order->order_status !== 'pending' || $lockedAssignment->status !== 'awaiting_payment') {
-                throw new InvalidArgumentException('Supplier overrides are allowed only before payment while the order and assignment are still pending.');
+            $isPaidException = $order->retailer_model_order
+                && $order->payment_status === 'paid'
+                && in_array($order->sourcing_status, ['stockout_revalidation_hold', 'supplier_rejected', 'timed_out', 'counter_breach', 'awaiting_supplier_confirmation'], true)
+                && in_array($lockedAssignment->status, ['stockout_revalidation_hold', 'supplier_rejected', 'timed_out', 'counter_breach', 'awaiting_supplier_confirmation'], true);
+
+            $isPendingPrePayment = $order->retailer_model_order
+                && $order->payment_status === 'pending'
+                && $order->order_status === 'pending'
+                && $lockedAssignment->status === 'awaiting_payment';
+
+            if (!$isPaidException && !$isPendingPrePayment) {
+                throw new InvalidArgumentException('Supplier overrides are allowed only before payment or on paid orders under an authorized sourcing exception hold.');
             }
             if ((int) $lockedAssignment->supplier_vendor_id === $newVendorId) {
                 throw new InvalidArgumentException('Choose a different supplier account for an override.');
             }
-            if ($order->expires_at && Carbon::now()->gte($order->expires_at)) {
+            if ($isPendingPrePayment && $order->expires_at && Carbon::now()->gte($order->expires_at)) {
                 throw new InvalidArgumentException('This checkout reservation has expired; create a new checkout before changing suppliers.');
             }
 

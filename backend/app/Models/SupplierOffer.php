@@ -18,6 +18,7 @@ class SupplierOffer extends Model
         'availability_confirmed_at',
         'availability_confirmed_by',
         'availability_expires_at',
+        'unavailability_penalty_expires_at',
         'notes',
     ];
 
@@ -26,7 +27,17 @@ class SupplierOffer extends Model
         'is_available' => 'boolean',
         'availability_confirmed_at' => 'datetime',
         'availability_expires_at' => 'datetime',
+        'unavailability_penalty_expires_at' => 'datetime',
     ];
+
+    /**
+     * Check if this supplier offer is currently blocked by a 24-hour stockout penalty.
+     */
+    public function isPenaltyActive(): bool
+    {
+        return $this->unavailability_penalty_expires_at !== null
+            && $this->unavailability_penalty_expires_at->isFuture();
+    }
 
     public function availabilityConfirmer()
     {

@@ -34,6 +34,46 @@ class SupplierOfferSelectionService
 
         $now = Carbon::now();
 
+        return $this->eligibleOffersQuery($product, $fulfillmentType, $now)
+            ->orderBy('wholesale_cost')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->first();
+    }
+
+    /**
+     * Query all currently eligible offers for a product under the Consolidated Sourcing Law.
+     * Enforces active Uyo vendor, KYC, single active shop, unexpired availability,
+     * SKU 24-hour unavailability penalty cooldown expired, and fewer than 5 active pending handovers.
+     */
+    public function getEligibleOffers(Product $product, string $fulfillmentType): \Illuminate\Database\Eloquent\Collection
+    {
+        if (!in_array($fulfillmentType, ['doorstep_delivery', 'in_shop_pickup'], true)) {
+            throw new InvalidArgumentException('Unsupported fulfillment type.');
+        }
+
+        if (
+            !$product->is_approved
+            || $product->listing_status !== 'listed'
+            || !$product->is_in_stock
+            || !$product->isFresh()
+        ) {
+            return new \Illuminate\Database\Eloquent\Collection();
+        }
+
+        $now = Carbon::now();
+
+        return $this->eligibleOffersQuery($product, $fulfillmentType, $now)
+            ->orderBy('wholesale_cost')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Base query for eligible supplier offers.
+     */
+    public function eligibleOffersQuery(Product $product, string $fulfillmentType, Carbon $now): \Illuminate\Database\Eloquent\Builder
+    {
         return SupplierOffer::query()
             ->with(['vendor.user', 'shop'])
             ->where('product_id', $product->id)
@@ -44,11 +84,16 @@ class SupplierOfferSelectionService
             ->whereNotNull('availability_confirmed_by')
             ->whereNotNull('availability_expires_at')
             ->where('availability_expires_at', '>', $now)
+            ->where(function ($q) use ($now) {
+                $q->whereNull('unavailability_penalty_expires_at')
+                    ->orWhere('unavailability_penalty_expires_at', '<=', $now);
+            })
             ->whereHas('vendor', function ($query) {
                 $query->whereNull('vendor_profiles.deleted_at')
                     ->where('marketplace_status', 'active')
                     ->where('kyc_status', 'verified')
                     ->whereRaw('(select count(*) from shops as active_supplier_shops where active_supplier_shops.vendor_id = vendor_profiles.id and active_supplier_shops.deleted_at is null and active_supplier_shops.is_active = 1) = 1')
+                    ->whereRaw('(select count(*) from order_supplier_assignments as pending_assignments where pending_assignments.supplier_vendor_id = vendor_profiles.id and pending_assignments.status in (\'awaiting_supplier_confirmation\', \'supplier_confirmed\', \'ready_for_collection\')) < 5')
                     ->whereHas('user', function ($userQuery) {
                         $userQuery->where('status', 'active');
                     });
@@ -68,10 +113,6 @@ class SupplierOfferSelectionService
                             $state->whereRaw('LOWER(TRIM(states.name)) = ?', ['akwa ibom']);
                         });
                 });
-            })
-            ->orderBy('wholesale_cost')
-            ->orderBy('id')
-            ->lockForUpdate()
-            ->first();
+            });
     }
 }

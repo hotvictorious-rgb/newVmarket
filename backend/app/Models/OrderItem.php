@@ -35,6 +35,7 @@ class OrderItem extends Model
         'rejection_notes',
         'defect_photo_path',
         'item_delivery_status',
+        'package_tier',
     ];
 
     protected $casts = [
