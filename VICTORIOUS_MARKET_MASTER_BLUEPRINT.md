@@ -10,13 +10,14 @@ This document provides an exhaustive, end-to-end engineering and operational bre
 
 Most e-commerce ventures in Nigeria fail because they import foreign software assumptions: they rely on unmapped street coordinates, allow Cash-on-Delivery (COD) theft, permit riders to zig-zag aimlessly across cities, and assume open-market traders manage digital inventory like corporate warehouses.
 
-Victorious MARKET enforces a **fail-closed, hyper-localized architecture** built on five foundational laws:
+Victorious MARKET enforces a **fail-closed, hyper-localized architecture** built on six foundational laws:
 
 1. **The Approved Uyo Supplier Location Rule:** Every supplier must have one admin-approved shop or pickup location anywhere within the approved Uyo operating boundary. Plaza is one possible location, not a mandatory hub. The eight delivery corridors classify customer destinations and company tariffs; they do not require suppliers to be located in Plaza.
 2. **SKU-Level Deterministic Sourcing:** Approved suppliers at locations throughout Uyo may offer products. Stock availability, pricing and penalty rules operate at the individual product (`product_id` / supplier offer) level, never as a blanket shop-wide guess.
 3. **One Order, One Rider Accountability:** A customer order—even if it contains items sourced from multiple approved supplier locations—is owned from pickup to doorstep by **one single delivery person**. Splitting a single customer's order across multiple riders is prohibited.
 4. **The "Bulky Contagion" & Keke Isolation Law:** If a customer order contains even one bulky item (`is_bulky = true`), the *entire order* becomes classified as bulky, is forced onto a **Keke (Tricycle)**, and locks that Keke into a **100% exclusive trip** for that customer alone.
 5. **Evidence at physical handoffs:** Supplier pickup requires the prescribed one-time pickup OTP and mandatory pickup photo at each supplier location. Customer doorstep completion requires the customer OTP and mandatory geo-tagged doorstep photo. Other status and financial transitions must satisfy their own authorization, evidence, payment and idempotency rules; OTP/photo proof is not a universal prerequisite for unrelated status changes.
+6. **The Zero-Automated-Outflow Law:** Money NEVER leaves the platform or payment gateway automatically. Zero automated Paystack refunds; zero automated bank transfers. 100% of outflows require manual, persisted human Super Admin review, authorization, and manual dispatch initiation via the Admin Command Tower.
 
 ---
 
@@ -173,9 +174,13 @@ Customer payment is recorded only after trusted Paystack verification. A success
 2. **Logistics-company payable:** Calculate the payable from the assigned approved logistics company's admin-configured base payable for the applicable corridor, plus that company's configured bulky-unit surcharge multiplied by the applicable bulky-unit count. This is a separate tariff schedule from the customer delivery charge. Never derive it from a percentage of customer delivery revenue. Snapshot company, corridor, tariff/version, base, bulky quantity/rate and total at assignment; later tariff changes must not silently rewrite it. If payable exceeds delivery revenue, record the difference as a Victorious MARKET-funded subsidy/expense. The logistics company—not automatically the rider—is the payee.
 3. **Victorious MARKET margin and expenses:** Keep merchandise revenue, supplier purchase cost, customer delivery revenue, logistics cost, gateway fees, discounts, refunds, cashback liability, subsidy and operating expenses distinct. Merchandise spread is not net profit until attributable costs and liabilities are reconciled.
 
-### 6.2 Supplier and logistics payment controls
+### 6.2 Supplier and logistics payment controls & The Zero-Automated-Outflow Law
 
-A payable becoming eligible is not the same as a payment being approved, initiated, or confirmed. Every payout/payment operation must follow the applicable owner-approved authorization, limits, idempotency, reconciliation and audit requirements. Do not assume instant supplier transfers, daily automatic supplier settlement, weekly logistics-company transfer, or automatic wallet credit unless a separate current policy explicitly authorizes it. Provider timeout remains uncertain until reconciled; payout completion requires authoritative provider confirmation. Preserve legacy vendor earning/payout records as historical records and do not relabel them as supplier costs without an approved accounting migration.
+A payable becoming eligible is not the same as a payment being approved, initiated, or confirmed. Every payout/payment and refund operation must strictly enforce the **Zero-Automated-Outflow Law**:
+- **Zero Automated Outflow Mandate:** No cron, queue worker, or webhook may ever execute an automated Paystack refund or automated bank transfer. All money outflows require recorded human Super Admin review and manual dispatch.
+- **Settlement Dependency:** Supplier and fleet disbursements take place strictly Monday through Friday and only after Paystack collections have fully settled into the platform's corporate settlement account.
+- **Auditable Non-FIFO Controls:** Every payout request must adhere to the ₦5,000 minimum and ₦1,000,000 maximum per batch, selected through an authorized non-FIFO audit process.
+Provider timeout remains uncertain until reconciled; payout completion requires authoritative provider confirmation. Preserve legacy vendor earning/payout records as historical records and do not relabel them as supplier costs without an approved accounting migration.
 
 ## 7. Master Engineering Checklist (What You & The AI Will Build/Test)
 

@@ -58,19 +58,41 @@ The post-push scan found several AI-drift risks and corrected the active wording
 - The root blueprint now accepts either a trusted verified Paystack webhook or authoritative server-side transaction verification, rather than making one webhook event the only possible proof. Pickup OTP/photo evidence is described per supplier pickup stop, doorstep photo proof is explicitly geo-tagged, and supplier rejection opens an admin-managed exception rather than silent auto-reassignment.
 - The root blueprint's broad claim that no status can change without OTP/photo proof was narrowed to physical custody handoffs; unrelated state transitions must satisfy their own authorization/evidence rules. A separate KYC flag is not added as an undocumented supplier eligibility gate; any KYC requirement must be defined in the supplier approval policy.
 
-## Additional contradiction checks — documentation versus source artifacts (22 October 2026)
+## Finalized owner operational & financial decisions (Confirmed 22 October 2026)
 
-The main policy documents now agree on the owner-confirmed supplier payout limits and no-FIFO rule. Historical tracker/register entries that describe FIFO and the former ₦500,000 cap are valid only as evidence of the old vendor-earning model; the state-transition register now labels that section accordingly.
+The owner has reviewed and finalized the complete operational workflow, exception handling, and financial architecture:
 
-The following are **not resolved by documentation edits** and must remain visible as implementation/source-artifact risks:
+1. **The Zero-Automated-Outflow Law:**
+   - Under no circumstances may any background cron, queue job, webhook, or server script autonomously trigger a Paystack refund or bank transfer.
+   - 100% of outflows require manual, recorded human Super Admin review, authorization, and manual dispatch initiation via the Admin Command Tower.
+   - Out-of-stock items, customer cancellations, duplicate payments, and returns generate pending review requests in the Super Admin dashboard; money stays securely locked in Paystack escrow until explicit human admin execution.
+2. **Supplier Confirmation SLA & Operating Hours:**
+   - Confirmation timers run strictly during Uyo commercial hours: **8:00 AM to 4:00 PM**.
+   - Suppliers have exactly **60 minutes** of active operating hours to confirm readiness.
+   - If a supplier rejects or times out after 60 minutes, the item auto-fails over to the next eligible supplier with a 24-hour SKU penalty. If all suppliers are exhausted, it escalates to the Admin Command Tower.
+3. **The 24-Hour Customer Partial Fulfilment Protocol:**
+   - When an item cannot be sourced, support presents the partial delivery option.
+   - Support waits up to **24 hours** for customer response. If accepted, ready items are dispatched and unfulfilled items queued for manual admin refund. If rejected or 24 hours lapse, the order is cancelled and a full refund queued for manual admin authorization.
+4. **Doorstep Transit & Corridor Re-Attempt Policy:**
+   - Riders must place a mandatory phone call to the customer before departure along the road corridor.
+   - If the customer is unavailable at the door, the parcel returns to the accredited 3PL logistics company's secure holding custody.
+   - Up to **3 delivery attempts** are permitted, batched along that same corridor on future runs with **zero extra platform fee**.
+   - After 3 failed attempts, the order is cancelled, items return to suppliers, and admin arbitrates the account.
+5. **Corridor Reverse Logistics & Escrow Freeze:**
+   - Return pickups are collected by riders on their return corridor run (zero-waste logistics).
+   - The supplier payable is immediately frozen in escrow upon a dispute; Super Admin conducts binding arbitration.
+6. **Lean Supplier KYC Standards (Zero Public Sign-Ups):**
+   - Zero public signups: all accounts created/approved exclusively by Victorious MARKET Super Admin.
+   - **Mandatory:** Business Name, Physical Shop Address (within Uyo LGA), Nigerian Bank Account (NUBAN).
+   - **Optional:** NIN, CAC, Storefront Photo.
 
-- **Supplier payout implementation mismatch:** repository search results for `backend/app/Services/RetailerSupplierPayoutService.php`, vendor payout controllers/views and tests still show a ₦500,000 cap and FIFO/oldest-first allocation. This conflicts with the active retailer-model rule of a ₦1,000,000 maximum and prohibited FIFO. Code was not changed in this documentation-only pass. Treat runtime enforcement as non-conforming/unverified until the service, every request/approval/dispatch path, UI and tests are separately corrected and verified.
-- **KYC policy mismatch:** active business rules do not yet decide whether KYC is a mandatory component of supplier admin approval, but historical remediation/source artifacts describe a KYC hard gate for listing, sourcing and supplier payout. Do not treat that gate as owner-approved until the owner resolves the KYC standard; preserve this as a decision and implementation audit item.
-- **Published legal text embedded in source:** `backend/database/seeders/LegalDocumentSeeder.php` contains customer-facing content that still describes an active 24-hour in-shop reservation, and the About text still describes logistics-company payable as 90% of customer delivery fee / 10% VM margin. These conflict with the current support-managed pickup exception and independent company/corridor tariff policy. The seeder is source code, so it was not edited under the documentation-only constraint. It needs a separately authorized source change and a safe published-legal-document versioning/update plan; changing the seeder alone may not update already-published database records.
-- **Legal/document scope:** source-embedded Privacy, Terms, FAQ, cancellation and About content must be audited as a family, including what is actually published in the database. A correct README does not make stale customer-facing legal text safe.
+## Documents updated or given explicit policy precedence
 
-## Remaining work before implementation or release
+- `README.md`
+- `.ai/BUSINESS_RULES.md`
+- `PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md`
+- `VICTORIOUS_MARKET_MASTER_BLUEPRINT.md`
+- `docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md`
+- `docs/architecture/OPERATIONAL_WORKFLOW_AND_EXCEPTION_PLAYBOOK.md`
+- `docs/architecture/DOCUMENT_ALIGNMENT_REPORT_2026-10-22.md`
 
-1. **Owner decision still needed — supplier approval/KYC:** the active rule requires suppliers to be active and admin-approved, but it does not separately define a `kyc_verified` flag or KYC acceptance criteria. Decide whether KYC is a required component of admin approval and document the exact evidence/verification standard before implementing a separate hard gate.
-2. Audit code/schema/tests against active rules, especially admin-only supplier registration/activation/suspension, non-FIFO supplier-payable selection and ₦5,000/₦1,000,000 limits, listing/manual-delist lifecycle, verified-payment allocation gate, whole-order multi-supplier consolidation, flat customer delivery fee independent of corridor, configurable company/corridor logistics payable, bulky isolation, stop-level pickup evidence, support-managed pickup, supplier payable eligibility and admin-managed paid-order exceptions.
-3. Reconcile all historical audit claims with current `main`, CI and runtime before treating any fix as implemented or release-ready. This documentation alignment does not make the repository release-ready.

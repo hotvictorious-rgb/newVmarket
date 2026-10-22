@@ -9,6 +9,11 @@
 
 Victorious MARKET operates as a centralized, deterministic retail and logistics engine in Uyo, Akwa Ibom State. This Playbook documents the exact physical and digital SOP for every touchpoint: from supplier confirmation to doorstep handover, failed delivery recovery, dispute reverse-logistics, and financial settlement.
 
+### The Zero-Automated-Outflow Law
+Victorious MARKET enforces an unbreakable financial rule: **Money NEVER leaves the platform automatically.**
+* **Zero Automated Paystack Refunds:** No webhook, cron job, queue worker, timeout, or automated script may ever trigger a Paystack refund directly. Every single refund (whether due to out-of-stock items, customer cancellation, 24-hour partial fulfilment expiration, or duplicate charges) is queued as an immutable **Pending Refund Request** on the **Super Admin Command Tower**. It requires explicit review, authorization, and manual dispatch initiation by a human Super Administrator.
+* **Zero Automated Bank Transfers:** Supplier wholesale disbursements and logistics company settlements are never automated. Each payout is reviewed and manually authorized and dispatched by an authorized Super Admin strictly after customer funds have cleared and settled from Paystack into the platform's corporate account.
+
 ```
 [Customer Pays Upfront via Paystack]
                   │
@@ -44,8 +49,8 @@ Victorious MARKET operates as a centralized, deterministic retail and logistics 
   24h Claim Window        │
           │               Exhausted 3 attempts ──► Return to Supplier & Admin Cancel
   Mon–Fri Settlement      │
-  (Paystack Settled)      │
-                          ▼
+  (Paystack Settled,      │
+  Manual Admin Payout)    ▼
             [24h Defect Dispute Reported]
                           │
             Supplier Payable FROZEN in Escrow
@@ -71,9 +76,9 @@ Victorious MARKET operates as a centralized, deterministic retail and logistics 
 If all eligible suppliers in Uyo LGA are exhausted without fulfilling a line item:
 1. The order immediately transitions to the **Admin Operations Command Tower** (`paid_stock_unavailable` / exception hold).
 2. Victorious MARKET Customer Support immediately contacts the customer and presents the **Partial Fulfilment Option**:
-   - **Option A (Customer Accepts Partial):** The confirmed items are dispatched for doorstep delivery. The unfulfillable item's full retail selling price is immediately queued for a refund to the original Paystack payment channel.
-   - **Option B (Customer Rejects Partial):** The customer declines partial delivery. The entire order is cancelled, and 100% of customer funds (merchandise + delivery fee) are refunded via Paystack.
-3. **The 24-Hour Customer Response Window:** Support waits up to **24 hours** for the customer's decision. If the customer does not respond within 24 hours, the order automatically cancels and issues a full 100% Paystack refund.
+   - **Option A (Customer Accepts Partial):** The confirmed items are dispatched for doorstep delivery. The unfulfillable item's full retail selling price is immediately recorded as a **Pending Partial Refund Request** in the Admin Command Tower. An authorized Super Admin must review and manually trigger the Paystack refund.
+   - **Option B (Customer Rejects Partial):** The customer declines partial delivery. The entire order is cancelled, and a **Pending Full Refund Request** (merchandise + delivery fee) is queued for manual Super Admin review and manual gateway dispatch.
+3. **The 24-Hour Customer Response Window:** Support waits up to **24 hours** for the customer's decision. If the customer does not respond within 24 hours, the order automatically cancels, and the full refund is queued on the Admin Command Tower for manual Super Admin authorization. Funds remain locked in Paystack escrow until a human Super Admin approves and clicks to initiate the refund.
 
 ---
 
@@ -156,12 +161,13 @@ To balance robust fraud prevention with low friction for local Uyo merchants, th
 * Victorious MARKET operates a protected treasury model. No supplier payout is disbursed using uncollected speculative money.
 * Payouts to suppliers occur **only after customer payments have settled from Paystack into Victorious MARKET's corporate settlement account**.
 
-### 7.2 Monday-to-Friday Payout Schedule
+### 7.2 Monday-to-Friday Payout Schedule & Manual Initiation Mandate
 * Paystack operates on standard Nigerian banking business days (**T+1 settlement** for card and bank transfers, with weekend transactions settling on Monday).
-* Consequently, **Supplier Disbursements occur strictly Monday through Friday**:
+* Consequently, **Supplier and Fleet Disbursements occur strictly Monday through Friday**:
   - Orders verified over the weekend mature into eligibility once Paystack funds settle on Monday morning.
-  - No automated supplier bank transfers are dispatched on Saturdays or Sundays.
+  - **Zero Automated Outflow Mandate:** Under no circumstances are automated bank transfers dispatched by cron or background queue. Every single NUBAN disbursement to a supplier or logistics company must be manually authorized, reviewed, and initiated by an authorized Super Administrator.
 * **Payout Guardrails:**
   - Minimum payout request/batch: **₦5,000**.
   - Maximum single transaction: **₦1,000,000**.
   - Non-FIFO, auditable selection of verified order line-item wholesale payables.
+  - Full cryptographic and audit trail linking each transfer to settled Paystack receipts.
