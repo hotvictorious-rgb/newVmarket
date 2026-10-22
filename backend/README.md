@@ -19,6 +19,7 @@ The active business rules require:
 5. **Proof of custody:** Require a unique pickup OTP and mandatory photo proof at each supplier pickup location, plus customer delivery OTP and mandatory geo-tagged doorstep photo.
 6. **Separate delivery tariffs:** Customer delivery fee is one configured flat base fee per order, independent of corridor, plus the customer bulky surcharge per applicable physical unit. Logistics-company payable is the admin-configured company/corridor base payable plus that company's configured bulky-unit surcharge. Never derive company payable as 90% of the customer fee.
 7. **Admin-managed paid-order exceptions:** Allocation failure does not trigger an automatic refund by itself. Admin can reassign, source an acceptable alternative, hold, cancel or initiate a refund under policy. Refund completion must be confirmed by the payment provider and all actions audited.
-8. **Financial separation:** Keep supplier payables, logistics-company payables, customer receipts, refunds, delivery revenue/cost, cashback and reconciliation distinct.
+8. **Supplier-payable payment limits:** Each supplier payment request is at least ₦5,000 and at most ₦1,000,000 at a time. FIFO/oldest-first selection is prohibited; the selected eligible payables and approving admin must be auditable. Do not split an over-cap request automatically.
+9. **Financial separation:** Keep supplier payables, logistics-company payables, customer receipts, refunds, delivery revenue/cost, cashback and reconciliation distinct.
 
 These are business requirements, not a statement that the backend already enforces every requirement. Verify implementation through code review, database/migration checks, admin UI checks and passing tests before release.
