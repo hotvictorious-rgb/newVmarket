@@ -54,7 +54,7 @@ These are intended categories, not a guarantee that every item is currently list
 
 ## 4. Supplier approval and product sourcing
 
-Victorious MARKET does not need to own all inventory before listing products. It may work with approved suppliers who operate from one approved shop or pickup point at one admin-approved shop or pickup location anywhere within the approved Uyo operating boundary.
+Victorious MARKET does not need to own all inventory before listing products. It may work with approved suppliers, each operating from one admin-approved shop or pickup location anywhere within the approved Uyo operating boundary.
 
 The intended flow is:
 
@@ -73,10 +73,10 @@ Allocation should apply hard eligibility checks before comparing offers. Exclude
 
 Among feasible whole-order allocations, the intended priorities are:
 
-1. Prefer the plan that fulfils the greatest number of order lines using the fewest supplier shops, reducing pickup complexity.
-2. Among similarly consolidated feasible plans, prefer the lowest total wholesale cost.
-3. Use fulfilment success or availability reliability as a subsequent consideration.
-4. Apply deterministic tie-breakers so equivalent inputs produce a predictable outcome.
+1. Compare only feasible plans that can fulfil the whole customer order; first prefer the plan using the fewest distinct supplier pickup locations.
+2. Among plans using the same minimum number of locations, prefer the lowest total wholesale cost.
+3. Among equally consolidated and equally priced plans, prefer better documented fulfilment reliability.
+4. Apply a stable deterministic tie-break so equivalent inputs produce a predictable outcome.
 
 An administrator may override an assignment only with the required permission, a recorded reason and an immutable audit trail. An override must not bypass payment verification or other non-overridable safety conditions.
 
