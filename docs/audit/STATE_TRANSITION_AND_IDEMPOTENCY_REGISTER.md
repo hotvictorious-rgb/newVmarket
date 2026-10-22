@@ -1,3 +1,5 @@
+> **Active policy notice (22 October 2026):** Use [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md) as the current authority. Earlier implementation findings, status descriptions and proposed workflows in this audit document are historical evidence, not current policy. In particular, supplier locations may be anywhere within the approved Uyo boundary; pre-payment checks are non-binding; verified Paystack payment precedes binding supplier allocation; pickup is support-managed exception only; and logistics-company payables use configured company/corridor rates plus bulky surcharges, never the retired 90% formula. This update changes documentation only.
+
 # Victorious MARKET — State Transition and Idempotency Register
 
 > **Authoritative Master Blueprint:** This register operates under the governing rules of [VICTORIOUS_MARKET_MASTER_BLUEPRINT.md](../../VICTORIOUS_MARKET_MASTER_BLUEPRINT.md). Dual verification handovers, idempotent webhook gates, state transition locks, and immutable financial journals must strictly adhere to the Master Blueprint.
