@@ -58,6 +58,7 @@ $\text{Pre-discount Checkout Subtotal} = \sum(\text{Item Retail Price} \times \t
 
 Apply only the discounts and cashback redemption permitted by the active checkout policy when deriving the final amount due.
 
+* **Mandatory Customer Account Registration:** Guests are permitted to browse the storefront catalog, view products, calculate delivery estimates, and add items to cart freely. However, **guest checkout is strictly prohibited**. Before proceeding to checkout or initializing Paystack payment, the customer must register or log in. This ensures that every order is bound to an authenticated customer record with a verified phone number for the rider's mandatory pre-departure call and secure Delivery OTP dispatch.
 * **No Cash-on-Delivery (COD):** The customer must complete payment via **Paystack** (Card or standard bank transfer, the approved launch rails).
 * **Payment Verification Gate:** A browser redirect, screenshot or payment initialization does not trigger fulfilment. A trusted, correctly verified Paystack webhook or authoritative server-side transaction verification may establish payment only after checking reference, order binding, exact amount, NGN currency and idempotency. Only then may the order enter its verified-paid processing state and proceed to supplier allocation.
 

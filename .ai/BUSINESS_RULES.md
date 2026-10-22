@@ -15,7 +15,8 @@
 - Admin may manually delist. Stock changes cannot automatically relist a manually delisted item until an authorized admin permits it.
 - Preserve stock events, offer history, delisting reason, prior orders and financial records.
 
-## Paystack gate and allocation
+## Customer registration, Paystack gate and allocation
+- **Mandatory Customer Account Registration:** Guests can freely browse the catalog and add items to cart, but guest checkout is strictly disabled. Customers must register or log in before initiating checkout or Paystack payment.
 - Delivery payment is upfront through Paystack. Verify trusted webhook/signature, transaction reference, amount, currency and idempotency.
 - Before verified payment, stock/catalogue/cart checks are non-binding. No supplier lock, order-specific reservation, binding notification or supplier payable may be created.
 - After verified payment, revalidate current stock and supplier eligibility before allocation.

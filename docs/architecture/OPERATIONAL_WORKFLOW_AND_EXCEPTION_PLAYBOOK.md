@@ -14,7 +14,14 @@ Victorious MARKET enforces an unbreakable financial rule: **Money NEVER leaves t
 * **Zero Automated Paystack Refunds:** No webhook, cron job, queue worker, timeout, or automated script may ever trigger a Paystack refund directly. Every single refund (whether due to out-of-stock items, customer cancellation, 24-hour partial fulfilment expiration, or duplicate charges) is queued as an immutable **Pending Refund Request** on the **Super Admin Command Tower**. It requires explicit review, authorization, and manual dispatch initiation by a human Super Administrator.
 * **Zero Automated Bank Transfers:** Supplier wholesale disbursements and logistics company settlements are never automated. Each payout is reviewed and manually authorized and dispatched by an authorized Super Admin strictly after customer funds have cleared and settled from Paystack into the platform's corporate account.
 
+### Mandatory Customer Registration Gate (No Guest Checkout)
+* **Open Guest Browsing:** Visitors may browse the catalog, view real-time Uyo product prices, and populate their shopping cart freely without signing in.
+* **Registration Enforced at Checkout:** Guest checkout is strictly disabled. Before initiating checkout, selecting a landmark corridor, or submitting Paystack payment, the customer must register or log in. This binds the order to an authenticated customer identity, verified phone number for rider calls, and a secure delivery OTP channel.
+
 ```
+[Customer Browses Freely (Guest) ──► Must Register/Login to Checkout]
+                  │
+                  ▼
 [Customer Pays Upfront via Paystack]
                   │
                   ▼

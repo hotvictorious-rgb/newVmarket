@@ -20,7 +20,8 @@ This document records the owner's active decisions. If older documents conflict 
 - Keep the product record, offer history, stock events and delisting reason for audit; hiding a listing should not erase historical orders or financial records.
 - Listing-time availability checks must not bind a supplier to a customer's future order.
 
-## 3. Payment before supplier allocation
+## 3. Customer registration gate & Payment before supplier allocation
+- **Mandatory Customer Account Registration:** Guests are permitted to browse the storefront catalog, view products, calculate delivery estimates, and add items to cart freely. However, **guest checkout is strictly disabled**. Before proceeding to checkout or initializing Paystack payment, the customer must register or log in. This ensures that every order is bound to an authenticated customer record with a verified phone number for the rider's mandatory pre-departure call and secure Delivery OTP dispatch.
 - The customer must complete upfront Paystack payment. A browser redirect, screenshot, payment initialization or unverified event is not proof of payment.
 - The backend independently verifies payment (including the trusted webhook/signature, amount, currency, reference and idempotency) before any order-specific supplier allocation, assignment or reservation begins.
 - Before payment, the system may display catalogue availability, quote a price, validate a cart or perform a non-binding feasibility check. It must not lock suppliers, reserve their stock, notify them of a binding order, or create supplier payables.
