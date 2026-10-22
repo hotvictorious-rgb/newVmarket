@@ -18,7 +18,7 @@ Victorious MARKET operates as a Direct-to-Consumer (1P) Retailer with Just-in-Ti
 2. **Wholesale Sourcing:** Suppliers provide their physical products, inventory availability, physical shop locations in Uyo, and wholesale cost prices (e.g., ₦10,000).
 3. **Retail Markup:** Victorious MARKET sets the customer-facing retail selling price by adding its own profit margin (e.g., wholesale ₦10,000 + VM markup ₦4,000 = retail selling price ₦14,000).
 4. **Public Product Listing:** VM creates and controls one canonical public listing. Customers only see Victorious MARKET as the seller at the retail price. Supplier identity and wholesale cost remain strictly private to VM.
-5. **Multiple Supplier Offers:** When multiple suppliers offer the same product, VM links each supplier's offer (wholesale price, shop location in Uyo, stock availability) to the canonical listing. VM selects the supplier offer that is **available and cheapest** when fulfilling orders.
+5. **Whole-order source planning:** Evaluate eligible offers at SKU level, then choose a feasible whole-order allocation. Prefer the feasible plan that sources the greatest number of order lines from the fewest supplier shops; among comparably consolidated feasible plans, minimize total wholesale cost, then use measured fulfillment success and a stable deterministic tie-breaker. Do not blindly select the cheapest offer per SKU if that makes the whole order infeasible or creates avoidable extra stops.
 
 A supplier submission is a wholesale proposal, never an auto-published marketplace listing. VM reviews, approves, and owns all customer-facing titles, descriptions, categories, images, and prices.
 
@@ -51,11 +51,11 @@ If coverage is unconfirmed, checkout blocks delivery. VM controls delivery cover
 **Binding rule: Doorstep delivery requires pre-payment online via Paystack. Strictly NO Cash on Delivery (COD).**
 
 1. **Customer Checkout (Pay First):** The customer pays the full retail price plus delivery fee online via Paystack (card or bank transfer).
-2. **Automated Sourcing Assignment:** Upon verified Paystack payment, the system automatically assigns the order to the supplier that has the item available (`is_in_stock = true`) and cheapest (`cost_price` lowest).
+2. **Automated Sourcing Assignment:** After verified Paystack payment, run the SKU-level eligibility checks and select the best feasible whole-order sourcing plan using consolidation priority, total wholesale cost and supplier fulfillment reliability. Snapshot the selected source and wholesale cost per item. Do not allocate new online orders merely on order creation or an unverified payment event.
 3. **Admin Sourcing Override:** Admin can review the auto-assigned supplier and override the assignment by selecting a different accredited supplier if necessary.
 4. **Supplier Availability Confirmation:** The assigned supplier receives the sourcing notification in their portal and physically inspects their inventory to **confirm product availability**.
 5. **Admin Logistics Company Assignment:** Once the supplier confirms availability, the order transitions to Admin dispatch. Admin assigns the order to an accredited **Logistics Company** (onboarded strictly by Admin; zero public self-registration).
-6. **Fleet Pickup & Handover:** The Logistics Company assigns one of its active fleet riders. The rider visits the supplier's shop, picks up the package, and transports it to the customer.
+6. **Fleet Pickup & Handover:** One customer order is assigned to one active rider from one approved logistics company, even when several Plaza shops supply its items. Every supplier stop requires its own single-use shop-specific pickup OTP and mandatory pickup photo. If any order item is bulky, the entire order requires a keke and that trip is exclusive to that customer; only all-small-item orders may be batched on a bike with compatible orders for the same Uyo road corridor.
 7. **Customer Delivery Handshake:** Doorstep delivery completion strictly requires the server-verified customer OTP (`delivery_otp`) plus a mandatory doorstep delivery photo proof.
 8. **Supplier Settlement:** Only after verified customer delivery is the supplier's wholesale payable unlocked and eligible for settlement.
 
@@ -136,7 +136,7 @@ Do not merge/deploy this policy change as if it were an implemented code migrati
 
 ## Authoritative launch boundary — Uyo-only central retailer
 
-The current owner-approved launch policy is **Uyo LGA, Akwa Ibom State only** for sourcing and doorstep delivery. It supersedes older planning passages that mention other LGAs, interstate/park dispatch, public supplier storefronts, or customer-facing pickup as live launch features. Historical routes may remain auditable but cannot authorize new orders; admin controls and all fulfillment entry points must fail closed outside Uyo. Suppliers remain private sourcing partners, customers transact with Victorious MARKET only, delivery is priced once per order plus bulky-unit surcharges, and the logistics-company payable is determined by its corridor-specific tariff (paid to the company, not its rider). Supplier payables require verified delivery and reconciliation. Preserve 5% eligible merchandise cashback and its existing caps, maturation, reversals and refund rules. See [the authoritative policy](docs/architecture/VM_UYO_ONLY_RETAILER_POLICY.md).
+The current owner-approved launch policy is **Uyo LGA, Akwa Ibom State only** for new sourcing, customer destinations, active corridors and logistics dispatch. Historical routes do not authorize new out-of-Uyo orders. Support-managed pickup is an exception only, not a public checkout/reservation feature. Suppliers remain private sourcing partners; customers transact with Victorious MARKET only. Delivery is priced once per order plus customer bulky-unit surcharges, while the logistics-company payable comes from that company's corridor tariff plus its configured bulky-unit surcharge. Supplier payables require verified completion and reconciliation. Preserve the active 5% eligible merchandise cashback and its existing caps, maturity, reversals and refund rules. See [the authoritative Uyo-only policy](docs/architecture/VM_UYO_ONLY_RETAILER_POLICY.md) and [end-to-end operating blueprint](docs/architecture/VM_END_TO_END_OPERATING_BLUEPRINT.md).
 
  
 ---
