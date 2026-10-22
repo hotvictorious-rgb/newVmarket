@@ -22,6 +22,10 @@ class ReconcileFinancialGatewayCommand extends Command
         $staleWebhooks = $engine->reconcileStaleWebhooks();
         $this->info("Stale Webhook Events Reset for Retry: {$staleWebhooks}");
 
+        // 3. Reconcile Customer Refunds (P1 Durability Remediation)
+        $refundsReconciled = $engine->reconcileRefunds();
+        $this->info("Customer Refunds Reconciled: {$refundsReconciled}");
+
         $this->info('Financial Gateway Reconciliation Complete.');
         return 0;
     }

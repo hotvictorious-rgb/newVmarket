@@ -443,6 +443,65 @@ class FinancialReconciliationEngine
                 continue;
             }
 
+            // For charge.success events with a valid order reference, attempt authoritative
+            // live server-side verification directly against Paystack before failing.
+            if ($event->event_type === 'charge.success' && !empty($event->payload)) {
+                $payloadData = json_decode((string) $event->payload, true);
+                $reference = (string) ($payloadData['data']['reference'] ?? '');
+
+                if (!empty($reference)) {
+                    $order = \App\Models\Order::where('payment_reference', $reference)->first();
+                    if ($order) {
+                        if ($order->payment_status === 'paid') {
+                            // Order was already settled (e.g. by browser callback or another worker).
+                            // Finalize this stale webhook claim to completed.
+                            $claim->update([
+                                'status' => 'completed',
+                                'processed_at' => Carbon::now(),
+                                'error_reason' => null,
+                            ]);
+                            $replayed++;
+                            continue;
+                        }
+
+                        // Re-establish payment truth directly with Paystack
+                        try {
+                            $verification = $this->paystackService->verifyTransaction($reference, $order);
+                            if (!empty($verification['success']) && strtolower((string) ($verification['data']['status'] ?? '')) === 'success') {
+                                $newAttempt = $event->attempts + 1;
+                                $claimed = $claim->update([
+                                    'attempts' => $newAttempt,
+                                    'updated_at' => Carbon::now(),
+                                ]);
+
+                                if ($claimed) {
+                                    $settlement = $this->settlementService->settlePaystackOrder(
+                                        $order,
+                                        $verification['data'],
+                                        null,
+                                        'reconciler_stale_recovery',
+                                        (int) $event->id,
+                                        $newAttempt
+                                    );
+
+                                    if (!empty($settlement['success'])) {
+                                        \App\Models\ProcessedWebhookEvent::where('id', $event->id)->update([
+                                            'status' => 'completed',
+                                            'processed_at' => Carbon::now(),
+                                            'error_reason' => null,
+                                        ]);
+                                        $replayed++;
+                                        continue;
+                                    }
+                                }
+                            }
+                        } catch (\Throwable $e) {
+                            \Illuminate\Support\Facades\Log::warning("Live Paystack verification during stale webhook recovery failed for ref {$reference}: " . $e->getMessage());
+                        }
+                    }
+                }
+            }
+
             $updated = $claim->update([
                 'status' => 'failed',
                 'attempts' => $event->attempts + 1,
