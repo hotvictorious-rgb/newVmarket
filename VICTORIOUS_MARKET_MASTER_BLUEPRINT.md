@@ -16,7 +16,7 @@ Victorious MARKET enforces a **fail-closed, hyper-localized architecture** built
 2. **SKU-Level Deterministic Sourcing:** Approved suppliers at locations throughout Uyo may offer products. Stock availability, pricing and penalty rules operate at the individual product (`product_id` / supplier offer) level, never as a blanket shop-wide guess.
 3. **One Order, One Rider Accountability:** A customer order—even if it contains items sourced from multiple approved supplier locations—is owned from pickup to doorstep by **one single delivery person**. Splitting a single customer's order across multiple riders is prohibited.
 4. **The "Bulky Contagion" & Keke Isolation Law:** If a customer order contains even one bulky item (`is_bulky = true`), the *entire order* becomes classified as bulky, is forced onto a **Keke (Tricycle)**, and locks that Keke into a **100% exclusive trip** for that customer alone.
-5. **Cryptographic Proof Over Trust:** No item moves, no status changes, and no naira is paid out without dual verification (**OTP + Photo Proof**) at every single handoff point.
+5. **Evidence at physical handoffs:** Supplier pickup requires the prescribed one-time pickup OTP and mandatory pickup photo at each supplier location. Customer doorstep completion requires the customer OTP and mandatory geo-tagged doorstep photo. Other status and financial transitions must satisfy their own authorization, evidence, payment and idempotency rules; OTP/photo proof is not a universal prerequisite for unrelated status changes.
 
 ---
 
@@ -53,10 +53,12 @@ Once the landmark is selected, the checkout engine inspects the cart and calcula
 
 $\text{Customer Delivery Fee} = \text{Configured Flat Customer Base Fee Per Order} + (\text{Customer Bulky Surcharge} \times \text{Applicable Bulky Units})$
 
-$$\text{Grand Total} = \sum(\text{Item Retail Price} \times \text{Quantity}) + \text{Delivery Fee}$$
+$\text{Pre-discount Checkout Subtotal} = \sum(\text{Item Retail Price} \times \text{Quantity}) + \text{Customer Delivery Fee}$
+
+Apply only the discounts and cashback redemption permitted by the active checkout policy when deriving the final amount due.
 
 * **No Cash-on-Delivery (COD):** The customer must complete payment via **Paystack** (Card or standard bank transfer, the approved launch rails).
-* **Webhook Verification Gate:** Completing payment on the browser does *not* trigger fulfillment. The order remains in `payment_pending` state until the backend server receives, validates, and verifies the cryptographic HMAC signature of the **Paystack `charge.success` webhook**. Only then does the order transition to `paid_processing` and wake up the Automated Sourcing Engine.
+* **Payment Verification Gate:** A browser redirect, screenshot or payment initialization does not trigger fulfilment. A trusted, correctly verified Paystack webhook or authoritative server-side transaction verification may establish payment only after checking reference, order binding, exact amount, NGN currency and idempotency. Only then may the order enter its verified-paid processing state and proceed to supplier allocation.
 
 ---
 
@@ -68,7 +70,7 @@ Only after the backend independently verifies successful Paystack payment does i
 
 For every distinct `product_id` in the customer's order, the engine queries the `supplier_offers` table and immediately disqualifies any supplier offer that fails any of these four mandatory checks:
 
-1. **KYC & Geographic Boundary Check:** The supplier account must have `kyc_verified = true`, `status = 'active'`, and an admin-approved operating/pickup location within Uyo.
+1. **KYC & Geographic Boundary Check:** The supplier account must be active and admin-approved, with an admin-approved operating/pickup location within Uyo. Any separate KYC check must be part of the documented supplier-approval policy; do not invent an additional undocumented eligibility gate.
 2. **Explicit Product Stock Flag:** The supplier's specific offer for *that exact product* must be marked `stock_status = 'in_stock'` and have sufficient quantity.
 3. **The 24-Hour Unavailability Penalty (Self-Healing Shield):** The engine queries the `supplier_unavailability_logs` table. Did this supplier mark *this specific product* as "Out of Stock / Unavailable" within the last 24 hours? If **Yes**, the offer is **discarded**. This stops the system from repeatedly sending orders to a merchant who ran out of stock earlier that day.
 4. **Pending Handover Overload Cap (Bottleneck Prevention):** The engine counts how many active order items are currently sitting with this supplier in `assigned` or `confirmed` status waiting for rider pickup. If the supplier has **5 or more pending handovers** ($\text{Pending Handovers} \ge 5$), they are **temporarily discarded**. This ensures orders never pile up in a slow or crowded shop.
@@ -86,11 +88,11 @@ If two suppliers offer the exact same wholesale price and consolidation coverage
 
 ### 3.3 Step 3: Supplier Notification, Rejection Loop, & Admin Override
 
-1. **Automated Assignment:** The winning supplier(s) receive an instant dashboard alert and SMS/WhatsApp ping showing the item(s) ordered and the locked wholesale payout price.
+1. **Automated Assignment:** The winning supplier(s) receive an instant dashboard alert and SMS/WhatsApp ping showing the item(s) ordered and the locked agreed wholesale purchase-cost snapshot.
 2. **If Chosen Supplier Marks "Unavailable":** If a supplier realizes their physical shelf is actually empty and clicks *"Mark Unavailable"*:
 * The system immediately logs a **24-hour penalty** against that supplier for that specific SKU.
 * The system decreases their historical **Availability Rate** score.
-* The system triggers a high-priority alert on the **Admin Operations Dashboard** (and can either auto-reallocate to the second-best surviving supplier or hold for Admin intervention).
+* The system opens a visible admin-managed exception, alerts the admin and records the SKU-specific 24-hour cooldown. An authorized admin decides whether to reassign to another eligible supplier, hold fulfilment or initiate another permitted resolution; do not silently change the binding supplier assignment.
 3. **The Manual Admin Override:** At any point before rider pickup, an authorized Victorious MARKET Admin can click **"Override Supplier"**, select any eligible verified supplier from an approved Uyo shop/pickup location, and input a **Mandatory Audit Reason Code** (e.g., *"Original supplier shop shutter closed temporarily"*). The system preserves the original assignment and financial snapshots, records the admin's actor/reason/time, and appends balanced compensating entries for any changed supplier payable or cost delta. Do not overwrite the original financial fact or silently mutate a posted journal.
 
 ---
@@ -133,16 +135,16 @@ To eliminate inventory theft, "rider said / supplier said" arguments, and fake d
 Suppose Rider Emmanuel (driving a Keke) is assigned Order #800, which has 2 items sourced from two different approved supplier locations (Shop Alpha and Shop Beta):
 
 1. **Arrival at Shop Alpha:** Emmanuel arrives at Shop Alpha's table. The merchant hands over Item 1.
-2. **Shop Pickup Photo #1:** Emmanuel uses his app to snap a clear, live camera photo of Item 1 at the shop counter (gallery uploads are disabled; live camera capture is forced).
-3. **Shop Pickup OTP #1:** Shop Alpha reads out the unique 4-digit **Shop Pickup OTP** displayed on their supplier dashboard for that specific order item. Emmanuel enters it into his app.
+2. **Supplier Pickup Photo:** Emmanuel captures the mandatory pickup photo for the handover at Shop Alpha, showing the items/manifest being collected at that location. The photo is linked to the pickup stop; gallery uploads are disabled if the approved implementation supports enforced live capture.
+3. **Supplier Pickup OTP:** Shop Alpha reads out the unique one-time **Supplier Pickup OTP** for this order's pickup stop. Emmanuel enters it into his app. The OTP verifies the handover at this supplier location, not each item as a separate pickup event.
 * *System Action:* The database timestamps the handoff, shifts liability for Item 1 from Shop Alpha to the 3PL company, and marks Shop Alpha's portion as `picked_up`.
-4. **Arrival at Shop Beta:** Emmanuel travels to the second approved supplier pickup location, loads the bulky item into his Keke, snaps **Shop Pickup Photo #2**, and enters **Shop Pickup OTP #2**.
+4. **Arrival at Shop Beta:** Emmanuel travels to the second approved supplier pickup location, loads the items for that stop, captures the mandatory pickup photo for the handover and enters that stop's one-time **Supplier Pickup OTP**.
 5. **Transit Unlock:** Only after *every single shop stop* for Order #800 has a verified Pickup OTP and Photo does the order status transition to `in_transit_on_corridor`, unlocking the customer's doorstep details.
 
 ### 5.2 Stage 2: Doorstep Handover Protocol
 
 1. **Arrival on Corridor:** Emmanuel drives straight down the designated road corridor (e.g., *Oron Road*) to the customer's address.
-2. **Doorstep Photo Proof:** Before handing over the final package, Emmanuel snaps a mandatory, timestamped **Doorstep Delivery Photo** showing the intact items at the customer's premises.
+2. **Doorstep Photo Proof:** Before final handover, Emmanuel captures a mandatory, timestamped, geo-tagged **Doorstep Delivery Photo** showing the delivered items at the customer's premises.
 3. **Customer Delivery OTP:** The customer recites their secret **Delivery OTP** (sent to their phone via SMS/email when the order went into transit). Emmanuel inputs the OTP into his app.
 4. **Instant Cryptographic Closure:** The backend verifies the OTP match, validates the uploaded photo proof, and transitions the order status to `completed_verified`.
 
