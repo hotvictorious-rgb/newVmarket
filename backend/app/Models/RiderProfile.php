@@ -100,10 +100,45 @@ class RiderProfile extends Model
      */
     public function isEligibleForCentralOrder(Order $order): bool
     {
-        return $this->isEligibleForCentralDelivery()
-            && (int) $order->rider_id === (int) $this->id
-            && !empty($order->logistics_company_id)
-            && (int) $order->logistics_company_id === (int) $this->logistics_company_id;
+        if (!$this->isEligibleForCentralDelivery()
+            || (int) $order->rider_id !== (int) $this->id
+            || empty($order->logistics_company_id)
+            || (int) $order->logistics_company_id !== (int) $this->logistics_company_id) {
+            return false;
+        }
+
+        $vehicle = strtolower(trim((string) $this->vehicle_type));
+        $requiresKeke = $order->requiresKekeForDelivery();
+        if ($requiresKeke && !in_array($vehicle, ['keke', 'tricycle'], true)) {
+            return false;
+        }
+        if (!$requiresKeke && !in_array($vehicle, ['bike', 'motorbike', 'motorcycle'], true)) {
+            return false;
+        }
+
+        // Dispatch lock: an exclusive Keke order cannot share a rider's active
+        // trip with any other customer order. Bikes may only batch standard
+        // orders whose snapshotted destination corridor is exactly the same.
+        $activeStatuses = ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup', 'out_for_delivery'];
+        $otherActiveOrders = $this->assignedOrders()
+            ->where('orders.id', '<>', $order->id)
+            ->where('orders.fulfillment_type', 'doorstep_delivery')
+            ->whereIn('orders.order_status', $activeStatuses)
+            ->get();
+
+        if ($requiresKeke) {
+            return $otherActiveOrders->isEmpty();
+        }
+
+        foreach ($otherActiveOrders as $otherOrder) {
+            if ($otherOrder->requiresKekeForDelivery()
+                || empty($order->delivery_corridor_id)
+                || (int) $otherOrder->delivery_corridor_id !== (int) $order->delivery_corridor_id) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function isFleetRider(): bool
