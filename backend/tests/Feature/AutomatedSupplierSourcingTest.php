@@ -633,4 +633,165 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertNotEmpty($orderItem->supplier_name_snapshot);
         $this->assertNotEmpty($orderItem->supplier_shop_name_snapshot);
     }
+    public function test_recently_unavailable_offer_is_excluded_even_after_admin_reconfirmation(): void
+    {
+        [$userA, $vendorA, $shopA] = $this->createSupplier('Cooldown Supplier', 'cooldown@supplier.ng', '08077770001');
+        [$userB, $vendorB, $shopB] = $this->createSupplier('Available Supplier', 'available@supplier.ng', '08077770002');
+
+        $product = Product::create([
+            'vendor_id' => $vendorA->id,
+            'shop_id' => $shopA->id,
+            'category_id' => $this->category->id,
+            'name' => 'Cooldown Test Product',
+            'slug' => 'cooldown-test-product',
+            'unit_price' => '5000.00',
+            'cost_price' => '3000.00',
+            'is_in_stock' => true,
+            'inventory_quantity' => 10,
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+
+        $offerA = $this->createConfirmedOffer([
+            'product_id' => $product->id,
+            'vendor_id' => $vendorA->id,
+            'shop_id' => $shopA->id,
+            'wholesale_cost' => '1000.00',
+        ]);
+        $this->createConfirmedOffer([
+            'product_id' => $product->id,
+            'vendor_id' => $vendorB->id,
+            'shop_id' => $shopB->id,
+            'wholesale_cost' => '1200.00',
+        ]);
+
+        $availability = app(\\App\\Services\\SupplierOfferAvailabilityService::class);
+        $availability->markUnavailable($offerA->id, $userA, 'Supplier checked the shelf and confirmed no stock.');
+        $availability->confirm($offerA->id, $this->adminUser, Carbon::now()->addHours(48), 'Admin reconfirmed, but cooldown must still apply.');
+
+        $selected = $this->sourcingService->resolveCheapestOffer($product->fresh(), 1);
+        $this->assertNotNull($selected);
+        $this->assertSame($vendorB->id, $selected['vendor_id']);
+        $this->assertSame($shopB->id, $selected['shop_id']);
+    }
+
+    public function test_consolidated_sourcing_prefers_one_shop_covering_more_lines_before_line_level_cheapest_cost(): void
+    {
+        [$userA, $vendorA, $shopA] = $this->createSupplier('Consolidation Supplier', 'consolidation@supplier.ng', '08077770003');
+        [$userB, $vendorB, $shopB] = $this->createSupplier('Cheapest Single Line Supplier', 'singleline@supplier.ng', '08077770004');
+
+        $productA = Product::create([
+            'vendor_id' => $vendorA->id,
+            'shop_id' => $shopA->id,
+            'category_id' => $this->category->id,
+            'name' => 'Consolidation Product A',
+            'slug' => 'consolidation-product-a',
+            'unit_price' => '5000.00',
+            'cost_price' => '2000.00',
+            'is_in_stock' => true,
+            'inventory_quantity' => 10,
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+        $productB = Product::create([
+            'vendor_id' => $vendorA->id,
+            'shop_id' => $shopA->id,
+            'category_id' => $this->category->id,
+            'name' => 'Consolidation Product B',
+            'slug' => 'consolidation-product-b',
+            'unit_price' => '7000.00',
+            'cost_price' => '2500.00',
+            'is_in_stock' => true,
+            'inventory_quantity' => 10,
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+
+        $this->createConfirmedOffer([
+            'product_id' => $productA->id,
+            'vendor_id' => $vendorA->id,
+            'shop_id' => $shopA->id,
+            'wholesale_cost' => '1500.00',
+        ]);
+        $this->createConfirmedOffer([
+            'product_id' => $productB->id,
+            'vendor_id' => $vendorA->id,
+            'shop_id' => $shopA->id,
+            'wholesale_cost' => '2000.00',
+        ]);
+        $this->createConfirmedOffer([
+            'product_id' => $productA->id,
+            'vendor_id' => $vendorB->id,
+            'shop_id' => $shopB->id,
+            'wholesale_cost' => '900.00',
+        ]);
+
+        $plan = $this->sourcingService->resolveConsolidatedOffers([
+            ['product' => $productA, 'quantity' => 1],
+            ['product' => $productB, 'quantity' => 1],
+        ], 'doorstep_delivery');
+
+        $this->assertNotNull($plan);
+        $this->assertSame($shopA->id, $plan[0]['shop_id']);
+        $this->assertSame($shopA->id, $plan[1]['shop_id']);
+        $this->assertSame('1500.00', $plan[0]['wholesale_cost']);
+        $this->assertSame('2000.00', $plan[1]['wholesale_cost']);
+    }
+
+    public function test_supplier_with_five_paid_active_handover_assignments_is_excluded_from_new_sourcing(): void
+    {
+        [$userA, $vendorA, $shopA] = $this->createSupplier('Overloaded Supplier', 'overloaded@supplier.ng', '08077770005');
+        [$userB, $vendorB, $shopB] = $this->createSupplier('Capacity Supplier', 'capacity@supplier.ng', '08077770006');
+
+        $product = Product::create([
+            'vendor_id' => $vendorA->id,
+            'shop_id' => $shopA->id,
+            'category_id' => $this->category->id,
+            'name' => 'Capacity Gate Product',
+            'slug' => 'capacity-gate-product',
+            'unit_price' => '5000.00',
+            'cost_price' => '2000.00',
+            'is_in_stock' => true,
+            'inventory_quantity' => 10,
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+
+        $this->createConfirmedOffer([
+            'product_id' => $product->id,
+            'vendor_id' => $vendorA->id,
+            'shop_id' => $shopA->id,
+            'wholesale_cost' => '900.00',
+        ]);
+        $this->createConfirmedOffer([
+            'product_id' => $product->id,
+            'vendor_id' => $vendorB->id,
+            'shop_id' => $shopB->id,
+            'wholesale_cost' => '1200.00',
+        ]);
+
+        for ($i = 0; $i < 5; $i++) {
+            $order = $this->createOrderFixture([
+                'order_status' => 'confirmed',
+                'payment_status' => 'paid',
+                'retailer_model_order' => true,
+            ]);
+            OrderSupplierAssignment::create([
+                'order_id' => $order->id,
+                'supplier_vendor_id' => $vendorA->id,
+                'supplier_shop_id' => $shopA->id,
+                'status' => 'awaiting_supplier_confirmation',
+                'assigned_at' => Carbon::now(),
+            ]);
+        }
+
+        $selected = $this->sourcingService->resolveCheapestOffer($product->fresh(), 1);
+        $this->assertNotNull($selected);
+        $this->assertSame($vendorB->id, $selected['vendor_id']);
+    }
+
 }
