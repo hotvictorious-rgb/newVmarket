@@ -57,72 +57,42 @@ class PortalController extends Controller
     {
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
 
-        $activeCity = $request->input('city') ?? session('customer_city', 'Uyo');
-        $activeState = $request->input('state') ?? session('customer_state', 'Akwa Ibom');
+        // Permanent launch boundary: the storefront is one central retailer for Uyo only.
+        // Query parameters/session state cannot switch customers to another LGA or expose
+        // supplier shops as public storefronts.
+        $activeCity = 'Uyo';
+        $activeState = 'Akwa Ibom';
+        $selectedLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->firstOrFail();
+        $selectedLgaId = (int) $selectedLga->id;
+        $activeLanes = collect();
+        $eligibleOriginLgaIds = collect([$selectedLgaId]);
+        $shops = collect();
+        $lgas = collect([$selectedLga]);
+        $localProductsCount = Product::marketplaceEligible()
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->where('name', 'Uyo')->whereHas('state', function ($stateQuery) {
+                    $stateQuery->where('name', 'Akwa Ibom');
+                });
+            })->count();
+        $corridorProductsCount = 0;
+        $scope = 'all';
+        $hasLocalShops = false;
+        $coverageStatus = 'uyo_local_delivery';
+        $statusBadge = 'Uyo Local Delivery';
+        $previewStatus = 'Delivery within Uyo, Akwa Ibom State';
+        $isFallbackCatalog = false;
+        $isCorridorCatalog = false;
 
-        // Central Retailer Fulfilment Origin: Uyo LGA, Akwa Ibom State
-        $uyoLga = Lga::where('name', 'Uyo')->first();
-        $uyoLgaId = $uyoLga ? $uyoLga->id : 69;
-
-        // Lookup Customer Delivery Destination LGA
-        $selectedLga = Lga::where('name', $activeCity)->first();
-        if (!$selectedLga && $request->filled('lga_id')) {
-            $candidate = Lga::find($request->input('lga_id'));
-            if ($candidate && (empty($activeCity) || strcasecmp($candidate->name, $activeCity) === 0)) {
-                $selectedLga = $candidate;
-            }
-        }
-        if (!$selectedLga) {
-            $selectedLga = $uyoLga;
-        }
-
-        $selectedLgaId = $selectedLga ? $selectedLga->id : $uyoLgaId;
-        $activeCity = $selectedLga ? $selectedLga->name : 'Uyo';
-        $activeState = $selectedLga?->state?->name ?? $activeState;
-
-        // Route & Serviceability Resolution from Uyo Sourcing Hub
-        $isUyoDestination = ($selectedLgaId === $uyoLgaId || strcasecmp($activeCity, 'Uyo') === 0);
-
-        $activeLane = DeliveryLane::where('origin_lga_id', $uyoLgaId)
-            ->where('destination_lga_id', $selectedLgaId)
-            ->where('is_active', true)
-            ->first();
-
-        // Active delivery routes from Uyo
-        $activeLanes = DeliveryLane::where('origin_lga_id', $uyoLgaId)
-            ->where('is_active', true)
-            ->with(['destinationLga', 'assignedLogisticsCompany'])
-            ->get();
-
-        if ($isUyoDestination) {
-            $isDeliverable = true;
-            $coverageStatus = 'local_delivery';
-            $statusBadge = '⚡ Door-to-Door Delivery in Uyo';
-            $previewStatus = 'Door-to-door delivery within Uyo';
-            $deliveryFee = $activeLane ? $activeLane->base_fee : '500.00';
-            $deliveryTimeText = 'Same-day delivery';
-        } elseif ($activeLane) {
-            $isDeliverable = true;
-            $minHours = $activeLane->estimated_delivery_hours_min ?? 12;
-            $maxHours = $activeLane->estimated_delivery_hours_max ?? 24;
-            $coverageStatus = 'regional_delivery';
-            $statusBadge = "🚚 Regional Delivery Active ({$minHours}–{$maxHours} hrs)";
-            $previewStatus = "Logistics-managed regional delivery from Uyo ({$minHours}–{$maxHours} hrs)";
-            $deliveryFee = $activeLane->base_fee;
-            $deliveryTimeText = "{$minHours}–{$maxHours} hours";
-        } else {
-            $isDeliverable = false;
-            $coverageStatus = 'unserviced';
-            $statusBadge = '⏳ Route Opening Soon';
-            $previewStatus = "Delivery route to {$activeCity} being scheduled. Central fulfillment from Uyo.";
-            $deliveryFee = '0.00';
-            $deliveryTimeText = 'Route opening soon';
-        }
-
-        // Query eligible products across the central retailer catalog
+        // Public catalogue contains only products with an eligible sourcing offer from Uyo.
         $query = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug']);
-
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->where('name', 'Uyo')->whereHas('state', function ($stateQuery) {
+                    $stateQuery->where('name', 'Akwa Ibom');
+                });
+            })
+            ->with(['category:id,name,slug']);
         if ($request->filled('category')) {
             $query->whereHas('category', function ($q) use ($request) {
                 $q->where('slug', $request->input('category'));
@@ -146,28 +116,17 @@ class PortalController extends Controller
         }
 
         $products = $query->latest()->take(12)->get();
-        $isFallbackCatalog = false;
-        $isCorridorCatalog = !$isUyoDestination && $isDeliverable;
-        $scope = $request->input('scope', 'all');
-        $localProductsCount = $products->count();
-        $corridorProductsCount = $products->count();
-
         $latestProducts = Product::marketplaceEligible()
+            ->whereHas('supplierOffers.shop.lga', function ($q) {
+                $q->where('name', 'Uyo')->whereHas('state', function ($stateQuery) {
+                    $stateQuery->where('name', 'Akwa Ibom');
+                });
+            })
             ->with(['category:id,name,slug'])
             ->latest()
             ->take(6)
             ->get();
 
-        // Sourcing hubs based in Uyo
-        $shops = Shop::with('lga:id,name')
-            ->where('is_active', true)
-            ->where('lga_id', $uyoLgaId)
-            ->take(6)
-            ->get();
-
-        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
-
-        // Return dynamic JSON for AJAX requests
         if ($request->ajax() || $request->wantsJson() || $request->has('ajax')) {
             $productsHtml = view('storefront.partials._products_grid', compact(
                 'products', 'activeCity', 'selectedLgaId', 'activeLanes',
@@ -184,11 +143,10 @@ class PortalController extends Controller
                 'coverage_status' => $coverageStatus,
                 'status_badge' => $statusBadge,
                 'preview_status' => $previewStatus,
-                'is_deliverable' => $isDeliverable,
                 'products_count' => $products->count(),
                 'local_products_count' => $localProductsCount,
-                'corridor_products_count' => $corridorProductsCount,
-                'scope' => $scope,
+                'corridor_products_count' => 0,
+                'scope' => 'all',
                 'products_html' => $productsHtml,
                 'shops_html' => $shopsHtml,
                 'is_fallback' => false,
@@ -234,54 +192,42 @@ class PortalController extends Controller
             $lga = Lga::where('name', 'like', "%{$city}%")->first();
         }
 
-        $lgaId = $lga ? $lga->id : 69;
-        $cityName = $lga ? $lga->name : $city;
-        $stateName = $lga?->state?->name ?? $state;
+        // Owner policy: customers may select only Uyo LGA, Akwa Ibom State.
+        $isUyo = $lga
+            && strtolower(trim((string) ($lga->name ?? ''))) === 'uyo'
+            && strtolower(trim((string) ($lga->state->name ?? ''))) === 'akwa ibom';
+        if (!$isUyo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Victorious MARKET currently sources and delivers only within Uyo LGA, Akwa Ibom State.',
+                'code' => 'OUTSIDE_UYO_LAUNCH_BOUNDARY',
+            ], 422);
+        }
+
+        $lgaId = (int) $lga->id;
+        $cityName = $lga->name;
+        $state = 'Akwa Ibom';
 
         session([
             'customer_city' => $cityName,
-            'customer_state' => $stateName,
+            'customer_state' => $state,
             'customer_lga_id' => $lgaId,
         ]);
 
-        // Central Fulfilment Sourcing Origin: Uyo
-        $uyoLga = Lga::where('name', 'Uyo')->first();
-        $uyoLgaId = $uyoLga ? $uyoLga->id : 69;
-        $isUyo = ($lgaId === $uyoLgaId || strcasecmp($cityName, 'Uyo') === 0);
-
-        $lane = DeliveryLane::where('origin_lga_id', $uyoLgaId)
-            ->where('destination_lga_id', $lgaId)
-            ->where('is_active', true)
-            ->first();
-
-        if ($isUyo) {
-            $coverageStatus = 'local_delivery';
-            $statusBadge = '⚡ Door-to-Door Delivery in Uyo';
-            $previewStatus = 'Door-to-door delivery within Uyo';
-            $isDeliverable = true;
-        } elseif ($lane) {
-            $minHours = $lane->estimated_delivery_hours_min ?? 12;
-            $maxHours = $lane->estimated_delivery_hours_max ?? 24;
-            $coverageStatus = 'regional_delivery';
-            $statusBadge = "🚚 Regional Delivery Active ({$minHours}–{$maxHours} hrs)";
-            $previewStatus = "Logistics-managed delivery from Uyo ({$minHours}–{$maxHours} hrs)";
-            $isDeliverable = true;
-        } else {
-            $coverageStatus = 'unserviced';
-            $statusBadge = '⏳ Route Opening Soon';
-            $previewStatus = "Delivery route to {$cityName} being scheduled. Central fulfillment from Uyo.";
-            $isDeliverable = false;
-        }
+        // The location selector never promises pickup or out-of-Uyo dispatch.
+        // Product availability and the final customer fee are confirmed at checkout.
+        $coverageStatus = 'uyo_only';
+        $statusBadge = 'Uyo Local Delivery';
+        $previewStatus = 'Delivery is limited to Uyo. Eligible supplier availability and a recognised delivery corridor are confirmed at checkout.';
 
         return response()->json([
             'success' => true,
             'city' => $cityName,
-            'state' => $stateName,
+            'state' => $state,
             'lga_id' => $lgaId,
             'coverage_status' => $coverageStatus,
             'status_badge' => $statusBadge,
             'preview_status' => $previewStatus,
-            'is_deliverable' => $isDeliverable,
         ]);
     }
 

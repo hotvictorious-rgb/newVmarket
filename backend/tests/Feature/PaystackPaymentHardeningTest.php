@@ -5,12 +5,16 @@ namespace Tests\Feature;
 use App\Models\AdminAuditLog;
 use App\Models\CustomerCashbackLedger;
 use App\Models\Lga;
+use App\Models\DeliveryCorridor;
+use App\Models\LogisticsCompanyCorridorRate;
+use App\Models\LogisticsCompanyProfile;
 use App\Models\Order;
 use App\Models\ProcessedWebhookEvent;
 use App\Models\FinancialJournalEntry;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Shop;
+use App\Models\SupplierOffer;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Services\OrderSettlementService;
@@ -61,9 +65,74 @@ class PaystackPaymentHardeningTest extends TestCase
         $this->vendorProfile = $this->vendorUser->vendorProfile ?? VendorProfile::first();
         $this->shop = Shop::where('vendor_id', $this->vendorProfile->id)->first();
         $this->product = Product::where('shop_id', $this->shop->id)->first();
+        $uyoLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->firstOrFail();
+        $this->shop->update(['lga_id' => $uyoLga->id, 'state_id' => $uyoLga->state_id, 'is_active' => true]);
+        Shop::where('vendor_id', $this->vendorProfile->id)->where('id', '!=', $this->shop->id)->update(['is_active' => false]);
+        $this->vendorProfile->update(['marketplace_status' => 'active', 'kyc_status' => 'verified']);
         if ($this->product) {
-            $this->product->update(['cost_price' => '5000.00']);
+            $this->product->update([
+                'cost_price' => '5000.00',
+                'is_approved' => true,
+                'listing_status' => 'listed',
+                'listing_confirmed_at' => now(),
+                'is_in_stock' => true,
+                'inventory_quantity' => 20,
+            ]);
+            SupplierOffer::updateOrCreate([
+                'product_id' => $this->product->id,
+                'vendor_id' => $this->vendorProfile->id,
+                'shop_id' => $this->shop->id,
+            ], [
+                'wholesale_cost' => '5000.00',
+                'is_available' => true,
+                'availability_confirmed_at' => now(),
+                'availability_confirmed_by' => $this->vendorUser->id,
+                'availability_expires_at' => now()->addDay(),
+            ]);
         }
+
+        $uyoLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->firstOrFail();
+        $company = LogisticsCompanyProfile::where('status', 'active')
+            ->where('lga_id', $uyoLga->id)
+            ->whereHas('user', fn ($user) => $user->where('status', 'active'))
+            ->first();
+        if (!$company) {
+            $fleetUser = User::create([
+                'name' => 'Paystack Test Fleet',
+                'email' => 'paystack-test-fleet@example.test',
+                'password' => bcrypt('test-password'),
+                'user_type' => 'logistics_company',
+                'status' => 'active',
+            ]);
+            $company = LogisticsCompanyProfile::create([
+                'user_id' => $fleetUser->id,
+                'company_name' => 'Paystack Test Fleet Ltd',
+                'lga_id' => $uyoLga->id,
+                'wallet_balance' => '0.00',
+                'status' => 'active',
+            ]);
+        }
+        $corridor = DeliveryCorridor::create([
+            'code' => 'paystack-test-uyo',
+            'name' => 'Paystack Test Uyo Corridor',
+            'lga_id' => $uyoLga->id,
+            'landmark_aliases' => ['Uyo'],
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+        LogisticsCompanyCorridorRate::create([
+            'logistics_company_id' => $company->id,
+            'delivery_corridor_id' => $corridor->id,
+            'base_payable' => '900.00',
+            'bulky_surcharge_per_unit' => '200.00',
+            'tariff_version' => 1,
+            'is_active' => true,
+        ]);
     }
 
     /**

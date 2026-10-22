@@ -6,8 +6,11 @@ use App\Models\AdminAuditLog;
 use App\Models\Category;
 use App\Models\CustomerAddress;
 use App\Models\CustomerCashbackLedger;
+use App\Models\CustomerWalletCredit;
 use App\Models\CashbackRecoveryLedger;
 use App\Models\DeliveryLane;
+use App\Models\DeliveryCorridor;
+use App\Models\LogisticsCompanyCorridorRate;
 use App\Models\DisputeAndReturn;
 use App\Models\FinancialJournalEntry;
 use App\Models\Lga;
@@ -53,7 +56,9 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
 
         $this->seed();
 
-        $this->uyoLga = Lga::where('name', 'Uyo')->firstOrFail();
+        $this->uyoLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->firstOrFail();
         $this->ikotEkpeneLga = Lga::where('name', 'Ikot Ekpene')->first() ?? Lga::where('id', '!=', $this->uyoLga->id)->firstOrFail();
 
         // Super Admin
@@ -161,8 +166,11 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         ]);
 
         // Logistics Company & Rider
-        $this->fleetCompany = LogisticsCompanyProfile::first();
-        if (!$this->fleetCompany) {
+        $fleetCompany = LogisticsCompanyProfile::where('status', 'active')
+            ->where('lga_id', $this->uyoLga->id)
+            ->whereHas('user', fn ($user) => $user->where('status', 'active'))
+            ->first();
+        if (!$fleetCompany) {
             $logisticsUser = User::create([
                 'name' => 'Swift Courier Ltd',
                 'email' => 'swift@fleet.com',
@@ -172,14 +180,32 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
                 'status' => 'active',
             ]);
 
-            $this->fleetCompany = LogisticsCompanyProfile::create([
+            $fleetCompany = LogisticsCompanyProfile::create([
                 'user_id' => $logisticsUser->id,
                 'company_name' => 'Swift Fleet Logistics',
-                'hq_lga_id' => $this->uyoLga->id,
+                'lga_id' => $this->uyoLga->id,
                 'wallet_balance' => '0.00',
                 'status' => 'active',
             ]);
         }
+        $this->fleetCompany = $fleetCompany;
+        $checkoutCorridor = DeliveryCorridor::create([
+            'code' => 'financial-test-uyo-corridor',
+            'name' => 'Financial Test Uyo Corridor',
+            'lga_id' => $this->uyoLga->id,
+            'landmark_aliases' => ['Uyo', 'Oron Road'],
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+        LogisticsCompanyCorridorRate::create([
+            'logistics_company_id' => $this->fleetCompany->id,
+            'delivery_corridor_id' => $checkoutCorridor->id,
+            'base_payable' => '900.00',
+            'bulky_surcharge_per_unit' => '200.00',
+            'tariff_version' => 1,
+            'is_active' => true,
+        ]);
 
         $existingVendorRider = RiderProfile::where('vendor_id', $this->vendorProfile->id)->first();
         if ($existingVendorRider) {
@@ -743,6 +769,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $payload = [
             'shop_id' => $this->shop->id,
             'fulfillment_type' => 'doorstep_delivery',
+            'customer_address_id' => CustomerAddress::where('user_id', $this->customerUser->id)->where('lga_id', $this->uyoLga->id)->value('id'),
             'destination_lga_id' => $this->shop->lga_id,
             'items' => [
                 [
@@ -769,6 +796,24 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
 
     public function test_retailer_order_uses_item_cost_cashback_and_audited_logistics_company_override(): void
     {
+        $corridor = DeliveryCorridor::create([
+            'code' => 'test-uyo-retailer-' . strtolower(substr(sha1((string) microtime(true)), 0, 8)),
+            'name' => 'Test Uyo Retailer Corridor',
+            'lga_id' => $this->uyoLga->id,
+            'landmark_aliases' => ['Oron Road'],
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+        LogisticsCompanyCorridorRate::create([
+            'logistics_company_id' => $this->fleetCompany->id,
+            'delivery_corridor_id' => $corridor->id,
+            'base_payable' => '900.00',
+            'bulky_surcharge_per_unit' => '200.00',
+            'tariff_version' => 1,
+            'is_active' => true,
+        ]);
+
         $reference = Order::generateUniquePaymentReference();
         $order = Order::create([
             'order_number' => 'VM-RETAILER-FIN-' . strtoupper(substr(sha1($reference), 0, 8)),
@@ -777,6 +822,8 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'shop_id' => $this->shop->id,
             'origin_lga_id' => $this->shop->lga_id,
             'destination_lga_id' => $this->uyoLga->id,
+            'delivery_corridor_id' => $corridor->id,
+            'delivery_bulky_quantity_snapshot' => 0,
             'fulfillment_type' => 'doorstep_delivery',
             'retailer_model_order' => true,
             'order_status' => 'pending',
@@ -792,10 +839,10 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'vendor_net_90' => '0.00',
             'customer_cashback_5' => '500.00',
             'platform_margin_5' => '0.00',
-            'logistics_fee_retained' => '900.00',
-            'platform_delivery_fee' => '100.00',
-            'logistics_company_payable_default_amount' => '900.00',
-            'logistics_company_payable_amount' => '900.00',
+            'logistics_fee_retained' => '0.00',
+            'platform_delivery_fee' => '0.00',
+            'logistics_company_payable_default_amount' => null,
+            'logistics_company_payable_amount' => null,
             'sourcing_status' => 'supplier_confirmed',
             'vendor_settlement_status' => 'held',
             'verification_code' => '123456',
@@ -834,12 +881,9 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'entry_type' => 'credit',
             'amount' => '6000.00',
         ]);
-        $this->assertDatabaseHas('financial_journal_entries', [
+        $this->assertDatabaseMissing('financial_journal_entries', [
             'order_id' => $order->id,
             'account_name' => 'logistics_company_payable',
-            'entry_type' => 'credit',
-            'amount' => '900.00',
-            'beneficiary_id' => null,
         ]);
         $this->assertDatabaseMissing('financial_journal_entries', [
             'order_id' => $order->id,
@@ -851,6 +895,16 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $assigned = $service->assignCompany($order->fresh(), $this->superAdmin, $this->fleetCompany->id, 'Uyo route covered by approved fleet');
         $this->assertTrue($assigned['success']);
         $this->assertSame($this->fleetCompany->id, (int) $assigned['order']->logistics_company_id);
+        $this->assertSame('900.00', $assigned['order']->logistics_company_payable_amount);
+        $this->assertSame('900.00', $assigned['order']->logistics_company_base_payable_snapshot);
+        $this->assertSame('200.00', $assigned['order']->logistics_company_bulky_surcharge_per_unit_snapshot);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'logistics_company_payable',
+            'entry_type' => 'credit',
+            'amount' => '900.00',
+            'beneficiary_id' => $this->fleetCompany->id,
+        ]);
 
         // Commercial rate may still be adjusted after rider assignment, but not after
         // the rider confirms physical parcel custody.
@@ -939,10 +993,10 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'vendor_net_90' => '0.00',
             'customer_cashback_5' => '500.00',
             'platform_margin_5' => '0.00',
-            'logistics_fee_retained' => '900.00',
-            'platform_delivery_fee' => '100.00',
-            'logistics_company_payable_default_amount' => '900.00',
-            'logistics_company_payable_amount' => '900.00',
+            'logistics_fee_retained' => '0.00',
+            'platform_delivery_fee' => '0.00',
+            'logistics_company_payable_default_amount' => null,
+            'logistics_company_payable_amount' => null,
             'received_at' => $now->copy()->subHours(50),
             'refund_window_expires_at' => $now->copy()->subHours(1),
             'vendor_settlement_status' => 'held',
@@ -999,5 +1053,37 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_wallet_credit_is_rejected_at_launch_without_financial_side_effects(): void
+    {
+        $this->product->update(['unit_price' => '10000.00', 'package_tier' => 'standard']);
+        CustomerWalletCredit::create([
+            'customer_id' => $this->customerUser->id,
+            'amount' => '10500.00',
+            'credit_type' => 'refund',
+            'status' => 'available',
+            'notes' => 'Wallet-credit launch guard regression test',
+        ]);
+
+        $ordersBefore = Order::where('customer_id', $this->customerUser->id)->count();
+        $result = app(\App\Services\CheckoutExecutionService::class)->execute($this->customerUser, [
+            'fulfillment_type' => 'doorstep_delivery',
+            'destination_lga_id' => $this->uyoLga->id,
+            'items' => [[
+                'product_id' => $this->product->id,
+                'quantity' => 1,
+                'unit_price' => '10000.00',
+            ]],
+            'redeem_wallet_credit' => true,
+        ]);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame(422, $result['status_code']);
+        $this->assertSame($ordersBefore, Order::where('customer_id', $this->customerUser->id)->count());
+        $this->assertDatabaseMissing('financial_journal_entries', [
+            'transaction_reference' => 'WALLET-CREDIT-LAUNCH-BLOCKED',
+        ]);
+    }
+
 
 }

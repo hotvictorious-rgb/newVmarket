@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AdminAuditLog;
 use App\Models\FinancialJournalEntry;
 use App\Models\LogisticsCompanyProfile;
+use App\Models\LogisticsCompanyCorridorRate;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -48,9 +49,10 @@ class LogisticsCompanyPayableService
                 ->whereKey($companyId)
                 ->where('status', 'active')
                 ->whereNull('deleted_at')
+                ->with('user')
                 ->first();
-            if (!$company) {
-                throw new InvalidArgumentException('The selected logistics company must be active and approved.');
+            if (!$company || !$company->user || $company->user->status !== 'active') {
+                throw new InvalidArgumentException('The selected logistics company and its user account must be active and approved.');
             }
             $companyHqLga = $company->hqLga()->with('state')->first();
             if (strtolower(trim((string) ($companyHqLga->name ?? ''))) !== 'uyo'
@@ -64,29 +66,61 @@ class LogisticsCompanyPayableService
                 return ['success' => true, 'replayed' => true, 'order' => $locked];
             }
 
-            $revision = (int) $locked->logistics_company_payable_override_revision + 1;
-            $amount = (string) ($locked->logistics_company_payable_amount
-                ?? $locked->logistics_company_payable_default_amount
-                ?? BcMathService::mul((string) $locked->delivery_fee, '0.90'));
-
-            $baseline = FinancialJournalEntry::query()
-                ->where('order_id', $locked->id)
-                ->where('account_name', 'logistics_company_payable')
-                ->where('entry_type', 'credit')
-                ->exists();
-            if (!$baseline) {
-                throw new RuntimeException('The original logistics-company payable journal is missing; reconcile before assigning a company.');
+            if (!$locked->delivery_corridor_id) {
+                throw new InvalidArgumentException('The order must have a resolved delivery corridor before logistics assignment.');
             }
 
+            $rate = LogisticsCompanyCorridorRate::query()
+                ->where('logistics_company_id', $company->id)
+                ->where('delivery_corridor_id', $locked->delivery_corridor_id)
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->first();
+            if (!$rate) {
+                throw new InvalidArgumentException('The selected logistics company has no active payable tariff for this corridor.');
+            }
+
+            $revision = (int) $locked->logistics_company_payable_override_revision + 1;
+            $bulkyQuantity = (int) ($locked->delivery_bulky_quantity_snapshot ?? 0);
+            $amount = $rate->calculatePayable($bulkyQuantity);
+            $baseline = FinancialJournalEntry::query()->where('order_id', $locked->id)->where('account_name', 'logistics_company_payable')->where('entry_type', 'credit')->exists();
             $ledgerCompanyId = $locked->logistics_company_payable_ledger_company_id;
-            if ($baseline && (int) ($ledgerCompanyId ?? 0) !== (int) $company->id
-                && BcMathService::comp($amount, '0.00') > 0) {
-                $this->journal($locked, $admin, $revision, 'assignment-reclass-debit', 'logistics_company_payable', 'debit', $amount, $ledgerCompanyId ? (int) $ledgerCompanyId : null, 'Reclassify payable from prior beneficiary/suspense.');
-                $this->journal($locked, $admin, $revision, 'assignment-reclass-credit', 'logistics_company_payable', 'credit', $amount, $company->id, 'Assign payable to the approved logistics company.');
+            $oldAmount = $baseline ? (string) ($locked->logistics_company_payable_amount ?? $locked->logistics_company_payable_default_amount ?? '0.00') : '0.00';
+            $deliveryFee = (string) $locked->delivery_fee;
+            $oldMargin = $baseline && BcMathService::comp($deliveryFee, $oldAmount) > 0 ? BcMathService::sub($deliveryFee, $oldAmount) : '0.00';
+            $newMargin = BcMathService::comp($deliveryFee, $amount) > 0 ? BcMathService::sub($deliveryFee, $amount) : '0.00';
+            $oldSubsidy = $baseline && BcMathService::comp($oldAmount, $deliveryFee) > 0 ? BcMathService::sub($oldAmount, $deliveryFee) : '0.00';
+            $newSubsidy = BcMathService::comp($amount, $deliveryFee) > 0 ? BcMathService::sub($amount, $deliveryFee) : '0.00';
+            if ($baseline && BcMathService::comp($oldAmount, '0.00') > 0) {
+                $this->journal($locked, $admin, $revision, 'assignment-prior-payable-debit', 'logistics_company_payable', 'debit', $oldAmount, $ledgerCompanyId ? (int) $ledgerCompanyId : null, 'Reverse provisional or prior logistics payable before applying the company corridor tariff.');
+            }
+            if (BcMathService::comp($amount, '0.00') > 0) {
+                $this->journal($locked, $admin, $revision, 'assignment-company-payable-credit', 'logistics_company_payable', 'credit', $amount, $company->id, 'Apply the assigned company-specific corridor payable tariff.');
+            }
+            $marginDelta = BcMathService::sub($newMargin, $oldMargin);
+            if (BcMathService::comp($marginDelta, '0.00') > 0) {
+                $this->journal($locked, $admin, $revision, 'assignment-margin-increase', 'platform_delivery_revenue', 'credit', $marginDelta, null, 'Recognize VM delivery revenue after company corridor payable assignment.');
+            } elseif (BcMathService::comp($marginDelta, '0.00') < 0) {
+                $this->journal($locked, $admin, $revision, 'assignment-margin-decrease', 'platform_delivery_revenue', 'debit', BcMathService::sub('0.00', $marginDelta), null, 'Reduce VM delivery revenue after company corridor payable assignment.');
+            }
+            $subsidyDelta = BcMathService::sub($newSubsidy, $oldSubsidy);
+            if (BcMathService::comp($subsidyDelta, '0.00') > 0) {
+                $this->journal($locked, $admin, $revision, 'assignment-subsidy-increase', 'delivery_subsidy_expense', 'debit', $subsidyDelta, null, 'Record VM-funded subsidy when company payable exceeds customer delivery fees.');
+            } elseif (BcMathService::comp($subsidyDelta, '0.00') < 0) {
+                $this->journal($locked, $admin, $revision, 'assignment-subsidy-decrease', 'delivery_subsidy_expense', 'credit', BcMathService::sub('0.00', $subsidyDelta), null, 'Reverse prior delivery subsidy after company tariff assignment.');
             }
 
             $locked->logistics_company_id = $company->id;
             $locked->logistics_company_payable_ledger_company_id = $company->id;
+            $locked->logistics_company_base_payable_snapshot = $rate->base_payable;
+            $locked->logistics_company_bulky_surcharge_per_unit_snapshot = $rate->bulky_surcharge_per_unit;
+            $locked->logistics_company_bulky_quantity_snapshot = $bulkyQuantity;
+            $locked->logistics_company_payable_tariff_version_snapshot = $rate->tariff_version;
+            $locked->logistics_company_payable_default_amount = $amount;
+            $locked->logistics_company_payable_amount = $amount;
+            $locked->logistics_company_payable_override_reason = null;
+            $locked->logistics_company_payable_override_by = null;
+            $locked->logistics_company_payable_override_at = null;
             $locked->logistics_company_payable_override_revision = $revision;
             $locked->save();
 
@@ -98,11 +132,18 @@ class LogisticsCompanyPayableService
                 'old_values' => [
                     'logistics_company_id' => $oldCompanyId,
                     'payable_ledger_company_id' => $ledgerCompanyId,
+                    'prior_payable_amount' => $oldAmount,
                 ],
                 'new_values' => [
                     'logistics_company_id' => $company->id,
                     'company_name' => $company->company_name,
                     'payable_amount' => $amount,
+                    'corridor_id' => $locked->delivery_corridor_id,
+                    'corridor_code' => $locked->deliveryCorridor?->code,
+                    'base_payable' => $rate->base_payable,
+                    'bulky_surcharge_per_unit' => $rate->bulky_surcharge_per_unit,
+                    'bulky_quantity' => $bulkyQuantity,
+                    'tariff_version' => $rate->tariff_version,
                     'assignment_reason' => $reason,
                     'assigned_by' => $admin->id,
                     'revision' => $revision,
@@ -147,15 +188,18 @@ class LogisticsCompanyPayableService
                 ->whereKey($locked->logistics_company_id)
                 ->where('status', 'active')
                 ->whereNull('deleted_at')
+                ->with('user')
                 ->lockForUpdate()
                 ->first();
-            if (!$company) {
-                throw new InvalidArgumentException('The assigned logistics company must remain active at delivery release.');
+            if (!$company || !$company->user || $company->user->status !== 'active') {
+                throw new InvalidArgumentException('The assigned logistics company and its user account must remain active at delivery release.');
             }
 
-            $amount = (string) ($locked->logistics_company_payable_amount
-                ?? $locked->logistics_company_payable_default_amount
-                ?? BcMathService::mul((string) $locked->delivery_fee, '0.90'));
+            $amount = $locked->logistics_company_payable_amount ?? $locked->logistics_company_payable_default_amount;
+            if ($amount === null) {
+                throw new InvalidArgumentException('No company-specific corridor payable has been approved for this order.');
+            }
+            $amount = (string) $amount;
 
             if (BcMathService::comp($amount, '0.00') > 0) {
                 $company->creditWallet($amount);
@@ -240,15 +284,12 @@ class LogisticsCompanyPayableService
                 throw new InvalidArgumentException('The assigned logistics company must be active and approved.');
             }
 
+            // Company payable is independently tariffed; a promotional/free customer delivery fee may still require a VM-funded subsidy.
             $fee = bcadd((string) $locked->delivery_fee, '0', 2);
-            if (BcMathService::comp($fee, '0.00') <= 0) {
-                throw new InvalidArgumentException('A zero-fee order cannot have a logistics-company payable.');
-            }
 
             $default = $locked->logistics_company_payable_default_amount;
             if ($default === null) {
-                $default = BcMathService::mul($fee, '0.90');
-                $locked->logistics_company_payable_default_amount = $default;
+                throw new InvalidArgumentException('Assign a company-specific corridor tariff before overriding an order payable.');
             }
             $oldAmount = bcadd((string) ($locked->logistics_company_payable_amount ?? $default), '0', 2);
             $revision = (int) $locked->logistics_company_payable_override_revision;

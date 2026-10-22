@@ -150,6 +150,17 @@ class OrderSettlementService
                 ->lockForUpdate()
                 ->get();
 
+            // The central retailer model is one customer order with item-level
+            // supplier assignments. It must never fall into the legacy parent/child
+            // vendor-commission settlement branch.
+            if ($lockedOrder->retailer_model_order && $childOrders->isNotEmpty()) {
+                return [
+                    'success' => false,
+                    'status' => 'RETAILER_PARENT_CHILD_ORDER_FORBIDDEN',
+                    'message' => 'Retailer-model orders cannot settle through legacy child-order vendor accounting.',
+                ];
+            }
+
             if ($childOrders->isNotEmpty()) {
                 $aggregateFields = [
                     'merchandise_subtotal',
@@ -667,66 +678,64 @@ class OrderSettlementService
                     }
 
                     $deliveryFeeSnapshot = (string) $lockedOrder->delivery_fee;
-                    $defaultCompanyPayable = $lockedOrder->logistics_company_payable_default_amount;
-                    if ($defaultCompanyPayable === null) {
-                        $defaultCompanyPayable = BcMathService::mul($deliveryFeeSnapshot, '0.90');
-                        $lockedOrder->logistics_company_payable_default_amount = $defaultCompanyPayable;
-                    }
-                    $companyPayable = (string) ($lockedOrder->logistics_company_payable_amount ?? $defaultCompanyPayable);
-                    $lockedOrder->logistics_company_payable_amount = $companyPayable;
-                    $lockedOrder->logistics_company_payable_ledger_company_id = $lockedOrder->logistics_company_id;
-                    $lockedOrder->save();
+                    $companyPayable = $lockedOrder->logistics_company_payable_amount ?? $lockedOrder->logistics_company_payable_default_amount;
 
-                    if (BcMathService::comp($companyPayable, '0.00') > 0) {
-                        FinancialJournalEntry::create([
-                            'order_id' => $lockedOrder->id,
-                            'transaction_reference' => $reference,
-                            'event_id' => 'EVT-LOG-COMPANY-PAYABLE-' . $reference,
-                            'beneficiary_type' => LogisticsCompanyProfile::class,
-                            'beneficiary_id' => $lockedOrder->logistics_company_id,
-                            'account_name' => 'logistics_company_payable',
-                            'entry_type' => 'credit',
-                            'amount' => $companyPayable,
-                            'currency' => 'NGN',
-                            'description' => "Default/approved logistics-company payable for Order #{$lockedOrder->order_number}; not a rider payable.",
-                        ]);
+                    // Logistics assignment follows payment and supplier confirmation.
+                    // Do not calculate the company payable as a percentage of customer fees.
+                    // Company payable, VM delivery revenue and any subsidy are posted
+                    // when the approved company tariff is assigned.
+                    if ($lockedOrder->logistics_company_id && $companyPayable !== null) {
+                        $companyPayable = (string) $companyPayable;
+                        $lockedOrder->logistics_company_payable_default_amount = $companyPayable;
+                        $lockedOrder->logistics_company_payable_amount = $companyPayable;
+                        $lockedOrder->logistics_company_payable_ledger_company_id = $lockedOrder->logistics_company_id;
+                        $lockedOrder->save();
+                        if (BcMathService::comp($companyPayable, '0.00') > 0) {
+                            FinancialJournalEntry::create([
+                                'order_id' => $lockedOrder->id,
+                                'transaction_reference' => $reference,
+                                'event_id' => 'EVT-LOG-COMPANY-PAYABLE-' . $reference,
+                                'beneficiary_type' => LogisticsCompanyProfile::class,
+                                'beneficiary_id' => $lockedOrder->logistics_company_id,
+                                'account_name' => 'logistics_company_payable',
+                                'entry_type' => 'credit',
+                                'amount' => $companyPayable,
+                                'currency' => 'NGN',
+                                'description' => "Approved logistics-company corridor payable for Order #{$lockedOrder->order_number}; not a rider payable.",
+                            ]);
+                        }
+                        $deliveryMargin = BcMathService::comp($deliveryFeeSnapshot, $companyPayable) > 0 ? BcMathService::sub($deliveryFeeSnapshot, $companyPayable) : '0.00';
+                        $deliverySubsidy = BcMathService::comp($companyPayable, $deliveryFeeSnapshot) > 0 ? BcMathService::sub($companyPayable, $deliveryFeeSnapshot) : '0.00';
+                        if (BcMathService::comp($deliveryMargin, '0.00') > 0) {
+                            FinancialJournalEntry::create([
+                                'order_id' => $lockedOrder->id,
+                                'transaction_reference' => $reference,
+                                'event_id' => 'EVT-PLATFORM-DELIVERY-REV-' . $reference,
+                                'beneficiary_type' => User::class,
+                                'beneficiary_id' => null,
+                                'account_name' => 'platform_delivery_revenue',
+                                'entry_type' => 'credit',
+                                'amount' => $deliveryMargin,
+                                'currency' => 'NGN',
+                                'description' => "VM delivery revenue after assigned company corridor payable for Order #{$lockedOrder->order_number}",
+                            ]);
+                        }
+                        if (BcMathService::comp($deliverySubsidy, '0.00') > 0) {
+                            FinancialJournalEntry::create([
+                                'order_id' => $lockedOrder->id,
+                                'transaction_reference' => $reference,
+                                'event_id' => 'EVT-DELIVERY-SUBSIDY-' . $reference,
+                                'beneficiary_type' => User::class,
+                                'beneficiary_id' => null,
+                                'account_name' => 'delivery_subsidy_expense',
+                                'entry_type' => 'debit',
+                                'amount' => $deliverySubsidy,
+                                'currency' => 'NGN',
+                                'description' => "VM-funded delivery subsidy where company payable exceeds customer delivery fee for Order #{$lockedOrder->order_number}",
+                            ]);
+                        }
                     }
 
-                    $deliveryMargin = BcMathService::comp($deliveryFeeSnapshot, $companyPayable) > 0
-                        ? BcMathService::sub($deliveryFeeSnapshot, $companyPayable)
-                        : '0.00';
-                    $deliverySubsidy = BcMathService::comp($companyPayable, $deliveryFeeSnapshot) > 0
-                        ? BcMathService::sub($companyPayable, $deliveryFeeSnapshot)
-                        : '0.00';
-
-                    if (BcMathService::comp($deliveryMargin, '0.00') > 0) {
-                        FinancialJournalEntry::create([
-                            'order_id' => $lockedOrder->id,
-                            'transaction_reference' => $reference,
-                            'event_id' => 'EVT-PLATFORM-DELIVERY-REV-' . $reference,
-                            'beneficiary_type' => User::class,
-                            'beneficiary_id' => null,
-                            'account_name' => 'platform_delivery_revenue',
-                            'entry_type' => 'credit',
-                            'amount' => $deliveryMargin,
-                            'currency' => 'NGN',
-                            'description' => "VM delivery margin after logistics-company payable for Order #{$lockedOrder->order_number}",
-                        ]);
-                    }
-                    if (BcMathService::comp($deliverySubsidy, '0.00') > 0) {
-                        FinancialJournalEntry::create([
-                            'order_id' => $lockedOrder->id,
-                            'transaction_reference' => $reference,
-                            'event_id' => 'EVT-DELIVERY-SUBSIDY-' . $reference,
-                            'beneficiary_type' => User::class,
-                            'beneficiary_id' => null,
-                            'account_name' => 'delivery_subsidy_expense',
-                            'entry_type' => 'debit',
-                            'amount' => $deliverySubsidy,
-                            'currency' => 'NGN',
-                            'description' => "VM-funded delivery subsidy where company payable exceeds customer delivery fee for Order #{$lockedOrder->order_number}",
-                        ]);
-                    }
                 } else {
                 // Standard Single-Vendor Order Path:
                 // Credit: Vendor Payable (90% Merchandise Net)

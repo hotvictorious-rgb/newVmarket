@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\FulfillmentAvailabilityService;
+use App\Services\CustomerDeliveryPricingService;
+use App\Services\BcMathService;
 use App\Models\CustomerAddress;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,6 +42,17 @@ class FulfillmentApiController extends Controller
             }
 
             $result = $this->fulfillmentService->checkCartFulfillmentAvailability($destLgaId ? (int)$destLgaId : null, (array)$cartItems);
+            $delivery = $result['fulfillment_options']['delivery'] ?? null;
+            if (is_array($delivery) && !empty($delivery['available'])) {
+                $pricing = app(CustomerDeliveryPricingService::class)->quote((int) ($delivery['bulky_quantity'] ?? 0));
+                $result['fulfillment_options']['delivery']['base_route_fee'] = $pricing['base_fee'];
+                $result['fulfillment_options']['delivery']['bulky_surcharge_per_unit'] = $pricing['bulky_surcharge_per_unit'];
+                $result['fulfillment_options']['delivery']['bulky_surcharge_total'] = BcMathService::mul(
+                    $pricing['bulky_surcharge_per_unit'],
+                    (string) $pricing['bulky_quantity']
+                );
+                $result['fulfillment_options']['delivery']['total_shipping_fee'] = $pricing['total_fee'];
+            }
 
             return response()->json($result, $result['available'] ? 200 : 422);
         }
@@ -88,14 +101,18 @@ class FulfillmentApiController extends Controller
             $validated['items']
         );
         $delivery = $result['fulfillment_options']['delivery'] ?? [];
+        $pricing = null;
+        if (!empty($delivery['available'])) {
+            $pricing = app(CustomerDeliveryPricingService::class)->quote((int) ($delivery['bulky_quantity'] ?? 0));
+        }
 
         return response()->json([
             'status' => (bool) ($delivery['available'] ?? false),
-            'base_route_fee' => $delivery['base_route_fee'] ?? '0.00',
-            'bulky_surcharge_per_unit' => $delivery['bulky_surcharge_per_unit'] ?? '0.00',
-            'bulky_quantity' => $delivery['bulky_quantity'] ?? 0,
-            'bulky_surcharge_total' => $delivery['bulky_surcharge_total'] ?? '0.00',
-            'delivery_fee' => $delivery['total_shipping_fee'] ?? '0.00',
+            'base_route_fee' => $pricing['base_fee'] ?? '0.00',
+            'bulky_surcharge_per_unit' => $pricing['bulky_surcharge_per_unit'] ?? '0.00',
+            'bulky_quantity' => $pricing['bulky_quantity'] ?? ($delivery['bulky_quantity'] ?? 0),
+            'bulky_surcharge_total' => $pricing ? BcMathService::mul($pricing['bulky_surcharge_per_unit'], (string) $pricing['bulky_quantity']) : '0.00',
+            'delivery_fee' => $pricing['total_fee'] ?? '0.00',
             'currency' => 'NGN',
             'message' => ($delivery['available'] ?? false)
                 ? 'Order-level delivery fee calculated successfully.'
