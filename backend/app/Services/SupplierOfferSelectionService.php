@@ -44,6 +44,18 @@ class SupplierOfferSelectionService
             ->whereNotNull('availability_confirmed_by')
             ->whereNotNull('availability_expires_at')
             ->where('availability_expires_at', '>', $now)
+            ->where(function ($cooldown) use ($now) {
+                $cooldown->whereNull('last_unavailable_at')
+                    ->orWhere('last_unavailable_at', '<=', $now->copy()->subHours(24));
+            })
+            // Count only paid, unfinished supplier handovers. Checkout reservations
+            // and completed/reassigned work do not consume supplier handover capacity.
+            ->whereRaw("(SELECT COUNT(*) FROM order_supplier_assignments osa
+                INNER JOIN orders o ON o.id = osa.order_id
+                WHERE osa.supplier_vendor_id = supplier_offers.vendor_id
+                  AND osa.status NOT IN ('collected', 'admin_reassigned', 'rejected', 'cancelled', 'supplier_rejected')
+                  AND o.payment_status = 'paid'
+                  AND o.order_status NOT IN ('delivered', 'picked_up', 'cancelled', 'refunded', 'returned')) < 5")
             ->whereHas('vendor', function ($query) {
                 $query->whereNull('vendor_profiles.deleted_at')
                     ->where('marketplace_status', 'active')
