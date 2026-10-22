@@ -120,11 +120,13 @@ The service layer must enforce the same gates as the API/controller so direct ca
 
 This is a target specification, not a claim that all items are already implemented. The code audit must specifically verify and close:
 
-- persistent 24-hour offer-unavailability history and the authorized supplier action that records it;
-- active pending-handover counting and enforcement at the final allocation boundary;
-- whole-order consolidation scoring across all eligible offers, with success-rate tie-breaking;
-- hard service-layer enforcement of per-supplier pickup photo evidence and persisted geolocation/timestamp evidence for pickup and doorstep;
-- corridor-lock enforcement for rider batching and Keke exclusivity at the assignment API/service layer;
-- one end-to-end automated test path from verified Paystack webhook through sourcing, supplier pickups, rider dispatch, doorstep OTP/photo, reconciliation, and idempotent payouts.
+The current single working branch has added code for a supplier-owned 24-hour unavailability cooldown, a five-active-handover cap, whole-order consolidation scoring, per-item bulky snapshots, Keke exclusivity and bike corridor eligibility checks, and mandatory photo plus persisted GPS/timestamp fields for retailer pickup and doorstep proof. Regression tests have been added for cooldown, supplier capacity, and consolidation.
+
+The following still need to be closed before this blueprint can be called complete:
+
+- dispatch assignment must reject incompatible rider/vehicle/corridor combinations at the moment of assignment, not only when the rider later attempts pickup or delivery;
+- GPS coordinates are currently client-submitted metadata. Add location accuracy/geofence checks against the configured supplier shop or customer destination, and make sure photo capture and coordinates are bound to the same fulfillment event;
+- add a full end-to-end test from a verified Paystack webhook through supplier confirmation, multi-shop collection, dispatch, doorstep OTP/photo, reconciliation, and idempotent supplier/company payouts;
+- run migrations and the relevant regression suite on the branch and resolve any failures; no test result should be reported as passing until CI actually returns green.
 
 Do not mark these items complete based on documentation alone. Record each implementation change and test result on the single working branch, and keep the pull request in draft until verification is real.
