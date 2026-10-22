@@ -96,8 +96,8 @@ class FulfillmentAvailabilityService
             ->first();
 
         if ($lane) {
-            // Active lane is used for delivery pricing/serviceability only. New orders are
-            // vendor-managed, so an inactive legacy fleet assignment must not block vendor delivery.
+            // Active lane controls serviceability only. New retailer orders use the
+            // centrally assigned approved logistics company; legacy vendor-managed dispatch is not permitted.
 
             // The lane controls serviceability only. Customer pricing is a global
             // flat per-order fee plus the configured bulky surcharge.
