@@ -7,6 +7,7 @@ This pass aligns documentation to [Active Business Rules](ACTIVE_BUSINESS_RULES_
 ## Canonical decisions propagated
 
 - Victorious MARKET is the sole customer-facing retailer; suppliers are private.
+- Only an authorized admin may register, activate or suspend suppliers; no supplier self-registration. Suspension blocks new allocations and requires explicit admin review of already-paid/in-flight orders, without silent cancellation or refund.
 - Uyo LGA is the sourcing and delivery boundary. Every supplier has one admin-approved location within that boundary; Plaza is optional.
 - Eight corridors remain: Oron Road, Nwaniba Road, Aka Road, Abak Road, Ikot Ekpene Road, Itu Road, Ikpa Road and Plaza.
 - Listing availability is separate from order allocation. Hide listings when no eligible in-stock offer remains; manual delisting blocks automatic relisting until admin authorization.
@@ -16,7 +17,7 @@ This pass aligns documentation to [Active Business Rules](ACTIVE_BUSINESS_RULES_
 - Any bulky item requires a dedicated exclusive Keke/tricycle trip. Bike batching is limited to qualifying small orders in the same corridor.
 - Supplier pickup OTP/photo and customer doorstep OTP/geo-tagged photo are mandatory.
 - Customer delivery charge is per order plus configured bulky-unit surcharges. Logistics-company payable is separately configured by company/corridor plus company-specific bulky-unit surcharges. The former 90%-of-customer-delivery-fee rule is retired.
-- Supplier payables use immutable wholesale-cost snapshots and are eligible only after verified completion/authorized exception plus reconciliation.
+- Supplier payables use immutable wholesale-cost snapshots and are eligible only after verified completion/authorized exception plus reconciliation. Supplier-payable disbursements are ₦5,000 minimum and ₦1,000,000 maximum per request/time; FIFO is prohibited, and selection must be authorized, auditable and non-FIFO.
 - Cashback remains a separate 5% eligible merchandise benefit under existing caps, maturity, validity and reversal rules.
 - Allocation failure is admin-managed, not an automatic refund. Refund completion requires provider confirmation. Changed product/terms require customer consent; transitions are audited and idempotent.
 - Support-managed pickup is exceptional, not a public reservation or pre-payment stock hold.
@@ -58,7 +59,6 @@ The post-push scan found several AI-drift risks and corrected the active wording
 
 ## Remaining work before implementation or release
 
-1. **Owner decision needed — payout limits scope:** the historical vendor payout policy used a ₦5,000 minimum and ₦500,000 maximum; a payout request could be made when eligible balance reached the minimum, every payout required approval, and any excess remained eligible. The active retailer model uses supplier payables rather than vendor earnings. Decide whether these same limits and request/approval semantics should govern supplier-payable disbursements, or whether supplier payments need a separate policy. Until then, do not silently apply the legacy vendor-wallet/FIFO policy to supplier payables.
-2. **Owner decision needed — supplier approval/KYC:** the active rule requires suppliers to be active and admin-approved, but it does not separately define a `kyc_verified` flag or KYC acceptance criteria. Decide whether KYC is a required component of admin approval and document the exact evidence/verification standard before implementing a separate hard gate.
-3. Audit code/schema/tests against active rules, especially listing/manual-delist lifecycle, verified-payment allocation gate, whole-order multi-supplier consolidation, flat customer delivery fee independent of corridor, configurable company/corridor logistics payable, bulky isolation, stop-level pickup evidence, support-managed pickup, supplier payable eligibility and admin-managed paid-order exceptions.
-4. Reconcile all historical audit claims with current `main`, CI and runtime before treating any fix as implemented or release-ready. This documentation alignment does not make the repository release-ready.
+1. **Owner decision still needed — supplier approval/KYC:** the active rule requires suppliers to be active and admin-approved, but it does not separately define a `kyc_verified` flag or KYC acceptance criteria. Decide whether KYC is a required component of admin approval and document the exact evidence/verification standard before implementing a separate hard gate.
+2. Audit code/schema/tests against active rules, especially admin-only supplier registration/activation/suspension, non-FIFO supplier-payable selection and ₦5,000/₦1,000,000 limits, listing/manual-delist lifecycle, verified-payment allocation gate, whole-order multi-supplier consolidation, flat customer delivery fee independent of corridor, configurable company/corridor logistics payable, bulky isolation, stop-level pickup evidence, support-managed pickup, supplier payable eligibility and admin-managed paid-order exceptions.
+3. Reconcile all historical audit claims with current `main`, CI and runtime before treating any fix as implemented or release-ready. This documentation alignment does not make the repository release-ready.
