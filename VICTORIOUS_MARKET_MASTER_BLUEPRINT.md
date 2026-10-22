@@ -62,11 +62,11 @@ Apply only the discounts and cashback redemption permitted by the active checkou
 
 ---
 
-## 3. Supplier account governance
+### Supplier account governance
 
 Supplier account creation, approval, activation and suspension are controlled exclusively by an authorized Victorious MARKET admin. Supplier self-registration is not permitted. A suspended supplier is immediately ineligible for new sourcing/allocation. Existing paid or in-flight orders must be reviewed and explicitly resolved by an authorized admin; suspension must not silently delete history or automatically cancel/refund orders. Reactivation requires an authorized admin action and an audit record. Follow the [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md) for the binding policy.
 
-## 4. Phase 2: The Automated Product Sourcing Engine (Supply Side)
+## 3. Phase 2: The Automated Product Sourcing Engine (Supply Side)
 
 Only after the backend independently verifies successful Paystack payment does it execute the **Multi-Product Consolidated Sourcing Pipeline**. Before payment, any cart or feasibility check is non-binding: it must not assign or reserve suppliers, create supplier payables, or send binding order notifications. After payment, revalidate current stock and eligibility before allocating. The goal is to maximize fulfilment success, minimize the number of approved supplier pickup locations, and control wholesale cost.
 
