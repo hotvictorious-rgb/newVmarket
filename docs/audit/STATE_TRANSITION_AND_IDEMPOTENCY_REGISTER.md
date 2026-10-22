@@ -113,9 +113,11 @@ Required business states: `reserved`, `pending_maturation`, `matured/spendable`,
 - Duplicate fulfilment/refund/maturity jobs must not double-credit, double-reverse or mature early.
 - **OPEN:** enumerate cashback ledger status values, uniqueness keys, concurrent reservation behavior and every scheduled job/service writer.
 
-## 8. Vendor earning, settlement and payout lifecycle
+## 8. Legacy vendor earning, settlement and payout lifecycle — historical compatibility only
 
-### Earning/settlement
+> **Scope warning (22 October 2026):** This section describes the legacy public-marketplace/vendor-earning model and its historical records. Its FIFO, ₦5,000–₦500,000 vendor-payout rules, vendor delivery earnings and child-order settlement concepts do **not** govern new Victorious MARKET retailer-model supplier payables. For new supplier payments, follow [Active Business Rules](../architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md): ₦5,000 minimum, ₦1,000,000 maximum per request/disbursement, no FIFO/oldest-first selection, and authorized auditable non-FIFO selection. Do not change historical records merely to make them resemble the new policy.
+
+### Earning/settlement (legacy vendor earnings only)
 Required concepts: `held -> eligible -> reserved_for_payout -> paid_out`; exceptions/holds remain separately represented (dispute, return, security, reconciliation). Never turn eligibility directly into transfer success.
 - Vendor merchandise earning must be tied to child-order item allocation; delivery earning is a separate record tied to the child order.
 - Eligibility requires verified fulfilment, that child's 24-hour claim window expired, and no blocking case/security/reconciliation issue.
