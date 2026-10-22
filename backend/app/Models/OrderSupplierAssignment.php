@@ -19,6 +19,9 @@ class OrderSupplierAssignment extends Model
         'handover_ready_at',
         'collected_at',
         'collection_proof_image_path',
+        'collection_latitude',
+        'collection_longitude',
+        'collection_captured_at',
         'collection_notes',
         'pickup_failed_attempts',
         'pickup_locked_until',
@@ -32,6 +35,7 @@ class OrderSupplierAssignment extends Model
         'supplier_rejected_at' => 'datetime',
         'handover_ready_at' => 'datetime',
         'collected_at' => 'datetime',
+        'collection_captured_at' => 'datetime',
         'pickup_locked_until' => 'datetime',
         'pickup_failed_attempts' => 'integer',
     ];
