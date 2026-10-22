@@ -10,7 +10,7 @@ use App\Models\Shop;
 class FulfillmentAvailabilityService
 {
     /**
-     * Checks directional doorstep delivery availability & fee between Shop LGA and Destination LGA.
+     * Checks directional doorstep delivery availability between an approved Uyo supplier shop and an in-Uyo customer destination.
      */
     public function checkDeliveryAvailability(int $shopId, int $destinationLgaId, string $packageTier = 'bike'): array
     {
@@ -23,7 +23,7 @@ class FulfillmentAvailabilityService
             ];
         }
 
-        // Owner policy: all sourcing shops must be physically based in Uyo, Akwa Ibom.
+        // Owner policy: new sourcing shops and customer destinations must be inside Uyo LGA, Akwa Ibom.
         $originLgaName = strtolower(trim((string) ($shop->lga->name ?? '')));
         $originStateName = strtolower(trim((string) ($shop->lga->state->name ?? '')));
         if ($originLgaName !== 'uyo' || $originStateName !== 'akwa ibom') {
@@ -44,7 +44,7 @@ class FulfillmentAvailabilityService
         if (!$shop->vendor || $shop->vendor->trashed() || $shop->vendor->marketplace_status !== 'active') {
             return [
                 'is_available' => false,
-                'message' => 'The merchant providing this item is currently not active on the marketplace.',
+                'message' => 'The private supplier providing this item is currently not active for Victorious MARKET.',
                 'fee' => '0.00',
             ];
         }
