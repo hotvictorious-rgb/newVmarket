@@ -1,3 +1,5 @@
+> **Active policy notice (22 October 2026):** Current business behaviour is governed by [Active Business Rules](https://github.com/hotvictorious-rgb/newVmarket/blob/main/docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). Older implementation findings, proposed workflows and historical decisions remain for traceability but do not override current policy. Supplier locations may be anywhere within approved Uyo LGA; pre-payment checks are non-binding; verified Paystack payment precedes binding supplier allocation; pickup is a support-managed exception only; and logistics-company payables use configured company/corridor rates plus bulky surcharges, never the retired 90% formula. Documentation-only update; runtime conformity is not certified.
+
 # VICTORIOUS MARKET — PRODUCTION LAUNCH & INFRASTRUCTURE MANUAL
 **Brand Promise:** Your Trusted Online Market for Quality Products.  
 **Operating Philosophy:** Trust First. Quality Always. Accountability at Every Stage.
