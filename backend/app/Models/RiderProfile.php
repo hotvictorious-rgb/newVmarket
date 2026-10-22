@@ -87,6 +87,16 @@ class RiderProfile extends Model
             return false;
         }
 
+        $assignedLga = $this->assignedLga;
+        if (!$assignedLga) {
+            return false;
+        }
+        $assignedLga->loadMissing('state');
+        if (strtolower(trim((string) ($assignedLga->name ?? ''))) !== 'uyo'
+            || strtolower(trim((string) ($assignedLga->state->name ?? ''))) !== 'akwa ibom') {
+            return false;
+        }
+
         $company = $this->logisticsCompany;
         return $company !== null
             && $company->deleted_at === null
