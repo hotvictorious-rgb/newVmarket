@@ -59,7 +59,7 @@ A new online order uses doorstep delivery, one customer destination and the publ
 
 Do not expose an automated in-shop pickup/reservation option in standard customer checkout or public APIs. A customer who prefers pickup must contact VM support. Support must verify every item in the complete order, physical readiness at one approved collection point, payment arrangements and customer agreement before confirming pickup or disclosing the approved collection details.
 
-Never send a customer to multiple supplier shops by default. VM must consolidate internally or offer a feasible delivery plan. Support decisions cannot bypass sourcing eligibility, payment verification, authorization, evidence or financial controls.
+A customer must never be sent to supplier shops. Internally, one assigned rider may visit multiple private supplier shops to collect the full order. Never split one customer order across riders. If any item is bulky, the entire order requires an exclusive keke trip; only all-small orders may be batched on a bike along the same active Uyo corridor. Support decisions cannot bypass sourcing eligibility, payment verification, authorization, evidence or financial controls.
 
 ### Legacy records
 
