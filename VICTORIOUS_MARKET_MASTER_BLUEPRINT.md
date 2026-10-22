@@ -62,7 +62,11 @@ Apply only the discounts and cashback redemption permitted by the active checkou
 
 ---
 
-## 3. Phase 2: The Automated Product Sourcing Engine (Supply Side)
+## 3. Supplier account governance
+
+Supplier account creation, approval, activation and suspension are controlled exclusively by an authorized Victorious MARKET admin. Supplier self-registration is not permitted. A suspended supplier is immediately ineligible for new sourcing/allocation. Existing paid or in-flight orders must be reviewed and explicitly resolved by an authorized admin; suspension must not silently delete history or automatically cancel/refund orders. Reactivation requires an authorized admin action and an audit record. Follow the [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md) for the binding policy.
+
+## 4. Phase 2: The Automated Product Sourcing Engine (Supply Side)
 
 Only after the backend independently verifies successful Paystack payment does it execute the **Multi-Product Consolidated Sourcing Pipeline**. Before payment, any cart or feasibility check is non-binding: it must not assign or reserve suppliers, create supplier payables, or send binding order notifications. After payment, revalidate current stock and eligibility before allocating. The goal is to maximize fulfilment success, minimize the number of approved supplier pickup locations, and control wholesale cost.
 
@@ -165,6 +169,7 @@ Victorious MARKET must preserve an auditable, idempotent financial ledger. Ledge
 Customer payment is recorded only after trusted Paystack verification. A successful payment does not itself prove delivery, supplier payable eligibility, or logistics payable eligibility.
 
 1. **Supplier payable:** Link the immutable agreed wholesale-cost snapshot to each sourced order item. Supplier stock acceptance, availability confirmation, allocation or pickup alone does not make the payable due. Eligibility requires verified delivery, or an explicitly authorized completion exception, followed by reconciliation. Do not treat supplier payables as vendor commissions or automatically credit a supplier wallet at allocation/capture.
+   - Each supplier-payable payment request/disbursement must be at least ₦5,000 and no more than ₦1,000,000 at a time. FIFO/oldest-first selection is prohibited. Use an authorized, auditable non-FIFO selection process; do not invent an automatic alternative ranking or silently split an over-cap request. Admin approval, reconciliation, idempotency and provider-confirmed completion remain required.
 2. **Logistics-company payable:** Calculate the payable from the assigned approved logistics company's admin-configured base payable for the applicable corridor, plus that company's configured bulky-unit surcharge multiplied by the applicable bulky-unit count. This is a separate tariff schedule from the customer delivery charge. Never derive it from a percentage of customer delivery revenue. Snapshot company, corridor, tariff/version, base, bulky quantity/rate and total at assignment; later tariff changes must not silently rewrite it. If payable exceeds delivery revenue, record the difference as a Victorious MARKET-funded subsidy/expense. The logistics company—not automatically the rider—is the payee.
 3. **Victorious MARKET margin and expenses:** Keep merchandise revenue, supplier purchase cost, customer delivery revenue, logistics cost, gateway fees, discounts, refunds, cashback liability, subsidy and operating expenses distinct. Merchandise spread is not net profit until attributable costs and liabilities are reconciled.
 
