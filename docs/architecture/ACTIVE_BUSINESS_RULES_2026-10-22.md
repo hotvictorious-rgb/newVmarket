@@ -27,7 +27,7 @@ This document records the owner's active decisions. If older documents conflict 
 
 ## 4. Supplier allocation
 - Apply hard eligibility checks first: supplier active and approved, approved location within Uyo, product offer explicitly in stock with sufficient quantity, applicable 24-hour product-specific out-of-stock cooldown expired, and supplier below the limit of five active pending handovers.
-- Among feasible whole-order plans, first maximize order-line consolidation into the fewest supplier pickup locations; among similarly consolidated plans, prefer the lowest total wholesale cost, then fulfillment reliability and deterministic tie-breakers.
+- Compare only feasible plans that can fulfil the whole customer order. First minimize the number of distinct supplier pickup locations; among plans using the same minimum number of locations, minimize total wholesale cost; then prefer documented fulfilment reliability and apply a stable deterministic tie-break.
 - A customer order may use multiple supplier locations, but the whole customer order remains assigned to one rider from one approved logistics company.
 - Admin may override a supplier assignment with required authorization, reason and immutable audit record. Overrides cannot bypass verified payment or other non-overridable safety rules.
 
