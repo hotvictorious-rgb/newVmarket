@@ -9,45 +9,66 @@ return new class extends Migration
 {
     /**
      * A retailer-model customer order can contain items sourced from several
-     * private suppliers. orders.vendor_id is retained for legacy marketplace
-     * orders only and must not force a fake single-vendor owner on new orders.
+     * private suppliers. The legacy order-level vendor/shop pointers are
+     * retained for historical marketplace orders only and must not force a
+     * fake single-vendor or single-shop owner on new customer orders.
      */
     public function up(): void
     {
-        if (!Schema::hasTable('orders') || !Schema::hasColumn('orders', 'vendor_id')) {
+        if (!Schema::hasTable('orders')) {
             return;
         }
 
         Schema::table('orders', function (Blueprint $table) {
-            $table->dropForeign(['vendor_id']);
-            $table->foreignId('vendor_id')->nullable()->change();
-            $table->foreign('vendor_id')
-                ->references('id')
-                ->on('vendor_profiles')
-                ->nullOnDelete();
+            if (Schema::hasColumn('orders', 'vendor_id')) {
+                $table->dropForeign(['vendor_id']);
+                $table->foreignId('vendor_id')->nullable()->change();
+                $table->foreign('vendor_id')
+                    ->references('id')
+                    ->on('vendor_profiles')
+                    ->nullOnDelete();
+            }
+
+            if (Schema::hasColumn('orders', 'shop_id')) {
+                $table->dropForeign(['shop_id']);
+                $table->foreignId('shop_id')->nullable()->change();
+                $table->foreign('shop_id')
+                    ->references('id')
+                    ->on('shops')
+                    ->nullOnDelete();
+            }
         });
     }
 
     /**
      * This migration is forward-first. Refuse rollback rather than inventing
-     * a vendor owner for centrally owned retailer orders.
+     * a legacy vendor/shop owner for centrally owned retailer orders.
      */
     public function down(): void
     {
-        if (!Schema::hasTable('orders') || !Schema::hasColumn('orders', 'vendor_id')) {
+        if (!Schema::hasTable('orders')) {
             return;
         }
 
-        if (DB::table('orders')->whereNull('vendor_id')->exists()) {
+        if ((Schema::hasColumn('orders', 'vendor_id') && DB::table('orders')->whereNull('vendor_id')->exists())
+            || (Schema::hasColumn('orders', 'shop_id') && DB::table('orders')->whereNull('shop_id')->exists())) {
             throw new RuntimeException(
-                'Cannot restore required orders.vendor_id while centrally owned retailer orders exist without a legacy vendor owner.'
+                'Cannot restore required orders.vendor_id/orders.shop_id while centrally owned retailer orders exist without a legacy owner.'
             );
         }
 
         Schema::table('orders', function (Blueprint $table) {
-            $table->dropForeign(['vendor_id']);
-            $table->foreignId('vendor_id')->nullable(false)->change();
-            $table->foreign('vendor_id')->references('id')->on('vendor_profiles');
+            if (Schema::hasColumn('orders', 'vendor_id')) {
+                $table->dropForeign(['vendor_id']);
+                $table->foreignId('vendor_id')->nullable(false)->change();
+                $table->foreign('vendor_id')->references('id')->on('vendor_profiles');
+            }
+
+            if (Schema::hasColumn('orders', 'shop_id')) {
+                $table->dropForeign(['shop_id']);
+                $table->foreignId('shop_id')->nullable(false)->change();
+                $table->foreign('shop_id')->references('id')->on('shops');
+            }
         });
     }
 };
