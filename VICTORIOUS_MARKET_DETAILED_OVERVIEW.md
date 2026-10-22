@@ -123,7 +123,7 @@ These are separate calculations and must not be conflated.
 
 The customer pays one base delivery fee per order, plus a customer bulky surcharge for each applicable physical bulky unit.
 
-`Customer delivery charge = customer base fee per order + (bulky units × customer bulky rate)`
+`Customer delivery charge = flat customer base fee per order (independent of corridor) + (applicable bulky units × customer bulky rate)`
 
 ### Logistics-company payable
 
