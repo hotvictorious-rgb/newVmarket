@@ -2340,19 +2340,26 @@ class FinancialAuditRemediationProofTest extends TestCase
             'status' => 'refund_pending',
             'resolution_type' => 'refund',
             'total_refundable_amount' => '250.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
         ]);
 
         $service = app(FinancialOperationService::class);
+        $auth = [
+            'type' => 'admin_approved_return',
+            'approved_by_user_id' => $this->superAdmin->id,
+        ];
         $first = $service->createRefundOperation(
             $order, '200.00', 'approved return case partial refund', $returnCase,
-            'IDEMPOTENCY-CASE-CEILING-FIRST-' . uniqid()
+            'IDEMPOTENCY-CASE-CEILING-FIRST-' . uniqid(),
+            $auth
         );
         $this->assertSame(20000, (int) $first->amount_kobo);
 
         try {
             $service->createRefundOperation(
                 $order, '50.01', 'exceeds approved return case balance', $returnCase,
-                'IDEMPOTENCY-CASE-CEILING-OVER-' . uniqid()
+                'IDEMPOTENCY-CASE-CEILING-OVER-' . uniqid(),
+                $auth
             );
             $this->fail('Cumulative refunds must not exceed the approved return-case amount.');
         } catch (\DomainException $exception) {

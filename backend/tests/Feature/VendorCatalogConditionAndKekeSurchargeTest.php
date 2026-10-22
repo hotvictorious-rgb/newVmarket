@@ -727,8 +727,8 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $replacementConfirmation = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
             'notes' => 'Replacement items confirmed in stock.',
         ]);
-        $replacementConfirmation->assertOk()
-            ->assertJsonPath('data.sourcing_status', 'supplier_confirmed');
+        $replacementConfirmation->assertOk();
+        $this->assertEquals('supplier_confirmed', $orderTwoBulky->fresh()->sourcing_status);
         $replacementReady = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/ready-for-handover");
         $replacementReady->assertOk()->assertJsonPath('all_suppliers_ready', true);
         $this->assertEquals('ready_for_pickup', $orderTwoBulky->fresh()->order_status);
