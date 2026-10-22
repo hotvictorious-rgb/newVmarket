@@ -430,6 +430,7 @@ class SupplierOfferSelectionServiceTest extends TestCase
             'business_name' => 'Supplier ' . $suffix,
             'business_phone' => '08030000002',
             'marketplace_status' => $suffix === 'inactive' ? 'suspended' : 'active',
+            'kyc_status' => 'verified',
         ]);
         $shop = Shop::create([
             'vendor_id' => $vendor->id,

@@ -1281,7 +1281,7 @@
                 </div>
                 <div>
                     <h3 class="vm-modal-title" id="vmLocationModalTitle">Delivering to</h3>
-                    <p class="vm-modal-subtitle">Centrally fulfilled from Uyo. Door-to-door delivery in Uyo and verified regional delivery to active destinations.</p>
+                    <p class="vm-modal-subtitle">Centrally fulfilled from Uyo. Doorstep delivery exclusively within Uyo LGA. We never deliver outside Uyo.</p>
                 </div>
             </div>
 
@@ -1291,7 +1291,7 @@
                     <span class="vm-flag-tag">NG</span>
                     <span class="vm-country-name">Nigeria</span>
                 </div>
-                <span class="vm-country-sub">Uyo & Active Regional Routes</span>
+                <span class="vm-country-sub">Uyo LGA Doorstep Delivery Only</span>
             </div>
 
             <!-- Search Input with Autocomplete -->
@@ -1304,7 +1304,7 @@
                             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
                     </span>
-                    <input type="text" id="vmLgaSearchInput" class="vm-modal-input vm-lga-search-input" placeholder="Search delivery LGA (e.g. Uyo, Eket, Ikot Ekpene, Aba)..." value="{{ session('customer_city', 'Uyo') }}" autocomplete="off">
+                    <input type="text" id="vmLgaSearchInput" class="vm-modal-input vm-lga-search-input" placeholder="Uyo LGA, Akwa Ibom State (Doorstep Delivery Only)" value="{{ session('customer_city', 'Uyo') }}" autocomplete="off">
                     <button type="button" class="vm-input-clear-btn" id="vmLgaClearBtn" aria-label="Clear">×</button>
                 </div>
 
@@ -1317,7 +1317,7 @@
                 <span class="vm-chips-heading">ACTIVE DELIVERY DESTINATIONS:</span>
                 <div class="vm-city-chips-grid">
                     @php
-                        $popularCities = ['Uyo', 'Eket', 'Ikot Ekpene', 'Oron', 'Abak', 'Ikot Abasi', 'Aba', 'Calabar', 'Port Harcourt'];
+                        $popularCities = ['Uyo'];
                         $currentActiveCity = session('customer_city', 'Uyo');
                         $popularLgas = \App\Models\Lga::whereIn('name', $popularCities)->pluck('id', 'name')->toArray();
                     @endphp
@@ -1346,9 +1346,9 @@
                         <strong class="vm-selected-city-text" id="vmPreviewCity">{{ session('customer_city', 'Uyo') }}, {{ session('customer_state', 'Akwa Ibom') }}</strong>
                         <small class="vm-selected-status-text" id="vmPreviewStatus">
                             @if(strcasecmp(session('customer_city', 'Uyo'), 'Uyo') === 0)
-                                Door-to-door delivery within Uyo
+                                Doorstep delivery within Uyo
                             @else
-                                Logistics-managed regional delivery from Uyo
+                                Delivery unavailable outside Uyo (Uyo Doorstep Only)
                             @endif
                         </small>
                     </div>

@@ -7,7 +7,7 @@
             <div>
                 <strong style="font-size: 13.5px; color: #1E3A8A; display: block; margin-bottom: 2px;">Delivering from Uyo Central to {{ $activeCity }}</strong>
                 <div style="font-size: 11.5px; color: #3B82F6; line-height: 1.4;">
-                    Orders are centrally fulfilled from Uyo, Akwa Ibom State via verified regional logistics delivery.
+                    Orders are centrally fulfilled in Uyo, Akwa Ibom State via door-to-door doorstep delivery.
                 </div>
             </div>
         </div>

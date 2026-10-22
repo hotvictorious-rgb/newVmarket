@@ -200,7 +200,7 @@
                     <div style="background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
                         <div style="display: flex; align-items: center; gap: 8px; color: #1D4ED8; font-weight: 700; font-size: 13.5px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-                            <span>{{ strtolower($activeCity) === 'uyo' ? 'Doorstep to' : 'Regional Delivery to' }} {{ $activeCity }}: &#8358;{{ number_format((float)$deliveryCheck['fee'], 2) }}</span>
+                            <span>{{ strtolower($activeCity) === 'uyo' ? 'Doorstep Delivery in' : 'Delivery Unavailable Outside Uyo - ' }} {{ $activeCity }}: &#8358;{{ number_format((float)$deliveryCheck['fee'], 2) }}</span>
                         </div>
                         <span style="background: #DBEAFE; color: #1E40AF; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>

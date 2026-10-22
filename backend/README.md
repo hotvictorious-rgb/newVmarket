@@ -1,64 +1,13 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Victorious MARKET — Backend Service
 
+> **Authoritative Master Blueprint:** This application is strictly governed by [VICTORIOUS_MARKET_MASTER_BLUEPRINT.md](../VICTORIOUS_MARKET_MASTER_BLUEPRINT.md).
 
-> **Current delivery-first fulfilment policy (21 October 2026):** Victorious MARKET is one customer-facing retailer using private suppliers behind the scenes. Doorstep delivery is the only standard online fulfilment method. Do not offer automated in-shop pickup reservations, supplier/shop selection, or supplier-address disclosure in customer checkout. Customers who prefer pickup must contact VM support; support may confirm an exception only after checking the complete order, availability, physical readiness, approved collection point, payment arrangement and customer agreement. Never disclose a collection address or say an order is ready before confirmation. For multi-product orders, VM coordinates the complete order; customers must not be sent to multiple suppliers by default. Legacy pickup/multi-vendor code and historical records remain compatibility/audit material until safely retired; documentation alignment alone does not mean runtime routes or production legal terms have been disabled. See `docs/architecture/RETAILER_FULFILMENT_SIMPLIFICATION_2026-10-21.md` for the binding workflow and implementation acceptance criteria.
+Built specifically for **Uyo, Akwa Ibom State**, this platform operates as a centrally managed retailer engine enforcing:
+1. **The Plaza Centralization Law:** Sourcing from the central Plaza commercial cluster.
+2. **SKU-Level Deterministic Sourcing:** 4 hard filters + multi-item shop consolidation + `cost_price ASC` sorting.
+3. **One Order, One Rider:** A single rider owns the entire customer order from all pickup stops to the doorstep.
+4. **Bulky Contagion & Keke Isolation:** Any bulky item (`is_bulky = true`) forces the entire order onto a dedicated, isolated Keke trip.
+5. **Cryptographic Proof Over Trust:** Live camera photo + Shop Pickup OTP per stop; live camera photo + Delivery OTP at customer doorstep.
+6. **Corridor Logistics:** 8 Master Uyo Road Corridors (`COR-01` to `COR-08`) with pre-negotiated flat 3PL trip rates.
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
-
-> **Victorious MARKET project note:** This Laravel application is being aligned to a centrally managed retailer model based in Uyo. Suppliers are private product sources linked to approved offers and order items; delivery is coordinated through approved logistics companies, and every assigned rider must be linked to exactly one active logistics company. New supplier payables use immutable agreed wholesale cost and become eligible only after verified handover and reconciliation. Active customer cashback is 5% of eligible post-discount merchandise funded by real money used to complete the order, excluding delivery and cashback/discount-funded value; the existing claim, maturity, expiry, redemption and recovery terms remain in force. New doorstep delivery defaults to 90% of the delivery fee payable to the logistics company (not its rider), with a reasoned, audited Super Admin override before rider custody; any amount above the fee is a VM-funded subsidy. The former 90/5/5 merchandise split and vendor 90/10 delivery earning are historical only. See the [root project README](../README.md), [retailer/supplier operating model](../RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md), and [authoritative system rules](../VICTORIOUS_MARKET_SYSTEM_RULES_V1.md). Documentation changes do not prove the application has completed migration.
-
-## About Laravel
-
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
-
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
-
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-## Laravel Sponsors
-
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
-
-### Premium Partners
-
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
-
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+For full architectural laws, pricing formulas, and settlement workflows, see [VICTORIOUS_MARKET_MASTER_BLUEPRINT.md](../VICTORIOUS_MARKET_MASTER_BLUEPRINT.md).

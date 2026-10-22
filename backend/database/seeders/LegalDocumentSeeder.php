@@ -1,6 +1,6 @@
 <?php
 
-/* Current policy: delivery-first retailer; pickup is support-managed only. See docs/architecture/RETAILER_FULFILMENT_SIMPLIFICATION_2026-10-21.md. Legacy pickup terms below must not authorize new public reservations or early supplier-address disclosure. */
+/* Authoritative policy: Central Retailer and Logistics Engine. See VICTORIOUS_MARKET_MASTER_BLUEPRINT.md. */
 
 namespace Database\Seeders;
 

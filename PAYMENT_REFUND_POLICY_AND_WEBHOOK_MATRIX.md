@@ -1,19 +1,7 @@
 # VICTORIOUS MARKET — Payment, Refund, Settlement & Paystack Webhook Policy
 
+> **Authoritative Master Blueprint:** This policy operates strictly under [VICTORIOUS_MARKET_MASTER_BLUEPRINT.md](VICTORIOUS_MARKET_MASTER_BLUEPRINT.md). Payment completion via Paystack, cryptographic HMAC webhook gates, dual OTP verification (shop pickup and customer doorstep), and automated double-entry ledger settlements must strictly adhere to the Master Blueprint.
 
-> **Current delivery-first fulfilment policy (21 October 2026):** Victorious MARKET is one customer-facing retailer using private suppliers behind the scenes. Doorstep delivery is the only standard online fulfilment method. Do not offer automated in-shop pickup reservations, supplier/shop selection, or supplier-address disclosure in customer checkout. Customers who prefer pickup must contact VM support; support may confirm an exception only after checking the complete order, availability, physical readiness, approved collection point, payment arrangement and customer agreement. Never disclose a collection address or say an order is ready before confirmation. For multi-product orders, VM coordinates the complete order; customers must not be sent to multiple suppliers by default. Legacy pickup/multi-vendor code and historical records remain compatibility/audit material until safely retired; documentation alignment alone does not mean runtime routes or production legal terms have been disabled. See `docs/architecture/RETAILER_FULFILMENT_SIMPLIFICATION_2026-10-21.md` for the binding workflow and implementation acceptance criteria.
-
-> **Superseding owner decision (21 October 2026):** VM is a retailer operating from Uyo; suppliers are private product sources, not public marketplace sellers. VM owns customer-facing delivery through approved logistics companies, and every assigned rider must be linked to exactly one active logistics company. Authorized supplier-shop pickup remains available. Supplier payment eligibility begins only after verified successful customer delivery or confirmed customer pickup and reconciliation. Former vendor commissions, vendor payout thresholds, 90/5/5 merchandise allocation, 90/10 vendor delivery allocation, and vendor-managed delivery are not defaults for new retailer-model transactions. Existing customer payment/refund security controls remain. Active retailer cashback is 5% under the defined existing terms, and the default logistics-company payable is 90% of the delivery fee with audited admin override. See [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md).
-
-**Status:** Owner-confirmed policy baseline for payment/refund decisions recorded on 20 October 2026. The business questions in this decision set are resolved; technical implementation and verification gaps remain open. Implementation gaps are not completed fixes.
-**Prepared:** 20 October 2026
-**Branch:** audit/paystack-refund-webhook-safety
-**Canonical delivery rules:** .ai/BUSINESS_RULES.md
-**No-merge rule:** Do not merge to main without explicit owner approval.
-
-## 1. Scope and authority
-
-This policy governs payment-provider verification, customer refunds, webhook handling, reconciliation and financial safety. For the current business model, read it with [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md) and [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md). Legacy vendor child-order, commission and payout language below is retained only where needed to describe existing code/history; it is not authority to apply marketplace allocations to new retailer-model transactions.
 
 The owner-confirmed decisions below are binding for the audit plan. Paystack card and standard bank transfer are the approved launch rails. No numeric second-approval threshold has been approved; keep any high-value second-approval threshold configurable and do not hard-code an unapproved amount. These are business decisions; they do not mean implementation is complete. Do not merge to main without explicit owner approval.
 
