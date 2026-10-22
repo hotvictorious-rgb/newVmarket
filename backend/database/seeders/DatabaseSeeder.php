@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             NigeriaGeographySeeder::class,
             InitialDeliveryLanesSeeder::class,
+            InitialDeliveryCorridorsSeeder::class,
             EcosystemDemoSeeder::class,
             LegalDocumentSeeder::class,
         ]);
