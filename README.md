@@ -293,11 +293,12 @@ These documents serve different purposes and should remain consistent:
 3. [VICTORIOUS_MARKET.md](VICTORIOUS_MARKET.md) — broader product vision and operating model.
 4. [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md) — legacy source-audit findings plus the binding retailer-model supersession notice at the top.
 5. [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) — payment channels, refund policy, legacy financial history and Paystack event matrix; the retailer-model supersession notice controls new transactions.
-6. [VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md](VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md) — code observations, implementation gaps and verification checklist.
+6. [VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md](VENDOR_MANAGED_DELIVERY_IMPLEMENTATION_AUDIT.md) — historical source audit of the former vendor-managed model; reverify any old findings against the current candidate and use the current Uyo-only blueprint for release blockers.
 7. [DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md](DELIVERY_SIMPLIFICATION_AND_FINANCIAL_INTEGRITY.md) — delivery and accounting implementation plan.
 8. [SHARED_HOSTING_DEPLOYMENT_GUIDE.md](SHARED_HOSTING_DEPLOYMENT_GUIDE.md) — deployment instructions.
+9. [Branch consolidation and retirement plan](docs/architecture/BRANCH_CONSOLIDATION_AND_RETIREMENT_PLAN_2026-10-22.md) — branch comparison, safe retirement gates and current CI blockers.
 
-If documents conflict, follow the current owner-confirmed retailer model in `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md`, then reconcile the code and every downstream policy before release. This branch is documentation and audit work; it does not claim that the application has already been migrated. The old multi-vendor checkout, vendor commission/payout splits, vendor-managed delivery and vendor-linked riders are legacy assumptions until a separate implementation migration is completed.
+If documents conflict, follow the current owner-confirmed retailer model in `RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md`, then reconcile the code and every downstream policy before release. This consolidation branch contains policy/documentation alignment and targeted code corrections, but it does not claim that the application has already been migrated or that the required test suite is passing. The old multi-vendor checkout, vendor commission/payout splits, vendor-managed delivery and vendor-linked riders are legacy assumptions until a separate implementation migration is completed.
 
 ---
 
