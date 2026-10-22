@@ -33,7 +33,7 @@ Victorious MARKET is the sole customer-facing retailer. Suppliers are private be
 The corridor list does not make Plaza a mandatory supplier hub. Admin must maintain clear landmark mapping; unsupported destinations fail closed.
 
 ## Customer delivery fee and logistics payable are separate
-- **Customer charge:** per-order base delivery fee + configured customer bulky surcharge per applicable physical bulky unit.
+- **Customer charge:** one configured flat customer base fee per order, independent of corridor, plus configured customer bulky surcharge per applicable physical bulky unit. This is separate from the logistics company's corridor tariff.
 - **Logistics payable:** assigned logistics company’s configured corridor base payable + its configured bulky-unit surcharge per applicable physical bulky unit.
 - Snapshot the corridor, company, tariff version, base, bulky units/rate and total. If payable exceeds collected delivery revenue, record the difference as VM subsidy/expense. Pay the logistics company, not automatically the rider.
 
