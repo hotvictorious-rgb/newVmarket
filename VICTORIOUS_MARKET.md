@@ -71,14 +71,14 @@ Customer payment must be verified against authoritative payment-provider informa
 
 ### Retail accounting replaces marketplace commission splits
 
-The former 90% vendor / 5% cashback / 5% platform merchandise split is **retired** for the retailer model. The separate logistics-company delivery rule is: default 90% of the customer delivery fee to the logistics company and 10% VM delivery margin, subject to an audited admin override.
+The former 90% vendor / 5% cashback / 5% platform merchandise split and former 90% customer-delivery-fee allocation are **retired for new retailer orders**. Customer delivery pricing and logistics-company payables are independent: the customer pays one configured base fee per order plus the configured surcharge for each physical bulky unit; the logistics company receives its separately configured corridor base payable plus its per-bulky-unit surcharge. Any company payable above customer delivery revenue is recorded as an explicit VM-funded delivery subsidy. The company—not the rider—is the payee.
 
 Victorious MARKET accounts for transactions as a retailer:
 - **Wholesale Cost Price (`cost_price`):** Agreed price owed to the private supplier.
 - **Retail Selling Price (`unit_price`):** Customer-facing price published by VM (`Wholesale Cost + VM Profit Margin`).
 - **VM Gross Profit Margin:** `Retail Selling Price - Supplier Wholesale Cost = VM Gross Margin`.
 - **Customer 5% Cashback (active):** Cashback is funded from VM's gross retail margin, never deducted from supplier wholesale cost. Earn 5% only on eligible post-discount merchandise actually funded by real money through VM's verified Paystack flow, after redeemed cashback; exclude delivery, discounts and cashback-funded value. Cashback matures after verified fulfilment + the 24-hour claim window + the separate 24-hour maturity buffer, provided no blocking case remains. Its 365-day validity begins at maturity. Redemption is capped at 50% of cart merchandise subtotal. Refunds reverse unspent cashback; spent-cashback recovery is tracked separately and may be offset only against future matured cashback under the existing terms.
-- **Delivery Revenue & Expense:** The default logistics-company payable is 90% of the customer delivery fee; VM's default delivery margin is the remaining 10%. The company—not the rider—is the payee under this rule. Authorized admins can approve a higher or lower amount with an immutable reason/approver/time audit. Any amount above the fee is recorded as an explicit VM delivery subsidy.
+- **Delivery Revenue & Expense:** New logistics-company payable equals the assigned company's snapshotted corridor base payable plus its configured per-bulky-unit surcharge, not a percentage of the customer delivery fee. Any excess over customer delivery revenue is recorded as a VM-funded delivery subsidy. The company—not the rider—is the payee. The former 90% allocation is historical-only.
 
 Suppliers receive 100% of their agreed wholesale cost upon verified completion. No percentage commission is deducted from suppliers.
 
@@ -92,7 +92,7 @@ The current payment, webhook, idempotency, refund authorization, original-paymen
 
 ## 7. Supplier Operations and Availability
 
-VM can source products after customer order, hold stock for selected fast-moving products, or use a hybrid approach. The system must clearly distinguish supplier-reported availability, VM-confirmed availability, stock actually held by VM, and a product reserved for an order. Supplier availability is not a guaranteed physical stock count unless verified.
+VM may maintain stock for selected fast-moving products or source through private suppliers after verified customer payment. A pre-payment availability check is only a non-binding quote; the selected source and wholesale-cost snapshot must be revalidated and bound after verified payment.
 
 Before confirming an order, VM must validate the selected supplier offer and its current availability, agreed purchase cost, fulfilment location, and ability to meet the expected delivery/pickup commitment. The order item snapshots the chosen offer and cost. If the supplier cannot fulfill, the system must stop fulfilment and follow the authorized cancellation/refund workflow rather than silently substituting a different offer or increasing the customer's price.
 
@@ -100,7 +100,7 @@ Before confirming an order, VM must validate the selected supplier offer and its
 
 ### Central operating base and service coverage
 
-VM operates from Uyo, Akwa Ibom State. It may serve any destination that its current product sourcing and approved logistics arrangements can reliably cover; it must not imply universal or nationwide delivery. Checkout must reject or clearly mark unavailable any destination without a valid current coverage and fee rule. VM owns delivery coverage, customer-facing fee quotes, delivery coordination and customer communication.
+VM's launch boundary is **Uyo LGA, Akwa Ibom State only** for supplier sourcing, customer destinations, active delivery corridors and dispatch. Eket, Oron, Ikot Ekpene, Abak, other LGAs, interstate routes and park/terminal handoffs are future scope and must be rejected for new orders. Only the eight configured Uyo road corridors and their curated landmarks may be used; unknown or ambiguous addresses fail closed.
 
 ### Order-level delivery fee calculation and bulky surcharges
 
@@ -113,19 +113,16 @@ Victorious MARKET charges delivery **per order**, while calculating the fee usin
 | **One order-level fee, calculated from its items** | **Victorious MARKET standard:** One clear total, with fair adjustments for bulky items and the destination. |
 
 **The 5 delivery rules:**
-1. **Base delivery fee per order:** Based on the delivery destination and service corridor (e.g. Uyo municipal door-to-door or enabled regional route).
+1. **Base customer delivery fee per order:** Based on the resolved, active Uyo road corridor. No regional or out-of-Uyo route may be enabled for new orders at launch.
 2. **Bulky surcharge per qualifying product/unit:** Add the configured surcharge for each product unit that cannot fit on a standard dispatch bike (e.g. standing fan, gas cooker, generator).
 3. **Multiple supplier pickups:** Account for additional collection and consolidation costs behind the scenes without charging a separate base delivery fee for every supplier.
 4. **Total shown before payment:** The customer sees one delivery charge at checkout, with an itemized breakdown (Base Route Fee + Bulky Surcharge).
-5. **Logistics company receives 90%:** The logistics company receives 90% of the actual delivery amount collected for that order, including applicable bulky surcharges. The remaining 10% belongs to Victorious MARKET before other expenses, unless an authorized Super Admin override applies with recorded reason and audit trail.
+5. **Separate logistics-company payable:** Admin configures each approved company's base payable and per-bulky-unit surcharge for each active Uyo corridor. The company payable is calculated from that tariff and the order's snapshotted bulky quantity; it is independent of the customer delivery fee and never calculated as 90% of that fee. Overrides require authorized actor, reason, timestamp and immutable audit.
 
-**Illustrative example:**
-- Base delivery fee: ₦1,000
-- Bulky surcharge for a standing fan: ₦500
-- **Total customer delivery fee:** **₦1,500**
-  - Logistics company payable (90%): **₦1,350**
-  - Victorious MARKET delivery margin (10%): **₦150**
-*(These figures are illustrative, not proposed official tariffs.)*
+**Calculation example (illustrative only):**
+- Customer delivery fee = configured customer base fee + (customer bulky surcharge × bulky physical quantity).
+- Logistics-company payable = that company's configured corridor base payable + (that company's bulky surcharge × bulky physical quantity).
+- These two totals may differ. If the company payable exceeds the customer delivery fee, record the difference as a VM-funded delivery subsidy. Actual tariffs are set by an authorized administrator.
 
 ### Logistics companies and riders
 
