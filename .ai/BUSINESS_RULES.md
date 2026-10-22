@@ -79,7 +79,7 @@ This decision record supersedes older vendor-delivery Q&A decisions for new work
 
 ## 4. Order assignment and reassignment
 
-1. VM or its authorized operations actor assigns a deliverable order/fulfilment unit to an active approved logistics company and one eligible rider linked to that company.
+1. VM or its authorized operations actor assigns the complete customer order to one active approved logistics company and exactly one eligible rider linked to that company. Internal supplier assignments never split the customer order or create additional riders or customer delivery fees.
 2. Validate order identity, destination coverage, fulfilment state, payment/order eligibility, company status, rider status, existing assignment and custody state within a transaction/locking strategy.
 3. A supplier cannot assign a supplier-owned rider or directly change VM's logistics assignment.
 4. Reassignment before custody must be audited. After custody begins, require an explicit custody-transfer or return-to-origin workflow with actor, timestamp and evidence.
