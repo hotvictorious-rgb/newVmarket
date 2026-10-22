@@ -14,7 +14,7 @@ Maintain one active integration branch for the Uyo-only retailer model while kee
 - Draft PR #12: `align/vmarket-single-source-2026-10-22` → `docs/retailer-central-fulfilment-model`.
 - PR #12 is open, unmerged and not release-approved.
 - Latest observed focused workflow: run 39749874290. Composer install and configured PHP syntax checks passed; the financial/audit test step failed with 268 passed, 12 failed (1,772 assertions).
-- A verified schema blocker remains: new retailer-order tests cannot create a single customer order with multiple internal supplier assignments because `orders.vendor_id` is still NOT NULL.
+- A schema migration has now been added to make legacy `orders.vendor_id` nullable for centrally owned retailer orders. It is not closed until CI confirms migration/foreign-key compatibility, order tests pass and rollback is safely guarded.
 - Checkout currently resolves/snapshots a whole-order source plan before Paystack payment verification. The policy requires binding supplier assignment only after verified payment, or a clearly non-binding quote followed by atomic revalidation/rebinding after payment.
 - Therefore, do not merge or retire source branches yet.
 
