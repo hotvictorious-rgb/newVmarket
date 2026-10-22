@@ -255,8 +255,12 @@ class RiderTerminalApiController extends Controller
             'order_id' => 'required|integer|exists:orders,id',
             'otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
             'proof_photo' => 'required|file|image|mimes:jpeg,png,jpg|max:5120',
+            'proof_latitude' => 'required|numeric|between:-90,90',
+            'proof_longitude' => 'required|numeric|between:-180,180',
         ], [
             'proof_photo.required' => 'A live photo of the package at the merchant counter is strictly mandatory to verify pickup.',
+            'proof_latitude.required' => 'Location permission is required to geotag pickup proof.',
+            'proof_longitude.required' => 'Location permission is required to geotag pickup proof.',
         ]);
 
         if ($error = $this->guardRiderWithLogistics($request)) {
@@ -280,7 +284,15 @@ class RiderTerminalApiController extends Controller
             $photoPath = $opt['path'];
         }
 
-        $result = $this->settlementService->verifyRiderPickupOtp($order, $validated['otp'], $rider, $photoPath);
+        $result = $this->settlementService->verifyRiderPickupOtp(
+            $order,
+            $validated['otp'],
+            $rider,
+            $photoPath,
+            null,
+            (float) $validated['proof_latitude'],
+            (float) $validated['proof_longitude']
+        );
 
         return response()->json([
             'status' => $result['success'],
@@ -455,8 +467,12 @@ class RiderTerminalApiController extends Controller
             'order_id' => 'required|integer|exists:orders,id',
             'otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
             'proof_photo' => 'required|file|image|mimes:jpeg,png,jpg|max:5120',
+            'proof_latitude' => 'required|numeric|between:-90,90',
+            'proof_longitude' => 'required|numeric|between:-180,180',
         ], [
             'proof_photo.required' => 'A live photo of the package at the customer doorstep is strictly mandatory to complete delivery.',
+            'proof_latitude.required' => 'Location permission is required to geotag doorstep proof.',
+            'proof_longitude.required' => 'Location permission is required to geotag doorstep proof.',
         ]);
 
         if ($error = $this->guardRiderWithLogistics($request)) {
@@ -480,7 +496,15 @@ class RiderTerminalApiController extends Controller
             $photoPath = $opt['path'];
         }
 
-        $result = $this->settlementService->verifyCustomerDeliveryOtp($order, $validated['otp'], $rider, $photoPath);
+        $result = $this->settlementService->verifyCustomerDeliveryOtp(
+            $order,
+            $validated['otp'],
+            $rider,
+            $photoPath,
+            null,
+            (float) $validated['proof_latitude'],
+            (float) $validated['proof_longitude']
+        );
 
         return response()->json([
             'status' => $result['success'],
