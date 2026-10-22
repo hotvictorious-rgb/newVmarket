@@ -802,4 +802,31 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertSame($vendorB->id, $selected['vendor_id']);
     }
 
+    public function test_initial_delivery_corridor_seeder_creates_all_eight_uyo_roads(): void
+    {
+        app(\\Database\\Seeders\\InitialDeliveryCorridorsSeeder::class)->run();
+
+        foreach ([
+            'uyo-oron-road',
+            'uyo-nwaniba-road',
+            'uyo-aka-road',
+            'uyo-abak-road',
+            'uyo-ikot-ekpene-road',
+            'uyo-itu-road',
+            'uyo-ikpa-road',
+            'uyo-plaza',
+        ] as $code) {
+            $this->assertDatabaseHas('delivery_corridors', [
+                'code' => $code,
+                'lga_id' => $this->uyoLga->id,
+                'is_active' => true,
+            ]);
+        }
+
+        $plaza = DeliveryCorridor::where('code', 'uyo-plaza')->firstOrFail();
+        $this->assertContains('Ibom Plaza', $plaza->landmark_aliases);
+        $this->assertSame([], $plaza->companyRates()->get()->all(),
+            'Company payables must be configured separately by an administrator.');
+    }
+
 }
