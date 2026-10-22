@@ -20,7 +20,7 @@
 - Before verified payment, stock/catalogue/cart checks are non-binding. No supplier lock, order-specific reservation, binding notification or supplier payable may be created.
 - After verified payment, revalidate current stock and supplier eligibility before allocation.
 - Supplier eligibility: active/approved; one approved Uyo location; explicit in-stock offer with sufficient quantity; SKU-specific 24-hour unavailable cooldown expired; fewer than five active pending handovers.
-- Choose feasible whole-order plans by fewest pickup locations, lowest total wholesale cost, reliability, then deterministic tie-break. An order may use multiple suppliers but one rider from one approved logistics company handles the complete customer order.
+- Compare only feasible plans that can fulfil the whole order: minimize distinct pickup locations first; among equally consolidated plans, minimize total wholesale cost; then prefer documented reliability and a deterministic tie-break. An order may use multiple suppliers but one rider from one approved logistics company handles the complete customer order.
 - Admin overrides require authorization, reason and immutable audit, and cannot bypass payment verification or safety rules.
 
 ## Logistics and evidence
@@ -30,7 +30,7 @@
 - Support-managed pickup is exceptional, not public pre-payment reservation. Confirm only after complete-order readiness at one approved point, authorized payment arrangement, customer agreement and required evidence are verified.
 
 ## Money rules
-- Customer delivery charge = one base fee per customer order + configured customer bulky surcharge per applicable physical bulky unit.
+- Customer delivery charge = one configured flat customer base fee per order, independent of corridor, + configured customer bulky surcharge per applicable physical bulky unit. The logistics company's corridor tariff is separate.
 - Logistics company payable = admin-configured company/corridor base payable + that company’s configured bulky-unit surcharge per applicable physical bulky unit. These are separate calculations.
 - The former “90% of customer delivery fee” payable is retired; never use it as a default/fallback. Snapshot company, corridor, tariff/version, base payable, bulky units/rate and total. If payable exceeds delivery revenue, record VM subsidy/expense. Logistics company is payee, not automatically rider.
 - Supplier payable uses immutable wholesale-cost snapshots and is eligible only after verified delivery or authorized completion exception plus reconciliation.
