@@ -18,7 +18,7 @@
                 <span>Fleet Logistics Operations Center</span>
             </h1>
             <p class="page-header-subtitle">
-                Company: <strong style="color: var(--adm-text);">{{ $company->company_name ?? 'Victorious Express Logistics Uyo' }}</strong> — Supervise directional LGA delivery corridors, couriers, and 90% logistics delivery earnings.
+                Company: <strong style="color: var(--adm-text);">{{ $company->company_name ?? 'Victorious Express Logistics Uyo' }}</strong> — Supervise Uyo road corridors, fleet dispatch, and the company’s independently negotiated corridor payables.
             </p>
         </div>
         <div style="display: flex; gap: 8px;">
@@ -50,9 +50,9 @@
 
         <div class="stat-card stat-card-border-emerald">
             <div class="stat-card-info">
-                <span class="stat-card-label">90% Delivery Fee Wallet</span>
+                <span class="stat-card-label">Company Corridor Payables</span>
                 <span class="stat-card-value">₦{{ number_format($fleetMetrics['accumulated_fees'], 2) }}</span>
-                <span class="stat-card-subtext" style="color: var(--adm-success);">Verified OTP Earnings</span>
+                <span class="stat-card-subtext" style="color: var(--adm-success);">Released after verified delivery</span>
             </div>
             <div class="stat-card-icon-box icon-box-emerald">💼</div>
         </div>
@@ -64,6 +64,26 @@
                 <span class="stat-card-subtext" style="color: var(--adm-info);">Total Handshakes</span>
             </div>
             <div class="stat-card-icon-box icon-box-blue">🏁</div>
+        </div>
+    </div>
+
+    <!-- The eight Uyo road corridors -->
+    <div class="dash-card" style="margin-bottom: 28px;">
+        <div class="dash-card-header">
+            <div>
+                <div class="dash-card-title">Eight Uyo Road Corridors</div>
+                <span class="dash-card-subtitle">Counts include only active retailer orders assigned to this logistics company.</span>
+            </div>
+            <a href="{{ route('logistics.waybills.index') }}" class="btn-dash btn-dash-primary">Open corridor tabs →</a>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; padding:0 18px 18px;">
+            @foreach($corridors as $corridor)
+                <div style="border:1px solid var(--adm-border); border-radius:10px; padding:12px;">
+                    <div style="font-size:12px; font-weight:800; color:var(--adm-text);">{{ $corridor->name }}</div>
+                    <div style="font-size:22px; font-weight:800; color:var(--adm-primary); margin-top:6px;">{{ $activeDeliveries->where('delivery_corridor_id', $corridor->id)->count() }}</div>
+                    <div style="font-size:10.5px; color:var(--adm-text-muted);">assigned orders</div>
+                </div>
+            @endforeach
         </div>
     </div>
 
@@ -84,7 +104,7 @@
                         <span class="dash-badge dash-badge-purple">{{ count($activeRiders) }} Couriers</span>
                     </div>
                     <div class="module-card-title">Rider Roster &amp; Shifts</div>
-                    <div class="module-card-desc">Assign couriers to LGA delivery corridors, inspect vehicle compliance, and monitor active duty shifts.</div>
+                    <div class="module-card-desc">Assign Uyo fleet riders, inspect motorcycle/Keke compliance, and monitor active duty shifts.</div>
                 </div>
                 <div class="module-card-footer">
                     <span style="font-size: 11.5px; color: #047857; font-weight: 700;">● Active Roster</span>
@@ -101,7 +121,7 @@
                         <span class="dash-badge dash-badge-gold">{{ count($activeDeliveries) }} Dispatches</span>
                     </div>
                     <div class="module-card-title">Directional LGA Waybills Manifest</div>
-                    <div class="module-card-desc">Monitor parcels in transit from branch counters across Akwa Ibom corridors to customer doorsteps.</div>
+                    <div class="module-card-desc">Monitor retailer orders assigned to your company across the eight Uyo road corridors.</div>
                 </div>
                 <div class="module-card-footer">
                     <span style="font-size: 11.5px; color: var(--adm-text-muted);">Corridor Tracking</span>
@@ -115,13 +135,13 @@
                 <div>
                     <div class="module-card-header">
                         <div class="module-card-icon" style="background: rgba(16, 185, 129, 0.1); color: var(--adm-success);">💼</div>
-                        <span class="dash-badge dash-badge-success">90% Cut</span>
+                        <span class="dash-badge dash-badge-success">Configured Tariff</span>
                     </div>
                     <div class="module-card-title">90% Delivery Fee Wallet</div>
-                    <div class="module-card-desc">Review 90% delivery revenue cuts credited to corporate wallet upon verified customer OTP delivery.</div>
+                    <div class="module-card-desc">Review your admin-configured corridor payable and bulky surcharge, released only after verified delivery and reconciliation.</div>
                 </div>
                 <div class="module-card-footer">
-                    <span style="font-size: 11.5px; color: #059669; font-weight: 700;">● Instant Escrow</span>
+                    <span style="font-size: 11.5px; color: #059669; font-weight: 700;">● Reconciled payout</span>
                     <a href="{{ route('logistics.wallet.index') }}" class="btn-dash btn-dash-primary" style="padding: 6px 14px; font-size: 12px; font-weight: 700;">
                         Open Fee Wallet &rarr;
                     </a>
