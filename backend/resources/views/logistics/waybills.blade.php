@@ -100,7 +100,21 @@
                                 <span style="font-size: 11.5px; color: var(--adm-text-muted);">{{ $order->customer->phone ?? 'N/A' }}</span>
                             </td>
                             <td>
-                                <span class="dash-badge dash-badge-purple">{{ $order->rider->user->name ?? 'Assigned Courier' }}</span>
+                                <span class="dash-badge dash-badge-purple">{{ $order->rider->user->name ?? 'Unassigned' }}</span>
+                                @php($isBulkyForDispatch = $order->items->contains(fn ($item) => (bool) $item->is_bulky_snapshot))
+                                @php($eligibleRiders = $companyRiders->filter(fn ($candidate) => $isBulkyForDispatch ? in_array(strtolower((string) $candidate->vehicle_type), ['keke', 'tricycle'], true) : in_array(strtolower((string) $candidate->vehicle_type), ['motorcycle', 'motorbike', 'bike'], true)))
+                                @if($order->payment_status === 'paid' && !$order->pickup_confirmed_by_rider && !in_array($order->order_status, ['out_for_delivery', 'delivered', 'cancelled', 'returned', 'disputed'], true))
+                                    <form method="POST" action="{{ route('logistics.orders.assign_rider', $order->id) }}" style="margin-top:8px; display:flex; gap:5px; flex-wrap:wrap;">
+                                        @csrf
+                                        <select name="rider_id" required style="max-width:160px; font-size:11px; padding:5px;">
+                                            <option value="">Choose {{ $isBulkyForDispatch ? 'Keke' : 'motorcycle' }}</option>
+                                            @foreach($eligibleRiders as $candidate)
+                                                <option value="{{ $candidate->id }}" @selected((int) $order->rider_id === (int) $candidate->id)>{{ $candidate->user->name ?? 'Fleet Rider' }}</option>
+                                            @endforeach
+                                        </select>
+                                        <button type="submit" class="btn-dash btn-dash-primary" style="padding:5px 8px; font-size:11px;">Assign</button>
+                                    </form>
+                                @endif
                             </td>
                             <td style="font-weight: 800; color: #059669;">
                                 ₦{{ number_format($order->delivery_fee ?? 1500, 2) }}
