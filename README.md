@@ -78,13 +78,13 @@ Existing approved customer payment paths and Paystack verification safeguards re
 
 The standard customer return/claim window is **24 hours from verified doorstep delivery**. A support-managed pickup exception must use the same approved customer-protection rules and its own recorded handover evidence; it does not reinstate automated pickup reservations. This is a customer-protection window; it is **not** a promise that Paystack will process a refund within 24 hours.
 
-- The backend must use the approved 24-hour setting consistently across customer interfaces, APIs, services, jobs, and vendor settlement eligibility, evaluated independently per vendor child order.
+- The backend must use the approved 24-hour setting consistently across customer interfaces, APIs, services and jobs. For new retailer orders, evaluate the customer-order claim clock and any blocking return/dispute before the relevant supplier payable or cashback is released. Preserve per-child clocks only for historical marketplace transactions.
 - The 24-hour period is the standard operational claim/reporting window, not a blanket waiver of rights that cannot lawfully be excluded. It must not be presented as eliminating remedies available under the Federal Competition and Consumer Protection Act or other applicable Nigerian law, including where goods are defective, unsafe, misdescribed, or non-conforming. Applicable law and valid warranty obligations prevail where they provide a stronger remedy; obtain qualified Nigerian legal review of customer-facing Terms before launch.
 - A return request, dispute, failed delivery, unconfirmed pickup, or other blocking case must be evaluated before affected vendor earnings or cashback are released.
 - Verified duplicate successful charges, verified paid orders cancelled before any vendor action, payment exceptions, chargebacks, and applicable non-waivable legal obligations follow their own evidence and authorization rules. The fulfilment-based 24-hour clock does not erase those obligations.
 - Only verified duplicate charges and verified paid orders cancelled before any vendor action qualify for the narrow automatic-refund-approval exception. Other refunds require persisted authorized human approval before dispatch.
 - The platform remains responsible for executing an approved customer refund. Vendor recovery, where justified by the actual allocation and approved reason, is a separate auditable process; it must not be confused with whether the customer refund succeeded.
-- Refunds are limited by the affected child order's captured allocation and the aggregate parent capture. Previously refunded amounts and approved merchandise/delivery components must be accounted for. Concurrent requests must not exceed either ceiling.
+- New retailer refunds are limited by the affected customer order/item's actual captured allocation and the original Paystack capture ceiling. Preserve child-order allocation ceilings only for historical marketplace transactions. Previously refunded amounts and separately approved merchandise/delivery components must be accounted for; concurrent requests must not exceed any applicable ceiling.
 - At launch, the refund goes through Paystack against the verified original transaction. Do not silently substitute wallet credit, an alternate bank destination, or an off-platform transfer.
 
 ### Cashback maturity is a separate clock
@@ -173,14 +173,14 @@ Webhook subscription must match the enabled Paystack products and channels. The 
 
 | Event | Why it matters |
 |---|---|
-| charge.success | Candidate successful payment signal for card and bank transfer; verify transaction and bind it to the correct parent checkout. |
+| charge.success | Candidate successful payment signal for card and bank transfer; verify the transaction and bind it to the correct customer order and original payment reference. Historical parent/child checkout bindings remain for legacy transactions. |
 | bank.transfer.rejected | Required because standard bank transfer is enabled; record a payment exception and verify provider refund/status before taking action. Avoid issuing a duplicate refund. |
 | refund.pending | Track a refund that has not reached a final outcome. |
 | refund.processing | Track gateway processing without marking the refund complete. |
 | refund.processed | Confirm only when event identity, operation, amount, currency and original transaction all match. |
 | refund.failed | Preserve the obligation and reconcile whether a safe retry or manual review is required. |
 | refund.needs-attention | Alert authorized operators; keep the customer refund obligation open. Do not switch to wallet or alternate-bank payment without a separate approved policy. |
-| transfer.success | Verify transfer identity, amount and currency before marking an authorized vendor payout paid. |
+| transfer.success | Verify transfer identity, amount and currency against the exact approved supplier or logistics-company payable operation before marking it paid; preserve historical vendor payout reconciliation separately. |
 | transfer.failed | Reconcile failure and returned funds; do not let a delayed failure overwrite a confirmed success. |
 | transfer.reversed | Record a genuine reversal and reverse only previously posted disbursement entries. |
 
@@ -265,7 +265,7 @@ Before release, verify at minimum:
 - Cashback reversal/recovery without silent wallet debit.
 - Rider assignments linked exclusively to the assigned active logistics company, protected Call Customer action and rider response privacy.
 - Delivery-first checkout and support-managed pickup exceptions only; no new public RES-XXXXXX pickup reservations.
-- Supplier payable eligibility after verified customer handover and reconciliation; approved logistics-company charges; provider transfer verification and balanced journals. Legacy vendor FIFO payout batching is not a new supplier-payment rule.
+- Supplier payable eligibility after verified customer handover and reconciliation; independently configured logistics-company corridor charges; provider transfer verification and balanced journals. Legacy vendor FIFO payout batching is not a new supplier-payment rule.
 - Legacy logistics paths blocked for new work while historical records remain auditable.
 
 ## Known implementation gaps
