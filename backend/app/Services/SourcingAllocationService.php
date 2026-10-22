@@ -414,6 +414,8 @@ class SourcingAllocationService
         return [
             'product_id' => $product->id,
             'product_name' => $product->name,
+            'package_tier_snapshot' => strtolower((string) ($product->package_tier ?? 'bike')),
+            'is_bulky_snapshot' => in_array(strtolower((string) ($product->package_tier ?? 'bike')), ['keke', 'bulky'], true),
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
             'cost_price' => $resolvedOffer['wholesale_cost'],
