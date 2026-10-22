@@ -197,6 +197,7 @@ Route::middleware(['role:logistics_company'])->prefix('logistics')->group(functi
     Route::get('/riders', [PortalController::class, 'logisticsRidersPage'])->name('logistics.riders.index');
     Route::post('/riders', [PortalController::class, 'logisticsStoreRider'])->name('logistics.riders.store');
     Route::post('/riders/{id}/toggle-active', [PortalController::class, 'logisticsToggleRiderActive'])->name('logistics.riders.toggle_active');
+    Route::post('/orders/{id}/assign-rider', [PortalController::class, 'logisticsAssignRider'])->whereNumber('id')->name('logistics.orders.assign_rider');
     Route::get('/waybills', [PortalController::class, 'logisticsWaybillsPage'])->name('logistics.waybills.index');
     Route::get('/wallet', [PortalController::class, 'logisticsWalletPage'])->name('logistics.wallet.index');
     Route::get('/collection-points', [PortalController::class, 'logisticsCollectionPointsPage'])->name('logistics.collection_points.index');
