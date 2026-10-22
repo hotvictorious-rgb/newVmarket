@@ -107,6 +107,12 @@ class RiderProfile extends Model
             return false;
         }
 
+        // Preserve legacy historical/marketplace routing; strict vehicle and
+        // corridor locks apply to the centrally managed retailer launch model.
+        if (!$order->retailer_model_order) {
+            return true;
+        }
+
         $vehicle = strtolower(trim((string) $this->vehicle_type));
         $requiresKeke = $order->requiresKekeForDelivery();
         if ($requiresKeke && !in_array($vehicle, ['keke', 'tricycle'], true)) {
@@ -123,6 +129,7 @@ class RiderProfile extends Model
         $otherActiveOrders = $this->assignedOrders()
             ->where('orders.id', '<>', $order->id)
             ->where('orders.fulfillment_type', 'doorstep_delivery')
+            ->where('orders.retailer_model_order', true)
             ->whereIn('orders.order_status', $activeStatuses)
             ->get();
 
