@@ -1,9 +1,9 @@
 # Victorious MARKET — Retailer, Supplier and Central Fulfilment Model
 
 
-> **Current delivery-first fulfilment policy (21 October 2026):** Victorious MARKET is one customer-facing retailer using private suppliers behind the scenes. Doorstep delivery is the only standard online fulfilment method. Do not offer automated in-shop pickup reservations, supplier/shop selection, or supplier-address disclosure in customer checkout. Customers who prefer pickup must contact VM support; support may confirm an exception only after checking the complete order, availability, physical readiness, approved collection point, payment arrangement and customer agreement. Never disclose a collection address or say an order is ready before confirmation. For multi-product orders, VM coordinates the complete order; customers must not be sent to multiple suppliers by default. Legacy pickup/multi-vendor code and historical records remain compatibility/audit material until safely retired; documentation alignment alone does not mean runtime routes or production legal terms have been disabled. See `docs/architecture/RETAILER_FULFILMENT_SIMPLIFICATION_2026-10-21.md` for the binding workflow and implementation acceptance criteria.
+> **Current delivery-first fulfilment policy (22 October 2026):** Victorious MARKET is the sole customer-facing retailer operating only within Uyo LGA, Akwa Ibom State for new sourcing, customer destinations and dispatch. Suppliers are private sources. Doorstep delivery is the only standard online fulfilment method. Public pickup reservations, supplier/shop selection and supplier-address disclosure are disabled for new orders. Support may approve pickup only as an exception after checking complete-order availability/readiness at one approved collection point, payment arrangement and customer agreement. One rider handles the complete order; one bulky item makes the order keke-only and exclusive, while only all-small orders may be batched by bike along the same Uyo corridor. New logistics-company payables use the company's configured corridor base payable plus its per-bulky-unit surcharge; the former 90% rule is historical-only.
 
-**Status:** Owner-confirmed business model baseline, 21 October 2026. This document supersedes earlier marketplace/vendor-managed-delivery assumptions for new retailer-model work. It does not assert that application code has already been migrated.
+**Status:** Owner-confirmed business model baseline, 22 October 2026. This document supersedes earlier marketplace/vendor-managed-delivery assumptions for new retailer-model work. It does not assert that application code has already been migrated.
 
 ## 1. Business identity
 
@@ -28,7 +28,7 @@ For every new online order:
 1. The customer orders the canonical product from Victorious MARKET at the published retail price.
 2. Doorstep delivery is the only standard online fulfilment method. The customer pays the merchandise total and the published destination/service delivery fee through the authorized VM checkout.
 3. Pickup is not a checkout or reservation type. A customer who prefers pickup must contact support for a confirmed exception; no automated reservation or supplier/shop selection is exposed.
-4. Sourcing runs server-side for each line using confirmed current availability, active/approved private source status and valid delivery coverage. The system assesses the complete order and feasible fulfilment plan, not merely the cheapest source for each line independently.
+4. After verified Paystack payment, sourcing binds a feasible whole-order plan using confirmed current availability, active/approved private-source status and valid Uyo delivery coverage. Any pre-payment availability result is a non-binding quote; the selected source and wholesale-cost snapshots must be revalidated and committed after verified payment. The system assesses the complete order, not merely the cheapest source for each line independently.
 5. If several sources are required, VM coordinates internal collection/consolidation. Do not expose supplier identity/address or direct the customer to multiple suppliers by default.
 6. Admin may override a source assignment only with appropriate authorization, a recorded reason and an audit trail.
 7. Each order item stores an immutable snapshot of the selected offer/source, agreed wholesale cost, retail price and selection timestamp. Later supplier-price edits must not rewrite existing order economics.
@@ -57,7 +57,7 @@ If coverage is unconfirmed, checkout blocks delivery. VM controls delivery cover
 5. **Admin Logistics Company Assignment:** Once the supplier confirms availability, the order transitions to Admin dispatch. Admin assigns the order to an accredited **Logistics Company** (onboarded strictly by Admin; zero public self-registration).
 6. **Fleet Pickup & Handover:** One customer order is assigned to one active rider from one approved logistics company, even when several Plaza shops supply its items. Every supplier stop requires its own single-use shop-specific pickup OTP and mandatory pickup photo. If any order item is bulky, the entire order requires a keke and that trip is exclusive to that customer; only all-small-item orders may be batched on a bike with compatible orders for the same Uyo road corridor.
 7. **Customer Delivery Handshake:** Doorstep delivery completion strictly requires the server-verified customer OTP (`delivery_otp`) plus a mandatory doorstep delivery photo proof.
-8. **Supplier Settlement:** Only after verified customer delivery is the supplier's wholesale payable unlocked and eligible for settlement.
+8. **Supplier Settlement:** A supplier's immutable wholesale-cost payable becomes eligible only after verified customer delivery—or an explicitly authorized, verified support-managed pickup exception—and successful reconciliation. Eligibility does not trigger an automatic transfer.
 
 ### Order-level delivery fee calculation and bulky surcharges
 
