@@ -557,6 +557,7 @@ class AutomatedSupplierSourcingTest extends TestCase
             'name' => 'Locally Harvested Beans 25kg',
             'slug' => 'local-beans-25kg',
             'unit_price' => '32000.00',
+            'package_tier' => 'keke',
             'cost_price' => '27000.00',
             'is_in_stock' => true,
             'inventory_quantity' => 10,
@@ -632,6 +633,8 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertNotNull($orderItem->supplier_snapshot_at);
         $this->assertNotEmpty($orderItem->supplier_name_snapshot);
         $this->assertNotEmpty($orderItem->supplier_shop_name_snapshot);
+        $this->assertSame('keke', $orderItem->package_tier_snapshot);
+        $this->assertTrue($orderItem->is_bulky_snapshot);
     }
     public function test_recently_unavailable_offer_is_excluded_even_after_admin_reconfirmation(): void
     {
