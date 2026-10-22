@@ -979,9 +979,11 @@ class OrderSettlementService
         string $otp,
         RiderProfile $rider,
         ?string $proofImagePath = null,
-        ?string $pickupNotes = null
+        ?string $pickupNotes = null,
+        ?float $proofLatitude = null,
+        ?float $proofLongitude = null
     ): array {
-        return DB::transaction(function () use ($order, $otp, $rider, $proofImagePath, $pickupNotes) {
+        return DB::transaction(function () use ($order, $otp, $rider, $proofImagePath, $pickupNotes, $proofLatitude, $proofLongitude) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
             if (!$lockedOrder) {
@@ -1059,9 +1061,22 @@ class OrderSettlementService
                     return ['success' => false, 'message' => 'Invalid supplier collection OTP. Verify the code for this supplier package.'];
                 }
 
+                if (!is_string($proofImagePath) || trim($proofImagePath) === '') {
+                    return ['success' => false, 'message' => 'A separate pickup photo is required for every supplier stop.'];
+                }
+                if ($proofLatitude === null || $proofLongitude === null
+                    || $proofLatitude < -90 || $proofLatitude > 90
+                    || $proofLongitude < -180 || $proofLongitude > 180) {
+                    return ['success' => false, 'message' => 'Valid GPS coordinates are required for every supplier pickup proof.'];
+                }
+
+                $collectionCapturedAt = Carbon::now();
                 $assignment->status = 'collected';
-                $assignment->collected_at = Carbon::now();
+                $assignment->collected_at = $collectionCapturedAt;
                 $assignment->collection_proof_image_path = $proofImagePath;
+                $assignment->collection_latitude = $proofLatitude;
+                $assignment->collection_longitude = $proofLongitude;
+                $assignment->collection_captured_at = $collectionCapturedAt;
                 $assignment->collection_notes = $pickupNotes;
                 $assignment->save();
 
@@ -1076,6 +1091,9 @@ class OrderSettlementService
                     $lockedOrder->pickup_confirmed_by_rider = true;
                     $lockedOrder->picked_up_at = Carbon::now();
                     $lockedOrder->pickup_proof_image = $proofImagePath;
+                    $lockedOrder->pickup_proof_latitude = $proofLatitude;
+                    $lockedOrder->pickup_proof_longitude = $proofLongitude;
+                    $lockedOrder->pickup_proof_captured_at = $collectionCapturedAt;
                     if ($pickupNotes) {
                         $lockedOrder->pickup_notes = $pickupNotes;
                     }
@@ -1214,9 +1232,11 @@ class OrderSettlementService
         string $otp,
         ?RiderProfile $rider = null,
         ?string $proofImagePath = null,
-        ?string $customerNotes = null
+        ?string $customerNotes = null,
+        ?float $proofLatitude = null,
+        ?float $proofLongitude = null
     ): array {
-        return DB::transaction(function () use ($order, $otp, $rider, $proofImagePath, $customerNotes) {
+        return DB::transaction(function () use ($order, $otp, $rider, $proofImagePath, $customerNotes, $proofLatitude, $proofLongitude) {
             $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
 
             if (!$lockedOrder) {
@@ -1304,6 +1324,13 @@ class OrderSettlementService
             if (!is_string($proofImagePath) || trim($proofImagePath) === '') {
                 return ['success' => false, 'message' => 'Doorstep photo proof is required before delivery can be confirmed.'];
             }
+            if ($lockedOrder->retailer_model_order && (
+                $proofLatitude === null || $proofLongitude === null
+                || $proofLatitude < -90 || $proofLatitude > 90
+                || $proofLongitude < -180 || $proofLongitude > 180
+            )) {
+                return ['success' => false, 'message' => 'Valid GPS coordinates are required for retailer doorstep proof.'];
+            }
 
             $lockedOrder->delivery_failed_attempts = 0;
             $lockedOrder->delivery_locked_until = null;
@@ -1312,6 +1339,11 @@ class OrderSettlementService
             $refundHours = max(1, (int) SystemSetting::get('refund_window_hours', 24));
             $lockedOrder->order_status = 'delivered';
             $lockedOrder->delivery_confirmed_by_customer = true;
+            if ($lockedOrder->retailer_model_order) {
+                $lockedOrder->delivery_proof_latitude = $proofLatitude;
+                $lockedOrder->delivery_proof_longitude = $proofLongitude;
+                $lockedOrder->delivery_proof_captured_at = $now;
+            }
             $lockedOrder->received_at = $now;
             $lockedOrder->refund_window_expires_at = $now->copy()->addHours($refundHours);
             $lockedOrder->vendor_settlement_status = 'held';
