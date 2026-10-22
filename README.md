@@ -1,82 +1,44 @@
 # Victorious MARKET
 
-> **Authoritative Master Blueprint:** Victorious MARKET operates strictly under the [VICTORIOUS_MARKET_MASTER_BLUEPRINT.md](VICTORIOUS_MARKET_MASTER_BLUEPRINT.md). Built specifically for the economic, geographic, and physical realities of **Uyo, Akwa Ibom State**, this system replaces open-market chaos with a deterministic, high-margin retail and logistics engine.
+> **Current business-policy authority:** [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). The detailed [Master Blueprint](VICTORIOUS_MARKET_MASTER_BLUEPRINT.md) and [Payment/Refund Policy](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) must conform to it. No conflicting legacy wording in another document overrides the active rules.
 
----
+## Official positioning
+**VICTORIOUS MARKET — YOUR TRUSTED ONLINE MARKET IN UYO, AKWA IBOM STATE.**
 
-## Official Positioning
-**VICTORIOUS MARKET — YOUR TRUSTED ONLINE MARKET IN UYO, AKWA IBOM STATE.**  
-*Trust first. Quality always. Accountability at every stage.*
+Victorious MARKET is the sole customer-facing retailer. Suppliers are private behind-the-scenes sources with one admin-approved shop or pickup location anywhere within the approved Uyo LGA boundary. Plaza is optional, not mandatory. Customers see and buy from Victorious MARKET; the company controls listings, retail prices, Paystack collections, fulfilment coordination, customer support, refunds and financial records.
 
-Victorious MARKET is a centrally managed direct retailer. Customers buy from Victorious MARKET; suppliers remain private behind-the-scenes product sources linked internally to approved wholesale offers and order items. Victorious MARKET controls public listings, retail prices, customer payments, delivery coordination, customer support, refunds, and financial records. Delivery is fulfilled through accredited third-party logistics (3PL) companies whose riders must each be linked to an active logistics company.
+## Binding operational summary
+1. **Uyo-only:** source and deliver within the approved Uyo LGA boundary. Unknown or out-of-boundary destinations fail closed.
+2. **Listing is not allocation:** a product is purchasable only while at least one eligible supplier offer is explicitly in stock. Hide it when no eligible offer remains. Admin delisting is respected until an authorized admin permits relisting. Preserve history.
+3. **Pay first, then allocate:** verify Paystack payment (trusted signature/event, reference, amount, currency and idempotency) before any binding order-specific supplier allocation, reservation or notification. Pre-payment checks are non-binding.
+4. **Supplier choice:** active/approved supplier, approved Uyo location, sufficient explicit stock, SKU-specific 24-hour unavailability cooldown expired and fewer than five active pending handovers. Optimize feasible plans by fewest pickup locations, then lowest total wholesale cost, reliability and deterministic tie-break.
+5. **One order, one rider/company:** an order may source from multiple suppliers but remains assigned to one rider from one approved logistics company.
+6. **Bulky isolation:** any bulky item makes the whole order a dedicated Keke/tricycle trip for that customer only. Small-item bike batching is allowed only within the same corridor and subject to capacity/safety constraints.
+7. **Proof:** one-time supplier pickup OTP plus mandatory pickup photo; customer delivery OTP plus mandatory geo-tagged doorstep photo.
+8. **Customer delivery fee:** one base fee per order plus configured customer bulky surcharge per applicable physical bulky unit.
+9. **Logistics-company payable:** independently configured company/corridor base payable plus that company’s bulky-unit surcharge. The retired 90%-of-customer-delivery-fee rule is not a fallback. Any payable shortfall is explicitly recorded as VM subsidy/expense.
+10. **Supplier settlement and cashback:** supplier payable uses immutable wholesale-cost snapshots and becomes eligible after verified completion/reconciliation. Cashback remains a separate 5% eligible merchandise loyalty benefit, subject to caps, maturity and reversals.
+11. **Paid-order exceptions:** allocation failure is admin-managed, not an automatic refund. Admin may reassign, hold, source an acceptable alternative, cancel or initiate refund with audit. Refund completion requires provider confirmation. No silent substitution or unconsented extra charge.
 
----
+## Eight configured corridors
+- COR-01 Oron Road
+- COR-02 Nwaniba Road
+- COR-03 Aka Road
+- COR-04 Abak Road
+- COR-05 Ikot Ekpene Road
+- COR-06 Itu Road
+- COR-07 Ikpa Road
+- COR-08 Plaza (central core)
 
-## The 5 Foundational Laws
+The corridor list does not make Plaza a mandatory supplier hub. Admin must maintain clear landmark mapping; unsupported destinations fail closed.
 
-1. **The Plaza Centralization Law (Zero Distance Complexity):** Every supplier is physically situated within the **Plaza** commercial hub in central Uyo. Pickups originate from this unified cluster; customer delivery distances are governed strictly by the 8 arterial road corridors.
-2. **SKU-Level Deterministic Sourcing:** All stock availability, pricing, and penalty rules operate strictly at the individual product (`product_id`) level.
-3. **One Order, One Rider Accountability:** A customer order—even with items from multiple Plaza shops—is owned from pickup to doorstep by **one single delivery person**. Multi-rider order splitting is prohibited.
-4. **The "Bulky Contagion" & Keke Isolation Law:** If an order contains even one bulky item (`is_bulky = true`), the *entire order* becomes classified as bulky, is forced onto a **Keke (Tricycle)**, and locks that Keke into a **100% exclusive trip** for that customer alone.
-5. **Cryptographic Proof Over Trust:** Dual verification (**OTP + Live Photo Proof**) is enforced at every handoff point (per-shop pickup and customer doorstep).
+## Customer delivery fee and logistics payable are separate
+- **Customer charge:** per-order base delivery fee + configured customer bulky surcharge per applicable physical bulky unit.
+- **Logistics payable:** assigned logistics company’s configured corridor base payable + its configured bulky-unit surcharge per applicable physical bulky unit.
+- Snapshot the corridor, company, tariff version, base, bulky units/rate and total. If payable exceeds collected delivery revenue, record the difference as VM subsidy/expense. Pay the logistics company, not automatically the rider.
 
----
+## Exception and pickup controls
+Support-managed pickup is exceptional, not a public reservation or pre-payment stock hold. Support must verify complete-order readiness at one approved point, authorized payment arrangements, customer agreement and required evidence before confirming. Never disclose a pickup address before confirmation.
 
-## The 8 Master Uyo Road Corridors
-
-All customer destinations and logistics dispatch operations are permanently mapped to one of the 8 Corridors:
-
-| Corridor ID | Corridor Name | Key Landmarks & Feeder Axes |
-| :--- | :--- | :--- |
-| **COR-01** | **Oron Road** | Ewet Housing Estate, Shelter Afrique, Osongama, Ring Road 3 axis, Airport Rd junction |
-| **COR-02** | **Nwaniba Road** | Use Offot, Akpan Andem Market axis, Brooks Street, Marina / Ibom Icon axis |
-| **COR-03** | **Aka Road** | Four Lanes, Aka Etinan axis, State Secretariat annex, Ibom Plaza South edge |
-| **COR-04** | **Abak Road** | Federal Housing Estate, Mechanic Village axis, Ukana Offot, Ibom Tropicana axis |
-| **COR-05** | **Ikot Ekpene Road** | Itam Market / Flyover axis, Kalabari street, Ikot Oku Ikono junction |
-| **COR-06** | **Itu Road** | Uyo Village Road, Obio Etoi, Northern Ring Road bypass axis |
-| **COR-07** | **Ikpa Road** | Uniuyo Town Campus, Science Park axis, Ravine area, Barracks Road |
-| **COR-08** | **Plaza (Central Core)** | Immediate Ibom Plaza surroundings, Wellington Bassey Way, Ikot Abasi Street |
-
----
-
-## Core Operational Mechanics
-
-### 1. Customer Discovery & Checkout
-- **Unified Retailer Catalog:** Customers do not browse individual vendor shops.
-- **Payload Classification:** Every product has an immutable `is_bulky` boolean flag.
-- **Formula:** $\text{Delivery Fee} = \text{Corridor Base Fee} + (\text{Bulky Surcharge} \times \text{Total Bulky Units})$.
-- **No Cash on Delivery (COD):** 100% upfront payment via Paystack card/transfer. Orders remain in `payment_pending` until the Paystack `charge.success` HMAC webhook is cryptographically verified.
-
-### 2. Automated Supply Sourcing
-Upon payment, the system evaluates all Plaza suppliers:
-1. **Hard Filters:** KYC verified, active, located at `Plaza_Uyo`, stock in stock, not in 24h unavailability penalty, fewer than 5 active pending handovers.
-2. **Consolidation Priority:** Prioritizes suppliers who can fulfill multiple items in the order to reduce rider stops.
-3. **Wholesale Cost Sort:** Sorts by `cost_price ASC`.
-4. **Reliability Tie-Breaker:** Breaks ties using historical `availability_rate DESC`.
-5. **Rejection Penalty & Override:** Supplier unavailability logs a 24h penalty for that SKU; Admin can manually override supplier with an audited reason code.
-
-### 3. Major-Road Logistics & Dispatch
-- Accredited 3PL Fleet Managers manage dispatches across the 8 Road Corridor tabs.
-- Programmatic validations enforce:
-  - Single-Road Corridor Lock (riders only take orders on their designated corridor).
-  - One Order, One Rider.
-  - Bulky Contagion & Keke Isolation (standard bike trips can batch corridor small orders; bulky orders are forced to dedicated Keke trips).
-
-### 4. Dual Verification Chain
-- **Plaza Shop Pickup:** Live camera photo of item at counter + unique 4-digit Shop Pickup OTP from merchant.
-- **Doorstep Handover:** Live camera photo at customer premises + secret Customer Delivery OTP.
-
-### 5. Financial Ledger & Settlement Engine
-- Automated double-entry ledger triggers upon `completed_verified`.
-- **Supplier Payable:** Credited with locked `cost_price` snapshot per item. Settled daily/instantly.
-- **3PL Logistics Payable:** Credited with pre-negotiated flat corridor rate per completed order trip (Bike vs Keke rate). Settled weekly (Mondays).
-- **Victorious MARKET Net Profit:** $\sum(\text{Retail Price} - \text{Wholesale Cost}) + (\text{Delivery Fee Captured} - \text{3PL Corridor Payout})$.
-
----
-
-## Authority & Documentation Map
-
-1. [VICTORIOUS_MARKET_MASTER_BLUEPRINT.md](VICTORIOUS_MARKET_MASTER_BLUEPRINT.md) — The authoritative master architectural and operational blueprint.
-2. [.ai/BUSINESS_RULES.md](.ai/BUSINESS_RULES.md) — System rules and engineering specifications aligned directly with the master blueprint.
-3. [PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) — Paystack webhook handling, refund ceilings, and idempotent financial journals.
-4. [SHARED_HOSTING_DEPLOYMENT_GUIDE.md](SHARED_HOSTING_DEPLOYMENT_GUIDE.md) — Server deployment procedures.
+## Implementation status
+This README describes policy, not verified runtime behaviour. Code changes are out of scope for this documentation alignment. See the active rules and the audit/settlement documents for implementation checks and unresolved gaps.
