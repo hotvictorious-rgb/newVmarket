@@ -209,4 +209,14 @@ class StorefrontWiringAndShopTest extends TestCase
             ->assertJsonPath('code', 'OUTSIDE_UYO_LAUNCH_BOUNDARY');
     }
 
+    public function test_checkout_template_never_renders_supplier_shop_names(): void
+    {
+        $template = file_get_contents(resource_path('views/storefront/checkout.blade.php'));
+
+        $this->assertIsString($template);
+        $this->assertStringNotContainsString('${item.shop_name}', $template,
+            'Supplier shop names must remain private in the customer-facing checkout.');
+        $this->assertStringContainsString('<span>Victorious MARKET</span>', $template);
+    }
+
 }
