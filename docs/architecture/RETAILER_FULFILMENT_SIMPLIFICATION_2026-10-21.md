@@ -1,6 +1,6 @@
 # Victorious MARKET — Simplified Delivery-First Fulfilment Policy
 
-**Policy date:** 21 October 2026  
+**Policy date:** 22 October 2026  
 **Status:** Owner-directed current policy  
 **Applies to:** New retailer-model transactions and all current product, checkout, fulfilment, support, finance, API and customer-facing documentation  
 **Authority:** This policy supplements `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md`. If older documents describe public multi-vendor selling, customer-facing shop selection, automatic in-shop pickup reservations, or supplier-address disclosure, those descriptions are historical/legacy requirements and do not define the current customer journey.
@@ -32,7 +32,7 @@ A single customer-facing order must not silently become multiple customer delive
 - Delivery is charged once per order using the configured destination/service base route fee. Add the configured bulky surcharge for each physical unit that does not fit on a bike (each unit marked keke/bulky, multiplied by quantity). Do not charge another base fee for each product or supplier pickup. Display the base fee, bulky quantity and surcharge, and one order-level total before payment; snapshot the components and total so later fulfilment cannot silently reprice the order. Supplier identity must not change the customer's agreed charges after checkout.
 - All new delivery orders are Uyo-only and use the approved Uyo doorstep-delivery workflow. No outside-Uyo or park/terminal delivery promise may be offered at launch. A support-managed pickup exception is not standard checkout and must not be used to bypass Uyo, payment, sourcing or evidence controls.
 - Supplier shops and logistics-company headquarters must be physically located in Uyo, Akwa Ibom State. Other origins are rejected for new retailer fulfilment.
-- Outside-Uyo destinations must have an explicitly active directional delivery lane. The old automatic nationwide fallback is not authority to accept a destination. Each route is independently enabled/disabled by operations.
+- **Out-of-Uyo destinations are rejected at launch**, even if a legacy directional delivery lane remains active in the database. The old automatic nationwide fallback and legacy active lanes do not authorize new orders. Expansion requires a separate owner-approved policy change, explicit route configuration and passing acceptance tests.
 - For new orders, the logistics-company payable is the assigned company's admin-configured corridor base payable plus its configured per-bulky-unit surcharge, independent of the customer's delivery fee. Snapshot the company, corridor, tariff/version, base payable, bulky quantity, bulky rate and total. The former 90% rule is historical-only for orders that actually used it.
 - Cashback remains active under the existing policy: 5% of eligible post-discount merchandise actually funded by real money through verified payment, excluding delivery and applying all existing redemption, maturity, reversal, validity and recovery terms.
 - Supplier payable is based on the immutable agreed supplier cost snapshot and becomes eligible only after the applicable verified fulfilment and reconciliation gates. Supplier recovery is separate from customer refunds.
