@@ -1751,7 +1751,10 @@ class PortalController extends Controller
             ->latest()
             ->get();
         $activeRiders = $allRiders->where('is_active', true);
-        $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
+        $lgas = Lga::where('is_active', true)
+            ->whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->orderBy('name', 'asc')->get();
 
         return view('logistics.riders', compact('company', 'allRiders', 'activeRiders', 'lgas'));
     }
