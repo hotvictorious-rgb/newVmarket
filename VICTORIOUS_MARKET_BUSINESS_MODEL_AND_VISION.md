@@ -10,9 +10,9 @@ Your official positioning is:
 
 ### YOUR TRUSTED ONLINE MARKET IN UYO, AKWA IBOM STATE.
 
-A Uyo-based retailer serving customers locally and through deliberately enabled regional delivery routes.
+A retailer currently serving customers **within Uyo LGA, Akwa Ibom State only**. Regional and interstate routes are future scope and must remain disabled until separately approved.
 
-The important distinction is that Uyo is your operational base, not necessarily the limit of your customer market. You can build your supplier relationships and logistics network in Uyo while serving customers in other parts of Akwa Ibom and selected nearby cities when the routes are operationally supported.
+At launch, Uyo is both your operational base and your customer-delivery boundary. Future expansion beyond Uyo requires a separate owner-approved decision, verified sourcing/logistics capacity, explicit route configuration, customer-fee rules and new acceptance tests; it is not enabled by this vision document.
 
 ---
 
@@ -72,11 +72,11 @@ Imagine a customer in Uyo orders a standing fan and a power bank from your websi
 
 1. **Product discovery:** The customer finds the products on the Victorious MARKET website, social media, WhatsApp catalogue or through a referral. The prices, product descriptions and delivery conditions are presented under your brand.
 2. **Checkout and payment:** The customer places one order and pays the displayed total through the authorized payment process. Payment is verified on the server using trusted payment-provider confirmation, not merely a success screen or browser redirect.
-3. **Stock confirmation:** You or your sourcing process checks the approved Uyo suppliers for the exact products, specifications, quantities and current availability. A product being displayed online is not sufficient proof that it is still available.
-4. **Sourcing and consolidation:** The business plans how to collect all items efficiently. If the fan is at one shop and the power bank is at another, the system should coordinate the order as one fulfilment job rather than create unrelated customer orders or unexpected delivery charges.
-5. **Quality and order preparation:** Products are checked as appropriate for correctness, condition and agreed specifications. The order is prepared for local delivery or for a regional logistics arrangement.
-6. **Delivery:** For an enabled Uyo route, the intended model is door-to-door delivery. For an enabled route outside Uyo, the customer must be told the agreed delivery method before dispatch. It might involve a park or terminal collection, or another supported handoff.
-7. **Verified completion:** The business records evidence of fulfilment. For regional handoffs, the intended safeguards include order-specific OTP verification and mandatory photo proof. A package arriving at a transport park alone does not prove that the customer received it.
+3. **Stock confirmation:** After verified payment, the sourcing process checks eligible approved Uyo supplier offers for exact products, specifications, quantities and current availability. Any pre-payment availability result is a non-binding quote only; selected supplier assignments and wholesale-cost snapshots must be revalidated and bound after verified payment.
+4. **Sourcing and consolidation:** The business selects a feasible whole-order source plan, prioritizing the greatest consolidation across supplier shops, then total wholesale cost and fulfilment reliability. The same rider collects all items across supplier stops; the customer order is never split across riders or charged another base delivery fee because multiple suppliers are involved.
+5. **Quality and order preparation:** Products are checked as appropriate for correctness, condition and agreed specifications. The order is prepared for delivery within Uyo LGA only. If any item is bulky, the whole order requires an exclusive keke trip; only all-small orders may be batched by bike with compatible orders on the same active Uyo corridor.
+6. **Delivery:** New checkout accepts only an active Uyo LGA destination mapped to one of the eight approved road corridors: Oron Road, Nwaniba Road, Aka Road, Abak Road, Ikot Ekpene Road, Itu Road, Ikpa Road or Plaza. Standard delivery is door-to-door within Uyo. Out-of-Uyo destinations and park/terminal handoffs are rejected at launch.
+7. **Verified completion:** Every supplier-shop stop requires a unique, single-use shop pickup OTP and mandatory pickup photo. Final doorstep delivery requires the customer's server-verified OTP and mandatory geo-tagged delivery photo. A pickup scan or photo alone never proves customer delivery.
 8. **Settlement and after-sales support:** Supplier costs, logistics payables, eligible cashback, fees, refunds and other financial movements are recorded according to the business rules. If something goes wrong, the customer contacts Victorious MARKET rather than having to navigate several unrelated vendors.
 
 The central principle is that the customer buys from Victorious MARKET, while Victorious MARKET coordinates the work required to fulfil the promise.
@@ -90,8 +90,8 @@ Your operating model has a defined geographical centre:
 ### Uyo, Akwa Ibom State — the operational base
 Approved suppliers and approved logistics companies must be based in Uyo. Local customer deliveries are designed around door-to-door fulfilment.
 
-### Other enabled destinations
-Other Akwa Ibom LGAs and selected nearby cities—including Aba, Calabar and Port Harcourt—may be served through deliberately activated, verified routes. These destinations should not be assumed available until the relevant route and delivery arrangement are operational.
+### Future expansion — not enabled at launch
+Other Akwa Ibom LGAs and nearby cities—including Aba, Calabar and Port Harcourt—are **future expansion only**. They must remain disabled in checkout, address validation, fee calculation and dispatch until the owner separately approves a route-specific launch plan and the relevant tests pass.
 
 ### Why is this structure useful?
 - You can concentrate supplier relationships and operational control in one city.
@@ -99,7 +99,7 @@ Other Akwa Ibom LGAs and selected nearby cities—including Aba, Calabar and Por
 - You avoid promising delivery everywhere before you have reliable route coverage.
 - You can expand one route at a time based on actual orders, costs, reliability and customer demand.
 
-A logistics company based in Uyo may use a transport operator or last-mile partner for a regional journey, but the agreed logistics company remains accountable under its contract with Victorious MARKET. Delegating the physical movement of a parcel must not mean losing responsibility for tracking and fulfilment.
+At launch, approved logistics companies deliver within Uyo LGA under their configured corridor tariffs. Any future subcontracting or out-of-Uyo movement requires a separately approved route and contract; it is not currently enabled.
 
 ---
 
@@ -115,10 +115,12 @@ For example, consider this illustrative order:
 | Supplier merchandise cost | −₦40,000 |
 | **Gross merchandise margin** | **₦10,000** |
 | Customer delivery fee | ₦2,000 |
-| Default logistics-company payable (90%) | −₦1,800 |
-| **Delivery-fee balance before other delivery costs** | **₦200** |
+| Logistics-company payable | Company's configured corridor base payable + its configured bulky-unit surcharge; independent of the customer fee |
+| **Delivery-fee surplus or subsidy** | **Customer delivery fee minus company payable, recorded transparently** |
 
 The ₦10,000 merchandise margin is not automatically ₦10,000 profit. Payment processing, sourcing transport, packaging, failed fulfilment, customer support, marketing, applicable taxes and other operating expenses may reduce it.
+
+The logistics-company payable is not calculated as a percentage of the customer delivery fee. Customer delivery pricing and company payable are independent tariffs; any company payable above customer delivery revenue must be recorded as a Victorious MARKET-funded delivery subsidy.
 
 Likewise, the ₦200 delivery-fee balance is not necessarily profit. If you incur another ₦500 to consolidate products from multiple shops, that order may have an additional ₦300 fulfilment cost unless the merchandise margin or an explicitly approved subsidy covers it.
 
@@ -133,24 +135,20 @@ Victorious MARKET charges delivery **per order**, while calculating the fee usin
 | **One order-level fee, calculated from its items** | **Victorious MARKET standard:** One clear total, with fair adjustments for bulky items and the destination. |
 
 **The model rules:**
-1. **Base delivery fee per order:** Based on the delivery destination and service route (e.g. Uyo door-to-door or enabled regional corridor).
-2. **Bulky surcharge per qualifying product:** Add the configured surcharge for each product/unit that cannot fit on a bike (e.g. standing fan, cooker, furniture).
+1. **Base customer delivery fee per order:** Based on the resolved active Uyo road corridor. Other LGAs, interstate routes and park/terminal handoffs are disabled for new orders.
+2. **Customer bulky surcharge per physical unit:** Add the configured customer surcharge for each bulky physical unit. If any item is bulky, the entire order becomes keke-only and exclusive to that customer.
 3. **Multiple supplier pickups:** Account for additional collection costs when necessary, without automatically charging a full delivery fee for every supplier.
 4. **Show the total before payment:** The customer sees one delivery charge at checkout, with a clear breakdown if needed.
-5. **Logistics company receives 90%:** Calculate its default share from the actual delivery amount collected for that order, including applicable bulky surcharges. The remaining 10% belongs to Victorious MARKET before other expenses, unless an authorized Super Admin override applies with recorded reason and audit trail.
+5. **Separate logistics-company payable:** Admin configures each approved company's corridor base payable and per-bulky-unit surcharge. Calculate company payable from that tariff and the actual bulky quantity, independent of customer delivery revenue. Snapshot the company, corridor, tariff version, base payable, bulky rate, quantity and total. The former 90% allocation is historical-only.
 
-**Example:**
-Suppose the configured charges for an order are:
-- Base delivery fee: ₦1,000
-- Bulky surcharge for a standing fan: ₦500
-- **Total delivery charge:** **₦1,500**
-  - Logistics company (90%): **₦1,350**
-  - Victorious MARKET (10%): **₦150**
-*(These figures are illustrative, not proposed official tariffs.)*
+**Calculation example (illustrative only):**
+- Customer delivery fee = configured customer base fee + (customer bulky surcharge × physical bulky quantity).
+- Logistics-company payable = assigned company's configured corridor base payable + (company bulky surcharge × physical bulky quantity).
+- The amounts may differ. If company payable exceeds customer delivery revenue, record the difference as a VM-funded delivery subsidy. Actual tariffs are set by an authorized administrator.
 
-### Your logistics payment rule
+### Your logistics-company payment rule
 
-The current business rule is that the logistics company is paid 90% of the captured customer delivery fee by default, not 90% directly to the individual rider. An authorized administrator may override that percentage or amount with a recorded reason and audit trail.
+The current rule is that each approved logistics company is paid its separately configured corridor base payable plus its configured per-bulky-unit surcharge. The customer delivery fee is a separate amount. The company—not the individual rider—is the payee. Admin overrides require authorization, reason, timestamp and immutable audit.
 
 If the agreed logistics payable exceeds the delivery fee collected, the difference must be recorded transparently as a Victorious MARKET subsidy or expense. The system should not quietly invent a new charge for the customer.
 
@@ -231,7 +229,7 @@ Your strategy of anchoring suppliers and logistics partners in Uyo is useful bec
 
 1. **Establish reliable Uyo operations:** Build relationships with approved suppliers, confirm stock accurately, deliver locally and measure the actual cost of each order.
 2. **Standardize fulfilment:** Establish repeatable sourcing, consolidation, delivery, customer communication, refunds and reconciliation procedures.
-3. **Activate regional routes selectively:** Test individual destinations and logistics arrangements instead of promising unsupported nationwide delivery.
+3. **Expand only after Uyo is stable:** Any route beyond Uyo requires a separate owner-approved expansion decision, verified sourcing/logistics arrangements, route-specific customer and company tariffs, legal/operational review and passing acceptance tests. Until then, out-of-Uyo routes remain disabled.
 4. **Automate repeatable work:** Use software for order tracking, alerts, stock confirmation workflows, payment verification, financial ledgers and delivery evidence.
 5. **Delegate carefully:** As order volume grows, introduce staff or operational partners for defined responsibilities while retaining central control of customer service, financial permissions and business standards.
 6. **Expand based on evidence:** Use actual order demand, repeat purchases, contribution margin, delivery success and complaints to decide which products and routes deserve more investment.
