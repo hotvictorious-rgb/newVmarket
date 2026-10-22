@@ -74,7 +74,7 @@ Victorious MARKET charges delivery **per order**, while calculating the fee usin
 
 Support may confirm pickup only after verifying the complete order, confirmed availability of every line, physical readiness of all items at one approved collection point, the payment arrangement, and the customer's agreement. Support must record the responsible staff member, timestamp, decision, approved location, readiness evidence and any exception reason. Do not disclose a supplier address or instruct the customer to travel before confirmation.
 
-A multi-product order must not default to multiple supplier visits. If all items cannot be made ready at one approved point, VM coordinates internal consolidation or offers a feasible doorstep-delivery plan and communicates any material change for customer agreement. Do not silently add another customer delivery fee or change the snapshotted fee.
+A multi-product order may require pickups from multiple private supplier shops. That is normal internal fulfilment: the same assigned rider collects every supplier assignment in sequence and delivers the complete order. Do not direct the customer to suppliers, split one customer order across riders, or add another customer base delivery fee because multiple suppliers are involved.
 
 Legacy reservation records, tables, states and handlers remain only for historical reads, audit, financial reconciliation and resolution of pre-existing obligations until their dependencies can be safely retired. Their existence does not authorize new public reservation writes. No existing historical record may be mass-deleted or reclassified by this policy.
 ## 7. Supplier payment eligibility
