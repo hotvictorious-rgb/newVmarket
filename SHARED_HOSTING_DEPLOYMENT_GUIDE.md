@@ -2,7 +2,7 @@
 
 # 👑 Victorious MARKET - Shared Hosting & cPanel Deployment Blueprint
 
-This document is the production deployment guide for hosting **Victorious MARKET (`newVmarket`)** on shared hosting environments (cPanel, DirectAdmin, Whogohost, Namecheap, Hostinger, etc.). Business-model policy is maintained separately in [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md](RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.md). This guide does not certify that the retailer-model migration is complete.
+This document is an infrastructure/deployment guide for **Victorious MARKET (`newVmarket`)** on shared hosting environments (cPanel, DirectAdmin, WhoGoHost, Namecheap, Hostinger, etc.). Current business policy is maintained in [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). Any references below to vendor/marketplace features are legacy implementation context, not authorization to expose supplier storefronts, use marketplace commissions, or enable vendor earning payouts. This guide does not certify that the retailer-model migration is complete.
 
 ---
 
