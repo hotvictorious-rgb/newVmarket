@@ -183,6 +183,196 @@ class SourcingAllocationService
     }
 
     /**
+     * Selects sources for a whole multi-SKU order. It greedily consolidates the
+     * largest feasible number of remaining lines at one supplier shop first,
+     * then minimizes the wholesale cost for those lines, then prefers suppliers
+     * with stronger completed-handover success rates. The checkout caller applies
+     * the returned per-line source snapshots before creating the order.
+     *
+     * @param array<int, array{product: Product, quantity: int}> $requestedItems
+     * @return array<int, array>|null Original input indexes mapped to resolved offers.
+     */
+    public function resolveConsolidatedOffers(array $requestedItems, string $fulfillmentType): ?array
+    {
+        if (!in_array($fulfillmentType, ['doorstep_delivery', 'in_shop_pickup'], true)) {
+            throw new InvalidArgumentException('Unsupported fulfillment type.');
+        }
+        if (!$requestedItems) {
+            return null;
+        }
+
+        $now = Carbon::now();
+        $candidatesByIndex = [];
+        $vendorIds = [];
+
+        foreach ($requestedItems as $index => $requested) {
+            $product = $requested['product'] ?? null;
+            if (!$product instanceof Product || (int) ($requested['quantity'] ?? 0) < 1) {
+                return null;
+            }
+            if (!$product->is_approved || $product->listing_status !== 'listed'
+                || !$product->is_in_stock || !$product->isFresh()) {
+                return null;
+            }
+
+            $offers = SupplierOffer::query()
+                ->with(['vendor.user', 'shop.lga.state'])
+                ->where('product_id', $product->id)
+                ->where('is_available', true)
+                ->where('wholesale_cost', '>', 0)
+                ->whereNotNull('availability_confirmed_at')
+                ->where('availability_confirmed_at', '<=', $now)
+                ->whereNotNull('availability_confirmed_by')
+                ->whereNotNull('availability_expires_at')
+                ->where('availability_expires_at', '>', $now)
+                ->where(function ($cooldown) use ($now) {
+                    $cooldown->whereNull('last_unavailable_at')
+                        ->orWhere('last_unavailable_at', '<=', $now->copy()->subHours(24));
+                })
+                ->whereRaw("(SELECT COUNT(*) FROM order_supplier_assignments osa
+                    INNER JOIN orders o ON o.id = osa.order_id
+                    WHERE osa.supplier_vendor_id = supplier_offers.vendor_id
+                      AND osa.status NOT IN ('collected', 'admin_reassigned', 'rejected', 'cancelled', 'supplier_rejected')
+                      AND o.payment_status = 'paid'
+                      AND o.order_status NOT IN ('delivered', 'picked_up', 'cancelled', 'refunded', 'returned')) < 5")
+                ->whereHas('vendor', function ($query) {
+                    $query->whereNull('vendor_profiles.deleted_at')
+                        ->where('marketplace_status', 'active')
+                        ->where('kyc_status', 'verified')
+                        ->whereHas('user', fn ($user) => $user->where('status', 'active'));
+                })
+                ->whereHas('shop', function ($query) use ($fulfillmentType) {
+                    $query->whereNull('shops.deleted_at')
+                        ->whereColumn('shops.vendor_id', 'supplier_offers.vendor_id')
+                        ->where('is_active', true);
+                    if ($fulfillmentType === 'in_shop_pickup') {
+                        $query->where('pickup_enabled', true);
+                    }
+                    $query->whereHas('lga', function ($lga) {
+                        $lga->whereRaw('LOWER(TRIM(lgas.name)) = ?', ['uyo'])
+                            ->whereHas('state', function ($state) {
+                                $state->whereRaw('LOWER(TRIM(states.name)) = ?', ['akwa ibom']);
+                            });
+                    });
+                })
+                ->whereRaw('(SELECT COUNT(*) FROM shops active_supplier_shops
+                    WHERE active_supplier_shops.vendor_id = supplier_offers.vendor_id
+                      AND active_supplier_shops.deleted_at IS NULL
+                      AND active_supplier_shops.is_active = 1) = 1')
+                ->orderBy('wholesale_cost')
+                ->orderBy('id')
+                ->get()
+                ->filter(fn (SupplierOffer $offer) => $offer->vendor
+                    && $offer->shop
+                    && !$offer->vendor->trashed()
+                    && !$offer->shop->trashed()
+                    && $this->isEligibleUyoShop($offer->shop)
+                    && (int) $offer->shop->vendor_id === (int) $offer->vendor_id
+                    && $offer->vendor->isKycVerified()
+                    && $offer->vendor->user
+                    && $offer->vendor->user->status === 'active')
+                ->values();
+
+            if ($offers->isEmpty()) {
+                return null;
+            }
+
+            $candidatesByIndex[$index] = $offers;
+            foreach ($offers as $offer) {
+                $vendorIds[(int) $offer->vendor_id] = true;
+            }
+        }
+
+        // Reliability is measured only from terminal supplier assignment outcomes.
+        // A supplier with no history gets a neutral score and is still eligible.
+        $successRates = [];
+        foreach (array_keys($vendorIds) as $vendorId) {
+            $terminal = OrderSupplierAssignment::query()
+                ->where('supplier_vendor_id', $vendorId)
+                ->whereIn('status', ['collected', 'rejected', 'supplier_rejected', 'admin_reassigned'])
+                ->count();
+            $successful = OrderSupplierAssignment::query()
+                ->where('supplier_vendor_id', $vendorId)
+                ->where('status', 'collected')
+                ->count();
+            $successRates[$vendorId] = $terminal > 0 ? ($successful / $terminal) : 0.5;
+        }
+
+        $remaining = array_fill_keys(array_keys($requestedItems), true);
+        $resolved = [];
+
+        while ($remaining) {
+            $shopOptions = [];
+            foreach (array_keys($remaining) as $index) {
+                foreach ($candidatesByIndex[$index] as $offer) {
+                    $shopId = (int) $offer->shop_id;
+                    if (!isset($shopOptions[$shopId])) {
+                        $shopOptions[$shopId] = [
+                            'shop_id' => $shopId,
+                            'covered' => [],
+                            'cost' => '0.00',
+                            'success_rate' => $successRates[(int) $offer->vendor_id] ?? 0.5,
+                            'vendor_id' => (int) $offer->vendor_id,
+                        ];
+                    }
+                    if (!isset($shopOptions[$shopId]['covered'][$index])
+                        || bccomp((string) $offer->wholesale_cost, (string) $shopOptions[$shopId]['covered'][$index]->wholesale_cost, 2) < 0) {
+                        $shopOptions[$shopId]['covered'][$index] = $offer;
+                    }
+                }
+            }
+
+            foreach ($shopOptions as &$option) {
+                foreach ($option['covered'] as $index => $offer) {
+                    $option['cost'] = BcMathService::add(
+                        $option['cost'],
+                        BcMathService::mul((string) $offer->wholesale_cost, (string) ($requestedItems[$index]['quantity'] ?? 1))
+                    );
+                }
+                $option['coverage'] = count($option['covered']);
+            }
+            unset($option);
+
+            usort($shopOptions, static function (array $a, array $b): int {
+                if ($a['coverage'] !== $b['coverage']) {
+                    return $b['coverage'] <=> $a['coverage'];
+                }
+                $cost = bccomp((string) $a['cost'], (string) $b['cost'], 2);
+                if ($cost !== 0) {
+                    return $cost;
+                }
+                if ($a['success_rate'] !== $b['success_rate']) {
+                    return $b['success_rate'] <=> $a['success_rate'];
+                }
+                return $a['shop_id'] <=> $b['shop_id'];
+            });
+
+            $winner = $shopOptions[0] ?? null;
+            if (!$winner || empty($winner['covered'])) {
+                return null;
+            }
+
+            foreach ($winner['covered'] as $index => $offer) {
+                $resolved[$index] = [
+                    'supplier_offer_id' => (int) $offer->id,
+                    'vendor_id' => (int) $offer->vendor_id,
+                    'shop_id' => (int) $offer->shop_id,
+                    'supplier_name' => $offer->vendor->business_name ?? ($offer->vendor->user->name ?? 'Supplier'),
+                    'shop_name' => $offer->shop->name ?? 'Shop Branch',
+                    'wholesale_cost' => bcadd((string) $offer->wholesale_cost, '0', 2),
+                    'currency' => 'NGN',
+                    'source_type' => 'supplier_offer',
+                    'offer_model' => $offer,
+                ];
+                unset($remaining[$index]);
+            }
+        }
+
+        ksort($resolved);
+        return $resolved;
+    }
+
+    /**
      * Retailer sourcing is anchored to active supplier shops in Uyo, Akwa Ibom only.
      */
     private function isEligibleUyoShop(?Shop $shop): bool
