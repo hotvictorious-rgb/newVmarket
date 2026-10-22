@@ -57,10 +57,10 @@ Implementation of this policy must be proved by code review and tests; this text
 ### Remaining consistency checks before release
 
 1. Search all docs, frontend/mobile text, onboarding screens, route names, notification templates, tests, and API contracts for active “fleet dispatch”, logistics-provider share/payable, rider earnings, rider payouts, or automatic wallet credit language. Historical descriptions must be explicitly labelled historical rather than presented as current behaviour.
-2. **Canonical pickup credential decision:** customer in_shop_pickup requires both the RES-XXXXXX reservation pass and the separate six-digit customer pickup OTP (`pickup_verification_code`). The OTP supplements and never replaces the reservation pass. Preserve legacy values and records, securely verify both at the owning vendor counter, and keep the customer OTP distinct from any rider-to-vendor parcel-custody OTP.
+2. **Historical pickup credential proposal — superseded for new orders:** the old audit proposed both an RES-XXXXXX reservation pass and a separate customer pickup OTP. Current policy disables public reservations and the RES pass for new orders. Support-managed pickup requires explicit authorization, complete-order readiness at one approved collection point, recorded payment arrangement/customer agreement, one-time customer verification and mandatory photo evidence.
 3. Distinguish the rider collecting a parcel from the vendor (doorstep-delivery custody handover) from a customer collecting an order at the vendor counter. They are separate actors, flows, permissions, secrets, and status transitions. A rider must not be assigned to, or asked to verify, a customer in-shop pickup.
 
-## 3. Confirmed source-code gaps
+## 3. Historical source-code gaps from original audit snapshot — reverify against current candidate
 
 These findings were confirmed by source inspection of the audit branch. They remain **unfixed** unless a later implementation commit explicitly addresses them.
 
@@ -135,7 +135,7 @@ Attempt count, threshold evaluation, order state, return case, and custody are u
 
 Doorstep COD is disabled. Customers may pay before delivery through Victorious MARKET, or reserve in-shop pickup through Victorious MARKET and pay at the approved vendor shop through Victorious MARKET's authorised payment workflow. No off-platform payment is allowed. Launch rails are Paystack card and standard bank transfer unless separately approved. Riders must never see payment status/amount due or collect/reconcile customer money through platform rider accounts.
 
-## 4. Pickup, supplier linkage and central-delivery invariants
+## 4. Historical pickup and assignment invariants — superseded where conflicting
 
 - Supplier-shop pickup remains supported; it does not create a public vendor storefront.
 - The order item retains the exact supplier offer and purchase-cost snapshot chosen at confirmation.
@@ -182,7 +182,7 @@ Doorstep COD is disabled. Customers may pay before delivery through Victorious M
 - Do not merge to main without explicit owner approval.
 - Business-rule changes require owner approval and matching updates to documentation, APIs, implementation, tests, and customer/vendor-facing policies.
 
-## 8. Detailed contradiction register and implementation acceptance
+## 8. Historical contradiction register and implementation acceptance — reverify before acting
 
 The business rules are now explicit; this section distinguishes policy from code state so a documentation edit is never mistaken for a shipped feature.
 
