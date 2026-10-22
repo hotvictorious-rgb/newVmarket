@@ -5,19 +5,24 @@
 
 ## Active retailer-policy acceptance scenarios (aligned 22 October 2026)
 
-1. **Configured logistics-company payable:** Given a paid doorstep order, resolve the assigned approved logistics company and destination corridor, snapshot that company's configured base payable and configured bulky-unit surcharge, and calculate the company payable independently of the customer delivery charge. Do not assume a fixed percentage or default 10% margin.
-2. **Payable exceeds delivery revenue:** If the configured company payable exceeds the customer delivery revenue collected, record the difference as an explicit VM-funded subsidy/expense. Preserve balanced journals and the immutable tariff snapshot.
-3. **Tariff changes after assignment:** Changing the admin-configured corridor/company tariff must not rewrite the payable snapshot for an already-assigned order. New assignments use the new active tariff/version.
-4. **Authorized override:** Only an authorized admin may override a payable, with a valid reason and immutable audit record. Reject unauthorized, malformed, duplicate, stale-state or post-finalization changes without duplicate financial effects.
-5. **Cashback basis:** Given eligible post-discount merchandise of ₦10,000, cashback redeemed of ₦2,000, and delivery of ₦1,000, cashback earned is 5% × ₦8,000 = ₦400 after verified successful fulfilment. Delivery does not earn cashback.
-6. **Cashback non-compounding:** A discounted or cashback-funded amount does not earn cashback. Failed/unfulfilled/cancelled orders do not accrue a cashback lot.
-7. **Maturity and validity:** Cashback is unavailable until verified fulfilment + 24-hour claim window + separate 24-hour buffer, and no blocking case remains; its 365-day validity begins at maturity.
-8. **Refund:** An approved merchandise refund reverses the relevant unspent cashback once. Cashback already spent is recorded as separate recoverable exposure and offset only against future matured cashback under existing terms; no silent cash-wallet debit occurs.
-9. **Idempotency/concurrency:** Duplicate webhook delivery, retry, concurrent admin override or repeated payout attempt must not duplicate cashback lots, logistics payable adjustments, journal entries or company transfers.
+**Verification status:** These are required acceptance criteria, not evidence that tests have run or passed. The active policy source is `docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md`.
 
-Date started: 21 October 2026
-Branch: `audit/paystack-refund-webhook-safety`
-Scope: test the actual application services, controllers, database constraints, queues, webhook handlers, and financial ledgers. Scenarios must run in automated tests wherever feasible; manual tabletop review is supplemental, not a substitute.
+1. **Listing lifecycle:** A product is purchasable only while at least one eligible approved supplier offer is explicitly in stock with sufficient quantity. When none remain, hide it. A manually delisted listing must not auto-relist until an authorized admin permits it. Preserve offer and order history.
+2. **Payment gate:** Pre-payment checks may quote and assess feasibility but must not bind a supplier, hold stock, notify a supplier of a binding order or create a supplier payable. Duplicate, invalid, wrong-amount, wrong-currency or unverified payment events must not trigger allocation.
+3. **Whole-order supplier optimization:** After verified payment, revalidate offers and compare feasible plans by fewest distinct pickup locations first, then lowest total wholesale cost, reliability and deterministic tie-break. A cheaper plan using more pickup locations must not defeat a more consolidated feasible plan.
+4. **Flat customer delivery charge:** The customer delivery fee is one configured flat base fee per order, independent of corridor, plus configured bulky-unit surcharges. Changing the destination corridor must not silently change the customer base fee.
+5. **Configured logistics-company payable:** Resolve the assigned approved logistics company and destination corridor, snapshot that company's configured base payable and configured bulky-unit surcharge, and calculate the company payable independently of the customer delivery charge. Do not assume a fixed percentage or default 10% margin.
+6. **Bulky isolation and accountability:** If any item is bulky, the entire order uses an exclusive Keke/tricycle trip and cannot be batched with another customer. The complete order remains assigned to one rider from one approved logistics company even if multiple supplier pickup locations are involved.
+7. **Payable exceeds delivery revenue:** If configured company payable exceeds customer delivery revenue collected, record the difference as an explicit VM-funded subsidy/expense. Preserve balanced journals and the immutable tariff snapshot.
+8. **Tariff changes after assignment:** Changing the admin-configured corridor/company tariff must not rewrite the payable snapshot for an already-assigned order. New assignments use the new active tariff/version.
+9. **Authorized override:** Only an authorized admin may override a payable or supplier assignment, with required reason and immutable audit record. Reject unauthorized, malformed, duplicate, stale-state or post-finalization changes without duplicate financial effects; never bypass payment verification or hard eligibility rules.
+10. **Allocation failure:** After verified payment, no eligible supplier must place the order in an admin-managed exception state, not trigger an automatic refund solely for allocation failure. Reassignment, changed terms, cancellation and refund must be authorized and audited; obtain customer consent for changed product/price/terms. Refund completion requires provider confirmation.
+11. **Supplier payable eligibility:** Supplier acceptance, allocation and pickup alone do not make a payable due. Eligibility requires verified delivery, or an explicitly authorized completion exception, followed by reconciliation and required evidence.
+12. **Cashback basis and non-compounding:** Given eligible post-discount merchandise of ₦10,000, cashback redeemed of ₦2,000, and delivery of ₦1,000, cashback earned is 5% × ₦8,000 = ₦400 after verified successful fulfilment. Delivery and cashback-funded amounts do not earn cashback; failed/unfulfilled/cancelled orders do not accrue a cashback lot.
+13. **Maturity, validity and refund:** Cashback is unavailable until verified fulfilment + 24-hour claim window + separate 24-hour buffer, with no blocking case; its 365-day validity begins at maturity. Refund reversals are idempotent; spent cashback recovery is separate and must not silently debit a cash wallet.
+14. **Idempotency/concurrency:** Duplicate webhook delivery, retries, concurrent admin overrides or repeated payout attempts must not duplicate orders, stock movements, cashback lots, payable adjustments, journals, refunds or company transfers.
+
+Historical audit metadata: the original audit work referenced branch `audit/paystack-refund-webhook-safety` on 21 October 2026. That is historical context, not proof that the branch currently exists or that its code is present on `main`. Automated tests and current CI/runtime verification remain required.
 
 ## Non-negotiable pass conditions
 
