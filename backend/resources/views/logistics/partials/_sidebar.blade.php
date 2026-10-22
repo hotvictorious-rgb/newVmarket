@@ -37,6 +37,6 @@
 <li class="sidebar-nav-item">
     <a href="{{ route('logistics.wallet.index') }}" class="sidebar-nav-link {{ request()->routeIs('logistics.wallet.*') ? 'active' : '' }}">
         <span class="nav-link-icon">💼</span>
-        <span>90% Delivery Fee Wallet</span>
+        <span>Fleet Delivery Tariff Wallet</span>
     </a>
 </li>

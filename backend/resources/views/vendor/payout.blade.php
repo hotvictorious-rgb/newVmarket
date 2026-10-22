@@ -2,7 +2,7 @@
 
 @section('title', 'Merchant Payouts & Supplier Payables — Vendor')
 @section('role_title', 'Merchant Commerce Suite')
-@section('page_title', '90% Payout Desk & Bank Settlements')
+@section('page_title', 'Supplier Payout Desk & Bank Settlements')
 @section('role_badge', 'VENDOR')
 @section('role_badge_class', 'role-badge-vendor')
 
@@ -14,7 +14,7 @@
     <div class="breadcrumb-trail">
         <a href="{{ route('vendor.dashboard') }}">Merchant</a>
         <span class="breadcrumb-separator">/</span>
-        <span class="breadcrumb-current">90% Payout Desk &amp; Settlements</span>
+        <span class="breadcrumb-current">Supplier Payout Desk &amp; Settlements</span>
     </div>
 
     <div class="page-header-row">
@@ -261,7 +261,7 @@
                             </td>
                             <td>
                                 <strong style="font-size: 14.5px; color: #047857;">₦{{ number_format((float)$req->amount, 2) }}</strong>
-                                <div style="font-size: 10.5px; color: var(--adm-text-muted);">90% merchandise share</div>
+                                <div style="font-size: 10.5px; color: var(--adm-text-muted);">settlement amount</div>
                             </td>
                             <td>
                                 <div style="font-weight: 700; color: var(--adm-text);">{{ $req->bank_name }}</div>

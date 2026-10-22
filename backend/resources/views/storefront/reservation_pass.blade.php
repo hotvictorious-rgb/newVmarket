@@ -1,3 +1,4 @@
+{{-- RETIRED: Public in-shop pickup reservation passes are retired under the retailer model. Support-managed pickup is an exceptional admin workflow only. --}}
 @extends('layouts.app')
 
 @section('title', 'In-Shop Inspection Pass — ' . $reservation->reservation_code)

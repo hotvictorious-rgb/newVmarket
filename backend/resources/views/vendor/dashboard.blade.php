@@ -43,7 +43,7 @@
 
         <div class="stat-card stat-card-border-emerald">
             <div class="stat-card-info">
-                <span class="stat-card-label">90% Net Earnings</span>
+                <span class="stat-card-label">Merchant Net Earnings</span>
                 <span class="stat-card-value">₦{{ number_format($vendorMetrics['net_earnings'], 2) }}</span>
                 <span class="stat-card-subtext" style="color: var(--adm-success);">Direct Merchant Share</span>
             </div>
@@ -151,9 +151,9 @@
                 <div>
                     <div class="module-card-header">
                         <div class="module-card-icon" style="background: rgba(16, 185, 129, 0.1); color: var(--adm-success);">💳</div>
-                        <span class="dash-badge dash-badge-success">90% Payout</span>
+                        <span class="dash-badge dash-badge-success">Bank Payout</span>
                     </div>
-                    <div class="module-card-title">90% Payout Bank Account</div>
+                    <div class="module-card-title">Merchant Payout Bank Account</div>
                     <div class="module-card-desc">View disbursed funds, escrow holds, and verified Nigerian bank details for automatic payouts.</div>
                 </div>
                 <div class="module-card-footer">

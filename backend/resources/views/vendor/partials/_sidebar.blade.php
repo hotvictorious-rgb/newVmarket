@@ -46,6 +46,6 @@
 <li class="sidebar-nav-item">
     <a href="{{ route('vendor.payout.index') }}" class="sidebar-nav-link {{ request()->routeIs('vendor.payout.*') ? 'active' : '' }}">
         <span class="nav-link-icon">💳</span>
-        <span>90% Payout Bank Account</span>
+        <span>Merchant Payout Bank Account</span>
     </a>
 </li>

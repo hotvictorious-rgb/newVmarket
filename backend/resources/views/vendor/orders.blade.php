@@ -74,10 +74,10 @@
                         <th>Order # &amp; Date</th>
                         <th>Customer</th>
                         <th>Gross Total</th>
-                        <th>90% Merchant Cut</th>
+                        <th>Wholesale / Net Cut</th>
                         <th>Fulfillment</th>
                         <th>Status</th>
-                        <th>Courier Handshake (Plaza Counter)</th>
+                        <th>Courier Handshake (Shop Counter)</th>
                     </tr>
                 </thead>
                 <tbody>

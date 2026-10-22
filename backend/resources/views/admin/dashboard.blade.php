@@ -112,9 +112,9 @@
                         </div>
                         <span class="dash-badge dash-badge-success">{{ count($pendingSettlements) }} Ready for Payout</span>
                     </div>
-                    <div class="module-card-title">90/5/5 &amp; 90/10 Settlement Desk</div>
+                    <div class="module-card-title">Treasury Settlement Desk</div>
                     <div class="module-card-desc">
-                        Review verified orders, disburse 90% merchant payouts (merchandise + delivery) via FIFO batches, track dispute inspection window, and balance the 5% cashback ledger (&Delta; = &#8358;0.00).
+                        Review verified orders, disburse merchant and supplier payouts via FIFO batches, track dispute inspection window, and balance the 5% cashback ledger (&Delta; = &#8358;0.00).
                     </div>
                 </div>
                 <div class="module-card-footer">
@@ -201,8 +201,8 @@
                 <div class="dash-card-title">
                     <span>💰</span>
                     <div>
-                        <div style="font-size: 14px;">Manual Settlement Desk â€” Quick Queue</div>
-                        <span class="dash-card-subtitle">Orders verified and ready for 90% payout release.</span>
+                        <div style="font-size: 14px;">Treasury Settlement Desk — Quick Queue</div>
+                        <span class="dash-card-subtitle">Orders verified and ready for payout release.</span>
                     </div>
                 </div>
                 <a href="{{ route('admin.settlements.index') }}" class="dash-badge dash-badge-success" style="text-decoration: none;">
@@ -215,7 +215,7 @@
                         <tr>
                             <th>Order</th>
                             <th>Merchant</th>
-                            <th>90% Share</th>
+                            <th>Share Amount</th>
                             <th>Action</th>
                         </tr>
                     </thead>

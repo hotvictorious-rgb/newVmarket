@@ -19,7 +19,7 @@
                 <span>90/5/5 Sovereign Escrow &amp; Settlement Desk</span>
             </h1>
             <p class="page-header-subtitle">
-                Dual-Commission Escrow &amp; Treasury Settlement Desk &mdash; Sovereign 90/5/5 Mathematical Split Formula (90% Merchandise) &amp; 90/10 Delivery Fee Split &mdash; Super Admin Treasury Governance &mdash; Authorize or reject automated Paystack NUBAN bank transfers for <strong>Merchants (90% Sales + 90% Delivery Fees)</strong> under strict FIFO whole-earning rules (&ge; &#8358;5,000 to &le; &#8358;500,000). Historical logistics fleet requests preserved for audit integrity.
+                Dual-Commission Escrow &amp; Treasury Settlement Desk &mdash; Super Admin Treasury Governance &mdash; Authorize or reject automated Paystack NUBAN bank transfers for <strong>Merchants &amp; Suppliers</strong> under strict FIFO whole-earning rules (&ge; &#8358;5,000 to &le; &#8358;500,000). Historical marketplace and fleet requests preserved for audit integrity.
             </p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -155,7 +155,7 @@
                     <span>🏪</span>
                     <div>
                         <div>Merchant Payout Queue &mdash; FIFO Batched Earnings ({{ $pendingVendorsList->where('status', 'pending')->count() }} Pending)</div>
-                        <span class="dash-card-subtitle">Merchants requesting automated Paystack bank disbursement of matured 90% merchandise + 90% delivery fee earnings (&#8358;5,000 min, &#8358;500,000 max).</span>
+                        <span class="dash-card-subtitle">Merchants and suppliers requesting automated Paystack bank disbursement of matured earnings (&#8358;5,000 min, &#8358;500,000 max).</span>
                     </div>
                 </div>
                 <span class="dash-badge dash-badge-success">Merchant Treasury</span>
@@ -187,7 +187,7 @@
                                 </td>
                                 <td>
                                     <strong style="font-size: 15px; color: #047857;">&#8358;{{ number_format((float)$payout->amount, 2) }}</strong>
-                                    <div style="font-size: 10.5px; color: var(--adm-text-muted);">90% net earnings (sales &amp; delivery)</div>
+                                    <div style="font-size: 10.5px; color: var(--adm-text-muted);">net earnings</div>
                                 </td>
                                 <td>
                                     <div style="font-weight: 700; color: var(--adm-text);">{{ $payout->bank_name }}</div>
@@ -270,7 +270,7 @@
             <div>
                 <strong style="color: #1E40AF; font-size: 13.5px;">Historical Logistics Fleet Desk (Audit-Only)</strong>
                 <div style="font-size: 12px; color: #1D4ED8; margin-top: 2px;">
-                    Under Victorious MARKET's streamlined delivery architecture, all new doorstep deliveries are fulfilled directly by vendor-managed riders. 90% of delivery fees accrue directly to the fulfilling merchant and 10% to the platform. Fleet withdrawal records below represent pre-existing or external fleet claims preserved for complete financial audit integrity.
+                    Under Victorious MARKET's retailer architecture, logistics payables are governed by configured company/corridor tariffs and bulky surcharges. Fleet withdrawal records below represent pre-existing or external fleet claims preserved for complete financial audit integrity.
                 </div>
             </div>
         </div>
@@ -281,7 +281,7 @@
                     <span>🚚</span>
                     <div>
                         <div>Logistics Fleet Corporate Withdrawal Queue &mdash; Audit Console ({{ $pendingLogisticsList->where('status', 'pending')->count() }} Pending)</div>
-                        <span class="dash-card-subtitle">Historical logistics operators requesting bank payout from their verified 90% delivery fee earnings.</span>
+                        <span class="dash-card-subtitle">Logistics operators requesting bank payout from their verified delivery tariff earnings.</span>
                     </div>
                 </div>
                 <span class="dash-badge dash-badge-info">Fleet Audit</span>
@@ -313,7 +313,7 @@
                                 </td>
                                 <td>
                                     <strong style="font-size: 14.5px; color: #047857;">&#8358;{{ number_format((float)$payout->amount, 2) }}</strong>
-                                    <div style="font-size: 10.5px; color: var(--adm-text-muted);">90% delivery cut</div>
+                                    <div style="font-size: 10.5px; color: var(--adm-text-muted);">delivery earnings</div>
                                 </td>
                                 <td>
                                     <div style="font-weight: 700; color: var(--adm-text);">{{ $payout->bank_name }}</div>
@@ -409,7 +409,7 @@
                             <th>Order Ref</th>
                             <th>Merchant Store</th>
                             <th>Customer Subtotal</th>
-                            <th>90% Merchant Share</th>
+                            <th>Merchant / Supplier Share</th>
                             <th>Escrow Status</th>
                         </tr>
                     </thead>

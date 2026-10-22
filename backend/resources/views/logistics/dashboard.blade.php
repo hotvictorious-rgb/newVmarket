@@ -18,7 +18,7 @@
                 <span>Fleet Logistics Operations Center</span>
             </h1>
             <p class="page-header-subtitle">
-                Company: <strong style="color: var(--adm-text);">{{ $company->company_name ?? 'Victorious Express Logistics Uyo' }}</strong> — Supervise directional LGA delivery corridors, couriers, and 90% logistics delivery earnings.
+                Company: <strong style="color: var(--adm-text);">{{ $company->company_name ?? 'Victorious Express Logistics Uyo' }}</strong> — Supervise directional LGA delivery corridors, couriers, and logistics fleet delivery earnings.
             </p>
         </div>
         <div style="display: flex; gap: 8px;">
@@ -50,7 +50,7 @@
 
         <div class="stat-card stat-card-border-emerald">
             <div class="stat-card-info">
-                <span class="stat-card-label">90% Delivery Fee Wallet</span>
+                <span class="stat-card-label">Fleet Delivery Tariff Wallet</span>
                 <span class="stat-card-value">₦{{ number_format($fleetMetrics['accumulated_fees'], 2) }}</span>
                 <span class="stat-card-subtext" style="color: var(--adm-success);">Verified OTP Earnings</span>
             </div>
@@ -115,10 +115,10 @@
                 <div>
                     <div class="module-card-header">
                         <div class="module-card-icon" style="background: rgba(16, 185, 129, 0.1); color: var(--adm-success);">💼</div>
-                        <span class="dash-badge dash-badge-success">90% Cut</span>
+                        <span class="dash-badge dash-badge-success">Fleet Tariff</span>
                     </div>
-                    <div class="module-card-title">90% Delivery Fee Wallet</div>
-                    <div class="module-card-desc">Review 90% delivery revenue cuts credited to corporate wallet upon verified customer OTP delivery.</div>
+                    <div class="module-card-title">Fleet Delivery Tariff Wallet</div>
+                    <div class="module-card-desc">Review delivery tariff earnings credited to corporate wallet upon verified customer OTP delivery.</div>
                 </div>
                 <div class="module-card-footer">
                     <span style="font-size: 11.5px; color: #059669; font-weight: 700;">● Instant Escrow</span>
