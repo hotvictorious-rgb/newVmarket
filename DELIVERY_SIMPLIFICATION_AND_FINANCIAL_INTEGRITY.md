@@ -28,10 +28,10 @@ The current model is defined in [RETAILER_SUPPLIER_AND_CENTRAL_FULFILMENT_MODEL.
 - **Admin Sourcing Override:** Admin maintains complete supervisory control and can override the automated supplier or shop assignment at any time.
 - **Doorstep Delivery Flow (Pay First, Sourced & Dispatched):**
   1. Customer pays the full retail selling price plus delivery fee upfront online via Paystack. Strictly NO Cash on Delivery (COD).
-  2. System automatically assigns the order to the cheapest available supplier in Uyo. Admin can override this assignment.
+  2. After verified payment, the system selects a feasible whole-order sourcing plan, prioritizing shop consolidation, then total wholesale cost and supplier fulfillment reliability. Admin may override with a mandatory reason and audit trail.
   3. The assigned supplier verifies their physical inventory and confirms product availability in their portal.
   4. Once availability is confirmed, Admin assigns the order to an accredited Logistics Company (onboarded strictly by Admin).
-  5. The Logistics Company dispatches its active fleet rider to collect the item from the supplier's shop and deliver to the customer.
+  5. One assigned rider handles the complete customer order across all supplier stops. If any item is bulky, the order requires an exclusive keke trip; only all-small orders may be batched on a bike with compatible orders for the same Uyo corridor.
   6. Delivery completion strictly requires customer verification OTP (`delivery_otp`) plus doorstep photo proof.
 - **Pickup requests (support-managed exception only):** Customers cannot create a new online pickup reservation or receive an automatically assigned supplier branch. They must contact Victorious MARKET support. Support verifies the complete order, availability of every item, physical readiness at one approved collection point, payment arrangements and customer agreement before confirming pickup or disclosing instructions. Do not direct customers to multiple suppliers by default. Existing reservation records and handlers remain legacy-only until safe retirement.
 - **Operating Base:** Uyo, Akwa Ibom State is the central operating base. Delivery is offered only where local supplier sourcing and accredited logistics partner coverage are confirmed.
