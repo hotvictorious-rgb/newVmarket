@@ -36,8 +36,8 @@ class CheckoutExecutionService
 
     /**
      * Authoritative Order Checkout Execution Engine.
-     * Pessimistically locks catalog stock, applies cashback/wallet credits,
-     * routes logistics, and prepares Paystack payment intent.
+     * Pessimistically locks catalog stock, applies eligible cashback, rejects legacy
+     * wallet-credit tender, and prepares the Paystack payment intent.
      */
     public function execute(User $user, array $validated): array
     {
