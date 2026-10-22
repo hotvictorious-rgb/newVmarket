@@ -1,11 +1,11 @@
 > **Historical audit record:** Findings and proposed workflows below describe what was observed or planned at the time. They are not proof of current policy or implementation. Current policy is governed by [Active Business Rules](https://github.com/hotvictorious-rgb/newVmarket/blob/main/docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). Do not implement legacy Plaza-only sourcing, pre-payment binding allocation, public pickup stock holds, automatic refund solely due to allocation failure, or the retired 90% logistics-payable formula.
 
-> **Historical note — superseded 22 October 2026:** Older remediation entries may describe the retired 90%-of-delivery-fee logistics payable. Current policy is governed by [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md); configured logistics-company/corridor payable plus company-specific bulky surcharge is required.
+> **Historical note — superseded 22 October 2026:** Older remediation entries may describe the retired 90%-of-delivery-fee logistics payable. Current policy is governed by [Active Business Rules](../architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md); configured logistics-company/corridor payable plus company-specific bulky surcharge is required.
 
 # Victorious MARKET — Audit and Remediation Tracker
 
 **Working branch:** `audit/paystack-refund-webhook-safety`  
-**Policy source:** Owner-approved business rules captured in the project audit context.  
+**Current policy source:** [Active Business Rules](../architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). Historical remediation entries document observations at the time and do not override current policy.  
 **Deployment status:** No deployment or merge performed.  
 **Evidence rule:** A code change is not marked verified until the relevant automated tests run successfully.
 
