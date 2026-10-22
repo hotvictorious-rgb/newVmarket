@@ -8,15 +8,9 @@
 
 ## Master Architecture Overview
 
-Victorious Market is an end-to-end, multi-sided Nigerian digital commerce ecosystem comprising:
-1. **The Laravel 11 Financial Core & API Gateway (`newVmarket`)**:
-   - Manages the dual-ledger accounting system, Paystack Escrow holding & disbursement, 5-stage doorstep handshakes, dynamic delivery fee matrices, and Super Admin Command Tower.
-2. **Customer Mobile Application (`customerAPP`)**:
-   - Shopper storefront, order checkout, real-time OTP delivery verification, and doorstep returns/claims.
-3. **Vendor Merchant Application (`vendorAPP`)**:
-   - Inventory catalog, product dispatch handover, financial ledger, and bank account settlement withdrawals.
-4. **Logistics & Rider Application (`riderAPP`)**:
-   - Active corridor delivery manifests, merchant pickup verifications, OTP doorstep customer handovers, and wallet payouts.
+**Active business model:** Victorious MARKET is the single customer-facing retailer; suppliers are private sources and approved logistics companies perform delivery. The application repository and deployment state must be checked before treating any separate mobile application or service as a current dependency.
+
+The following names (`customerAPP`, `vendorAPP`, `riderAPP`) and marketplace-style wallet/escrow/withdrawal descriptions are legacy planning context in this manual, not proof that those applications exist in this repository or are approved launch dependencies. Do not use vendor commissions, vendor wallet payouts, or rider wallet payouts as the active retailer financial model. Follow [Active Business Rules](../docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md) for supplier payables and logistics-company payables. Any deployment steps below that assume a separate app, automatic transfer, or marketplace settlement must be revalidated against the actual approved architecture before execution.
 
 ---
 
@@ -153,7 +147,7 @@ sudo supervisorctl status
    - URL: `https://api.victoriousmarket.com.ng/api/v1/payments/paystack/webhook`
    - Enable events: `charge.success`, `transfer.success`, `transfer.failed`, `transfer.reversed`.
    - Copy Webhook Secret Hash to `PAYSTACK_WEBHOOK_SECRET` in `.env`.
-5. Enable **Transfers** in Paystack Dashboard under Settings > Transfers to allow automated merchant & rider wallet payouts.
+5. Do not enable automated merchant/vendor or rider wallet payouts merely because this legacy manual mentions them. Any Paystack Transfers configuration must be justified by a separately approved supplier-payment or logistics-company-payment workflow and its authorization controls.
 
 ### Termii Live SMS & Sender ID
 1. Top up Termii Live Naira Wallet.
