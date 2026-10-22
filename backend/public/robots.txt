@@ -1,2 +1,13 @@
 User-agent: *
-Disallow:
+Disallow: /admin/
+Disallow: /vendor/
+Disallow: /supplier/
+Disallow: /logistics/
+Disallow: /rider/
+Disallow: /portal/
+Disallow: /api/
+Allow: /
+Allow: /products/
+Allow: /categories/
+Allow: /legal/
+Allow: /assets/

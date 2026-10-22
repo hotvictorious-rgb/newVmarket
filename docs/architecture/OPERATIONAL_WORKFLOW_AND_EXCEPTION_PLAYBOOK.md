@@ -84,6 +84,12 @@ Victorious MARKET enforces an unbreakable financial rule: **Money NEVER leaves t
     1. **Wholesale Cost Price (`cost_price`):** The agreed purchase amount paid by Victorious MARKET.
     2. **Stock Quantity (`stock_quantity`):** Units physically available on the shop shelf.
     3. **Stock Status:** Toggle between `in_stock` and `out_of_stock`.
+* **Storefront SEO Exclusivity & Strict Backstage No-Index Isolation:**
+  - **Public Storefront Only:** 100% SEO indexing, Google ranking, Schema.org JSON-LD structured data, and OpenGraph WhatsApp/Facebook previews apply **strictly and exclusively** to the customer-facing storefront (`/`, `/products/*`, `/categories/*`, `/legal/*`).
+  - **Zero Backstage Indexing (Triple-Shield Isolation):** Under no circumstances may search engines crawl, index, or cache the Super Admin Command Tower, Supplier Terminal, or 3PL Logistics Portal.
+    1. `robots.txt` strictly disallows `/admin/`, `/vendor/`, `/supplier/`, `/logistics/`, `/rider/`, and `/api/`.
+    2. All authenticated portal layouts inject `<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">`.
+    3. Server middleware emits `X-Robots-Tag: noindex, nofollow` HTTP security headers across all operational portals.
 * **Negative Margin Shield:**
   - The system programmatically blocks any supplier offer where the wholesale cost is greater than or equal to the retail selling price (`cost_price >= unit_price`), alerting the Super Admin immediately.
 * **Supplier Product Request Workflow:**

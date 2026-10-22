@@ -36,7 +36,12 @@ When customers browse `victoriousmarket.com.ng`, they do not see chaotic multi-v
   - **Blazing Fast Performance:** Zero heavy third-party tracker bloat; optimized lazy-loaded WebP images; lightweight vanilla CSS.
   - **Sticky Bottom Action Bar:** On mobile screens, an ergonomic sticky bar displays the price, quantity selector, and high-contrast "Buy Now" / "Add to Cart" buttons for frictionless thumb access.
   - **Conversion Boosters:** Verified Retailer Trust Badge (*"Sold & Guaranteed by Victorious MARKET Uyo"*), Live In-Stock Indicator (*"In Stock in Uyo — Order before 5 PM for same-day corridor delivery"*), 5% Cashback Highlight (*"Earn ₦X Cashback on this item"*), and an Instant Landmark Delivery Fee Estimator directly on the page.
-* **100% SEO Optimization Standards:**
+* **100% SEO Optimization Standards (Storefront Exclusive):**
+  - **Public Storefront Only:** 100% SEO indexing, Google ranking, Schema.org JSON-LD structured data, and OpenGraph WhatsApp/Facebook previews apply **strictly and exclusively** to the customer-facing storefront (`/`, `/products/*`, `/categories/*`, `/legal/*`).
+  - **Zero Backstage Indexing (Triple-Shield Isolation):** Under no circumstances may search engines crawl, index, or cache the Super Admin Command Tower, Supplier Terminal, or 3PL Logistics Portal.
+    1. `robots.txt` strictly disallows `/admin/`, `/vendor/`, `/supplier/`, `/logistics/`, `/rider/`, and `/api/`.
+    2. All authenticated portal layouts inject `<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">`.
+    3. Server middleware emits `X-Robots-Tag: noindex, nofollow` HTTP security headers across all operational portals.
   - **Automated Schema.org JSON-LD:** Implements rich structured data (`Product`, `Offer`, `AggregateRating`, `Brand`, and `InStock` availability) for rich Google search snippets.
   - **OpenGraph & Twitter Cards:** Dynamic social sharing meta tags optimized for crystal-clear WhatsApp, Facebook, and Twitter image/price previews when customers share products.
   - **Single `<h1>` Hierarchy:** Strict semantic HTML5 tags with descriptive alt attributes on all product photos.
