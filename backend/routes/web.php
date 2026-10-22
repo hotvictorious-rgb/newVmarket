@@ -162,6 +162,7 @@ Route::middleware(['role:admin_employee'])->prefix('admin-staff')->group(functio
 
 // 3. Vendor Merchant Desk
 Route::middleware(['role:vendor'])->prefix('vendor')->group(function () {
+    Route::post('/supplier-offers/{offerId}/mark-unavailable', [\\App\\Http\\Controllers\\Web\\VendorSupplierOfferAvailabilityController::class, 'markUnavailable'])->whereNumber('offerId')->name('vendor.supplier_offers.mark_unavailable');
     Route::get('/', [PortalController::class, 'vendorDashboard'])->name('vendor.dashboard');
     Route::get('/products', [PortalController::class, 'vendorProductsPage'])->name('vendor.products.index');
     Route::get('/orders', [PortalController::class, 'vendorOrdersPage'])->name('vendor.orders.index');
