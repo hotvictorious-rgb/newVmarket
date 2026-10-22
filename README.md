@@ -64,7 +64,7 @@ Victorious MARKET is the retailer. Customers buy from Victorious MARKET, not fro
 
 ### Central operating base and service coverage
 
-VM operates from Uyo, Akwa Ibom State, and serves any destination it can actually cover through available product sourcing and approved logistics arrangements. Uyo is the central operating base, not a promise of nationwide service. Checkout must offer delivery only where current coverage, product availability, fee and delivery arrangements are confirmed. No coverage rule means no delivery promise.
+VM operates within Uyo LGA, Akwa Ibom State only at launch. New sourcing, customer destinations and logistics dispatch outside Uyo are rejected. The eight configured Uyo road corridors and curated landmarks control delivery eligibility; future expansion requires a separately approved policy change.
 
 ### Payment and order-state separation
 
@@ -258,12 +258,12 @@ Before release, verify at minimum:
 
 - Card and bank-transfer payment confirmation, mismatch handling and duplicate events.
 - bank.transfer.rejected handling without duplicate refunding.
-- Parent/child allocation equality and multi-vendor fulfilment isolation.
+- New customer-order and original Paystack-capture allocation equality, plus historical parent/child marketplace isolation for legacy transactions.
 - COD rejection through every checkout/API/configuration path.
 - 24-hour return-window start/end and the separate 24-hour cashback-maturity buffer.
 - Original-channel-only refunds, approval provenance, refund ceilings and refund reconciliation.
 - Cashback reversal/recovery without silent wallet debit.
-- Vendor-only rider assignments, protected Call Customer action and rider response privacy.
+- Rider assignments linked exclusively to the assigned active logistics company, protected Call Customer action and rider response privacy.
 - Delivery-first checkout and support-managed pickup exceptions only; no new public RES-XXXXXX pickup reservations.
 - Supplier payable eligibility after verified customer handover and reconciliation; approved logistics-company charges; provider transfer verification and balanced journals. Legacy vendor FIFO payout batching is not a new supplier-payment rule.
 - Legacy logistics paths blocked for new work while historical records remain auditable.
