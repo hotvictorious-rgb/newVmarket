@@ -7,7 +7,7 @@
 
 **Status:** Owner-confirmed policy baseline for payment/refund decisions recorded on 20 October 2026. The business questions in this decision set are resolved; technical implementation and verification gaps remain open. Implementation gaps are not completed fixes.
 **Prepared:** 20 October 2026
-**Branch:** audit/paystack-refund-webhook-safety
+**Current consolidation branch:** `align/vmarket-single-source-2026-10-22` (the former audit branch remains a source of changes to compare, not the active policy branch).
 **Canonical delivery rules:** .ai/BUSINESS_RULES.md
 **No-merge rule:** Do not merge to main without explicit owner approval.
 
