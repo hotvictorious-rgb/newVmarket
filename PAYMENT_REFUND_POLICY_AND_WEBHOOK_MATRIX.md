@@ -225,43 +225,43 @@ Do not subscribe to subscription, invoice, payment-request, dedicated-account or
 These are requirements to verify against code; listing them does not mean they are already implemented.
 
 ### Payment collection
-- [ ] Confirm one parent payment and immutable per-child allocation snapshots.
+- [ ] For new retailer orders, confirm one customer order and immutable order/item payment allocations. Preserve parent/child allocation snapshots only for historical marketplace transactions.
 - [ ] Reject COD across checkout, APIs, settings and legacy payment paths at launch; prove in-shop pickup is not treated as COD.
 - [ ] Ensure webhook and transaction verification use the same strict settlement service.
 - [ ] Record every verified charge/reference, including duplicate/late/mismatched charges.
 - [ ] Add a controlled duplicate-payment case/operation and tests for double charge.
-- [ ] Cover cancellation and stock loss between checkout and late payment; atomically recheck stock.
+- [ ] Cover cancellation and stock loss between checkout and late payment; atomically recheck availability after verified payment and before binding supplier assignments. Pre-payment availability quotes must be non-binding.
 - [ ] Distinguish underpayment, overpayment, currency mismatch, reference mismatch and invalid payer binding; keep each from fulfilling.
 - [ ] Add/verify reconciliation state for uncertain payment and safe stock-hold release.
 - [ ] Restrict enabled payment channels to Paystack card + standard bank transfer; implement and test `bank.transfer.rejected` without duplicate refunding.
 - [ ] Keep COD disabled across every launch path; no rider/customer cash collection workflow is enabled.
 - [ ] Keep DVA disabled at launch; reject or ignore DVA-only flows safely and do not subscribe to `dedicatedaccount.assign.success` / `dedicatedaccount.assign.failed` until DVA is separately approved.
 - [ ] **Historical vendor-payout migration only:** preserve an immutable audit trail for legacy vendor order-item earnings and child-order delivery allocations. Do not use that vendor payout ledger for new retailer supplier settlements; new supplier payables are per-order-item wholesale-cost liabilities and logistics-company payables use the independent corridor tariff.
-- [ ] Make vendor withdrawable balance a derived total of eligible earning records, not an order-level aggregate alone; apply payment, fulfilment, 24-hour window, returns/disputes, KYC/vendor status, bank cooldown and recovery checks per earning.
+- [ ] **Historical vendor payouts only:** preserve legacy vendor withdrawable-balance calculations and their original eligibility checks for audit. Do not use vendor earnings/balances for new supplier payables; new supplier payables are item-level wholesale-cost liabilities and require verified handover, authorization, reconciliation and idempotency.
 - [ ] **Legacy marketplace only:** preserve and reconcile historical vendor payout batch records with their original rules. Do not implement the ₦5,000/₦500,000 FIFO vendor-payout policy for new supplier payables; no replacement supplier-payment threshold or SLA is approved. For new supplier payments, require verified handover, immutable item-level cost, authorization, reconciliation and idempotency.
-- [ ] Split admin payout approval from payment initiation. Pending review cannot call Paystack; only an approved request can enter processing; verified transfer success finalizes the exact earning snapshot.
-- [ ] Test rejection/failed/reversed/timeout payout states, exact reservation restoration, webhook races, and no rider/logistics beneficiary for new vendor-managed orders.
+- [ ] **Historical vendor payout migration only:** preserve approval/transfer evidence for old vendor payout requests. For new supplier/company payments, keep authorization, payable eligibility, provider transfer initiation, provider-confirmed outcome and reconciliation as separate audited steps; no payout may be initiated from an unapproved or unmatched payable.
+- [ ] Test rejection/failed/reversed/timeout payout states, exact reservation restoration and webhook races. New retailer orders may pay the approved logistics company under its corridor tariff, but must never create a direct rider payable.
 
 ### Refunds and cashback
 - [ ] Persist authorization provenance before dispatch. Permit automatic approval only for verified duplicate charges and pre-vendor-action cancellation under the narrow policy in Q10; require authorized human approval for all other refunds.
 - [ ] Ensure partial-refund calculations use captured immutable item allocations and include prior confirmed refunds plus active reservations.
-- [ ] Ensure reservations are concurrency-safe across child orders, partial refunds, provisional holds and repeated idempotency keys.
+- [ ] Ensure refund reservations are concurrency-safe across customer-order components and the original capture. Apply historical child-order ceilings only to legacy marketplace transactions; partial refunds and repeated idempotency keys must remain safe.
 - [ ] Enforce original-channel refunds only at launch; block wallet-credit refunds and legacy wallet-credit checkout tender at UI/API/service boundaries. Preserve historical wallet-credit records without allowing them as a third launch payment path. Cashback redemption remains a separate capped discount.
 - [ ] Add secure `refund.needs-attention` handling, notifications and follow-up tracking. Preserve original-transaction Paystack-only refund policy; do not use alternate bank details/retry flow unless a separate owner-approved exception exists.
 - [ ] On refund.failed, preserve the customer obligation and reservation policy; alert and reconcile provider credit before retry.
 - [ ] Verify the default customer return/refund/protection window is 24 hours from verified fulfilment and cashback's earliest maturity is `refund_window_expires_at + 24 hours` (`+ 1 day`), only if no blocking case remains. The cashback buffer does not extend the customer claim window and is not a gateway refund SLA.
 - [ ] Implement a cashback recovery ledger and offset future cashback before making new cashback spendable; document the policy in Terms & Conditions and complete legal/consumer-policy review.
 - [ ] Make refund completion depend on matched refund.processed evidence and idempotent journal posting.
-- [ ] Preserve partial-refund sibling states; one confirmed partial refund must not falsely mark the entire child order fully refunded/completed.
+- [ ] Preserve partial-refund component states; one confirmed partial refund must not falsely mark the entire new customer order fully refunded/completed. Retain child-order sibling isolation only for historical marketplace transactions.
 - [ ] Keep customer refund status separate from vendor recovery status.
 
 ### Supplier payables, logistics charges and disputes
-- [ ] Verify payout eligibility per child order after fulfilment, protection window and no blocking return/dispute.
+- [ ] Verify new supplier payable eligibility per order item after verified delivery (or authorized pickup exception), required reconciliation and no blocking return/dispute. Verify logistics-company payable is based on its immutable corridor tariff and is released to the company only after verified delivery and required reconciliation. Preserve historical vendor child-order payout gates only for legacy transactions.
 - [ ] Implement charge.dispute.* handlers with exact names, case/deadline tracking, evidence preservation and affected-settlement hold.
 - [ ] Never create a payout record from unmatched transfer.success.
 - [ ] Make transfer failure/reversal handling race-safe; stale failure must not overwrite success.
 - [ ] Verify provider transfer status/returned funds before retry; use a new attempt/reference.
-- [ ] Keep rider and legacy logistics payouts excluded from new vendor-managed delivery flows.
+- [ ] Never create a direct rider payable. Keep approved logistics-company corridor payables, company wallet/transfer controls and reconciliation active for new retailer orders; disable only legacy vendor-managed dispatch and vendor/rider payout paths for new work.
 
 ### Webhook reliability
 - [ ] HMAC-SHA512 signature validation on raw body before business processing.
