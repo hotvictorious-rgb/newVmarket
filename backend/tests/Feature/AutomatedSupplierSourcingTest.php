@@ -804,7 +804,7 @@ class AutomatedSupplierSourcingTest extends TestCase
 
     public function test_initial_delivery_corridor_seeder_creates_all_eight_uyo_roads(): void
     {
-        app(\\Database\\Seeders\\InitialDeliveryCorridorsSeeder::class)->run();
+        app(\Database\Seeders\InitialDeliveryCorridorsSeeder::class)->run();
 
         foreach ([
             'uyo-oron-road',
