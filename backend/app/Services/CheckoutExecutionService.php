@@ -89,8 +89,10 @@ class CheckoutExecutionService
             ];
         }
 
-        // Retailer checkout has no customer-selected supplier/shop. Each line is
-        // resolved independently to an eligible private supplier offer inside checkout.
+        // Retailer checkout has no customer-selected supplier/shop. A feasible whole-order
+        // supplier plan is currently resolved and snapshotted here before payment; the
+        // post-payment sourcing timing is a documented release blocker until revalidation/
+        // binding assignment is enforced after the verified Paystack webhook.
         // Guard 3: Explicit Logistics Company Invariant
         if (!empty($validated['logistics_company_id'])) {
             $logistics = LogisticsCompanyProfile::withTrashed()->with('user')->find($validated['logistics_company_id']);
@@ -110,8 +112,8 @@ class CheckoutExecutionService
             }
         }
 
-        // Launch policy: customers cannot choose a rider or central logistics fleet at checkout.
-        // Vendor-managed fulfilment assigns a vendor rider after order acceptance, if one is needed.
+        // Launch policy: customers cannot choose a rider or logistics company at checkout.
+        // VM centrally assigns an approved logistics company after verified payment and supplier confirmation.
         if (!empty($validated['rider_id']) || !empty($validated['logistics_company_id'])) {
             return [
                 'success' => false,
