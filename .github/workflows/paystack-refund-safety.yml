@@ -14,6 +14,7 @@ on:
     branches:
       - audit/paystack-refund-webhook-safety
       - docs/retailer-central-fulfilment-model
+      - align/vmarket-single-source-2026-10-22
   workflow_dispatch:
 
 permissions:
