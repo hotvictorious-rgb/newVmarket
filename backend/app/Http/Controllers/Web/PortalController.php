@@ -1829,6 +1829,125 @@ class PortalController extends Controller
     /**
      * Logistics Company Action: Toggle Courier Active/Inactive Duty Status
      */
+    /**
+     * Assign one eligible fleet rider to a paid retailer order. This is the
+     * dispatch-time enforcement point for Uyo corridor lock and bulky Keke exclusivity.
+     */
+    public function logisticsAssignRider(Request $request, int $id)
+    {
+        $company = $this->resolveLogisticsCompany();
+        $validated = $request->validate([
+            'rider_id' => ['required', 'integer', 'exists:rider_profiles,id'],
+        ]);
+
+        $order = Order::whereKey($id)
+            ->where('retailer_model_order', true)
+            ->where('fulfillment_type', 'doorstep_delivery')
+            ->where('logistics_company_id', $company->id)
+            ->firstOrFail();
+
+        if ($order->payment_status !== 'paid') {
+            return back()->with('error', 'Only verified-paid retailer orders can be dispatched.');
+        }
+        if (!in_array($order->order_status, ['ready_for_pickup', 'ready_for_dispatch', 'confirmed', 'processing'], true)
+            || $order->pickup_confirmed_by_rider
+            || $order->order_status === 'out_for_delivery') {
+            return back()->with('error', 'Rider assignment is blocked after collection or once the order enters transit.');
+        }
+
+        $assignments = \App\Models\OrderSupplierAssignment::where('order_id', $order->id)->get();
+        if ($assignments->isEmpty()
+            || $assignments->contains(fn ($assignment) => !in_array($assignment->status, ['ready_for_collection', 'collected', 'admin_reassigned'], true))) {
+            return back()->with('error', 'Every supplier assignment must be ready for collection before dispatch assignment.');
+        }
+
+        $uyo = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->first();
+        $corridor = $order->delivery_corridor_id
+            ? DeliveryCorridor::with('lga.state')->whereKey($order->delivery_corridor_id)->where('is_active', true)->first()
+            : null;
+        if (!$uyo || !$corridor || (int) $corridor->lga_id !== (int) $uyo->id
+            || !$corridor->companyRates()->where('logistics_company_id', $company->id)->where('is_active', true)->exists()) {
+            return back()->with('error', 'Dispatch requires an active Uyo corridor and this company’s active negotiated tariff.');
+        }
+
+        $rider = RiderProfile::with(['user', 'assignedLga.state', 'logisticsCompany.user'])
+            ->whereKey($validated['rider_id'])
+            ->where('logistics_company_id', $company->id)
+            ->first();
+        if (!$rider || !$rider->isEligibleForCentralDelivery()) {
+            return back()->with('error', 'Choose an active rider belonging to this logistics company and assigned to Uyo.');
+        }
+
+        $requiresKeke = $order->requiresKekeForDelivery();
+        $vehicle = strtolower(trim((string) $rider->vehicle_type));
+        if ($requiresKeke && !in_array($vehicle, ['keke', 'tricycle'], true)) {
+            return back()->with('error', 'This order contains a bulky item and requires an exclusive Keke/tricycle.');
+        }
+        if (!$requiresKeke && !in_array($vehicle, ['motorcycle', 'motorbike', 'bike'], true)) {
+            return back()->with('error', 'Standard orders must be assigned to a motorcycle rider.');
+        }
+
+        $activeStatuses = ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup', 'out_for_delivery'];
+        $otherActiveOrders = $rider->assignedOrders()
+            ->where('orders.id', '<>', $order->id)
+            ->where('orders.retailer_model_order', true)
+            ->where('orders.fulfillment_type', 'doorstep_delivery')
+            ->whereIn('orders.order_status', $activeStatuses)
+            ->get();
+
+        if ($requiresKeke && $otherActiveOrders->isNotEmpty()) {
+            return back()->with('error', 'A bulky Keke order must be the rider’s only active customer order.');
+        }
+        foreach ($otherActiveOrders as $otherOrder) {
+            if ($otherOrder->requiresKekeForDelivery()
+                || (int) $otherOrder->delivery_corridor_id !== (int) $order->delivery_corridor_id) {
+                return back()->with('error', 'A motorcycle may batch only standard orders on the exact same Uyo road corridor.');
+            }
+        }
+
+        try {
+            DB::transaction(function () use ($order, $rider, $request) {
+                $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+                if ($lockedOrder->payment_status !== 'paid'
+                    || $lockedOrder->pickup_confirmed_by_rider
+                    || in_array($lockedOrder->order_status, ['out_for_delivery', 'delivered', 'cancelled', 'returned', 'disputed'], true)) {
+                    throw new \InvalidArgumentException('Order state changed while assigning the rider; refresh and retry.');
+                }
+
+                $oldRiderId = $lockedOrder->rider_id;
+                $lockedOrder->rider_id = $rider->id;
+                $lockedOrder->save();
+
+                if (!$rider->isEligibleForCentralOrder($lockedOrder->fresh())) {
+                    throw new \InvalidArgumentException('Rider failed the final vehicle, company, or corridor eligibility check.');
+                }
+
+                AdminAuditLog::create([
+                    'user_id' => $request->user()->id,
+                    'action' => 'logistics_company_rider_assigned',
+                    'target_type' => Order::class,
+                    'target_id' => $lockedOrder->id,
+                    'old_values' => ['rider_id' => $oldRiderId],
+                    'new_values' => [
+                        'rider_id' => $rider->id,
+                        'logistics_company_id' => $lockedOrder->logistics_company_id,
+                        'delivery_corridor_id' => $lockedOrder->delivery_corridor_id,
+                        'vehicle_type' => $rider->vehicle_type,
+                        'requires_keke' => $lockedOrder->requiresKekeForDelivery(),
+                    ],
+                    'ip_address' => $request->ip(),
+                    'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+                ]);
+            }, 3);
+        } catch (\Throwable $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return back()->with('success', 'Rider assigned and audited. Corridor and vehicle restrictions passed.');
+    }
+
     public function logisticsToggleRiderActive($id)
     {
         $company = $this->resolveLogisticsCompany();
