@@ -137,7 +137,7 @@
                         <div class="module-card-icon" style="background: rgba(16, 185, 129, 0.1); color: var(--adm-success);">💼</div>
                         <span class="dash-badge dash-badge-success">Configured Tariff</span>
                     </div>
-                    <div class="module-card-title">90% Delivery Fee Wallet</div>
+                    <div class="module-card-title">Company Corridor Payables</div>
                     <div class="module-card-desc">Review your admin-configured corridor payable and bulky surcharge, released only after verified delivery and reconciliation.</div>
                 </div>
                 <div class="module-card-footer">
