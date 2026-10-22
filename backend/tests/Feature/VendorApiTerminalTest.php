@@ -518,7 +518,7 @@ class VendorApiTerminalTest extends TestCase
 
         $res->assertStatus(403)
             ->assertJsonPath('status', false)
-            ->assertJsonPath('message', 'Security Cooldown Active: Bank account was recently updated. For fraud prevention, withdrawals are locked for 48 hours following bank detail modifications.');
+            ->assertJsonPath('message', 'Security hold: verified bank details must have an audited update timestamp and remain unchanged for 48 hours before withdrawals.');
     }
 
     public function test_vendor_can_upload_product_with_photo_file_and_gallery(): void
