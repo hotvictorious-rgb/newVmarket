@@ -212,6 +212,20 @@ class Order extends Model
         return $this->fulfillment_type === 'doorstep_delivery';
     }
 
+    /**
+     * Bulky contagion is based on immutable order-item snapshots, not mutable
+     * catalog data. One bulky line makes the entire customer order Keke-only.
+     */
+    public function requiresKekeForDelivery(): bool
+    {
+        return $this->items()
+            ->where(function ($query) {
+                $query->where('is_bulky_snapshot', true)
+                    ->orWhereIn('package_tier_snapshot', ['keke', 'bulky']);
+            })
+            ->exists();
+    }
+
     public function isPickup(): bool
     {
         return in_array($this->fulfillment_type, ['in_shop_pickup', 'in_store_pickup'], true);
