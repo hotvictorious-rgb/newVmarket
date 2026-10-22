@@ -84,6 +84,8 @@ jobs:
           php -l database/migrations/2026_10_22_000001_add_geotagged_retailer_fulfillment_proof.php
           php -l database/migrations/2026_10_22_000002_add_supplier_unavailability_cooldown.php
           php -l database/migrations/2026_10_22_000003_add_order_item_bulky_snapshots.php
+          php -l database/seeders/InitialDeliveryCorridorsSeeder.php
+          php -l database/seeders/DatabaseSeeder.php
           php -l app/Services/SupplierReassignmentRecoveryService.php
           php -l app/Http/Controllers/Web/AdminSupplierRecoveryController.php
           php -l app/Http/Controllers/Web/AdminRetailerSupplierPayoutController.php
