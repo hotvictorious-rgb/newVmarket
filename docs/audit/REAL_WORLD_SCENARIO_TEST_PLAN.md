@@ -103,10 +103,12 @@ Every scenario must verify:
 - Expected: blocked cashback does not mature/spend; spent cashback recovery is separately recorded; no silent cash-wallet debit or duplicate ledger entry.
 - Verify: maturity time, liability ledger, redemption cap and reversal links.
 
-### S13 — Payout timeout, duplicate click and late bank confirmation
-- Arrange: vendor clicks twice; provider times out; later reconciliation confirms transfer; also test a true failure.
-- Expected: one active reservation of earning records; timeout does not release the reservation; FIFO whole-earning allocation and caps remain intact; completed transfer is not reversed.
-- Verify: payout state, earning allocation, bank/provider reference, fees and ledger balance.
+### S13 — Legacy vendor payout timeout, duplicate click and late bank confirmation (historical compatibility)
+- Scope: this scenario covers only pre-existing legacy vendor-earning/payout records. It must not be used as the acceptance rule for new retailer-model supplier payables.
+- Arrange: for a historical vendor payout, the vendor clicks twice; the provider times out; later reconciliation confirms transfer; also test a true failure.
+- Expected (legacy records only): one active reservation of legacy earning records; timeout does not release the reservation; apply the historical whole-record/FIFO rules only to that legacy record set; completed transfer is not reversed without a verified reversal event.
+- New supplier-payable acceptance rule: request/disbursement is ₦5,000–₦1,000,000; FIFO/oldest-first selection is prohibited; selection is authorized and auditable but has no owner-approved automatic ranking; do not silently split an over-cap request.
+- Verify separately: legacy payout state/allocations and, for new supplier payables, selected payable IDs, approving admin, amount limits, idempotency, provider confirmation and balanced ledger.
 
 ### S14 — Vendor repayment and refund recovery
 - Arrange: vendor disputes debt; sends screenshot only; later verified bank repayment arrives twice; admin proposes offset/write-off.
