@@ -10,6 +10,8 @@ Built for the approved Uyo LGA, Akwa Ibom operating area, Victorious MARKET is o
 
 The active business rules require:
 
+0. **Supplier administration:** supplier registration, activation and suspension are admin-only; self-registration is not allowed. Suspension blocks new allocation and requires admin review of paid/in-flight orders.
+
 1. **Listing lifecycle separate from allocation:** Keep a product purchasable only while at least one eligible supplier offer is explicitly in stock. Hide it automatically when all eligible offers are out of stock/ineligible, or when an authorized admin delists it. Preserve historical records.
 2. **Verified payment before allocation:** Before verified Paystack payment, stock checks and feasibility checks must remain non-binding. No supplier assignment, support-managed pickup exception, binding notification or supplier payable may begin until payment is verified. Revalidate stock after payment before allocation.
 3. **Whole-order sourcing and one rider:** Compare only feasible plans that fulfil the complete order; minimize supplier pickup locations first, then total wholesale cost among equally consolidated plans, then reliability and a deterministic tie-break. A customer order may use multiple approved supplier locations but remains with one rider from one approved logistics company.
