@@ -5,8 +5,8 @@
 > **Current owner decision (22 October 2026):** VM is the sole customer-facing retailer operating only within Uyo LGA, Akwa Ibom State for new sourcing, customer destinations and dispatch. Suppliers are private product sources linked to approved offers and order items. VM coordinates delivery through approved logistics companies; each rider assigned to new work must be active and linked exclusively to one active approved company. Pickup is a support-managed exception only, not a public reservation flow; legacy RES passes are historical-only. Supplier payables require verified handover and reconciliation. New company payables use company-specific corridor base tariffs plus configured bulky-unit surcharges, never the former 90% allocation. This audit preserves older code findings for historical context; it does not prove current code is complete.
 
 
-**Review date:** 20 October 2026  
-**Branch:** `audit/paystack-refund-webhook-safety`  
+**Original audit snapshot date:** 20 October 2026
+**Original audit source branch:** `audit/paystack-refund-webhook-safety`
 **Status:** Business rules documented; implementation gaps remain open. This report is an audit and implementation plan, not proof that the code has been fixed.  
 **Controlling policy:** `.ai/BUSINESS_RULES.md`  
 **No-merge rule:** Do not merge to `main` without explicit owner approval.
