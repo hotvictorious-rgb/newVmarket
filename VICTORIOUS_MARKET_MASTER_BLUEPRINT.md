@@ -136,7 +136,7 @@ Suppose Rider Emmanuel (driving a Keke) is assigned Order #800, which has 2 item
 2. **Shop Pickup Photo #1:** Emmanuel uses his app to snap a clear, live camera photo of Item 1 at the shop counter (gallery uploads are disabled; live camera capture is forced).
 3. **Shop Pickup OTP #1:** Shop Alpha reads out the unique 4-digit **Shop Pickup OTP** displayed on their supplier dashboard for that specific order item. Emmanuel enters it into his app.
 * *System Action:* The database timestamps the handoff, shifts liability for Item 1 from Shop Alpha to the 3PL company, and marks Shop Alpha's portion as `picked_up`.
-4. **Arrival at Shop Beta:** Emmanuel moves 50 meters down the plaza to Shop Beta, loads the bulky item into his Keke, snaps **Shop Pickup Photo #2**, and enters **Shop Pickup OTP #2**.
+4. **Arrival at Shop Beta:** Emmanuel travels to the second approved supplier pickup location, loads the bulky item into his Keke, snaps **Shop Pickup Photo #2**, and enters **Shop Pickup OTP #2**.
 5. **Transit Unlock:** Only after *every single shop stop* for Order #800 has a verified Pickup OTP and Photo does the order status transition to `in_transit_on_corridor`, unlocking the customer's doorstep details.
 
 ### 5.2 Stage 2: Doorstep Handover Protocol
@@ -165,7 +165,7 @@ When a customer pays via Paystack at checkout, 100% of the funds sit in the Vict
 1. **Supplier Payable Ledger (Paid Per Item Fulfilled):**
 Each approved supplier who contributed an item to the order has their wallet/payout ledger credited with the exact locked `cost_price` snapshot recorded at the moment of allocation.
 2. **3PL Logistics Payable Ledger (Paid Per Customer Order Trip):**
-The logistics company is **never** paid per item or per supplier stop; it is paid **one pre-negotiated flat corridor rate per completed customer order trip**, based on the road corridor and vehicle type:
+The logistics company is **never** paid per item or per supplier stop; it is paid according to the admin-configured base payable for that logistics company and corridor, plus that company's configured bulky-unit surcharge multiplied by the applicable bulky-unit count:
 * *Standard Bike Order Trip:* Pay the configured company/corridor base payable, plus any configured company bulky-unit surcharge if applicable.
 * *Isolated Bulky Keke Order Trip:* Pay the configured company/corridor base payable plus the company's bulky-unit surcharge multiplied by the applicable bulky-unit count.
 3. **Victorious MARKET Net Revenue Ledger:**
@@ -202,6 +202,6 @@ To ensure your AI coding partner builds this system without cutting corners, her
 
 3. **Role-Based Portals (UI/Frontend Views):**
 * **Customer Storefront:** Fast catalog, landmark-driven checkout, Paystack integration, and OTP tracking page.
-* **Plaza Supplier Portal:** Ultra-simple mobile-first screen to toggle stock, view assigned orders, read out Shop Pickup OTPs, or click "Unavailable" (triggering the 24h penalty).
+* **Approved Supplier Portal:** Ultra-simple mobile-first screen for each approved supplier to manage its offers and stock, view assigned orders, read out Shop Pickup OTPs, or click "Unavailable" (triggering the product-specific 24-hour cooldown).
 * **3PL Logistics Portal & Rider View:** The 8 Road Corridor tabs, vehicle assignment validation, and camera/OTP capture screens.
 * **Victorious Admin Command Center:** Live order monitor, manual supplier override modal, stuck-order alerts, and weekly payout reconciliation dashboard.
