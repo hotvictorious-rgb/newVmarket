@@ -34,6 +34,23 @@
         </div>
     </div>
 
+    <div class="dash-card" style="margin-bottom: 16px;">
+        <div class="dash-card-header">
+            <div>
+                <div class="dash-card-title">Uyo Road Corridor Tabs</div>
+                <span class="dash-card-subtitle">Only orders assigned to your logistics company are shown. A rider may not mix corridors on a bike trip.</span>
+            </div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; padding:0 18px 18px;">
+            <button type="button" class="dash-badge dash-badge-info" data-corridor-filter="all" aria-pressed="true">All corridors ({{ count($activeDeliveries) }})</button>
+            @foreach($corridors as $corridor)
+                <button type="button" class="dash-badge dash-badge-info" data-corridor-filter="{{ $corridor->id }}" aria-pressed="false">
+                    {{ $corridor->name }} ({{ $activeDeliveries->where('delivery_corridor_id', $corridor->id)->count() }})
+                </button>
+            @endforeach
+        </div>
+    </div>
+
     <div class="dash-card">
         <div class="dash-card-header">
             <div>
@@ -47,7 +64,9 @@
                 <thead>
                     <tr>
                         <th>Waybill / Order #</th>
-                        <th>Origin Plaza</th>
+                        <th>Source</th>
+                        <th>Destination Corridor</th>
+                        <th>Vehicle Class</th>
                         <th>Recipient &amp; Phone</th>
                         <th>Assigned Courier</th>
                         <th>Delivery Fee</th>
@@ -56,7 +75,7 @@
                 </thead>
                 <tbody>
                     @forelse($activeDeliveries as $order)
-                        <tr>
+                        <tr data-corridor-id="{{ $order->delivery_corridor_id }}">
                             <td>
                                 <div style="font-weight: 700; color: var(--adm-primary); font-size: 13.5px;">{{ $order->order_number }}</div>
                                 <span style="font-size: 11.5px; color: var(--adm-text-muted);">{{ $order->created_at->format('d M, Y H:i') }}</span>
@@ -64,6 +83,17 @@
                             <td>
                                 <div style="font-weight: 600; color: var(--adm-text);">{{ $order->shop->name ?? 'Victor Tech Plaza' }}</div>
                                 <span style="font-size: 11.5px; color: var(--adm-text-muted);">Counter Staged</span>
+                            </td>
+                            <td>
+                                <div style="font-weight: 700; color: var(--adm-text);">{{ $order->deliveryCorridor->name ?? 'Unmapped — hold dispatch' }}</div>
+                            </td>
+                            <td>
+                                @php($isBulkyOrder = $order->items->contains(fn ($item) => (bool) $item->is_bulky_snapshot))
+                                @if($isBulkyOrder)
+                                    <span class="dash-badge dash-badge-gold">Keke — exclusive order</span>
+                                @else
+                                    <span class="dash-badge dash-badge-info">Motorcycle — corridor batch only</span>
+                                @endif
                             </td>
                             <td>
                                 <div style="font-weight: 600; color: var(--adm-text);">{{ $order->customer->name ?? 'Shopper' }}</div>
@@ -87,7 +117,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" style="text-align: center; padding: 40px; color: var(--adm-text-muted);">
+                            <td colspan="8" style="text-align: center; padding: 40px; color: var(--adm-text-muted);">
                                 No active waybill dispatches in progress right now.
                             </td>
                         </tr>
@@ -96,4 +126,22 @@
             </table>
         </div>
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const tabs = Array.from(document.querySelectorAll('[data-corridor-filter]'));
+            const rows = Array.from(document.querySelectorAll('tr[data-corridor-id]'));
+            tabs.forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    const selected = tab.getAttribute('data-corridor-filter');
+                    tabs.forEach(function (other) {
+                        other.setAttribute('aria-pressed', other === tab ? 'true' : 'false');
+                    });
+                    rows.forEach(function (row) {
+                        row.style.display = selected === 'all' || row.getAttribute('data-corridor-id') === selected ? '' : 'none';
+                    });
+                });
+            });
+        });
+    </script>
 @endsection
