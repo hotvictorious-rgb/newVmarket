@@ -14,7 +14,7 @@
 
 Victorious MARKET is a centrally managed online retailer operating from Uyo, Akwa Ibom State. Customers buy from Victorious MARKET; suppliers remain private behind-the-scenes product sources linked internally to approved wholesale offers and order items. Victorious MARKET controls public listings, retail prices, customer payments, delivery coordination, pickup verification, customer support, refunds, and financial records. Delivery is fulfilled through approved logistics companies whose riders must each be linked to an active logistics company.
 
-> **Current policy status:** The owner-approved business rules are documented on the canonical working branch `docs/retailer-central-fulfilment-model`. Some items in the implementation audit remain open and must not be treated as completed merely because they appear in this README. Do not merge this branch into main without explicit owner approval.
+> **Current policy status:** The owner-approved rules are being consolidated on `align/vmarket-single-source-2026-10-22`; PR #12 remains open and unmerged. `main` remains the protected release branch. Some implementation gaps remain open; documentation does not prove that code or tests are complete.
 
 ## At a glance
 
