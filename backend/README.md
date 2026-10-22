@@ -1,3 +1,5 @@
+> **Policy authority:** [Active Business Rules](https://github.com/hotvictorious-rgb/newVmarket/blob/main/docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md) governs the backend target contract. Pickup is not a public pre-payment reservation or stock hold. No code was changed in this documentation pass.
+
 # Victorious MARKET — Backend Service
 
 > **Binding business rules:** [Active Business Rules](../docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md).  
@@ -9,7 +11,7 @@ Built for the approved Uyo LGA, Akwa Ibom operating area, Victorious MARKET is o
 The active business rules require:
 
 1. **Listing lifecycle separate from allocation:** Keep a product purchasable only while at least one eligible supplier offer is explicitly in stock. Hide it automatically when all eligible offers are out of stock/ineligible, or when an authorized admin delists it. Preserve historical records.
-2. **Verified payment before allocation:** Before verified Paystack payment, stock checks and feasibility checks must remain non-binding. No supplier assignment, reservation, binding notification or supplier payable may begin until payment is verified. Revalidate stock after payment before allocation.
+2. **Verified payment before allocation:** Before verified Paystack payment, stock checks and feasibility checks must remain non-binding. No supplier assignment, support-managed pickup exception, binding notification or supplier payable may begin until payment is verified. Revalidate stock after payment before allocation.
 3. **Whole-order sourcing and one rider:** A customer order may be sourced from multiple approved supplier locations, but the complete order remains with one rider from one approved logistics company.
 4. **Bulky isolation:** Any bulky item makes the whole order a dedicated Keke/tricycle trip for that customer order; do not combine it with another customer's order.
 5. **Proof of custody:** Require a unique pickup OTP and mandatory photo proof at each supplier pickup location, plus customer delivery OTP and mandatory geo-tagged doorstep photo.
