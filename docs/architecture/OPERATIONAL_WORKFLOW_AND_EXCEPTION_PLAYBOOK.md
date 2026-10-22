@@ -70,7 +70,28 @@ Victorious MARKET enforces an unbreakable financial rule: **Money NEVER leaves t
 
 ---
 
-## 2. Stage 1: Sourcing & Pre-Dispatch Confirmation Gate
+## 2. Stage 0: Master Catalog Creation, Supplier Offer Management, Media & Margin Shield
+
+### 2.1 Canonical Products vs. Supplier Wholesale Offers
+* **Canonical Product Management (Admin-Owned):**
+  - Victorious MARKET Super Admin creates and controls all public storefront catalog listings.
+  - Each canonical product defines: Product Title, Category, High-Resolution Studio Gallery, Technical Specifications, Bulky Payload Flag (`is_bulky`), and the **Public Retail Selling Price (`unit_price`)**.
+  - **Embedded YouTube Video Link:** Admin can attach an official YouTube video or YouTube Shorts link (`youtube_video_id`). On the storefront, an ultra-fast, lightweight lazy-loaded video facade allows shoppers in Uyo to inspect real unboxings, build quality, and demonstrations with zero page speed penalty.
+  - **100% SEO Standards:** Automatic Schema.org JSON-LD structured data (`Product`, `Offer`, `InStock`), dynamic OpenGraph/WhatsApp preview cards, and semantic HTML5 hierarchy.
+* **Supplier Offer Management (Confidential & Backstage):**
+  - Suppliers never create public listings or customer-facing pages.
+  - In their mobile-first Supplier Terminal, suppliers browse the canonical catalog and submit 3 parameters:
+    1. **Wholesale Cost Price (`cost_price`):** The agreed purchase amount paid by Victorious MARKET.
+    2. **Stock Quantity (`stock_quantity`):** Units physically available on the shop shelf.
+    3. **Stock Status:** Toggle between `in_stock` and `out_of_stock`.
+* **Negative Margin Shield:**
+  - The system programmatically blocks any supplier offer where the wholesale cost is greater than or equal to the retail selling price (`cost_price >= unit_price`), alerting the Super Admin immediately.
+* **Supplier Product Request Workflow:**
+  - When a merchant stocks a high-demand item not yet in the master catalog, they submit a *"Product Addition Request"* via their portal. Admin reviews, creates the canonical record with photos, YouTube video, and retail price, and opens it for supplier offers.
+
+---
+
+## 3. Stage 1: Sourcing & Pre-Dispatch Confirmation Gate
 
 ### 2.1 The "All-Confirmed-Before-Movement" Gate
 * **Strict Invariant:** A rider from the assigned logistics company is **never dispatched** until **every single item** in the customer order has been explicitly marked as `ready_for_pickup` by each assigned supplier.

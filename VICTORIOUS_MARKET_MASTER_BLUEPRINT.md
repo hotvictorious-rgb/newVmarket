@@ -23,13 +23,28 @@ Victorious MARKET enforces a **fail-closed, hyper-localized architecture** built
 
 ## 2. Phase 1: Customer Discovery, Cart Mechanics, & Checkout Gateway
 
-### 2.1 Catalog Structure & Product Attributes
+### 2.1 Catalog Structure, High-Converting Media & Product Attributes
 
-When customers browse `victoriousmarket.com.ng`, they do not see individual vendor shops; they see a unified, authoritative Victorious MARKET retail catalog. Behind the scenes, each product record contains critical operational metadata:
+When customers browse `victoriousmarket.com.ng`, they do not see chaotic multi-vendor listings; they experience a single, ultra-fast, authoritative Victorious MARKET retail storefront. Behind the scenes, each canonical product record contains rich operational, media, and SEO metadata:
 
 * **Retail Selling Price (`unit_price`):** The customer-facing price set by Victorious MARKET.
 * **Payload Classification (`is_bulky`):** A strict boolean flag (`true` or `false`). Items like smartphones, chargers, blenders, and clippers are `false` (Standard/Small). Items like 4x6 virgin foam mattresses, standing gas cookers, large generators, and deep freezers are `true` (Bulky).
-* **Active Supplier Backing and Listing Lifecycle:** A product is purchasable only while at least one active, verified supplier at an admin-approved Uyo location has an eligible, unpenalized `in_stock` offer. If all eligible offers are out of stock or otherwise ineligible, automatically hide the listing from the customer-facing storefront. An authorized admin may manually delist it at any time. Recompute visibility when stock changes; a listing may return only if an eligible offer exists and admin has not manually delisted it. Hiding a listing must not delete product, offer or historical order records. Listing visibility is separate from allocation to a particular paid order.
+* **Multimedia & Embedded YouTube Unboxing Video (`youtube_video_id`):** 
+  - Admin can attach an official YouTube video/Shorts link to any product.
+  - On the customer product page, an ultra-fast, lightweight facade video player is embedded. Customers can watch real-world unboxings, physical quality reviews, and product demonstrations right on the page without sacrificing page load speeds.
+* **Mobile-First High-Converting Product Page Architecture:**
+  - **Blazing Fast Performance:** Zero heavy third-party tracker bloat; optimized lazy-loaded WebP images; lightweight vanilla CSS.
+  - **Sticky Bottom Action Bar:** On mobile screens, an ergonomic sticky bar displays the price, quantity selector, and high-contrast "Buy Now" / "Add to Cart" buttons for frictionless thumb access.
+  - **Conversion Boosters:** Verified Retailer Trust Badge (*"Sold & Guaranteed by Victorious MARKET Uyo"*), Live In-Stock Indicator (*"In Stock in Uyo — Order before 5 PM for same-day corridor delivery"*), 5% Cashback Highlight (*"Earn ₦X Cashback on this item"*), and an Instant Landmark Delivery Fee Estimator directly on the page.
+* **100% SEO Optimization Standards:**
+  - **Automated Schema.org JSON-LD:** Implements rich structured data (`Product`, `Offer`, `AggregateRating`, `Brand`, and `InStock` availability) for rich Google search snippets.
+  - **OpenGraph & Twitter Cards:** Dynamic social sharing meta tags optimized for crystal-clear WhatsApp, Facebook, and Twitter image/price previews when customers share products.
+  - **Single `<h1>` Hierarchy:** Strict semantic HTML5 tags with descriptive alt attributes on all product photos.
+* **Supplier Offer Management & Negative-Margin Shield:**
+  - Suppliers never create public listings; they submit confidential wholesale offers against canonical products: **Wholesale Cost (`cost_price`)**, **Stock Quantity (`stock_quantity`)**, and **Stock Status (`in_stock` / `out_of_stock`)**.
+  - **Negative-Margin Guard:** The system programmatically blocks or flags any scenario where a supplier's wholesale cost exceeds the public retail selling price (`cost_price >= unit_price`), alerting the Super Admin immediately.
+  - **Supplier Product Request Feature:** If a merchant stocks an item not yet in the master catalog, they click *"Request Product Addition"*; Admin reviews, adds the canonical listing with studio photos/YouTube video, sets the retail price, and opens it for supplier offers.
+* **Active Supplier Backing and Listing Lifecycle:** A product is purchasable only while at least one active, verified supplier at an admin-approved Uyo location has an eligible, unpenalized `in_stock` offer. If all eligible offers are out of stock or otherwise ineligible, the system automatically hides the listing from the storefront to prevent ghost sales. An authorized admin may manually delist at any time.
 
 ### 2.2 Address Capture & The 8 Major Uyo Road Corridors
 
