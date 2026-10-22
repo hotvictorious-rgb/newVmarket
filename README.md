@@ -19,11 +19,11 @@ Victorious MARKET is a centrally managed online retailer operating from Uyo, Akw
 ## At a glance
 
 - **Repository:** [hotvictorious-rgb/newVmarket](https://github.com/hotvictorious-rgb/newVmarket)
-- **Canonical working branch:** docs/retailer-central-fulfilment-model
+- **Consolidation candidate branch:** `align/vmarket-single-source-2026-10-22` is the current document-alignment candidate; PR #12 remains open/unmerged. `main` remains the protected release branch. No branch is release-ready until its unique changes, document contradictions, and CI/test results are verified.
 - **Application:** Laravel 12 / PHP 8.2+
 - **Currency:** NGN; payment amounts are validated in integer kobo.
 - **Two Permitted Customer Flows:**
-  - **Doorstep Delivery (Pay First Online, Sourced & Dispatched):** Customer pays upfront online via Paystack. System automatically assigns order to the cheapest available supplier in Uyo (with Admin override capability). Supplier confirms availability in portal. Admin assigns order to an accredited Logistics Company. Fleet rider picks up and delivers. Verified handover with customer OTP (`delivery_otp`) and doorstep photo proof. Strictly zero COD.
+  - **Doorstep Delivery (Pay First Online):** Customer pays upfront online via Paystack. After verified payment, the system selects a feasible whole-order sourcing plan, prioritizing shop consolidation, total wholesale cost and fulfillment reliability. Admin overrides require reason and audit. One rider handles the complete order across all supplier stops; any bulky item makes the order keke-only and exclusive, while all-small orders may be batched by bike along the same corridor.
   - **Pickup requests:** Not available through standard checkout or public reservation APIs. Customers must call or WhatsApp support. Support may confirm a one-point collection exception only after complete-order availability, physical readiness, payment arrangements and customer agreement are verified. Never disclose a supplier address or mark an order ready prematurely. Existing reservation code/data is legacy-only until safely retired.
 - **Retail Accounting:** `Retail Price - Supplier Wholesale Cost = VM Gross Margin` before other costs. Supplier payables use immutable wholesale-cost snapshots and become eligible only after verified completion and reconciliation. Legacy 90/5/5 merchandise and 90% logistics-fee allocations are historical-only for orders that actually used them. New logistics-company payables use the assigned company's corridor base tariff plus configured per-bulky-unit surcharge. Cashback remains a separate 5% loyalty benefit under its existing eligible-merchandise, maturity, cap and reversal rules.
 - **Delivery pricing:** One configured customer base fee is charged per Uyo order, regardless of product or supplier count, plus the configured customer bulky surcharge for each physical bulky unit. The logistics company's payable is separate: the assigned company's corridor base payable plus its configured per-bulky-unit surcharge. Snapshot both calculations independently; do not calculate company payable as a percentage of customer delivery revenue.
@@ -130,11 +130,11 @@ Suppliers receive 100% of their agreed wholesale cost upon verified completion. 
 ### Delivery controlled by Victorious MARKET (Pay First Online)
 
 - **Pay First Online:** Customer must pay the retail selling price plus delivery fee upfront online via Paystack. Strictly NO Cash on Delivery (COD).
-- **Automated Sourcing Assignment:** Upon verified Paystack payment, the system automatically assigns the order to the accredited supplier in Uyo offering the lowest wholesale cost price (`cost_price`) with available stock.
+- **Automated Sourcing Assignment:** After verified payment, the system selects a feasible whole-order source plan, prioritizing shop consolidation, then total wholesale cost and supplier fulfillment reliability. Admin overrides require a reason and audit trail.
 - **Admin Sourcing Override:** Admin maintains supervisory authority and can override the automated assignment to reassign the order to another accredited supplier whenever needed.
 - **Supplier Availability Confirmation:** The assigned supplier inspects inventory and confirms physical availability in their portal.
 - **Admin Logistics Assignment:** Once availability is confirmed, Admin assigns the order to an accredited Logistics Company (onboarded strictly by Admin; zero public self-registration).
-- **Logistics Dispatch & Delivery:** The Logistics Company dispatches its active fleet rider to collect the packaged item from the supplier's shop and deliver to the customer. Every rider must be active and linked to exactly one active logistics company; unlinked, supplier-owned, or inactive couriers are rejected.
+- **Logistics Dispatch & Delivery:** One assigned rider handles the complete order across all supplier stops. Each supplier stop requires its own single-use shop OTP and mandatory pickup photo. One bulky item makes the entire order keke-only and exclusive; only all-small orders may be batched by bike along the same Uyo corridor. Delivery requires the customer's OTP and mandatory geo-tagged photo.
 - **Handover Verification:** Customer delivery completion strictly requires the server-verified customer OTP (`delivery_otp`) plus a mandatory doorstep delivery photo proof. Rider collection or logistics scans alone do not constitute delivery.
 
 ### Supplier-shop pickup — support-managed exception only
