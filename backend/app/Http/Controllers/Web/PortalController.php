@@ -1768,11 +1768,18 @@ class PortalController extends Controller
             'phone' => 'required|string|max:25|unique:users,phone',
             'email' => 'nullable|email|max:150|unique:users,email',
             'password' => 'nullable|string|min:8',
-            'assigned_lga_id' => 'required|exists:lgas,id',
-            'vehicle_type' => 'required|in:motorcycle,bicycle,van,transit_waybill',
+            'assigned_lga_id' => 'required|integer|exists:lgas,id',
+            'vehicle_type' => 'required|in:motorcycle,bicycle,van,transit_waybill,keke,tricycle',
             'license_plate' => 'required|string|max:50',
             'nin_number' => 'nullable|string|max:50',
         ]);
+
+        $assignedLga = Lga::with('state')->find($validated['assigned_lga_id']);
+        if (!$assignedLga
+            || strtolower(trim((string) $assignedLga->name)) !== 'uyo'
+            || strtolower(trim((string) ($assignedLga->state->name ?? ''))) !== 'akwa ibom') {
+            return back()->withInput()->with('error', 'Central dispatch riders must be assigned to Uyo LGA, Akwa Ibom State.');
+        }
 
         return DB::transaction(function () use ($validated, $company) {
             $cleanPhone = preg_replace('/[^0-9+]/', '', $validated['phone']);
