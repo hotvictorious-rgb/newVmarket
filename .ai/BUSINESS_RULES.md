@@ -342,3 +342,8 @@ This owner-confirmed rule supersedes earlier 90%-of-customer-fee logistics payab
 
 
 **Launch tender note:** Paystack prepayment is required for standard checkout. COD and instant refund-wallet-credit checkout tender are disabled at launch; cashback redemption remains separately allowed under its existing caps. The 5% earned-cashback base excludes redeemed cashback, wallet credit, and delivery fees.
+
+
+## Current authoritative operating blueprint
+
+For the complete customer-to-settlement flow, including Uyo's eight road corridors, per-SKU supplier sourcing, multi-shop collection, bulky-order routing, mandatory proof, and finance gates, follow [`docs/architecture/VM_END_TO_END_OPERATING_BLUEPRINT.md`](docs/architecture/VM_END_TO_END_OPERATING_BLUEPRINT.md). For new Uyo launch orders, that blueprint supersedes conflicting legacy marketplace, public supplier storefront, multi-LGA delivery, pickup-reservation, and vendor-commission assumptions. Historical records remain for audit only and do not authorize new out-of-Uyo fulfillment. Items listed under its known implementation gaps must remain open until code and tests verify them.
