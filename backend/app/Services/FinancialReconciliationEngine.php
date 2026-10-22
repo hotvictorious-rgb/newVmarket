@@ -645,7 +645,9 @@ class FinancialReconciliationEngine
                 } elseif ($claimedOrder->order_status === 'paid_stock_unavailable'
                     && $claimedOrder->vendor_settlement_status === 'refund_pending'
                     && $claimedOrder->payment_status === 'paid') {
-                    $refundAuthorization = ['type' => 'auto_late_payment_cancelled_before_vendor_action'];
+                    // Zero-Automated-Outflow Law: Reconciler does not synthesize automated refund authorizations.
+                    // Orders in paid_stock_unavailable must be explicitly reviewed and authorized by an active Super Admin.
+                    $refundAuthorization = null;
                 }
 
                 if ($refundAuthorization === null) {

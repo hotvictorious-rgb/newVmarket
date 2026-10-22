@@ -844,27 +844,34 @@ class OrderSettlementService
             ];
         });
 
-        // Out-of-DB-Transaction Paystack Refund Execution via Authoritative FinancialOperationService
+        // Zero-Automated-Outflow Law: Settle payment facts, reserve liability hold, and record
+        // pending FinancialOperation. Autonomous gateway dispatch is strictly blocked.
         if (!empty($result['trigger_gateway_refund'])) {
             $orderToRefund = Order::find($result['refund_order_id']);
             if ($orderToRefund) {
                 try {
                     $finOpService = app(\App\Services\FinancialOperationService::class);
-                    $op = $finOpService->createRefundOperation(
-                        $orderToRefund,
-                        $result['refund_amount'],
-                        "Automated refund for out-of-stock/cancelled Order #{$result['refund_order_number']}",
-                        null,
-                        null,
-                        ['type' => 'auto_late_payment_cancelled_before_vendor_action']
-                    );
-                    $dispatchRes = $finOpService->dispatchRefund($op);
+                    $existingOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+                        ->whereJsonContains('metadata->order_id', $orderToRefund->id)
+                        ->whereIn('status', ['pending', 'initiated', 'confirmed'])
+                        ->first();
+
+                    if (!$existingOp) {
+                        $finOpService->createRefundOperation(
+                            $orderToRefund,
+                            $result['refund_amount'],
+                            "Refund pending administrative authorization for cancelled/depleted Order #{$result['refund_order_number']}",
+                            null,
+                            null,
+                            ['type' => 'pending_admin_review_late_payment']
+                        );
+                    }
 
                     if (isset($result['order'])) {
                         $result['order']->refresh();
                     }
                 } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::error("OrderSettlementService refund operation error: " . $e->getMessage());
+                    \Illuminate\Support\Facades\Log::error("OrderSettlementService refund operation queue error: " . $e->getMessage());
                 }
             }
         }

@@ -603,4 +603,227 @@ class PaystackPaymentHardeningTest extends TestCase
         $this->assertSame($journalCountBefore, FinancialJournalEntry::count());
     }
 
+
+    /**
+     * PROOF 15: Zero-Automated-Outflow Law: Late payment on cancelled/depleted order
+     * creates an auditable pending FinancialOperation under reservation hold,
+     * but NEVER autonomously dispatches a gateway refund.
+     */
+    public function test_late_payment_on_cancelled_depleted_order_creates_pending_refund_request_without_gateway_dispatch(): void
+    {
+        Http::fake();
+
+        $order = $this->createTestOrder([
+            'order_number' => 'VM-LATE-CANCELLED-01',
+            'payment_reference' => 'VM-LATE-CANCELLED-REF-01',
+            'grand_total' => '12500.50',
+            'order_status' => 'cancelled',
+            'payment_status' => 'pending',
+            'vendor_settlement_status' => 'held',
+        ]);
+
+        // Supplier offers are unavailable
+        \App\Models\SupplierOffer::where('product_id', $this->product->id)->update([
+            'is_available' => false,
+        ]);
+        $this->product->update(['inventory_quantity' => 0, 'is_in_stock' => false]);
+
+        $payloadData = [
+            'event' => 'charge.success',
+            'data' => [
+                'id' => 776655,
+                'status' => 'success',
+                'currency' => 'NGN',
+                'amount' => 1250050,
+                'reference' => 'VM-LATE-CANCELLED-REF-01',
+                'channel' => 'card',
+                'customer' => ['email' => $this->customer->email],
+                'metadata' => [
+                    'order_id' => $order->id,
+                    'customer_id' => $this->customer->id,
+                ],
+            ],
+        ];
+
+        $payload = json_encode($payloadData);
+        $signature = hash_hmac('sha512', $payload, app(\App\Services\PaystackService::class)->getSecretKey());
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+
+        $order->refresh();
+        $this->assertSame('paid', $order->payment_status);
+        $this->assertSame('paid_stock_unavailable', $order->order_status);
+        $this->assertSame('refund_pending', $order->vendor_settlement_status);
+
+        // An auditable FinancialOperation must exist in pending status
+        $finOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+            ->whereJsonContains('metadata->order_id', $order->id)
+            ->first();
+
+        $this->assertNotNull($finOp, 'A pending FinancialOperation must be recorded for Super Admin review.');
+        $this->assertSame('holding_reservation', $finOp->status, 'FinancialOperation must remain in holding_reservation awaiting human approval.');
+
+        // Must have ZERO gateway dispatch attempts
+        $this->assertSame(0, $finOp->gatewayAttempts()->count(), 'No gateway dispatch attempts must be made autonomously.');
+
+        // Active reservation hold must protect the customer funds
+        $reservation = \App\Models\FinancialReservation::where('financial_operation_id', $finOp->id)
+            ->where('status', 'active')
+            ->first();
+        $this->assertNotNull($reservation, 'Active reservation hold must be created.');
+        $this->assertSame(1250050, (int)$reservation->reserved_amount_kobo);
+
+        // Zero HTTP requests sent to Paystack /refund endpoint
+        Http::assertNothingSent();
+    }
+
+    /**
+     * PROOF 16: Zero-Automated-Outflow Law: FinancialOperationService strictly blocks
+     * refund dispatch if authorization lacks an active human Super Admin.
+     */
+    public function test_financial_operation_service_strictly_blocks_refund_dispatch_without_active_human_super_admin(): void
+    {
+        Http::fake();
+
+        $order = $this->createTestOrder([
+            'order_number' => 'VM-UNAUTH-DISPATCH-01',
+            'payment_reference' => 'VM-UNAUTH-DISPATCH-REF-01',
+            'payment_status' => 'paid',
+            'order_status' => 'paid_stock_unavailable',
+            'vendor_settlement_status' => 'refund_pending',
+        ]);
+
+        $finOpService = app(\App\Services\FinancialOperationService::class);
+
+        // Attempt 1: Context claims automated exception without human approver
+        $op1 = $finOpService->createRefundOperation(
+            $order,
+            '10000.00',
+            'Test refund attempt without approver',
+            null,
+            null,
+            ['type' => 'auto_late_payment_cancelled_before_vendor_action']
+        );
+
+        $result1 = $finOpService->dispatchRefund($op1);
+        $this->assertFalse($result1['success']);
+        $this->assertSame('failed', $op1->fresh()->status);
+        $this->assertStringContainsString('authorization was invalid or inactive', $op1->fresh()->metadata['dispatch_block_reason'] ?? '');
+
+        // Attempt 2: Approver ID is inactive or non-existent
+        $op2 = $finOpService->createRefundOperation(
+            $order,
+            '10000.00',
+            'Test refund attempt with inactive approver',
+            null,
+            null,
+            [
+                'type' => 'admin_approved_cancellation',
+                'approved_by_user_id' => 999999, // Non-existent user
+            ]
+        );
+
+        $result2 = $finOpService->dispatchRefund($op2);
+        $this->assertFalse($result2['success']);
+        $this->assertSame('failed', $op2->fresh()->status);
+
+        Http::assertNothingSent();
+    }
+
+    /**
+     * PROOF 17: Provider in-flight refund notification (refund.pending / refund.processing)
+     * is recorded as evidence and is NEVER treated as final confirmed settlement.
+     */
+    public function test_in_flight_refund_pending_webhook_records_evidence_and_does_not_confirm(): void
+    {
+        $order = $this->createTestOrder([
+            'payment_reference' => 'VM-INFLIGHT-REF-01',
+            'payment_status' => 'paid',
+        ]);
+
+        $finOpService = app(\App\Services\FinancialOperationService::class);
+        $op = $finOpService->createRefundOperation(
+            $order,
+            '5000.00',
+            'In-flight refund test',
+            null,
+            null,
+            ['type' => 'admin_approved_cancellation', 'approved_by_user_id' => 1]
+        );
+
+        $payloadData = [
+            'event' => 'refund.pending',
+            'data' => [
+                'id' => 443322,
+                'refund_reference' => 'RFD-INFLIGHT-01',
+                'transaction_reference' => 'VM-INFLIGHT-REF-01',
+                'amount' => 500000,
+                'currency' => 'NGN',
+                'status' => 'pending',
+            ],
+        ];
+
+        $payload = json_encode($payloadData);
+        $signature = hash_hmac('sha512', $payload, app(\App\Services\PaystackService::class)->getSecretKey());
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+
+        $op->refresh();
+        $this->assertNotEquals('confirmed', $op->status, 'In-flight pending refund must NEVER be marked confirmed.');
+        $this->assertSame('initiated', $op->status);
+    }
+
+    /**
+     * PROOF 18: Paystack customer charge dispute freezes settlement escrow and creates
+     * an auditable record without disbursing unauthorized refunds.
+     */
+    public function test_charge_dispute_webhook_freezes_settlement_and_creates_audit_log_without_disbursing_refund(): void
+    {
+        $order = $this->createTestOrder([
+            'payment_reference' => 'VM-DISPUTE-REF-01',
+            'payment_status' => 'paid',
+            'vendor_settlement_status' => 'pending',
+        ]);
+
+        $payloadData = [
+            'event' => 'charge.dispute.create',
+            'data' => [
+                'id' => 991122,
+                'status' => 'pending',
+                'amount' => 1250050,
+                'currency' => 'NGN',
+                'reason' => 'Fraudulent card use reported by cardholder',
+                'transaction' => [
+                    'reference' => 'VM-DISPUTE-REF-01',
+                ],
+            ],
+        ];
+
+        $payload = json_encode($payloadData);
+        $signature = hash_hmac('sha512', $payload, app(\App\Services\PaystackService::class)->getSecretKey());
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payloadData, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(200);
+
+        $order->refresh();
+        $this->assertSame('settlement_frozen_dispute', $order->vendor_settlement_status, 'Settlement must be frozen immediately.');
+
+        $auditLog = \App\Models\AdminAuditLog::where('action', 'paystack_charge_dispute_notification')
+            ->where('target_id', $order->id)
+            ->first();
+
+        $this->assertNotNull($auditLog, 'Audit log must record the dispute event.');
+        $this->assertSame('Fraudulent card use reported by cardholder', $auditLog->new_values['reason']);
+    }
 }

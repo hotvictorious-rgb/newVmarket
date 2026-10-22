@@ -76,28 +76,28 @@ class PaystackPaymentController extends Controller
         }
 
         if (($settlement['status'] ?? '') === 'REFUND_PENDING' || $order->fresh()->vendor_settlement_status === 'refund_pending') {
-            $refundMessage = 'Your payment was verified after the order had been cancelled and inventory was unavailable. The refund is pending reconciliation and is not yet confirmed.';
+            $refundMessage = 'Your payment was verified after the order had been cancelled and inventory was unavailable. An administrative refund request has been created and is pending Super Admin authorization under the Zero-Automated-Outflow Law.';
             if (!empty($settlement['trigger_gateway_refund'])) {
                 try {
                     $finOpService = app(\App\Services\FinancialOperationService::class);
-                    $op = $finOpService->createRefundOperation(
-                        $order,
-                        $settlement['refund_amount'] ?? (string)$order->grand_total,
-                        "Automated refund for late payment on depleted inventory for Order #{$order->order_number}",
-                        null,
-                        null,
-                        ['type' => 'auto_late_payment_cancelled_before_vendor_action']
-                    );
-                    $dispatchResult = $finOpService->dispatchRefund($op);
-                    if (!empty($dispatchResult['success']) && ($dispatchResult['status'] ?? '') === 'confirmed') {
-                        $refundMessage = 'Your refund has been confirmed.';
-                    } elseif (!empty($dispatchResult['success'])) {
-                        $refundMessage = 'A refund request has been submitted to Paystack and is awaiting confirmation. It is not yet completed.';
-                    } else {
-                        Log::warning("Late-payment refund was not dispatched in callback for Order #{$order->id}: " . ($dispatchResult['message'] ?? 'Unknown dispatch failure'));
+                    $existingOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+                        ->whereJsonContains('metadata->order_id', $order->id)
+                        ->whereIn('status', ['pending', 'initiated', 'confirmed'])
+                        ->first();
+
+                    if (!$existingOp) {
+                        $finOpService->createRefundOperation(
+                            $order,
+                            $settlement['refund_amount'] ?? (string)$order->grand_total,
+                            "Refund pending administrative authorization for cancelled/depleted Order #{$order->order_number}",
+                            null,
+                            null,
+                            ['type' => 'pending_admin_review_late_payment']
+                        );
+                        Log::info("Pending late-payment refund operation created for Order #{$order->id}; awaiting human Super Admin authorization.");
                     }
                 } catch (\Throwable $e) {
-                    Log::error("Failed to automatically dispatch refund in callback for Order #{$order->id}: " . $e->getMessage());
+                    Log::error("Failed to record pending refund operation in callback for Order #{$order->id}: " . $e->getMessage());
                 }
             }
 
@@ -980,6 +980,113 @@ class PaystackPaymentController extends Controller
             return response()->json(['status' => true, 'message' => 'Refund failure reconciled against its financial operation.'], 200);
         }
 
+        // Handle Paystack In-Flight Refund Notifications (Reconciliation Evidence, NOT Outflow Authorization)
+        if (in_array($event['event'], ['refund.pending', 'refund.processing', 'refund.needs-attention'], true)) {
+            $rData = $event['data'] ?? [];
+            $rRef = (string)($rData['refund_reference'] ?? ($rData['reference'] ?? ($rData['id'] ?? '')));
+            $transRef = (string)($rData['transaction_reference'] ?? ($rData['transaction'] ?? ''));
+
+            Log::info("Paystack Webhook: {$event['event']} for refund ref: {$rRef}, trans: {$transRef}");
+
+            $finOp = null;
+            if (!empty($rRef)) {
+                $finOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+                    ->where(function ($q) use ($rRef) {
+                        $q->where('gateway_reference', $rRef)
+                          ->orWhereHas('gatewayAttempts', function ($aq) use ($rRef) {
+                              $aq->where('gateway_reference', $rRef);
+                          });
+                    })
+                    ->first();
+            }
+
+            if (!$finOp && !empty($transRef)) {
+                $finOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+                    ->whereJsonContains('metadata->payment_reference', $transRef)
+                    ->whereIn('status', ['pending', 'holding_reservation', 'initiated'])
+                    ->first();
+            }
+
+            if ($finOp) {
+                \Illuminate\Support\Facades\DB::transaction(function () use ($finOp, $event, $rData) {
+                    $lockedOp = \App\Models\FinancialOperation::where('id', $finOp->id)->lockForUpdate()->first();
+                    if ($lockedOp && in_array($lockedOp->status, ['pending', 'holding_reservation'], true)) {
+                        $lockedOp->update([
+                            'status' => 'initiated',
+                            'metadata' => array_merge($lockedOp->metadata ?? [], [
+                                'provider_status' => $event['event'],
+                                'provider_event_at' => Carbon::now()->toIso8601String(),
+                            ]),
+                        ]);
+                    }
+                    if ($lockedOp && ($event['event'] === 'refund.needs-attention')) {
+                        \App\Models\AdminAuditLog::create([
+                            'action' => 'refund_needs_attention_alert',
+                            'target_type' => \App\Models\FinancialOperation::class,
+                            'target_id' => $lockedOp->id,
+                            'new_values' => ['event' => $event['event'], 'payload' => $rData],
+                            'ip_address' => request()->ip() ?? '127.0.0.1',
+                        ]);
+                    }
+                });
+            }
+
+            $this->updateProcessedEvent($processedEvent, [
+                'status' => 'completed',
+                'processed_at' => Carbon::now(),
+            ]);
+
+            return response()->json(['status' => true, 'message' => "Refund status '{$event['event']}' recorded as reconciliation evidence."], 200);
+        }
+
+        // Handle Paystack Customer Dispute Notifications (Chargebacks & Retrieval Requests)
+        if (str_starts_with((string)$event['event'], 'charge.dispute.')) {
+            $dData = $event['data'] ?? [];
+            $transRef = (string)($dData['transaction']['reference'] ?? ($dData['transaction_reference'] ?? ($dData['reference'] ?? '')));
+            $disputeStatus = (string)($dData['status'] ?? 'pending');
+
+            Log::warning("Paystack Webhook: Dispute event '{$event['event']}' for trans ref '{$transRef}'", $dData);
+
+            $order = !empty($transRef) ? Order::where('payment_reference', $transRef)->first() : null;
+
+            if ($order) {
+                \Illuminate\Support\Facades\DB::transaction(function () use ($order, $event, $dData, $disputeStatus) {
+                    $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+                    if ($lockedOrder) {
+                        if ($event['event'] === 'charge.dispute.create') {
+                            if (in_array($lockedOrder->vendor_settlement_status, ['pending', 'ready_for_payout'])) {
+                                $lockedOrder->vendor_settlement_status = 'settlement_frozen_dispute';
+                            }
+                        }
+
+                        \App\Models\AdminAuditLog::create([
+                            'user_id' => null,
+                            'action' => 'paystack_charge_dispute_notification',
+                            'target_type' => Order::class,
+                            'target_id' => $lockedOrder->id,
+                            'new_values' => [
+                                'dispute_event' => $event['event'],
+                                'dispute_status' => $disputeStatus,
+                                'dispute_amount' => $dData['amount'] ?? null,
+                                'reason' => $dData['reason'] ?? 'customer_dispute',
+                            ],
+                            'ip_address' => request()->ip() ?? '127.0.0.1',
+                            'user_agent' => 'Paystack Webhook',
+                        ]);
+
+                        $lockedOrder->save();
+                    }
+                });
+            }
+
+            $this->updateProcessedEvent($processedEvent, [
+                'status' => 'completed',
+                'processed_at' => Carbon::now(),
+            ]);
+
+            return response()->json(['status' => true, 'message' => "Dispute event '{$event['event']}' logged for audit."], 200);
+        }
+
         // Unsupported-but-valid Paystack event types are intentionally ignored, but
         // the inbox claim must still reach a terminal state. Leaving it as "processing"
         // causes needless retries forever and obscures actual crash recovery.
@@ -1050,26 +1157,29 @@ class PaystackPaymentController extends Controller
             ], 422);
         }
 
-        // Automated controlled refund dispatch if inventory was depleted (Late Payment Reconciliation Policy)
+        // Zero-Automated-Outflow Law: Webhook records facts and creates an auditable pending refund request;
+        // it must NEVER autonomously dispatch funds through the payment gateway.
         if (!empty($settlement['trigger_gateway_refund'])) {
             try {
                 $finOpService = app(\App\Services\FinancialOperationService::class);
-                $op = $finOpService->createRefundOperation(
-                    $order,
-                    $settlement['refund_amount'] ?? (string)$order->grand_total,
-                    "Automated refund for late payment on depleted inventory for Order #{$order->order_number}",
-                    null,
-                    null,
-                    ['type' => 'auto_late_payment_cancelled_before_vendor_action']
-                );
-                $dispatchResult = $finOpService->dispatchRefund($op);
-                if (!empty($dispatchResult['success'])) {
-                    Log::info("Late-payment refund dispatch accepted by FinancialOperationService for Order #{$order->id}; status: " . ($dispatchResult['status'] ?? 'unknown'));
-                } else {
-                    Log::warning("Late-payment refund was not dispatched for Order #{$order->id}: " . ($dispatchResult['message'] ?? 'Unknown dispatch failure'));
+                $existingOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+                    ->whereJsonContains('metadata->order_id', $order->id)
+                    ->whereIn('status', ['pending', 'initiated', 'confirmed'])
+                    ->first();
+
+                if (!$existingOp) {
+                    $finOpService->createRefundOperation(
+                        $order,
+                        $settlement['refund_amount'] ?? (string)$order->grand_total,
+                        "Refund pending administrative authorization for cancelled/depleted Order #{$order->order_number}",
+                        null,
+                        null,
+                        ['type' => 'pending_admin_review_late_payment']
+                    );
+                    Log::info("Late-payment refund operation queued for Super Admin review for Order #{$order->id}. Autonomous gateway dispatch blocked.");
                 }
             } catch (\Throwable $e) {
-                Log::error("Failed to automatically dispatch refund for out-of-stock Order #{$order->id}: " . $e->getMessage());
+                Log::error("Failed to create pending refund operation for out-of-stock Order #{$order->id}: " . $e->getMessage());
             }
         }
 

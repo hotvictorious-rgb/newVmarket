@@ -297,16 +297,24 @@ class FinancialOperationService
         $order = Order::find($meta['order_id'] ?? null);
         if (!$order || $order->payment_status !== 'paid' || empty($order->payment_reference)) return false;
 
+        // ZERO-AUTOMATED-OUTFLOW LAW:
+        // Every refund dispatch to the payment gateway REQUIRES a verified, active human approver.
+        // No automated exception context is ever permitted to bypass human review.
+        $approverId = (int) ($authorization['approved_by_user_id'] ?? 0);
+        $activeApprover = $approverId > 0
+            && User::whereKey($approverId)
+                ->where('status', 'active')
+                ->whereIn('user_type', ['super_admin', 'admin_employee'])
+                ->exists();
+
+        if (!$activeApprover) {
+            return false;
+        }
+
         if (($authorization['type'] ?? null) === 'admin_approved_return') {
             $caseId = $meta['return_case_id'] ?? null;
             $case = $caseId ? ReturnCase::find($caseId) : null;
-            $approverId = (int) ($authorization['approved_by_user_id'] ?? 0);
             $deliveryFeeAuthorized = ($authorization['refund_delivery_fee'] ?? false) === true;
-            $activeApprover = $approverId > 0
-                && User::whereKey($approverId)
-                    ->where('status', 'active')
-                    ->whereIn('user_type', ['super_admin', 'admin_employee'])
-                    ->exists();
 
             return $case
                 && (int) $case->order_id === (int) $order->id
@@ -314,14 +322,12 @@ class FinancialOperationService
                 && $case->resolution_type === 'refund'
                 && !empty($case->reviewed_by_admin_id)
                 && (int) $case->reviewed_by_admin_id === $approverId
-                && $activeApprover
                 && (!$deliveryFeeAuthorized || (bool) $case->refund_delivery_fee);
         }
 
-        if (($authorization['type'] ?? null) === 'auto_late_payment_cancelled_before_vendor_action') {
-            return $order->order_status === 'paid_stock_unavailable'
-                && $order->vendor_settlement_status === 'refund_pending'
-                && $order->payment_status === 'paid';
+        if (($authorization['type'] ?? null) === 'admin_approved_cancellation') {
+            return in_array($order->order_status, ['cancelled', 'paid_stock_unavailable'])
+                && $order->vendor_settlement_status === 'refund_pending';
         }
 
         return false;
