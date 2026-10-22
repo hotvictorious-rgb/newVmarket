@@ -198,6 +198,7 @@ Route::middleware(['role:logistics_company'])->prefix('logistics')->group(functi
     Route::delete('/collection-points/{id}', [PortalController::class, 'logisticsDeleteCollectionPoint'])->name('logistics.collection_points.delete');
     Route::post('/bank', [PortalController::class, 'logisticsUpdateBank'])->name('logistics.bank.update');
     Route::post('/payout-request', [PortalController::class, 'logisticsRequestPayout'])->name('logistics.payout.request');
+    Route::post('/orders/{id}/assign-rider', [PortalController::class, 'logisticsAssignRider'])->name('logistics.orders.assign_rider');
 });
 
 // 6. Delivery Rider Dispatch Cockpit
@@ -239,6 +240,7 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/delivery-lanes/toggle-corridor', [PortalController::class, 'adminToggleHubCorridor'])->name('admin.delivery_lanes.toggle_corridor');
     Route::post('/vendors/{id}/accredit', [PortalController::class, 'adminAccreditVendor'])->name('admin.vendors.accredit');
     Route::post('/merchants', [PortalController::class, 'adminStoreSupplier'])->name('admin.merchants.store');
+    Route::post('/orders/{id}/assign-rider', [PortalController::class, 'adminAssignRiderToOrder'])->name('admin.orders.assign_rider');
 });
 
 // Stage 2: Vendor Commerce Desk Routes

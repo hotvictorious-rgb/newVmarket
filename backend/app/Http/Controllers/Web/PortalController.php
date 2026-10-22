@@ -1823,7 +1823,7 @@ class PortalController extends Controller
             'email' => 'nullable|email|max:150|unique:users,email',
             'password' => 'nullable|string|min:8',
             'assigned_lga_id' => 'required|exists:lgas,id',
-            'vehicle_type' => 'required|in:motorcycle,bicycle,van,transit_waybill',
+            'vehicle_type' => 'required|in:motorcycle,keke,bicycle,van,transit_waybill',
             'license_plate' => 'required|string|max:50',
             'nin_number' => 'nullable|string|max:50',
         ]);
@@ -1876,12 +1876,173 @@ class PortalController extends Controller
     }
 
     /**
+     * Logistics company assigns an approved fleet rider to a doorstep delivery order.
+     * Enforces vehicle type constraints (keke/cargo for bulky items) and prevents custody race conditions.
+     */
+    public function logisticsAssignRider(Request $request, $id)
+    {
+        $company = $this->resolveLogisticsCompany();
+
+        $validated = $request->validate([
+            'rider_id' => 'required|integer|exists:rider_profiles,id',
+        ]);
+
+        $order = Order::where('id', $id)->firstOrFail();
+
+        if ((int) $order->logistics_company_id !== (int) $company->id) {
+            return back()->with('error', 'Unauthorized: This order is not assigned to your logistics fleet.');
+        }
+
+        if ($order->fulfillment_type !== 'doorstep_delivery') {
+            return back()->with('error', 'Cannot assign delivery rider: this order is not configured for doorstep delivery.');
+        }
+
+        if ($order->payment_status !== 'paid') {
+            return back()->with('error', 'Unpaid orders cannot be assigned to a dispatch rider.');
+        }
+
+        if (in_array($order->order_status, ['out_for_delivery', 'delivered', 'cancelled', 'returned', 'disputed'], true)) {
+            return back()->with('error', "Cannot assign rider: order is in '{$order->order_status}' status. Reassignment is blocked once custody has transitioned.");
+        }
+
+        if ($order->retailer_model_order && in_array($order->sourcing_status, ['stockout_revalidation_hold', 'supplier_rejected', 'timed_out', 'counter_breach'], true)) {
+            return back()->with('error', "Rider assignment is blocked while order is on sourcing exception hold ('{$order->sourcing_status}').");
+        }
+
+        $rider = RiderProfile::where('id', $validated['rider_id'])
+            ->where('logistics_company_id', $company->id)
+            ->first();
+
+        if (!$rider) {
+            return back()->with('error', 'Unauthorized: Selected rider does not belong to your logistics fleet.');
+        }
+
+        if (!$rider->is_active) {
+            return back()->with('error', 'Selected delivery rider is currently inactive.');
+        }
+
+        // Vehicle suitability check: bulky items strictly require cargo dispatch (keke, van, transit_waybill)
+        $requiresCargo = (int) ($order->delivery_bulky_quantity_snapshot ?? 0) > 0;
+        if (!$requiresCargo) {
+            foreach ($order->items as $item) {
+                $tier = strtolower((string) ($item->package_tier ?? 'bike'));
+                if (in_array($tier, ['keke', 'fragile', 'bulky'], true)) {
+                    $requiresCargo = true;
+                    break;
+                }
+            }
+        }
+
+        if ($requiresCargo && !in_array($rider->vehicle_type, ['keke', 'van', 'transit_waybill'], true)) {
+            return back()->with('error', "Order contains bulky items requiring cargo dispatch (keke, van, or transit waybill). Motorcycle or bicycle riders cannot be assigned.");
+        }
+
+        $oldRiderId = $order->rider_id;
+        $order->rider_id = $rider->id;
+        $order->save();
+
+        AdminAuditLog::create([
+            'user_id' => auth()->id(),
+            'action' => 'logistics_assign_rider',
+            'target_type' => Order::class,
+            'target_id' => $order->id,
+            'old_values' => ['rider_id' => $oldRiderId],
+            'new_values' => [
+                'rider_id' => $rider->id,
+                'rider_name' => $rider->user->name ?? null,
+                'vehicle_type' => $rider->vehicle_type,
+                'logistics_company_id' => $company->id,
+            ],
+            'ip_address' => request()->ip() ?? '127.0.0.1',
+            'user_agent' => request()->userAgent(),
+        ]);
+
+        return back()->with('status', "Order #{$order->order_number} successfully assigned to rider {$rider->user->name}.");
+    }
+
+    /**
+     * Admin assigns an approved rider to an order with bulky vehicle verification.
+     */
+    public function adminAssignRiderToOrder(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'rider_id' => 'required|integer|exists:rider_profiles,id',
+        ]);
+
+        $order = Order::where('id', $id)->firstOrFail();
+
+        if ($order->fulfillment_type !== 'doorstep_delivery') {
+            return back()->with('error', 'Cannot assign delivery rider: this order is not configured for doorstep delivery.');
+        }
+
+        if ($order->payment_status !== 'paid') {
+            return back()->with('error', 'Unpaid orders cannot be assigned to a dispatch rider.');
+        }
+
+        if (in_array($order->order_status, ['out_for_delivery', 'delivered', 'cancelled', 'returned', 'disputed'], true)) {
+            return back()->with('error', "Cannot assign rider: order is in '{$order->order_status}' status.");
+        }
+
+        $rider = RiderProfile::findOrFail($validated['rider_id']);
+
+        if (!$rider->is_active) {
+            return back()->with('error', 'Selected delivery rider is currently inactive.');
+        }
+
+        // If order has an assigned company, rider must belong to that company
+        if ($order->logistics_company_id && (int) $rider->logistics_company_id !== (int) $order->logistics_company_id) {
+            return back()->with('error', 'Selected rider does not belong to the logistics company assigned to this order.');
+        }
+
+        // Bulky check
+        $requiresCargo = (int) ($order->delivery_bulky_quantity_snapshot ?? 0) > 0;
+        if (!$requiresCargo) {
+            foreach ($order->items as $item) {
+                $tier = strtolower((string) ($item->package_tier ?? 'bike'));
+                if (in_array($tier, ['keke', 'fragile', 'bulky'], true)) {
+                    $requiresCargo = true;
+                    break;
+                }
+            }
+        }
+
+        if ($requiresCargo && !in_array($rider->vehicle_type, ['keke', 'van', 'transit_waybill'], true)) {
+            return back()->with('error', "Order contains bulky items requiring cargo dispatch (keke, van, or transit waybill). Motorcycle or bicycle riders cannot be assigned.");
+        }
+
+        $oldRiderId = $order->rider_id;
+        $order->rider_id = $rider->id;
+        if (!$order->logistics_company_id && $rider->logistics_company_id) {
+            $order->logistics_company_id = $rider->logistics_company_id;
+        }
+        $order->save();
+
+        AdminAuditLog::create([
+            'user_id' => auth()->id(),
+            'action' => 'admin_assign_rider_to_order',
+            'target_type' => Order::class,
+            'target_id' => $order->id,
+            'old_values' => ['rider_id' => $oldRiderId],
+            'new_values' => [
+                'rider_id' => $rider->id,
+                'rider_name' => $rider->user->name ?? null,
+                'vehicle_type' => $rider->vehicle_type,
+            ],
+            'ip_address' => request()->ip() ?? '127.0.0.1',
+            'user_agent' => request()->userAgent(),
+        ]);
+
+        return back()->with('status', "Order #{$order->order_number} successfully assigned to rider {$rider->user->name}.");
+    }
+
+    /**
      * Logistics Directional LGA Waybills Page
      */
     public function logisticsWaybillsPage()
     {
         $company = $this->resolveLogisticsCompany();
         $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
+            ->where('logistics_company_id', $company->id)
             ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
             ->with(['shop', 'customer', 'rider.user'])
             ->get();
@@ -1895,8 +2056,9 @@ class PortalController extends Controller
     public function logisticsWalletPage()
     {
         $company = $this->resolveLogisticsCompany();
-        $activeRiders = RiderProfile::where('is_active', true)->with(['user', 'assignedLga'])->get();
+        $activeRiders = RiderProfile::where('is_active', true)->where('logistics_company_id', $company->id)->with(['user', 'assignedLga'])->get();
         $completedRuns = Order::where('fulfillment_type', 'doorstep_delivery')
+            ->where('logistics_company_id', $company->id)
             ->where('order_status', 'delivered')
             ->with(['shop', 'customer', 'rider.user'])
             ->latest()

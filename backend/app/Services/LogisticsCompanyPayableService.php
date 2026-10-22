@@ -67,7 +67,7 @@ class LogisticsCompanyPayableService
             $revision = (int) $locked->logistics_company_payable_override_revision + 1;
             $amount = (string) ($locked->logistics_company_payable_amount
                 ?? $locked->logistics_company_payable_default_amount
-                ?? BcMathService::mul((string) $locked->delivery_fee, '0.90'));
+                ?? (string) $locked->delivery_fee);
 
             $baseline = FinancialJournalEntry::query()
                 ->where('order_id', $locked->id)

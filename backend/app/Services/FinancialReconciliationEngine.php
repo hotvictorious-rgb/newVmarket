@@ -660,19 +660,18 @@ class FinancialReconciliationEngine
                     $op = $finOpService->createRefundOperation(
                         $claimedOrder,
                         $refundAmount,
-                        "Automated reconciliation refund for authorized Order #{$claimedOrder->order_number}",
+                        "Reconciliation refund reservation for authorized Order #{$claimedOrder->order_number}",
                         $returnCase,
                         null,
                         $refundAuthorization
                     );
-                    $dispatchRes = $finOpService->dispatchRefund($op);
-
-                    if (!empty($dispatchRes['success']) && ($dispatchRes['status'] ?? '') === 'confirmed') {
-                        $reconciled++;
-                    }
-                    $releaseClaim();
+                    // Zero-Automated-Outflow Law: Reconciler never autonomously drains money.
+                    // An authorized human Super Admin must manually initiate and dispatch the refund.
+                    Log::info("Reconciler recorded customer refund operation #{$op->id} under active hold for Order #{$claimedOrder->order_number}. Manual admin dispatch required.");
+                    $reconciled++;
+                    $releaseClaim('pending');
                 } catch (\Throwable $e) {
-                    Log::error("Reconciler refund initiation failed for order #{$claimedOrder->id}: " . $e->getMessage());
+                    Log::error("Reconciler refund reservation failed for order #{$claimedOrder->id}: " . $e->getMessage());
                     $releaseClaim('pending');
                 }
             } else {

@@ -93,9 +93,10 @@ class SupplierReassignmentRecoveryService
                 ];
             }
 
+            $allowedSourcingStatuses = ['supplier_rejected', 'timed_out', 'stockout_revalidation_hold', 'counter_breach', 'awaiting_supplier_confirmation'];
             if (!$order->retailer_model_order || $order->payment_status !== 'paid'
-                || $order->order_status !== 'confirmed' || $order->sourcing_status !== 'supplier_rejected') {
-                throw new InvalidArgumentException('Recovery is allowed only for paid retailer orders on a pre-dispatch supplier-rejection hold.');
+                || $order->order_status !== 'confirmed' || !in_array($order->sourcing_status, $allowedSourcingStatuses, true)) {
+                throw new InvalidArgumentException('Recovery is allowed only for paid retailer orders on an authorized sourcing hold.');
             }
 
             $rejectedAssignment = OrderSupplierAssignment::whereKey($rejectedAssignmentId)
@@ -103,8 +104,8 @@ class SupplierReassignmentRecoveryService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($rejectedAssignment->status !== 'supplier_rejected') {
-                throw new InvalidArgumentException('The selected assignment is not on supplier-rejection hold.');
+            if (!in_array($rejectedAssignment->status, $allowedSourcingStatuses, true)) {
+                throw new InvalidArgumentException('The selected assignment is not on an authorized sourcing hold.');
             }
             if ((int) $rejectedAssignment->supplier_vendor_id === $newVendorId) {
                 throw new InvalidArgumentException('Choose a different supplier account from the rejected assignment.');
@@ -270,10 +271,10 @@ class SupplierReassignmentRecoveryService
                 $replacementAssignment->save();
             }
 
-            // Mark rejected assignments with no remaining items as historical, not
+            // Mark rejected/timed-out assignments with no remaining items as historical, not
             // active blockers. Keep the rows and rejection audit history intact.
             $rejectedAssignments = OrderSupplierAssignment::where('order_id', $order->id)
-                ->where('status', 'supplier_rejected')
+                ->whereIn('status', ['supplier_rejected', 'timed_out', 'stockout_revalidation_hold', 'counter_breach'])
                 ->lockForUpdate()
                 ->get();
             $hasUnresolvedRejectedItems = false;

@@ -24,3 +24,6 @@ Schedule::command('cashback:mature')->everyFifteenMinutes()->withoutOverlapping(
 
 // Automated 7-Day Product Freshness Lifecycle Expiration (Hourly)
 Schedule::command('products:expire-stale-listings')->hourly();
+
+// Monitor 60-Minute Supplier Confirmation SLA (Every 5 minutes, 8am-6pm WAT)
+Schedule::command('supplier:check-confirmation-sla')->everyFiveMinutes()->withoutOverlapping();

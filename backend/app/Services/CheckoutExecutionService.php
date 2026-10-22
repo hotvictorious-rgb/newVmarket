@@ -166,21 +166,35 @@ class CheckoutExecutionService
                     ];
                 }
 
-                $resolvedOffer = $this->sourcingService->resolveCheapestOffer($product, (int) $item['quantity'], null, $validated['fulfillment_type']);
-                if (!$resolvedOffer) {
-                    return [
-                        'error' => true,
-                        'status_code' => 422,
-                        'message' => "{$product->name} is temporarily unavailable because no eligible Uyo supplier can fulfil it.",
-                    ];
-                }
-
-                $itemsToCreate[] = [
+                $itemsForSourcing[] = [
                     'product' => $product,
-                    'quantity' => $item['quantity'],
+                    'quantity' => (int) $item['quantity'],
                     'unit_price' => $product->unit_price,
                     'line_total' => $lineTotal,
-                    'resolved_offer' => $resolvedOffer,
+                ];
+            }
+
+            $sourcingPlan = $this->sourcingService->resolveOptimalWholeOrderPlan(
+                $itemsForSourcing,
+                $validated['fulfillment_type']
+            );
+
+            if (!$sourcingPlan) {
+                return [
+                    'error' => true,
+                    'status_code' => 422,
+                    'message' => 'Cart items are temporarily unavailable because no eligible Uyo supplier can fulfil them.',
+                ];
+            }
+
+            $itemsToCreate = [];
+            foreach ($sourcingPlan['items'] as $planLine) {
+                $itemsToCreate[] = [
+                    'product' => $planLine['product'],
+                    'quantity' => $planLine['quantity'],
+                    'unit_price' => $planLine['product']->unit_price,
+                    'line_total' => BcMathService::mul($planLine['product']->unit_price, (string) $planLine['quantity']),
+                    'resolved_offer' => $planLine['resolved_offer'],
                 ];
             }
 
@@ -319,10 +333,15 @@ class CheckoutExecutionService
                 $customerCashback5
             );
 
-            // Default logistics-company payable is 90% of the snapshotted customer
-            // delivery fee. Admin may override the final company amount with audit.
-            $vendorDeliveryNet90 = BcMathService::mul($deliveryFee, '0.90');
-            $platformDelivery10 = BcMathService::sub($deliveryFee, $vendorDeliveryNet90);
+            // Logistics company payable is decoupled from customer delivery fee.
+            // The retired 90% haircut rule is never used.
+            $lane = $laneId ? DeliveryLane::find($laneId) : null;
+            $defaultCompanyPayable = $lane
+                ? BcMathService::add((string) $lane->base_fee, BcMathService::mul((string) $lane->bulky_surcharge, (string) $deliveryBulkyQuantity))
+                : $deliveryFee;
+            $deliverySubsidy = BcMathService::comp($defaultCompanyPayable, $deliveryFee) > 0
+                ? BcMathService::sub($defaultCompanyPayable, $deliveryFee)
+                : '0.00';
 
             $walletCreditApplied = '0.00';
             if (!empty($validated['redeem_wallet_credit'])) {
@@ -349,7 +368,7 @@ class CheckoutExecutionService
 
             // Customer cannot choose a logistics company or rider; VM assigns an approved company after supplier availability is confirmed.
             $rider = null;
-            $logisticsCompanyId = null;
+            $logisticsCompanyId = $lane ? $lane->assigned_logistics_company_id : null;
 
             $orderNumber = 'VM-' . date('Ymd') . '-' . strtoupper(Str::random(4));
             $paymentRef = Order::generateUniquePaymentReference();
@@ -385,8 +404,10 @@ class CheckoutExecutionService
                 'supplier_cost_total_snapshot' => $supplierCostTotal,
                 'fulfillment_supplier_cost_total_snapshot' => $supplierCostTotal,
                 'retailer_merchandise_margin' => $retailerMerchandiseMargin,
-                'logistics_company_payable_default_amount' => $vendorDeliveryNet90,
-                'logistics_company_payable_amount' => $vendorDeliveryNet90,
+                'sourcing_plan_locations_count' => $sourcingPlan['locations_count'],
+                'logistics_company_payable_default_amount' => $defaultCompanyPayable,
+                'logistics_company_payable_amount' => $defaultCompanyPayable,
+                'logistics_subsidy_amount' => $deliverySubsidy,
                 'cashback_redeemed' => $cashbackApplied,
                 'wallet_credit_applied' => $walletCreditApplied,
                 'grand_total' => $grandTotal,

@@ -669,12 +669,21 @@ class OrderSettlementService
                     $deliveryFeeSnapshot = (string) $lockedOrder->delivery_fee;
                     $defaultCompanyPayable = $lockedOrder->logistics_company_payable_default_amount;
                     if ($defaultCompanyPayable === null) {
-                        $defaultCompanyPayable = BcMathService::mul($deliveryFeeSnapshot, '0.90');
+                        $defaultCompanyPayable = $deliveryFeeSnapshot;
                         $lockedOrder->logistics_company_payable_default_amount = $defaultCompanyPayable;
                     }
                     $companyPayable = (string) ($lockedOrder->logistics_company_payable_amount ?? $defaultCompanyPayable);
                     $lockedOrder->logistics_company_payable_amount = $companyPayable;
                     $lockedOrder->logistics_company_payable_ledger_company_id = $lockedOrder->logistics_company_id;
+
+                    $deliveryMargin = BcMathService::comp($deliveryFeeSnapshot, $companyPayable) > 0
+                        ? BcMathService::sub($deliveryFeeSnapshot, $companyPayable)
+                        : '0.00';
+                    $deliverySubsidy = BcMathService::comp($companyPayable, $deliveryFeeSnapshot) > 0
+                        ? BcMathService::sub($companyPayable, $deliveryFeeSnapshot)
+                        : '0.00';
+
+                    $lockedOrder->logistics_subsidy_amount = $deliverySubsidy;
                     $lockedOrder->save();
 
                     if (BcMathService::comp($companyPayable, '0.00') > 0) {
@@ -692,12 +701,7 @@ class OrderSettlementService
                         ]);
                     }
 
-                    $deliveryMargin = BcMathService::comp($deliveryFeeSnapshot, $companyPayable) > 0
-                        ? BcMathService::sub($deliveryFeeSnapshot, $companyPayable)
-                        : '0.00';
-                    $deliverySubsidy = BcMathService::comp($companyPayable, $deliveryFeeSnapshot) > 0
-                        ? BcMathService::sub($companyPayable, $deliveryFeeSnapshot)
-                        : '0.00';
+
 
                     if (BcMathService::comp($deliveryMargin, '0.00') > 0) {
                         FinancialJournalEntry::create([
@@ -806,6 +810,70 @@ class OrderSettlementService
                         'expires_at' => null, // Validity starts only after maturity.
                     ]);
                 }
+                }
+            }
+
+            if ($lockedOrder->retailer_model_order) {
+                $now = Carbon::now();
+                $hasStockoutIssue = false;
+                $stockoutReason = '';
+
+                $orderItems = $lockedOrder->items()->orderBy('id')->lockForUpdate()->get();
+                $assignments = \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($orderItems as $item) {
+                    $offer = \App\Models\SupplierOffer::where('id', $item->supplier_offer_id)->lockForUpdate()->first();
+                    if (!$offer || !$offer->is_available || $offer->isPenaltyActive() || ($offer->availability_expires_at && $offer->availability_expires_at->lte($now))) {
+                        $hasStockoutIssue = true;
+                        $stockoutReason = "Supplier offer for {$item->product_name} is no longer available or under penalty at payment.";
+                        break;
+                    }
+
+                    $pendingHandovers = \App\Models\OrderSupplierAssignment::where('supplier_vendor_id', $item->supplier_vendor_id)
+                        ->whereIn('status', ['awaiting_supplier_confirmation', 'supplier_confirmed', 'ready_for_collection'])
+                        ->where('order_id', '!=', $lockedOrder->id)
+                        ->count();
+                    if ($pendingHandovers >= 5) {
+                        $hasStockoutIssue = true;
+                        $stockoutReason = "Supplier for {$item->product_name} has reached maximum pending handover limit (5).";
+                        break;
+                    }
+                }
+
+                if ($hasStockoutIssue) {
+                    $lockedOrder->sourcing_status = 'stockout_revalidation_hold';
+                    $lockedOrder->sourcing_notes = $stockoutReason;
+                    $lockedOrder->save();
+
+                    foreach ($assignments as $assignment) {
+                        $assignment->status = 'stockout_revalidation_hold';
+                        $assignment->save();
+                    }
+
+                    AdminAuditLog::create([
+                        'user_id' => $actorUser ? $actorUser->id : null,
+                        'action' => 'supplier_stockout_revalidation_hold',
+                        'target_type' => Order::class,
+                        'target_id' => $lockedOrder->id,
+                        'new_values' => [
+                            'reason' => $stockoutReason,
+                            'order_number' => $lockedOrder->order_number,
+                            'paid_at' => $lockedOrder->paid_at->toIso8601String(),
+                        ],
+                        'ip_address' => request()->ip() ?? '127.0.0.1',
+                        'user_agent' => request()->userAgent(),
+                    ]);
+                } else {
+                    $lockedOrder->sourcing_status = 'awaiting_supplier_confirmation';
+                    $lockedOrder->save();
+
+                    foreach ($assignments as $assignment) {
+                        $assignment->status = 'awaiting_supplier_confirmation';
+                        $assignment->assigned_at = $now;
+                        $assignment->save();
+                    }
                 }
             }
 
@@ -1023,6 +1091,9 @@ class OrderSettlementService
             // Each supplier has its own one-time collection OTP and mandatory proof photo.
             if ($lockedOrder->retailer_model_order
                 && \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)->exists()) {
+                if (empty($proofImagePath) || trim($proofImagePath) === '') {
+                    return ['success' => false, 'message' => 'Mandatory courier pickup photo proof is required to verify handover collection.'];
+                }
                 if ($lockedOrder->order_status !== 'ready_for_pickup') {
                     return ['success' => false, 'message' => 'All supplier packages must be marked ready before the rider starts the complete-order collection.'];
                 }

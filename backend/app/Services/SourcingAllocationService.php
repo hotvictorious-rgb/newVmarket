@@ -433,6 +433,23 @@ class SourcingAllocationService
                 throw new InvalidArgumentException('This checkout reservation has expired; create a new checkout before changing suppliers.');
             }
 
+            if ($isPaidException) {
+                $recoveryService = app(\App\Services\SupplierReassignmentRecoveryService::class);
+                $idempotencyKey = 'override-' . $lockedAssignment->id . '-' . microtime(true);
+                $result = $recoveryService->reassignRejectedItems(
+                    $order->id,
+                    $lockedAssignment->id,
+                    $newVendorId,
+                    $newShopId,
+                    $itemIds,
+                    $adminUser,
+                    $reason,
+                    $idempotencyKey
+                );
+
+                return OrderSupplierAssignment::findOrFail($result['replacement_assignment_id']);
+            }
+
             $newVendor = VendorProfile::withTrashed()->with('user')->find($newVendorId);
             $newShop = Shop::withTrashed()->with(['lga.state', 'vendor.user'])->find($newShopId);
             if (!$newVendor || $newVendor->trashed() || $newVendor->marketplace_status !== 'active'
