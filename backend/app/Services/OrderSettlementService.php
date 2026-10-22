@@ -1008,7 +1008,7 @@ class OrderSettlementService
                 return ['success' => false, 'message' => 'Rider collection is blocked while this retailer order is on supplier-rejection hold. An administrator must resolve sourcing first.'];
             }
             if ($lockedOrder->retailer_model_order
-                && !\\App\\Models\\OrderSupplierAssignment::where('order_id', $lockedOrder->id)->exists()) {
+                && !\App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)->exists()) {
                 return ['success' => false, 'message' => 'Retailer-model orders require supplier-specific collection assignments; the legacy order-level pickup path is disabled.'];
             }
 
