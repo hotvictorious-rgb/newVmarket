@@ -5,14 +5,14 @@
 > **Current policy authority:** This policy must conform to [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). The root [Master Blueprint](VICTORIOUS_MARKET_MASTER_BLUEPRINT.md) supplies implementation detail only where it does not conflict with the active rules. This document contains legacy vendor/parent-child implementation history; legacy terminology is not authority for new retailer-model behaviour.
 
 
-The owner-confirmed decisions below are binding for the audit plan. Paystack card and standard bank transfer are the approved launch rails. No numeric second-approval threshold has been approved; keep any high-value second-approval threshold configurable and do not hard-code an unapproved amount. These are business decisions; they do not mean implementation is complete. Do not merge to main without explicit owner approval.
+The following payment/refund controls describe approved business constraints and legacy compatibility requirements. Paystack card and standard bank transfer are the approved launch rails. No numeric high-value second-approval threshold has been approved; keep any such separate threshold configurable and do not hard-code an unapproved amount. These are policy decisions, not proof of implementation. Code changes and release remain outside this documentation-only alignment.
 
 
 ### Final owner-confirmed launch contract
 
 The owner has confirmed the following final choices. These are binding and supersede any older or conflicting proposal elsewhere in the repository:
 
-- **Retailer Operating Model:** Victorious MARKET is the customer-facing retailer. Customers buy directly from Victorious MARKET. Products are sourced just-in-time from private suppliers in Uyo who submit wholesale cost prices. VM sets public retail selling prices (`Retail Price = Wholesale Cost + VM Margin`) and sources each order item from the cheapest available local supplier offer.
+- **Retailer Operating Model:** Victorious MARKET is the customer-facing retailer. Customers buy directly from Victorious MARKET. Products are sourced just-in-time from private suppliers with approved locations within Uyo who submit wholesale cost prices. VM controls public retail prices. Allocate only after verified payment and compare feasible whole-order plans in this strict order: fewest supplier pickup locations, lowest total wholesale cost among equally consolidated plans, fulfilment reliability, then deterministic tie-break.
 - **Two Permitted Payment Paths:**
   1. **Doorstep Delivery (Pay First Online):** Customer must pay the full retail selling price plus delivery fee upfront online via Paystack (card or bank transfer). Cash on delivery is completely disabled.
   2. **Pickup exception:** Pickup is not an automated reservation or checkout path. Customers must contact support; support confirms only after checking the complete order, physical readiness at one approved point, payment arrangements and customer agreement. Do not disclose addresses or direct customers to travel before confirmation. All payments must be processed/recorded through Victorious MARKET; suppliers may not accept cash or off-platform private transfers. Launch rails are Paystack card and standard bank transfer.
