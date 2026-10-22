@@ -228,3 +228,38 @@ To balance robust fraud prevention with low friction for local Uyo merchants, th
   - Maximum single transaction: **₦1,000,000**.
   - Non-FIFO, auditable selection of verified order line-item wholesale payables.
   - Full cryptographic and audit trail linking each transfer to settled Paystack receipts.
+
+---
+
+## 8. Stage 7: Comprehensive Security, Cryptography & Fraud Defense Architecture
+
+To protect working capital, prevent internal collusion, and stop online and physical fraud, Victorious MARKET operates under 5 unbreakable security pillars:
+
+### 8.1 Pillar 1: Financial & Gateway Fraud Defense
+* **Cryptographic HMAC-SHA512 Webhook Verification:** 100% of incoming Paystack webhook requests are cryptographically verified using the Paystack Secret Key via the `x-paystack-signature` header. Unsigned or spoofed requests are rejected with HTTP 400.
+* **Strict Webhook Idempotency Lock:** Every payment transaction reference is permanently indexed. Repeated webhook deliveries are safely acknowledged without double-crediting, double-allocating stock, or creating duplicate payouts.
+* **Zero Client-Side Price Trust:** The frontend JavaScript cart never transmits financial totals. The backend recalculates every kobo directly from database records, preventing browser developer-tool tampering.
+
+### 8.2 Pillar 2: Delivery & Handoff Cryptography
+* **Dual-OTP Cryptographic Handshake:**
+  - **Shop Pickup OTP (4 digits):** Randomly generated per supplier stop; legal liability shifts to 3PL only when verified.
+  - **Customer Delivery OTP (6 digits):** Dispatched via SMS/Email directly to the registered customer; riders cannot complete delivery without the customer providing it.
+* **Brute-Force OTP Lockout:** If an incorrect OTP is entered **3 consecutive times**, the verification endpoint locks for 15 minutes and immediately alerts the Super Admin Command Tower.
+* **Live Camera Enforcement (Anti-Gallery Uploads):** Rider mobile web forms enforce direct hardware camera capture (`accept="image/*" capture="environment"`). Gallery uploads and file-picker browsing are disabled to prevent riders uploading stale or fake handover photos.
+
+### 8.3 Pillar 3: Access Control & Rider Financial Redaction
+* **Strict Role-Based Access Control (RBAC):** Customers cannot view supplier/admin routes. Suppliers cannot see competitors' catalogs, wholesale costs, or platform orders outside their shop.
+* **Rider Financial Data Redaction:** To eliminate theft incentives and protect commercial secrets, riders **never** see customer merchandise selling prices, supplier wholesale costs, or Victorious MARKET margins. Riders only view operational data: customer name, destination landmark/phone, package size, and their earned logistics fee.
+* **Brute-Force Login Throttling:** All login and authentication endpoints are throttled to a maximum of **5 attempts per minute** per IP.
+
+### 8.4 Pillar 4: HTTP Security Headers & Browser Hardening
+* **Content-Security-Policy (CSP):** Restricts script execution strictly to verified sources (Victorious MARKET, Paystack checkout, and YouTube unboxing embeds).
+* **Clickjacking Defense (`X-Frame-Options: SAMEORIGIN`):** Forbids third-party websites from framing Victorious MARKET inside invisible iframes.
+* **MIME Sniffing Block (`X-Content-Type-Options: nosniff`):** Forces browsers to strictly respect declared content types.
+* **HSTS (`Strict-Transport-Security`):** Enforces HTTPS encryption across all client sessions.
+* **CSRF Token Validation:** Every state-changing HTTP request requires an authenticated CSRF token.
+
+### 8.5 Pillar 5: Immutable Administrative Audit Logs
+* **The "No Secret Actions" Law:** Every administrative action—including manual supplier overrides, refund approvals, payout authorizations, product price edits, or supplier account suspensions—permanently writes an immutable audit log containing:
+  - `admin_id` • `ip_address` • `timestamp` • `action` • `reason_code` • `original_snapshot` • `new_snapshot`.
+* Audit records cannot be modified or deleted through any dashboard interface.

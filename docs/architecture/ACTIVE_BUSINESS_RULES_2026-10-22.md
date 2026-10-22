@@ -80,5 +80,13 @@ This document records the owner's active decisions. If older documents conflict 
 - Cashback remains a separate 5% loyalty benefit on eligible post-discount merchandise actually funded by verified Paystack money, subject to existing caps, maturity and reversal rules. Former 90/5/5 merchandise splits and vendor-managed delivery allocations are historical only.
 - All sensitive assignments, overrides, refunds, tariff changes and financial adjustments require role-based authorization, a reason where applicable, and immutable audit records.
 
-## 9. Documentation versus implementation
+## 9. Security, Cryptography and Anti-Fraud Guardrails
+- **Financial Gateway Cryptography:** Mandatory HMAC-SHA512 verification on all Paystack webhooks; atomic database transaction idempotency locks; zero client-side price trust.
+- **Physical Handshake Cryptography:** 4-digit Shop Pickup OTP shifting liability to 3PL; 6-digit Customer Delivery OTP; 3-attempt brute-force OTP lockout with 15-minute freeze and Super Admin alert; mandatory live camera enforcement (`capture="environment"`), blocking gallery uploads.
+- **Role-Based Access Control & Redaction:** Strict RBAC separating roles; complete redaction of product retail prices, wholesale costs, and platform profit margins from rider interfaces; brute-force login throttling (max 5 attempts per minute per IP).
+- **Browser & Network Hardening:** Content-Security-Policy (CSP) restricting scripts; `X-Frame-Options: SAMEORIGIN` clickjacking defense; `X-Content-Type-Options: nosniff`; HSTS HTTPS enforcement; CSRF token validation on all web forms.
+- **Backstage No-Index Isolation:** `robots.txt` disallows `/admin/`, `/vendor/`, `/supplier/`, `/logistics/`, `/rider/`, and `/api/`; authenticated portal views inject `<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">`; `X-Robots-Tag: noindex, nofollow` HTTP headers. Storefront is exclusively optimized for SEO.
+- **Immutable Audit Trail:** Append-only logging of all administrative actions with actor, IP, timestamp, action code, reason code, and before/after state snapshots.
+
+## 10. Documentation versus implementation
 These are the active business decisions to align across documentation. Code, schema, admin UI, workflows and tests must be audited separately and must not be claimed aligned merely because the documents are updated. Until a separate implementation audit and required tests pass, implementation status remains unverified.

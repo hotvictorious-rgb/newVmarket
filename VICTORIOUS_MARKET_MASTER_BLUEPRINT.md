@@ -229,3 +229,31 @@ To ensure your AI coding partner builds this system without cutting corners, her
 * **Approved Supplier Portal:** Ultra-simple mobile-first screen for each approved supplier to manage its offers and stock, view assigned orders, read out Shop Pickup OTPs, or click "Unavailable" (triggering the product-specific 24-hour cooldown).
 * **3PL Logistics Portal & Rider View:** The 8 Road Corridor tabs, vehicle assignment validation, and camera/OTP capture screens.
 * **Victorious Admin Command Center:** Live order monitor, manual supplier override modal, stuck-order alerts, and weekly payout reconciliation dashboard.
+
+---
+
+## 8. Comprehensive Security, Anti-Fraud & Data Protection Architecture
+
+To ensure institutional stability and eliminate all attack vectors, the platform enforces 5 security pillars:
+
+1. **Financial Gateway Security:**
+   - Strict HMAC-SHA512 verification on 100% of incoming Paystack webhooks.
+   - Atomic database idempotency locks preventing double-spend or double-allocation.
+   - 100% backend price calculation—zero client-side price trust.
+2. **Delivery Cryptography & Anti-Theft:**
+   - 4-digit Shop Pickup OTP shifting custody to 3PL.
+   - 6-digit Customer Doorstep Handshake OTP.
+   - 3-attempt brute-force OTP lockout with 15-minute freeze and Super Admin alert.
+   - Live hardware camera enforcement (`capture="environment"`) blocking gallery uploads.
+3. **Access Control & Financial Redaction:**
+   - Strict RBAC separating Customer, Merchant, Rider, and Super Admin privileges.
+   - Complete redaction of retail selling prices and platform profit margins from rider views.
+   - Brute-force login rate limiting (max 5 attempts per minute per IP).
+4. **Browser & Network Hardening:**
+   - Content-Security-Policy (CSP) restricting scripts to self, Paystack, and YouTube video embeds.
+   - `X-Frame-Options: SAMEORIGIN` clickjacking prevention.
+   - `X-Content-Type-Options: nosniff` MIME sniffing protection.
+   - HSTS HTTPS enforcement and mandatory CSRF token validation on all state-changing forms.
+5. **Immutable Administrative Audit Trail:**
+   - Every sensitive administrative event (supplier overrides, refund approvals, payout dispatches, tariff changes, and merchant suspensions) is permanently logged with `admin_id`, `ip_address`, `timestamp`, `action`, `reason_code`, and `before/after snapshots`.
+   - Audit records are append-only and cannot be altered or purged.
