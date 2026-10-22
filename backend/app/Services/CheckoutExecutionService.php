@@ -185,6 +185,28 @@ class CheckoutExecutionService
                 ];
             }
 
+            // Re-score the full cart after per-SKU eligibility checks. Consolidation
+            // takes priority over isolated cheapest-offer selection; the resulting
+            // per-item supplier/cost snapshots remain private and immutable.
+            $consolidatedOffers = $this->sourcingService->resolveConsolidatedOffers(
+                array_map(static fn (array $itemData) => [
+                    'product' => $itemData['product'],
+                    'quantity' => (int) $itemData['quantity'],
+                ], $itemsToCreate),
+                $validated['fulfillment_type']
+            );
+            if (!$consolidatedOffers || count($consolidatedOffers) !== count($itemsToCreate)) {
+                return [
+                    'error' => true,
+                    'status_code' => 422,
+                    'message' => 'The full order cannot be sourced safely from confirmed Uyo suppliers. Please review availability or try again.',
+                ];
+            }
+            foreach ($itemsToCreate as $index => &$itemData) {
+                $itemData['resolved_offer'] = $consolidatedOffers[$index];
+            }
+            unset($itemData);
+
             // The first selected supplier shop is retained only as a legacy order anchor.
             // Actual supplier identity and cost are snapshotted independently per order item.
             $primaryOffer = $itemsToCreate[0]['resolved_offer'] ?? null;
