@@ -312,7 +312,7 @@ The active product policy is delivery-first. Any earlier README paragraphs or ar
 
 ## Authoritative launch boundary — Uyo-only central retailer
 
-The current owner-approved launch policy is **Uyo LGA, Akwa Ibom State only** for sourcing and doorstep delivery. It supersedes older planning passages that mention other LGAs, interstate/park dispatch, public supplier storefronts, or customer-facing pickup as live launch features. Historical routes may remain auditable but cannot authorize new orders; admin controls and all fulfillment entry points must fail closed outside Uyo. Suppliers remain private sourcing partners, customers transact with Victorious MARKET only, delivery is priced once per order plus bulky-unit surcharges, and the logistics-company baseline is 90% of delivery fee (paid to the company, not its rider). Supplier payables require verified delivery and reconciliation. Preserve 5% eligible merchandise cashback and its existing caps, maturation, reversals and refund rules. See [the authoritative policy](docs/architecture/VM_UYO_ONLY_RETAILER_POLICY.md).
+The current owner-approved launch policy is **Uyo LGA, Akwa Ibom State only** for new sourcing, customer destinations, active corridors and dispatch. Historical routes do not authorize new out-of-Uyo orders. Support-managed pickup is an exception only, not a public checkout/reservation feature. Delivery is priced once per order plus customer bulky-unit surcharges; logistics-company payables use the assigned company's corridor tariff plus its configured bulky-unit surcharge. See the Uyo-only policy and end-to-end operating blueprint.
 
  
 ---
