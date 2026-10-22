@@ -2,7 +2,7 @@
 
 # Victorious MARKET — State Transition and Idempotency Register
 
-> **Authoritative Master Blueprint:** This register operates under the governing rules of [VICTORIOUS_MARKET_MASTER_BLUEPRINT.md](../../VICTORIOUS_MARKET_MASTER_BLUEPRINT.md). Dual verification handovers, idempotent webhook gates, state transition locks, and immutable financial journals must strictly adhere to the Master Blueprint.
+> **Current policy authority:** This register must conform to [Active Business Rules](../architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). The root [Master Blueprint](../../VICTORIOUS_MARKET_MASTER_BLUEPRINT.md) provides technical detail only where consistent with that policy. Historical transition descriptions are not current business authorization.
 
 
 **Status:** Initial system-wide inventory; implementation verification is intentionally incomplete.
