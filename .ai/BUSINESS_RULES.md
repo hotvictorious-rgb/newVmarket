@@ -91,7 +91,7 @@ This decision record supersedes older vendor-delivery Q&A decisions for new work
 ### Doorstep delivery (Pay First Online)
 
 - **Mandatory Pre-payment:** Customer must pay the full retail selling price plus delivery fee online via Paystack. Strictly NO Cash on Delivery (COD).
-- VM confirms destination coverage from Uyo, sources the product from the cheapest available supplier offer, and assigns an accredited logistics partner rider.
+- VM confirms the destination is within Uyo LGA, allocates a feasible whole-order sourcing plan after verified payment, and assigns one approved logistics company/rider for the complete order. Consolidation, total wholesale cost and fulfillment reliability govern source selection.
 - Supplier readiness and rider collection are internal custody events, not customer completion.
 - Customer handover requires server-verified one-time customer OTP (`delivery_otp`) plus a mandatory doorstep delivery photo.
 - Failed attempts and returns to origin are tracked separately; failed delivery does not grant automatic refund or release supplier payable.
@@ -205,7 +205,7 @@ Where the legacy text below conflicts with these rules, it is a historical findi
 - Multi-vendor checkout creates separate child orders and assignments; each rider sees only their vendor's child order.
 - Rider API and UI do not expose raw customer phone, payment status, delivery fee, total/amount due, card data, commission, cashback, vendor settlement, or payouts.
 - Call Customer works without revealing the raw number in API/UI/logs.
-- In-shop pickup costs zero, requires an in-shop pickup photo and creates no rider assignment or delivery payout. RES-XXXXXX may remain as a separate collection-security pass.
+- A support-managed pickup exception is not a public reservation or checkout flow. Any customer delivery-fee adjustment must be explicitly authorized and recorded; do not assume every exception has zero fee. Require one approved collection point, complete-order readiness, authorized payment status, customer agreement, one-time pickup verification and mandatory photo. Legacy RES passes/stock holds are historical-only for new orders.
 - Doorstep delivery requires verified customer OTP plus a linked delivery photo. GPS/signature/separate rider-pickup photo are not mandatory.
 - Failed attempts create operational records only; no automatic wallet credit, rider/logistics payable, refund, or vendor settlement release.
 - Repeated delivery callbacks, failed attempts, assignment requests, and pickup confirmation cannot duplicate state transitions or financial entries.
@@ -300,7 +300,7 @@ These final choices are binding across checkout, fulfilment, payment, refund, an
 9. **Vendor recovery is separate:** customer refund execution and vendor recovery are linked but independent operations. Determine recovery from the approved component and actual vendor allocation; do not hold the customer refund open merely because vendor recovery is unresolved, and do not mark vendor recovery settled merely because Paystack refunded the customer.
 10. **Return window:** the normal customer claim window remains 24 hours from verified doorstep delivery or confirmed vendor-counter pickup. The additional 24-hour buffer applies only to cashback maturity, not to whether merchandise and delivery-fee components need separate decisions. Exceptional duplicate charges, pre-vendor-action cancellations, chargebacks and non-waivable legal rights follow their separate evidence/authorization rules.
 
-**Required acceptance tests:** merchandise approved/delivery denied; delivery approved/merchandise denied; both approved as separate operations; one component pending while the other succeeds; pickup with zero delivery fee; discount and partial-item refund; multiple vendor child orders; duplicate/out-of-order webhooks; component-specific idempotency conflicts; concurrent reservations that approach both child and parent ceilings; and correct historical 90/5/5 versus vendor 90/10 reversals alongside current retailer supplier-cost/cashback/company-payable accounting.
+**Required acceptance tests:** merchandise and delivery-fee refunds approved/denied independently; duplicate and partial refunds; support-managed pickup exception with explicit fee treatment and no public reservation; multiple supplier assignments under one customer order; duplicate/out-of-order webhooks; one-rider-per-order enforcement; bulky contagion and exclusive keke trips; small-item same-corridor bike batching; per-shop OTP/photo evidence; delivery OTP/photo evidence; idempotent reconciliation and payouts.
 
 
 ## Owner-confirmed refund funding and recoverable vendor debt
