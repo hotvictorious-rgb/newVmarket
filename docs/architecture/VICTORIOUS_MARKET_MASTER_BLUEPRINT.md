@@ -1,4 +1,4 @@
-> **Active-policy precedence (22 October 2026):** [Active Business Rules](../architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md) governs current business behaviour. This document retains detailed architecture/history, but any Plaza-only supplier assumption, binding pre-payment supplier assignment/reservation, public pickup reservation/stock hold, automatic refund on allocation failure, or 90%-of-customer-delivery-fee logistics rule is superseded. Do not treat this document as evidence that runtime code conforms.
+> **Active-policy precedence (22 October 2026):** [Active Business Rules](ACTIVE_BUSINESS_RULES_2026-10-22.md) governs current business behaviour. This document retains detailed architecture/history, but any Plaza-only supplier assumption, binding pre-payment supplier assignment/reservation, public pickup reservation/stock hold, automatic refund on allocation failure, or 90%-of-customer-delivery-fee logistics rule is superseded. Do not treat this document as evidence that runtime code conforms.
 
 # Victorious MARKET: Comprehensive Master Operational & Architectural Blueprint
 
@@ -12,7 +12,7 @@ Most e-commerce ventures in Nigeria fail because they import foreign software as
 
 Victorious MARKET enforces a **fail-closed, hyper-localized architecture** built on five foundational laws:
 
-1. **The Plaza Centralization Law (Zero Distance Complexity):** Every supplier is physically situated within the **Plaza** commercial hub in central Uyo. Because all pickups originate from this single unified cluster, the platform requires zero Google Maps API distance calculations, zero dynamic per-kilometer routing fees, and zero complex geo-fencing. Distance from Plaza to any neighborhood is governed strictly by arterial road corridors.
+1. **The Approved Uyo Supplier Location Rule:** Every supplier has one admin-approved shop or pickup location anywhere within the approved Uyo LGA boundary. Plaza is permitted but is not mandatory. Corridor mapping governs delivery dispatch, not supplier eligibility.
 2. **SKU-Level Deterministic Sourcing:** Suppliers in Plaza sell dozens of distinct categories. All stock availability, pricing, and penalty rules operate strictly at the individual product (`product_id`) level, never as a blanket shop-wide guess.
 3. **One Order, One Rider Accountability:** A customer order—even if it contains five items sourced from three different approved supplier locations within Uyo—is owned from pickup to doorstep by **one single delivery person**. Splitting a single customer's order across multiple riders is prohibited.
 4. **The "Bulky Contagion" & Keke Isolation Law:** If a customer order contains even one bulky item (`is_bulky = true`), the *entire order* becomes classified as bulky, is forced onto a **Keke (Tricycle)**, and locks that Keke into a **100% exclusive trip** for that customer alone.
@@ -62,7 +62,7 @@ $$\text{Grand Total} = \sum(\text{Item Retail Price} \times \text{Quantity}) + \
 
 ## 3. Phase 2: The Automated Product Sourcing Engine (Supply Side)
 
-The exact millisecond Paystack confirms payment, the backend executes the **Multi-Product Consolidated Sourcing Pipeline**. The goal of this engine is threefold: **guarantee stock availability, minimize the number of Plaza shop stops for the rider, and maximize Victorious MARKET's retail profit margin.**
+The exact millisecond Paystack confirms payment, the backend executes the **Multi-Product Consolidated Sourcing Pipeline**. The goal of this engine is threefold: **guarantee stock availability, minimize the number of approved supplier pickup locations for the rider, and maximize Victorious MARKET's retail profit margin.**
 
 ### 3.1 Step 1: Hard Pass/Fail Filters (SKU-Level Elimination)
 
