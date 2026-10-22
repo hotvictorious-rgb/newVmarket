@@ -4,7 +4,8 @@
 
 > **Binding business rules:** [Active Business Rules](../docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md).  
 > **Detailed operating overview:** [VICTORIOUS MARKET Detailed Business Overview](../VICTORIOUS_MARKET_DETAILED_OVERVIEW.md).  
-> **Architecture blueprint:** [VICTORIOUS MARKET Master Blueprint](../VICTORIOUS_MARKET_MASTER_BLUEPRINT.md).
+> **Architecture blueprint:** [VICTORIOUS MARKET Master Blueprint](../VICTORIOUS_MARKET_MASTER_BLUEPRINT.md).  
+> **Operational playbook:** [Operational Workflow & Exception Playbook](../docs/architecture/OPERATIONAL_WORKFLOW_AND_EXCEPTION_PLAYBOOK.md).
 
 Built for the approved Uyo LGA, Akwa Ibom operating area, Victorious MARKET is one centrally managed retailer supported by private, approved suppliers and logistics companies. Suppliers may use one admin-approved shop or pickup location anywhere within Uyo; Plaza is not mandatory.
 

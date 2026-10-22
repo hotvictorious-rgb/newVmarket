@@ -1,6 +1,6 @@
 # Victorious MARKET
 
-> **Current business-policy authority:** [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). The detailed [Master Blueprint](VICTORIOUS_MARKET_MASTER_BLUEPRINT.md) and [Payment/Refund Policy](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) must conform to it. No conflicting legacy wording in another document overrides the active rules.
+> **Current business-policy authority:** [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). The detailed [Master Blueprint](VICTORIOUS_MARKET_MASTER_BLUEPRINT.md), [Operational Playbook](docs/architecture/OPERATIONAL_WORKFLOW_AND_EXCEPTION_PLAYBOOK.md), and [Payment/Refund Policy](PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md) must conform to it. No conflicting legacy wording in another document overrides the active rules.
 
 ## Official positioning
 **VICTORIOUS MARKET — YOUR TRUSTED ONLINE MARKET IN UYO, AKWA IBOM STATE.**
