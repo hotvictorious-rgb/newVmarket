@@ -556,7 +556,7 @@ try {
                             <strong style="font-size: 13px; color: #0F172A; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name}</strong>
                             <div style="font-size: 11px; color: #64748B; display: flex; align-items: center; gap: 4px;">
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-                                <span>${item.shop_name}</span> &bull; <span>Qty: ${item.quantity}</span>
+                                <span>Victorious MARKET</span> &bull; <span>Qty: ${item.quantity}</span>
                             </div>
                             <strong style="font-size: 12.5px; color: #5E17EB;">₦${lineTotal.toLocaleString('en-NG', {minimumFractionDigits: 2})}</strong>
                         </div>
