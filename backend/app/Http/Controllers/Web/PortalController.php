@@ -1981,8 +1981,13 @@ class PortalController extends Controller
         $corridors = $uyoLga
             ? DeliveryCorridor::where('lga_id', $uyoLga->id)->where('is_active', true)->orderBy('name')->get()
             : collect();
+        $companyRiders = RiderProfile::where('logistics_company_id', $company->id)
+            ->where('is_active', true)
+            ->with(['user', 'assignedLga'])
+            ->orderBy('id')
+            ->get();
 
-        return view('logistics.waybills', compact('company', 'activeDeliveries', 'corridors'));
+        return view('logistics.waybills', compact('company', 'activeDeliveries', 'corridors', 'companyRiders'));
     }
 
     /**
