@@ -4,10 +4,10 @@
 
 # Victorious MARKET — Audit and Remediation Tracker
 
-**Working branch:** `audit/paystack-refund-webhook-safety`  
+**Historical working-branch reference:** `audit/paystack-refund-webhook-safety` (21 October 2026 audit snapshot; not a currently listed branch in the 22 October 2026 branch check).  
 **Current policy source:** [Active Business Rules](../architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). Historical remediation entries document observations at the time and do not override current policy.  
-**Deployment status:** No deployment or merge performed.  
-**Evidence rule:** A code change is not marked verified until the relevant automated tests run successfully.
+**Deployment status:** This document does not establish current deployment or merge state.  
+**Evidence rule:** A code change is not marked verified until relevant automated tests run successfully on the current target commit. Branch-specific claims must be rechecked against current `main` before relying on them.
 
 ## Status key
 
