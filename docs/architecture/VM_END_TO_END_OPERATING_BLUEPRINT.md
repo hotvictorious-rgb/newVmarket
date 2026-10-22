@@ -125,7 +125,11 @@ The current consolidation candidate branch is being audited for supplier-owned 2
 The following still need to be closed before this blueprint can be called complete:
 
 - dispatch assignment must reject incompatible rider/vehicle/corridor combinations at the moment of assignment, not only when the rider later attempts pickup or delivery;
+- ensure every new rider has exactly one active approved logistics-company owner; legacy vendor-linked riders must not be assigned to new retailer orders;
+- remove stale vendor-managed-dispatch comments and prevent any legacy vendor assignment route from bypassing the central logistics-company workflow;
 - GPS coordinates are currently client-submitted metadata. Add location accuracy/geofence checks against the configured supplier shop or customer destination, and make sure photo capture and coordinates are bound to the same fulfillment event;
+- **Payment-to-sourcing timing must be resolved and tested:** `CheckoutExecutionService` currently resolves the consolidated source plan and writes item-level supplier/cost snapshots plus supplier-assignment rows during checkout, before the Paystack payment is verified. The target rule says new supplier assignment occurs only after verified payment. Either defer binding source assignment/snapshots until the verified webhook, or explicitly treat checkout resolution as a non-binding quote and revalidate/rebind atomically after payment before any supplier notification or payable can exist. No supplier should be committed or payable created on an unverified payment.
+- **Fix and rerun CI:** the observed PR #12 workflow failed in Laravel `package:discover` because `backend/routes/web.php:165` had a malformed class reference with doubled namespace backslashes. That route reference has now been corrected on the consolidation branch; the rerun must confirm Composer installation, syntax checks, migrations and tests actually execute.
 - add a full end-to-end test from a verified Paystack webhook through supplier confirmation, multi-shop collection, dispatch, doorstep OTP/photo, reconciliation, and idempotent supplier/company payouts;
 - run migrations and the relevant regression suite on the branch and resolve any failures; no test result should be reported as passing until CI actually returns green.
 
