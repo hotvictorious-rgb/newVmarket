@@ -6,7 +6,7 @@
 
 
 **Status:** Initial system-wide inventory; implementation verification is intentionally incomplete.
-**Branch:** `audit/paystack-refund-webhook-safety`
+**Historical branch reference:** `audit/paystack-refund-webhook-safety` (audit snapshot from 21 October 2026; not currently listed in the 22 October 2026 branch check). Do not assume branch-specific code or test claims are present on `main` without verifying the current commit.
 **Rule:** No event may apply a state transition or financial effect unless its source state, authorization, evidence, and idempotency identity are valid. Duplicate delivery must return the recorded outcome without repeating the effect. Unknown provider outcomes remain pending/uncertain until reconciled; never guess success or failure.
 **Important:** The lists below distinguish states found in current enums/policy from required lifecycle states that still need code-level mapping. They are not a claim that every transition is currently enforced.
 
