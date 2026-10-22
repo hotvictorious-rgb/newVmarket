@@ -198,18 +198,20 @@ Where the legacy text below conflicts with these rules, it is a historical findi
 
 ## 13. Acceptance tests required before release
 
-- A vendor can create/manage its own rider; cannot create a rider for another vendor.
-- Every active rider has exactly one active vendor owner; no active rider is unaffiliated or fleet-linked for new fulfilment.
+### Historical marketplace-only rider rules — not applicable to new Victorious MARKET orders
+
+- Historical rule only: a vendor could create/manage its own rider; that legacy rule does not authorize any vendor-managed rider assignment for new retailer orders.
+- Historical rule only: old vendor-linked rider ownership remains for historical transactions. New orders require the assigned rider to be active and linked to exactly one active approved logistics company.
 - Vendor A cannot view/assign Vendor B orders or riders; Rider A cannot view or mutate an order assigned to Rider B.
-- Only the owning vendor assigns/reassigns its orders; reassignment is blocked after custody begins except through audited custody transfer.
-- Multi-vendor checkout creates separate child orders and assignments; each rider sees only their vendor's child order.
+- Historical rule only: old vendor-managed assignment does not apply to new orders. VM centrally coordinates the order; authorized admin/logistics-company actions follow the new audited custody and reassignment rules.
+- Historical rule only: legacy marketplace child orders remain for audit. New customer checkout creates one customer order; internal supplier assignments do not split customer orders, and one rider handles the complete order.
 - Rider API and UI do not expose raw customer phone, payment status, delivery fee, total/amount due, card data, commission, cashback, vendor settlement, or payouts.
 - Call Customer works without revealing the raw number in API/UI/logs.
 - A support-managed pickup exception is not a public reservation or checkout flow. Any customer delivery-fee adjustment must be explicitly authorized and recorded; do not assume every exception has zero fee. Require one approved collection point, complete-order readiness, authorized payment status, customer agreement, one-time pickup verification and mandatory photo. Legacy RES passes/stock holds are historical-only for new orders.
 - Doorstep delivery requires verified customer OTP plus a linked delivery photo. GPS/signature/separate rider-pickup photo are not mandatory.
 - Failed attempts create operational records only; no automatic wallet credit, rider/logistics payable, refund, or vendor settlement release.
 - Repeated delivery callbacks, failed attempts, assignment requests, and pickup confirmation cannot duplicate state transitions or financial entries.
-- Vendor settlement cannot become eligible before verified doorstep delivery or verified customer in-shop pickup; a disputed/return-pending order remains blocked under the applicable hold policy.
+- Historical vendor settlement rule only. For new orders, supplier payables and logistics-company payables are separate, and both require their own verified completion evidence and reconciliation gates.
 - Every merchandise earning is linked to one vendor/order item; delivery earning is separate and linked to one vendor child order; line/item refunds reverse only the affected earning.
 - Vendor payout requests are system-calculated capped FIFO batches of oldest eligible whole earning records (₦5,000 minimum, ₦500,000 maximum), stop on the first record that would exceed the cap, never split or skip records, and permit only one active request.
 - Admin approval is recorded before payout initiation; only an approved request can be paid, and payment is not complete until Paystack success/reconciliation confirms it.
