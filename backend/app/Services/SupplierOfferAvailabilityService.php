@@ -47,6 +47,12 @@ class SupplierOfferAvailabilityService
 
         return DB::transaction(function () use ($offerId, $actor, $reason, $ipAddress, $userAgent) {
             $offer = SupplierOffer::query()->lockForUpdate()->findOrFail($offerId);
+            if ($offer->last_unavailable_at && $offer->last_unavailable_at->gt(now()->subHours(24))) {
+                throw ValidationException::withMessages([
+                    'supplier_offer' => 'This offer is in the mandatory 24-hour cooldown after being marked unavailable.',
+                ]);
+            }
+
             $vendor = VendorProfile::query()
                 ->whereKey($offer->vendor_id)
                 ->where('user_id', $actor->id)
