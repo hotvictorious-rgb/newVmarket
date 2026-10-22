@@ -4,7 +4,7 @@
 **Business boundary:** source and deliver only within Uyo LGA, Akwa Ibom State.
 **Customer promise:** VICTORIOUS MARKET — YOUR TRUSTED ONLINE MARKET IN UYO AKWA IBOM STATE.
 
-This document turns the owner-approved operating blueprint into explicit system invariants and acceptance criteria. If an older document or legacy marketplace path conflicts with this file, the Uyo-only centrally managed retailer model in this file wins for new orders. Historical records must remain readable for audit but must never authorize new out-of-Uyo fulfillment.
+This document turns the owner-approved operating blueprint into explicit system invariants and acceptance criteria. Authority order: `VICTORIOUS_MARKET_SYSTEM_RULES_V1.md` governs business decisions; `VM_UYO_ONLY_RETAILER_POLICY.md` specifies the Uyo-only launch boundary; this blueprint defines operational behavior and acceptance tests. If this blueprint conflicts with either higher-level policy, update this blueprint rather than overriding the policy. Historical records remain readable for audit but must never authorize new out-of-Uyo fulfillment.
 
 ## 1. Non-negotiable launch invariants
 
@@ -94,7 +94,7 @@ The service layer must enforce the same gates as the API/controller so direct ca
 
 - Each order item has an immutable supplier-cost snapshot. The order's supplier-cost total must equal the sum of item snapshot cost × quantity.
 - Supplier payables are posted per supplier/item or assignment, not as legacy vendor commission. A retailer-model order must never settle through legacy parent/child vendor-net accounting.
-- The assigned logistics company is credited according to its snapshotted corridor tariff (base + company bulky surcharge), not a percentage of customer delivery fee unless the tariff explicitly says so.
+- The assigned logistics company is credited according to its snapshotted corridor tariff (base + company bulky surcharge), never as a percentage of the customer delivery fee. The former 90% rule is retired for new orders.
 - The difference between customer delivery revenue and company payable remains a separate Victorious MARKET delivery margin/surplus ledger amount.
 - All journals are balanced, immutable, and idempotent. Overrides must use balanced adjustment entries and preserve the original amount, new amount, actor, reason, timestamp, and revision.
 - Cashback is 5% of eligible merchandise actually paid in real money; exclude delivery, redeemed cashback, and wallet-credit amounts. Do not earn cashback on cashback. Existing caps, maturation, expiry, reversal, and refund rules remain in force.
@@ -120,7 +120,7 @@ The service layer must enforce the same gates as the API/controller so direct ca
 
 This is a target specification, not a claim that all items are already implemented. The code audit must specifically verify and close:
 
-The current single working branch has added code for a supplier-owned 24-hour unavailability cooldown, a five-active-handover cap, whole-order consolidation scoring, per-item bulky snapshots, Keke exclusivity and bike corridor eligibility checks, and mandatory photo plus persisted GPS/timestamp fields for retailer pickup and doorstep proof. Regression tests have been added for cooldown, supplier capacity, and consolidation.
+The current consolidation candidate branch is being audited for supplier-owned 24-hour unavailability cooldown, a five-active-handover cap, whole-order consolidation scoring, per-item bulky snapshots, keke exclusivity, bike corridor eligibility and mandatory photo/GPS/timestamp evidence. These are implementation claims to verify against code and tests, not proof of release readiness.
 
 The following still need to be closed before this blueprint can be called complete:
 
