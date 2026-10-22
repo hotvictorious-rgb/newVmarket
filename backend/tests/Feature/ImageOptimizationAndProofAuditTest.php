@@ -203,6 +203,8 @@ class ImageOptimizationAndProofAuditTest extends TestCase
             'rider_id' => $this->rider->id,
             'logistics_company_id' => $this->company->id,
             'order_type' => 'delivery',
+            'fulfillment_type' => 'doorstep_delivery',
+            'payment_status' => 'paid',
             'order_status' => 'ready_for_pickup',
             'pickup_verification_code' => '445566',
             'merchandise_subtotal' => '15000.00',

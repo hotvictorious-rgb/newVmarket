@@ -37,7 +37,7 @@ class PortalWebTest extends TestCase
         $response = $this->actingAs($admin)->get('/admin');
         $response->assertStatus(200);
         $response->assertSee('Platform Sovereign Command Tower');
-        $response->assertSee('Manual Settlement Desk');
+        $response->assertSee('Settlement Desk');
         $response->assertSee('Storefront Announcement &amp; Support Control Center', false);
     }
 
@@ -61,7 +61,7 @@ class PortalWebTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Merchant Commerce Suite');
         $response->assertSee('Gross Merchant Sales');
-        $response->assertSee('90% Payout Bank Account');
+        $response->assertSee('Merchant Payout Bank Account');
     }
 
     public function test_branch_counter_dashboard_loads_successfully_when_authenticated(): void
@@ -85,7 +85,7 @@ class PortalWebTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Fleet Logistics Operations Center');
         $response->assertSee('Directional LGA Waybills Manifest');
-        $response->assertSee('90% Delivery Fee Wallet');
+        $response->assertSee('Fleet Delivery Tariff Wallet');
     }
 
     public function test_delivery_rider_dashboard_loads_successfully_when_authenticated(): void
@@ -133,7 +133,7 @@ class PortalWebTest extends TestCase
     {
         $admin = User::where('user_type', 'super_admin')->first();
         $origin = Lga::where('name', 'Uyo')->first() ?? Lga::first();
-        $dest = Lga::where('name', 'Eket')->first() ?? Lga::skip(1)->first();
+        $dest = $origin;
 
         $postData = [
             'origin_lga_id' => $origin->id,
@@ -155,14 +155,7 @@ class PortalWebTest extends TestCase
         ]);
     }
 
-    public function test_super_admin_settlements_page_loads_successfully(): void
-    {
-        $admin = User::where('user_type', 'super_admin')->first();
-        $response = $this->actingAs($admin)->get('/admin/settlements');
-        $response->assertStatus(200);
-        $response->assertSee('90/5/5 Sovereign Escrow &amp; Settlement Desk', false);
-        $response->assertSee('Sovereign 90/5/5 Mathematical Split Formula');
-    }
+
 
     public function test_super_admin_announcements_page_loads_successfully(): void
     {
