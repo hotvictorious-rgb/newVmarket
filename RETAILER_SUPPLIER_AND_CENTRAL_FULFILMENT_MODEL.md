@@ -36,7 +36,7 @@ For every new online order:
 
 ## 4. Central operating base and service coverage
 
-VM's central operating base is Uyo, Akwa Ibom State. VM serves destinations reliably covered by local supplier sourcing and accredited logistics partners.
+Victorious MARKET's launch operating boundary is **Uyo LGA, Akwa Ibom State only** for suppliers, customer destinations, active corridors and logistics dispatch. Other LGAs, interstate routes and park/terminal handoffs are future scope and must be rejected for new orders.
 
 Before offering delivery at checkout, VM verifies:
 1. The product can be sourced from an active supplier shop in Uyo;
