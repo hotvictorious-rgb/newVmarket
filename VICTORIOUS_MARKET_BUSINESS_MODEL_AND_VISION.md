@@ -50,8 +50,8 @@ The business has one public-facing retailer, supported by several private operat
             ┌──────────────────┴──────────────────┐
             ▼                                     ▼
     APPROVED SUPPLIERS                   LOGISTICS COMPANIES
-Confirm stock and supply to VM         Handle local delivery or manage
-       fulfilment process               agreed regional handoff
+Confirm stock and supply to VM         Handle approved Uyo delivery
+       fulfilment process               under company corridor tariffs
 ```
 
 *This is the operating model, not a claim that every workflow is already fully implemented in the software.*
