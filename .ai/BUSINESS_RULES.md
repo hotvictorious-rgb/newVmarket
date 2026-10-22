@@ -5,7 +5,7 @@
 ## Retailer and service boundary
 - Victorious MARKET is the sole customer-facing retailer; suppliers remain private behind-the-scenes sources.
 - Sourcing and delivery are restricted to the approved Uyo LGA boundary.
-- Each supplier has one admin-approved shop/pickup point anywhere inside that boundary. Plaza is optional.
+- Only an authorized admin may register a supplier or activate/suspend its account; supplier self-registration is not permitted. Each supplier has one admin-approved shop/pickup point anywhere inside that boundary. Plaza is optional. Suspension blocks new allocations; existing paid/in-flight orders require explicit admin review, not silent cancellation/refund. Reactivation must be authorized and audited.
 - Corridors: Oron Road, Nwaniba Road, Aka Road, Abak Road, Ikot Ekpene Road, Itu Road, Ikpa Road and Plaza. Unknown/out-of-boundary destination mapping fails closed.
 
 ## Listing lifecycle
@@ -33,7 +33,7 @@
 - Customer delivery charge = one configured flat customer base fee per order, independent of corridor, + configured customer bulky surcharge per applicable physical bulky unit. The logistics company's corridor tariff is separate.
 - Logistics company payable = admin-configured company/corridor base payable + that company’s configured bulky-unit surcharge per applicable physical bulky unit. These are separate calculations.
 - The former “90% of customer delivery fee” payable is retired; never use it as a default/fallback. Snapshot company, corridor, tariff/version, base payable, bulky units/rate and total. If payable exceeds delivery revenue, record VM subsidy/expense. Logistics company is payee, not automatically rider.
-- Supplier payable uses immutable wholesale-cost snapshots and is eligible only after verified delivery or authorized completion exception plus reconciliation.
+- Supplier payable uses immutable wholesale-cost snapshots and is eligible only after verified delivery or authorized completion exception plus reconciliation. Each supplier-payable disbursement/request must be at least ₦5,000 and at most ₦1,000,000 at a time. No FIFO or oldest-first allocation may be used; use an authorized, auditable non-FIFO selection process, and do not invent an automatic replacement ranking. No silent splitting of a request above the cap. Approval, reconciliation, idempotency and provider-confirmed payment are required.
 - Cashback is a separate 5% eligible post-discount merchandise benefit funded by verified Paystack money, subject to existing caps/maturity/validity/reversal rules; delivery is excluded. Old 90/5/5 and vendor 90/10 splits are historical only.
 - Separate customer receipts/refunds, supplier payables, logistics-company payables, VM margin, delivery revenue/cost, bulky surcharges, cashback and recovery/reconciliation.
 
