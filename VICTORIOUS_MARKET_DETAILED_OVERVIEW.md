@@ -1,5 +1,7 @@
 # VICTORIOUS MARKET — Detailed Business Overview
 
+> **Active business-rule source of truth:** [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). Where older wording conflicts, follow that policy. This is a documentation alignment update only; code implementation remains unverified.
+
 > **Official positioning:** Victorious MARKET — Your Trusted Online Market in Uyo, Akwa Ibom State.  
 > **Core principle:** The customer buys from Victorious MARKET, not from individual suppliers.
 
@@ -52,16 +54,16 @@ These are intended categories, not a guarantee that every item is currently list
 
 ## 4. Supplier approval and product sourcing
 
-Victorious MARKET does not need to own all inventory before listing products. It may work with approved suppliers who operate from one approved shop or pickup point within the permitted sourcing area.
+Victorious MARKET does not need to own all inventory before listing products. It may work with approved suppliers who operate from one approved shop or pickup point at one admin-approved shop or pickup location anywhere within the approved Uyo operating boundary.
 
 The intended flow is:
 
-1. A supplier submits product information, wholesale cost and stock availability.
-2. Victorious MARKET verifies the supplier offer and makes eligible products available to customers.
+1. A supplier submits product information, wholesale cost and stock availability from one admin-approved shop or pickup location anywhere within Uyo.
+2. Victorious MARKET verifies the supplier offer and listing eligibility. A product is visible for purchase only while at least one eligible supplier offer is explicitly in stock; if all eligible offers are out of stock or ineligible, the listing is automatically hidden. An authorized admin may also delist it manually. Hiding a listing preserves the product, offer and order history.
 3. The customer places an order and completes payment.
-4. Only after payment is verified, the system evaluates eligible offers and allocates each order line internally.
+4. Only after payment is independently verified does the system revalidate stock and allocate suppliers to that paid order. Any pre-payment availability or feasibility check must be non-binding and must not reserve stock or assign suppliers.
 5. The selected supplier or suppliers prepare the required items.
-6. One assigned rider from one approved logistics company collects the complete order from every required supplier shop and delivers it to the customer.
+6. One assigned rider from one approved logistics company collects the complete order from every required supplier location and delivers it to the customer.
 
 Customers should not select private suppliers or browse supplier storefronts. Suppliers should not independently control the customer's payment, delivery promise or customer-facing order policy.
 
@@ -166,6 +168,10 @@ Former 90/5/5 merchandise splits and vendor-based delivery allocations are histo
 
 ## 9. Exceptions and support-managed pickup
 
+### 9.1 Paid-order allocation and fulfilment failures
+
+A verified paid order must not be automatically refunded solely because no eligible supplier can immediately fulfil it. Place it in a visible admin-managed exception state with an alert and aging/escalation information. Authorized admin may reassign it, source an acceptable alternative, hold fulfilment, cancel or initiate a refund according to policy. Do not silently substitute products or impose extra charges. A refund is complete only after payment-provider confirmation; record the actor, reason, amount, references, timestamps and status. Preserve idempotency and the financial audit trail.
+
 The system must handle supplier unavailability, incomplete sourcing, failed pickup, failed delivery, cancellations, refunds, delayed or reversed payments, disputes and tariff changes without losing financial or audit integrity.
 
 Each exception should use explicit states, preserve the original records and require appropriate authorisation for sensitive actions. Supplier availability cooldowns must be enforced by the application, not merely described in documentation.
@@ -176,7 +182,7 @@ A support-managed pickup may remain as a controlled exception only when the comp
 
 Administrators oversee:
 
-- Supplier approval and the single approved shop/pickup point for each supplier.
+- Supplier approval and the single admin-approved shop/pickup point for each supplier anywhere within Uyo.
 - Product eligibility, wholesale offers and sourcing rules.
 - Order allocation and authorised assignment overrides.
 - Customer delivery rates and active Uyo corridors.
@@ -199,7 +205,7 @@ The public website and operational backend must enforce the same rules. Document
 
 This document describes the intended business operating model; it does not certify that every rule is already implemented in production.
 
-At the last recorded development stopping point, the proposed consolidation branch was `align/vmarket-single-source-2026-10-22`, pull request #12 remained open and unmerged, and `main` had not been changed by that consolidation work. Documentation had been updated, but the latest recorded focused test result showed 12 failures. The project was therefore not verified as release-ready.
+At the last recorded development stopping point, consolidation work was not release-approved. Pull request #12 is closed and unmerged according to the latest observed metadata. The active business rules are documented separately in `docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md`; this documentation update does not certify code or release readiness. Documentation had been updated, but the latest recorded focused test result showed 12 failures. The project was therefore not verified as release-ready.
 
 Recorded remaining work included database compatibility for orders sourced from multiple suppliers, supplier-unavailability cooldown tests, refund-approval test flows, alignment of retired legacy tests, and verification that the admin interface exposes Uyo corridor and logistics-company payable settings. These are development findings, not proof that every rule in this overview is enforced in a live production system.
 
