@@ -18,6 +18,9 @@ class SupplierOffer extends Model
         'availability_confirmed_at',
         'availability_confirmed_by',
         'availability_expires_at',
+        'last_unavailable_at',
+        'last_unavailable_by',
+        'last_unavailable_reason',
         'notes',
     ];
 
@@ -26,6 +29,7 @@ class SupplierOffer extends Model
         'is_available' => 'boolean',
         'availability_confirmed_at' => 'datetime',
         'availability_expires_at' => 'datetime',
+        'last_unavailable_at' => 'datetime',
     ];
 
     public function availabilityConfirmer()
