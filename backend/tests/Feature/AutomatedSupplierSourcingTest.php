@@ -669,12 +669,12 @@ class AutomatedSupplierSourcingTest extends TestCase
             'wholesale_cost' => '1200.00',
         ]);
 
-        $availability = app(\App\\Services\\SupplierOfferAvailabilityService::class);
+        $availability = app(\App\Services\SupplierOfferAvailabilityService::class);
         $availability->markUnavailable($offerA->id, $userA, 'Supplier checked the shelf and confirmed no stock.');
         try {
             $availability->confirm($offerA->id, $this->adminUser, Carbon::now()->addHours(48), 'Admin reconfirmation must not bypass cooldown.');
             $this->fail('The mandatory 24-hour unavailable cooldown must block early reconfirmation.');
-        } catch (\Illuminate\\Validation\\ValidationException $exception) {
+        } catch (\Illuminate\Validation\ValidationException $exception) {
             $this->assertArrayHasKey('supplier_offer', $exception->errors());
         }
 
