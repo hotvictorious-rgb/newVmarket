@@ -12,7 +12,7 @@ Victorious MARKET is a centrally managed, online-first retail business. It helps
 It is designed as **one retailer supported by a private network of approved suppliers and logistics companies**, not as an open marketplace where vendors independently own the customer relationship or manage separate storefronts and deliveries.
 
 - **Victorious MARKET** owns the customer-facing brand, catalogue, retail offer, checkout, support and order coordination.
-- **Suppliers** are behind-the-scenes sources of products, each with one approved shop or pickup point.
+- **Suppliers** are behind-the-scenes sources of products, each with one admin-approved shop or pickup point. Only an authorized admin may register, activate or suspend supplier accounts; supplier self-registration is not allowed. Suspension blocks new allocation and triggers explicit admin review of already-paid/in-flight orders without silent cancellation or refund.
 - **Approved logistics companies** provide transportation and delivery services under centrally managed dispatch rules.
 - **Customers** order from Victorious MARKET and receive one coordinated order experience.
 - **Administrators** supervise eligibility, assignments, tariffs, exceptions, financial controls and audit records.
@@ -140,6 +140,10 @@ If the company payable exceeds the customer delivery revenue collected, the diff
 ## 8. Supplier payables and financial separation
 
 Supplier payables are based on immutable wholesale-cost snapshots for the actual items sourced for an order.
+
+- Each supplier-payable payment request/disbursement must be at least ₦5,000 and no more than ₦1,000,000 at a time.
+- FIFO/oldest-first selection of eligible payables is prohibited. Use an authorized, auditable non-FIFO selection process; do not introduce an automatic alternative ranking without owner approval.
+- Do not silently split a request above ₦1,000,000 into multiple transfers. Requests and payments require approval, reconciliation, idempotency and provider-confirmed completion.
 
 - Stock acceptance or availability confirmation alone does not make a supplier payable due.
 - A supplier payable becomes eligible only after verified delivery, or an explicitly authorised pickup-completion exception, followed by reconciliation.
