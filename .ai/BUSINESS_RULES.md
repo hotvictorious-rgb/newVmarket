@@ -106,7 +106,7 @@ Existing pickup reservation tables, states, endpoints and historical records are
 ## 6. VM-defined delivery coverage and fees
 
 1. VM controls customer-facing service coverage and delivery-fee quotes; suppliers do not configure marketplace delivery prices.
-2. Uyo, Akwa Ibom State is the central operating base. VM serves any destination it can currently cover through sourcing and approved logistics arrangements, not every location by default.
+2. **Uyo LGA only at launch.** New sourcing, customer destinations, active delivery corridors and dispatch must be within Uyo LGA, Akwa Ibom State. Other LGAs, interstate routes and park/terminal handoffs are future scope and must fail closed until separately approved.
 3. Checkout must validate a current coverage rule, carrier availability, applicable customer fee and order snapshot. Missing, expired or contradictory coverage data means delivery is unavailable until resolved.
 4. Snapshot destination, fulfilment choice, quoted customer fee and applicable fee-rule version on the accepted order.
 5. For new retailer orders, Super Admin configures each company's base payable and per-bulky-unit surcharge for each active Uyo corridor. This company tariff is independent of the flat customer delivery fee. Preserve 90%/10% allocation only for historical orders that actually used it; do not apply it to new retailer orders. Record any company payable above customer delivery revenue as an explicit VM-funded delivery subsidy. No direct rider payable is created.
@@ -177,7 +177,7 @@ All payments must be processed and recorded through Victorious MARKET's authoris
 1. Keep historical logistics company profiles, payout requests, fleet rider links, delivery lanes, collection points, and ledger entries for audit/history unless a separately approved data-retention plan says otherwise.
 2. Prevent legacy logistics roles from receiving new vendor-managed assignments. Legacy data may be shown in restricted read-only historical views.
 3. Do not drop logistics-company columns, legacy tables, old routes, or columns until dependency mapping confirms no production, API, job, webhook, report, or historical-order dependency remains.
-4. Use additive migrations and backfills. Identify vendor ownership for eligible active riders; unresolved/ambiguous riders are suspended from new assignments until manually resolved, not guessed.
+4. Use additive migrations and backfills. Identify the single active approved logistics-company owner for each rider eligible for new retailer work; vendor-only, dual-linked, unlinked or ambiguous riders are suspended from new assignments until manually resolved, not guessed.
 5. Never convert a legacy logistics-company payout into a rider payout or vendor payout without verified financial reconciliation and explicit approval.
 
 ## Retailer-model supersession notice (binding for all new transactions)
@@ -289,7 +289,7 @@ These final choices are binding across checkout, fulfilment, payment, refund, an
 
 ## 16. Independent merchandise-refund and delivery-fee-refund decisions (binding owner rule)
 
-**Merchandise and delivery are separate financial components. They must never be merged into one refund-approval decision or one undifferentiated refund amount.** A parent checkout may contain multiple vendor child orders, but each child order's merchandise and delivery-fee refund eligibility must be decided and recorded independently.
+**Merchandise and delivery are separate financial components. They must never be merged into one refund-approval decision or one undifferentiated refund amount.** For new retailer orders, decide and record merchandise and customer delivery-fee refunds separately on the single customer order, while enforcing the original Paystack capture ceiling. Preserve separate child-order decisions and ceilings only for historical multi-vendor marketplace transactions.
 
 1. **Separate decisions:** every refund request must identify its component: (a) merchandise/item refund, (b) delivery-fee refund, or (c) a set of separately itemized component requests. A single customer complaint may mention both, but approval for one component never implies approval for the other. This component separation applies to both legacy marketplace orders and new retailer orders.
 2. **Merchandise refund approval:** record the exact child order, affected item/order-line IDs and quantities, reason, evidence, approved merchandise amount, applicable discount allocation, vendor/platform allocation reversal, cashback reversal/recovery, prior refunds and approving actor/time. Do not include any delivery fee in this amount.
