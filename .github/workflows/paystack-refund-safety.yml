@@ -77,6 +77,13 @@ jobs:
           php -l app/Http/Controllers/Web/AdminDeliveryCorridorController.php
           php -l database/migrations/2026_10_21_000002_create_delivery_corridors_and_company_rates.php
           php -l app/Services/SourcingAllocationService.php
+          php -l app/Services/SupplierOfferAvailabilityService.php
+          php -l app/Services/SupplierOfferSelectionService.php
+          php -l app/Http/Controllers/Web/VendorSupplierOfferAvailabilityController.php
+          php -l app/Models/RiderProfile.php
+          php -l database/migrations/2026_10_22_000001_add_geotagged_retailer_fulfillment_proof.php
+          php -l database/migrations/2026_10_22_000002_add_supplier_unavailability_cooldown.php
+          php -l database/migrations/2026_10_22_000003_add_order_item_bulky_snapshots.php
           php -l app/Services/SupplierReassignmentRecoveryService.php
           php -l app/Http/Controllers/Web/AdminSupplierRecoveryController.php
           php -l app/Http/Controllers/Web/AdminRetailerSupplierPayoutController.php
