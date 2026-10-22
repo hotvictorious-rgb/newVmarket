@@ -275,14 +275,19 @@ class OrderSettlementService
                 $lockedOrder->order_status = 'confirmed';
                 $lockedOrder->vendor_settlement_status = 'held';
 
+                $depletedStockItems = [];
                 // Deduct inventory quantity if tracked upon confirmed payment
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
                         $prod = Product::where('id', $item->product_id)->lockForUpdate()->first();
-                        if ($prod && isset($prod->inventory_quantity) && (int)$prod->inventory_quantity > 0) {
-                            $prod->decrement('inventory_quantity', (int)$item->quantity);
-                            $prod->is_in_stock = ((int)$prod->inventory_quantity > 0);
-                            $prod->save();
+                        if ($prod && isset($prod->inventory_quantity)) {
+                            if ((int) $prod->inventory_quantity >= (int) $item->quantity) {
+                                $prod->decrement('inventory_quantity', (int) $item->quantity);
+                                $prod->is_in_stock = ((int) $prod->inventory_quantity > 0);
+                                $prod->save();
+                            } else {
+                                $depletedStockItems[] = $item->product_name ?? "Product #{$prod->id}";
+                            }
                         }
                     }
                 }
@@ -815,8 +820,10 @@ class OrderSettlementService
 
             if ($lockedOrder->retailer_model_order) {
                 $now = Carbon::now();
-                $hasStockoutIssue = false;
-                $stockoutReason = '';
+                $hasStockoutIssue = !empty($depletedStockItems);
+                $stockoutReason = !empty($depletedStockItems)
+                    ? 'Inventory depleted for: ' . implode(', ', $depletedStockItems)
+                    : '';
 
                 $orderItems = $lockedOrder->items()->orderBy('id')->lockForUpdate()->get();
                 $assignments = \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)

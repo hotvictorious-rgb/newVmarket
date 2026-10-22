@@ -125,7 +125,37 @@ class SourcingAllocationService
             ];
         }
 
-        // 2. Generate and evaluate Cartesian feasible plans
+        // 2. Optimization: Single-Stop Fast-Path (Consolidated Sourcing Law: Fewest Stops First)
+        // If one or more single shops have eligible offers for 100% of the cart items, any 1-stop plan
+        // will strictly beat any >= 2 stop plan. We prune evaluation strictly to 1-stop candidates.
+        $singleStopShops = null;
+        foreach ($candidatesPerItem as $itemData) {
+            $shopsForItem = [];
+            foreach ($itemData['offers'] as $offer) {
+                $shopsForItem[$offer['shop_id']] = true;
+            }
+            if ($singleStopShops === null) {
+                $singleStopShops = $shopsForItem;
+            } else {
+                $singleStopShops = array_intersect_key($singleStopShops, $shopsForItem);
+            }
+        }
+
+        if (!empty($singleStopShops)) {
+            // Prune each item's candidate offers strictly to the single-stop shops
+            foreach ($candidatesPerItem as $cIdx => $itemData) {
+                $candidatesPerItem[$cIdx]['offers'] = array_values(array_filter(
+                    $itemData['offers'],
+                    fn($offer) => isset($singleStopShops[$offer['shop_id']])
+                ));
+            }
+        } else {
+            // No single shop can fulfill the whole cart (requires >= 2 stops).
+            // Prevent combinatorial Cartesian explosion (M^N) via Consolidation Potential Pruning:
+            $candidatesPerItem = $this->pruneCandidatesForCombinatorialSafety($candidatesPerItem);
+        }
+
+        // 3. Generate and evaluate Cartesian feasible plans
         $plans = $this->generateCombinatorialPlans($candidatesPerItem);
         if (empty($plans)) {
             return null;
@@ -247,6 +277,76 @@ class SourcingAllocationService
         }
 
         return $plans;
+    }
+
+    /**
+     * Intelligently prunes candidate offers to prevent M^N Cartesian explosion
+     * while preserving maximum consolidation potential and lowest wholesale cost.
+     */
+    private function pruneCandidatesForCombinatorialSafety(array $candidatesPerItem): array
+    {
+        // Count how many cart items each shop can fulfill (consolidation potential)
+        $shopItemCounts = [];
+        foreach ($candidatesPerItem as $itemData) {
+            $seenInItem = [];
+            foreach ($itemData['offers'] as $offer) {
+                $sid = $offer['shop_id'];
+                if (!isset($seenInItem[$sid])) {
+                    $shopItemCounts[$sid] = ($shopItemCounts[$sid] ?? 0) + 1;
+                    $seenInItem[$sid] = true;
+                }
+            }
+        }
+
+        // Rank offers within each item:
+        // 1. Higher consolidation potential (shops appearing across multiple cart items)
+        // 2. Lower wholesale cost
+        // 3. Higher supplier reliability score
+        foreach ($candidatesPerItem as $idx => $itemData) {
+            $offers = $itemData['offers'];
+            usort($offers, function ($a, $b) use ($shopItemCounts) {
+                $countA = $shopItemCounts[$a['shop_id']] ?? 0;
+                $countB = $shopItemCounts[$b['shop_id']] ?? 0;
+                if ($countA !== $countB) {
+                    return $countB <=> $countA; // More shared items first
+                }
+                $costComp = bccomp($a['wholesale_cost'], $b['wholesale_cost'], 2);
+                if ($costComp !== 0) {
+                    return $costComp; // Cheaper wholesale cost first
+                }
+                return ($b['reliability'] ?? 100.0) <=> ($a['reliability'] ?? 100.0);
+            });
+
+            // Keep top 4 candidates per item
+            $candidatesPerItem[$idx]['offers'] = array_slice($offers, 0, 4);
+        }
+
+        // Dynamic safety cap: If total combinations exceed 1000, progressively trim
+        $calcCombos = function ($items) {
+            $combos = 1;
+            foreach ($items as $item) {
+                $combos *= max(1, count($item['offers']));
+            }
+            return $combos;
+        };
+
+        while ($calcCombos($candidatesPerItem) > 1000) {
+            $maxCount = 0;
+            $maxIdx = null;
+            foreach ($candidatesPerItem as $idx => $item) {
+                $c = count($item['offers']);
+                if ($c > $maxCount && $c > 1) {
+                    $maxCount = $c;
+                    $maxIdx = $idx;
+                }
+            }
+            if ($maxIdx === null) {
+                break;
+            }
+            array_pop($candidatesPerItem[$maxIdx]['offers']);
+        }
+
+        return $candidatesPerItem;
     }
 
     /**
