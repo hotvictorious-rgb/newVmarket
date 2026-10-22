@@ -7,6 +7,7 @@ use App\Models\Banner;
 use App\Models\Category;
 use App\Models\CustomerCashbackLedger;
 use App\Models\DeliveryLane;
+use App\Models\DeliveryCorridor;
 use App\Models\Lga;
 use App\Models\LogisticsCollectionPoint;
 use App\Models\LogisticsCompanyProfile;
@@ -1714,18 +1715,30 @@ class PortalController extends Controller
     public function logisticsDashboard()
     {
         $company = $this->resolveLogisticsCompany();
-        $activeRiders = RiderProfile::where('is_active', true)->with(['user', 'assignedLga'])->get();
-        $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
-            ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
-            ->with(['shop', 'customer', 'rider.user'])
+        // Fleet dashboards are tenant-isolated: never expose another company's riders or orders.
+        $activeRiders = RiderProfile::where('logistics_company_id', $company->id)
+            ->where('is_active', true)->with(['user', 'assignedLga'])->get();
+        $activeDeliveries = Order::where('logistics_company_id', $company->id)
+            ->where('retailer_model_order', true)
+            ->where('fulfillment_type', 'doorstep_delivery')
+            ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup', 'out_for_delivery'])
+            ->with(['deliveryCorridor', 'shop', 'customer', 'rider.user', 'items'])
             ->get();
 
-        $completedRuns = Order::where('fulfillment_type', 'doorstep_delivery')
+        $completedRuns = Order::where('logistics_company_id', $company->id)
+            ->where('retailer_model_order', true)
+            ->where('fulfillment_type', 'doorstep_delivery')
             ->where('order_status', 'delivered')
-            ->with(['shop', 'customer', 'rider.user'])
+            ->with(['deliveryCorridor', 'shop', 'customer', 'rider.user'])
             ->latest()
             ->take(10)
             ->get();
+        $uyoLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->first();
+        $corridors = $uyoLga
+            ? DeliveryCorridor::where('lga_id', $uyoLga->id)->where('is_active', true)->orderBy('name')->get()
+            : collect();
 
         $totalRevenue = (float)($company->wallet_balance ?? 0);
 
@@ -1737,7 +1750,7 @@ class PortalController extends Controller
             'accumulated_fees' => $totalRevenue,
         ];
 
-        return view('logistics.dashboard', compact('company', 'activeRiders', 'activeDeliveries', 'completedRuns', 'fleetMetrics'));
+        return view('logistics.dashboard', compact('company', 'activeRiders', 'activeDeliveries', 'completedRuns', 'fleetMetrics', 'corridors'));
     }
 
     /**
@@ -1837,12 +1850,20 @@ class PortalController extends Controller
     public function logisticsWaybillsPage()
     {
         $company = $this->resolveLogisticsCompany();
-        $activeDeliveries = Order::where('fulfillment_type', 'doorstep_delivery')
-            ->whereIn('order_status', ['confirmed', 'processing', 'out_for_delivery'])
-            ->with(['shop', 'customer', 'rider.user'])
+        $activeDeliveries = Order::where('logistics_company_id', $company->id)
+            ->where('retailer_model_order', true)
+            ->where('fulfillment_type', 'doorstep_delivery')
+            ->whereIn('order_status', ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup', 'out_for_delivery'])
+            ->with(['deliveryCorridor', 'shop', 'customer', 'rider.user', 'items'])
             ->get();
+        $uyoLga = Lga::whereRaw('LOWER(TRIM(name)) = ?', ['uyo'])
+            ->whereHas('state', fn ($state) => $state->whereRaw('LOWER(TRIM(name)) = ?', ['akwa ibom']))
+            ->first();
+        $corridors = $uyoLga
+            ? DeliveryCorridor::where('lga_id', $uyoLga->id)->where('is_active', true)->orderBy('name')->get()
+            : collect();
 
-        return view('logistics.waybills', compact('company', 'activeDeliveries'));
+        return view('logistics.waybills', compact('company', 'activeDeliveries', 'corridors'));
     }
 
     /**
