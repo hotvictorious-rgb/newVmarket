@@ -3,12 +3,12 @@
 # Victorious MARKET — Real-World Scenario Hardening Plan
 
 
-## Current retailer policy acceptance scenarios (21 October 2026)
+## Active retailer-policy acceptance scenarios (aligned 22 October 2026)
 
-1. **Default logistics-company payable:** Given a new doorstep order with a captured delivery fee of ₦1,000 and no override, the snapshotted company payable is ₦900 and default VM delivery margin is ₦100. The ₦900 belongs to the logistics company, not its rider.
-2. **Admin raises company payable:** Given the same ₦1,000 fee, an authorized admin approves ₦1,100 with a reason. The system records ₦900 default, ₦1,100 final, the reason, admin and timestamp, and records the ₦100 excess as a VM-funded delivery subsidy/expense. No existing posted journal is edited; linked balanced adjustment entries are used if the default was already posted.
-3. **Admin lowers company payable:** Given a ₦1,000 fee, an authorized admin approves ₦700 with a reason. The final payable and VM delivery margin reconcile to ₦700 and ₦300 respectively.
-4. **Unauthorized/malformed override:** A non-admin, inactive admin, zero/negative amount, missing reason, stale order state, already-finalized payout or duplicate concurrent override is rejected without mutation.
+1. **Configured logistics-company payable:** Given a paid doorstep order, resolve the assigned approved logistics company and destination corridor, snapshot that company's configured base payable and configured bulky-unit surcharge, and calculate the company payable independently of the customer delivery charge. Do not assume a fixed percentage or default 10% margin.
+2. **Payable exceeds delivery revenue:** If the configured company payable exceeds the customer delivery revenue collected, record the difference as an explicit VM-funded subsidy/expense. Preserve balanced journals and the immutable tariff snapshot.
+3. **Tariff changes after assignment:** Changing the admin-configured corridor/company tariff must not rewrite the payable snapshot for an already-assigned order. New assignments use the new active tariff/version.
+4. **Authorized override:** Only an authorized admin may override a payable, with a valid reason and immutable audit record. Reject unauthorized, malformed, duplicate, stale-state or post-finalization changes without duplicate financial effects.
 5. **Cashback basis:** Given eligible post-discount merchandise of ₦10,000, cashback redeemed of ₦2,000, and delivery of ₦1,000, cashback earned is 5% × ₦8,000 = ₦400 after verified successful fulfilment. Delivery does not earn cashback.
 6. **Cashback non-compounding:** A discounted or cashback-funded amount does not earn cashback. Failed/unfulfilled/cancelled orders do not accrue a cashback lot.
 7. **Maturity and validity:** Cashback is unavailable until verified fulfilment + 24-hour claim window + separate 24-hour buffer, and no blocking case remains; its 365-day validity begins at maturity.
