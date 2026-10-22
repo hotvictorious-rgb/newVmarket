@@ -51,11 +51,11 @@ The backend database permanently links every landmark to one of **8 Master Uyo R
 
 Once the landmark is selected, the checkout engine inspects the cart and calculates the exact payable total using an immutable formula:
 
-$$\text{Delivery Fee} = \text{Corridor Base Fee} + (\text{Bulky Surcharge} \times \text{Total Bulky Units})$$
+$\text{Customer Delivery Fee} = \text{Configured Flat Customer Base Fee Per Order} + (\text{Customer Bulky Surcharge} \times \text{Applicable Bulky Units})$
 
 $$\text{Grand Total} = \sum(\text{Item Retail Price} \times \text{Quantity}) + \text{Delivery Fee}$$
 
-* **No Cash-on-Delivery (COD):** The customer must complete payment via **Paystack** (Card, Bank Transfer, USSD).
+* **No Cash-on-Delivery (COD):** The customer must complete payment via **Paystack** (Card or standard bank transfer, the approved launch rails).
 * **Webhook Verification Gate:** Completing payment on the browser does *not* trigger fulfillment. The order remains in `payment_pending` state until the backend server receives, validates, and verifies the cryptographic HMAC signature of the **Paystack `charge.success` webhook**. Only then does the order transition to `paid_processing` and wake up the Automated Sourcing Engine.
 
 ---
@@ -78,9 +78,9 @@ For every distinct `product_id` in the customer's order, the engine queries the 
 Once ineligible offers are eliminated, the engine evaluates the surviving suppliers to find the optimal assignment:
 
 * **Rule A — Multi-Product Shop Consolidation (Reducing Rider Stops):**
-If a customer ordered 3 different products (e.g., a phone, a power bank, and a memory card), the engine checks which surviving suppliers have **all 3** (or **2 out of 3**) items in stock. It assigns a high **Consolidation Priority Weight** to suppliers who can fulfill multiple items from the same order. Having a rider stop at 1 shop instead of 3 cuts pickup time by 70% and drastically reduces operational friction.
+For the complete order, evaluate feasible supplier plans by the binding priority order: (1) minimize the number of distinct approved pickup locations needed to fulfil the whole order; (2) among equally consolidated plans, minimize total wholesale cost; (3) prefer better documented fulfilment reliability; and (4) use a stable deterministic tie-break. Do not use an arbitrary consolidation weight or a fixed 2-of-3 threshold that can override this priority order.
 * **Rule B — Primary Economic Sort (Lowest Wholesale Price):**
-Among suppliers who meet the consolidation threshold (or for single-product orders), the engine sorts strictly by `cost_price ASC` (Lowest Wholesale Price first). If Supplier A sells the item for ₦14,000 wholesale and Supplier B sells it for ₦14,500, Supplier A wins—automatically locking in an extra ₦500 margin for Victorious MARKET.
+Wholesale cost is the second priority only after comparing the number of pickup locations required for the feasible whole-order plan. A cheaper individual offer must not defeat a plan that uses fewer pickup locations.
 * **Rule C — Secondary Reliability Tie-Breaker (Availability Rate):**
 If two suppliers offer the exact same wholesale price and consolidation coverage, the engine breaks the tie using `availability_rate DESC` (calculated from their historical successful handovers divided by total assigned orders). The most reliable trader gets the sale.
 
@@ -91,7 +91,7 @@ If two suppliers offer the exact same wholesale price and consolidation coverage
 * The system immediately logs a **24-hour penalty** against that supplier for that specific SKU.
 * The system decreases their historical **Availability Rate** score.
 * The system triggers a high-priority alert on the **Admin Operations Dashboard** (and can either auto-reallocate to the second-best surviving supplier or hold for Admin intervention).
-3. **The Manual Admin Override:** At any point before rider pickup, an authorized Victorious MARKET Admin can click **"Override Supplier"**, select any eligible verified supplier from an approved Uyo shop/pickup location, and input a **Mandatory Audit Reason Code** (e.g., *"Original supplier shop shutter closed temporarily"*). The database updates the cost price snapshot, logs the Admin's User ID, and preserves ledger integrity.
+3. **The Manual Admin Override:** At any point before rider pickup, an authorized Victorious MARKET Admin can click **"Override Supplier"**, select any eligible verified supplier from an approved Uyo shop/pickup location, and input a **Mandatory Audit Reason Code** (e.g., *"Original supplier shop shutter closed temporarily"*). The system preserves the original assignment and financial snapshots, records the admin's actor/reason/time, and appends balanced compensating entries for any changed supplier payable or cost delta. Do not overwrite the original financial fact or silently mutate a posted journal.
 
 ---
 
@@ -154,31 +154,21 @@ If payment has been verified but no supplier can fulfil the order, do not automa
 
 ---
 
-## 6. Phase 5: Fail-Closed Financial Ledger & Settlement Engine
+## 6. Phase 5: Financial ledger, payables and reconciliation
 
-Victorious MARKET never relies on manual spreadsheet calculations to figure out who is owed what. The platform runs an automated double-entry internal ledger that executes the moment an order reaches `completed_verified`.
+Victorious MARKET must preserve an auditable, idempotent financial ledger. Ledger automation must not be confused with automatic approval or immediate bank disbursement. This section follows [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md); if this older blueprint's wording conflicts, the active rules prevail.
 
-### 6.1 How the Money Splits (Per Completed Order)
+### 6.1 Separate money paths for each completed order
 
-When a customer pays via Paystack at checkout, 100% of the funds sit in the Victorious MARKET settlement account. The moment the final Doorstep Delivery OTP is entered, the ledger splits the revenue into three distinct buckets:
+Customer payment is recorded only after trusted Paystack verification. A successful payment does not itself prove delivery, supplier payable eligibility, or logistics payable eligibility.
 
-1. **Supplier Payable Ledger (Paid Per Item Fulfilled):**
-Each approved supplier who contributed an item to the order has their wallet/payout ledger credited with the exact locked `cost_price` snapshot recorded at the moment of allocation.
-2. **3PL Logistics Payable Ledger (Paid Per Customer Order Trip):**
-The logistics company is **never** paid per item or per supplier stop; it is paid according to the admin-configured base payable for that logistics company and corridor, plus that company's configured bulky-unit surcharge multiplied by the applicable bulky-unit count:
-* *Standard Bike Order Trip:* Pay the configured company/corridor base payable, plus any configured company bulky-unit surcharge if applicable.
-* *Isolated Bulky Keke Order Trip:* Pay the configured company/corridor base payable plus the company's bulky-unit surcharge multiplied by the applicable bulky-unit count.
-3. **Victorious MARKET Net Revenue Ledger:**
-The platform automatically retains:
+1. **Supplier payable:** Link the immutable agreed wholesale-cost snapshot to each sourced order item. Supplier stock acceptance, availability confirmation, allocation or pickup alone does not make the payable due. Eligibility requires verified delivery, or an explicitly authorized completion exception, followed by reconciliation. Do not treat supplier payables as vendor commissions or automatically credit a supplier wallet at allocation/capture.
+2. **Logistics-company payable:** Calculate the payable from the assigned approved logistics company's admin-configured base payable for the applicable corridor, plus that company's configured bulky-unit surcharge multiplied by the applicable bulky-unit count. This is a separate tariff schedule from the customer delivery charge. Never derive it from a percentage of customer delivery revenue. Snapshot company, corridor, tariff/version, base, bulky quantity/rate and total at assignment; later tariff changes must not silently rewrite it. If payable exceeds delivery revenue, record the difference as a Victorious MARKET-funded subsidy/expense. The logistics company—not automatically the rider—is the payee.
+3. **Victorious MARKET margin and expenses:** Keep merchandise revenue, supplier purchase cost, customer delivery revenue, logistics cost, gateway fees, discounts, refunds, cashback liability, subsidy and operating expenses distinct. Merchandise spread is not net profit until attributable costs and liabilities are reconciled.
 
-$$\text{Net Profit} = \sum(\text{Retail Price} - \text{Supplier Wholesale Cost}) + (\text{Customer Delivery Fee Collected} - \text{3PL Corridor Payout})$$
+### 6.2 Supplier and logistics payment controls
 
-### 6.2 Settlement Cycles
-
-* **Suppliers:** Settled instantly or via daily automated bank transfers for all verified picked-up and delivered orders, keeping their cash turnover ultra-fast so they prioritize Victorious MARKET above walk-in credit buyers.
-* **3PL Logistics Companies:** Settled on a clean, automated weekly batch cycle (e.g., every Monday morning), accompanied by an itemized digital manifest showing every completed Order ID, Road Corridor, Vehicle Type, and OTP timestamp.
-
----
+A payable becoming eligible is not the same as a payment being approved, initiated, or confirmed. Every payout/payment operation must follow the applicable owner-approved authorization, limits, idempotency, reconciliation and audit requirements. Do not assume instant supplier transfers, daily automatic supplier settlement, weekly logistics-company transfer, or automatic wallet credit unless a separate current policy explicitly authorizes it. Provider timeout remains uncertain until reconciled; payout completion requires authoritative provider confirmation. Preserve legacy vendor earning/payout records as historical records and do not relabel them as supplier costs without an approved accounting migration.
 
 ## 7. Master Engineering Checklist (What You & The AI Will Build/Test)
 
