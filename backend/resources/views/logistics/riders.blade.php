@@ -196,6 +196,7 @@
                         <label style="display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; color: var(--adm-text);">Vehicle Type *</label>
                         <select name="vehicle_type" required style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--adm-border); background: var(--adm-bg); color: var(--adm-text); font-size: 13px;">
                             <option value="motorcycle" selected>🏍️ Motorcycle</option>
+                            <option value="keke">🛺 Keke / Tricycle (bulky orders only)</option>
                             <option value="bicycle">🚲 Bicycle</option>
                             <option value="van">🚐 Delivery Van</option>
                             <option value="transit_waybill">📦 Transit Waybill</option>
