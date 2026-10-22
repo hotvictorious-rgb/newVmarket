@@ -19,14 +19,18 @@
 - Delivery payment is upfront through Paystack. Verify trusted webhook/signature, transaction reference, amount, currency and idempotency.
 - Before verified payment, stock/catalogue/cart checks are non-binding. No supplier lock, order-specific reservation, binding notification or supplier payable may be created.
 - After verified payment, revalidate current stock and supplier eligibility before allocation.
+- Sourcing confirmation runs strictly from **8:00 AM to 6:00 PM** (60-minute supplier SLA; pauses after 6:00 PM and restarts fresh at 8:00 AM).
 - Supplier eligibility: active/approved; one approved Uyo location; explicit in-stock offer with sufficient quantity; SKU-specific 24-hour unavailable cooldown expired; fewer than five active pending handovers.
 - Compare only feasible plans that can fulfil the whole order: minimize distinct pickup locations first; among equally consolidated plans, minimize total wholesale cost; then prefer documented reliability and a deterministic tie-break. An order may use multiple suppliers but one rider from one approved logistics company handles the complete customer order.
-- Admin overrides require authorization, reason and immutable audit, and cannot bypass payment verification or safety rules.
+- Sourcing failover / shop counter stockout breach: immediate 24-hour SKU penalty, automated failover to next eligible supplier, and alert to Super Admin. Admin maintains permanent authority to override auto-match and reassign to any eligible supplier with audit reason.
 
 ## Logistics and evidence
+- Road delivery transit operates strictly from **8:00 AM to 5:00 PM** (deliveries stop by 5:00 PM for rider security and safety).
+- Mandatory pre-departure phone call from rider to customer before traveling on road corridor.
 - Any bulky unit makes the entire order a dedicated Keke/tricycle trip exclusive to that customer order.
 - Bike batching for small orders is permitted only on the same road corridor and within all capacity/route/safety constraints.
 - Supplier pickup: one-time pickup OTP plus mandatory pickup photo. Doorstep delivery: customer OTP plus mandatory geo-tagged doorstep photo.
+- Up to 3 batched reattempts on corridor for customer absence with zero extra platform fee. If all 3 fail, order cancelled, items returned to suppliers; **Fair Protection Refund** refunds merchandise amount only and retains delivery fee.
 - Support-managed pickup is exceptional, not public pre-payment reservation. Confirm only after complete-order readiness at one approved point, authorized payment arrangement, customer agreement and required evidence are verified.
 
 ## Money rules

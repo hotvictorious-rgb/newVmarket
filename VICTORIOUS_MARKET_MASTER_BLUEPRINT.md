@@ -91,20 +91,21 @@ Wholesale cost is the second priority only after comparing the number of pickup 
 * **Rule C — Secondary Reliability Tie-Breaker (Availability Rate):**
 If two suppliers offer the exact same wholesale price and consolidation coverage, the engine breaks the tie using `availability_rate DESC` (calculated from their historical successful handovers divided by total assigned orders). The most reliable trader gets the sale.
 
-### 3.3 Step 3: Supplier Notification, Rejection Loop, & Admin Override
+### 3.3 Step 3: Confirmation Clock, Counter Breach, Re-Route & Admin Override
 
-1. **Automated Assignment:** The winning supplier(s) receive an instant dashboard alert and SMS/WhatsApp ping showing the item(s) ordered and the locked agreed wholesale purchase-cost snapshot.
-2. **If Chosen Supplier Marks "Unavailable":** If a supplier realizes their physical shelf is actually empty and clicks *"Mark Unavailable"*:
-* The system immediately logs a **24-hour penalty** against that supplier for that specific SKU.
-* The system decreases their historical **Availability Rate** score.
-* The system opens a visible admin-managed exception, alerts the admin and records the SKU-specific 24-hour cooldown. An authorized admin decides whether to reassign to another eligible supplier, hold fulfilment or initiate another permitted resolution; do not silently change the binding supplier assignment.
-3. **The Manual Admin Override:** At any point before rider pickup, an authorized Victorious MARKET Admin can click **"Override Supplier"**, select any eligible verified supplier from an approved Uyo shop/pickup location, and input a **Mandatory Audit Reason Code** (e.g., *"Original supplier shop shutter closed temporarily"*). The system preserves the original assignment and financial snapshots, records the admin's actor/reason/time, and appends balanced compensating entries for any changed supplier payable or cost delta. Do not overwrite the original financial fact or silently mutate a posted journal.
+1. **Operating Confirmation Window (8:00 AM – 6:00 PM):** Winning suppliers receive an instant portal alert with a **60-minute confirmation timer**. Timers run strictly between 8:00 AM and 6:00 PM. After 6:00 PM, timers pause; merchants can view orders, and countdowns restart fresh at 8:00 AM the following morning.
+2. **If Supplier Rejects or Commits Shop-Floor Counter Breach:**
+* If a supplier marks "Unavailable" or fails to hand over an item at pickup because it was sold to a walk-in cash customer:
+* The system immediately applies a **24-hour SKU penalty** against that supplier.
+* The sourcing engine immediately **auto-routes** to the next-best eligible in-stock supplier in Uyo LGA.
+* The system instantly alerts the **Super Admin Command Tower**.
+3. **The Permanent Admin Override Authority:** At any point, an authorized Victorious MARKET Super Admin can override the automated sourcing assignment or failover match, manually reassigning the order line item to any verified supplier in Uyo with a mandatory audit reason. The system preserves the original audit trail and records balanced compensating entries for any changed wholesale payable.
 
 ---
 
 ## 4. Phase 3: Major-Road Logistics & Dispatch Architecture (Delivery Side)
 
-Once every item in the customer order is confirmed ready by the approved supplier(s), the order moves to the **Logistics Dispatch Queue**. Victorious MARKET does not manage random freelance riders; it integrates accredited **Third-Party Logistics (3PL) Companies** operating in Uyo.
+Once every item in the customer order is confirmed ready by the approved supplier(s), the order moves to the **Logistics Dispatch Queue**. Road delivery transit operates strictly from **8:00 AM to 5:00 PM** to ensure rider safety, optimal visibility, and eliminate evening delivery security risks along Uyo road corridors. Victorious MARKET integrates accredited **Third-Party Logistics (3PL) Companies** operating in Uyo.
 
 ### 4.1 The 3PL Partner Portal & The 8 Road Tabs
 

@@ -21,24 +21,26 @@ Victorious MARKET enforces an unbreakable financial rule: **Money NEVER leaves t
 [Automated Sourcing Engine Allocates Supplier(s)]
                   │
                   ▼
-[Supplier 60-Min Confirmation Gate (8:00 AM – 4:00 PM)]
+[Supplier 60-Min Confirmation Gate (8:00 AM – 6:00 PM)]
        ├── Confirms within 60 min ─────────────► [ALL Items Ready?]
        │                                                 │
-       └── Timeout / Rejects ──► [Auto-Failover to Next Supplier]
+       └── Timeout / Rejects ──► [Auto-Failover to Next Supplier (Admin Override)]
                                        │
                          All Exhausted ──► [Admin Alert: 24h Customer Partial Option]
                                                  │
                                                  ▼
-[Logistics Fleet Dispatched: One Order, One Rider]
+[Logistics Fleet Dispatched (8:00 AM – 5:00 PM): One Order, One Rider]
                   │
                   ▼
 [Shop Pickup: OTP + Mandatory Photo per Stop]
+       │
+       └── Shop Stockout Breach ──► 24h SKU Penalty + Auto-Route + Admin Alert
                   │
                   ▼
 [Rider Calls Customer Prior to Departure] ◄───── MANDATORY TRANSIT NOTIFICATION
                   │
                   ▼
-[Doorstep Handshake: Delivery OTP + Geo-Tagged Photo]
+[Doorstep Handshake (by 5:00 PM): Delivery OTP + Geo-Tagged Photo]
                   │
           ┌───────┴───────┐
           ▼               ▼
@@ -47,11 +49,12 @@ Victorious MARKET enforces an unbreakable financial rule: **Money NEVER leaves t
   Delivered Status        Rider returns parcel to 3PL Secure Custody
           │               Reattempt batched on next corridor run (Max 3 attempts, no extra fee)
   24h Claim Window        │
-          │               Exhausted 3 attempts ──► Return to Supplier & Admin Cancel
+  (Strict Non-Returnable  Exhausted 3 attempts ──► Return to Supplier & Admin Cancel
+   Exclusions Apply)      │                        (Merchandise Refunded, Delivery Fee Retained)
+          │               │
   Mon–Fri Settlement      │
-  (Paystack Settled,      │
-  Manual Admin Payout)    ▼
-            [24h Defect Dispute Reported]
+  (Paystack Settled,      ▼
+  Manual Admin Payout)  [24h Defect Dispute Reported]
                           │
             Supplier Payable FROZEN in Escrow
             Rider collects on return corridor trip
@@ -66,11 +69,14 @@ Victorious MARKET enforces an unbreakable financial rule: **Money NEVER leaves t
 * **Strict Invariant:** A rider from the assigned logistics company is **never dispatched** until **every single item** in the customer order has been explicitly marked as `ready_for_pickup` by each assigned supplier.
 * **No Speculative Dispatch:** Riders do not travel to a shop on the assumption that an item will be available. If an order has 3 items from 2 shops, both shops must confirm readiness on their portal before the order moves to the logistics dispatch queue.
 
-### 2.2 The 60-Minute Business-Hours Confirmation Clock
-* **Operating Clock Window:** Sourcing confirmation timers run strictly during Uyo commercial hours: **8:00 AM to 4:00 PM (West Africa Time)**.
-  - If an order is verified outside this window (e.g. 8:30 PM), the 60-minute countdown pauses and begins at 8:00 AM the following morning.
-* **Automated Failover:** A supplier has exactly **60 minutes** of active operating hours to confirm stock readiness.
-  - If the supplier marks "Unavailable" or fails to confirm within 60 minutes, the engine immediately logs a 24-hour SKU penalty and automatically reallocates the line item to the next-best eligible in-stock supplier within Uyo LGA.
+### 2.2 Sourcing Confirmation Clock (8:00 AM – 6:00 PM) vs. Delivery Window (8:00 AM – 5:00 PM)
+* **Sourcing Operating Window (8:00 AM – 6:00 PM):** Supplier confirmation timers run strictly during Uyo commercial hours from **8:00 AM to 6:00 PM (West Africa Time)**.
+  - A supplier has exactly **60 minutes** of active operating hours to confirm stock readiness.
+  - **The Evening Protocol (After 6:00 PM):** Sourcing countdown timers pause. Merchants can view incoming customer orders on their portal at any time, but the 60-minute countdown clock **starts afresh at 8:00 AM** the following morning.
+* **Delivery Transit Window (8:00 AM – 5:00 PM):** Physical road transit operates strictly between **8:00 AM and 5:00 PM**. No deliveries are dispatched after 5:00 PM to ensure rider safety, optimal visibility, and eliminate evening delivery security risks along Uyo road corridors.
+* **Automated Failover & Admin Override Authority:**
+  - If a supplier marks "Unavailable" or fails to confirm within 60 minutes, the engine immediately logs a 24-hour SKU penalty and automatically reallocates the line item to the next-best eligible in-stock supplier within Uyo LGA.
+  - **Super Admin Override:** The Super Admin Command Tower is alerted immediately. An authorized Super Admin maintains permanent authority to override the automated match and reassign the order line item to any other eligible supplier in Uyo.
 
 ### 2.3 Sourcing Exhaustion & 24-Hour Partial Fulfilment Protocol
 If all eligible suppliers in Uyo LGA are exhausted without fulfilling a line item:
@@ -82,7 +88,7 @@ If all eligible suppliers in Uyo LGA are exhausted without fulfilling a line ite
 
 ---
 
-## 3. Stage 2: Pickup & Mid-Route Breakdown Protocol
+## 3. Stage 2: Pickup, Counter Breaches & Mid-Route Protocols
 
 ### 3.1 Chain of Custody at Supplier Shop
 * For each supplier stop, the rider must:
@@ -91,7 +97,14 @@ If all eligible suppliers in Uyo LGA are exhausted without fulfilling a line ite
   3. Enter the supplier's 4-digit **Shop Pickup OTP**.
 * Once the OTP is validated, physical liability shifts contractually from the supplier to the accredited 3PL Logistics Company.
 
-### 3.2 Mid-Route Failure (e.g. Subsequent Shop Shutter Closed)
+### 3.2 Counter Breach: "Walk-In Cash Customer" Stockout at Handover
+If a merchant previously confirmed stock readiness on their portal, but when the rider arrives with the Pickup OTP, the merchant states the item was sold to a walk-in cash customer:
+1. **Rider Counter-Flag:** The rider selects **"Item Unavailable at Shop Counter"** in the mobile interface.
+2. **24-Hour SKU Penalty:** The platform instantly slaps that supplier with a 24-hour unavailability cooldown for that product.
+3. **Automated Re-Route:** The sourcing engine instantly re-allocates the item to the next-best eligible supplier in Uyo LGA.
+4. **Command Tower Alert & Admin Override:** The incident triggers an urgent alert on the Super Admin Command Tower. The Super Admin can monitor the auto-route or immediately intervene to manually assign any alternative verified supplier.
+
+### 3.3 Mid-Route Failure (e.g. Subsequent Shop Shutter Closed)
 If a rare exception occurs where Shop 1 is picked up, but Shop 2 cannot hand over Item 2:
 1. **3PL Secure Custody Hold:** The rider transports Item 1 directly to the accredited **3PL Logistics Company's secure facility/office**.
 2. **Contractual Holding:** Accredited 3PL logistics companies contractually provide secure temporary holding without extra platform fees.
@@ -105,27 +118,37 @@ If a rare exception occurs where Shop 1 is picked up, but Shop 2 cannot hand ove
 * **The Rider Call Rule:** Before heading out on the road corridor toward the customer destination, the rider **must call the customer** to notify them of estimated arrival time.
 * If the customer states they are unavailable, the trip is rescheduled before physical travel begins.
 
-### 4.2 Customer Absence at Doorstep
-If the rider arrives at the customer's verified landmark address and the customer is not present or reachable:
+### 4.2 Customer Absence at Doorstep & Fair Protection Refund
+If the rider arrives at the customer's verified landmark address during delivery hours (8:00 AM – 5:00 PM) and the customer is not present or reachable:
 1. **Return to 3PL Custody:** The rider returns the package to the logistics company’s secure holding facility.
 2. **Batched Re-Attempt Rule:**
    - The platform allows up to **3 delivery attempts**.
    - **The platform does NOT pay for re-delivery trips.**
    - All re-attempts **must be batched** with future scheduled delivery runs traveling down that exact same road corridor.
-3. **Exhausted Attempts (3 Failed Attempts):** If the customer cannot be reached after 3 documented attempts:
-   - The order enters `delivery_failed_abandoned`.
+3. **Exhausted Attempts (3 Failed Attempts) — The Fair Protection Refund:**
+   - If the customer fails to receive the order after 3 documented attempts, the order transitions to `delivery_failed_abandoned`.
    - The logistics company returns the items to the originating suppliers.
-   - Admin investigates and processes the case under the cancellation and refund policy.
+   - **Fair Protection Financial Rule:** Under Super Admin manual review, the customer receives a **refund of the merchandise selling price only**. The **customer delivery fee is permanently retained** by Victorious MARKET to cover the logistics fleet costs incurred across 3 physical transit attempts. The refund is queued for manual Super Admin dispatch under the Zero-Automated-Outflow Law.
+
+### 4.3 Flat Customer Base Fee Integrity (Zero Multi-Stop Customer Surcharges)
+* The customer is charged strictly **one flat customer base delivery fee** (plus bulky surcharge if bulky), regardless of whether items are sourced from 1, 2, or 3 separate shops across Uyo.
+* Victorious MARKET absorbs any multi-stop logistics company corridor tariff differential as a platform expense/subsidy, ensuring checkout conversion remains friction-free.
 
 ---
 
-## 5. Stage 4: Post-Delivery Disputes & Reverse Logistics
+## 5. Stage 4: Post-Delivery Disputes, Non-Returnable Items & Reverse Logistics
 
-### 5.1 24-Hour Return / Defect Window
+### 5.1 24-Hour Return Window & Strict Admin Adjudication
 * Customers have exactly 24 hours from verified delivery OTP handshake to report defective, non-functional, or misdescribed items.
+* **Not All Returns/Refunds are Approved:** A customer report does not automatically grant a return or refund. Every claim requires photographic/video evidence and is individually adjudicated by a Super Administrator.
+* **Strictly Non-Returnable Categories:**
+  Once the Delivery OTP handshake is verified, the following categories are strictly non-returnable and non-refundable:
+  1. **Perishable Goods:** Fresh food, fruits, vegetables, baked goods, and chilled groceries.
+  2. **Personal Hygiene & Intimate Items:** Underwear, socks, cosmetics, beauty items with opened seals, and personal grooming appliances.
+  3. **Digital & Vouchers:** Software licenses, scratch cards, and airtime/data pins.
 
 ### 5.2 Zero-Waste Reverse Logistics via Corridors
-* If an item return is authorized:
+* If an item return is authorized by Super Admin:
   - An accredited rider operating on that specific road corridor collects the item from the customer **on their return journey from an active delivery run**.
   - The rider returns the item directly to the originating supplier's shop.
   - This eliminates standalone courier costs for return pickups.
@@ -134,7 +157,7 @@ If the rider arrives at the customer's verified landmark address and the custome
 * **Instant Payout Freeze:** The moment a return or defect case is filed, the associated supplier payable is **immediately frozen in escrow**—no money leaves the platform.
 * **Admin Arbitration:** If the supplier disputes the defect (e.g., alleging customer negligence or misuse):
   - The item is brought to the **Victorious MARKET Admin Desk** for physical inspection.
-  - Super Admin inspects the pickup photo, doorstep photo, and returned item to issue a final, binding determination.
+  - Super Admin inspects the pickup photo, doorstep photo, and returned item to issue a final, binding determination. If approved, the refund is manually dispatched to the customer; if denied, frozen funds are released to the supplier.
 
 ---
 
