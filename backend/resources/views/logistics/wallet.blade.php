@@ -267,7 +267,7 @@
                                     <strong style="font-size: 12px; color: #B91C1C;">Held for reconciliation</strong>
                                     <div style="font-size: 10.5px; color: var(--adm-text-muted);">No company wallet credit recorded</div>
                                 @else
-                                    <strong style="font-size: 14px; color: #047857;">₦{{ number_format((float)($order->retailer_model_order ? ($order->logistics_company_payable_wallet_credited_amount ?? $order->logistics_company_payable_amount ?? $order->logistics_company_payable_default_amount ?? 0) : ($order->logistics_fee_retained ?? bcmul((string)$order->delivery_fee, '0.90', 2))), 2) }}</strong>
+                                    <strong style="font-size: 14px; color: #047857;">₦{{ number_format((float)($order->retailer_model_order ? ($order->logistics_company_wallet_credited_amount ?? $order->logistics_company_payable_amount ?? $order->logistics_company_payable_default_amount ?? 0) : ($order->logistics_fee_retained ?? bcmul((string)$order->delivery_fee, '0.90', 2))), 2) }}</strong>
                                     <div style="font-size: 10.5px; color: var(--adm-text-muted);">{{ $order->retailer_model_order ? 'Approved company payable' : '90.00% legacy net' }}</div>
                                 @endif
                             </td>
