@@ -121,7 +121,8 @@ class PortalController extends Controller
 
         // Query eligible products across the central retailer catalog
         $query = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug']);
+            // Supplier/shop relations are private sourcing data; public cards need only category data.
+            ->with(['category:id,name,slug']);
 
         if ($request->filled('category')) {
             $query->whereHas('category', function ($q) use ($request) {
@@ -158,12 +159,9 @@ class PortalController extends Controller
             ->take(6)
             ->get();
 
-        // Sourcing hubs based in Uyo
-        $shops = Shop::with('lga:id,name')
-            ->where('is_active', true)
-            ->where('lga_id', $uyoLgaId)
-            ->take(6)
-            ->get();
+        // Supplier locations are private sourcing data, never a public storefront directory.
+        // The existing view's empty state presents Victorious MARKET as the single retailer.
+        $shops = collect();
 
         $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
 
@@ -4522,7 +4520,8 @@ class PortalController extends Controller
     {
         $product = Product::marketplaceEligible()
             ->where('slug', $slug)
-            ->with(['shop.lga', 'vendor', 'category'])
+            // Supplier identity is resolved only by private sourcing services, not the public view.
+            ->with(['category'])
             ->firstOrFail();
 
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();
