@@ -147,6 +147,8 @@
                         dest_name: '{{ $currentHub->name }} (Same LGA)',
                         base_fee: '{{ $intraLane->base_fee ?? $zonalSettings['zone_intra_lga_fee'] }}',
                         bulky: '{{ $intraLane->bulky_surcharge ?? $zonalSettings['zone_bulky_cargo_surcharge'] }}',
+                        company_payable_base: '{{ $intraLane->logistics_company_base_payable ?? '' }}',
+                        company_payable_bulky: '{{ $intraLane->logistics_company_bulky_surcharge ?? '' }}',
                         min_eta: '{{ $intraLane->estimated_delivery_hours_min ?? 2 }}',
                         max_eta: '{{ $intraLane->estimated_delivery_hours_max ?? 4 }}',
                         tier_label: 'Tier 1: Municipal (Intra-LGA)',
@@ -327,6 +329,8 @@
                                             dest_name: '{{ $lga->name }} ({{ $currentHub->state->name ?? 'Akwa Ibom' }})',
                                             base_fee: '{{ $fee }}',
                                             bulky: '{{ $bulky }}',
+                                            company_payable_base: '{{ $lane->logistics_company_base_payable ?? '' }}',
+                                            company_payable_bulky: '{{ $lane->logistics_company_bulky_surcharge ?? '' }}',
                                             min_eta: '{{ $minEta }}',
                                             max_eta: '{{ $maxEta }}',
                                             tier_label: 'Tier 2: Regional (Inter-LGA)',
@@ -480,6 +484,8 @@
                                             dest_name: '{{ $st->name }} (Hub: {{ $capitalLga->name ?? 'Statewide' }})',
                                             base_fee: '{{ $stFee }}',
                                             bulky: '{{ $stBulky }}',
+                                            company_payable_base: '{{ $firstLane->logistics_company_base_payable ?? '' }}',
+                                            company_payable_bulky: '{{ $firstLane->logistics_company_bulky_surcharge ?? '' }}',
                                             min_eta: '{{ $stMinEta }}',
                                             max_eta: '{{ $stMaxEta }}',
                                             tier_label: 'Tier 3: Inter-State Freight',
@@ -542,9 +548,22 @@
                         <input type="number" step="0.01" name="base_fee" id="modalBaseFee" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1.5px solid var(--adm-border); font-size: 13.5px; font-weight: 700; color: #047857; box-sizing: border-box;">
                     </div>
                     <div>
-                        <label style="font-size: 11px; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">BULKY CARGO SURCHARGE (₦)</label>
+                        <label style="font-size: 11px; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">BULKY CARGO SURCHARGE (CUSTOMER ₦)</label>
                         <input type="number" step="0.01" name="bulky_surcharge" id="modalBulkyFee" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1.5px solid var(--adm-border); font-size: 13px; color: #B45309; box-sizing: border-box;">
                     </div>
+                </div>
+
+                <!-- Independent fleet/company payable tariff: never derived from customer fee -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; padding: 12px; border: 1px solid #F59E0B; border-radius: 8px; background: #FFFBEB;">
+                    <div>
+                        <label style="font-size: 11px; font-weight: 800; color: #92400E; display: block; margin-bottom: 4px;">COMPANY BASE PAYABLE (₦) *</label>
+                        <input type="number" min="0.01" step="0.01" name="logistics_company_base_payable" id="modalCompanyBasePayable" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1.5px solid #D97706; font-size: 13px; box-sizing: border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; font-weight: 800; color: #92400E; display: block; margin-bottom: 4px;">COMPANY BULKY SURCHARGE / UNIT (₦) *</label>
+                        <input type="number" min="0" step="0.01" name="logistics_company_bulky_surcharge" id="modalCompanyBulkyPayable" required style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1.5px solid #D97706; font-size: 13px; box-sizing: border-box;">
+                    </div>
+                    <p style="grid-column: 1 / -1; margin: 0; font-size: 11px; color: #92400E;">This tariff is paid to the logistics company and is independent of the customer delivery fee above. Enter an approved value before enabling checkout on this corridor.</p>
                 </div>
 
                 <!-- ETA Grid -->
