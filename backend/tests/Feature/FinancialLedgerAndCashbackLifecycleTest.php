@@ -890,7 +890,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             $service->override($deliveredOrder->fresh(), $this->superAdmin, '1200.00', 'Late override after rider custody');
             $this->fail('Payable override must be rejected after rider custody begins.');
         } catch (\InvalidArgumentException $exception) {
-            $this->assertStringContainsString('rider custody is confirmed', $exception->getMessage());
+            $this->assertStringContainsString('after rider custody or customer handover', $exception->getMessage());
         }
         $deliveredOrder->order_status = 'delivered';
         $deliveredOrder->received_at = Carbon::now();
@@ -1022,6 +1022,10 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'merchandise_subtotal' => '10000.00',
             'delivery_fee' => '1000.00',
             'grand_total' => '11000.00',
+            'vendor_net_90' => '9000.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '500.00',
+            'supplier_cost_total_snapshot' => '8000.00',
             'logistics_company_id' => $this->fleetCompany->id,
             'received_at' => Carbon::now(),
             'delivery_confirmed_by_customer' => true,
@@ -1045,6 +1049,8 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'description' => 'Customer delivery fee held pending independent company tariff.',
         ]);
 
+        $walletBefore = (string) $this->fleetCompany->fresh()->wallet_balance;
+
         $result = app(\App\Services\LogisticsCompanyPayableService::class)->override(
             $order,
             $this->superAdmin,
@@ -1058,7 +1064,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $this->assertTrue($result['payable_recovered_from_suspense']);
         $this->assertSame('1200.00', (string) $result['order']->logistics_company_wallet_credited_amount);
         $this->assertNotNull($result['order']->logistics_company_wallet_credited_at);
-        $this->assertSame('1200.00', (string) $this->fleetCompany->fresh()->wallet_balance);
+        $this->assertSame(bcadd($walletBefore, '1200.00', 2), (string) $this->fleetCompany->fresh()->wallet_balance);
 
         // A retried admin submission after delivery must be a no-op, not a second wallet credit.
         $retry = app(\App\Services\LogisticsCompanyPayableService::class)->override(
@@ -1068,7 +1074,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'Explicit reconciliation of missing company corridor tariff'
         );
         $this->assertTrue($retry['replayed']);
-        $this->assertSame('1200.00', (string) $this->fleetCompany->fresh()->wallet_balance);
+        $this->assertSame(bcadd($walletBefore, '1200.00', 2), (string) $this->fleetCompany->fresh()->wallet_balance);
         $this->assertDatabaseHas('financial_journal_entries', [
             'order_id' => $order->id,
             'account_name' => 'logistics_payable_suspense',

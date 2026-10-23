@@ -64,6 +64,11 @@ class PaystackPaymentHardeningTest extends TestCase
         if ($this->product) {
             $this->product->update(['cost_price' => '5000.00']);
         }
+
+        \App\Models\DeliveryLane::query()->update([
+            'logistics_company_base_payable' => '900.00',
+            'logistics_company_bulky_surcharge' => '400.00',
+        ]);
     }
 
     /**
