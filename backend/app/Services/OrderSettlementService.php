@@ -290,6 +290,25 @@ class OrderSettlementService
                 // stores no supplier assignments or wholesale-cost snapshots.
                 if ($lockedOrder->retailer_model_order) {
                     $allocationResult = app(SourcingAllocationService::class)->allocateVerifiedPaidOrder($lockedOrder);
+
+                    // Allocation updates the order through its own row-locked model
+                    // instance. Copy those authoritative fields onto this settlement
+                    // instance before its later save, otherwise stale null snapshots
+                    // would overwrite the just-created supplier-cost totals.
+                    if (!empty($allocationResult['success'])) {
+                        $sourcedState = Order::whereKey($lockedOrder->id)->firstOrFail();
+                        foreach ([
+                            'vendor_id',
+                            'shop_id',
+                            'supplier_cost_total_snapshot',
+                            'fulfillment_supplier_cost_total_snapshot',
+                            'retailer_merchandise_margin',
+                            'sourcing_plan_locations_count',
+                            'sourced_at',
+                        ] as $field) {
+                            $lockedOrder->{$field} = $sourcedState->{$field};
+                        }
+                    }
                 }
 
                 // Deduct inventory quantity if tracked upon confirmed payment
