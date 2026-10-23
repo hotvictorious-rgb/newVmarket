@@ -273,8 +273,8 @@ class LogisticsCompanyPayableService
     /**
      * Admin-only commercial override. Runs under an order lock, records the
      * original/default and final amount, and posts balanced journal adjustments.
-     * It is deliberately blocked after verified customer handover: post-handover
-     * changes require a separate recovery/adjustment workflow linked to payout state.
+     * Ordinary overrides are blocked after verified handover; the sole exception is
+     * explicit recovery of an uncredited missing-tariff suspense balance.
      */
     public function override(Order $order, User $admin, string $amount, string $reason): array
     {
@@ -301,9 +301,26 @@ class LogisticsCompanyPayableService
             if ($locked->payment_status !== 'paid') {
                 throw new InvalidArgumentException('The customer payment must be verified before setting a logistics-company payable.');
             }
-            if (in_array($locked->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true)
-                || $locked->received_at !== null || $locked->pickup_confirmed_by_rider === true) {
-                throw new InvalidArgumentException('The payable cannot be overridden after rider custody is confirmed, customer handover, or a terminal order outcome.');
+            $hasPayableCredit = FinancialJournalEntry::query()
+                ->where('order_id', $locked->id)
+                ->where('account_name', 'logistics_company_payable')
+                ->where('entry_type', 'credit')
+                ->exists();
+            $hasSuspenseCredit = FinancialJournalEntry::query()
+                ->where('order_id', $locked->id)
+                ->where('account_name', 'logistics_payable_suspense')
+                ->where('entry_type', 'credit')
+                ->exists();
+            $missingTariffRecoveryCandidate = $locked->logistics_company_payable_default_amount === null
+                && $locked->logistics_company_payable_amount === null
+                && !$hasPayableCredit
+                && $hasSuspenseCredit
+                && $locked->logistics_company_wallet_credited_at === null;
+
+            if (!$missingTariffRecoveryCandidate
+                && (in_array($locked->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true)
+                    || $locked->received_at !== null || $locked->pickup_confirmed_by_rider === true)) {
+                throw new InvalidArgumentException('The payable cannot be overridden after rider custody or customer handover, except to reconcile an explicitly held missing-tariff suspense balance.');
             }
             if (!$locked->logistics_company_id) {
                 throw new InvalidArgumentException('Assign an approved logistics company before overriding its payable.');
