@@ -211,6 +211,8 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         ], [
             'base_fee' => '1000.00',
             'bulky_surcharge' => '500.00',
+            'logistics_company_base_payable' => '900.00',
+            'logistics_company_bulky_surcharge' => '400.00',
             'estimated_delivery_hours_min' => 2,
             'estimated_delivery_hours_max' => 4,
             'is_active' => true,
