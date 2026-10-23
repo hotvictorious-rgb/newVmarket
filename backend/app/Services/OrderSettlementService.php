@@ -315,11 +315,13 @@ class OrderSettlementService
                     ->get();
 
                 foreach ($orderItems as $item) {
-                    $offer = \App\Models\SupplierOffer::where('id', $item->supplier_offer_id)->lockForUpdate()->first();
-                    if (!$offer || !$offer->is_available || $offer->isPenaltyActive() || ($offer->availability_expires_at && $offer->availability_expires_at->lte($now))) {
-                        $hasStockoutIssue = true;
-                        $stockoutReason = "Supplier offer for {$item->product_name} is no longer available or under penalty at payment.";
-                        break;
+                    if ($item->supplier_offer_id) {
+                        $offer = \App\Models\SupplierOffer::where('id', $item->supplier_offer_id)->lockForUpdate()->first();
+                        if (!$offer || !$offer->is_available || $offer->isPenaltyActive() || ($offer->availability_expires_at && $offer->availability_expires_at->lte($now))) {
+                            $hasStockoutIssue = true;
+                            $stockoutReason = "Supplier offer for {$item->product_name} is no longer available or under penalty at payment.";
+                            break;
+                        }
                     }
 
                     $pendingHandovers = \App\Models\OrderSupplierAssignment::where('supplier_vendor_id', $item->supplier_vendor_id)
@@ -775,7 +777,7 @@ class OrderSettlementService
                         $companyPayable = '0.00';
                         $lockedOrder->logistics_company_payable_amount = null;
                         $lockedOrder->logistics_company_payable_ledger_company_id = null;
-                        $lockedOrder->logistics_subsidy_amount = null;
+                        $lockedOrder->logistics_subsidy_amount = '0.00';
                         // Keep the captured delivery-fee component balanced in suspense.
                         // This is explicitly NOT a logistics company payable and cannot be released.
                         if (BcMathService::comp($deliveryFeeSnapshot, '0.00') > 0) {

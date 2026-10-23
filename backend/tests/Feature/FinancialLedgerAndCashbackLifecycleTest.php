@@ -625,6 +625,19 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $this->product->decrement('inventory_quantity', 3);
         $this->assertEquals($initialStock - 3, $this->product->fresh()->inventory_quantity);
 
+        // Payment was abandoned at Paystack gateway
+        \Illuminate\Support\Facades\Config::set('services.paystack.simulate_in_tests', false);
+        \Illuminate\Support\Facades\Http::fake([
+            'https://api.paystack.co/transaction/verify/*' => \Illuminate\Support\Facades\Http::response([
+                'status' => true,
+                'message' => 'Transaction not found or abandoned',
+                'data' => [
+                    'reference' => $order->payment_reference,
+                    'status' => 'abandoned',
+                ],
+            ], 200),
+        ]);
+
         // Run artisan expiration command
         $exitCode = Artisan::call('orders:expire-unpaid');
         $this->assertEquals(0, $exitCode);

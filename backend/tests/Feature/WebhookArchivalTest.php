@@ -151,6 +151,7 @@ class WebhookArchivalTest extends TestCase
     public function test_replay_of_archived_webhook_returns_200_and_does_not_duplicate(): void
     {
         $payload = json_encode([
+            'id' => 'evt_archived_replay_006',
             'event' => 'charge.success',
             'data' => [
                 'id' => 998877,
@@ -180,10 +181,18 @@ class WebhookArchivalTest extends TestCase
         $secretKey = app(\App\Services\PaystackService::class)->getSecretKey();
         $signature = hash_hmac('sha512', $payload, $secretKey);
 
-        $response = $this->withHeaders([
-            'x-paystack-signature' => $signature,
-            'x-paystack-event-id' => 'evt_archived_replay_006',
-        ])->call('POST', '/api/v1/payment/paystack/webhook', [], [], [], [], $payload);
+        $response = $this->call(
+            'POST',
+            route('payment.paystack.webhook'),
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_PAYSTACK_SIGNATURE' => $signature,
+            ],
+            $payload
+        );
 
         $response->assertStatus(200);
         $this->assertStringContainsString('Event already processed', (string) $response->getContent());
