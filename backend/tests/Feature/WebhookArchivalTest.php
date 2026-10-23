@@ -177,7 +177,8 @@ class WebhookArchivalTest extends TestCase
             'archived_at' => Carbon::now()->subDays(10),
         ]);
 
-        $signature = hash_hmac('sha512', $payload, $this->secretKey);
+        $secretKey = app(\App\Services\PaystackService::class)->getSecretKey();
+        $signature = hash_hmac('sha512', $payload, $secretKey);
 
         $response = $this->withHeaders([
             'x-paystack-signature' => $signature,
