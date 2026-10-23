@@ -1035,9 +1035,13 @@ class PortalController extends Controller
         $orderNumber = $result['order']->order_number;
         return redirect()->route('admin.orders.index')->with(
             'success',
-            $result['replayed']
-                ? "Logistics company assignment for {$orderNumber} was already applied."
-                : "Logistics company assigned to {$orderNumber} and audited."
+            !empty($result['payable_held_for_tariff'])
+                ? ($result['replayed']
+                    ? "Logistics company for {$orderNumber} is already assigned; payable remains held for explicit tariff reconciliation."
+                    : "Logistics company assigned to {$orderNumber}; payable remains held in suspense until a Super Admin reconciles the missing tariff.")
+                : ($result['replayed']
+                    ? "Logistics company assignment for {$orderNumber} was already applied."
+                    : "Logistics company assigned to {$orderNumber} and audited.")
         );
     }
 
