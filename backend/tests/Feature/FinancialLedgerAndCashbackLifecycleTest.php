@@ -1059,6 +1059,16 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $this->assertSame('1200.00', (string) $result['order']->logistics_company_wallet_credited_amount);
         $this->assertNotNull($result['order']->logistics_company_wallet_credited_at);
         $this->assertSame('1200.00', (string) $this->fleetCompany->fresh()->wallet_balance);
+
+        // A retried admin submission after delivery must be a no-op, not a second wallet credit.
+        $retry = app(\App\Services\LogisticsCompanyPayableService::class)->override(
+            $result['order'],
+            $this->superAdmin,
+            '1200.00',
+            'Explicit reconciliation of missing company corridor tariff'
+        );
+        $this->assertTrue($retry['replayed']);
+        $this->assertSame('1200.00', (string) $this->fleetCompany->fresh()->wallet_balance);
         $this->assertDatabaseHas('financial_journal_entries', [
             'order_id' => $order->id,
             'account_name' => 'logistics_payable_suspense',
