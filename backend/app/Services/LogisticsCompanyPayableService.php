@@ -68,7 +68,7 @@ class LogisticsCompanyPayableService
             $amount = $locked->logistics_company_payable_amount
                 ?? $locked->logistics_company_payable_default_amount;
             if ($amount === null || !is_numeric($amount) || BcMathService::comp((string) $amount, '0.00') <= 0) {
-                throw new RuntimeException('The immutable logistics company/corridor payable snapshot is missing or invalid; reconcile the tariff before assigning a company.')
+                throw new RuntimeException('The immutable logistics company/corridor payable snapshot is missing or invalid; reconcile the tariff before assigning a company.');
             }
             $amount = (string) $amount;
 
