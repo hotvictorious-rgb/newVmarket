@@ -205,7 +205,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $this->rider->update(['vendor_id' => $this->vendorProfile->id, 'logistics_company_id' => null]);
 
         // Delivery Lane
-        DeliveryLane::firstOrCreate([
+        DeliveryLane::updateOrCreate([
             'origin_lga_id' => $this->uyoLga->id,
             'destination_lga_id' => $this->uyoLga->id,
         ], [
