@@ -67,8 +67,8 @@ class LogisticsCompanyPayableService
             $revision = (int) $locked->logistics_company_payable_override_revision + 1;
             $amount = $locked->logistics_company_payable_amount
                 ?? $locked->logistics_company_payable_default_amount;
-            if ($amount === null || !is_numeric($amount) || BcMathService::comp((string) $amount, '0.00') < 0) {
-                throw new RuntimeException('The immutable logistics company/corridor payable snapshot is missing or invalid; reconcile the tariff before assigning a company.');
+            if ($amount === null || !is_numeric($amount) || BcMathService::comp((string) $amount, '0.00') <= 0) {
+                throw new RuntimeException('The immutable logistics company/corridor payable snapshot is missing or invalid; reconcile the tariff before assigning a company.')
             }
             $amount = (string) $amount;
 
@@ -158,7 +158,7 @@ class LogisticsCompanyPayableService
 
             $amount = $locked->logistics_company_payable_amount
                 ?? $locked->logistics_company_payable_default_amount;
-            if ($amount === null || !is_numeric($amount) || BcMathService::comp((string) $amount, '0.00') < 0) {
+            if ($amount === null || !is_numeric($amount) || BcMathService::comp((string) $amount, '0.00') <= 0) {
                 AdminAuditLog::create([
                     'user_id' => $locked->customer_id,
                     'action' => 'logistics_payable_release_blocked_missing_tariff',
@@ -231,8 +231,8 @@ class LogisticsCompanyPayableService
         if ($admin->status !== 'active' || $admin->user_type !== 'super_admin') {
             throw new AuthorizationException('Only an active Super Admin may override a logistics-company payable.');
         }
-        if (!is_numeric($amount) || BcMathService::comp($amount, '0.00') < 0) {
-            throw new InvalidArgumentException('The approved logistics-company amount must be zero or greater.');
+        if (!is_numeric($amount) || BcMathService::comp($amount, '0.00') <= 0) {
+            throw new InvalidArgumentException('The approved logistics-company amount must be greater than zero.');
         }
         $reason = trim($reason);
         if ($reason === '' || mb_strlen($reason) > 2000) {
