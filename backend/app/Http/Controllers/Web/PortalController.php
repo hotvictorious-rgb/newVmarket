@@ -3660,6 +3660,8 @@ class PortalController extends Controller
             'destination_lga_id' => 'required|integer|exists:lgas,id',
             'base_fee' => 'required|numeric|min:0|max:1000000',
             'bulky_surcharge' => 'nullable|numeric|min:0|max:1000000',
+            'logistics_company_base_payable' => 'nullable|numeric|min:0|max:1000000',
+            'logistics_company_bulky_surcharge' => 'nullable|numeric|min:0|max:1000000',
             'estimated_delivery_hours_min' => 'required|integer|min:1|max:720',
             'estimated_delivery_hours_max' => 'required|integer|min:1|max:720',
             'is_bidirectional' => 'nullable',
@@ -3688,6 +3690,8 @@ class PortalController extends Controller
                 $oldValues = [
                     'base_fee' => $existing->base_fee,
                     'bulky_surcharge' => $existing->bulky_surcharge,
+                    'logistics_company_base_payable' => $existing->logistics_company_base_payable,
+                    'logistics_company_bulky_surcharge' => $existing->logistics_company_bulky_surcharge,
                 ];
 
                 $existing->update([
@@ -3695,6 +3699,8 @@ class PortalController extends Controller
                     'destination_lga_id' => $validated['destination_lga_id'],
                     'base_fee' => number_format((float)$validated['base_fee'], 2, '.', ''),
                     'bulky_surcharge' => number_format((float)($validated['bulky_surcharge'] ?? 1000.00), 2, '.', ''),
+                    'logistics_company_base_payable' => isset($validated['logistics_company_base_payable']) ? number_format((float) $validated['logistics_company_base_payable'], 2, '.', '') : null,
+                    'logistics_company_bulky_surcharge' => isset($validated['logistics_company_bulky_surcharge']) ? number_format((float) $validated['logistics_company_bulky_surcharge'], 2, '.', '') : null,
                     'estimated_delivery_hours_min' => $validated['estimated_delivery_hours_min'],
                     'estimated_delivery_hours_max' => $validated['estimated_delivery_hours_max'],
                     'is_active' => true,
@@ -3707,6 +3713,8 @@ class PortalController extends Controller
                     ], [
                         'base_fee' => number_format((float)$validated['base_fee'], 2, '.', ''),
                         'bulky_surcharge' => number_format((float)($validated['bulky_surcharge'] ?? 1000.00), 2, '.', ''),
+                        'logistics_company_base_payable' => isset($validated['logistics_company_base_payable']) ? number_format((float) $validated['logistics_company_base_payable'], 2, '.', '') : null,
+                        'logistics_company_bulky_surcharge' => isset($validated['logistics_company_bulky_surcharge']) ? number_format((float) $validated['logistics_company_bulky_surcharge'], 2, '.', '') : null,
                         'estimated_delivery_hours_min' => $validated['estimated_delivery_hours_min'],
                         'estimated_delivery_hours_max' => $validated['estimated_delivery_hours_max'],
                         'is_active' => true,
@@ -3740,6 +3748,8 @@ class PortalController extends Controller
         ], [
             'base_fee' => number_format((float)$validated['base_fee'], 2, '.', ''),
             'bulky_surcharge' => number_format((float)($validated['bulky_surcharge'] ?? 1000.00), 2, '.', ''),
+            'logistics_company_base_payable' => isset($validated['logistics_company_base_payable']) ? number_format((float) $validated['logistics_company_base_payable'], 2, '.', '') : null,
+            'logistics_company_bulky_surcharge' => isset($validated['logistics_company_bulky_surcharge']) ? number_format((float) $validated['logistics_company_bulky_surcharge'], 2, '.', '') : null,
             'estimated_delivery_hours_min' => $validated['estimated_delivery_hours_min'],
             'estimated_delivery_hours_max' => $validated['estimated_delivery_hours_max'],
             'is_active' => true,
@@ -3753,6 +3763,8 @@ class PortalController extends Controller
             ], [
                 'base_fee' => number_format((float)$validated['base_fee'], 2, '.', ''),
                 'bulky_surcharge' => number_format((float)($validated['bulky_surcharge'] ?? 1000.00), 2, '.', ''),
+                'logistics_company_base_payable' => isset($validated['logistics_company_base_payable']) ? number_format((float) $validated['logistics_company_base_payable'], 2, '.', '') : null,
+                'logistics_company_bulky_surcharge' => isset($validated['logistics_company_bulky_surcharge']) ? number_format((float) $validated['logistics_company_bulky_surcharge'], 2, '.', '') : null,
                 'estimated_delivery_hours_min' => $validated['estimated_delivery_hours_min'],
                 'estimated_delivery_hours_max' => $validated['estimated_delivery_hours_max'],
                 'is_active' => true,
