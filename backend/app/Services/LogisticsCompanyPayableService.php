@@ -351,9 +351,12 @@ class LogisticsCompanyPayableService
                 ->where('entry_type', 'credit')
                 ->exists();
             $missingTariffRecovery = $default === null && !$baselineExists && $suspenseCreditExists;
+            $hasExistingManualPayable = $default === null
+                && $baselineExists
+                && $locked->logistics_company_payable_amount !== null;
 
-            if ($default === null && !$missingTariffRecovery) {
-                throw new RuntimeException('The immutable logistics-company payable snapshot is missing and no eligible suspense balance exists; manual reconciliation is required.');
+            if ($default === null && !$missingTariffRecovery && !$hasExistingManualPayable) {
+                throw new RuntimeException('The immutable logistics-company payable snapshot is missing and no eligible suspense balance or reconciled payable exists; manual reconciliation is required.');
             }
             $oldAmount = $missingTariffRecovery
                 ? '0.00'
