@@ -36,18 +36,18 @@ class InitialDeliveryLanesSeeder extends Seeder
 
         $lanes = [
             // Intra-LGA dispatch
-            ['origin' => $uyo->id, 'dest' => $uyo->id, 'fee' => '500.00', 'min_h' => 2, 'max_h' => 6],
-            ['origin' => $eket->id, 'dest' => $eket->id, 'fee' => '500.00', 'min_h' => 2, 'max_h' => 6],
-            ['origin' => $ikotEkpene->id, 'dest' => $ikotEkpene->id, 'fee' => '500.00', 'min_h' => 2, 'max_h' => 6],
-            ['origin' => $oron->id, 'dest' => $oron->id, 'fee' => '500.00', 'min_h' => 2, 'max_h' => 6],
+            ['origin' => $uyo->id, 'dest' => $uyo->id, 'fee' => '500.00', 'min_h' => 2, 'max_h' => 6, 'company_base' => '450.00', 'company_bulky' => '800.00'],
+            ['origin' => $eket->id, 'dest' => $eket->id, 'fee' => '500.00', 'min_h' => 2, 'max_h' => 6, 'company_base' => '450.00', 'company_bulky' => '800.00'],
+            ['origin' => $ikotEkpene->id, 'dest' => $ikotEkpene->id, 'fee' => '500.00', 'min_h' => 2, 'max_h' => 6, 'company_base' => '450.00', 'company_bulky' => '800.00'],
+            ['origin' => $oron->id, 'dest' => $oron->id, 'fee' => '500.00', 'min_h' => 2, 'max_h' => 6, 'company_base' => '450.00', 'company_bulky' => '800.00'],
 
             // Directional Inter-LGA transit
-            ['origin' => $uyo->id, 'dest' => $eket->id, 'fee' => '1500.00', 'min_h' => 12, 'max_h' => 24],
-            ['origin' => $eket->id, 'dest' => $uyo->id, 'fee' => '1500.00', 'min_h' => 12, 'max_h' => 24],
-            ['origin' => $uyo->id, 'dest' => $ikotEkpene->id, 'fee' => '1200.00', 'min_h' => 12, 'max_h' => 24],
-            ['origin' => $ikotEkpene->id, 'dest' => $uyo->id, 'fee' => '1200.00', 'min_h' => 12, 'max_h' => 24],
-            ['origin' => $uyo->id, 'dest' => $oron->id, 'fee' => '1500.00', 'min_h' => 12, 'max_h' => 24],
-            ['origin' => $oron->id, 'dest' => $uyo->id, 'fee' => '1500.00', 'min_h' => 12, 'max_h' => 24],
+            ['origin' => $uyo->id, 'dest' => $eket->id, 'fee' => '1500.00', 'min_h' => 12, 'max_h' => 24, 'company_base' => '1200.00', 'company_bulky' => '800.00'],
+            ['origin' => $eket->id, 'dest' => $uyo->id, 'fee' => '1500.00', 'min_h' => 12, 'max_h' => 24, 'company_base' => '1200.00', 'company_bulky' => '800.00'],
+            ['origin' => $uyo->id, 'dest' => $ikotEkpene->id, 'fee' => '1200.00', 'min_h' => 12, 'max_h' => 24, 'company_base' => '1000.00', 'company_bulky' => '800.00'],
+            ['origin' => $ikotEkpene->id, 'dest' => $uyo->id, 'fee' => '1200.00', 'min_h' => 12, 'max_h' => 24, 'company_base' => '1000.00', 'company_bulky' => '800.00'],
+            ['origin' => $uyo->id, 'dest' => $oron->id, 'fee' => '1500.00', 'min_h' => 12, 'max_h' => 24, 'company_base' => '1200.00', 'company_bulky' => '800.00'],
+            ['origin' => $oron->id, 'dest' => $uyo->id, 'fee' => '1500.00', 'min_h' => 12, 'max_h' => 24, 'company_base' => '1200.00', 'company_bulky' => '800.00'],
         ];
 
         foreach ($lanes as $l) {
@@ -57,6 +57,8 @@ class InitialDeliveryLanesSeeder extends Seeder
             ], [
                 'base_fee' => $l['fee'],
                 'bulky_surcharge' => '1000.00',
+                'logistics_company_base_payable' => $l['company_base'],
+                'logistics_company_bulky_surcharge' => $l['company_bulky'],
                 'estimated_delivery_hours_min' => $l['min_h'],
                 'estimated_delivery_hours_max' => $l['max_h'],
                 'is_active' => true,

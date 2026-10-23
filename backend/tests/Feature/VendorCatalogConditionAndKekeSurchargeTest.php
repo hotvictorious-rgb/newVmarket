@@ -95,6 +95,18 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             'is_active' => true,
             'priority' => 1,
         ]);
+
+        DeliveryLane::create([
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'base_fee' => '500.00',
+            'bulky_surcharge' => '1000.00',
+            'logistics_company_base_payable' => '450.00',
+            'logistics_company_bulky_surcharge' => '800.00',
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 6,
+            'is_active' => true,
+        ]);
     }
 
     public function test_supplier_recovery_journal_idempotency_keys_are_order_scoped_and_bounded(): void
