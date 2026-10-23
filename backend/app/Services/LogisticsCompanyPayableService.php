@@ -316,8 +316,12 @@ class LogisticsCompanyPayableService
                 && !$hasPayableCredit
                 && $hasSuspenseCredit
                 && $locked->logistics_company_wallet_credited_at === null;
+            $sameExistingOverride = $locked->logistics_company_payable_amount !== null
+                && BcMathService::comp((string) $locked->logistics_company_payable_amount, $amount) === 0
+                && trim((string) $locked->logistics_company_payable_override_reason) === $reason
+                && (int) $locked->logistics_company_payable_override_by === (int) $admin->id;
 
-            if (!$missingTariffRecoveryCandidate
+            if (!$missingTariffRecoveryCandidate && !$sameExistingOverride
                 && (in_array($locked->order_status, ['delivered', 'returned', 'cancelled', 'canceled', 'refunded'], true)
                     || $locked->received_at !== null || $locked->pickup_confirmed_by_rider === true)) {
                 throw new InvalidArgumentException('The payable cannot be overridden after rider custody or customer handover, except to reconcile an explicitly held missing-tariff suspense balance.');
