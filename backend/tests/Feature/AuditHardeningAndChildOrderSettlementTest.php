@@ -377,6 +377,8 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
         ], [
             'base_fee' => '0.00',
             'bulky_surcharge' => '0.00',
+            'logistics_company_base_payable' => '450.00',
+            'logistics_company_bulky_surcharge' => '800.00',
             'estimated_delivery_hours_min' => 2,
             'estimated_delivery_hours_max' => 4,
             'is_active' => true,
@@ -491,8 +493,9 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
 
         $this->assertTrue($result['success']);
         $this->assertEquals('REFUND_PENDING', $result['status']);
-        $this->assertNotNull($order->fresh()->paystack_refund_reference);
-        $this->assertStringStartsWith('rf_test_', $order->fresh()->paystack_refund_reference);
+        // Zero-Automated-Outflow Law: Gateway refunds are never dispatched autonomously.
+        $this->assertNull($order->fresh()->paystack_refund_reference, 'Zero-Automated-Outflow Law: No autonomous gateway refund dispatch.');
+        $this->assertEquals('refund_pending', $order->fresh()->vendor_settlement_status);
 
         // Web callback redirect informs customer of refund transparently
         $callbackRes = $this->get(route('payment.paystack.callback', [
@@ -501,7 +504,7 @@ class AuditHardeningAndChildOrderSettlementTest extends TestCase
 
         $callbackRes->assertRedirect();
         $callbackRes->assertSessionHas('warning');
-        $this->assertStringContainsString('refund is pending reconciliation', session('warning'));
+        $this->assertStringContainsString('Zero-Automated-Outflow Law', session('warning'));
     }
 
     /**

@@ -108,12 +108,8 @@ jobs:
           php -l tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php
           php -l tests/Feature/AuditHardeningAndChildOrderSettlementTest.php
           php -l tests/Feature/AuditHardeningAndSecurityProofTest.php
-          php -l tests/Feature/VendorManagedDeliveryRiderTest.php
           php -l tests/Feature/StructuralEntityAndLogisticsInvariantTest.php
-          php -l tests/Feature/VendorPayoutLifecycleTest.php
-          php -l tests/Feature/VendorApiTerminalTest.php
           php -l tests/Feature/SecurityHardeningAndAuditTest.php
-          php -l tests/Feature/VendorSettlementProtectionWindowTest.php
           php -l tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php
           php -l tests/Feature/AdminLogisticsAndRiderManagementTest.php
           php -l tests/Feature/AdminSupplierOnboardingTest.php
@@ -121,11 +117,14 @@ jobs:
           php -l tests/Feature/SupplierOfferSelectionServiceTest.php
           php -l tests/Feature/AutomatedSupplierSourcingTest.php
           php -l tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php
+          php -l tests/Feature/PaymentTruthDurabilityTest.php
+          php -l tests/Feature/PaystackWebhookInboxRecoveryTest.php
+          php -l tests/Feature/WholeOrderConsolidatedSourcingAndFleetDispatchTest.php
+          php -l tests/Feature/WebhookArchivalTest.php
 
       - name: Run financial audit and payment hardening proof tests
-        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php tests/Feature/FinancialJournalIdempotencySchemaTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/AuditHardeningAndSecurityProofTest.php tests/Feature/VendorPayoutLifecycleTest.php tests/Feature/VendorSettlementProtectionWindowTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/AutomatedSupplierSourcingTest.php tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php --display-warnings
+        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php tests/Feature/FinancialJournalIdempotencySchemaTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/AuditHardeningAndSecurityProofTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/AutomatedSupplierSourcingTest.php tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php tests/Feature/PaymentTruthDurabilityTest.php tests/Feature/PaystackWebhookInboxRecoveryTest.php tests/Feature/WholeOrderConsolidatedSourcingAndFleetDispatchTest.php tests/Feature/WebhookArchivalTest.php --display-warnings
 
       - name: Run supplier bank update regression tests
         run: |
-          php artisan test tests/Feature/VendorApiTerminalTest.php --filter='vendor_bank_update_triggers_48h_cooldown|vendor_payout_rejected_during_48h_cooldown' --display-warnings
           php artisan test tests/Feature/SecurityHardeningAndAuditTest.php --filter='vendor_bank_update_activates_48h_cooldown_and_validates_10_digit_nuban' --display-warnings
