@@ -65,9 +65,12 @@ class LogisticsCompanyPayableService
             }
 
             $revision = (int) $locked->logistics_company_payable_override_revision + 1;
-            $amount = (string) ($locked->logistics_company_payable_amount
-                ?? $locked->logistics_company_payable_default_amount
-                ?? (string) $locked->delivery_fee);
+            $amount = $locked->logistics_company_payable_amount
+                ?? $locked->logistics_company_payable_default_amount;
+            if ($amount === null || !is_numeric($amount) || BcMathService::comp((string) $amount, '0.00') < 0) {
+                throw new RuntimeException('The immutable logistics company/corridor payable snapshot is missing or invalid; reconcile the tariff before assigning a company.');
+            }
+            $amount = (string) $amount;
 
             $baseline = FinancialJournalEntry::query()
                 ->where('order_id', $locked->id)
@@ -153,9 +156,12 @@ class LogisticsCompanyPayableService
                 throw new InvalidArgumentException('The assigned logistics company must remain active at delivery release.');
             }
 
-            $amount = (string) ($locked->logistics_company_payable_amount
-                ?? $locked->logistics_company_payable_default_amount
-                ?? BcMathService::mul((string) $locked->delivery_fee, '0.90'));
+            $amount = $locked->logistics_company_payable_amount
+                ?? $locked->logistics_company_payable_default_amount;
+            if ($amount === null || !is_numeric($amount) || BcMathService::comp((string) $amount, '0.00') < 0) {
+                throw new RuntimeException('The immutable logistics company/corridor payable snapshot is missing or invalid; company wallet release is blocked.');
+            }
+            $amount = (string) $amount;
 
             if (BcMathService::comp($amount, '0.00') > 0) {
                 $company->creditWallet($amount);
@@ -247,8 +253,7 @@ class LogisticsCompanyPayableService
 
             $default = $locked->logistics_company_payable_default_amount;
             if ($default === null) {
-                $default = BcMathService::mul($fee, '0.90');
-                $locked->logistics_company_payable_default_amount = $default;
+                throw new RuntimeException('The immutable logistics company/corridor payable snapshot is missing; reconcile the tariff before applying an override.');
             }
             $oldAmount = bcadd((string) ($locked->logistics_company_payable_amount ?? $default), '0', 2);
             $revision = (int) $locked->logistics_company_payable_override_revision;
