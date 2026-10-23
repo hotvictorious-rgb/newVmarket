@@ -1279,6 +1279,11 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         ]);
 
         $this->actingAs($admin)
+            ->get('/admin/supplier-catalog')
+            ->assertOk()
+            ->assertSee('Create canonical product');
+
+        $this->actingAs($admin)
             ->post('/admin/supplier-catalog/products', [
                 'name' => 'Admin Catalog Samsung A15 128GB',
                 'description' => 'Canonical retailer-owned product record.',
