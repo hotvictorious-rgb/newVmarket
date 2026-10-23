@@ -67,16 +67,52 @@ class LogisticsCompanyPayableService
             $revision = (int) $locked->logistics_company_payable_override_revision + 1;
             $amount = $locked->logistics_company_payable_amount
                 ?? $locked->logistics_company_payable_default_amount;
-            if ($amount === null || !is_numeric($amount) || BcMathService::comp((string) $amount, '0.00') <= 0) {
-                throw new RuntimeException('The immutable logistics company/corridor payable snapshot is missing or invalid; reconcile the tariff before assigning a company.');
-            }
-            $amount = (string) $amount;
 
             $baseline = FinancialJournalEntry::query()
                 ->where('order_id', $locked->id)
                 ->where('account_name', 'logistics_company_payable')
                 ->where('entry_type', 'credit')
                 ->exists();
+            $suspenseCreditExists = FinancialJournalEntry::query()
+                ->where('order_id', $locked->id)
+                ->where('account_name', 'logistics_payable_suspense')
+                ->where('entry_type', 'credit')
+                ->exists();
+
+            if (!$baseline && $suspenseCreditExists && ($amount === null || !is_numeric($amount) || BcMathService::comp((string) $amount, '0.00') <= 0)) {
+                // The payment was settled while the independent tariff was missing.
+                // Assign the accountable company but keep its payable ledger unassigned
+                // until a Super Admin records the explicit tariff reconciliation.
+                $locked->logistics_company_id = $company->id;
+                $locked->logistics_company_payable_ledger_company_id = null;
+                $locked->logistics_company_payable_override_revision = $revision;
+                $locked->save();
+                AdminAuditLog::create([
+                    'user_id' => $admin->id,
+                    'action' => 'logistics_company_assigned_payable_held_for_tariff',
+                    'target_type' => Order::class,
+                    'target_id' => $locked->id,
+                    'old_values' => ['logistics_company_id' => $oldCompanyId, 'payable_ledger_company_id' => $locked->getOriginal('logistics_company_payable_ledger_company_id')],
+                    'new_values' => [
+                        'logistics_company_id' => $company->id,
+                        'company_name' => $company->company_name,
+                        'payable_status' => 'held_in_suspense_pending_explicit_tariff_reconciliation',
+                        'assignment_reason' => $reason,
+                        'assigned_by' => $admin->id,
+                        'revision' => $revision,
+                    ],
+                    'ip_address' => request()->ip() ?? '127.0.0.1',
+                    'user_agent' => request()->userAgent(),
+                ]);
+
+                return ['success' => true, 'replayed' => false, 'payable_held_for_tariff' => true, 'order' => $locked];
+            }
+
+            if ($amount === null || !is_numeric($amount) || BcMathService::comp((string) $amount, '0.00') <= 0) {
+                throw new RuntimeException('The immutable logistics company/corridor payable snapshot is missing or invalid; reconcile the tariff before assigning a company.');
+            }
+            $amount = (string) $amount;
+
             if (!$baseline) {
                 throw new RuntimeException('The original logistics-company payable journal is missing; reconcile before assigning a company.');
             }
