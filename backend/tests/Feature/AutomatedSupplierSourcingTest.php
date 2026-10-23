@@ -572,6 +572,9 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertTrue($result['success'], $result['message'] ?? json_encode($result));
         $order = $result['order'];
         $this->assertNotNull($order);
+        // Company payable uses the independent corridor tariff, not the customer delivery fee.
+        $this->assertSame('500.00', (string) $order->delivery_fee);
+        $this->assertSame('450.00', (string) $order->logistics_company_payable_amount);
 
         // Assert Order sourcing fields for retailer multi-supplier model
         $this->assertEquals('awaiting_payment', $order->sourcing_status);
@@ -598,5 +601,24 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertNotNull($orderItem->supplier_snapshot_at);
         $this->assertNotEmpty($orderItem->supplier_name_snapshot);
         $this->assertNotEmpty($orderItem->supplier_shop_name_snapshot);
+
+        // Missing company tariff must fail closed before a new order or payment intent is created.
+        DeliveryLane::where('origin_lga_id', $this->uyoLga->id)
+            ->where('destination_lga_id', $this->uyoLga->id)
+            ->update(['logistics_company_base_payable' => null]);
+        $ordersBeforeMissingTariffAttempt = Order::count();
+        $blocked = $checkoutService->execute($this->customerUser, [
+            'shop_id' => $shopA->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'destination_lga_id' => $this->uyoLga->id,
+            '_checkout_idempotency_key' => 'IDEMP-MISSING-TARIFF-' . uniqid(),
+            '_checkout_request_hash' => hash('sha256', 'missing-tariff-test'),
+            'items' => [
+                ['product_id' => $product->id, 'quantity' => 1],
+            ],
+        ]);
+        $this->assertFalse($blocked['success']);
+        $this->assertStringContainsString('no approved logistics-company payable tariff', strtolower($blocked['message']));
+        $this->assertSame($ordersBeforeMissingTariffAttempt, Order::count());
     }
 }
