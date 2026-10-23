@@ -63,6 +63,17 @@ class LogisticsCompanyPayableService
                 && (int) ($locked->logistics_company_payable_ledger_company_id ?? 0) === (int) $company->id) {
                 return ['success' => true, 'replayed' => true, 'order' => $locked];
             }
+            if ((int) ($oldCompanyId ?? 0) === (int) $company->id
+                && $locked->logistics_company_payable_ledger_company_id === null
+                && $locked->logistics_company_payable_amount === null
+                && $locked->logistics_company_payable_default_amount === null
+                && FinancialJournalEntry::query()
+                    ->where('order_id', $locked->id)
+                    ->where('account_name', 'logistics_payable_suspense')
+                    ->where('entry_type', 'credit')
+                    ->exists()) {
+                return ['success' => true, 'replayed' => true, 'payable_held_for_tariff' => true, 'order' => $locked];
+            }
 
             $revision = (int) $locked->logistics_company_payable_override_revision + 1;
             $amount = $locked->logistics_company_payable_amount
