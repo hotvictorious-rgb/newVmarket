@@ -95,3 +95,9 @@ These are the active business decisions to align across documentation. Code, sch
 ## Approved policy addendum — 23 October 2026
 
 The owner-approved [Exception and Reverse-Logistics Policies](APPROVED_EXCEPTION_AND_REVERSE_LOGISTICS_POLICIES_2026-10-23.md) are binding additions to these Active Business Rules. They govern supplier-stockout recovery, admin-managed partial fulfilment, the 24-hour response deadline (silence means rejection of the partial offer), item-level and whole-order cancellation/refund handling, doorstep rejection, post-purchase defective-item returns on compatible return routes, no redelivery, removal of independent logistics-company orders from platform scope, admin-configurable major-road/landmark hierarchy, and the related evidence and financial safeguards. Dependent documents must conform to that addendum. Documentation alignment does not certify runtime implementation.
+
+
+
+## Owner-approved Order State, Custody and Recovery Policy — 23 October 2026
+
+The owner-approved [Order State, Custody and Recovery Policy](ORDER_STATE_CUSTODY_AND_RECOVERY_POLICY_2026-10-23.md) is a binding cross-cutting control policy. It governs lifecycle separation, idempotent payment/event recovery, concurrency-safe supplier allocation, item-level custody and evidence, exception ownership, and reconciliation without changing the specific business outcomes already defined in these Active Business Rules or the approved Exception and Reverse-Logistics Policies. Specific approved business rules take precedence for their prescribed outcomes. The policy does not authorize automated refunds or transfers; the Zero-Automated-Outflow Law, existing refund eligibility/window/category rules, the three-attempt absence rule, partial-offer deadline, supplier selection, payout caps/schedule and non-FIFO selection remain binding. Code compliance is unverified until separately audited and tested.
