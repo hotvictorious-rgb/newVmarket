@@ -93,6 +93,12 @@
     </a>
 </li>
 <li class="sidebar-nav-item">
+    <a href="{{ route('admin.supplier-catalog.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.supplier-catalog.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">🧾</span>
+        <span>Supplier Catalog &amp; Listings</span>
+    </a>
+</li>
+<li class="sidebar-nav-item">
     <a href="{{ route('vendor.dashboard') }}" class="sidebar-nav-link">
         <span class="nav-link-icon">🏬</span>
         <span>Inspect Merchant Desk</span>
