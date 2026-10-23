@@ -672,7 +672,7 @@ class OrderSettlementService
                     $defaultCompanyPayable = $lockedOrder->logistics_company_payable_default_amount;
                     $hasValidCompanyTariff = $defaultCompanyPayable !== null
                         && is_numeric($defaultCompanyPayable)
-                        && BcMathService::comp((string) $defaultCompanyPayable, '0.00') >= 0;
+                        && BcMathService::comp((string) $defaultCompanyPayable, '0.00') > 0;
 
                     if (!$hasValidCompanyTariff) {
                         // Do not lose a real Paystack capture merely because a legacy order
