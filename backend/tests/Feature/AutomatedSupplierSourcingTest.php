@@ -510,7 +510,7 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertStringContainsString('Package packed and ready', $order->sourcing_notes);
     }
 
-    public function test_checkout_execution_populates_order_sourcing_and_order_item_snapshots(): void
+    public function test_checkout_keeps_supplier_sourcing_non_binding_until_verified_payment(): void
     {
         [$userA, $vendorA, $shopA] = $this->createSupplier('Supplier Alpha', 'alpha8@supplier.ng', '08098765438');
 
@@ -576,31 +576,24 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertSame('500.00', (string) $order->delivery_fee);
         $this->assertSame('450.00', (string) $order->logistics_company_payable_amount);
 
-        // Assert Order sourcing fields for retailer multi-supplier model
-        $this->assertEquals('awaiting_payment', $order->sourcing_status);
+        // Checkout performs only a non-binding feasibility check. No supplier
+        // assignment, wholesale-cost snapshot or sourcing timestamp may exist yet.
+        $this->assertSame('awaiting_payment', $order->sourcing_status);
         $this->assertNull($order->selected_supplier_id);
         $this->assertNull($order->selected_shop_id);
-        $this->assertNotNull($order->sourced_at);
+        $this->assertNull($order->sourced_at);
+        $this->assertNull($order->supplier_cost_total_snapshot);
+        $this->assertNull($order->fulfillment_supplier_cost_total_snapshot);
+        $this->assertSame(0, OrderSupplierAssignment::where('order_id', $order->id)->count());
 
-        // Assert per-supplier assignment is created
-        $assignment = OrderSupplierAssignment::where('order_id', $order->id)->first();
-        $this->assertNotNull($assignment);
-        $this->assertEquals($vendorA->id, $assignment->supplier_vendor_id);
-        $this->assertEquals($shopA->id, $assignment->supplier_shop_id);
-        $this->assertEquals('awaiting_payment', $assignment->status);
-
-        // Assert OrderItem snapshot fields
         $orderItem = $order->items()->first();
         $this->assertNotNull($orderItem);
-        $this->assertEquals($offer->id, $orderItem->supplier_offer_id);
-        $this->assertEquals($vendorA->id, $orderItem->supplier_vendor_id);
-        $this->assertEquals($shopA->id, $orderItem->supplier_shop_id);
-        $this->assertEquals('26500.00', $orderItem->supplier_cost_snapshot);
-        $this->assertEquals('26500.00', $orderItem->cost_price);
-        $this->assertEquals('NGN', $orderItem->supplier_cost_currency);
-        $this->assertNotNull($orderItem->supplier_snapshot_at);
-        $this->assertNotEmpty($orderItem->supplier_name_snapshot);
-        $this->assertNotEmpty($orderItem->supplier_shop_name_snapshot);
+        $this->assertNull($orderItem->supplier_offer_id);
+        $this->assertNull($orderItem->supplier_vendor_id);
+        $this->assertNull($orderItem->supplier_shop_id);
+        $this->assertNull($orderItem->supplier_cost_snapshot);
+        $this->assertNull($orderItem->supplier_snapshot_at);
+        $this->assertSame('0.00', (string) $orderItem->cost_price);
 
         // Missing company tariff must fail closed before a new order or payment intent is created.
         DeliveryLane::where('origin_lga_id', $this->uyoLga->id)
