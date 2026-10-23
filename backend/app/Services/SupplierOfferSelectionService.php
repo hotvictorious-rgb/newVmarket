@@ -79,6 +79,7 @@ class SupplierOfferSelectionService
             ->where('product_id', $product->id)
             ->where('is_available', true)
             ->where('wholesale_cost', '>', 0)
+            ->whereRaw('supplier_offers.wholesale_cost < (select products.unit_price from products where products.id = supplier_offers.product_id)')
             ->whereNotNull('availability_confirmed_at')
             ->where('availability_confirmed_at', '<=', $now)
             ->whereNotNull('availability_confirmed_by')
