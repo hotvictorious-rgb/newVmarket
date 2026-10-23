@@ -458,7 +458,24 @@ class LogisticsCompanyPayableService
                 'user_agent' => request()->userAgent(),
             ]);
 
-            return ['success' => true, 'replayed' => false, 'order' => $locked];
+            $walletRelease = null;
+            if ($missingTariffRecovery
+                && $locked->order_status === 'delivered'
+                && $locked->received_at !== null
+                && $locked->delivery_confirmed_by_customer
+                && !empty($locked->proof_of_delivery_image)) {
+                // This wallet credit follows an explicit Super Admin reconciliation
+                // action and existing delivery proof; it is not an automated bank transfer.
+                $walletRelease = $this->releaseAfterVerifiedDelivery($locked);
+            }
+
+            return [
+                'success' => true,
+                'replayed' => false,
+                'payable_recovered_from_suspense' => $missingTariffRecovery,
+                'wallet_release' => $walletRelease,
+                'order' => $locked->fresh(),
+            ];
         });
     }
 
