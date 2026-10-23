@@ -1276,6 +1276,48 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ->assertJsonMissingPath('data.0.name');
     }
 
+    public function test_public_storefront_and_product_detail_do_not_reveal_supplier_identity(): void
+    {
+        $product = Product::create([
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'category_id' => $this->category->id,
+            'name' => 'Private Supplier Identity Test Product',
+            'slug' => 'private-supplier-identity-test-product',
+            'description' => 'Public product description',
+            'unit_price' => '10000.00',
+            'condition' => 'brand_new',
+            'package_tier' => 'bike',
+            'inventory_quantity' => 5,
+            'is_in_stock' => true,
+            'listing_status' => 'listed',
+            'is_approved' => true,
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+
+        SupplierOffer::create([
+            'product_id' => $product->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'wholesale_cost' => '5000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now(),
+            'availability_confirmed_by' => $this->vendorUser->id,
+            'availability_expires_at' => Carbon::now()->addDay(),
+        ]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Victorious MARKET — One Trusted Local Retailer')
+            ->assertDontSee($this->shop->name);
+
+        $this->get('/product/' . $product->slug)
+            ->assertOk()
+            ->assertSee($product->name)
+            ->assertDontSee($this->shop->name)
+            ->assertDontSee('Sourcing Partner');
+    }
+
     public function test_public_product_api_does_not_expose_supplier_shop_or_vendor_ids(): void
     {
         $product = Product::create([
