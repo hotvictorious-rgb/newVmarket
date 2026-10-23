@@ -263,8 +263,8 @@
                                 <strong style="font-size: 13.5px; color: var(--adm-text);">₦{{ number_format((float)$order->delivery_fee, 2) }}</strong>
                             </td>
                             <td>
-                                <strong style="font-size: 14px; color: #047857;">₦{{ number_format((float)bcmul((string)$order->delivery_fee, '0.90', 2), 2) }}</strong>
-                                <div style="font-size: 10.5px; color: var(--adm-text-muted);">90.00% Net Credited</div>
+                                <strong style="font-size: 14px; color: #047857;">₦{{ number_format((float)($order->retailer_model_order ? ($order->logistics_company_payable_amount ?? $order->logistics_company_payable_default_amount ?? 0) : ($order->logistics_fee_retained ?? bcmul((string)$order->delivery_fee, '0.90', 2))), 2) }}</strong>
+                                <div style="font-size: 10.5px; color: var(--adm-text-muted);">{{ $order->retailer_model_order ? 'Approved company payable' : '90.00% legacy net' }}</div>
                             </td>
                             <td>
                                 <span class="dash-badge dash-badge-success">✅ OTP Verified</span>
