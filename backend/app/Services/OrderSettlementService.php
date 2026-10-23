@@ -670,7 +670,7 @@ class OrderSettlementService
                     $defaultCompanyPayable = $lockedOrder->logistics_company_payable_default_amount;
                     if ($defaultCompanyPayable === null || !is_numeric($defaultCompanyPayable)
                         || BcMathService::comp((string) $defaultCompanyPayable, '0.00') < 0) {
-                        throw new \\RuntimeException('Missing or invalid immutable logistics-company payable snapshot; payment settlement is blocked for reconciliation.');
+                        throw new \RuntimeException('Missing or invalid immutable logistics-company payable snapshot; payment settlement is blocked for reconciliation.');
                     }
                     $companyPayable = (string) ($lockedOrder->logistics_company_payable_amount ?? $defaultCompanyPayable);
                     $lockedOrder->logistics_company_payable_amount = $companyPayable;
