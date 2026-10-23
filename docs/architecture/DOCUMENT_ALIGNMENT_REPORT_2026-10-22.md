@@ -67,7 +67,7 @@ The owner has reviewed and finalized the complete operational workflow, exceptio
    - 100% of outflows require manual, recorded human Super Admin review, authorization, and manual dispatch initiation via the Admin Command Tower.
    - Out-of-stock items, customer cancellations, duplicate payments, and returns generate pending review requests in the Super Admin dashboard; money stays securely locked in Paystack escrow until explicit human admin execution.
 2. **Supplier Confirmation SLA & Operating Hours:**
-   - Confirmation timers run strictly during Uyo commercial hours: **8:00 AM to 4:00 PM**.
+   - Confirmation timers run strictly during Uyo commercial hours: **8:00 AM to 6:00 PM**, per the Active Business Rules.
    - Suppliers have exactly **60 minutes** of active operating hours to confirm readiness.
    - If a supplier rejects or times out after 60 minutes, the item auto-fails over to the next eligible supplier with a 24-hour SKU penalty. If all suppliers are exhausted, it escalates to the Admin Command Tower.
 3. **The 24-Hour Customer Partial Fulfilment Protocol:**
@@ -101,3 +101,12 @@ The owner has reviewed and finalized the complete operational workflow, exceptio
 ## Owner-approved policy addition — 23 October 2026
 
 Created [Approved Exception and Reverse-Logistics Policies](APPROVED_EXCEPTION_AND_REVERSE_LOGISTICS_POLICIES_2026-10-23.md) as the verbatim policy baseline approved by the owner. Linked the addendum from the Active Business Rules, Operational Workflow and Exception Playbook, Payment/Refund Policy, and Master Blueprint. The approved baseline covers supplier-stockout failover, partial fulfilment and 24-hour timeout semantics, item-level/whole-order refund treatment, doorstep rejection, defective-item returns on compatible return routes, no redelivery, removal of independent logistics-company order handling, admin-configurable major roads and nested landmarks, and financial/evidence controls. This is documentation-only; runtime behaviour remains to be audited and tested. Any existing code path that conflicts—particularly any logistics payable fallback to the customer delivery fee—remains an implementation issue until verified and corrected separately.
+
+
+## Order State, Custody and Recovery policy — draft review, 23 October 2026
+
+Created [Order State, Custody and Recovery Policy](ORDER_STATE_CUSTODY_AND_RECOVERY_POLICY_2026-10-23.md) as a **proposed draft pending owner approval**. It defines separate lifecycle dimensions for payment, order, item, custody, refund, payable and exception cases; crash/retry/concurrency recovery; evidence-based handovers; and reconciliation controls. It expressly preserves the binding business outcomes for supplier failover, the partial-offer 24-hour deadline, the three-attempt customer-absence rule and merchandise-only refund, separate doorstep-rejection treatment, the existing 24-hour defect/return window and non-returnable categories, one logistics company/rider per order, independent logistics tariff snapshots, the ₦5,000–₦1,000,000 supplier payout limits, weekday-after-settlement payout timing, non-FIFO selection, and the Zero-Automated-Outflow Law. It does not authorize runtime code changes or make the draft binding before owner approval.
+
+**Conflict found and corrected during review:** the payment/refund matrix described a pre-payment “stock hold active until expiry,” which conflicts with the Active Business Rules prohibiting binding supplier reservations before verified payment. The matrix now states that no binding supplier allocation or supplier-stock reservation may occur before verified payment; a cart/session expiry cannot reserve supplier inventory.
+
+**Review boundary:** the draft was read back from the working branch after creation. This is a documentation consistency review, not proof that database constraints, runtime transitions, webhooks, ledgers, admin UI or recovery tests implement these rules. Before implementation, map the conceptual states to existing statuses and verify code-level invariants. Keep this policy labelled draft until the owner approves it.
