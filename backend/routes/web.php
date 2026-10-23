@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Web\AdminSupplierOfferAvailabilityController;
+use App\Http\Controllers\Web\AdminSupplierCatalogController;
 use App\Http\Controllers\Web\AdminOrderSupplierAssignmentController;
 use App\Http\Controllers\Web\AdminSupplierRecoveryController;
 use App\Http\Controllers\Web\AdminRetailerSupplierPayoutController;
@@ -96,6 +97,12 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
         ->whereNumber('assignmentId')
         ->name('admin.orders.supplier_assignments.recover');
     Route::get('/products', [PortalController::class, 'adminProductsPage'])->name('admin.products.index');
+    Route::get('/supplier-catalog', [AdminSupplierCatalogController::class, 'index'])->name('admin.supplier-catalog.index');
+    Route::post('/supplier-catalog/products', [AdminSupplierCatalogController::class, 'storeProduct'])->name('admin.supplier-catalog.products.store');
+    Route::post('/supplier-catalog/products/{productId}/listing', [AdminSupplierCatalogController::class, 'setListing'])->whereNumber('productId')->name('admin.supplier-catalog.products.listing');
+    Route::post('/supplier-catalog/products/{productId}/offers', [AdminSupplierCatalogController::class, 'storeOffer'])->whereNumber('productId')->name('admin.supplier-catalog.offers.store');
+    Route::patch('/supplier-catalog/offers/{offerId}/cost', [AdminSupplierCatalogController::class, 'updateOfferCost'])->whereNumber('offerId')->name('admin.supplier-catalog.offers.cost');
+    Route::post('/supplier-catalog/offers/{offerId}/disable', [AdminSupplierCatalogController::class, 'disableOffer'])->whereNumber('offerId')->name('admin.supplier-catalog.offers.disable');
     Route::post('/supplier-offers/{offerId}/confirm-availability', [AdminSupplierOfferAvailabilityController::class, 'confirm'])
         ->whereNumber('offerId')
         ->name('admin.supplier_offers.confirm_availability');
