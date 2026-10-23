@@ -406,3 +406,8 @@ Binding requirements for refund, settlement, webhook, reconciliation and finance
 8. Maintain a monitored refund-liquidity reserve/forecast and alert authorised staff to projected shortfalls. The reserve calculation must never count vendor receivables as cash.
 
 Acceptance tests must cover balanced journals, refunds while recovery is pending, excluded receivables in cash totals, partial/shared responsibility, debt ageing and write-off, verified repayment, approved contractual offsets, duplicate callbacks, and preservation of completed vendor-transfer history. Obtain qualified-accountant review of final journal mapping before production.
+
+
+## Approved exception/refund policy addendum — 23 October 2026
+
+The owner-approved [Exception and Reverse-Logistics Policies](docs/architecture/APPROVED_EXCEPTION_AND_REVERSE_LOGISTICS_POLICIES_2026-10-23.md) govern fee treatment and refund requests for accepted partial orders, rejected partial orders, 24-hour response timeouts, doorstep rejection, and post-purchase defective-item returns. Refund calculations must use immutable original order/payment/fee snapshots; refund only the bulky surcharge attributable to a cancelled or rejected bulky item when applicable; retain the base delivery fee when the remaining order is delivered; and include the original delivery fee in the whole-order refund request when the whole order is cancelled or rejected, subject to applicable law and policy. No extra customer fee is charged for exception handling or an authorised return. All refunds remain subject to human Super Admin review/authorisation and provider-confirmed completion; no timeout, webhook, job, or retry may create an automatic or duplicate financial outflow. This addendum does not certify runtime implementation.
