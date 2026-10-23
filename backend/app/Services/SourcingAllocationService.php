@@ -450,6 +450,12 @@ class SourcingAllocationService
                 throw new \RuntimeException('Partial supplier snapshots detected; allocation is blocked for admin reconciliation.');
             }
 
+            // An old pre-payment assignment row without matching immutable
+            // item snapshots is ambiguous legacy state. Do not silently adopt it.
+            if (OrderSupplierAssignment::where('order_id', $lockedOrder->id)->exists()) {
+                return ['success' => false, 'reason' => 'Existing supplier assignment rows conflict with the unbound item snapshots; admin reconciliation is required.'];
+            }
+
             $planItems = [];
             foreach ($items as $item) {
                 $product = Product::whereKey($item->product_id)->lockForUpdate()->first();
