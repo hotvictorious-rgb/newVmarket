@@ -424,7 +424,7 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
                 'Pre-payment supplier override must be blocked'
             );
             $this->fail('A pre-payment supplier assignment override should be rejected.');
-        } catch (\\InvalidArgumentException $exception) {
+        } catch (\InvalidArgumentException $exception) {
             $this->assertStringContainsString('Pre-payment supplier plans are non-binding', $exception->getMessage());
         }
 
