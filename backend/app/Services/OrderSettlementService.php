@@ -682,6 +682,23 @@ class OrderSettlementService
                         $lockedOrder->logistics_company_payable_amount = null;
                         $lockedOrder->logistics_company_payable_ledger_company_id = null;
                         $lockedOrder->logistics_subsidy_amount = null;
+                        // Keep the captured delivery-fee component balanced in suspense.
+                        // This is explicitly NOT a logistics company payable and cannot be released.
+                        if (BcMathService::comp($deliveryFeeSnapshot, '0.00') > 0) {
+                            FinancialJournalEntry::create([
+                                'order_id' => $lockedOrder->id,
+                                'transaction_reference' => $reference,
+                                'event_id' => 'EVT-LOG-SUSPENSE-' . $reference,
+                                'beneficiary_type' => User::class,
+                                'beneficiary_id' => null,
+                                'account_name' => 'logistics_payable_suspense',
+                                'entry_type' => 'credit',
+                                'amount' => $deliveryFeeSnapshot,
+                                'currency' => 'NGN',
+                                'description' => 'Customer delivery charge held in suspense because the independent company/corridor tariff is missing; not a company payable.',
+                            ]);
+                        }
+
                         AdminAuditLog::create([
                             'user_id' => $lockedOrder->customer_id,
                             'action' => 'logistics_payable_missing_tariff_hold',
@@ -692,6 +709,7 @@ class OrderSettlementService
                                 'payment_settlement' => 'recorded_without_logistics_payable',
                                 'logistics_company_assignment' => 'blocked_pending_tariff_reconciliation',
                                 'delivery_fee_snapshot' => $deliveryFeeSnapshot,
+                                'suspense_account' => 'logistics_payable_suspense',
                             ],
                             'ip_address' => request()->ip() ?? '127.0.0.1',
                             'user_agent' => request()->userAgent(),
