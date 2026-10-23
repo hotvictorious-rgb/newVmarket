@@ -786,7 +786,10 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
     {
         // This regression now follows the binding policy: supplier cost is quoted
         // non-bindingly before payment and captured only by verified settlement.
-        $offer = SupplierOffer::where('product_id', $this->product->id)->firstOrFail();
+        // Isolate the intended offer: seeded fixtures may contain several offers
+        // for this product, and cheapest-offer selection must remain authoritative.
+        SupplierOffer::where('product_id', $this->product->id)->update(['is_available' => false]);
+        $offer = SupplierOffer::where('product_id', $this->product->id)->orderBy('id')->firstOrFail();
         $offer->update([
             'wholesale_cost' => '6000.00',
             'is_available' => true,
