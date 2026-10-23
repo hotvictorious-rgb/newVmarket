@@ -13,6 +13,7 @@ on:
   push:
     branches:
       - main
+      - docs/retailer-central-fulfilment-model
   workflow_dispatch:
 
 permissions:
@@ -43,84 +44,38 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: PHP syntax check for changed files
+      - name: PHP syntax check for changed PHP files
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CURRENT_SHA: ${{ github.sha }}
         run: |
-          php -l app/Http/Controllers/Web/PaystackPaymentController.php
-          php -l app/Http/Controllers/Web/AdminSupplierOfferAvailabilityController.php
-          php -l app/Http/Controllers/Web/PortalController.php
-          php -l app/Http/Controllers/Api/CheckoutAndReservationApiController.php
-          php -l app/Services/LogisticsCompanyPayableService.php
-          php -l app/Services/CashbackMaturityService.php
-          php -l app/Console/Commands/MatureCustomerCashbackCommand.php
-          php -l app/Console/Commands/ReconcileSupplierPayablesCommand.php
-          php -l routes/console.php
-          php -l app/Services/DoorstepHandshakeService.php
-          php -l app/Services/ReturnAndRefundService.php
-          php -l app/Services/FinancialOperationService.php
-          php -l app/Services/RetailerRefundAccountingService.php
-          php -l app/Models/CashbackRecoveryLedger.php
-          php -l app/Services/FinancialReconciliationEngine.php
-          php -l app/Services/PayoutFinalizationService.php
-          php -l app/Services/RetailerSupplierPayoutService.php
-          php -l app/Services/PaystackService.php
-          php -l app/Services/ReturnAndRefundService.php
-          php -l app/Services/DoorstepHandshakeService.php
-          php -l app/Http/Controllers/Api/RiderTerminalApiController.php
-          php -l app/Http/Controllers/Api/VendorTerminalApiController.php
-          php -l app/Services/NotificationDispatchService.php
-          php -l app/Services/CheckoutExecutionService.php
-          php -l app/Services/SourcingAllocationService.php
-          php -l app/Services/SupplierReassignmentRecoveryService.php
-          php -l app/Http/Controllers/Web/AdminSupplierRecoveryController.php
-          php -l app/Http/Controllers/Web/AdminRetailerSupplierPayoutController.php
-          php -l app/Services/OrderSettlementService.php
-          php -l app/Models/Order.php
-          php -l app/Models/ReturnCase.php
-          php -l app/Models/RetailerSupplierPayoutRequest.php
-          php -l app/Models/RetailerSupplierPayoutAllocation.php
-          php -l app/Models/OrderItem.php
-          php -l app/Models/SupplierOffer.php
-          php -l app/Services/SupplierOfferSelectionService.php
-          php -l app/Services/SupplierOfferAvailabilityService.php
-          php -l app/Models/OrderSupplierAssignment.php
-          php -l app/Http/Controllers/Web/AdminOrderSupplierAssignmentController.php
-          php -l database/migrations/2026_10_21_000002_create_order_supplier_assignments_table.php
-          php -l database/migrations/2026_10_21_000003_add_supplier_collection_proof_fields.php
-          php -l database/migrations/2026_10_21_000005_add_supplier_snapshots_to_order_items.php
-          php -l database/migrations/2026_10_21_000006_add_supplier_offer_availability_evidence.php
-          php -l database/migrations/2026_10_21_000007_make_product_supplier_ownership_nullable.php
-          php -l database/migrations/2026_10_21_000008_add_retailer_financial_snapshots_and_logistics_override.php
-          php -l database/migrations/2026_10_21_000009_add_operational_supplier_snapshots.php
-          php -l database/migrations/2026_10_21_000010_allow_centrally_owned_retailer_returns.php
-          php -l database/migrations/2026_10_21_000002_add_financial_journal_idempotency_key.php
-          php -l database/migrations/2026_10_21_000011_add_order_item_link_to_financial_journal_entries.php
-          php -l database/migrations/2026_10_21_000012_create_retailer_supplier_payout_tables.php
-          php -l database/migrations/2026_10_21_000009_create_cashback_recovery_ledger.php
-          php -l database/migrations/2026_10_20_000046_add_customer_address_id_to_orders.php
-          php -l database/migrations/2026_10_20_000001_allow_cashback_maturity_to_start_after_fulfilment.php
-          php -l database/migrations/2026_10_21_000004_create_supplier_offers_and_sourcing_fields.php
-          php -l tests/Feature/DoorstepPartialAcceptanceAndVendorReturnTest.php
-          php -l tests/Feature/FinancialAuditRemediationProofTest.php
-          php -l tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php
-          php -l tests/Feature/FinancialJournalIdempotencySchemaTest.php
-          php -l tests/Feature/PaystackPaymentHardeningTest.php
-          php -l tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php
-          php -l tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php
-          php -l tests/Feature/AuditHardeningAndChildOrderSettlementTest.php
-          php -l tests/Feature/AuditHardeningAndSecurityProofTest.php
-          php -l tests/Feature/StructuralEntityAndLogisticsInvariantTest.php
-          php -l tests/Feature/SecurityHardeningAndAuditTest.php
-          php -l tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php
-          php -l tests/Feature/AdminLogisticsAndRiderManagementTest.php
-          php -l tests/Feature/AdminSupplierOnboardingTest.php
-          php -l tests/Feature/SupplierSourcingSnapshotSchemaTest.php
-          php -l tests/Feature/SupplierOfferSelectionServiceTest.php
-          php -l tests/Feature/AutomatedSupplierSourcingTest.php
-          php -l tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php
-          php -l tests/Feature/PaymentTruthDurabilityTest.php
-          php -l tests/Feature/PaystackWebhookInboxRecoveryTest.php
-          php -l tests/Feature/WholeOrderConsolidatedSourcingAndFleetDispatchTest.php
-          php -l tests/Feature/WebhookArchivalTest.php
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BASE_SHA="$PR_BASE_SHA"
+          else
+            BASE_SHA="$EVENT_BEFORE"
+          fi
+
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "No usable base SHA; changed-file check will be skipped."
+          else
+            CHANGED_PHP="$(git diff --name-only "$BASE_SHA" "$CURRENT_SHA" -- '*.php' | grep '^backend/' | sed 's#^backend/##' || true)"
+            if [ -n "$CHANGED_PHP" ]; then
+              while IFS= read -r file; do
+                [ -z "$file" ] && continue
+                [ ! -f "$file" ] && continue
+                php -l "$file"
+              done <<< "$CHANGED_PHP"
+            else
+              echo "No changed PHP files to lint."
+            fi
+          fi
+
+      - name: Full backend PHP syntax scan
+        run: |
+          find app bootstrap config database routes tests -type f -name '*.php' -print0 |
+            xargs -0 -r -n1 php -l
 
       - name: Run financial audit and payment hardening proof tests
         run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php tests/Feature/FinancialJournalIdempotencySchemaTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/AuditHardeningAndSecurityProofTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/AutomatedSupplierSourcingTest.php tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php tests/Feature/PaymentTruthDurabilityTest.php tests/Feature/PaystackWebhookInboxRecoveryTest.php tests/Feature/WholeOrderConsolidatedSourcingAndFleetDispatchTest.php tests/Feature/WebhookArchivalTest.php --display-warnings
