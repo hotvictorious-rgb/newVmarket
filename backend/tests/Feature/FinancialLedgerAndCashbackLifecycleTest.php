@@ -252,8 +252,8 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $pastOrder = Order::create([
             'order_number' => 'ORD-PAST-0001',
             'customer_id' => $this->customerUser->id,
-            'vendor_id' => null,
-            'shop_id' => null,
+            'vendor_id' => $this->shop->vendor_id,
+            'shop_id' => $this->shop->id,
             'origin_lga_id' => $this->shop->lga_id,
             'destination_lga_id' => $this->uyoLga->id,
             'fulfillment_type' => 'doorstep_delivery',
@@ -802,8 +802,8 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $order = Order::create([
             'order_number' => 'VM-RETAILER-FIN-' . strtoupper(substr(sha1($reference), 0, 8)),
             'customer_id' => $this->customerUser->id,
-            'vendor_id' => $this->shop->vendor_id,
-            'shop_id' => $this->shop->id,
+            'vendor_id' => null,
+            'shop_id' => null,
             'origin_lga_id' => $this->shop->lga_id,
             'destination_lga_id' => $this->uyoLga->id,
             'fulfillment_type' => 'doorstep_delivery',
