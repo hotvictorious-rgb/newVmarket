@@ -66,12 +66,12 @@ class StressTestSettlementConcurrencyCommand extends Command
         ]);
 
         // Each supplier vendor is constrained by the platform rule: >= 5 pending handovers cap.
-        // Therefore, to support fulfilling $initialStock units under test, create max(1, ceil($initialStock / 5)) suppliers.
-        $numSuppliers = (int) max(1, ceil($initialStock / 5));
+        // Therefore, to support fulfilling $initialStock units under test, create max(1, ceil($initialStock / 3)) suppliers.
+        $numSuppliers = (int) max(1, ceil($initialStock / 3));
         $suppliers = [];
         for ($s = 1; $s <= $numSuppliers; $s++) {
             $vUser = User::firstOrCreate(
-                ['email' => "stress_vendor_{$s}@vmarket.ng"],
+                ['email' => "stress_vendor_{$testRunId}_{$s}@vmarket.ng"],
                 ['name' => "Stress Vendor User {$s}", 'phone' => "0807777" . str_pad((string)$s, 4, '0', STR_PAD_LEFT), 'password' => bcrypt('Pass123!'), 'user_type' => 'vendor', 'status' => 'active']
             );
             $vProfile = VendorProfile::firstOrCreate(
@@ -79,7 +79,7 @@ class StressTestSettlementConcurrencyCommand extends Command
                 ['business_name' => "Stress Vendor Ltd {$s}", 'kyc_status' => 'verified', 'marketplace_status' => 'active']
             );
             $vShop = Shop::firstOrCreate(
-                ['slug' => "stress-vendor-depot-{$s}"],
+                ['slug' => "stress-vendor-depot-{$testRunId}-{$s}"],
                 ['vendor_id' => $vProfile->id, 'country_id' => $country->id, 'state_id' => $state->id, 'lga_id' => $uyoLga->id, 'name' => "Stress Depot {$s}", 'address' => "10 Abak Road, Uyo Depot {$s}", 'phone' => "0807777" . str_pad((string)$s, 4, '0', STR_PAD_LEFT), 'is_active' => true, 'pickup_enabled' => true]
             );
             $vOffer = SupplierOffer::create([

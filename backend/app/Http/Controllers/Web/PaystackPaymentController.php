@@ -338,6 +338,25 @@ class PaystackPaymentController extends Controller
                 ->lockForUpdate()
                 ->first();
 
+            if (!$existingEvent && \Illuminate\Support\Facades\Schema::hasTable('archived_webhook_events')) {
+                $archivedEvent = \App\Models\ArchivedWebhookEvent::where('event_id', $eventId)->first();
+                if ($archivedEvent) {
+                    $storedHash = $archivedEvent->payload_hash;
+                    if (empty($storedHash) && is_string($archivedEvent->payload)) {
+                        $storedHash = hash('sha256', $archivedEvent->payload);
+                    }
+                    if (!is_string($storedHash) || !hash_equals($storedHash, $eventHash)) {
+                        Log::critical('Paystack webhook event ID reused with a different payload (archived record).', [
+                            'event_id' => $eventId,
+                            'stored_hash' => $storedHash,
+                            'incoming_hash' => $eventHash,
+                        ]);
+                        return ['action' => 'conflict', 'message' => 'Event ID already exists with a different payload.'];
+                    }
+                    return ['action' => 'completed', 'message' => 'Event already processed (archived).'];
+                }
+            }
+
             if ($existingEvent) {
                 // An event ID is an immutable inbox identity. Never let a different,
                 // correctly signed payload reuse it, regardless of current status.
