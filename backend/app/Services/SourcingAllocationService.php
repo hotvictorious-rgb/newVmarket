@@ -461,7 +461,7 @@ class SourcingAllocationService
 
             $plan = $this->resolveOptimalWholeOrderPlan($planItems, (string) $lockedOrder->fulfillment_type);
             if (!$plan) {
-                return ['success' => false, 'reason' => 'No eligible Uyo supplier plan remains after verified payment.'];
+                return ['success' => false, 'reason' => 'No eligible Uyo supplier plan remains after verified payment; supplier availability changed or no eligible alternative exists.'];
             }
 
             $groups = [];
