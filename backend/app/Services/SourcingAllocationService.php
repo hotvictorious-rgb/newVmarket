@@ -686,21 +686,14 @@ class SourcingAllocationService
                 && in_array($order->sourcing_status, ['stockout_revalidation_hold', 'supplier_rejected', 'timed_out', 'counter_breach', 'awaiting_supplier_confirmation'], true)
                 && in_array($lockedAssignment->status, ['stockout_revalidation_hold', 'supplier_rejected', 'timed_out', 'counter_breach', 'awaiting_supplier_confirmation'], true);
 
-            $isPendingPrePayment = $order->retailer_model_order
-                && $order->payment_status === 'pending'
-                && $order->order_status === 'pending'
-                && $lockedAssignment->status === 'awaiting_payment';
-
-            if (!$isPaidException && !$isPendingPrePayment) {
-                throw new InvalidArgumentException('Supplier overrides are allowed only before payment or on paid orders under an authorized sourcing exception hold.');
+            if (!$isPaidException) {
+                throw new InvalidArgumentException(
+                    'Supplier overrides are permitted only on paid retailer orders under an authorized sourcing exception hold. Pre-payment supplier plans are non-binding and cannot be overridden as assignments.'
+                );
             }
             if ((int) $lockedAssignment->supplier_vendor_id === $newVendorId) {
                 throw new InvalidArgumentException('Choose a different supplier account for an override.');
             }
-            if ($isPendingPrePayment && $order->expires_at && Carbon::now()->gte($order->expires_at)) {
-                throw new InvalidArgumentException('This checkout reservation has expired; create a new checkout before changing suppliers.');
-            }
-
             if ($isPaidException) {
                 $recoveryService = app(\App\Services\SupplierReassignmentRecoveryService::class);
                 $idempotencyKey = 'override-' . $lockedAssignment->id . '-' . microtime(true);
