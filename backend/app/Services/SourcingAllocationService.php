@@ -464,8 +464,9 @@ class SourcingAllocationService
                 return ['success' => false, 'reason' => 'No eligible Uyo supplier plan remains after verified payment; supplier availability changed or no eligible alternative exists.'];
             }
 
-            $groups = [];
-            $supplierCostTotal = '0.00';
+            // Validate and lock every selected offer before writing any item
+            // snapshot. A late invalid line must not commit a partial allocation.
+            $validatedLines = [];
             foreach (array_values($plan['items']) as $index => $planLine) {
                 $item = $items[$index] ?? null;
                 if (!$item || (int) $item->product_id !== (int) $planLine['product']->id) {
@@ -497,19 +498,29 @@ class SourcingAllocationService
                     return ['success' => false, 'reason' => "Supplier availability changed while allocating order line {$item->id}."];
                 }
 
-                $resolved = [
-                    'supplier_offer_id' => (int) $offer->id,
-                    'vendor_id' => (int) $offer->vendor_id,
-                    'shop_id' => (int) $offer->shop_id,
-                    'supplier_name' => $offer->vendor->business_name ?? $offer->vendor->user->name,
-                    'shop_name' => $offer->shop->name,
-                    'wholesale_cost' => BcMathService::add((string) $offer->wholesale_cost, '0.00'),
-                    'currency' => 'NGN',
+                $validatedLines[] = [
+                    'item' => $item,
+                    'product' => $planLine['product'],
+                    'resolved' => [
+                        'supplier_offer_id' => (int) $offer->id,
+                        'vendor_id' => (int) $offer->vendor_id,
+                        'shop_id' => (int) $offer->shop_id,
+                        'supplier_name' => $offer->vendor->business_name ?? $offer->vendor->user->name,
+                        'shop_name' => $offer->shop->name,
+                        'wholesale_cost' => BcMathService::add((string) $offer->wholesale_cost, '0.00'),
+                        'currency' => 'NGN',
+                    ],
                 ];
+            }
 
+            $groups = [];
+            $supplierCostTotal = '0.00';
+            foreach ($validatedLines as $line) {
+                $item = $line['item'];
+                $resolved = $line['resolved'];
                 $item->fill($this->buildOrderItemSnapshot(
                     $resolved,
-                    $planLine['product'],
+                    $line['product'],
                     (int) $item->quantity,
                     (string) $item->unit_price,
                     (string) $item->line_total,
