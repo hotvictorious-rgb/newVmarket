@@ -377,8 +377,8 @@ class CheckoutExecutionService
                 'paystack_initialization_status' => 'not_started',
                 'customer_id' => $user->id,
                 'customer_address_id' => $validated['customer_address_id'] ?? null,
-                'vendor_id' => $primarySourceShop->vendor_id,
-                'shop_id' => $primarySourceShop->id,
+                'vendor_id' => null, // bound only after verified payment
+                'shop_id' => null, // bound only after verified payment
                 'collection_point_id' => $collectionPointId,
                 'rider_id' => $rider ? $rider->id : null,
                 'logistics_company_id' => $logisticsCompanyId,
