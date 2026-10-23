@@ -1052,7 +1052,7 @@ class PortalController extends Controller
     public function adminOverrideLogisticsCompanyPayable(Request $request, int $id, LogisticsCompanyPayableService $service)
     {
         $validated = $request->validate([
-            'amount' => ['required', 'numeric', 'min:0', 'regex:/^\\d{1,12}(\\.\\d{1,2})?$/'],
+            'amount' => ['required', 'numeric', 'min:0.01', 'regex:/^\\d{1,12}(\\.\\d{1,2})?$/'],
             'reason' => ['required', 'string', 'min:1', 'max:2000'],
         ]);
 
