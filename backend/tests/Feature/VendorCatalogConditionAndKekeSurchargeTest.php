@@ -473,7 +473,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
 
         // Authoritative payment settlement now selects eligible Uyo suppliers,
         // records immutable supplier/cost snapshots, and creates assignment groups.
-        $settlement = app(\\App\\Services\\OrderSettlementService::class)->settlePaystackOrder($orderTwoBulky, [
+        $settlement = app(\App\Services\OrderSettlementService::class)->settlePaystackOrder($orderTwoBulky, [
             'status' => 'success',
             'currency' => 'NGN',
             'amount' => (int) bcmul((string) $orderTwoBulky->grand_total, '100', 0),
