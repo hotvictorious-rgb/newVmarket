@@ -139,6 +139,8 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
             'assigned_logistics_company_id' => $this->logisticsCompany->id,
             'base_fee' => '1500.00',
             'bulky_surcharge' => '800.00',
+            'logistics_company_base_payable' => '1200.00',
+            'logistics_company_bulky_surcharge' => '500.00',
             'estimated_delivery_hours_min' => 1,
             'estimated_delivery_hours_max' => 4,
             'is_active' => true,
