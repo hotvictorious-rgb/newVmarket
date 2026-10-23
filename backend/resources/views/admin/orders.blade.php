@@ -296,8 +296,10 @@
                                             <small style="color:var(--adm-text-muted);">Company payable tariff snapshot:
                                                 @if($order->logistics_company_payable_default_amount !== null)
                                                     ₦{{ number_format((float)$order->logistics_company_payable_default_amount, 2) }}
+                                                @elseif($order->logistics_company_payable_amount !== null)
+                                                    <strong style="color:#B45309;">Manual reconciliation: ₦{{ number_format((float)$order->logistics_company_payable_amount, 2) }} (original tariff missing)</strong>
                                                 @else
-                                                    <strong style="color:#B91C1C;">Not configured — reconcile tariff before assignment/release.</strong>
+                                                    <strong style="color:#B91C1C;">Not configured — reconcile tariff before release.</strong>
                                                 @endif
                                             </small>
                                             <input name="amount" type="number" min="0.01" step="0.01" required value="{{ $order->logistics_company_payable_amount ?? $order->logistics_company_payable_default_amount ?? '' }}" aria-label="Logistics company payable amount" style="max-width:180px;">
