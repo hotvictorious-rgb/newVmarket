@@ -417,10 +417,11 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
         // Must transition to stockout_revalidation_hold, NOT supplier_confirmed or automated refund
         $this->assertSame('paid', $order->payment_status);
         $this->assertSame('stockout_revalidation_hold', $order->sourcing_status);
-        $this->assertStringContainsString('no longer available', $order->sourcing_notes);
+        $this->assertStringContainsString('No eligible Uyo supplier plan remains', $order->sourcing_notes);
 
-        $assignment = OrderSupplierAssignment::where('order_id', $order->id)->first();
-        $this->assertSame('stockout_revalidation_hold', $assignment->status);
+        // No supplier assignment is created when post-payment revalidation finds
+        // no eligible offer. The paid order remains held for admin recovery.
+        $this->assertSame(0, OrderSupplierAssignment::where('order_id', $order->id)->count());
 
         // Admin audit log was created
         $audit = AdminAuditLog::where('target_id', $order->id)
