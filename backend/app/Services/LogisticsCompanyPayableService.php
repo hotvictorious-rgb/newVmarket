@@ -141,9 +141,8 @@ class LogisticsCompanyPayableService
             if ($locked->logistics_company_wallet_credited_at !== null) {
                 return ['success' => true, 'skipped' => false, 'replayed' => true, 'order' => $locked];
             }
-            if (!$locked->logistics_company_id
-                || (int) ($locked->logistics_company_payable_ledger_company_id ?? 0) !== (int) $locked->logistics_company_id) {
-                throw new InvalidArgumentException('The logistics payable must be assigned to the active company ledger before release.');
+            if (!$locked->logistics_company_id) {
+                throw new InvalidArgumentException('An approved logistics company must be assigned before release.');
             }
 
             $company = LogisticsCompanyProfile::query()
@@ -183,6 +182,10 @@ class LogisticsCompanyPayableService
                 ];
             }
             $amount = (string) $amount;
+
+            if ((int) ($locked->logistics_company_payable_ledger_company_id ?? 0) !== (int) $locked->logistics_company_id) {
+                throw new InvalidArgumentException('The logistics payable must be assigned to the active company ledger before release.');
+            }
 
             if (BcMathService::comp($amount, '0.00') > 0) {
                 $company->creditWallet($amount);
