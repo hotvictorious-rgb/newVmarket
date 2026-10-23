@@ -201,6 +201,7 @@ class OrderSettlementService
             $depletedStockItems = [];
             $hasStockoutIssue = false;
             $stockoutReason = '';
+            $allocationResult = null;
             $lockedOrder->payment_status = 'paid';
             $lockedOrder->paid_at = $now;
             $lockedOrder->payment_channel = (string)($paystackData['channel'] ?? 'paystack');
@@ -209,7 +210,10 @@ class OrderSettlementService
             if ($lockedOrder->order_status === 'cancelled') {
                 // The order was previously cancelled by the expiration worker.
                 // Verify whether stock can be re-reserved atomically.
-                $canReinstate = $lockedOrder->items->isNotEmpty();
+                // A retailer order that expired/cancelled before payment must not be
+                // silently resurrected after a late charge. Keep its funds held for
+                // an authorized refund-review decision under the binding recovery policy.
+                $canReinstate = !$lockedOrder->retailer_model_order && $lockedOrder->items->isNotEmpty();
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
                         $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
@@ -280,6 +284,14 @@ class OrderSettlementService
 
                 $depletedStockItems = [];
                 $decrementedProducts = [];
+
+                // Binding sourcing starts only now: payment has been verified and
+                // the order is locked inside this settlement transaction. Checkout
+                // stores no supplier assignments or wholesale-cost snapshots.
+                if ($lockedOrder->retailer_model_order) {
+                    $allocationResult = app(SourcingAllocationService::class)->allocateVerifiedPaidOrder($lockedOrder);
+                }
+
                 // Deduct inventory quantity if tracked upon confirmed payment
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
@@ -304,10 +316,13 @@ class OrderSettlementService
             // Post-Payment Stock & Supplier Availability Revalidation (Retailer Model)
             if ($lockedOrder->retailer_model_order && $lockedOrder->payment_status === 'paid'
                 && $lockedOrder->order_status === 'confirmed') {
-                $hasStockoutIssue = !empty($depletedStockItems);
+                $hasStockoutIssue = !empty($depletedStockItems)
+                    || ($allocationResult !== null && empty($allocationResult['success']));
                 $stockoutReason = !empty($depletedStockItems)
                     ? 'Inventory depleted for: ' . implode(', ', $depletedStockItems)
-                    : '';
+                    : (($allocationResult !== null && empty($allocationResult['success']))
+                        ? (string) ($allocationResult['reason'] ?? 'No eligible supplier plan remains after verified payment.')
+                        : '');
 
                 $orderItems = $lockedOrder->items()->orderBy('id')->lockForUpdate()->get();
                 $assignments = \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
