@@ -102,7 +102,7 @@ These are business states, not necessarily literal database enum values. Map exi
 
 | State/evidence | Allowed result | Prohibited result / next action |
 |---|---|---|
-| Checkout created, no authoritative payment | Awaiting payment; stock hold active until expiry | No vendor settlement, spendable cashback or fulfilled status |
+| Checkout created, no authoritative payment | Awaiting payment; no binding supplier allocation or supplier-stock reservation | No supplier binding, supplier payable, vendor settlement, spendable cashback or fulfilled status; any cart/session expiry is non-binding and must not reserve supplier inventory |
 | Browser callback says success only | Show verification in progress | Do not mark paid from browser fields alone |
 | Verified charge.success / verified transaction | Settle once if reference, exact kobo amount, NGN currency and order binding match and order is fulfillable | No duplicate settlement or duplicate cashback |
 | Verified success but order cancelled/stock unavailable | Record late/exception payment; block fulfilment and settlement; create refund case | Do not reopen or oversell; do not bypass refund approval |
