@@ -40,19 +40,19 @@
             <div>
                 <strong style="font-size: 15px; color: #991B1B; display: block; margin-bottom: 4px;">Item Currently Out of Stock</strong>
                 <p style="font-size: 13px; color: #B91C1C; margin: 0; line-height: 1.5;">
-                    All units of <strong>{{ $product->name }}</strong> have been allocated to confirmed orders, marked out of stock by the vendor, or temporarily reserved in active 30-minute checkout holds. Purchasing is temporarily disabled until stock is replenished.
+                    All units of <strong>{{ $product->name }}</strong> have been allocated to confirmed orders, marked out of stock by the vendor, or subject to supplier availability confirmation after verified payment. Purchasing is temporarily disabled until stock is replenished.
                 </p>
             </div>
         </div>
     @else
-        <!-- 30-Minute Stock Hold & Escrow Guarantee Banner -->
+        <!-- Payment verification notice; no supplier stock is reserved before verified payment -->
         <div style="background: #F0FDF4; border: 1.5px solid #86EFAC; border-radius: 12px; padding: 14px 18px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
             <div style="display: flex; align-items: center; gap: 10px;">
                 <div style="color: #16A34A; flex-shrink: 0;">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 </div>
                 <div style="font-size: 12.5px; color: #166534; line-height: 1.4;">
-                    <strong>30-Minute Guaranteed Inventory Hold:</strong> Submitting your order reserves your units for 30 minutes while you complete Paystack payment.
+                    <strong>Payment verification:</strong> Submitting your order does not reserve supplier inventory. Victorious MARKET confirms supplier availability after Paystack payment is verified; if sourcing fails, support will manage the order under the published exception policy.
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
