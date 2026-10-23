@@ -257,3 +257,8 @@ To ensure institutional stability and eliminate all attack vectors, the platform
 5. **Immutable Administrative Audit Trail:**
    - Every sensitive administrative event (supplier overrides, refund approvals, payout dispatches, tariff changes, and merchant suspensions) is permanently logged with `admin_id`, `ip_address`, `timestamp`, `action`, `reason_code`, and `before/after snapshots`.
    - Audit records are append-only and cannot be altered or purged.
+
+
+## Owner-approved policy addendum — 23 October 2026
+
+The [Approved Exception and Reverse-Logistics Policies](docs/architecture/APPROVED_EXCEPTION_AND_REVERSE_LOGISTICS_POLICIES_2026-10-23.md) are binding architectural constraints. Implement supplier-stockout failover before admin-managed cancellation; partial-fulfilment acceptance/rejection with a 24-hour response window and silence treated as rejection; distinct full-order versus item-level doorstep rejection; post-purchase defective-item return collection on compatible return journeys without a customer return fee; no redelivery; no independent logistics-company order marketplace; and an admin-maintained major-road → child-landmark → written-address hierarchy. Preserve paid-order destination/tariff snapshots and existing one-approved-logistics-company/one-rider accountability for each VM order. Refunds and supplier/logistics financial adjustments must remain auditable and non-automatic. Documentation does not prove that these constraints are implemented in code.
