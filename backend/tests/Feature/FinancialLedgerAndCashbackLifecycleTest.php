@@ -1002,4 +1002,82 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         Carbon::setTestNow();
     }
 
+
+    public function test_missing_logistics_tariff_can_be_reconciled_from_suspense_without_fee_fallback(): void
+    {
+        $reference = Order::generateUniquePaymentReference();
+        $order = Order::create([
+            'order_number' => 'VM-TARIFF-RECOVERY-' . strtoupper(substr(sha1($reference), 0, 8)),
+            'customer_id' => $this->customerUser->id,
+            'vendor_id' => $this->shop->vendor_id,
+            'shop_id' => $this->shop->id,
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'retailer_model_order' => true,
+            'order_status' => 'confirmed',
+            'payment_status' => 'paid',
+            'payment_method' => 'paystack',
+            'payment_reference' => $reference,
+            'merchandise_subtotal' => '10000.00',
+            'delivery_fee' => '1000.00',
+            'grand_total' => '11000.00',
+            'logistics_company_id' => $this->fleetCompany->id,
+            'logistics_company_payable_default_amount' => null,
+            'logistics_company_payable_amount' => null,
+            'logistics_company_payable_ledger_company_id' => null,
+            'vendor_settlement_status' => 'held',
+        ]);
+
+        FinancialJournalEntry::create([
+            'order_id' => $order->id,
+            'transaction_reference' => $reference,
+            'event_id' => 'EVT-LOG-SUSPENSE-' . $reference,
+            'beneficiary_type' => User::class,
+            'beneficiary_id' => null,
+            'account_name' => 'logistics_payable_suspense',
+            'entry_type' => 'credit',
+            'amount' => '1000.00',
+            'currency' => 'NGN',
+            'description' => 'Customer delivery fee held pending independent company tariff.',
+        ]);
+
+        $result = app(\\App\\Services\\LogisticsCompanyPayableService::class)->override(
+            $order,
+            $this->superAdmin,
+            '1200.00',
+            'Explicit reconciliation of missing company corridor tariff'
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame('1200.00', (string) $result['order']->logistics_company_payable_amount);
+        $this->assertSame((int) $this->fleetCompany->id, (int) $result['order']->logistics_company_payable_ledger_company_id);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'logistics_payable_suspense',
+            'entry_type' => 'debit',
+            'amount' => '1000.00',
+        ]);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'logistics_company_payable',
+            'entry_type' => 'credit',
+            'amount' => '1200.00',
+        ]);
+        $this->assertDatabaseHas('financial_journal_entries', [
+            'order_id' => $order->id,
+            'account_name' => 'delivery_subsidy_expense',
+            'entry_type' => 'debit',
+            'amount' => '200.00',
+        ]);
+
+        $recoveryEntries = FinancialJournalEntry::where('order_id', $order->id)
+            ->where('event_id', 'like', 'EVT-LOG-COMPANY-OVERRIDE-' . $order->id . '-R1-%')
+            ->get();
+        $debits = $recoveryEntries->where('entry_type', 'debit')->sum(fn ($entry) => (float) $entry->amount);
+        $credits = $recoveryEntries->where('entry_type', 'credit')->sum(fn ($entry) => (float) $entry->amount);
+        $this->assertEquals(1200.00, $debits);
+        $this->assertEquals(1200.00, $credits);
+    }
+
 }
