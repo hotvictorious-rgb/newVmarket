@@ -312,60 +312,83 @@ class LogisticsCompanyPayableService
             }
 
             $default = $locked->logistics_company_payable_default_amount;
-            if ($default === null) {
-                throw new RuntimeException('The immutable logistics company/corridor payable snapshot is missing; reconcile the tariff before applying an override.');
-            }
-            $oldAmount = bcadd((string) ($locked->logistics_company_payable_amount ?? $default), '0', 2);
-            $revision = (int) $locked->logistics_company_payable_override_revision;
-
-            if (BcMathService::comp($oldAmount, $amount) === 0
-                && trim((string) $locked->logistics_company_payable_override_reason) === $reason
-                && (int) $locked->logistics_company_payable_override_by === (int) $admin->id) {
-                return ['success' => true, 'replayed' => true, 'order' => $locked];
-            }
-
-            $oldMargin = BcMathService::comp($fee, $oldAmount) > 0 ? BcMathService::sub($fee, $oldAmount) : '0.00';
-            $newMargin = BcMathService::comp($fee, $amount) > 0 ? BcMathService::sub($fee, $amount) : '0.00';
-            $oldSubsidy = BcMathService::comp($oldAmount, $fee) > 0 ? BcMathService::sub($oldAmount, $fee) : '0.00';
-            $newSubsidy = BcMathService::comp($amount, $fee) > 0 ? BcMathService::sub($amount, $fee) : '0.00';
-            $revision++;
-
-            // A payment-settled order must already have a company-payable credit.
-            // Beneficiary changes are tracked separately so retries cannot reclassify twice.
             $baselineExists = FinancialJournalEntry::query()
                 ->where('order_id', $locked->id)
                 ->where('account_name', 'logistics_company_payable')
                 ->where('entry_type', 'credit')
                 ->exists();
-            if (!$baselineExists) {
-                throw new RuntimeException('The original logistics-company payable journal is missing; reconcile before overriding.');
+            $suspenseCreditExists = FinancialJournalEntry::query()
+                ->where('order_id', $locked->id)
+                ->where('account_name', 'logistics_payable_suspense')
+                ->where('entry_type', 'credit')
+                ->exists();
+            $missingTariffRecovery = $default === null && !$baselineExists && $suspenseCreditExists;
+
+            if ($default === null && !$missingTariffRecovery) {
+                throw new RuntimeException('The immutable logistics-company payable snapshot is missing and no eligible suspense balance exists; manual reconciliation is required.');
             }
+            $oldAmount = $missingTariffRecovery
+                ? '0.00'
+                : bcadd((string) ($locked->logistics_company_payable_amount ?? $default), '0', 2);
+            $revision = (int) $locked->logistics_company_payable_override_revision + 1;
+
+            if (!$missingTariffRecovery
+                && BcMathService::comp($oldAmount, $amount) === 0
+                && trim((string) $locked->logistics_company_payable_override_reason) === $reason
+                && (int) $locked->logistics_company_payable_override_by === (int) $admin->id) {
+                return ['success' => true, 'replayed' => true, 'order' => $locked];
+            }
+
+            $newMargin = BcMathService::comp($fee, $amount) > 0 ? BcMathService::sub($fee, $amount) : '0.00';
+            $newSubsidy = BcMathService::comp($amount, $fee) > 0 ? BcMathService::sub($amount, $fee) : '0.00';
             $ledgerCompanyId = $locked->logistics_company_payable_ledger_company_id;
-            if ((int) ($ledgerCompanyId ?? 0) !== (int) $company->id) {
-                $this->journal($locked, $admin, $revision, 'company-reclass-debit', 'logistics_company_payable', 'debit', $oldAmount, $ledgerCompanyId ? (int) $ledgerCompanyId : null, 'Reclassify unsettled logistics payable from suspense/previous company.');
-                $this->journal($locked, $admin, $revision, 'company-reclass-credit', 'logistics_company_payable', 'credit', $oldAmount, $company->id, 'Assign unsettled logistics payable to the approved logistics company.');
+
+            if ($missingTariffRecovery) {
+                // Replace the suspense credit with an explicitly authorized payable.
+                // Revenue/subsidy is recognized only as the difference from the actual customer fee.
+                $this->journal($locked, $admin, $revision, 'tariff-recovery-suspense-debit', 'logistics_payable_suspense', 'debit', $fee, null, 'Release customer delivery charge from suspense after explicit tariff reconciliation.');
+                $this->journal($locked, $admin, $revision, 'tariff-recovery-company-credit', 'logistics_company_payable', 'credit', $amount, $company->id, 'Create the explicitly approved company payable after missing-tariff reconciliation.');
+                if (BcMathService::comp($newMargin, '0.00') > 0) {
+                    $this->journal($locked, $admin, $revision, 'tariff-recovery-margin-credit', 'platform_delivery_revenue', 'credit', $newMargin, null, 'Recognize the delivery margin after explicit company tariff reconciliation.');
+                }
+                if (BcMathService::comp($newSubsidy, '0.00') > 0) {
+                    $this->journal($locked, $admin, $revision, 'tariff-recovery-subsidy-debit', 'delivery_subsidy_expense', 'debit', $newSubsidy, null, 'Record VM-funded subsidy after explicit company tariff reconciliation.');
+                }
                 $locked->logistics_company_payable_ledger_company_id = $company->id;
-            }
+            } else {
+                if (!$baselineExists) {
+                    throw new RuntimeException('The original logistics-company payable journal is missing; reconcile before overriding.');
+                }
 
-            $companyDelta = BcMathService::sub($amount, $oldAmount);
-            if (BcMathService::comp($companyDelta, '0.00') > 0) {
-                $this->journal($locked, $admin, $revision, 'company-increase', 'logistics_company_payable', 'credit', $companyDelta, $company->id, 'Increase approved logistics-company payable.');
-            } elseif (BcMathService::comp($companyDelta, '0.00') < 0) {
-                $this->journal($locked, $admin, $revision, 'company-decrease', 'logistics_company_payable', 'debit', BcMathService::sub('0.00', $companyDelta), $company->id, 'Reduce approved logistics-company payable.');
-            }
+                $oldMargin = BcMathService::comp($fee, $oldAmount) > 0 ? BcMathService::sub($fee, $oldAmount) : '0.00';
+                $oldSubsidy = BcMathService::comp($oldAmount, $fee) > 0 ? BcMathService::sub($oldAmount, $fee) : '0.00';
 
-            $marginDelta = BcMathService::sub($newMargin, $oldMargin);
-            if (BcMathService::comp($marginDelta, '0.00') > 0) {
-                $this->journal($locked, $admin, $revision, 'margin-increase', 'platform_delivery_revenue', 'credit', $marginDelta, null, 'Increase VM delivery margin after company-payable override.');
-            } elseif (BcMathService::comp($marginDelta, '0.00') < 0) {
-                $this->journal($locked, $admin, $revision, 'margin-decrease', 'platform_delivery_revenue', 'debit', BcMathService::sub('0.00', $marginDelta), null, 'Reduce VM delivery margin after company-payable override.');
-            }
+                if ((int) ($ledgerCompanyId ?? 0) !== (int) $company->id) {
+                    $this->journal($locked, $admin, $revision, 'company-reclass-debit', 'logistics_company_payable', 'debit', $oldAmount, $ledgerCompanyId ? (int) $ledgerCompanyId : null, 'Reclassify unsettled logistics payable from prior company.');
+                    $this->journal($locked, $admin, $revision, 'company-reclass-credit', 'logistics_company_payable', 'credit', $oldAmount, $company->id, 'Assign payable to the approved logistics company.');
+                    $locked->logistics_company_payable_ledger_company_id = $company->id;
+                }
 
-            $subsidyDelta = BcMathService::sub($newSubsidy, $oldSubsidy);
-            if (BcMathService::comp($subsidyDelta, '0.00') > 0) {
-                $this->journal($locked, $admin, $revision, 'subsidy-increase', 'delivery_subsidy_expense', 'debit', $subsidyDelta, null, 'Record VM-funded delivery subsidy above customer delivery fee.');
-            } elseif (BcMathService::comp($subsidyDelta, '0.00') < 0) {
-                $this->journal($locked, $admin, $revision, 'subsidy-decrease', 'delivery_subsidy_expense', 'credit', BcMathService::sub('0.00', $subsidyDelta), null, 'Reverse excess delivery subsidy after company-payable override.');
+                $companyDelta = BcMathService::sub($amount, $oldAmount);
+                if (BcMathService::comp($companyDelta, '0.00') > 0) {
+                    $this->journal($locked, $admin, $revision, 'company-increase', 'logistics_company_payable', 'credit', $companyDelta, $company->id, 'Increase approved logistics-company payable.');
+                } elseif (BcMathService::comp($companyDelta, '0.00') < 0) {
+                    $this->journal($locked, $admin, $revision, 'company-decrease', 'logistics_company_payable', 'debit', BcMathService::sub('0.00', $companyDelta), $company->id, 'Reduce approved logistics-company payable.');
+                }
+
+                $marginDelta = BcMathService::sub($newMargin, $oldMargin);
+                if (BcMathService::comp($marginDelta, '0.00') > 0) {
+                    $this->journal($locked, $admin, $revision, 'margin-increase', 'platform_delivery_revenue', 'credit', $marginDelta, null, 'Increase VM delivery margin after company-payable override.');
+                } elseif (BcMathService::comp($marginDelta, '0.00') < 0) {
+                    $this->journal($locked, $admin, $revision, 'margin-decrease', 'platform_delivery_revenue', 'debit', BcMathService::sub('0.00', $marginDelta), null, 'Reduce VM delivery margin after company-payable override.');
+                }
+
+                $subsidyDelta = BcMathService::sub($newSubsidy, $oldSubsidy);
+                if (BcMathService::comp($subsidyDelta, '0.00') > 0) {
+                    $this->journal($locked, $admin, $revision, 'subsidy-increase', 'delivery_subsidy_expense', 'debit', $subsidyDelta, null, 'Record VM-funded delivery subsidy above customer delivery fee.');
+                } elseif (BcMathService::comp($subsidyDelta, '0.00') < 0) {
+                    $this->journal($locked, $admin, $revision, 'subsidy-decrease', 'delivery_subsidy_expense', 'credit', BcMathService::sub('0.00', $subsidyDelta), null, 'Reverse excess delivery subsidy after company-payable override.');
+                }
             }
 
             $oldValues = [
