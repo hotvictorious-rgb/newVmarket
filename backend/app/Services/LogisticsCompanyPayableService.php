@@ -84,11 +84,7 @@ class LogisticsCompanyPayableService
                 ->where('account_name', 'logistics_company_payable')
                 ->where('entry_type', 'credit')
                 ->exists();
-            $suspenseCreditExists = FinancialJournalEntry::query()
-                ->where('order_id', $locked->id)
-                ->where('account_name', 'logistics_payable_suspense')
-                ->where('entry_type', 'credit')
-                ->exists();
+            $suspenseCreditExists = $this->hasUnreconciledDeliveryFeeSuspense($locked);
 
             if (!$baseline && $suspenseCreditExists && ($amount === null || !is_numeric($amount) || BcMathService::comp((string) $amount, '0.00') <= 0)) {
                 // The payment was settled while the independent tariff was missing.
@@ -349,11 +345,7 @@ class LogisticsCompanyPayableService
                 ->where('account_name', 'logistics_company_payable')
                 ->where('entry_type', 'credit')
                 ->exists();
-            $suspenseCreditExists = FinancialJournalEntry::query()
-                ->where('order_id', $locked->id)
-                ->where('account_name', 'logistics_payable_suspense')
-                ->where('entry_type', 'credit')
-                ->exists();
+            $suspenseCreditExists = $this->hasUnreconciledDeliveryFeeSuspense($locked);
             $missingTariffRecovery = $default === null && !$baselineExists && $suspenseCreditExists;
             $hasExistingManualPayable = $default === null
                 && $baselineExists
@@ -484,6 +476,29 @@ class LogisticsCompanyPayableService
                 'order' => $locked->fresh(),
             ];
         });
+    }
+
+    /**
+     * Recovery is allowed only when the unreconciled suspense net exactly equals
+     * the immutable customer delivery-fee snapshot. Never debit a guessed amount.
+     */
+    private function hasUnreconciledDeliveryFeeSuspense(Order $order): bool
+    {
+        $credits = bcadd((string) FinancialJournalEntry::query()
+            ->where('order_id', $order->id)
+            ->where('account_name', 'logistics_payable_suspense')
+            ->where('entry_type', 'credit')
+            ->sum('amount'), '0', 2);
+        $debits = bcadd((string) FinancialJournalEntry::query()
+            ->where('order_id', $order->id)
+            ->where('account_name', 'logistics_payable_suspense')
+            ->where('entry_type', 'debit')
+            ->sum('amount'), '0', 2);
+        $netSuspense = BcMathService::sub($credits, $debits);
+        $deliveryFee = bcadd((string) $order->delivery_fee, '0', 2);
+
+        return BcMathService::comp($netSuspense, '0.00') > 0
+            && BcMathService::comp($netSuspense, $deliveryFee) === 0;
     }
 
     private function journal(
