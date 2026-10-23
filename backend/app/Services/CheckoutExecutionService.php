@@ -338,7 +338,11 @@ class CheckoutExecutionService
             $lane = $laneId ? DeliveryLane::find($laneId) : null;
             if (!$lane
                 || $lane->logistics_company_base_payable === null
-                || $lane->logistics_company_bulky_surcharge === null) {
+                || !is_numeric($lane->logistics_company_base_payable)
+                || BcMathService::comp((string) $lane->logistics_company_base_payable, '0.00') <= 0
+                || $lane->logistics_company_bulky_surcharge === null
+                || !is_numeric($lane->logistics_company_bulky_surcharge)
+                || BcMathService::comp((string) $lane->logistics_company_bulky_surcharge, '0.00') < 0) {
                 return [
                     'error' => true,
                     'status_code' => 422,
