@@ -118,6 +118,17 @@ class SupplierOfferSelectionServiceTest extends TestCase
         ], $overrides));
     }
 
+    public function test_offer_at_or_above_retail_price_is_not_selectable_or_publicly_eligible(): void
+    {
+        $offer = $this->offer(['wholesale_cost' => (string) $this->product->unit_price]);
+
+        $this->assertNull(
+            app(SupplierOfferSelectionService::class)->selectLowestCost($this->product, 'doorstep_delivery')
+        );
+        $this->assertFalse(Product::marketplaceEligible()->whereKey($this->product->id)->exists());
+        $this->assertSame($offer->id, $offer->fresh()->id);
+    }
+
     public function test_unverified_supplier_is_not_selectable_even_with_fresh_offer(): void
     {
         $offer = $this->offer();
