@@ -252,8 +252,8 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $pastOrder = Order::create([
             'order_number' => 'ORD-PAST-0001',
             'customer_id' => $this->customerUser->id,
-            'vendor_id' => $this->shop->vendor_id,
-            'shop_id' => $this->shop->id,
+            'vendor_id' => null,
+            'shop_id' => null,
             'origin_lga_id' => $this->shop->lga_id,
             'destination_lga_id' => $this->uyoLga->id,
             'fulfillment_type' => 'doorstep_delivery',
@@ -784,6 +784,20 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
 
     public function test_retailer_order_uses_item_cost_cashback_and_audited_logistics_company_override(): void
     {
+        // This regression now follows the binding policy: supplier cost is quoted
+        // non-bindingly before payment and captured only by verified settlement.
+        $offer = SupplierOffer::where('product_id', $this->product->id)->firstOrFail();
+        $offer->update([
+            'wholesale_cost' => '6000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now(),
+            'availability_confirmed_by' => $this->vendorUser->id,
+            'availability_expires_at' => Carbon::now()->addHours(2),
+        ]);
+        Shop::where('vendor_id', $this->vendorProfile->id)
+            ->where('id', '!=', $this->shop->id)
+            ->update(['is_active' => false]);
+
         $reference = Order::generateUniquePaymentReference();
         $order = Order::create([
             'order_number' => 'VM-RETAILER-FIN-' . strtoupper(substr(sha1($reference), 0, 8)),
@@ -802,8 +816,8 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'delivery_fee' => '1000.00',
             'cashback_redeemed' => '0.00',
             'grand_total' => '11000.00',
-            'supplier_cost_total_snapshot' => '6000.00',
-            'retailer_merchandise_margin' => '3500.00',
+            'supplier_cost_total_snapshot' => null,
+            'retailer_merchandise_margin' => null,
             'vendor_net_90' => '0.00',
             'customer_cashback_5' => '500.00',
             'platform_margin_5' => '0.00',
@@ -811,7 +825,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'platform_delivery_fee' => '100.00',
             'logistics_company_payable_default_amount' => '900.00',
             'logistics_company_payable_amount' => '900.00',
-            'sourcing_status' => 'supplier_confirmed',
+            'sourcing_status' => 'awaiting_payment',
             'vendor_settlement_status' => 'held',
             'verification_code' => '123456',
             'pickup_verification_code' => '654321',
@@ -824,14 +838,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'quantity' => 1,
             'unit_price' => '10000.00',
             'line_total' => '10000.00',
-            'supplier_offer_id' => null,
-            'supplier_vendor_id' => $this->vendorProfile->id,
-            'supplier_shop_id' => $this->shop->id,
-            'supplier_name_snapshot' => $this->vendorProfile->business_name,
-            'supplier_shop_name_snapshot' => $this->shop->name,
-            'supplier_cost_snapshot' => '6000.00',
-            'supplier_cost_currency' => 'NGN',
-            'supplier_snapshot_at' => Carbon::now(),
+            'cost_price' => '0.00',
         ]);
 
         $settlement = app(OrderSettlementService::class)->settlePaystackOrder($order, [
