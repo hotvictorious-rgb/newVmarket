@@ -333,12 +333,22 @@ class CheckoutExecutionService
                 $customerCashback5
             );
 
-            // Logistics company payable is decoupled from customer delivery fee.
-            // The retired 90% haircut rule is never used.
+            // Logistics company payable must come from an independent, admin-maintained
+            // corridor tariff snapshot, never from the customer-facing delivery fee.
             $lane = $laneId ? DeliveryLane::find($laneId) : null;
-            $defaultCompanyPayable = $lane
-                ? BcMathService::add((string) $lane->base_fee, BcMathService::mul((string) $lane->bulky_surcharge, (string) $deliveryBulkyQuantity))
-                : $deliveryFee;
+            if (!$lane
+                || $lane->logistics_company_base_payable === null
+                || $lane->logistics_company_bulky_surcharge === null) {
+                return [
+                    'error' => true,
+                    'status_code' => 422,
+                    'message' => 'This delivery corridor has no approved logistics-company payable tariff. Please contact Victorious MARKET support; no payment has been initiated.',
+                ];
+            }
+            $defaultCompanyPayable = BcMathService::add(
+                (string) $lane->logistics_company_base_payable,
+                BcMathService::mul((string) $lane->logistics_company_bulky_surcharge, (string) $deliveryBulkyQuantity)
+            );
             $deliverySubsidy = BcMathService::comp($defaultCompanyPayable, $deliveryFee) > 0
                 ? BcMathService::sub($defaultCompanyPayable, $deliveryFee)
                 : '0.00';
