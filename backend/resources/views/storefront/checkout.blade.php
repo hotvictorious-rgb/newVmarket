@@ -40,7 +40,7 @@
             <div>
                 <strong style="font-size: 15px; color: #991B1B; display: block; margin-bottom: 4px;">Item Currently Out of Stock</strong>
                 <p style="font-size: 13px; color: #B91C1C; margin: 0; line-height: 1.5;">
-                    All units of <strong>{{ $product->name }}</strong> have been allocated to confirmed orders, marked out of stock by the vendor, or subject to supplier availability confirmation after verified payment. Purchasing is temporarily disabled until stock is replenished.
+                    <strong>{{ $product->name }}</strong> is currently unavailable for checkout because its listing is out of stock or not currently approved for sale. Purchasing is temporarily disabled until availability is restored.
                 </p>
             </div>
         </div>
