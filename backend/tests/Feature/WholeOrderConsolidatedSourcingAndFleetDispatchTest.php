@@ -49,15 +49,16 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
     {
         parent::setUp();
 
-        $country = \App\Models\Country::create([
+        $this->country = \App\Models\Country::create([
             'name' => 'Nigeria',
             'iso_code' => 'NG',
             'phone_code' => '+234',
             'currency_code' => 'NGN',
             'is_active' => true,
         ]);
+        $country = $this->country;
 
-        $this->akwaIbom = State::create(['country_id' => $country->id, 'name' => 'Akwa Ibom', 'code' => 'AK', 'is_active' => true]);
+        $this->akwaIbom = State::create(['country_id' => $this->country->id, 'name' => 'Akwa Ibom', 'code' => 'AK', 'is_active' => true]);
         $this->uyoLga = Lga::create(['state_id' => $this->akwaIbom->id, 'name' => 'Uyo', 'code' => 'UYO', 'is_active' => true]);
         $this->ikotEkpeneLga = Lga::create(['state_id' => $this->akwaIbom->id, 'name' => 'Ikot Ekpene', 'code' => 'IKP', 'is_active' => true]);
 
@@ -631,5 +632,258 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
         $this->assertSame('timed_out', $assignment->status);
         $this->assertSame('timed_out', $order->sourcing_status);
         $this->assertTrue($offerA->isPenaltyActive(), '24-hour SKU penalty must be active on breached offer.');
+    }
+
+    /**
+     * 8. Combinatorial Scaling: 5 items with 10 suppliers each (would be 10^5 = 100,000 combinations).
+     * Pruning and consolidation sorting bound combinations without CPU/memory exhaustion.
+     */
+    public function test_combinatorial_pruning_prevents_cartesian_explosion_on_multi_item_many_supplier_order(): void
+    {
+        $category = \App\Models\Category::first();
+        $products = [];
+        for ($p = 0; $p < 5; $p++) {
+            $products[] = Product::create([
+                'category_id' => $category->id,
+                'name' => "Scaling Product SKU {$p}",
+                'slug' => "scaling-product-sku-{$p}",
+                'unit_price' => '10000.00',
+                'package_tier' => 'bike',
+                'condition' => 'brand_new',
+                'inventory_quantity' => 100,
+                'status' => 'active',
+                'is_verified' => true,
+                'is_approved' => true,
+                'listing_status' => 'listed',
+                'is_in_stock' => true,
+                'listing_confirmed_at' => Carbon::now()->subMinute(),
+            ]);
+        }
+
+        // Create 10 distinct suppliers and approved shops in Uyo
+        $suppliers = [];
+        for ($s = 0; $s < 10; $s++) {
+            $u = User::create([
+                'name' => "Supplier {$s}",
+                'email' => "supplier{$s}_scale@test.ng",
+                'phone' => "0808888000{$s}",
+                'password' => bcrypt('Pass123!'),
+                'user_type' => 'vendor',
+                'status' => 'active',
+            ]);
+            $vp = VendorProfile::create([
+                'user_id' => $u->id,
+                'business_name' => "Supplier Corp {$s}",
+                'kyc_status' => 'verified',
+                'marketplace_status' => 'active',
+            ]);
+            $sh = Shop::create([
+                'vendor_id' => $vp->id,
+                'country_id' => $this->country->id,
+                'state_id' => $this->akwaIbom->id,
+                'lga_id' => $this->uyoLga->id,
+                'name' => "Depot {$s}",
+                'slug' => "depot-{$s}-scale",
+                'address' => "Address {$s}, Uyo",
+                'phone' => "0808888000{$s}",
+                'is_active' => true,
+                'pickup_enabled' => true,
+            ]);
+            $suppliers[] = ['vendor' => $vp, 'shop' => $sh];
+        }
+
+        // Supplier 0 offers ALL 5 products (making Supplier 0 the single-stop candidate)
+        for ($p = 0; $p < 5; $p++) {
+            $this->createConfirmedOffer($products[$p], $suppliers[0]['vendor'], $suppliers[0]['shop'], '8000.00');
+        }
+
+        // Other 9 suppliers offer some items at various prices (fragmented)
+        for ($s = 1; $s < 10; $s++) {
+            for ($p = 0; $p < 4; $p++) {
+                $this->createConfirmedOffer($products[$p], $suppliers[$s]['vendor'], $suppliers[$s]['shop'], '7500.00');
+            }
+        }
+
+        $items = array_map(fn($prod) => ['product' => $prod, 'quantity' => 1], $products);
+
+        $startTime = microtime(true);
+        $sourcingService = app(SourcingAllocationService::class);
+        $plan = $sourcingService->resolveOptimalWholeOrderPlan($items, 'doorstep_delivery');
+        $duration = microtime(true) - $startTime;
+
+        $this->assertNotNull($plan);
+        $this->assertLessThan(1.0, $duration, 'Pruned resolution must complete in under 1 second.');
+        // Single-stop fast-path must have identified Supplier 0 as the sole consolidated 1-stop plan
+        $this->assertSame(1, $plan['locations_count'], 'Must consolidate into 1 single stop at Supplier 0.');
+        $this->assertSame($suppliers[0]['shop']->id, $plan['distinct_shop_ids'][0]);
+    }
+
+    /**
+     * 9. Concurrency: Two orders competing for the last inventory unit.
+     * Settle Order A succeeds -> inventory becomes 0.
+     * Settle Order B detects depleted stock -> routes to stockout_revalidation_hold without double deduction or automated refund.
+     */
+    public function test_concurrent_payment_settlement_on_last_inventory_unit_routes_to_hold_without_double_deduction(): void
+    {
+        $category = \App\Models\Category::first();
+        $singleUnitProduct = Product::create([
+            'category_id' => $category->id,
+            'name' => 'Scarce Solar Generator 1KW',
+            'slug' => 'scarce-solar-generator-1kw',
+            'unit_price' => '250000.00',
+            'package_tier' => 'bulky',
+            'condition' => 'brand_new',
+            'inventory_quantity' => 1, // EXACTLY 1 UNIT LEFT
+            'status' => 'active',
+            'is_verified' => true,
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'is_in_stock' => true,
+            'listing_confirmed_at' => Carbon::now()->subMinute(),
+        ]);
+
+        $offer = $this->createConfirmedOffer($singleUnitProduct, $this->supplierA, $this->shopA, '220000.00');
+
+        // Order 1 for the unit
+        $order1 = Order::create([
+            'order_number' => 'VM-RACE-01',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->supplierA->id,
+            'shop_id' => $this->shopA->id,
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'retailer_model_order' => true,
+            'order_status' => 'pending',
+            'payment_status' => 'pending',
+            'sourcing_status' => 'awaiting_payment',
+            'fulfillment_type' => 'doorstep_delivery',
+            'delivery_fee' => '1500.00',
+            'vendor_net_90' => '0.00',
+            'customer_cashback_5' => '0.00',
+            'platform_margin_5' => '0.00',
+            'merchandise_subtotal' => '250000.00',
+            'grand_total' => '251500.00',
+            'supplier_cost_total_snapshot' => '220000.00',
+            'payment_reference' => 'REF-RACE-01',
+        ]);
+
+        OrderItem::create([
+            'order_id' => $order1->id,
+            'product_id' => $singleUnitProduct->id,
+            'product_name' => $singleUnitProduct->name,
+            'quantity' => 1,
+            'unit_price' => '250000.00',
+            'line_total' => '250000.00',
+            'supplier_offer_id' => $offer->id,
+            'supplier_vendor_id' => $this->supplierA->id,
+            'supplier_shop_id' => $this->shopA->id,
+            'supplier_cost_snapshot' => '220000.00',
+            'package_tier' => 'bulky',
+        ]);
+
+        OrderSupplierAssignment::create([
+            'order_id' => $order1->id,
+            'supplier_vendor_id' => $this->supplierA->id,
+            'supplier_shop_id' => $this->shopA->id,
+            'status' => 'awaiting_payment',
+        ]);
+
+        // Order 2 for the same unit
+        $order2 = Order::create([
+            'order_number' => 'VM-RACE-02',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->supplierA->id,
+            'shop_id' => $this->shopA->id,
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'retailer_model_order' => true,
+            'order_status' => 'pending',
+            'payment_status' => 'pending',
+            'sourcing_status' => 'awaiting_payment',
+            'fulfillment_type' => 'doorstep_delivery',
+            'delivery_fee' => '1500.00',
+            'vendor_net_90' => '0.00',
+            'customer_cashback_5' => '0.00',
+            'platform_margin_5' => '0.00',
+            'merchandise_subtotal' => '250000.00',
+            'grand_total' => '251500.00',
+            'supplier_cost_total_snapshot' => '220000.00',
+            'payment_reference' => 'REF-RACE-02',
+        ]);
+
+        OrderItem::create([
+            'order_id' => $order2->id,
+            'product_id' => $singleUnitProduct->id,
+            'product_name' => $singleUnitProduct->name,
+            'quantity' => 1,
+            'unit_price' => '250000.00',
+            'line_total' => '250000.00',
+            'supplier_offer_id' => $offer->id,
+            'supplier_vendor_id' => $this->supplierA->id,
+            'supplier_shop_id' => $this->shopA->id,
+            'supplier_cost_snapshot' => '220000.00',
+            'package_tier' => 'bulky',
+        ]);
+
+        OrderSupplierAssignment::create([
+            'order_id' => $order2->id,
+            'supplier_vendor_id' => $this->supplierA->id,
+            'supplier_shop_id' => $this->shopA->id,
+            'status' => 'awaiting_payment',
+        ]);
+
+        $settlementService = app(OrderSettlementService::class);
+
+        // Step A: Payment for Order 1 arrives and settles
+        $result1 = $settlementService->settlePaystackOrder(
+            $order1,
+            [
+                'reference' => 'REF-RACE-01',
+                'status' => 'success',
+                'amount' => 25150000,
+                'currency' => 'NGN',
+                'channel' => 'card',
+            ],
+            $this->customer
+        );
+
+        $this->assertTrue($result1['success']);
+        $order1->refresh();
+        $this->assertSame('paid', $order1->payment_status);
+        $this->assertSame('awaiting_supplier_confirmation', $order1->sourcing_status);
+
+        // Stock quantity should now be 0 (depleted)
+        $singleUnitProduct->refresh();
+        $this->assertSame(0, (int) $singleUnitProduct->inventory_quantity);
+
+        // Step B: Payment for Order 2 arrives for the same depleted SKU
+        $result2 = $settlementService->settlePaystackOrder(
+            $order2,
+            [
+                'reference' => 'REF-RACE-02',
+                'status' => 'success',
+                'amount' => 25150000,
+                'currency' => 'NGN',
+                'channel' => 'card',
+            ],
+            $this->customer
+        );
+
+        $this->assertTrue($result2['success']);
+        $order2->refresh();
+
+        // Order 2 is paid, but caught by post-payment revalidation -> routes to hold
+        $this->assertSame('paid', $order2->payment_status);
+        $this->assertSame('stockout_revalidation_hold', $order2->sourcing_status);
+
+        // Inventory must NEVER become negative
+        $singleUnitProduct->refresh();
+        $this->assertSame(0, (int) $singleUnitProduct->inventory_quantity);
+
+        // An audit log was written for Order 2 hold
+        $audit = AdminAuditLog::where('target_id', $order2->id)
+            ->where('action', 'supplier_stockout_revalidation_hold')
+            ->first();
+        $this->assertNotNull($audit);
     }
 }

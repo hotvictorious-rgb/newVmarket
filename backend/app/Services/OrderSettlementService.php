@@ -198,6 +198,9 @@ class OrderSettlementService
             // 9. Atomic State Transition & Expiry Race Defense
             $now = Carbon::now();
             $oldPaymentStatus = $lockedOrder->payment_status;
+            $depletedStockItems = [];
+            $hasStockoutIssue = false;
+            $stockoutReason = '';
             $lockedOrder->payment_status = 'paid';
             $lockedOrder->paid_at = $now;
             $lockedOrder->payment_channel = (string)($paystackData['channel'] ?? 'paystack');
@@ -275,14 +278,21 @@ class OrderSettlementService
                 $lockedOrder->order_status = 'confirmed';
                 $lockedOrder->vendor_settlement_status = 'held';
 
+                $depletedStockItems = [];
+                $decrementedProducts = [];
                 // Deduct inventory quantity if tracked upon confirmed payment
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
                         $prod = Product::where('id', $item->product_id)->lockForUpdate()->first();
-                        if ($prod && isset($prod->inventory_quantity) && (int)$prod->inventory_quantity > 0) {
-                            $prod->decrement('inventory_quantity', (int)$item->quantity);
-                            $prod->is_in_stock = ((int)$prod->inventory_quantity > 0);
-                            $prod->save();
+                        if ($prod && isset($prod->inventory_quantity)) {
+                            if ((int) $prod->inventory_quantity >= (int) $item->quantity) {
+                                $prod->decrement('inventory_quantity', (int) $item->quantity);
+                                $prod->is_in_stock = ((int) $prod->inventory_quantity > 0);
+                                $prod->save();
+                                $decrementedProducts[] = ['product' => $prod, 'quantity' => (int) $item->quantity];
+                            } else {
+                                $depletedStockItems[] = $item->product_name ?? "Product #{$prod->id}";
+                            }
                         }
                     }
                 }
@@ -290,18 +300,79 @@ class OrderSettlementService
                 // Transition any associated pickup reservation to payment_completed upon confirmed gateway settlement
                 \App\Models\PickupReservation::where('order_id', $lockedOrder->id)->update(['status' => 'payment_completed']);
             }
-            // Retailer sourcing acceptance begins only after verified payment. Do not
-            // mark supplier assignments confirmed here; each source must accept separately.
+
+            // Post-Payment Stock & Supplier Availability Revalidation (Retailer Model)
             if ($lockedOrder->retailer_model_order && $lockedOrder->payment_status === 'paid'
                 && $lockedOrder->order_status === 'confirmed') {
-                \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
-                    ->where('status', 'awaiting_payment')
-                    ->update([
-                        'status' => 'awaiting_supplier_confirmation',
-                        'assigned_at' => $now,
-                        'updated_at' => $now,
+                $hasStockoutIssue = !empty($depletedStockItems);
+                $stockoutReason = !empty($depletedStockItems)
+                    ? 'Inventory depleted for: ' . implode(', ', $depletedStockItems)
+                    : '';
+
+                $orderItems = $lockedOrder->items()->orderBy('id')->lockForUpdate()->get();
+                $assignments = \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($orderItems as $item) {
+                    $offer = \App\Models\SupplierOffer::where('id', $item->supplier_offer_id)->lockForUpdate()->first();
+                    if (!$offer || !$offer->is_available || $offer->isPenaltyActive() || ($offer->availability_expires_at && $offer->availability_expires_at->lte($now))) {
+                        $hasStockoutIssue = true;
+                        $stockoutReason = "Supplier offer for {$item->product_name} is no longer available or under penalty at payment.";
+                        break;
+                    }
+
+                    $pendingHandovers = \App\Models\OrderSupplierAssignment::where('supplier_vendor_id', $item->supplier_vendor_id)
+                        ->whereIn('status', ['awaiting_supplier_confirmation', 'supplier_confirmed', 'ready_for_collection'])
+                        ->where('order_id', '!=', $lockedOrder->id)
+                        ->count();
+                    if ($pendingHandovers >= 5) {
+                        $hasStockoutIssue = true;
+                        $stockoutReason = "Supplier for {$item->product_name} has reached maximum pending handover limit (5).";
+                        break;
+                    }
+                }
+
+                if ($hasStockoutIssue) {
+                    // Restore any catalog inventory decremented earlier because this order cannot be fulfilled
+                    if (!empty($decrementedProducts)) {
+                        foreach ($decrementedProducts as $dec) {
+                            $dec['product']->increment('inventory_quantity', $dec['quantity']);
+                            $dec['product']->is_in_stock = true;
+                            $dec['product']->save();
+                        }
+                    }
+
+                    $lockedOrder->sourcing_status = 'stockout_revalidation_hold';
+                    $lockedOrder->sourcing_notes = $stockoutReason;
+
+                    foreach ($assignments as $assignment) {
+                        $assignment->status = 'stockout_revalidation_hold';
+                        $assignment->save();
+                    }
+
+                    AdminAuditLog::create([
+                        'user_id' => $actorUser ? $actorUser->id : null,
+                        'action' => 'supplier_stockout_revalidation_hold',
+                        'target_type' => Order::class,
+                        'target_id' => $lockedOrder->id,
+                        'new_values' => [
+                            'reason' => $stockoutReason,
+                            'order_number' => $lockedOrder->order_number,
+                            'paid_at' => $lockedOrder->paid_at->toIso8601String(),
+                        ],
+                        'ip_address' => request()->ip() ?? '127.0.0.1',
+                        'user_agent' => request()->userAgent(),
                     ]);
-                $lockedOrder->sourcing_status = 'awaiting_supplier_confirmation';
+                } else {
+                    $lockedOrder->sourcing_status = 'awaiting_supplier_confirmation';
+
+                    foreach ($assignments as $assignment) {
+                        $assignment->status = 'awaiting_supplier_confirmation';
+                        $assignment->assigned_at = $now;
+                        $assignment->save();
+                    }
+                }
             }
 
             $lockedOrder->save();
@@ -577,9 +648,32 @@ class OrderSettlementService
                 // second parent-level delivery split: each child's 90/10 split is authoritative.
             } else {
                 if ($lockedOrder->retailer_model_order) {
-                    // New retailer accounting: supplier payables are the immutable
-                    // item-level wholesale costs, never a percentage of merchandise.
-                    $items = $lockedOrder->items()->orderBy('id')->lockForUpdate()->get();
+                    if ($hasStockoutIssue) {
+                        // When post-payment revalidation detects inventory depletion or supplier unavailability,
+                        // order is placed on stockout_revalidation_hold.
+                        // Zero supplier payable, zero merchant margin, zero logistics payable, and zero cashback reward.
+                        // Customer funds are held intact in escrow liability.
+                        $totalCustomerFunds = BcMathService::add(
+                            BcMathService::add((string)$lockedOrder->grand_total, (string)$lockedOrder->cashback_redeemed),
+                            (string)$lockedOrder->wallet_credit_applied
+                        );
+
+                        FinancialJournalEntry::create([
+                            'order_id' => $lockedOrder->id,
+                            'transaction_reference' => $reference,
+                            'event_id' => 'EVT-ESCROW-HOLD-' . $reference,
+                            'beneficiary_type' => User::class,
+                            'beneficiary_id' => $lockedOrder->customer_id,
+                            'account_name' => 'customer_held_escrow',
+                            'entry_type' => 'credit',
+                            'amount' => $totalCustomerFunds,
+                            'currency' => 'NGN',
+                            'description' => "Customer payment held in escrow under stockout revalidation hold for Order #{$lockedOrder->order_number}: {$stockoutReason}",
+                        ]);
+                    } else {
+                        // New retailer accounting: supplier payables are the immutable
+                        // item-level wholesale costs, never a percentage of merchandise.
+                        $items = $lockedOrder->items()->orderBy('id')->lockForUpdate()->get();
                     $supplierCostTotal = '0.00';
                     foreach ($items as $item) {
                         if (empty($item->supplier_vendor_id) || $item->supplier_cost_snapshot === null) {
@@ -774,6 +868,7 @@ class OrderSettlementService
                             'description' => "VM-funded delivery subsidy where company payable exceeds customer delivery fee for Order #{$lockedOrder->order_number}",
                         ]);
                     }
+                    }
                 } else {
                 // Standard Single-Vendor Order Path:
                 // Credit: Vendor Payable (90% Merchandise Net)
@@ -856,70 +951,6 @@ class OrderSettlementService
                 }
             }
 
-            if ($lockedOrder->retailer_model_order) {
-                $now = Carbon::now();
-                $hasStockoutIssue = false;
-                $stockoutReason = '';
-
-                $orderItems = $lockedOrder->items()->orderBy('id')->lockForUpdate()->get();
-                $assignments = \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
-                    ->lockForUpdate()
-                    ->get();
-
-                foreach ($orderItems as $item) {
-                    $offer = \App\Models\SupplierOffer::where('id', $item->supplier_offer_id)->lockForUpdate()->first();
-                    if (!$offer || !$offer->is_available || $offer->isPenaltyActive() || ($offer->availability_expires_at && $offer->availability_expires_at->lte($now))) {
-                        $hasStockoutIssue = true;
-                        $stockoutReason = "Supplier offer for {$item->product_name} is no longer available or under penalty at payment.";
-                        break;
-                    }
-
-                    $pendingHandovers = \App\Models\OrderSupplierAssignment::where('supplier_vendor_id', $item->supplier_vendor_id)
-                        ->whereIn('status', ['awaiting_supplier_confirmation', 'supplier_confirmed', 'ready_for_collection'])
-                        ->where('order_id', '!=', $lockedOrder->id)
-                        ->count();
-                    if ($pendingHandovers >= 5) {
-                        $hasStockoutIssue = true;
-                        $stockoutReason = "Supplier for {$item->product_name} has reached maximum pending handover limit (5).";
-                        break;
-                    }
-                }
-
-                if ($hasStockoutIssue) {
-                    $lockedOrder->sourcing_status = 'stockout_revalidation_hold';
-                    $lockedOrder->sourcing_notes = $stockoutReason;
-                    $lockedOrder->save();
-
-                    foreach ($assignments as $assignment) {
-                        $assignment->status = 'stockout_revalidation_hold';
-                        $assignment->save();
-                    }
-
-                    AdminAuditLog::create([
-                        'user_id' => $actorUser ? $actorUser->id : null,
-                        'action' => 'supplier_stockout_revalidation_hold',
-                        'target_type' => Order::class,
-                        'target_id' => $lockedOrder->id,
-                        'new_values' => [
-                            'reason' => $stockoutReason,
-                            'order_number' => $lockedOrder->order_number,
-                            'paid_at' => $lockedOrder->paid_at->toIso8601String(),
-                        ],
-                        'ip_address' => request()->ip() ?? '127.0.0.1',
-                        'user_agent' => request()->userAgent(),
-                    ]);
-                } else {
-                    $lockedOrder->sourcing_status = 'awaiting_supplier_confirmation';
-                    $lockedOrder->save();
-
-                    foreach ($assignments as $assignment) {
-                        $assignment->status = 'awaiting_supplier_confirmation';
-                        $assignment->assigned_at = $now;
-                        $assignment->save();
-                    }
-                }
-            }
-
             // 10. Immutable Audit Trail
             AdminAuditLog::create([
                 'user_id' => $actorUser ? $actorUser->id : null,
@@ -943,8 +974,14 @@ class OrderSettlementService
                 'user_agent' => request()->userAgent(),
             ]);
 
-            // 11. Multi-Channel Alert to Customer & Vendor
-            NotificationDispatchService::dispatchOrderPlaced($lockedOrder);
+            // 11. Multi-Channel Alert to Customer & Vendor (dispatched after successful commit)
+            \Illuminate\Support\Facades\DB::afterCommit(function () use ($lockedOrder) {
+                try {
+                    NotificationDispatchService::dispatchOrderPlaced($lockedOrder);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning("Order #{$lockedOrder->id} notification dispatch deferred: " . $e->getMessage());
+                }
+            });
 
             return [
                 'success' => true,
@@ -953,7 +990,7 @@ class OrderSettlementService
                 'message' => 'Payment verified and order successfully confirmed.',
                 'order' => $lockedOrder,
             ];
-        });
+        }, 5);
 
         // Zero-Automated-Outflow Law: Settle payment facts, reserve liability hold, and record
         // pending FinancialOperation. Autonomous gateway dispatch is strictly blocked.
@@ -1859,6 +1896,29 @@ class OrderSettlementService
 
         $count = 0;
         foreach ($expiredOrders as $order) {
+            // P0 Control: Payment Truth Outranks Expiration
+            // If the order has an initiated payment reference, verify gateway truth before cancelling.
+            if (!empty($order->payment_reference)) {
+                $verification = $this->paystackService->verifyTransaction($order->payment_reference, $order);
+
+                if (!empty($verification['success']) && ($verification['data']['status'] ?? '') === 'success') {
+                    \Illuminate\Support\Facades\Log::info("Payment Truth Defense: Order #{$order->id} (Ref: {$order->payment_reference}) was captured by Paystack before expiration. Settling order.");
+                    $this->settlePaystackOrder(
+                        $order,
+                        $verification['data'],
+                        null,
+                        'expiration_defense_reconciliation'
+                    );
+                    continue; // Successfully settled, do NOT cancel or restore stock!
+                }
+
+                // If verification failed due to transient gateway network timeout, defer cancellation to next cycle
+                if (($verification['code'] ?? '') === 'GATEWAY_ERROR' && str_contains(strtolower($verification['message'] ?? ''), 'timeout')) {
+                    \Illuminate\Support\Facades\Log::warning("Skipping order #{$order->id} expiry: Paystack gateway check timed out. Deferring to next cycle.");
+                    continue;
+                }
+            }
+
             DB::transaction(function () use ($order, &$count) {
                 $locked = Order::where('id', $order->id)->lockForUpdate()->first();
                 if (

@@ -27,3 +27,7 @@ Schedule::command('products:expire-stale-listings')->hourly();
 
 // Monitor 60-Minute Supplier Confirmation SLA (Every 5 minutes, 8am-6pm WAT)
 Schedule::command('supplier:check-confirmation-sla')->everyFiveMinutes()->withoutOverlapping();
+
+// Weekly Webhook Inbox Archival (Completed > 90 Days; Retains Failed & Unmatched Indefinitely)
+Schedule::command('webhooks:archive --days=90')->weeklyOn(0, '03:00')->withoutOverlapping();
+
