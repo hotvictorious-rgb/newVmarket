@@ -1042,7 +1042,7 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
             'description' => 'Customer delivery fee held pending independent company tariff.',
         ]);
 
-        $result = app(\\App\\Services\\LogisticsCompanyPayableService::class)->override(
+        $result = app(\App\Services\LogisticsCompanyPayableService::class)->override(
             $order,
             $this->superAdmin,
             '1200.00',
