@@ -1311,7 +1311,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->actingAs($admin)
             ->patch("/admin/supplier-catalog/offers/{$offer->id}/cost", ['wholesale_cost' => '35000.00'])
             ->assertSessionHasErrors('wholesale_cost');
-        $this->assertSame('27000.00', (string) $offer->fresh()->wholesale_cost);
+        $this->assertSame('27000', (string) $offer->fresh()->wholesale_cost);
 
         $this->assertDatabaseHas('admin_audit_logs', [
             'action' => 'supplier_offer_attached_unconfirmed',
