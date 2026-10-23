@@ -293,7 +293,9 @@ class NotificationDispatchService
         // 1. Logistics Fleet Notification
         if ($order->rider && $order->rider->logisticsCompany && $order->rider->logisticsCompany->user) {
             $logisticsUserId = $order->rider->logisticsCompany->user_id;
-            $logisticsNet = $order->logistics_fee_retained ?? bcmul((string)$order->delivery_fee, '0.90', 2);
+            $logisticsNet = $order->retailer_model_order
+                ? ($order->logistics_company_payable_amount ?? $order->logistics_company_payable_default_amount ?? '0.00')
+                : ($order->logistics_fee_retained ?? bcmul((string)$order->delivery_fee, '0.90', 2));
             $fleetMsg = "Victorious Market B2B Settlement: Order {$order->order_number} delivered. ₦" . number_format((float)$logisticsNet, 2) . " credited to your Corporate Wallet.";
 
             if (self::isChannelActive('in_app', $eventType)) {
