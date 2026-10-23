@@ -42,6 +42,13 @@ class SupplierOfferAvailabilityService
 
         return DB::transaction(function () use ($offerId, $actor, $expiresAt, $notes, $ipAddress, $userAgent) {
             $offer = SupplierOffer::query()->lockForUpdate()->findOrFail($offerId);
+            $product = \App\Models\Product::query()->find($offer->product_id);
+            if (!$product || BcMathService::comp((string) $offer->wholesale_cost, (string) $product->unit_price) >= 0) {
+                throw ValidationException::withMessages([
+                    'supplier_offer' => 'Supplier wholesale cost must be lower than Victorious MARKET retail price before availability can be confirmed.',
+                ]);
+            }
+
             $vendor = VendorProfile::query()
                 ->whereKey($offer->vendor_id)
                 ->whereNull('deleted_at')
