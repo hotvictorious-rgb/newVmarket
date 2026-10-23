@@ -668,22 +668,45 @@ class OrderSettlementService
 
                     $deliveryFeeSnapshot = (string) $lockedOrder->delivery_fee;
                     $defaultCompanyPayable = $lockedOrder->logistics_company_payable_default_amount;
-                    if ($defaultCompanyPayable === null || !is_numeric($defaultCompanyPayable)
-                        || BcMathService::comp((string) $defaultCompanyPayable, '0.00') < 0) {
-                        throw new \RuntimeException('Missing or invalid immutable logistics-company payable snapshot; payment settlement is blocked for reconciliation.');
+                    $hasValidCompanyTariff = $defaultCompanyPayable !== null
+                        && is_numeric($defaultCompanyPayable)
+                        && BcMathService::comp((string) $defaultCompanyPayable, '0.00') >= 0;
+
+                    if (!$hasValidCompanyTariff) {
+                        // Do not lose a real Paystack capture merely because a legacy order
+                        // lacks a company tariff. Settle the customer payment, keep the
+                        // logistics payable unassigned, and raise an auditable exception.
+                        $companyPayable = '0.00';
+                        $lockedOrder->logistics_company_payable_amount = null;
+                        $lockedOrder->logistics_company_payable_ledger_company_id = null;
+                        $lockedOrder->logistics_subsidy_amount = null;
+                        AdminAuditLog::create([
+                            'user_id' => $lockedOrder->customer_id,
+                            'action' => 'logistics_payable_missing_tariff_hold',
+                            'target_type' => Order::class,
+                            'target_id' => $lockedOrder->id,
+                            'old_values' => ['logistics_company_payable_default_amount' => null],
+                            'new_values' => [
+                                'payment_settlement' => 'recorded_without_logistics_payable',
+                                'logistics_company_assignment' => 'blocked_pending_tariff_reconciliation',
+                                'delivery_fee_snapshot' => $deliveryFeeSnapshot,
+                            ],
+                            'ip_address' => request()->ip() ?? '127.0.0.1',
+                            'user_agent' => request()->userAgent(),
+                        ]);
+                    } else {
+                        $companyPayable = (string) ($lockedOrder->logistics_company_payable_amount ?? $defaultCompanyPayable);
+                        $lockedOrder->logistics_company_payable_amount = $companyPayable;
+                        $lockedOrder->logistics_company_payable_ledger_company_id = $lockedOrder->logistics_company_id;
+
+                        $deliveryMargin = BcMathService::comp($deliveryFeeSnapshot, $companyPayable) > 0
+                            ? BcMathService::sub($deliveryFeeSnapshot, $companyPayable)
+                            : '0.00';
+                        $deliverySubsidy = BcMathService::comp($companyPayable, $deliveryFeeSnapshot) > 0
+                            ? BcMathService::sub($companyPayable, $deliveryFeeSnapshot)
+                            : '0.00';
+                        $lockedOrder->logistics_subsidy_amount = $deliverySubsidy;
                     }
-                    $companyPayable = (string) ($lockedOrder->logistics_company_payable_amount ?? $defaultCompanyPayable);
-                    $lockedOrder->logistics_company_payable_amount = $companyPayable;
-                    $lockedOrder->logistics_company_payable_ledger_company_id = $lockedOrder->logistics_company_id;
-
-                    $deliveryMargin = BcMathService::comp($deliveryFeeSnapshot, $companyPayable) > 0
-                        ? BcMathService::sub($deliveryFeeSnapshot, $companyPayable)
-                        : '0.00';
-                    $deliverySubsidy = BcMathService::comp($companyPayable, $deliveryFeeSnapshot) > 0
-                        ? BcMathService::sub($companyPayable, $deliveryFeeSnapshot)
-                        : '0.00';
-
-                    $lockedOrder->logistics_subsidy_amount = $deliverySubsidy;
                     $lockedOrder->save();
 
                     if (BcMathService::comp($companyPayable, '0.00') > 0) {
