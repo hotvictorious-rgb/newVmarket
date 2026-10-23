@@ -268,3 +268,9 @@ To protect working capital, prevent internal collusion, and stop online and phys
 ## Binding policy addendum — 23 October 2026
 
 Follow the owner-approved [Exception and Reverse-Logistics Policies](APPROVED_EXCEPTION_AND_REVERSE_LOGISTICS_POLICIES_2026-10-23.md) for supplier-stockout recovery, the 24-hour partial-fulfilment response deadline (no response is treated as rejection), partial versus whole-order cancellation, doorstep rejection, post-purchase defective-item returns, return-to-supplier custody evidence, no redelivery, and the admin-managed road → mapped landmark → written address checkout sequence. Do not implement independent logistics-company orders as a platform feature. The Zero-Automated-Outflow Law remains in force: timeout, cancellation, rejection, or return events may create refund requests but must not automatically move money. Where this playbook conflicts with the approved addendum, the Active Business Rules and approved addendum take precedence until the playbook is fully reconciled.
+
+
+
+## Binding Order State, Custody and Recovery Policy — 23 October 2026
+
+Follow the owner-approved [Order State, Custody and Recovery Policy](ORDER_STATE_CUSTODY_AND_RECOVERY_POLICY_2026-10-23.md) for state transitions, payment/crash recovery, duplicate-event prevention, concurrency-safe stock allocation, item-level custody and evidence, exception ownership and reconciliation. This policy supplements the workflow; it does not override the specific approved exception outcomes or authorize automatic refunds/transfers. Preserve the separate absence, doorstep rejection, stockout/partial fulfilment and defective-item paths, and all existing operating-hour, handover, tariff, payout and Zero-Automated-Outflow controls. Map conceptual lifecycle dimensions onto the existing schema rather than creating conflicting status aliases. Runtime compliance remains unverified pending implementation audit and tests.
