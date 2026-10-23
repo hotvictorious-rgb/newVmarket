@@ -790,11 +790,18 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertSame('paid', $orderBike->payment_status);
         $this->assertGreaterThan(0, OrderSupplierAssignment::where('order_id', $orderBike->id)->count());
         $this->assertSame('awaiting_supplier_confirmation', $orderBike->sourcing_status);
+        $bikeAssignment = OrderSupplierAssignment::where('order_id', $orderBike->id)->firstOrFail();
+        $this->assertSame(
+            (int) $this->vendor->id,
+            (int) $bikeAssignment->supplier_vendor_id,
+            'The single-bike order should be allocated to its only eligible supplier.'
+        );
+        $this->assertSame((int) $this->shop->id, (int) $bikeAssignment->supplier_shop_id);
         Sanctum::actingAs($this->vendorUser, ['*']);
         $reject = $this->postJson("/api/v1/vendor/orders/{$orderBike->id}/reject-availability", [
             'reason' => 'The listed item is no longer physically available.',
         ]);
-        $reject->assertOk()
+        $reject->assertOk($reject->getContent())
             ->assertJsonPath('status', true)
             ->assertJsonPath('sourcing_status', 'supplier_rejected');
         $this->assertEquals('paid', $orderBike->fresh()->payment_status);
