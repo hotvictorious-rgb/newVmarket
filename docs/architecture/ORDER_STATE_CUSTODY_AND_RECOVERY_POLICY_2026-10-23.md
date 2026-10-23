@@ -1,7 +1,7 @@
 # Victorious MARKET — Order State, Custody and Recovery Policy
 
 **Decision date:** 23 October 2026  
-**Status:** Proposed binding policy for owner review; documentation only until owner approval  
+**Status:** OWNER-APPROVED BINDING POLICY — approved 23 October 2026; documentation only until implementation is audited and tested  
 **Scope:** Order lifecycle, item lifecycle, physical custody, event recovery, exception ownership and reconciliation. This document does not certify or implement runtime behaviour.
 
 ## 1. Authority and non-conflict rule
@@ -173,4 +173,4 @@ The implementation audit must separately inspect database schema/constraints, we
 
 **Explicit unresolved code-level risk to verify:** the previously identified logistics-payable fallback that may use customer delivery fee when company/corridor configuration is absent. The intended policy is fail-closed admin reconciliation, never fallback to customer fee.
 
-**Approval boundary:** this document is proposed until explicitly approved by the owner. Saving it to the working branch and aligning documents does not itself approve the policy, modify application code, run tests, merge the branch, or deploy changes.
+**Approval and implementation boundary:** The owner approved this policy on 23 October 2026. It is binding for future design and implementation on the working branch. Approval does not mean the application code has been changed, audited, tested, merged to the main branch, or deployed. Runtime compliance remains unverified until a separate implementation audit and required tests pass.
