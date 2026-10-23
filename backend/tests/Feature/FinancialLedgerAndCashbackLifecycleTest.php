@@ -1055,6 +1055,10 @@ class FinancialLedgerAndCashbackLifecycleTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertSame('1200.00', (string) $result['order']->logistics_company_payable_amount);
         $this->assertSame((int) $this->fleetCompany->id, (int) $result['order']->logistics_company_payable_ledger_company_id);
+        $this->assertTrue($result['payable_recovered_from_suspense']);
+        $this->assertSame('1200.00', (string) $result['order']->logistics_company_wallet_credited_amount);
+        $this->assertNotNull($result['order']->logistics_company_wallet_credited_at);
+        $this->assertSame('1200.00', (string) $this->fleetCompany->fresh()->wallet_balance);
         $this->assertDatabaseHas('financial_journal_entries', [
             'order_id' => $order->id,
             'account_name' => 'logistics_payable_suspense',
