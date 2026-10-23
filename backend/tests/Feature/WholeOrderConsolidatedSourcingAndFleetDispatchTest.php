@@ -372,6 +372,68 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
     }
 
     /**
+     * A pending checkout's feasibility plan is not a supplier assignment.
+     * Admin override must not turn it into a binding pre-payment source.
+     */
+    public function test_supplier_assignment_override_is_blocked_before_verified_payment(): void
+    {
+        $order = Order::create([
+            'order_number' => 'VM-UNBOUND-' . strtoupper(uniqid()),
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->supplierA->id,
+            'shop_id' => $this->shopA->id,
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'retailer_model_order' => true,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'pending',
+            'payment_status' => 'pending',
+            'sourcing_status' => 'awaiting_payment',
+            'merchandise_subtotal' => '10000.00',
+            'delivery_fee' => '500.00',
+            'grand_total' => '10500.00',
+            'vendor_net_90' => '0.00',
+            'customer_cashback_5' => '0.00',
+            'platform_margin_5' => '0.00',
+        ]);
+
+        $item = OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $this->product1->id,
+            'product_name' => $this->product1->name,
+            'unit_price' => '10000.00',
+            'cost_price' => '0.00',
+            'quantity' => 1,
+            'line_total' => '10000.00',
+        ]);
+
+        $assignment = OrderSupplierAssignment::create([
+            'order_id' => $order->id,
+            'supplier_vendor_id' => $this->supplierA->id,
+            'supplier_shop_id' => $this->shopA->id,
+            'status' => 'awaiting_payment',
+        ]);
+
+        try {
+            app(SourcingAllocationService::class)->overrideSupplierAssignmentGroup(
+                $assignment,
+                $this->supplierB->id,
+                $this->shopB->id,
+                [$item->id],
+                $this->superAdmin,
+                'Pre-payment supplier override must be blocked'
+            );
+            $this->fail('A pre-payment supplier assignment override should be rejected.');
+        } catch (\\InvalidArgumentException $exception) {
+            $this->assertStringContainsString('Pre-payment supplier plans are non-binding', $exception->getMessage());
+        }
+
+        $this->assertSame('pending', $order->fresh()->payment_status);
+        $this->assertSame(1, OrderSupplierAssignment::where('order_id', $order->id)->count());
+        $this->assertNull($item->fresh()->supplier_cost_snapshot);
+    }
+
+    /**
      * 4. Post-payment stockout routes into stockout_revalidation_hold, NOT automated refund.
      */
     public function test_post_payment_stockout_routes_to_stockout_revalidation_hold_without_refund(): void
