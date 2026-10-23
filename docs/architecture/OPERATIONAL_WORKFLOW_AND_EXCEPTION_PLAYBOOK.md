@@ -263,3 +263,8 @@ To protect working capital, prevent internal collusion, and stop online and phys
 * **The "No Secret Actions" Law:** Every administrative action—including manual supplier overrides, refund approvals, payout authorizations, product price edits, or supplier account suspensions—permanently writes an immutable audit log containing:
   - `admin_id` • `ip_address` • `timestamp` • `action` • `reason_code` • `original_snapshot` • `new_snapshot`.
 * Audit records cannot be modified or deleted through any dashboard interface.
+
+
+## Binding policy addendum — 23 October 2026
+
+Follow the owner-approved [Exception and Reverse-Logistics Policies](APPROVED_EXCEPTION_AND_REVERSE_LOGISTICS_POLICIES_2026-10-23.md) for supplier-stockout recovery, the 24-hour partial-fulfilment response deadline (no response is treated as rejection), partial versus whole-order cancellation, doorstep rejection, post-purchase defective-item returns, return-to-supplier custody evidence, no redelivery, and the admin-managed road → mapped landmark → written address checkout sequence. Do not implement independent logistics-company orders as a platform feature. The Zero-Automated-Outflow Law remains in force: timeout, cancellation, rejection, or return events may create refund requests but must not automatically move money. Where this playbook conflicts with the approved addendum, the Active Business Rules and approved addendum take precedence until the playbook is fully reconciled.
