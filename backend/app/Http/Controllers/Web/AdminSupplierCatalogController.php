@@ -145,6 +145,10 @@ class AdminSupplierCatalogController extends Controller
         ]);
 
         $product = Product::query()->findOrFail($productId);
+        if (BcMathService::comp((string) $data['wholesale_cost'], (string) $product->unit_price) >= 0) {
+            throw ValidationException::withMessages(['wholesale_cost' => 'Wholesale cost must be lower than Victorious MARKET retail price.']);
+        }
+
         $shop = Shop::query()->with(['vendor.user', 'lga.state'])->findOrFail($data['shop_id']);
         $vendor = $shop->vendor;
 
@@ -224,6 +228,10 @@ class AdminSupplierCatalogController extends Controller
 
         DB::transaction(function () use ($request, $offerId, $data) {
             $offer = SupplierOffer::query()->lockForUpdate()->findOrFail($offerId);
+            $product = Product::query()->find($offer->product_id);
+            if (!$product || BcMathService::comp((string) $data['wholesale_cost'], (string) $product->unit_price) >= 0) {
+                throw ValidationException::withMessages(['wholesale_cost' => 'Wholesale cost must be lower than Victorious MARKET retail price.']);
+            }
             $old = ['wholesale_cost' => (string) $offer->wholesale_cost];
             $offer->forceFill(['wholesale_cost' => $data['wholesale_cost']])->save();
             $this->audit($request, 'supplier_offer_wholesale_cost_updated', SupplierOffer::class, $offer->id, $old, [
