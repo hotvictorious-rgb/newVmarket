@@ -3729,6 +3729,9 @@ class PortalController extends Controller
                     'old_values' => $oldValues,
                     'new_values' => [
                         'base_fee' => $existing->base_fee,
+                        'bulky_surcharge' => $existing->bulky_surcharge,
+                        'logistics_company_base_payable' => $existing->logistics_company_base_payable,
+                        'logistics_company_bulky_surcharge' => $existing->logistics_company_bulky_surcharge,
                         'origin_lga_id' => $existing->origin_lga_id,
                         'destination_lga_id' => $existing->destination_lga_id,
                     ],
