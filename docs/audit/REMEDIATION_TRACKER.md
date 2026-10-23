@@ -601,3 +601,23 @@ The following findings were confirmed during source review and hardened on `docs
 | VM-AUD-129 | Critical | Rider API returned the supplier return OTP directly to the rider, used rider-profile ID where `returned_by_rider_id` references `users.id`, and did not bind OTP verification to the assigned rider. Retailer-model multi-supplier returns were incorrectly represented as one vendor handoff. | OTP is no longer returned to riders; it is sent only to an active assigned supplier/counter through private channels, with stale editable templates bypassed. Rider assignment is checked in controller/service; rider foreign-key writes/queries use `user_id`; multi-supplier cases are held as `pending_supplier_assignment` and no shared OTP is issued. | PARTIALLY FIXED — admin split/assignment workflow still required; tests/CI pending |
 
 | VM-AUD-130 | High | Supplier notification flows used the placeholder phone `+2348000000001` when a vendor phone was missing, potentially routing order details, handover PINs, payout/account details or return notices to an unrelated recipient. | Removed the placeholder fallback across supplier order/handover/delivery/payout/return notifications; phone recipients now use configured business phone or account phone, and WhatsApp/SMS dispatch is skipped when no valid recipient exists. Return OTP flow raises an admin alert when no private channel is available. | FIXED — tests/CI pending |
+
+## VM-AUD-071 — Independent logistics corridor payable and missing-tariff recovery (23 October 2026)
+
+**Severity:** High — financial integrity / checkout correctness.
+
+**Evidence found:** Retailer checkout derived the company payable from the customer delivery fee when no lane existed; payable assignment/release paths had delivery-fee/90% fallbacks; admin and logistics wallet displays could show a derived amount as if it were the approved company tariff; checkout copy promised a pre-payment 30-minute inventory hold.
+
+**Changes committed on `docs/retailer-central-fulfilment-model`:**
+- Added nullable `delivery_lanes.logistics_company_base_payable` and `delivery_lanes.logistics_company_bulky_surcharge` fields via migration `2026_10_23_000001_add_independent_logistics_corridor_payables.php`.
+- Added separate tariff inputs to the Super Admin corridor editor and persisted them independently of customer `base_fee` / `bulky_surcharge`.
+- New checkout fails closed before order/payment initialization when the independent company tariff is missing or invalid. Company payable is snapshotted as base payable plus per-unit bulky payable.
+- Removed customer delivery-fee and 90% fallbacks from retailer company assignment, wallet release and override defaults. Release without a valid payable remains held and audited without throwing from the release path.
+- Corrected admin and logistics wallet displays and delivery notifications so they do not imply a derived amount or claim wallet credit when the company payable is held.
+- Replaced the checkout's pre-payment stock-hold guarantee with the approved post-payment supplier-availability explanation.
+- For legacy paid orders settled without a tariff snapshot, the customer payment is still recorded; the customer delivery-fee component is credited to `logistics_payable_suspense`, the company payable remains unassigned, and an audit exception is written. The existing Super Admin company-payable override now supports a balanced, audited recovery from that suspense using an explicit amount and reason.
+- Added regression assertions for independent customer/company tariff values, missing-tariff checkout rejection, and balanced suspense-to-company-payable recovery.
+
+**Operational requirement:** Run the migration, then have an authorized Super Admin configure and verify both company tariff fields on every enabled delivery corridor before enabling checkout there. Existing orders with missing tariffs require explicit assignment and audited override reconciliation; do not bulk-fill them from the customer delivery fee.
+
+**Verification status:** Changes and regression tests are committed to the working branch. The application test suite has not been executed in this session; the latest queried commit status returned no CI status entries. Do not mark this finding fully verified until the migration, PHP syntax checks, targeted feature tests and relevant CI pass on the target environment. No merge or deployment is claimed.
