@@ -401,6 +401,7 @@ class LogisticsCompanyPayableService
             ];
 
             $locked->logistics_company_payable_amount = $amount;
+            $locked->logistics_subsidy_amount = $newSubsidy;
             $locked->logistics_company_payable_override_reason = $reason;
             $locked->logistics_company_payable_override_by = $admin->id;
             $locked->logistics_company_payable_override_at = now();
