@@ -458,7 +458,33 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertEquals('1000.00', $orderTwoBulky->delivery_bulky_surcharge_per_unit_snapshot);
         $this->assertEquals(2, $orderTwoBulky->delivery_bulky_quantity_snapshot);
 
-        // The customer has one order while private supplier snapshots differ by item.
+        // Before verified payment, the order contains customer-facing lines only:
+        // supplier identities/costs and assignment rows must not be bound yet.
+        $prePaymentItems = OrderItem::where('order_id', $orderTwoBulky->id)->orderBy('id')->get();
+        $this->assertCount(3, $prePaymentItems);
+        $this->assertTrue($prePaymentItems->every(fn ($item) =>
+            $item->supplier_vendor_id === null
+            && $item->supplier_shop_id === null
+            && $item->supplier_cost_snapshot === null
+        ));
+        $this->assertSame(0, OrderSupplierAssignment::where('order_id', $orderTwoBulky->id)->count());
+        $this->assertNull($orderTwoBulky->supplier_cost_total_snapshot);
+        $this->assertNull($orderTwoBulky->sourced_at);
+
+        // Authoritative payment settlement now selects eligible Uyo suppliers,
+        // records immutable supplier/cost snapshots, and creates assignment groups.
+        $settlement = app(\\App\\Services\\OrderSettlementService::class)->settlePaystackOrder($orderTwoBulky, [
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => (int) bcmul((string) $orderTwoBulky->grand_total, '100', 0),
+            'reference' => (string) $orderTwoBulky->payment_reference,
+            'id' => 'VM-TEST-TX-' . $orderTwoBulky->id,
+            'channel' => 'bank',
+            'customer' => ['email' => $customer->email],
+        ]);
+        $this->assertTrue($settlement['success'] ?? false, $settlement['message'] ?? 'Verified payment settlement failed.');
+        $orderTwoBulky->refresh();
+
         $orderItems = OrderItem::where('order_id', $orderTwoBulky->id)->orderBy('id')->get();
         $this->assertCount(3, $orderItems);
         $this->assertEquals($this->vendor->id, $orderItems[0]->supplier_vendor_id);
@@ -467,25 +493,20 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertEquals($this->shop->id, $orderItems[0]->supplier_shop_id);
         $this->assertEquals($shopB->id, $orderItems[1]->supplier_shop_id);
         $this->assertEquals($shopB->id, $orderItems[2]->supplier_shop_id);
+        $this->assertNotNull($orderItems[0]->supplier_cost_snapshot);
+        $this->assertNotNull($orderItems[1]->supplier_cost_snapshot);
+        $this->assertNotNull($orderItems[2]->supplier_cost_snapshot);
         $this->assertNull($orderTwoBulky->selected_supplier_id);
         $this->assertNull($orderTwoBulky->selected_shop_id);
+        $this->assertSame('paid', $orderTwoBulky->payment_status);
+        $this->assertSame('awaiting_supplier_confirmation', $orderTwoBulky->sourcing_status);
 
         $assignments = OrderSupplierAssignment::where('order_id', $orderTwoBulky->id)->orderBy('supplier_vendor_id')->get();
         $this->assertCount(2, $assignments);
-        $this->assertSame(['awaiting_payment', 'awaiting_payment'], $assignments->pluck('status')->all());
+        $this->assertSame(['awaiting_supplier_confirmation', 'awaiting_supplier_confirmation'], $assignments->pluck('status')->all());
 
-        // Simulate authoritative payment settlement, then verify each supplier can
-        // confirm only its own assignment and the order unlocks only after both respond.
-        $orderTwoBulky->forceFill([
-            'payment_status' => 'paid',
-            'order_status' => 'confirmed',
-            'sourcing_status' => 'awaiting_supplier_confirmation',
-        ])->save();
-        OrderSupplierAssignment::where('order_id', $orderTwoBulky->id)->update([
-            'status' => 'awaiting_supplier_confirmation',
-            'assigned_at' => Carbon::now(),
-        ]);
-
+        // Each supplier can confirm only its own assignment; the order unlocks
+        // only after both assigned supplier groups respond.
         Sanctum::actingAs($supplierUserB, ['*']);
         $responseB = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
             'notes' => 'Confirmed the fan stock.',
