@@ -54,11 +54,12 @@ The schema supports attaching multiple offers to one product, but the current ad
 
 ### P1 — Existing CI has separate financial and delivery test failures on an earlier commit
 
-The earlier run `40026761590` failed two tests:
+The earlier run `40026761590` failed two financial assertions and one bulky-surcharge assertion:
 - `FinancialLedgerAndCashbackLifecycleTest`: expected a supplier payable credit of 6000.00 but found 5000.00 in the corresponding journal entry.
 - `VendorCatalogConditionAndPackageTierTest`: supplier payable ledger did not reconcile to operational item snapshots during recovery.
+- A multi-item bulky-surcharge assertion also failed.
 
-The same run also reported a bulky-surcharge test failure. These failures were observed before the current privacy remediation commit and are not evidence that the privacy patch caused them. They remain financial/delivery issues to diagnose separately; do not alter expected ledger values merely to make tests green.
+These failures were not reproduced by the subsequent full run `40028387802`, which passed 234 tests (1,538 assertions), including the affected test files. Treat the earlier results as transient or environment/order-sensitive until reproduced; do not alter expected ledger values merely to make tests green. Continue monitoring them in later full runs.
 
 ## Privacy remediation verification
 
