@@ -3660,7 +3660,7 @@ class PortalController extends Controller
             'destination_lga_id' => 'required|integer|exists:lgas,id',
             'base_fee' => 'required|numeric|min:0|max:1000000',
             'bulky_surcharge' => 'nullable|numeric|min:0|max:1000000',
-            'logistics_company_base_payable' => 'nullable|numeric|min:0|max:1000000',
+            'logistics_company_base_payable' => 'nullable|numeric|min:0.01|max:1000000',
             'logistics_company_bulky_surcharge' => 'nullable|numeric|min:0|max:1000000',
             'estimated_delivery_hours_min' => 'required|integer|min:1|max:720',
             'estimated_delivery_hours_max' => 'required|integer|min:1|max:720',
