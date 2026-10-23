@@ -159,7 +159,28 @@ class LogisticsCompanyPayableService
             $amount = $locked->logistics_company_payable_amount
                 ?? $locked->logistics_company_payable_default_amount;
             if ($amount === null || !is_numeric($amount) || BcMathService::comp((string) $amount, '0.00') < 0) {
-                throw new RuntimeException('The immutable logistics company/corridor payable snapshot is missing or invalid; company wallet release is blocked.');
+                AdminAuditLog::create([
+                    'user_id' => $locked->customer_id,
+                    'action' => 'logistics_payable_release_blocked_missing_tariff',
+                    'target_type' => Order::class,
+                    'target_id' => $locked->id,
+                    'old_values' => ['logistics_company_payable_amount' => null],
+                    'new_values' => [
+                        'release' => 'blocked',
+                        'reason' => 'Missing or invalid immutable company/corridor payable snapshot',
+                        'order_status' => $locked->order_status,
+                    ],
+                    'ip_address' => request()->ip() ?? '127.0.0.1',
+                    'user_agent' => request()->userAgent(),
+                ]);
+
+                return [
+                    'success' => false,
+                    'skipped' => true,
+                    'blocked' => true,
+                    'reason' => 'Missing or invalid immutable logistics-company payable snapshot; company wallet was not credited.',
+                    'order' => $locked,
+                ];
             }
             $amount = (string) $amount;
 
