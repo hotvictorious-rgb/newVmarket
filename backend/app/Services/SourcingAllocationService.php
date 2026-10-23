@@ -418,7 +418,11 @@ class SourcingAllocationService
     {
         return DB::transaction(function () use ($order) {
             $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
-            if (!$lockedOrder->retailer_model_order || $lockedOrder->payment_status !== 'paid') {
+            // The caller is the verified-payment settlement transaction. Its
+            // in-memory order has payment_status=paid before the outer transaction
+            // commits; the locked database row may still show the pre-transition
+            // value until this transaction completes.
+            if (!$lockedOrder->retailer_model_order || $order->payment_status !== 'paid') {
                 throw new InvalidArgumentException('Supplier allocation requires a retailer order with verified paid status.');
             }
 
