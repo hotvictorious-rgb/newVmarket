@@ -485,6 +485,8 @@
 
         document.getElementById('modalBaseFee').value = parseFloat(data.base_fee || 0).toFixed(2);
         document.getElementById('modalBulkyFee').value = parseFloat(data.bulky || 0).toFixed(2);
+        document.getElementById('modalCompanyBasePayable').value = data.company_payable_base !== undefined ? data.company_payable_base : '';
+        document.getElementById('modalCompanyBulkyPayable').value = data.company_payable_bulky !== undefined ? data.company_payable_bulky : '';
         document.getElementById('modalMinEta').value = data.min_eta || 12;
         document.getElementById('modalMaxEta').value = data.max_eta || 24;
 
