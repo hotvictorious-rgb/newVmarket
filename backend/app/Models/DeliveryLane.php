@@ -12,6 +12,8 @@ class DeliveryLane extends Model
         'assigned_logistics_company_id',
         'base_fee',
         'bulky_surcharge',
+        'logistics_company_base_payable',
+        'logistics_company_bulky_surcharge',
         'estimated_delivery_hours_min',
         'estimated_delivery_hours_max',
         'is_active',
@@ -20,6 +22,8 @@ class DeliveryLane extends Model
     protected $casts = [
         'base_fee' => 'string',
         'bulky_surcharge' => 'string',
+        'logistics_company_base_payable' => 'string',
+        'logistics_company_bulky_surcharge' => 'string',
         'is_active' => 'boolean',
     ];
 
