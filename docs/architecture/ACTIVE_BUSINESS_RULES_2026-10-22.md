@@ -90,3 +90,8 @@ This document records the owner's active decisions. If older documents conflict 
 
 ## 10. Documentation versus implementation
 These are the active business decisions to align across documentation. Code, schema, admin UI, workflows and tests must be audited separately and must not be claimed aligned merely because the documents are updated. Until a separate implementation audit and required tests pass, implementation status remains unverified.
+
+
+## Approved policy addendum — 23 October 2026
+
+The owner-approved [Exception and Reverse-Logistics Policies](APPROVED_EXCEPTION_AND_REVERSE_LOGISTICS_POLICIES_2026-10-23.md) are binding additions to these Active Business Rules. They govern supplier-stockout recovery, admin-managed partial fulfilment, the 24-hour response deadline (silence means rejection of the partial offer), item-level and whole-order cancellation/refund handling, doorstep rejection, post-purchase defective-item returns on compatible return routes, no redelivery, removal of independent logistics-company orders from platform scope, admin-configurable major-road/landmark hierarchy, and the related evidence and financial safeguards. Dependent documents must conform to that addendum. Documentation alignment does not certify runtime implementation.
