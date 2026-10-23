@@ -667,6 +667,8 @@ class OrderSettlementService
                     }
 
                     $deliveryFeeSnapshot = (string) $lockedOrder->delivery_fee;
+                    $deliveryMargin = '0.00';
+                    $deliverySubsidy = '0.00';
                     $defaultCompanyPayable = $lockedOrder->logistics_company_payable_default_amount;
                     $hasValidCompanyTariff = $defaultCompanyPayable !== null
                         && is_numeric($defaultCompanyPayable)
