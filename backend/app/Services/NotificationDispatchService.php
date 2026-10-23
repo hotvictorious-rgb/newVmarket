@@ -296,13 +296,22 @@ class NotificationDispatchService
             $logisticsNet = $order->retailer_model_order
                 ? ($order->logistics_company_payable_amount ?? $order->logistics_company_payable_default_amount ?? '0.00')
                 : ($order->logistics_fee_retained ?? bcmul((string)$order->delivery_fee, '0.90', 2));
-            $fleetMsg = "Victorious Market B2B Settlement: Order {$order->order_number} delivered. ₦" . number_format((float)$logisticsNet, 2) . " credited to your Corporate Wallet.";
+            $payableHeld = $order->retailer_model_order && $order->logistics_company_wallet_credited_at === null;
+            $fleetMsg = $payableHeld
+                ? "Victorious Market: Order {$order->order_number} delivery is confirmed. Company payable is held pending tariff/ledger reconciliation; no wallet credit has been issued."
+                : "Victorious Market B2B Settlement: Order {$order->order_number} delivered. ₦" . number_format((float)$logisticsNet, 2) . " credited to your Corporate Wallet.";
 
             if (self::isChannelActive('in_app', $eventType)) {
                 self::createInApp($logisticsUserId, "Delivery Completed", $fleetMsg, $eventType, ['order_id' => $order->id]);
             }
             if (self::isChannelActive('fcm', $eventType)) {
-                self::dispatchPush($logisticsUserId, "Delivery Completed!", "Order #{$order->order_number} settled. +₦" . number_format((float)$logisticsNet, 2), ['type' => 'delivery_completed', 'order_id' => $order->id], $eventType);
+                self::dispatchPush(
+                    $logisticsUserId,
+                    "Delivery Completed!",
+                    $payableHeld ? "Order #{$order->order_number} delivered; company payable is held for reconciliation." : "Order #{$order->order_number} settled. +₦" . number_format((float)$logisticsNet, 2),
+                    ['type' => 'delivery_completed', 'order_id' => $order->id],
+                    $eventType
+                );
             }
         }
 
