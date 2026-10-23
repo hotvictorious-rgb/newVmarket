@@ -773,17 +773,23 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ->reconcileRetailerSupplierPayables($orderTwoBulky->id);
         $this->assertSame(0, $cleanAudit['mismatches']);
 
-        // A supplier rejection after payment must create an administrative hold,
-        // preserve the paid customer order, and never trigger an automatic refund.
-        $orderBike->forceFill([
-            'payment_status' => 'paid',
-            'order_status' => 'confirmed',
-            'sourcing_status' => 'awaiting_supplier_confirmation',
-        ])->save();
-        OrderSupplierAssignment::where('order_id', $orderBike->id)->update([
-            'status' => 'awaiting_supplier_confirmation',
-            'assigned_at' => Carbon::now(),
+        // Exercise the real lifecycle: supplier assignment must be created by
+        // authoritative verified settlement, not by manually fabricating assignment
+        // rows or flipping the order to paid inside a test.
+        $bikeSettlement = app(\\App\\Services\\OrderSettlementService::class)->settlePaystackOrder($orderBike, [
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => (int) bcmul((string) $orderBike->grand_total, '100', 0),
+            'reference' => (string) $orderBike->payment_reference,
+            'id' => 'VM-TEST-BIKE-TX-' . $orderBike->id,
+            'channel' => 'bank',
+            'customer' => ['email' => $customer->email],
         ]);
+        $this->assertTrue($bikeSettlement['success'] ?? false, $bikeSettlement['message'] ?? 'Verified bike-order settlement failed.');
+        $orderBike->refresh();
+        $this->assertSame('paid', $orderBike->payment_status);
+        $this->assertGreaterThan(0, OrderSupplierAssignment::where('order_id', $orderBike->id)->count());
+        $this->assertSame('awaiting_supplier_confirmation', $orderBike->sourcing_status);
         Sanctum::actingAs($this->vendorUser, ['*']);
         $reject = $this->postJson("/api/v1/vendor/orders/{$orderBike->id}/reject-availability", [
             'reason' => 'The listed item is no longer physically available.',
