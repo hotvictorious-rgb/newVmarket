@@ -96,3 +96,8 @@ The owner has reviewed and finalized the complete operational workflow, exceptio
 - `docs/architecture/OPERATIONAL_WORKFLOW_AND_EXCEPTION_PLAYBOOK.md`
 - `docs/architecture/DOCUMENT_ALIGNMENT_REPORT_2026-10-22.md`
 
+
+
+## Owner-approved policy addition — 23 October 2026
+
+Created [Approved Exception and Reverse-Logistics Policies](APPROVED_EXCEPTION_AND_REVERSE_LOGISTICS_POLICIES_2026-10-23.md) as the verbatim policy baseline approved by the owner. Linked the addendum from the Active Business Rules, Operational Workflow and Exception Playbook, Payment/Refund Policy, and Master Blueprint. The approved baseline covers supplier-stockout failover, partial fulfilment and 24-hour timeout semantics, item-level/whole-order refund treatment, doorstep rejection, defective-item returns on compatible return routes, no redelivery, removal of independent logistics-company order handling, admin-configurable major roads and nested landmarks, and financial/evidence controls. This is documentation-only; runtime behaviour remains to be audited and tested. Any existing code path that conflicts—particularly any logistics payable fallback to the customer delivery fee—remains an implementation issue until verified and corrected separately.
