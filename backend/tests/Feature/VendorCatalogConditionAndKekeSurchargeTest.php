@@ -776,7 +776,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         // Exercise the real lifecycle: supplier assignment must be created by
         // authoritative verified settlement, not by manually fabricating assignment
         // rows or flipping the order to paid inside a test.
-        $bikeSettlement = app(\\App\\Services\\OrderSettlementService::class)->settlePaystackOrder($orderBike, [
+        $bikeSettlement = app(\App\Services\OrderSettlementService::class)->settlePaystackOrder($orderBike, [
             'status' => 'success',
             'currency' => 'NGN',
             'amount' => (int) bcmul((string) $orderBike->grand_total, '100', 0),
