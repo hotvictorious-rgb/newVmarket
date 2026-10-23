@@ -1267,6 +1267,80 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertDatabaseCount('pickup_reservations', 0);
     }
 
+    public function test_admin_supplier_catalog_creates_private_canonical_product_and_unconfirmed_offer(): void
+    {
+        $admin = User::create([
+            'name' => 'Catalog Super Administrator',
+            'email' => 'catalog-admin@example.com',
+            'phone' => '+2348099000077',
+            'password' => bcrypt('SecurePass123!'),
+            'user_type' => 'super_admin',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->post('/admin/supplier-catalog/products', [
+                'name' => 'Admin Catalog Samsung A15 128GB',
+                'description' => 'Canonical retailer-owned product record.',
+                'category_id' => $this->category->id,
+                'unit_price' => '35000.00',
+                'condition' => 'brand_new',
+                'package_tier' => 'bike',
+            ])
+            ->assertRedirect(route('admin.supplier-catalog.index'));
+
+        $product = Product::where('slug', 'admin-catalog-samsung-a15-128gb')->firstOrFail();
+        $this->assertNull($product->vendor_id);
+        $this->assertNull($product->shop_id);
+        $this->assertSame('unlisted', $product->listing_status);
+        $this->assertFalse((bool) $product->is_approved);
+
+        $this->actingAs($admin)
+            ->post("/admin/supplier-catalog/products/{$product->id}/offers", [
+                'shop_id' => $this->shop->id,
+                'wholesale_cost' => '27000.00',
+            ])
+            ->assertRedirect(route('admin.supplier-catalog.index'));
+
+        $offer = SupplierOffer::where('product_id', $product->id)->firstOrFail();
+        $this->assertSame($this->vendor->id, $offer->vendor_id);
+        $this->assertSame($this->shop->id, $offer->shop_id);
+        $this->assertFalse((bool) $offer->is_available);
+        $this->assertNull($offer->availability_confirmed_at);
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'action' => 'supplier_offer_attached_unconfirmed',
+            'target_id' => $offer->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->post("/admin/supplier-catalog/products/{$product->id}/listing", ['action' => 'list'])
+            ->assertRedirect();
+
+        $this->assertSame('listed', $product->fresh()->listing_status);
+        $this->assertFalse(Product::marketplaceEligible()->whereKey($product->id)->exists());
+
+        $expiry = Carbon::now()->addDays(2)->format('Y-m-d\\TH:i');
+        $this->actingAs($admin)
+            ->post("/admin/supplier-offers/{$offer->id}/confirm-availability", [
+                'availability_expires_at' => $expiry,
+                'notes' => 'Supplier confirmed by admin test.',
+            ])
+            ->assertRedirect();
+
+        $this->assertTrue((bool) $offer->fresh()->is_available);
+        $this->assertTrue(Product::marketplaceEligible()->whereKey($product->id)->exists());
+
+        $this->actingAs($admin)
+            ->post("/admin/supplier-catalog/offers/{$offer->id}/disable", [
+                'reason' => 'Supplier stock could not be re-confirmed.',
+            ])
+            ->assertRedirect();
+
+        $this->assertFalse((bool) $offer->fresh()->is_available);
+        $this->assertSame('listed', $product->fresh()->listing_status);
+        $this->assertFalse(Product::marketplaceEligible()->whereKey($product->id)->exists());
+    }
+
     public function test_public_shop_directory_is_retired_to_protect_supplier_identity(): void
     {
         $this->getJson('/api/v1/shops')
