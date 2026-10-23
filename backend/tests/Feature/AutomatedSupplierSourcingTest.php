@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AdminAuditLog;
 use App\Models\Category;
+use App\Models\DeliveryLane;
 use App\Models\Country;
 use App\Models\Lga;
 use App\Models\Order;
@@ -537,6 +538,19 @@ class AutomatedSupplierSourcingTest extends TestCase
             'availability_confirmed_at' => Carbon::now(),
             'availability_confirmed_by' => $this->adminUser->id,
             'availability_expires_at' => Carbon::now()->addHours(24),
+        ]);
+
+        DeliveryLane::firstOrCreate([
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+        ], [
+            'base_fee' => '500.00',
+            'bulky_surcharge' => '1000.00',
+            'logistics_company_base_payable' => '450.00',
+            'logistics_company_bulky_surcharge' => '800.00',
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
         ]);
 
         $checkoutService = app(\App\Services\CheckoutExecutionService::class);
