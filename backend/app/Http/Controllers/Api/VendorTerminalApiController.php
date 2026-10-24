@@ -520,7 +520,11 @@ class VendorTerminalApiController extends Controller
                 ];
             }
 
-            $confirmationHash = hash('sha256', json_encode($confirmedItems, JSON_UNESCAPED_SLASHES));
+            $confirmationIdentity = array_map(function (array $item): array {
+                unset($item['confirmed_at']);
+                return $item;
+            }, $confirmedItems);
+            $confirmationHash = hash('sha256', json_encode($confirmationIdentity, JSON_UNESCAPED_SLASHES));
             if ($assignment->status === 'supplier_confirmed') {
                 if (!$assignment->confirmation_snapshot_hash
                     || !hash_equals((string) $assignment->confirmation_snapshot_hash, $confirmationHash)) {
