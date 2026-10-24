@@ -499,6 +499,14 @@ class FinancialOperationService
                     'outcome' => 'success',
                 ]);
 
+                // Mirror the first known provider reference on the operation for
+                // efficient exact-reference lookup; retain every attempt reference
+                // independently in gateway_attempts for replay and ambiguity checks.
+                if (is_string($gwRef) && trim($gwRef) !== '' && empty($lockedOp->gateway_reference)) {
+                    $lockedOp->gateway_reference = trim($gwRef);
+                    $lockedOp->save();
+                }
+
                 // Update Order refund reference for trace
                 $orderId = $lockedOp->metadata['order_id'] ?? null;
                 if ($orderId) {
