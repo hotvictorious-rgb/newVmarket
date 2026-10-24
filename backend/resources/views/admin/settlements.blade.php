@@ -100,6 +100,63 @@
         </div>
     </div>
 
+    <!-- Verified payment capture exceptions: read-only triage queue; never auto-refund -->
+    <section class="dash-card" style="margin-bottom: 28px; border-left: 4px solid #D97706;">
+        <div class="dash-card-header">
+            <div class="dash-card-title">
+                <span>⚠️</span>
+                <div>
+                    <div>Payment Capture Exceptions — Admin Review Required</div>
+                    <span class="dash-card-subtitle">Distinct or unproven successful captures and webhook/server-verification mismatches. These cases block silent replay handling; this queue does not dispatch refunds.</span>
+                </div>
+            </div>
+            <span class="dash-badge dash-badge-gold">{{ ($pendingPaymentCaptureExceptions ?? collect())->count() }} Pending</span>
+        </div>
+        <div class="table-responsive" style="padding: 0 20px 20px;">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Detected</th>
+                        <th>Order</th>
+                        <th>Exception</th>
+                        <th>Gateway Transaction</th>
+                        <th>Payment Reference</th>
+                        <th>Amount</th>
+                        <th>Evidence</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($pendingPaymentCaptureExceptions ?? [] as $captureException)
+                        <tr>
+                            <td>{{ $captureException->detected_at?->format('d M Y H:i:s') ?? '—' }}</td>
+                            <td>
+                                {{ $captureException->order?->order_number ?? ('Order #' . ($captureException->order_id ?? 'unknown')) }}
+                                <div style="font-size:11px; color:var(--adm-text-muted);">
+                                    {{ strtoupper((string) ($captureException->order?->payment_status ?? 'unknown')) }}
+                                </div>
+                            </td>
+                            <td>{{ str_replace('_', ' ', $captureException->exception_type) }}</td>
+                            <td>{{ $captureException->gateway_transaction_id ?: 'Identity unproven' }}</td>
+                            <td>{{ $captureException->payment_reference ?: '—' }}</td>
+                            <td>
+                                {{ $captureException->amount_kobo !== null ? '₦' . number_format($captureException->amount_kobo / 100, 2) : '—' }}
+                                {{ $captureException->currency ?? '' }}
+                            </td>
+                            <td>
+                                <details>
+                                    <summary>Inspect</summary>
+                                    <pre style="max-width:420px; white-space:pre-wrap; overflow-wrap:anywhere; font-size:11px;">{{ json_encode($captureException->evidence ?? [], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                                </details>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="7" class="text-center">No payment capture exceptions are awaiting admin review.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </section>
+
     <!-- Escrow & Maturation Policy Settings -->
     <div class="dash-card" style="margin-bottom: 28px; border-left: 4px solid var(--adm-primary);" id="financial-policy-desk">
         <div class="dash-card-header">
