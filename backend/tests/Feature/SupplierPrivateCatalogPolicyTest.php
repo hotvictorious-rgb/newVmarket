@@ -274,6 +274,13 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
         $offer->refresh();
         $this->assertNotNull($offer->availability_confirmed_at);
         $this->assertNotNull(app(SupplierOfferSelectionService::class)->selectLowestCost($canonical->fresh(), 'doorstep_delivery'));
+        $this->assertTrue(Product::marketplaceEligible()->whereKey($canonical->id)->exists());
+
+        $offer->forceFill(['unavailability_penalty_expires_at' => Carbon::now()->addHours(24)])->save();
+        $this->assertNull(app(SupplierOfferSelectionService::class)->selectLowestCost($canonical->fresh(), 'doorstep_delivery'));
+        $this->assertFalse(Product::marketplaceEligible()->whereKey($canonical->id)->exists(), 'Public listing must hide when its only offer is cooldown-blocked.');
+        $offer->forceFill(['unavailability_penalty_expires_at' => null])->save();
+        $this->assertTrue(Product::marketplaceEligible()->whereKey($canonical->id)->exists());
 
         $this->actingAs($this->admin)
             ->post("/admin/supplier-catalog/offers/{$offer->id}/disable", [
