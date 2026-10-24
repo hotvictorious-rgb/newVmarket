@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\AdminAuditLog;
 use App\Models\ManualBankTransferPayment;
+use App\Models\ManualBankTransferRefundCase;
 use App\Models\Order;
 use App\Models\SystemSetting;
 use App\Services\OrderSettlementService;
@@ -163,13 +164,17 @@ class ManualBankTransferController extends Controller
         $paymentConfig = SystemSetting::get('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
         $activePaymentMethod = is_array($paymentConfig) ? (string) ($paymentConfig['active_method'] ?? 'paystack') : 'paystack';
         $bankAccount = is_array($paymentConfig) ? ($paymentConfig['manual_bank_transfer_account'] ?? []) : [];
+        $refundCases = ManualBankTransferRefundCase::with(['order', 'payment', 'reviewer'])
+            ->orderByRaw("CASE WHEN status = 'pending_admin_review' THEN 0 ELSE 1 END")
+            ->orderBy('created_at')
+            ->paginate(25, ['*'], 'refund_page');
         $payments = ManualBankTransferPayment::with(['order.customer', 'customer', 'reviewer'])
             ->whereIn('status', ['pending_review', 'approved', 'rejected'])
             ->orderByRaw("CASE WHEN status = 'pending_review' THEN 0 ELSE 1 END")
             ->orderBy('submitted_at')
             ->paginate(25);
 
-        return view('admin.manual-bank-transfers.index', compact('payments', 'activePaymentMethod', 'bankAccount'));
+        return view('admin.manual-bank-transfers.index', compact('payments', 'refundCases', 'activePaymentMethod', 'bankAccount'));
     }
 
     public function saveSettings(Request $request)
