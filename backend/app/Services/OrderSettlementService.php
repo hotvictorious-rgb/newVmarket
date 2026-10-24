@@ -214,9 +214,12 @@ class OrderSettlementService
             // 5. Exact Mathematical Integer Kobo Equality Guard (BCMath Zero Epsilon)
             $grandTotalNormalized = bcadd((string)$lockedOrder->grand_total, '0', 2);
             $expectedKobo = (int) bcmul($grandTotalNormalized, '100', 0);
-            $actualKobo = (int) ($paystackData['amount'] ?? 0);
+            $actualKoboRaw = $paystackData['amount'] ?? null;
+            $actualKoboIsInteger = is_int($actualKoboRaw)
+                || (is_string($actualKoboRaw) && preg_match('/^\\d+$/', $actualKoboRaw) === 1);
+            $actualKobo = $actualKoboIsInteger ? (int) $actualKoboRaw : -1;
 
-            if ($actualKobo !== $expectedKobo) {
+            if (!$actualKoboIsInteger || $actualKobo !== $expectedKobo) {
                 return [
                     'success' => false,
                     'status' => 'AMOUNT_MISMATCH',
