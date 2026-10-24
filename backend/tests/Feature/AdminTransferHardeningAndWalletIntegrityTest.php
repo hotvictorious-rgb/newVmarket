@@ -275,7 +275,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         [$order, $item] = $this->createSupplierPayableOrderItem('7000.00');
         $service = app(RetailerSupplierPayoutService::class);
 
-        $requestResult = $service->requestPayout($this->vendor);
+        $requestResult = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requestResult['success'], $requestResult['message'] ?? 'Supplier payout request failed.');
         /** @var RetailerSupplierPayoutRequest $payout */
         $payout = $requestResult['payout'];
@@ -283,7 +283,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame(1, $payout->allocations->count());
         $this->assertTrue($service->requestJournalComplete($payout));
 
-        $duplicateRequest = $service->requestPayout($this->vendor);
+        $duplicateRequest = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertFalse($duplicateRequest['success']);
         $this->assertSame(1, RetailerSupplierPayoutRequest::where('supplier_vendor_id', $this->vendor->id)->count());
 
@@ -309,7 +309,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('9000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requestResult = $service->requestPayout($this->vendor);
+        $requestResult = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requestResult['success'], $requestResult['message'] ?? 'Supplier payout request failed.');
         $payout = $requestResult['payout'];
 
@@ -394,7 +394,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         ]);
         $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
 
-        $result = app(RetailerSupplierPayoutService::class)->requestPayout($this->vendor);
+        $result = app(RetailerSupplierPayoutService::class)->requestPayout($this->vendor, [$item->id]);
 
         $this->assertFalse($result['success']);
         $this->assertTrue($result['protected'] ?? false);
@@ -422,7 +422,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 
@@ -444,7 +444,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 
@@ -461,7 +461,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 
@@ -480,7 +480,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
         $processing = $service->markProcessing($payout->id, $this->superAdmin->id, 'RCP_TEST_SUPPLIER', 'SUPPAYOUT-IN-FLIGHT-RECON');
@@ -502,7 +502,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 
@@ -525,7 +525,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 
@@ -547,7 +547,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8500.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 
