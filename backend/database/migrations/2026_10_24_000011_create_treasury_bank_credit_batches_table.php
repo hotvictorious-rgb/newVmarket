@@ -45,6 +45,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
+            Schema::disableForeignKeyConstraints();
+            Schema::dropIfExists('treasury_bank_credit_batches');
+            Schema::enableForeignKeyConstraints();
+            return;
+        }
         if (Schema::hasTable('retailer_supplier_payout_requests')
             && Schema::hasColumn('retailer_supplier_payout_requests', 'treasury_bank_credit_batch_id')) {
             Schema::table('retailer_supplier_payout_requests', function (Blueprint $table) {
