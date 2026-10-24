@@ -199,7 +199,6 @@ class AdminSupplierCatalogController extends Controller
                 'availability_confirmed_at' => null,
                 'availability_confirmed_by' => null,
                 'availability_expires_at' => null,
-                'unavailability_penalty_expires_at' => null,
             ])->save();
 
             $record->forceFill([
@@ -401,6 +400,7 @@ class AdminSupplierCatalogController extends Controller
     {
         $data = $request->validate([
             'wholesale_cost' => ['required', 'numeric', 'gt:0', 'max:100000000'],
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
         ]);
 
         DB::transaction(function () use ($request, $offerId, $data) {
@@ -410,16 +410,31 @@ class AdminSupplierCatalogController extends Controller
                 throw ValidationException::withMessages(['wholesale_cost' => 'Wholesale cost must be lower than Victorious MARKET retail price.']);
             }
             $old = ['wholesale_cost' => (string) $offer->wholesale_cost];
+            $catalogRecord = $offer->supplier_catalog_product_id
+                ? SupplierCatalogProduct::whereKey($offer->supplier_catalog_product_id)->lockForUpdate()->first()
+                : null;
+
             $offer->forceFill(['wholesale_cost' => $data['wholesale_cost']])->save();
+            if ($catalogRecord) {
+                $old['supplier_catalog_source_price'] = (string) $catalogRecord->source_price;
+                $catalogRecord->forceFill(['source_price' => $data['wholesale_cost']])->save();
+                $this->audit($request, 'admin_supplier_source_price_corrected', SupplierCatalogProduct::class, $catalogRecord->id, $old, [
+                    'source_price' => (string) $catalogRecord->source_price,
+                    'supplier_offer_id' => $offer->id,
+                    'reason' => trim($data['reason']),
+                ]);
+            }
             $this->audit($request, 'supplier_offer_wholesale_cost_updated', SupplierOffer::class, $offer->id, $old, [
                 'wholesale_cost' => (string) $offer->wholesale_cost,
                 'product_id' => $offer->product_id,
                 'vendor_id' => $offer->vendor_id,
                 'shop_id' => $offer->shop_id,
+                'reason' => trim($data['reason']),
+                'linked_private_catalog_record' => $catalogRecord !== null,
             ]);
         }, 3);
 
-        return back()->with('success', 'Wholesale cost updated and audited. Availability confirmation was not changed.');
+        return back()->with('success', 'Source price correction recorded with a required reason. Availability confirmation was not changed.');
     }
 
     public function disableOffer(Request $request, int $offerId): RedirectResponse
