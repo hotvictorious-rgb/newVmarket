@@ -486,9 +486,11 @@ class AdminSupplierCatalogController extends Controller
             $catalogRecord = $offer->supplier_catalog_product_id
                 ? SupplierCatalogProduct::query()->whereKey($offer->supplier_catalog_product_id)->lockForUpdate()->first()
                 : null;
-            $stockSignalAvailable = $catalogRecord
-                ? ($catalogRecord->status === 'active' && (bool) $catalogRecord->is_in_stock)
-                : true;
+            $stockSignalAvailable = $offer->supplier_catalog_product_id === null
+                ? true
+                : ($catalogRecord !== null
+                    && $catalogRecord->status === 'active'
+                    && (bool) $catalogRecord->is_in_stock);
             $old = [
                 'is_available' => (bool) $offer->is_available,
                 'is_admin_disabled' => true,
