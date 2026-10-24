@@ -41,6 +41,12 @@
         <span>Payment Capture Exceptions</span>
     </a>
 </li>
+<li class="sidebar-nav-item">
+    <a href="{{ route('admin.manual-bank-transfers.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.manual-bank-transfers.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">🔐</span>
+        <span>Manual Transfer Review</span>
+    </a>
+</li>
 @endif
 <li class="sidebar-nav-item">
     <a href="{{ route('admin.announcements.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.announcements.*') ? 'active' : '' }}">
