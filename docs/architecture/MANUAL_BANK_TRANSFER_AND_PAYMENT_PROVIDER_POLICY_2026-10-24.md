@@ -11,11 +11,9 @@ Victorious MARKET has two distinct customer payment paths:
 1. **Paystack checkout:** Paystack-supported card and Paystack bank-transfer channels, verified through trusted Paystack verification/webhook mechanisms.
 2. **Manual Bank Transfer:** The customer transfers directly to the Victorious MARKET receiving bank account configured in the admin dashboard. This is a direct bank credit, is not a Paystack transaction, and must never be represented or processed as one.
 
-### 1.1 Mutual-exclusion activation rule
+### 1.1 Coexisting customer payment methods
 
-Only **one customer payment method may be active globally at any time**. An authorized admin may activate Paystack, activate Manual Bank Transfer, or deactivate both. The system must reject any attempt to enable the second method while the other is active. This rule must be enforced server-side and in persistent configuration, not merely by hiding a checkout option in the user interface. Configuration updates must be atomic and concurrency-safe so two admins or requests cannot activate both methods simultaneously.
-
-If neither method is active, checkout must not accept payment or create a payable order. Existing orders and pending transactions must remain auditable and must be handled according to their recorded payment method; deactivation must not delete them or pretend they were paid, cancelled or refunded.
+Paystack and direct Manual Bank Transfer may both be active and offered to customers simultaneously. An authorized admin may enable either or both, or disable both. Configuration updates must be atomic and concurrency-safe. If neither method is active, checkout must not accept payment or create a payable order. Each order is permanently bound to exactly one chosen method, with method-specific verification and no cross-method payment, evidence, refund or settlement. Existing orders and pending transactions must remain auditable and must be handled according to their recorded payment method; deactivation must not delete them or pretend they were paid, cancelled or refunded.
 
 ### 1.2 Per-order payment-method lock
 
