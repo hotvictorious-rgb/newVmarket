@@ -10,7 +10,7 @@
 
 - `Product` is the canonical catalog entity and supports multiple `SupplierOffer` rows.
 - Migration `2026_10_21_000007_make_product_supplier_ownership_nullable.php` permits canonical products without legacy `vendor_id` / `shop_id` references. Existing product-to-supplier references are retained for compatibility.
-- `SupplierOffer` stores product, supplier, shop, wholesale cost, availability, confirmation actor/time, expiry and penalty cooldown.
+- `SupplierOffer` stores product, supplier, shop, wholesale cost, binary availability, confirmation actor/time, expiry and penalty cooldown. The owner-approved 24 October policy clarifies that no permanent supplier quantity is maintained; the exact requested quantity is confirmed against a verified paid order line.
 - `SupplierOfferAvailabilityService` records admin-confirmed availability in a transaction and writes an `AdminAuditLog`; it does not independently contact suppliers.
 - `SupplierOfferSelectionService` filters active, verified suppliers and Uyo shops, valid confirmation evidence, expiry, cooldown and workload, then orders by wholesale cost and ID.
 - `SourcingAllocationService` resolves eligible offers and whole-order plans.
@@ -44,7 +44,7 @@ Missing admin capabilities to implement:
 
 ### P1 — Legacy product inventory still overlaps with offer availability
 
-`SupplierOfferSelectionService::selectLowestCost()` and `getEligibleOffers()` reject products unless legacy `Product.is_in_stock` is true and `Product.isFresh()`. Checkout also checks `is_in_stock`, `isFresh()` and product-level `inventory_quantity`. Meanwhile, offers currently store a boolean availability state rather than an offer-specific stock quantity.
+`SupplierOfferSelectionService::selectLowestCost()` and `getEligibleOffers()` reject products unless legacy `Product.is_in_stock` is true and `Product.isFresh()`. Checkout also checks `is_in_stock`, `isFresh()` and product-level `inventory_quantity`. Meanwhile, offers store a boolean availability state. This is now an intentional business rule rather than a missing quantity field: supplier catalog availability is binary, and ability to fulfill a particular quantity must be confirmed after verified payment against the exact order line.
 
 The product eligibility scope and selector therefore do not apply identical stock rules. This must be reconciled before changing inventory semantics or declaring the supplier catalog fully operational. Do not simply remove stock guards: settlement and inventory restoration paths must be audited together, and concurrency/paid-order exception behavior must remain safe.
 
@@ -87,3 +87,10 @@ The latest run triggered by the privacy regression test is:
 - No payment, refund, payout, ledger or supplier-assignment behavior was changed.
 - No database migration was added.
 - No branch merge or deployment was performed.
+
+
+## Owner-approved workflow update — 24 October 2026
+
+The owner has approved the [Supplier Catalog and Order-Specific Availability Confirmation Policy](../architecture/SUPPLIER_ORDER_SPECIFIC_AVAILABILITY_CONFIRMATION_POLICY_2026-10-24.md). This resolves the policy ambiguity around supplier quantity: **there is no permanent supplier quantity field**. Supplier-owned private catalog records hold product details, source price and binary in-stock/out-of-stock state; admins match each supplier record to at most one exact canonical public product or create a new canonical listing when no exact match exists. After independent payment verification, the system requests confirmation for the exact quantity of each paid order line, attempts eligible suppliers in priority order, and performs bounded/idempotent failover on decline, inability, timeout or lost eligibility. A single supplier must fulfill the full line unless a separate policy is approved; exhausted sourcing goes to admin-managed exception handling.
+
+This decision clarifies the target behavior but does **not** establish runtime compliance. The code audit remains open for supplier-owned unlinked catalog records, quantity-free data/UI, order-specific confirmation attempts, candidate failover and cooldown interactions, checkout/settlement stock guards, expiry/restoration, concurrency, immutable snapshots, and supplier/payable/ledger effects. Existing legacy stock guards must not be removed until these connected paths are reconciled and regression-tested. No merge or deployment is authorized by this documentation update.
