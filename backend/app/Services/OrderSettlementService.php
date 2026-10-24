@@ -311,19 +311,35 @@ class OrderSettlementService
                     }
                 }
 
-                // Deduct inventory quantity if tracked upon confirmed payment
+                // Legacy product inventory remains authoritative for legacy-owned stock.
+                // New canonical retailer products have no vendor/shop owner and use the
+                // verified supplier offer as the stock signal. Their inventory_quantity=0
+                // is a compatibility sentinel, not a depleted legacy inventory counter.
+                // Do not turn that sentinel into a false post-payment stockout/refund hold.
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
                         $prod = Product::where('id', $item->product_id)->lockForUpdate()->first();
-                        if ($prod && isset($prod->inventory_quantity)) {
-                            if ((int) $prod->inventory_quantity >= (int) $item->quantity) {
-                                $prod->decrement('inventory_quantity', (int) $item->quantity);
-                                $prod->is_in_stock = ((int) $prod->inventory_quantity > 0);
-                                $prod->save();
-                                $decrementedProducts[] = ['product' => $prod, 'quantity' => (int) $item->quantity];
-                            } else {
-                                $depletedStockItems[] = $item->product_name ?? "Product #{$prod->id}";
-                            }
+                        if (!$prod || !isset($prod->inventory_quantity)) {
+                            continue;
+                        }
+
+                        $supplierSourcedCanonicalProduct = $lockedOrder->retailer_model_order
+                            && $item->supplier_offer_id
+                            && $prod->vendor_id === null
+                            && $prod->shop_id === null
+                            && (int) $prod->inventory_quantity === 0;
+
+                        if ($supplierSourcedCanonicalProduct) {
+                            continue;
+                        }
+
+                        if ((int) $prod->inventory_quantity >= (int) $item->quantity) {
+                            $prod->decrement('inventory_quantity', (int) $item->quantity);
+                            $prod->is_in_stock = ((int) $prod->inventory_quantity > 0);
+                            $prod->save();
+                            $decrementedProducts[] = ['product' => $prod, 'quantity' => (int) $item->quantity];
+                        } else {
+                            $depletedStockItems[] = $item->product_name ?? "Product #{$prod->id}";
                         }
                     }
                 }
