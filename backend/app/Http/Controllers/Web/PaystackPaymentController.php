@@ -1163,7 +1163,7 @@ class PaystackPaymentController extends Controller
             return response()->json([
                 'status' => false,
                 'message' => 'Payment verification is not yet conclusive. The order remains unpaid pending retry/reconciliation.',
-            ], $verificationCode === 'GATEWAY_ERROR' ? 503 : 422);
+            ], in_array($verificationCode, ['GATEWAY_ERROR', 'EXCEPTION', 'CONFIG_MISSING'], true) ? 503 : 422);
         }
 
         $verifiedData = $verification['data'] ?? [];
