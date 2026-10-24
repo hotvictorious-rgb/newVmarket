@@ -206,6 +206,36 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
         ])->assertSessionHasErrors('canonical_product_id');
         $this->assertSame((int) $canonical->id, (int) $record->fresh()->canonical_product_id);
         $this->assertSame((int) $canonical->id, (int) $offer->fresh()->product_id);
+
+        // Guided correction retires the wrong offer, clears the match, and allows
+        // a new reviewed match without rewriting the old offer or order snapshots.
+        $this->post(route('admin.supplier-catalog.private-products.unmatch', $record->id), [
+            'reason' => 'Wrong model variant selected during catalog review.',
+        ])->assertRedirect()->assertSessionHas('success');
+        $record->refresh();
+        $offer->refresh();
+        $this->assertNull($record->canonical_product_id);
+        $this->assertNull($record->linked_at);
+        $this->assertNull($offer->supplier_catalog_product_id);
+        $this->assertTrue($offer->trashed());
+        $this->assertFalse($offer->is_available);
+        $this->assertNull($offer->availability_confirmed_at);
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'action' => 'supplier_private_catalog_match_corrected_unmatched',
+            'target_type' => SupplierCatalogProduct::class,
+            'target_id' => $record->id,
+        ]);
+
+        $this->post(route('admin.supplier-catalog.private-products.link', $record->id), [
+            'canonical_product_id' => $secondCanonical->id,
+            'match_notes' => 'Corrected exact model and variant after review.',
+        ])->assertRedirect()->assertSessionHas('success');
+        $record->refresh();
+        $newOffer = SupplierOffer::where('supplier_catalog_product_id', $record->id)->firstOrFail();
+        $this->assertSame((int) $secondCanonical->id, (int) $record->canonical_product_id);
+        $this->assertSame((int) $secondCanonical->id, (int) $newOffer->product_id);
+        $this->assertNull($newOffer->availability_confirmed_at, 'A rematched offer must require fresh admin confirmation.');
+        $this->assertSame((int) $canonical->id, (int) $offer->product_id, 'The retired offer history must not be rewritten.');
     }
 
     public function test_supplier_stock_toggle_invalidates_prior_offer_confirmation_and_cannot_change_other_supplier_records(): void
