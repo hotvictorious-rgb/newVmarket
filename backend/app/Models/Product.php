@@ -80,17 +80,24 @@ class Product extends Model
     }
 
     /**
-     * Availability indicator:
-     * Returns positive availability if in stock, 0 if out of stock.
+     * Legacy marketplace products may still have a real product-level quantity.
+     * Centrally sourced canonical products deliberately have no supplier quantity:
+     * null means "not quantity-tracked", not zero stock and not an inferred 999.
      */
-    public function getAvailableQuantityAttribute(): int
+    public function getAvailableQuantityAttribute(): ?int
     {
-        if (!(bool)$this->is_in_stock) {
+        if (!(bool) $this->is_in_stock) {
             return 0;
         }
 
-        if (isset($this->attributes['inventory_quantity']) && (int)$this->attributes['inventory_quantity'] > 0) {
-            return (int)$this->attributes['inventory_quantity'];
+        if (isset($this->attributes['inventory_quantity']) && (int) $this->attributes['inventory_quantity'] > 0) {
+            return (int) $this->attributes['inventory_quantity'];
+        }
+
+        if (($this->attributes['vendor_id'] ?? null) === null
+            && ($this->attributes['shop_id'] ?? null) === null
+            && (int) ($this->attributes['inventory_quantity'] ?? 0) === 0) {
+            return null;
         }
 
         return 999;
