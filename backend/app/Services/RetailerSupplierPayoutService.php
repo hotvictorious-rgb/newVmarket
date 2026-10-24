@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\RetailerSupplierPayoutAllocation;
 use App\Models\RetailerSupplierPayoutRequest;
+use App\Models\TreasuryBankCreditBatch;
 use App\Models\VendorProfile;
 use App\Models\VendorRecoveryLedger;
 use App\Models\User;
@@ -55,7 +56,7 @@ class RetailerSupplierPayoutService
 
             $usedKobo = (int) RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)
                 ->whereIn('status', ['pending', 'processing', 'uncertain', 'paid'])
-                ->whereKeyNot($payout->id)
+                ->where('id', '!=', $payout->id)
                 ->sum(DB::raw('CAST(amount * 100 AS BIGINT)'));
 
             $amountKobo = (int) bcmul((string) $payout->amount, '100', 0);
