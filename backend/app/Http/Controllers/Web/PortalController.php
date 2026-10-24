@@ -19,6 +19,7 @@ use App\Models\RiderProfile;
 use App\Models\Shop;
 use App\Models\ShopDeliveryCoverage;
 use App\Models\State;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Models\VendorEmployeeProfile;
@@ -4578,6 +4579,18 @@ class PortalController extends Controller
                 ->with('info', 'Please sign in or create an account to proceed with checkout. Your cart has been saved.');
         }
 
+        $activePaymentMethod = (string) SystemSetting::get('checkout.active_payment_method', 'paystack');
+        if (!in_array($activePaymentMethod, ['paystack', 'manual_bank_transfer'], true)) {
+            return redirect()->route('storefront')->with('error', 'Checkout payments are temporarily disabled. Please contact Victorious MARKET support.');
+        }
+        $manualTransferAccount = SystemSetting::get('manual_bank_transfer.account', []);
+        if ($activePaymentMethod === 'manual_bank_transfer'
+            && (!is_array($manualTransferAccount) || empty($manualTransferAccount['bank_name'])
+                || empty($manualTransferAccount['account_name'])
+                || !preg_match('/^[0-9]{10}$/', (string) ($manualTransferAccount['account_number'] ?? '')))) {
+            return redirect()->route('storefront')->with('error', 'Manual bank transfer is not configured correctly. No payment has been requested.');
+        }
+
         $productId = $request->input('product_id');
         $quantity = max(1, (int)$request->input('quantity', 1));
 
@@ -4658,7 +4671,7 @@ class PortalController extends Controller
         ];
         $collectionPoints = collect();
 
-        return view('storefront.checkout', compact('product', 'quantity', 'merchandiseSubtotal', 'deliveryFee', 'totalPayable', 'deliveryCheck', 'pickupCheck', 'destLga', 'lgas', 'allShops', 'availableCashback', 'activeCity', 'activeLanesMap', 'collectionPoints'));
+        return view('storefront.checkout', compact('product', 'quantity', 'merchandiseSubtotal', 'deliveryFee', 'totalPayable', 'deliveryCheck', 'pickupCheck', 'destLga', 'lgas', 'allShops', 'availableCashback', 'activeCity', 'activeLanesMap', 'collectionPoints', 'activePaymentMethod', 'manualTransferAccount'));
     }
 
     public function processCheckout(Request $request, CheckoutExecutionService $checkoutExecutionService)
@@ -4761,7 +4774,7 @@ class PortalController extends Controller
                 ]
             ],
             'redeem_cashback' => !empty($validated['redeem_cashback']),
-            'payment_method' => ($validated['fulfillment_type'] === 'in_shop_pickup') ? 'in_shop_counter' : 'paystack',
+            'payment_method' => SystemSetting::get('checkout.active_payment_method', 'paystack'),
             'callback_url' => route('payment.paystack.callback'),
         ];
 
@@ -4849,6 +4862,15 @@ class PortalController extends Controller
                 'order_number' => $order->order_number,
                 'token' => $order->guest_access_token,
             ])->with('success', "Your order has been reserved for in-store pickup! Visit {$shopName} at {$shopAddress} to inspect your items. You will pay at the shop counter after inspecting.");
+        }
+
+        // Manual bank transfer is confirmed only by an authorized admin after
+        // independent receiving-account verification; never initialize Paystack for it.
+        if ($order->payment_method === 'manual_bank_transfer') {
+            return redirect()->route('order.status', [
+                'order_number' => $order->order_number,
+                'token' => $order->guest_access_token,
+            ])->with('success', 'Order created. Transfer the exact amount to the receiving account shown below, copy the order code into the narration, then upload your receipt for admin review. Your order is not paid until verified.');
         }
 
         // For Doorstep Delivery: Paystack escrow
