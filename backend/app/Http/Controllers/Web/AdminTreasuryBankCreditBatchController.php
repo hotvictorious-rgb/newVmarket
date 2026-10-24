@@ -16,7 +16,7 @@ class AdminTreasuryBankCreditBatchController extends Controller
     public function index(Request $request)
     {
         $this->authorizeSuperAdmin($request);
-        $batches = TreasuryBankCreditBatch::with(['preparedByAdmin', 'confirmedByAdmin'])
+        $batches = TreasuryBankCreditBatch::with(['preparedByAdmin', 'confirmedByAdmin', 'allocations.order'])
             ->withCount('supplierPayouts')
             ->latest('id')
             ->paginate(25);
