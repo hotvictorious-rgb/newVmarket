@@ -690,11 +690,16 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
         $order->refresh();
         $offerA->refresh();
 
-        Carbon::setTestNow(null); // Reset mocked time
-
-        $this->assertSame('timed_out', $assignment->status);
-        $this->assertSame('timed_out', $order->sourcing_status);
-        $this->assertTrue($offerA->isPenaltyActive(), '24-hour SKU penalty must be active on breached offer.');
+        // Assert while the clock is still frozen at the simulated breach time.
+        // Resetting first made this test depend on the real wall clock crossing the
+        // 24-hour expiry boundary during CI execution.
+        try {
+            $this->assertSame('timed_out', $assignment->status);
+            $this->assertSame('timed_out', $order->sourcing_status);
+            $this->assertTrue($offerA->isPenaltyActive(), '24-hour SKU penalty must be active at the simulated breach time.');
+        } finally {
+            Carbon::setTestNow(null);
+        }
     }
 
     /**
