@@ -124,7 +124,7 @@ class OrderSettlementService
                             $paidStatus,
                             $paystackData['channel'] ?? null,
                         ], JSON_UNESCAPED_SLASHES) ?: '');
-                    $exceptionKey = 'PAYSTACK-DUP-CAP-' . hash('sha256', $exceptionIdentity);
+                    $exceptionKey = 'PAYSTACK-DUP-CAP-' . hash('sha256', $lockedOrder->id . '|' . $exceptionIdentity);
 
                     $captureException = \App\Models\PaymentCaptureException::firstOrCreate(
                         ['idempotency_key' => $exceptionKey],
