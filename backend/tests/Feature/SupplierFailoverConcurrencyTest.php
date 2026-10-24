@@ -19,14 +19,14 @@ use App\Models\VendorProfile;
 use App\Services\CheckoutExecutionService;
 use App\Services\OrderSettlementService;
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class SupplierFailoverConcurrencyTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
 
 
     public function test_two_processes_competing_for_one_failed_assignment_create_one_recovery_only(): void
