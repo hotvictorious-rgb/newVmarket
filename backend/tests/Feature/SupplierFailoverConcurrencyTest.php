@@ -185,8 +185,10 @@ class SupplierFailoverConcurrencyTest extends TestCase
         $this->assertSame('0.00', $oldSupplierNet);
         $this->assertSame('27000.00', $newSupplierNet);
 
-        // The committed multi-process fixture is rebound only for migration teardown;
-        // all behavioural assertions above exercise the unbound-before-payment model.
+        // DatabaseMigrations rolls the schema back after this test. Restore legacy
+        // non-null ownership only after all behavioural assertions, so the migration's
+        // safety guard is not bypassed and no test fixture leaves invalid legacy rows.
         $order->forceFill(['vendor_id' => $primaryVendor->id, 'shop_id' => $primaryShop->id])->save();
+        $product->forceFill(['vendor_id' => $primaryVendor->id, 'shop_id' => $primaryShop->id])->save();
     }
 }
