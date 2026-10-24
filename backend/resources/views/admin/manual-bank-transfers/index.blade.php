@@ -29,6 +29,43 @@
     </div>
 @endif
 
+<div class="dash-card" style="margin-bottom:24px">
+    <div class="dash-card-header">
+        <div class="dash-card-title">Payment Method &amp; Receiving Account</div>
+        <strong>Currently active: {{ strtoupper(str_replace('_', ' ', $activePaymentMethod ?? 'paystack')) }}</strong>
+    </div>
+    <form method="POST" action="{{ route('admin.manual-bank-transfers.settings') }}" style="padding:18px">
+        @csrf
+        <p style="margin-top:0">Only one global payment method can be active. Selecting one replaces the active method; selecting Disabled closes checkout. Existing orders remain bound to their recorded method.</p>
+        <label for="active_payment_method" style="display:block;font-weight:700;margin-bottom:6px">Active checkout payment method</label>
+        <select id="active_payment_method" name="active_payment_method" required style="width:100%;max-width:460px;padding:10px;margin-bottom:14px">
+            <option value="paystack" @selected(($activePaymentMethod ?? 'paystack') === 'paystack')>Paystack</option>
+            <option value="manual_bank_transfer" @selected(($activePaymentMethod ?? 'paystack') === 'manual_bank_transfer')>Manual Bank Transfer</option>
+            <option value="disabled" @selected(($activePaymentMethod ?? 'paystack') === 'disabled')>Disabled — no new checkout payments</option>
+        </select>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+            <div>
+                <label for="bank_name" style="display:block;font-weight:700;margin-bottom:6px">Receiving bank</label>
+                <input id="bank_name" name="bank_name" maxlength="100" value="{{ old('bank_name', $bankAccount['bank_name'] ?? '') }}" style="width:100%;padding:9px" />
+            </div>
+            <div>
+                <label for="account_name" style="display:block;font-weight:700;margin-bottom:6px">Account name</label>
+                <input id="account_name" name="account_name" maxlength="150" value="{{ old('account_name', $bankAccount['account_name'] ?? '') }}" style="width:100%;padding:9px" />
+            </div>
+            <div>
+                <label for="account_number" style="display:block;font-weight:700;margin-bottom:6px">10-digit account number</label>
+                <input id="account_number" name="account_number" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" value="{{ old('account_number', $bankAccount['account_number'] ?? '') }}" style="width:100%;padding:9px" />
+            </div>
+            <div>
+                <label for="customer_instructions" style="display:block;font-weight:700;margin-bottom:6px">Customer transfer instructions</label>
+                <textarea id="customer_instructions" name="customer_instructions" maxlength="2000" rows="3" style="width:100%;padding:9px">{{ old('customer_instructions', $bankAccount['customer_instructions'] ?? '') }}</textarea>
+            </div>
+        </div>
+        <p style="font-size:12px;color:#64748b">Bank details are public checkout instructions, not credentials. Never enter PINs, passwords, OTPs or API secrets here. Manual transfer requires an uploaded receipt plus independent actual-credit verification.</p>
+        <button type="submit" class="btn-dash btn-dash-primary" onclick="return confirm('Save this payment configuration? New checkouts will use only the selected method.')">Save payment configuration</button>
+    </form>
+</div>
+
 <div class="dash-card">
     <div class="dash-card-header">
         <div class="dash-card-title">Receipt submissions</div>
