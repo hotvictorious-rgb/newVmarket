@@ -122,7 +122,7 @@ Use immutable agreed wholesale cost per sourced item. Eligibility requires verif
 Use the assigned company's configured corridor base payable plus that company's bulky-unit surcharge multiplied by the applicable bulky-unit count, snapshotted at assignment. Never derive logistics payable from customer delivery fee or percentage, and never fall back to the customer delivery fee when the configured company tariff is missing. Missing/invalid tariff must fail closed into an admin configuration/reconciliation case; it must not produce an invented payable. Any platform subsidy is recorded separately.
 
 ### Money-out controls
-Supplier-payment request limits remain ₦5,000 minimum and ₦1,000,000 maximum per request/disbursement; no silent split of an over-cap request; no FIFO/oldest-first automatic selection. Disbursements remain Monday–Friday only after Paystack collections fully settle into the corporate settlement account. Human Super Admin review, approval, manual dispatch, idempotency, exact provider matching and provider-confirmed completion remain mandatory.
+Supplier and logistics-company settlement requests are each limited to ₦1 minimum and ₦1,000,000 maximum per individual request/transfer; no silent split and no FIFO/oldest-first selection. Settlements occur Monday–Friday after the relevant funds are cleared and reconciled in the corporate receiving account; Paystack settlement is not a prerequisite for verified manual-bank-transfer collections. Human Super Admin authorization, manual dispatch, idempotency, exact transaction matching and actual bank-outcome reconciliation remain mandatory.
 
 ## 9. Exception queue, ownership and escalation
 
