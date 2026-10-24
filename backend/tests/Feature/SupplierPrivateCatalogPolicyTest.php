@@ -170,6 +170,28 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
         $publicProductData = $canonical->fresh()->toArray();
         $this->assertArrayNotHasKey('source_price', $publicProductData);
         $this->assertArrayNotHasKey('supplier_catalog_product_id', $publicProductData);
+
+        $secondCanonical = Product::create([
+            'vendor_id' => null,
+            'shop_id' => null,
+            'category_id' => $this->category->id,
+            'name' => 'Solar Power Bank 20000mAh Alternate',
+            'slug' => 'solar-power-bank-20000mah-alternate',
+            'unit_price' => '26000.00',
+            'cost_price' => '0.00',
+            'is_in_stock' => true,
+            'inventory_quantity' => 0,
+            'is_approved' => false,
+            'listing_status' => 'unlisted',
+            'condition' => 'brand_new',
+            'package_tier' => 'bike',
+        ]);
+        $this->post("/admin/supplier-catalog/private-products/{$record->id}/link", [
+            'canonical_product_id' => $secondCanonical->id,
+            'match_notes' => 'Attempted second match must be blocked.',
+        ])->assertSessionHasErrors('canonical_product_id');
+        $this->assertSame((int) $canonical->id, (int) $record->fresh()->canonical_product_id);
+        $this->assertSame((int) $canonical->id, (int) $offer->fresh()->product_id);
     }
 
     public function test_supplier_stock_toggle_invalidates_prior_offer_confirmation_and_cannot_change_other_supplier_records(): void
