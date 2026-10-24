@@ -9,6 +9,7 @@ use App\Models\OrderItem;
 use App\Models\RetailerSupplierPayoutAllocation;
 use App\Models\RetailerSupplierPayoutRequest;
 use App\Models\TreasuryBankCreditBatch;
+use App\Models\TreasuryBankCreditBatchAllocation;
 use App\Models\VendorProfile;
 use App\Models\VendorRecoveryLedger;
 use App\Models\User;
@@ -52,6 +53,31 @@ class RetailerSupplierPayoutService
                 || empty($batch->confirmed_at)
                 || (int) $batch->prepared_by_admin_id === (int) $batch->confirmed_by_admin_id) {
                 return ['success' => false, 'message' => 'No dual-reviewed corporate bank-credit batch is available. Record and reconcile the actual gateway settlement and corporate bank statement before submitting any supplier transfer.'];
+            }
+
+            $allocations = TreasuryBankCreditBatchAllocation::where('treasury_bank_credit_batch_id', $batch->id)
+                ->orderBy('id')->lockForUpdate()->get();
+            if ($allocations->isEmpty()) {
+                return ['success' => false, 'message' => 'Treasury batch has no verified order-capture allocations; supplier payout remains blocked.'];
+            }
+
+            $allocatedGrossKobo = 0;
+            foreach ($allocations as $allocation) {
+                $order = Order::whereKey($allocation->order_id)->lockForUpdate()->first();
+                if (!$order || $order->payment_status !== 'paid'
+                    || trim((string) $order->payment_reference) === ''
+                    || !hash_equals((string) $order->payment_reference, (string) $allocation->payment_reference)
+                    || trim((string) $order->paystack_transaction_id) === ''
+                    || !hash_equals((string) $order->paystack_transaction_id, (string) $allocation->gateway_transaction_id)
+                    || strtoupper((string) $allocation->currency) !== 'NGN'
+                    || (int) $allocation->amount_kobo !== (int) bcmul((string) $order->grand_total, '100', 0)) {
+                    return ['success' => false, 'message' => 'Treasury batch capture evidence no longer matches its paid order; supplier payout is blocked for reconciliation.'];
+                }
+                $allocatedGrossKobo += (int) $allocation->amount_kobo;
+            }
+            if ($allocatedGrossKobo !== (int) $batch->gross_collection_amount_kobo
+                || (int) $batch->gross_collection_amount_kobo - (int) $batch->provider_fee_amount_kobo !== (int) $batch->net_credit_amount_kobo) {
+                return ['success' => false, 'message' => 'Treasury batch gross, fees, net credit and order allocations do not reconcile; supplier payout is blocked.'];
             }
 
             $usedKobo = (int) RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)
