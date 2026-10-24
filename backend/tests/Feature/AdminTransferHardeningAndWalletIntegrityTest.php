@@ -244,6 +244,31 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         return [$order, $item];
     }
 
+    public function test_super_admin_settlement_desk_surfaces_pending_payment_capture_exceptions(): void
+    {
+        [$order] = $this->createSupplierPayableOrderItem('7000.00');
+        \App\Models\PaymentCaptureException::create([
+            'order_id' => $order->id,
+            'gateway_provider' => 'paystack',
+            'gateway_transaction_id' => 'CAPTURE-REVIEW-TEST-1',
+            'payment_reference' => $order->payment_reference,
+            'amount_kobo' => 700000,
+            'currency' => 'NGN',
+            'exception_type' => 'distinct_successful_capture',
+            'idempotency_key' => 'PAYSTACK-ADMIN-QUEUE-TEST-1',
+            'status' => 'pending_admin_review',
+            'evidence' => ['test_case' => 'admin_queue_visibility'],
+            'detected_at' => Carbon::now(),
+        ]);
+
+        $response = $this->actingAs($this->superAdmin)->get(route('admin.settlements.index'));
+
+        $response->assertOk();
+        $response->assertSee('Payment Capture Exceptions');
+        $response->assertSee('CAPTURE-REVIEW-TEST-1');
+        $response->assertSee('distinct successful capture');
+    }
+
     public function test_supplier_payout_request_does_not_reserve_funds_during_bank_cooldown(): void
     {
         $this->vendor->update(['bank_updated_at' => Carbon::now()]);
