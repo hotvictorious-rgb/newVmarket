@@ -320,7 +320,7 @@ class PaystackService
      */
     public function initiateRefund(string $transactionReferenceOrId, ?string $amountInNaira = null, ?string $merchantNote = null): array
     {
-        if (app()->environment('testing')) {
+        if (app()->environment('testing') && config('services.paystack.simulate_in_tests', true)) {
             return [
                 'success' => true,
                 'is_simulated' => true,
