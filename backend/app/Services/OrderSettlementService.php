@@ -126,7 +126,7 @@ class OrderSettlementService
                         ], JSON_UNESCAPED_SLASHES) ?: '');
                     $exceptionKey = 'PAYSTACK-DUP-CAP-' . hash('sha256', $exceptionIdentity);
 
-                    \App\Models\PaymentCaptureException::firstOrCreate(
+                    $captureException = \App\Models\PaymentCaptureException::firstOrCreate(
                         ['idempotency_key' => $exceptionKey],
                         [
                             'order_id' => $lockedOrder->id,
@@ -150,7 +150,8 @@ class OrderSettlementService
                         ]
                     );
 
-                    \App\Models\AdminAuditLog::create([
+                    if ($captureException->wasRecentlyCreated) {
+                        \App\Models\AdminAuditLog::create([
                         'user_id' => null,
                         'action' => 'paystack_duplicate_capture_review_required',
                         'target_type' => Order::class,
@@ -168,7 +169,8 @@ class OrderSettlementService
                         ],
                         'ip_address' => request()->ip() ?? '127.0.0.1',
                         'user_agent' => 'Paystack settlement reconciliation',
-                    ]);
+                        ]);
+                    }
 
                     return [
                         'success' => true,
