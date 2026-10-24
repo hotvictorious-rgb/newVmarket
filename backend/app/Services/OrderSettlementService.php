@@ -31,15 +31,49 @@ class OrderSettlementService
      * currency check, idempotency against replay attacks, state transition,
      * 5% customer cashback maturation queue, and immutable audit log.
      */
+    /**
+     * Settle an independently verified direct bank credit. The caller must already
+     * have matched a unique bank transaction reference and exact credited amount to
+     * the immutable order payment reference. This deliberately does not create a
+     * Paystack transaction ID or invoke Paystack APIs.
+     */
+    public function settleManualBankTransferOrder(Order $order, string $bankTransactionReference, int $amountKobo, User $admin): array
+    {
+        if (trim($bankTransactionReference) === '' || $amountKobo < 1) {
+            return ['success' => false, 'status' => 'INVALID_BANK_EVIDENCE', 'message' => 'A bank transaction reference and positive credited amount are required.'];
+        }
+
+        if (empty($order->payment_reference)) {
+            return ['success' => false, 'status' => 'MISSING_ORDER_PAYMENT_REFERENCE', 'message' => 'The order has no immutable payment reference.'];
+        }
+
+        return $this->settlePaystackOrder($order, [
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => $amountKobo,
+            // This is the order's own immutable internal payment reference, not a
+            // Paystack reference. The bank reference remains in the manual tender table.
+            'reference' => (string) $order->payment_reference,
+            'id' => $bankTransactionReference,
+            'channel' => 'manual_bank_transfer',
+            'customer' => ['email' => (string) ($order->customer->email ?? '')],
+        ], $admin, 'manual_bank_transfer_admin_review', null, null, 'manual_bank_transfer');
+    }
+
     public function settlePaystackOrder(
         Order $order,
         array $paystackData,
         ?User $actorUser = null,
         string $channel = 'paystack_webhook',
         ?int $webhookEventId = null,
-        ?int $webhookAttempt = null
+        ?int $webhookAttempt = null,
+        string $provider = 'paystack'
     ): array {
-        $result = DB::transaction(function () use ($order, $paystackData, $actorUser, $channel, $webhookEventId, $webhookAttempt) {
+        if (!in_array($provider, ['paystack', 'manual_bank_transfer'], true)) {
+            return ['success' => false, 'status' => 'UNSUPPORTED_PAYMENT_PROVIDER', 'message' => 'Unsupported payment provider.'];
+        }
+
+        $result = DB::transaction(function () use ($order, $paystackData, $actorUser, $channel, $webhookEventId, $webhookAttempt, $provider) {
             // For webhook settlement, hold the inbox generation lock in the same
             // transaction as order/payment settlement and journal side effects.
             if ($webhookEventId !== null || $webhookAttempt !== null) {
@@ -68,6 +102,15 @@ class OrderSettlementService
                 return ['success' => false, 'status' => 'NOT_FOUND', 'message' => 'Order record not found under lock.'];
             }
 
+            // Payment methods are isolated. Manual bank evidence can never settle a Paystack order,
+            // and Paystack callbacks can never settle a manual-transfer order.
+            if ($provider === 'manual_bank_transfer' && $lockedOrder->payment_method !== 'manual_bank_transfer') {
+                return ['success' => false, 'status' => 'PAYMENT_METHOD_MISMATCH', 'message' => 'Manual bank transfer cannot settle an order assigned to another payment method.'];
+            }
+            if ($provider === 'paystack' && $lockedOrder->payment_method === 'manual_bank_transfer') {
+                return ['success' => false, 'status' => 'PAYMENT_METHOD_MISMATCH', 'message' => 'Paystack cannot settle a manual bank transfer order.'];
+            }
+
             // 1. Actor IDOR Authorization Check
             if ($actorUser) {
                 if ($actorUser->status !== 'active') {
@@ -76,6 +119,12 @@ class OrderSettlementService
                 if ($lockedOrder->customer_id && !$actorUser->isSuperAdmin() && (int)$lockedOrder->customer_id !== (int)$actorUser->id) {
                     return ['success' => false, 'status' => 'UNAUTHORIZED', 'message' => 'Unauthorized: You are not authorized to settle this customer order.'];
                 }
+            }
+
+            // A manual bank transfer is a one-shot tender: once settled, a second approval
+            // is never treated as a harmless replay and cannot create another payment.
+            if ($provider === 'manual_bank_transfer' && $lockedOrder->payment_status === 'paid') {
+                return ['success' => false, 'status' => 'ALREADY_PAID', 'message' => 'This order already has a settled payment; another manual payment is forbidden.'];
             }
 
             // 2. Paid-order replay guard. Validate gateway evidence BEFORE returning
@@ -309,8 +358,14 @@ class OrderSettlementService
             $allocationResult = null;
             $lockedOrder->payment_status = 'paid';
             $lockedOrder->paid_at = $now;
-            $lockedOrder->payment_channel = (string)($paystackData['channel'] ?? 'paystack');
-            $lockedOrder->paystack_transaction_id = (string)($paystackData['id'] ?? $reference);
+            $lockedOrder->payment_channel = $provider === 'manual_bank_transfer'
+                ? 'manual_bank_transfer'
+                : (string)($paystackData['channel'] ?? 'paystack');
+            // Direct bank transfers are recorded in their own table. Never forge a
+            // Paystack transaction ID for a manual bank credit.
+            $lockedOrder->paystack_transaction_id = $provider === 'manual_bank_transfer'
+                ? null
+                : (string)($paystackData['id'] ?? $reference);
 
             if ($lockedOrder->order_status === 'cancelled') {
                 // The order was previously cancelled by the expiration worker.
@@ -876,7 +931,7 @@ class OrderSettlementService
                         }
                     }
 
-                    if (BcMathService::comp((string) $lockedOrder->customer_cashback_5, '0.00') > 0) {
+                    if ($provider !== 'manual_bank_transfer' && BcMathService::comp((string) $lockedOrder->customer_cashback_5, '0.00') > 0) {
                         FinancialJournalEntry::create([
                             'order_id' => $lockedOrder->id,
                             'transaction_reference' => $reference,
