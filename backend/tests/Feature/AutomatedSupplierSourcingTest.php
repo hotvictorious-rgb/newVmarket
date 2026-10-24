@@ -694,10 +694,10 @@ class AutomatedSupplierSourcingTest extends TestCase
 
         // Exercise the real 60-operating-minute timeout worker and its automatic
         // failover path, not only the manual supplier-rejection endpoint.
-        Carbon::setTestNow(Carbon::parse('2026-10-24 10:01:00', 'Africa/Lagos'));
+        Carbon::setTestNow(Carbon::parse('2026-10-24 09:01:00', 'UTC'));
         OrderSupplierAssignment::whereKey($failedAssignment->id)->update([
             'status' => 'awaiting_supplier_confirmation',
-            'assigned_at' => Carbon::parse('2026-10-24 08:59:00', 'Africa/Lagos'),
+            'assigned_at' => Carbon::parse('2026-10-24 07:59:00', 'UTC'),
         ]);
         try {
             $this->artisan('supplier:check-confirmation-sla')->assertExitCode(0);
