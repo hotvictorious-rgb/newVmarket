@@ -75,7 +75,7 @@ The latest run triggered by the privacy regression test is:
 ## Implementation sequence
 
 1. Keep the public supplier privacy regression test and fix in place.
-2. Implement a dedicated super-admin supplier catalog screen using the existing `Product`, `SupplierOffer`, `SupplierOfferAvailabilityService` and `AdminAuditLog` rather than creating parallel catalog tables.
+2. **Superseded by the owner-approved 24 October policy:** keep `Product` as the canonical public catalog, but create a separate `SupplierCatalogProduct` private source-record table. A supplier source record exists independently of a canonical product and links to at most one canonical product through the audited admin match workflow. `SupplierOffer` remains the operational sourcing link.
 3. Add product/offer actions with transactions, validation, audit events and authorization. A newly attached offer must start unavailable until an admin records real availability confirmation.
 4. Separate manual product listing state from derived offer availability.
 5. Before changing inventory gates, map and test every stock decrement, restore, settlement, refund and post-payment sourcing-hold path. Keep paid-order supplier snapshots immutable.
@@ -94,3 +94,8 @@ The latest run triggered by the privacy regression test is:
 The owner has approved the [Supplier Catalog and Order-Specific Availability Confirmation Policy](../architecture/SUPPLIER_ORDER_SPECIFIC_AVAILABILITY_CONFIRMATION_POLICY_2026-10-24.md). This resolves the policy ambiguity around supplier quantity: **there is no permanent supplier quantity field**. Supplier-owned private catalog records hold product details, source price and binary in-stock/out-of-stock state; admins match each supplier record to at most one exact canonical public product or create a new canonical listing when no exact match exists. After independent payment verification, the system requests confirmation for the exact quantity of each paid order line, attempts eligible suppliers in priority order, and performs bounded/idempotent failover on decline, inability, timeout or lost eligibility. A single supplier must fulfill the full line unless a separate policy is approved; exhausted sourcing goes to admin-managed exception handling.
 
 This decision clarifies the target behavior but does **not** establish runtime compliance. The code audit remains open for supplier-owned unlinked catalog records, quantity-free data/UI, order-specific confirmation attempts, candidate failover and cooldown interactions, checkout/settlement stock guards, expiry/restoration, concurrency, immutable snapshots, and supplier/payable/ledger effects. Existing legacy stock guards must not be removed until these connected paths are reconciled and regression-tested. No merge or deployment is authorized by this documentation update.
+
+
+## Implementation status correction — 24 October 2026
+
+The earlier recommendation above to avoid a separate supplier-catalog table is superseded by the owner's explicit requirement that supplier-owned source records exist before and independently of canonical public listings. The branch now has a separate private `supplier_catalog_products` table/model, supplier-owner API, Super Admin matching workflow, binary stock state with no quantity field, and a unique offer-to-source-record relationship. Legacy offers without this relationship remain a migration/retirement gap; they are temporarily supported for backwards compatibility and must not be mistaken for the final policy state.
