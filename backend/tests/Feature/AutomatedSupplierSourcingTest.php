@@ -694,10 +694,21 @@ class AutomatedSupplierSourcingTest extends TestCase
 
         // Exercise the real 60-operating-minute timeout worker and its automatic
         // failover path, not only the manual supplier-rejection endpoint.
-        Carbon::setTestNow(Carbon::parse('2026-10-24 09:01:00', 'UTC'));
+        // Keep the frozen SLA clock at or after the offers' confirmation timestamps.
+        // Freezing to a fixed past date makes fresh offers appear to be confirmed in
+        // the future, which correctly excludes them from failover eligibility.
+        $slaNow = Carbon::now('Africa/Lagos');
+        if ($slaNow->hour < 10) {
+            $slaNow->setTime(10, 1, 0);
+        } elseif ($slaNow->hour >= 18) {
+            $slaNow->addDay()->setTime(10, 1, 0);
+        } else {
+            $slaNow->addMinute();
+        }
+        Carbon::setTestNow($slaNow);
         OrderSupplierAssignment::whereKey($failedAssignment->id)->update([
             'status' => 'awaiting_supplier_confirmation',
-            'assigned_at' => Carbon::parse('2026-10-24 07:59:00', 'UTC'),
+            'assigned_at' => $slaNow->copy()->subMinutes(62),
         ]);
         try {
             $this->artisan('supplier:check-confirmation-sla')->assertExitCode(0);
