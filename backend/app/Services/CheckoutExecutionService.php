@@ -149,13 +149,9 @@ class CheckoutExecutionService
                     ];
                 }
 
-                if (isset($product->inventory_quantity) && (int)$product->inventory_quantity > 0 && (int)$product->inventory_quantity < $item['quantity']) {
-                    return [
-                        'error' => true,
-                        'message' => "Insufficient stock for {$product->name}. Only {$product->inventory_quantity} available.",
-                    ];
-                }
-
+                // Supplier stock is binary at catalog level. Exact quantity is
+                // confirmed against eligible supplier offers after verified payment;
+                // legacy canonical inventory_quantity must not reject the cart here.
                 $lineTotal = BcMathService::mul($product->unit_price, (string)$item['quantity']);
                 $merchandiseSubtotal = BcMathService::add($merchandiseSubtotal, $lineTotal);
 
