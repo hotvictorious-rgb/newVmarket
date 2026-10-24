@@ -1,0 +1,63 @@
+name: AI Engineering Q&A Gate
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  pull-requests: read
+  contents: read
+
+jobs:
+  required-qa:
+    name: AI Engineering Q&A Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require complete change Q&A
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          body = os.environ.get("PR_BODY") or ""
+          questions = [
+              "Q1 — What exactly changed?",
+              "Q2 — Which approved policy permits this?",
+              "Q3 — Preconditions, state transitions, and authorization?",
+              "Q4 — Failure modes and safe recovery?",
+              "Q5 — Duplicate and concurrency protection?",
+              "Q6 — Financial and audit consequences?",
+              "Q7 — Tests run and what they prove?",
+              "Q8 — What was inspected beyond changed lines?",
+              "Q9 — Were any tests/controls removed, weakened, or skipped?",
+              "Q10 — Which current Victorious MARKET invariants apply?",
+              "Q11 — Risks, deployment requirements, and rollback?",
+              "Q12 — What remains unproven?",
+          ]
+
+          errors = []
+          for i, question in enumerate(questions):
+              match = re.search(r"(?m)^###\s+" + re.escape(question) + r"\s*$", body)
+              if not match:
+                  errors.append(f"Missing required section: {question}")
+                  continue
+              start = match.end()
+              next_heading = re.search(r"(?m)^###\s+", body[start:])
+              end = start + next_heading.start() if next_heading else len(body)
+              answer = body[start:end].strip()
+              answer = re.sub(r"(?m)^Answer:\s*", "", answer).strip()
+              if not answer or re.fullmatch(r"(?:\*\*?\s*)?(?:tbd|todo|n/?a|none|pending|fill this in|not applicable)(?:\s*\*\*?)?\.?\s*", answer, re.I):
+                  errors.append(f"Answer required for: {question}")
+
+          if errors:
+              print("AI Engineering Q&A Gate: FAIL")
+              print("\n".join(f"- {error}" for error in errors))
+              print("\nFill every Q1–Q12 section in the pull request description with specific answers. If not applicable, explain why and provide evidence.")
+              sys.exit(1)
+
+          print("AI Engineering Q&A Gate: required Q1–Q12 sections are present and non-empty.")
+          print("This checks answer presence only; it does not validate truth, code correctness, or test quality.")
+          PY
