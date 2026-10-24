@@ -81,18 +81,27 @@ class SupplierFailoverConcurrencyTest extends TestCase
             'listing_confirmed_at' => Carbon::now()->subMinute(),
             'freshness_confirmed_at' => Carbon::now()->subMinute(),
         ]);
-        foreach ([[$primaryVendor, $primaryShop, '25000.00'], [$backupVendor, $backupShop, '27000.00']] as [$vendor, $shop, $cost]) {
-            SupplierOffer::create([
-                'product_id' => $product->id,
-                'vendor_id' => $vendor->id,
-                'shop_id' => $shop->id,
-                'wholesale_cost' => $cost,
-                'is_available' => true,
-                'availability_confirmed_at' => now()->subMinute(),
-                'availability_confirmed_by' => $admin->id,
-                'availability_expires_at' => now()->addHours(24),
-            ]);
-        }
+        $primaryOffer = SupplierOffer::create([
+            'product_id' => $product->id,
+            'vendor_id' => $primaryVendor->id,
+            'shop_id' => $primaryShop->id,
+            'wholesale_cost' => '25000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => now()->subMinute(),
+            'availability_confirmed_by' => $admin->id,
+            'availability_expires_at' => now()->addHours(24),
+        ]);
+        SupplierOffer::create([
+            'product_id' => $product->id,
+            'vendor_id' => $backupVendor->id,
+            'shop_id' => $backupShop->id,
+            'wholesale_cost' => '27000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => now()->subMinute(),
+            'availability_confirmed_by' => $admin->id,
+            'availability_expires_at' => now()->addHours(24),
+        ]);
+
         DeliveryLane::create([
             'origin_lga_id' => $uyo->id,
             'destination_lga_id' => $uyo->id,
@@ -130,6 +139,7 @@ class SupplierFailoverConcurrencyTest extends TestCase
             ->where('supplier_vendor_id', $item->fulfillment_supplier_vendor_id)
             ->firstOrFail();
         $this->assertSame((int) $primaryVendor->id, (int) $item->fulfillment_supplier_vendor_id);
+        $primaryOffer->forceFill(['is_available' => false])->save();
         $failedAssignment->forceFill(['status' => 'supplier_rejected'])->save();
         $order->forceFill(['sourcing_status' => 'supplier_rejected'])->save();
 
