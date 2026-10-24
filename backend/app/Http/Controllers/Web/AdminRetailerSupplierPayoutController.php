@@ -36,6 +36,19 @@ class AdminRetailerSupplierPayoutController extends Controller
             return back()->with('error', 'Only a pending supplier payout can be submitted.');
         }
 
+        $treasuryReservation = app(RetailerSupplierPayoutService::class)->reserveTreasuryBankCreditBatch($payout->id);
+        if (!($treasuryReservation['success'] ?? false)) {
+            $this->audit($request, 'retailer_supplier_payout_blocked_missing_treasury_bank_credit', $payout, [
+                'status' => $payout->status,
+                'amount' => (string) $payout->amount,
+            ], [
+                'reason' => $treasuryReservation['message'] ?? 'No reconciled bank-credit batch available.',
+                'action' => 'transfer_blocked_before_gateway_recipient_or_transfer',
+            ]);
+            return back()->with('error', $treasuryReservation['message']
+                ?? 'Supplier payout blocked until treasury bank-credit evidence is reconciled.');
+        }
+
         $paystack = app(PaystackService::class);
         $recipient = $paystack->createTransferRecipient(
             $payout->account_name,
