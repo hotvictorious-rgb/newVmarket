@@ -1,9 +1,12 @@
 <?php
 
 use App\Http\Controllers\Web\AdminSupplierOfferAvailabilityController;
+use App\Http\Controllers\Web\AdminSupplierCatalogController;
 use App\Http\Controllers\Web\AdminOrderSupplierAssignmentController;
 use App\Http\Controllers\Web\AdminSupplierRecoveryController;
 use App\Http\Controllers\Web\AdminRetailerSupplierPayoutController;
+use App\Http\Controllers\Web\AdminPaymentCaptureExceptionController;
+use App\Http\Controllers\Web\AdminTreasuryBankCreditBatchController;
 use App\Http\Controllers\Web\PaystackPaymentController;
 use App\Http\Controllers\Web\PortalController;
 use App\Http\Controllers\Web\WebAuthController;
@@ -72,6 +75,13 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/delivery-lanes', [PortalController::class, 'adminDeliveryLanesPage'])->name('admin.delivery_lanes.index');
     Route::get('/settlements', [PortalController::class, 'adminSettlementsPage'])->name('admin.settlements.index');
     Route::get('/retailer-supplier-payouts', [AdminRetailerSupplierPayoutController::class, 'index'])->name('admin.retailer-supplier-payouts.index');
+    Route::get('/treasury-bank-credit-batches', [AdminTreasuryBankCreditBatchController::class, 'index'])->name('admin.treasury-bank-credit-batches.index');
+    Route::post('/treasury-bank-credit-batches', [AdminTreasuryBankCreditBatchController::class, 'prepare'])->name('admin.treasury-bank-credit-batches.prepare');
+    Route::post('/treasury-bank-credit-batches/{id}/allocations', [AdminTreasuryBankCreditBatchController::class, 'addAllocation'])->whereNumber('id')->name('admin.treasury-bank-credit-batches.allocations.store');
+    Route::post('/treasury-bank-credit-batches/{id}/confirm', [AdminTreasuryBankCreditBatchController::class, 'confirm'])->whereNumber('id')->name('admin.treasury-bank-credit-batches.confirm');
+    Route::get('/payment-capture-exceptions', [AdminPaymentCaptureExceptionController::class, 'index'])->name('admin.payment-capture-exceptions.index');
+    Route::post('/payment-capture-exceptions/{id}/prepare', [AdminPaymentCaptureExceptionController::class, 'prepare'])->whereNumber('id')->name('admin.payment-capture-exceptions.prepare');
+    Route::post('/payment-capture-exception-resolutions/{id}/confirm-manual-refund', [AdminPaymentCaptureExceptionController::class, 'confirmManualRefund'])->whereNumber('id')->name('admin.payment-capture-exceptions.confirm-manual-refund');
     Route::post('/retailer-supplier-payouts/{id}/disburse', [AdminRetailerSupplierPayoutController::class, 'disburse'])->whereNumber('id')->name('admin.retailer-supplier-payouts.disburse');
     Route::post('/retailer-supplier-payouts/{id}/reconcile', [AdminRetailerSupplierPayoutController::class, 'reconcile'])->whereNumber('id')->name('admin.retailer-supplier-payouts.reconcile');
     Route::post('/retailer-supplier-payouts/{id}/reject', [AdminRetailerSupplierPayoutController::class, 'reject'])->whereNumber('id')->name('admin.retailer-supplier-payouts.reject');
@@ -96,6 +106,15 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
         ->whereNumber('assignmentId')
         ->name('admin.orders.supplier_assignments.recover');
     Route::get('/products', [PortalController::class, 'adminProductsPage'])->name('admin.products.index');
+    Route::get('/supplier-catalog', [AdminSupplierCatalogController::class, 'index'])->name('admin.supplier-catalog.index');
+    Route::post('/supplier-catalog/private-products', [AdminSupplierCatalogController::class, 'storeSupplierCatalogProduct'])->name('admin.supplier-catalog.private-products.store');
+    Route::post('/supplier-catalog/private-products/{catalogProductId}/link', [AdminSupplierCatalogController::class, 'linkSupplierCatalogProduct'])->whereNumber('catalogProductId')->name('admin.supplier-catalog.private-products.link');
+    Route::post('/supplier-catalog/private-products/{catalogProductId}/unmatch', [AdminSupplierCatalogController::class, 'unmatchSupplierCatalogProduct'])->whereNumber('catalogProductId')->name('admin.supplier-catalog.private-products.unmatch');
+    Route::post('/supplier-catalog/products', [AdminSupplierCatalogController::class, 'storeProduct'])->name('admin.supplier-catalog.products.store');
+    Route::post('/supplier-catalog/products/{productId}/listing', [AdminSupplierCatalogController::class, 'setListing'])->whereNumber('productId')->name('admin.supplier-catalog.products.listing');
+    Route::patch('/supplier-catalog/offers/{offerId}/cost', [AdminSupplierCatalogController::class, 'updateOfferCost'])->whereNumber('offerId')->name('admin.supplier-catalog.offers.cost');
+    Route::post('/supplier-catalog/offers/{offerId}/disable', [AdminSupplierCatalogController::class, 'disableOffer'])->whereNumber('offerId')->name('admin.supplier-catalog.offers.disable');
+    Route::post('/supplier-catalog/offers/{offerId}/enable', [AdminSupplierCatalogController::class, 'enableOffer'])->whereNumber('offerId')->name('admin.supplier-catalog.offers.enable');
     Route::post('/supplier-offers/{offerId}/confirm-availability', [AdminSupplierOfferAvailabilityController::class, 'confirm'])
         ->whereNumber('offerId')
         ->name('admin.supplier_offers.confirm_availability');

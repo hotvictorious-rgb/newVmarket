@@ -410,6 +410,178 @@ class SourcingAllocationService
     }
 
     /**
+     * Bind supplier sourcing only after the order's payment has been authoritatively
+     * verified. Call from payment settlement; checkout may only run a non-binding
+     * feasibility check.
+     */
+    public function allocateVerifiedPaidOrder(Order $order): array
+    {
+        return DB::transaction(function () use ($order) {
+            $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            // The caller is the verified-payment settlement transaction. Its
+            // in-memory order has payment_status=paid before the outer transaction
+            // commits; the locked database row may still show the pre-transition
+            // value until this transaction completes.
+            if (!$lockedOrder->retailer_model_order || $order->payment_status !== 'paid') {
+                throw new InvalidArgumentException('Supplier allocation requires a retailer order with verified paid status.');
+            }
+
+            $items = OrderItem::where('order_id', $lockedOrder->id)->orderBy('id')->lockForUpdate()->get();
+            if ($items->isEmpty()) {
+                return ['success' => false, 'reason' => 'The paid order has no order lines to source.'];
+            }
+
+            $allSnapshotted = $items->every(fn ($item) =>
+                !empty($item->supplier_offer_id)
+                && !empty($item->supplier_vendor_id)
+                && !empty($item->supplier_shop_id)
+                && $item->supplier_cost_snapshot !== null
+            );
+            if ($allSnapshotted) {
+                if (!OrderSupplierAssignment::where('order_id', $lockedOrder->id)->exists()
+                    || $lockedOrder->supplier_cost_total_snapshot === null) {
+                    throw new \RuntimeException('Partial supplier allocation state detected; manual reconciliation is required.');
+                }
+                return ['success' => true, 'replayed' => true, 'locations_count' => (int) $lockedOrder->sourcing_plan_locations_count];
+            }
+
+            if ($items->contains(fn ($item) =>
+                $item->supplier_offer_id !== null
+                || $item->supplier_vendor_id !== null
+                || $item->supplier_shop_id !== null
+                || $item->supplier_cost_snapshot !== null
+            )) {
+                throw new \RuntimeException('Partial supplier snapshots detected; allocation is blocked for admin reconciliation.');
+            }
+
+            // An old pre-payment assignment row without matching immutable
+            // item snapshots is ambiguous legacy state. Do not silently adopt it.
+            if (OrderSupplierAssignment::where('order_id', $lockedOrder->id)->exists()) {
+                return ['success' => false, 'reason' => 'Existing supplier assignment rows conflict with the unbound item snapshots; admin reconciliation is required.'];
+            }
+
+            $planItems = [];
+            foreach ($items as $item) {
+                $product = Product::whereKey($item->product_id)->lockForUpdate()->first();
+                if (!$product) {
+                    return ['success' => false, 'reason' => "Product for order line {$item->id} no longer exists."];
+                }
+                $planItems[] = ['product' => $product, 'quantity' => (int) $item->quantity];
+            }
+
+            $plan = $this->resolveOptimalWholeOrderPlan($planItems, (string) $lockedOrder->fulfillment_type);
+            if (!$plan) {
+                return ['success' => false, 'reason' => 'No eligible Uyo supplier plan remains after verified payment; supplier availability changed or no eligible alternative exists.'];
+            }
+
+            // Validate and lock every selected offer before writing any item
+            // snapshot. A late invalid line must not commit a partial allocation.
+            $validatedLines = [];
+            foreach (array_values($plan['items']) as $index => $planLine) {
+                $item = $items[$index] ?? null;
+                if (!$item || (int) $item->product_id !== (int) $planLine['product']->id) {
+                    throw new \RuntimeException('Sourcing plan no longer matches the locked order lines.');
+                }
+
+                $offerData = $planLine['resolved_offer'];
+                $offer = SupplierOffer::whereKey($offerData['supplier_offer_id'])
+                    ->with(['vendor.user', 'shop.lga.state'])
+                    ->lockForUpdate()
+                    ->first();
+
+                $now = Carbon::now();
+                if (!$offer
+                    || !$offer->is_available
+                    || $offer->isPenaltyActive()
+                    || !$offer->availability_expires_at
+                    || $offer->availability_expires_at->lte($now)
+                    || BcMathService::comp((string) ($offer->wholesale_cost ?? '0'), '0.00') <= 0
+                    || !$offer->vendor
+                    || $offer->vendor->trashed()
+                    || $offer->vendor->marketplace_status !== 'active'
+                    || !$offer->vendor->isKycVerified()
+                    || !$offer->vendor->user
+                    || $offer->vendor->user->status !== 'active'
+                    || !$this->isEligibleUyoShop($offer->shop)
+                    || (int) $offer->vendor_id !== (int) $offer->shop->vendor_id
+                ) {
+                    return ['success' => false, 'reason' => "Supplier availability changed while allocating order line {$item->id}."];
+                }
+
+                $validatedLines[] = [
+                    'item' => $item,
+                    'product' => $planLine['product'],
+                    'resolved' => [
+                        'supplier_offer_id' => (int) $offer->id,
+                        'vendor_id' => (int) $offer->vendor_id,
+                        'shop_id' => (int) $offer->shop_id,
+                        'supplier_name' => $offer->vendor->business_name ?? $offer->vendor->user->name,
+                        'shop_name' => $offer->shop->name,
+                        'wholesale_cost' => BcMathService::add((string) $offer->wholesale_cost, '0.00'),
+                        'currency' => 'NGN',
+                    ],
+                ];
+            }
+
+            $groups = [];
+            $supplierCostTotal = '0.00';
+            foreach ($validatedLines as $line) {
+                $item = $line['item'];
+                $resolved = $line['resolved'];
+                $item->fill($this->buildOrderItemSnapshot(
+                    $resolved,
+                    $line['product'],
+                    (int) $item->quantity,
+                    (string) $item->unit_price,
+                    (string) $item->line_total,
+                    (string) ($item->package_tier ?? 'bike')
+                ));
+                $item->save();
+
+                $groupKey = $resolved['vendor_id'] . ':' . $resolved['shop_id'];
+                $groups[$groupKey] = [
+                    'supplier_vendor_id' => $resolved['vendor_id'],
+                    'supplier_shop_id' => $resolved['shop_id'],
+                ];
+                $supplierCostTotal = BcMathService::add(
+                    $supplierCostTotal,
+                    BcMathService::mul($resolved['wholesale_cost'], (string) $item->quantity)
+                );
+            }
+
+            foreach ($groups as $group) {
+                OrderSupplierAssignment::firstOrCreate(
+                    [
+                        'order_id' => $lockedOrder->id,
+                        'supplier_vendor_id' => $group['supplier_vendor_id'],
+                        'supplier_shop_id' => $group['supplier_shop_id'],
+                    ],
+                    [
+                        'status' => 'awaiting_supplier_confirmation',
+                        'assigned_at' => Carbon::now(),
+                    ]
+                );
+            }
+
+            $firstSnapshot = $items->first()?->fresh();
+            $lockedOrder->vendor_id = $firstSnapshot?->supplier_vendor_id;
+            $lockedOrder->shop_id = $firstSnapshot?->supplier_shop_id;
+            $lockedOrder->supplier_cost_total_snapshot = $supplierCostTotal;
+            $lockedOrder->fulfillment_supplier_cost_total_snapshot = $supplierCostTotal;
+            $lockedOrder->retailer_merchandise_margin = BcMathService::sub(
+                BcMathService::sub((string) $lockedOrder->merchandise_subtotal, $supplierCostTotal),
+                (string) $lockedOrder->customer_cashback_5
+            );
+            $lockedOrder->sourcing_plan_locations_count = count($groups);
+            $lockedOrder->sourcing_status = 'awaiting_supplier_confirmation';
+            $lockedOrder->sourced_at = Carbon::now();
+            $lockedOrder->save();
+
+            return ['success' => true, 'replayed' => false, 'locations_count' => count($groups)];
+        });
+    }
+
+    /**
      * Builds the authoritative snapshot payload for OrderItem creation.
      * Ensures immutable wholesale purchase cost and supplier identification.
      *
@@ -518,21 +690,14 @@ class SourcingAllocationService
                 && in_array($order->sourcing_status, ['stockout_revalidation_hold', 'supplier_rejected', 'timed_out', 'counter_breach', 'awaiting_supplier_confirmation'], true)
                 && in_array($lockedAssignment->status, ['stockout_revalidation_hold', 'supplier_rejected', 'timed_out', 'counter_breach', 'awaiting_supplier_confirmation'], true);
 
-            $isPendingPrePayment = $order->retailer_model_order
-                && $order->payment_status === 'pending'
-                && $order->order_status === 'pending'
-                && $lockedAssignment->status === 'awaiting_payment';
-
-            if (!$isPaidException && !$isPendingPrePayment) {
-                throw new InvalidArgumentException('Supplier overrides are allowed only before payment or on paid orders under an authorized sourcing exception hold.');
+            if (!$isPaidException) {
+                throw new InvalidArgumentException(
+                    'Supplier overrides are permitted only on paid retailer orders under an authorized sourcing exception hold. Pre-payment supplier plans are non-binding and cannot be overridden as assignments.'
+                );
             }
             if ((int) $lockedAssignment->supplier_vendor_id === $newVendorId) {
                 throw new InvalidArgumentException('Choose a different supplier account for an override.');
             }
-            if ($isPendingPrePayment && $order->expires_at && Carbon::now()->gte($order->expires_at)) {
-                throw new InvalidArgumentException('This checkout reservation has expired; create a new checkout before changing suppliers.');
-            }
-
             if ($isPaidException) {
                 $recoveryService = app(\App\Services\SupplierReassignmentRecoveryService::class);
                 $idempotencyKey = 'override-' . $lockedAssignment->id . '-' . microtime(true);

@@ -80,17 +80,25 @@ class Product extends Model
     }
 
     /**
-     * Availability indicator:
-     * Returns positive availability if in stock, 0 if out of stock.
+     * Legacy marketplace products may still have a real product-level quantity.
+     * Centrally sourced canonical products deliberately have no supplier quantity:
+     * null means "not quantity-tracked", not zero stock and not an inferred 999.
      */
-    public function getAvailableQuantityAttribute(): int
+    public function getAvailableQuantityAttribute(): ?int
     {
-        if (!(bool)$this->is_in_stock) {
+        if (!(bool) $this->is_in_stock) {
             return 0;
         }
 
-        if (isset($this->attributes['inventory_quantity']) && (int)$this->attributes['inventory_quantity'] > 0) {
-            return (int)$this->attributes['inventory_quantity'];
+        // Centrally managed canonical listings do not track supplier quantities,
+        // even if a stale legacy inventory counter happens to contain a value.
+        if (($this->attributes['vendor_id'] ?? null) === null
+            && ($this->attributes['shop_id'] ?? null) === null) {
+            return null;
+        }
+
+        if (isset($this->attributes['inventory_quantity']) && (int) $this->attributes['inventory_quantity'] > 0) {
+            return (int) $this->attributes['inventory_quantity'];
         }
 
         return 999;
@@ -197,17 +205,36 @@ class Product extends Model
             ->where('listing_confirmed_at', '<=', $now)
             ->whereHas('supplierOffers', function (Builder $offers) use ($now) {
                 $offers->where('is_available', true)
+                    ->where('is_admin_disabled', false)
+                    ->whereColumn('supplier_offers.wholesale_cost', '<', 'products.unit_price')
                     ->whereNotNull('availability_confirmed_at')
                     ->whereNotNull('availability_confirmed_by')
                     ->where('availability_confirmed_at', '<=', $now)
                     ->whereNotNull('availability_expires_at')
                     ->where('availability_expires_at', '>', $now)
+                    ->where(function (Builder $cooldown) use ($now) {
+                        $cooldown->whereNull('unavailability_penalty_expires_at')
+                            ->orWhere('unavailability_penalty_expires_at', '<=', $now);
+                    })
                     ->whereNull('deleted_at')
+                    ->where(function (Builder $catalogLink) {
+                        $catalogLink->whereNull('supplier_catalog_product_id')
+                            ->orWhereHas('supplierCatalogProduct', function (Builder $catalog) {
+                                $catalog->whereNull('supplier_catalog_products.deleted_at')
+                                    ->where('supplier_catalog_products.status', 'active')
+                                    ->where('supplier_catalog_products.is_in_stock', true)
+                                    ->whereColumn('supplier_catalog_products.canonical_product_id', 'supplier_offers.product_id')
+                                    ->whereColumn('supplier_catalog_products.supplier_vendor_id', 'supplier_offers.vendor_id')
+                                    ->whereColumn('supplier_catalog_products.supplier_shop_id', 'supplier_offers.shop_id')
+                                    ->whereColumn('supplier_catalog_products.source_price', 'supplier_offers.wholesale_cost');
+                            });
+                    })
                     ->whereHas('vendor', function ($vendor) {
                         $vendor->whereNull('vendor_profiles.deleted_at')
                             ->where('marketplace_status', 'active')
                             ->where('kyc_status', 'verified')
-                            ->whereRaw('(select count(*) from shops as active_supplier_shops where active_supplier_shops.vendor_id = vendor_profiles.id and active_supplier_shops.deleted_at is null and active_supplier_shops.is_active = 1) = 1')
+                            ->whereRaw('(select count(*) from shops as active_supplier_shops where active_supplier_shops.vendor_id = vendor_profiles.id and active_supplier_shops.deleted_at is null and active_supplier_shops.is_active = true) = 1')
+                            ->whereRaw('(select count(*) from order_supplier_assignments as pending_assignments where pending_assignments.supplier_vendor_id = vendor_profiles.id and pending_assignments.status in (\'awaiting_supplier_confirmation\', \'supplier_confirmed\', \'ready_for_collection\')) < 5')
                             ->whereHas('user', function ($user) {
                                 $user->where('status', 'active');
                             });

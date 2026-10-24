@@ -78,13 +78,115 @@ class OrderSettlementService
                 }
             }
 
-            // 2. IDEMPOTENCY GUARD: Already settled payment (Prevents duplicate captures / cashback replays)
+            // 2. Paid-order replay guard. Validate gateway evidence BEFORE returning
+            // ALREADY_PAID: a second successful capture must not be mistaken for a replay.
             if ($lockedOrder->payment_status === 'paid') {
+                $paidStatus = strtolower((string) ($paystackData['status'] ?? ''));
+                $paidCurrency = strtoupper((string) ($paystackData['currency'] ?? ''));
+                $paidReference = (string) ($paystackData['reference'] ?? '');
+                $paidAmountRaw = $paystackData['amount'] ?? null;
+                $paidAmountIsIntegerKobo = (is_int($paidAmountRaw) || (is_string($paidAmountRaw) && preg_match('/^\\d+$/', $paidAmountRaw) === 1));
+                $paidAmountKobo = $paidAmountIsIntegerKobo ? (int) $paidAmountRaw : -1;
+                $expectedPaidKobo = (int) bcmul(bcadd((string) $lockedOrder->grand_total, '0', 2), '100', 0);
+
+                if ($paidStatus !== 'success') {
+                    return ['success' => false, 'status' => 'STATUS_NOT_SUCCESS', 'message' => "Gateway status '{$paidStatus}' is not successful."];
+                }
+                if ($paidCurrency !== 'NGN') {
+                    return ['success' => false, 'status' => 'CURRENCY_MISMATCH', 'message' => "Currency mismatch: gateway sent '{$paidCurrency}', expected 'NGN'."];
+                }
+                if ($paidReference === '' || empty($lockedOrder->payment_reference) || !hash_equals((string) $lockedOrder->payment_reference, $paidReference)) {
+                    return ['success' => false, 'status' => 'REFERENCE_MISMATCH', 'message' => 'Payment reference does not match the already-paid order.'];
+                }
+                if (!$paidAmountIsIntegerKobo || $paidAmountKobo !== $expectedPaidKobo) {
+                    return ['success' => false, 'status' => 'AMOUNT_MISMATCH', 'message' => 'Incoming capture does not match the already-paid order amount in integer kobo.'];
+                }
+
+                $incomingTransactionId = trim((string) ($paystackData['id'] ?? ''));
+                $storedTransactionId = trim((string) ($lockedOrder->paystack_transaction_id ?? ''));
+                $storedIdentityIsKnown = $storedTransactionId !== ''
+                    && $storedTransactionId !== (string) $lockedOrder->payment_reference;
+                $isExactCaptureReplay = $incomingTransactionId !== ''
+                    && $storedIdentityIsKnown
+                    && hash_equals($storedTransactionId, $incomingTransactionId);
+
+                if (!$isExactCaptureReplay) {
+                    // The order is already paid, but the incoming success cannot be
+                    // proven to be the same gateway capture. Record a durable,
+                    // idempotent exception for admin reconciliation; never create a
+                    // second supplier payable, cashback credit, or automatic refund.
+                    $exceptionIdentity = $incomingTransactionId !== ''
+                        ? 'transaction:' . $incomingTransactionId
+                        : 'evidence:' . hash('sha256', json_encode([
+                            $paidReference,
+                            $paidAmountKobo,
+                            $paidCurrency,
+                            $paidStatus,
+                            $paystackData['channel'] ?? null,
+                        ], JSON_UNESCAPED_SLASHES) ?: '');
+                    $exceptionKey = 'PAYSTACK-DUP-CAP-' . hash('sha256', $lockedOrder->id . '|' . $exceptionIdentity);
+
+                    $captureException = \App\Models\PaymentCaptureException::firstOrCreate(
+                        ['idempotency_key' => $exceptionKey],
+                        [
+                            'order_id' => $lockedOrder->id,
+                            'gateway_provider' => 'paystack',
+                            'gateway_transaction_id' => $incomingTransactionId !== '' ? $incomingTransactionId : null,
+                            'payment_reference' => $paidReference,
+                            'amount_kobo' => $paidAmountKobo,
+                            'currency' => $paidCurrency,
+                            'exception_type' => $storedIdentityIsKnown ? 'distinct_successful_capture' : 'payment_identity_unproven',
+                            'status' => 'pending_admin_review',
+                            'evidence' => [
+                                'stored_transaction_id' => $storedTransactionId !== '' ? $storedTransactionId : null,
+                                'incoming_transaction_id' => $incomingTransactionId !== '' ? $incomingTransactionId : null,
+                                'payment_reference' => $paidReference,
+                                'amount_kobo' => $paidAmountKobo,
+                                'currency' => $paidCurrency,
+                                'channel' => (string) ($paystackData['channel'] ?? ''),
+                                'detected_via' => $channel,
+                            ],
+                            'detected_at' => Carbon::now(),
+                        ]
+                    );
+
+                    if ($captureException->wasRecentlyCreated) {
+                        \App\Models\AdminAuditLog::create([
+                        'user_id' => null,
+                        'action' => 'paystack_duplicate_capture_review_required',
+                        'target_type' => Order::class,
+                        'target_id' => $lockedOrder->id,
+                        'old_values' => ['paystack_transaction_id' => $storedTransactionId],
+                        'new_values' => [
+                            'exception_key' => $exceptionKey,
+                            'exception_type' => $storedIdentityIsKnown ? 'distinct_successful_capture' : 'payment_identity_unproven',
+                            'incoming_transaction_id' => $incomingTransactionId !== '' ? $incomingTransactionId : null,
+                            'payment_reference' => $paidReference,
+                            'amount_kobo' => $paidAmountKobo,
+                            'currency' => $paidCurrency,
+                            'requires_admin_review' => true,
+                            'automatic_refund_dispatched' => false,
+                        ],
+                        'ip_address' => request()->ip() ?? '127.0.0.1',
+                        'user_agent' => 'Paystack settlement reconciliation',
+                        ]);
+                    }
+
+                    return [
+                        'success' => true,
+                        'status' => 'DUPLICATE_CAPTURE_REQUIRES_REVIEW',
+                        'is_replayed' => false,
+                        'requires_admin_review' => true,
+                        'message' => 'The order was already paid, but this capture could not be proven to be the original transaction. A durable admin-review exception was recorded; no additional financial effects were posted.',
+                        'order' => $lockedOrder,
+                    ];
+                }
+
                 return [
                     'success' => true,
                     'status' => 'ALREADY_PAID',
                     'is_replayed' => true,
-                    'message' => 'Payment has already been successfully verified and settled.',
+                    'message' => 'The same gateway transaction was already verified and settled.',
                     'order' => $lockedOrder,
                 ];
             }
@@ -112,9 +214,12 @@ class OrderSettlementService
             // 5. Exact Mathematical Integer Kobo Equality Guard (BCMath Zero Epsilon)
             $grandTotalNormalized = bcadd((string)$lockedOrder->grand_total, '0', 2);
             $expectedKobo = (int) bcmul($grandTotalNormalized, '100', 0);
-            $actualKobo = (int) ($paystackData['amount'] ?? 0);
+            $actualKoboRaw = $paystackData['amount'] ?? null;
+            $actualKoboIsInteger = is_int($actualKoboRaw)
+                || (is_string($actualKoboRaw) && preg_match('/^\\d+$/', $actualKoboRaw) === 1);
+            $actualKobo = $actualKoboIsInteger ? (int) $actualKoboRaw : -1;
 
-            if ($actualKobo !== $expectedKobo) {
+            if (!$actualKoboIsInteger || $actualKobo !== $expectedKobo) {
                 return [
                     'success' => false,
                     'status' => 'AMOUNT_MISMATCH',
@@ -201,6 +306,7 @@ class OrderSettlementService
             $depletedStockItems = [];
             $hasStockoutIssue = false;
             $stockoutReason = '';
+            $allocationResult = null;
             $lockedOrder->payment_status = 'paid';
             $lockedOrder->paid_at = $now;
             $lockedOrder->payment_channel = (string)($paystackData['channel'] ?? 'paystack');
@@ -209,7 +315,10 @@ class OrderSettlementService
             if ($lockedOrder->order_status === 'cancelled') {
                 // The order was previously cancelled by the expiration worker.
                 // Verify whether stock can be re-reserved atomically.
-                $canReinstate = $lockedOrder->items->isNotEmpty();
+                // A retailer order that expired/cancelled before payment must not be
+                // silently resurrected after a late charge. Keep its funds held for
+                // an authorized refund-review decision under the binding recovery policy.
+                $canReinstate = !$lockedOrder->retailer_model_order && $lockedOrder->items->isNotEmpty();
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
                         $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
@@ -280,19 +389,61 @@ class OrderSettlementService
 
                 $depletedStockItems = [];
                 $decrementedProducts = [];
-                // Deduct inventory quantity if tracked upon confirmed payment
+
+                // Binding sourcing starts only now: payment has been verified and
+                // the order is locked inside this settlement transaction. Checkout
+                // stores no supplier assignments or wholesale-cost snapshots.
+                if ($lockedOrder->retailer_model_order) {
+                    $allocationResult = app(SourcingAllocationService::class)->allocateVerifiedPaidOrder($lockedOrder);
+
+                    // Allocation updates the order through its own row-locked model
+                    // instance. Copy those authoritative fields onto this settlement
+                    // instance before its later save, otherwise stale null snapshots
+                    // would overwrite the just-created supplier-cost totals.
+                    if (!empty($allocationResult['success'])) {
+                        $sourcedState = Order::whereKey($lockedOrder->id)->firstOrFail();
+                        foreach ([
+                            'vendor_id',
+                            'shop_id',
+                            'supplier_cost_total_snapshot',
+                            'fulfillment_supplier_cost_total_snapshot',
+                            'retailer_merchandise_margin',
+                            'sourcing_plan_locations_count',
+                            'sourced_at',
+                        ] as $field) {
+                            $lockedOrder->{$field} = $sourcedState->{$field};
+                        }
+                    }
+                }
+
+                // Legacy product inventory remains authoritative for legacy-owned stock.
+                // New canonical retailer products have no vendor/shop owner and use the
+                // verified supplier offer as the stock signal. Their legacy inventory_quantity is not an authoritative quantity counter for supplier-backed
+                // listings; the supplier's post-payment quantity confirmation is authoritative.
+                // Do not turn that sentinel into a false post-payment stockout/refund hold.
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
                         $prod = Product::where('id', $item->product_id)->lockForUpdate()->first();
-                        if ($prod && isset($prod->inventory_quantity)) {
-                            if ((int) $prod->inventory_quantity >= (int) $item->quantity) {
-                                $prod->decrement('inventory_quantity', (int) $item->quantity);
-                                $prod->is_in_stock = ((int) $prod->inventory_quantity > 0);
-                                $prod->save();
-                                $decrementedProducts[] = ['product' => $prod, 'quantity' => (int) $item->quantity];
-                            } else {
-                                $depletedStockItems[] = $item->product_name ?? "Product #{$prod->id}";
-                            }
+                        if (!$prod || !isset($prod->inventory_quantity)) {
+                            continue;
+                        }
+
+                        $supplierSourcedCanonicalProduct = $lockedOrder->retailer_model_order
+                            && $prod->vendor_id === null
+                            && $prod->shop_id === null
+                            && (bool) $prod->is_in_stock;
+
+                        if ($supplierSourcedCanonicalProduct) {
+                            continue;
+                        }
+
+                        if ((int) $prod->inventory_quantity >= (int) $item->quantity) {
+                            $prod->decrement('inventory_quantity', (int) $item->quantity);
+                            $prod->is_in_stock = ((int) $prod->inventory_quantity > 0);
+                            $prod->save();
+                            $decrementedProducts[] = ['product' => $prod, 'quantity' => (int) $item->quantity];
+                        } else {
+                            $depletedStockItems[] = $item->product_name ?? "Product #{$prod->id}";
                         }
                     }
                 }
@@ -304,10 +455,13 @@ class OrderSettlementService
             // Post-Payment Stock & Supplier Availability Revalidation (Retailer Model)
             if ($lockedOrder->retailer_model_order && $lockedOrder->payment_status === 'paid'
                 && $lockedOrder->order_status === 'confirmed') {
-                $hasStockoutIssue = !empty($depletedStockItems);
+                $hasStockoutIssue = !empty($depletedStockItems)
+                    || ($allocationResult !== null && empty($allocationResult['success']));
                 $stockoutReason = !empty($depletedStockItems)
                     ? 'Inventory depleted for: ' . implode(', ', $depletedStockItems)
-                    : '';
+                    : (($allocationResult !== null && empty($allocationResult['success']))
+                        ? (string) ($allocationResult['reason'] ?? 'No eligible supplier plan remains after verified payment.')
+                        : '');
 
                 $orderItems = $lockedOrder->items()->orderBy('id')->lockForUpdate()->get();
                 $assignments = \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
@@ -410,6 +564,20 @@ class OrderSettlementService
                     'description' => "Customer Refund Liability held in escrow for Order #{$lockedOrder->order_number} (Inventory depleted after expiration)",
                 ]);
 
+                // The payment capture and its customer refund obligation must commit
+                // atomically. If the pending admin-review operation cannot be persisted,
+                // throw and roll back the payment state + liability journal together.
+                // This creates a request only; it never dispatches a gateway refund.
+                $latePaymentRefundReason = "Refund pending administrative authorization for cancelled/depleted Order #{$lockedOrder->order_number}";
+                app(\App\Services\FinancialOperationService::class)->createRefundOperation(
+                    $lockedOrder,
+                    (string) $lockedOrder->grand_total,
+                    $latePaymentRefundReason,
+                    null,
+                    'PAYSTACK-LATE-REFUND-' . $lockedOrder->id,
+                    ['type' => 'pending_admin_review_late_payment']
+                );
+
                 // Invariant: Customer cashback balance is LEFT UNTOUCHED (zero lots consumed)
                 // Invariant: ZERO new cashback reward is accrued for unfulfilled orders
                 // Invariant: ZERO merchant, logistics, or platform cut is distributed
@@ -440,7 +608,7 @@ class OrderSettlementService
                     'success' => true,
                     'status' => 'REFUND_PENDING',
                     'is_refund_only' => true,
-                    'message' => 'Order was cancelled prior to payment and inventory is depleted. 100% of payment held in escrow as customer refund liability and automated refund requested.',
+                    'message' => 'Order was cancelled before payment and inventory is unavailable. The full captured amount is held as customer refund liability, with a pending admin-review request; no automatic refund is dispatched.',
                     'order' => $lockedOrder,
                     'trigger_gateway_refund' => true,
                     'refund_reference' => $reference,
@@ -994,38 +1162,8 @@ class OrderSettlementService
             ];
         }, 5);
 
-        // Zero-Automated-Outflow Law: Settle payment facts, reserve liability hold, and record
-        // pending FinancialOperation. Autonomous gateway dispatch is strictly blocked.
-        if (!empty($result['trigger_gateway_refund'])) {
-            $orderToRefund = Order::find($result['refund_order_id']);
-            if ($orderToRefund) {
-                try {
-                    $finOpService = app(\App\Services\FinancialOperationService::class);
-                    $existingOp = \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
-                        ->whereJsonContains('metadata->order_id', $orderToRefund->id)
-                        ->whereIn('status', ['pending', 'initiated', 'confirmed'])
-                        ->first();
-
-                    if (!$existingOp) {
-                        $finOpService->createRefundOperation(
-                            $orderToRefund,
-                            $result['refund_amount'],
-                            "Refund pending administrative authorization for cancelled/depleted Order #{$result['refund_order_number']}",
-                            null,
-                            null,
-                            ['type' => 'pending_admin_review_late_payment']
-                        );
-                    }
-
-                    if (isset($result['order'])) {
-                        $result['order']->refresh();
-                    }
-                } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::error("OrderSettlementService refund operation queue error: " . $e->getMessage());
-                }
-            }
-        }
-
+        // Late-payment refund obligations are created inside the settlement transaction.
+        // A committed customer refund liability must never lack its admin-review operation.
         return $result;
     }
     /**
@@ -1944,13 +2082,20 @@ class OrderSettlementService
                     ->whereIn('status', ['reserved', 'pending_payment'])
                     ->update(['status' => 'canceled']);
 
-                foreach ($locked->items as $item) {
-                    if ($item->product_id) {
-                        $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
-                        if ($product && isset($product->inventory_quantity) && (int)$product->inventory_quantity >= 0) {
-                            $product->increment('inventory_quantity', (int)$item->quantity);
-                            $product->is_in_stock = true;
-                            $product->save();
+                // New Victorious MARKET retailer orders do not reserve/decrement
+                // canonical inventory before payment: supplier stock is an availability
+                // signal and exact quantity is confirmed only after verified payment.
+                // Restoring quantity for these orders would fabricate stock and can turn
+                // the zero-inventory sentinel into a false legacy stock counter.
+                if (!$locked->retailer_model_order) {
+                    foreach ($locked->items as $item) {
+                        if ($item->product_id) {
+                            $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
+                            if ($product && isset($product->inventory_quantity) && (int) $product->inventory_quantity >= 0) {
+                                $product->increment('inventory_quantity', (int) $item->quantity);
+                                $product->is_in_stock = true;
+                                $product->save();
+                            }
                         }
                     }
                 }

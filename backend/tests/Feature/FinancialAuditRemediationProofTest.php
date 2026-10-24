@@ -1815,20 +1815,25 @@ class FinancialAuditRemediationProofTest extends TestCase
         // unexpected caller bypasses the service-level terminal-state guard.
         $firstEntry = $journalEntries->first();
         try {
-            FinancialJournalEntry::create([
-                'order_id' => $firstEntry->order_id,
-                'financial_operation_id' => $firstEntry->financial_operation_id,
-                'transaction_reference' => $firstEntry->transaction_reference,
-                'event_id' => $firstEntry->event_id,
-                'idempotency_key' => $firstEntry->idempotency_key,
-                'beneficiary_type' => $firstEntry->beneficiary_type,
-                'beneficiary_id' => $firstEntry->beneficiary_id,
-                'account_name' => $firstEntry->account_name,
-                'entry_type' => $firstEntry->entry_type,
-                'amount' => $firstEntry->amount,
-                'currency' => $firstEntry->currency,
-                'description' => $firstEntry->description,
-            ]);
+            // Isolate the expected unique-constraint violation in a savepoint.
+            // PostgreSQL marks the current transaction failed after a statement
+            // error unless the failing nested transaction is rolled back first.
+            \Illuminate\Support\Facades\DB::transaction(function () use ($firstEntry): void {
+                FinancialJournalEntry::create([
+                    'order_id' => $firstEntry->order_id,
+                    'financial_operation_id' => $firstEntry->financial_operation_id,
+                    'transaction_reference' => $firstEntry->transaction_reference,
+                    'event_id' => $firstEntry->event_id,
+                    'idempotency_key' => $firstEntry->idempotency_key,
+                    'beneficiary_type' => $firstEntry->beneficiary_type,
+                    'beneficiary_id' => $firstEntry->beneficiary_id,
+                    'account_name' => $firstEntry->account_name,
+                    'entry_type' => $firstEntry->entry_type,
+                    'amount' => $firstEntry->amount,
+                    'currency' => $firstEntry->currency,
+                    'description' => $firstEntry->description,
+                ]);
+            });
             $this->fail('Duplicate financial journal idempotency key should be rejected by the database.');
         } catch (\Illuminate\Database\QueryException $e) {
             $this->assertSame($journalCountAfterFirst, FinancialJournalEntry::where('financial_operation_id', $operation->id)->count());

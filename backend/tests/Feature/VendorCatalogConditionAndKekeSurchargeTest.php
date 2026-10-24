@@ -16,6 +16,7 @@ use App\Models\Shop;
 use App\Models\State;
 use App\Models\SystemSetting;
 use App\Models\SupplierOffer;
+use App\Models\SupplierCatalogProduct;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Services\FulfillmentAvailabilityService;
@@ -458,7 +459,33 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertEquals('1000.00', $orderTwoBulky->delivery_bulky_surcharge_per_unit_snapshot);
         $this->assertEquals(2, $orderTwoBulky->delivery_bulky_quantity_snapshot);
 
-        // The customer has one order while private supplier snapshots differ by item.
+        // Before verified payment, the order contains customer-facing lines only:
+        // supplier identities/costs and assignment rows must not be bound yet.
+        $prePaymentItems = OrderItem::where('order_id', $orderTwoBulky->id)->orderBy('id')->get();
+        $this->assertCount(3, $prePaymentItems);
+        $this->assertTrue($prePaymentItems->every(fn ($item) =>
+            $item->supplier_vendor_id === null
+            && $item->supplier_shop_id === null
+            && $item->supplier_cost_snapshot === null
+        ));
+        $this->assertSame(0, OrderSupplierAssignment::where('order_id', $orderTwoBulky->id)->count());
+        $this->assertNull($orderTwoBulky->supplier_cost_total_snapshot);
+        $this->assertNull($orderTwoBulky->sourced_at);
+
+        // Authoritative payment settlement now selects eligible Uyo suppliers,
+        // records immutable supplier/cost snapshots, and creates assignment groups.
+        $settlement = app(\App\Services\OrderSettlementService::class)->settlePaystackOrder($orderTwoBulky, [
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => (int) bcmul((string) $orderTwoBulky->grand_total, '100', 0),
+            'reference' => (string) $orderTwoBulky->payment_reference,
+            'id' => 'VM-TEST-TX-' . $orderTwoBulky->id,
+            'channel' => 'bank',
+            'customer' => ['email' => $customer->email],
+        ]);
+        $this->assertTrue($settlement['success'] ?? false, $settlement['message'] ?? 'Verified payment settlement failed.');
+        $orderTwoBulky->refresh();
+
         $orderItems = OrderItem::where('order_id', $orderTwoBulky->id)->orderBy('id')->get();
         $this->assertCount(3, $orderItems);
         $this->assertEquals($this->vendor->id, $orderItems[0]->supplier_vendor_id);
@@ -467,31 +494,55 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertEquals($this->shop->id, $orderItems[0]->supplier_shop_id);
         $this->assertEquals($shopB->id, $orderItems[1]->supplier_shop_id);
         $this->assertEquals($shopB->id, $orderItems[2]->supplier_shop_id);
+        $this->assertNotNull($orderItems[0]->supplier_cost_snapshot);
+        $this->assertNotNull($orderItems[1]->supplier_cost_snapshot);
+        $this->assertNotNull($orderItems[2]->supplier_cost_snapshot);
         $this->assertNull($orderTwoBulky->selected_supplier_id);
         $this->assertNull($orderTwoBulky->selected_shop_id);
+        $this->assertSame('paid', $orderTwoBulky->payment_status);
+        $this->assertSame('awaiting_supplier_confirmation', $orderTwoBulky->sourcing_status);
 
         $assignments = OrderSupplierAssignment::where('order_id', $orderTwoBulky->id)->orderBy('supplier_vendor_id')->get();
         $this->assertCount(2, $assignments);
-        $this->assertSame(['awaiting_payment', 'awaiting_payment'], $assignments->pluck('status')->all());
+        $this->assertSame(['awaiting_supplier_confirmation', 'awaiting_supplier_confirmation'], $assignments->pluck('status')->all());
 
-        // Simulate authoritative payment settlement, then verify each supplier can
-        // confirm only its own assignment and the order unlocks only after both respond.
-        $orderTwoBulky->forceFill([
-            'payment_status' => 'paid',
-            'order_status' => 'confirmed',
-            'sourcing_status' => 'awaiting_supplier_confirmation',
-        ])->save();
-        OrderSupplierAssignment::where('order_id', $orderTwoBulky->id)->update([
-            'status' => 'awaiting_supplier_confirmation',
-            'assigned_at' => Carbon::now(),
-        ]);
-
+        // Each supplier can confirm only its own assignment; the order unlocks
+        // only after both assigned supplier groups respond.
         Sanctum::actingAs($supplierUserB, ['*']);
         $responseB = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
             'notes' => 'Confirmed the fan stock.',
         ]);
         $responseB->assertOk();
         $this->assertEquals('partially_supplier_confirmed', $orderTwoBulky->fresh()->sourcing_status);
+
+        $assignmentB = OrderSupplierAssignment::where('order_id', $orderTwoBulky->id)
+            ->where('supplier_vendor_id', $supplierB->id)
+            ->firstOrFail();
+        $this->assertNotEmpty($assignmentB->confirmed_order_items);
+        $this->assertNotEmpty($assignmentB->confirmation_snapshot_hash);
+        $this->assertSame($supplierUserB->id, $assignmentB->supplier_confirmed_by_user_id);
+        $expectedSupplierBItems = OrderItem::where('order_id', $orderTwoBulky->id)
+            ->where('fulfillment_supplier_vendor_id', $supplierB->id)
+            ->where('fulfillment_supplier_shop_id', $shopB->id)
+            ->orderBy('id')
+            ->get();
+        $this->assertSame(
+            $expectedSupplierBItems->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            collect($assignmentB->confirmed_order_items)->pluck('order_item_id')->all()
+        );
+        $this->assertSame(
+            $expectedSupplierBItems->pluck('quantity')->map(fn ($quantity) => (int) $quantity)->all(),
+            collect($assignmentB->confirmed_order_items)->pluck('requested_quantity')->all()
+        );
+
+        // A duplicate confirmation must replay the same order-scoped decision
+        // rather than rewrite the confirmation snapshot or create another effect.
+        $savedConfirmationHash = $assignmentB->confirmation_snapshot_hash;
+        $replayConfirmation = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
+            'notes' => 'Duplicate delivery retry.',
+        ]);
+        $replayConfirmation->assertOk();
+        $this->assertSame($savedConfirmationHash, $assignmentB->fresh()->confirmation_snapshot_hash);
 
         Sanctum::actingAs($this->vendorUser, ['*']);
         $responseA = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
@@ -618,42 +669,9 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $customerTotalBeforeRecovery = $orderTwoBulky->fresh()->grand_total;
         $cashbackBeforeRecovery = $orderTwoBulky->fresh()->customer_cashback_5;
 
-        // The test marks this order paid directly rather than invoking the gateway
-        // settlement handler, so seed a balanced capture-time payable journal before
-        // exercising recovery's reconciliation guard.
-        $simulatedCaptureSupplierTotal = '0.00';
-        foreach (OrderItem::where('order_id', $orderTwoBulky->id)->orderBy('id')->get() as $captureItem) {
-            $captureLineCost = \App\Services\BcMathService::mul(
-                (string) $captureItem->supplier_cost_snapshot,
-                (string) $captureItem->quantity
-            );
-            $simulatedCaptureSupplierTotal = \App\Services\BcMathService::add($simulatedCaptureSupplierTotal, $captureLineCost);
-            \App\Models\FinancialJournalEntry::create([
-                'order_id' => $orderTwoBulky->id,
-                'order_item_id' => $captureItem->id,
-                'transaction_reference' => 'TEST-CAPTURE-' . $orderTwoBulky->id,
-                'event_id' => 'TEST-CAPTURE-SUPPLIER-' . $orderTwoBulky->id . '-' . $captureItem->id,
-                'idempotency_key' => 'TEST-CAPTURE-SUPPLIER-' . $orderTwoBulky->id . '-' . $captureItem->id,
-                'beneficiary_type' => VendorProfile::class,
-                'beneficiary_id' => $captureItem->supplier_vendor_id,
-                'account_name' => 'supplier_payable',
-                'entry_type' => 'credit',
-                'amount' => $captureLineCost,
-                'currency' => 'NGN',
-                'description' => 'Test capture supplier payable for recovery regression.',
-            ]);
-        }
-        \App\Models\FinancialJournalEntry::create([
-            'order_id' => $orderTwoBulky->id,
-            'transaction_reference' => 'TEST-CAPTURE-' . $orderTwoBulky->id,
-            'event_id' => 'TEST-CAPTURE-CASH-' . $orderTwoBulky->id,
-            'idempotency_key' => 'TEST-CAPTURE-CASH-' . $orderTwoBulky->id,
-            'account_name' => 'cash_in_escrow',
-            'entry_type' => 'debit',
-            'amount' => $simulatedCaptureSupplierTotal,
-            'currency' => 'NGN',
-            'description' => 'Test escrow funding leg for supplier payable recovery regression.',
-        ]);
+        // Verified settlement above already posted the supplier payable and
+        // escrow journals. Do not seed a second synthetic capture; duplicate
+        // payable credits would correctly fail the recovery reconciliation guard.
 
         $recoveryService = app(\App\Services\SupplierReassignmentRecoveryService::class);
         $journalCountBeforeStaleOffer = \App\Models\FinancialJournalEntry::where('order_id', $orderTwoBulky->id)->count();
@@ -785,22 +803,35 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ->reconcileRetailerSupplierPayables($orderTwoBulky->id);
         $this->assertSame(0, $cleanAudit['mismatches']);
 
-        // A supplier rejection after payment must create an administrative hold,
-        // preserve the paid customer order, and never trigger an automatic refund.
-        $orderBike->forceFill([
-            'payment_status' => 'paid',
-            'order_status' => 'confirmed',
-            'sourcing_status' => 'awaiting_supplier_confirmation',
-        ])->save();
-        OrderSupplierAssignment::where('order_id', $orderBike->id)->update([
-            'status' => 'awaiting_supplier_confirmation',
-            'assigned_at' => Carbon::now(),
+        // Exercise the real lifecycle: supplier assignment must be created by
+        // authoritative verified settlement, not by manually fabricating assignment
+        // rows or flipping the order to paid inside a test.
+        $bikeSettlement = app(\App\Services\OrderSettlementService::class)->settlePaystackOrder($orderBike, [
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => (int) bcmul((string) $orderBike->grand_total, '100', 0),
+            'reference' => (string) $orderBike->payment_reference,
+            'id' => 'VM-TEST-BIKE-TX-' . $orderBike->id,
+            'channel' => 'bank',
+            'customer' => ['email' => $customer->email],
         ]);
+        $this->assertTrue($bikeSettlement['success'] ?? false, $bikeSettlement['message'] ?? 'Verified bike-order settlement failed.');
+        $orderBike->refresh();
+        $this->assertSame('paid', $orderBike->payment_status);
+        $this->assertGreaterThan(0, OrderSupplierAssignment::where('order_id', $orderBike->id)->count());
+        $this->assertSame('awaiting_supplier_confirmation', $orderBike->sourcing_status);
+        $bikeAssignment = OrderSupplierAssignment::where('order_id', $orderBike->id)->firstOrFail();
+        $this->assertSame(
+            (int) $this->vendor->id,
+            (int) $bikeAssignment->supplier_vendor_id,
+            'The single-bike order should be allocated to its only eligible supplier.'
+        );
+        $this->assertSame((int) $this->shop->id, (int) $bikeAssignment->supplier_shop_id);
         Sanctum::actingAs($this->vendorUser, ['*']);
         $reject = $this->postJson("/api/v1/vendor/orders/{$orderBike->id}/reject-availability", [
             'reason' => 'The listed item is no longer physically available.',
         ]);
-        $reject->assertOk()
+        $reject->assertOk($reject->getContent())
             ->assertJsonPath('status', true)
             ->assertJsonPath('sourcing_status', 'supplier_rejected');
         $this->assertEquals('paid', $orderBike->fresh()->payment_status);
@@ -1266,6 +1297,119 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertDatabaseCount('pickup_reservations', 0);
     }
 
+    public function test_admin_supplier_catalog_creates_private_canonical_product_and_unconfirmed_offer(): void
+    {
+        $admin = User::create([
+            'name' => 'Catalog Super Administrator',
+            'email' => 'catalog-admin@example.com',
+            'phone' => '+2348099000077',
+            'password' => bcrypt('SecurePass123!'),
+            'user_type' => 'super_admin',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)
+            ->get('/admin/supplier-catalog')
+            ->assertOk()
+            ->assertSee('Create canonical product');
+
+        $this->actingAs($admin)
+            ->post('/admin/supplier-catalog/products', [
+                'name' => 'Admin Catalog Samsung A15 128GB',
+                'description' => 'Canonical retailer-owned product record.',
+                'category_id' => $this->category->id,
+                'unit_price' => '35000.00',
+                'condition' => 'brand_new',
+                'package_tier' => 'bike',
+            ])
+            ->assertRedirect(route('admin.supplier-catalog.index'));
+
+        $product = Product::where('slug', 'admin-catalog-samsung-a15-128gb')->firstOrFail();
+        $this->assertNull($product->vendor_id);
+        $this->assertNull($product->shop_id);
+        $this->assertSame('unlisted', $product->listing_status);
+        $this->assertFalse((bool) $product->is_approved);
+
+        $this->actingAs($admin)
+            ->post('/admin/supplier-catalog/private-products', [
+                'shop_id' => $this->shop->id,
+                'product_name' => 'Supplier Samsung A15 128GB',
+                'source_price' => '27000.00',
+                'is_in_stock' => '1',
+                'brand' => 'Samsung',
+                'model' => 'Galaxy A15',
+                'variant' => '128GB',
+                'condition' => 'brand_new',
+                'package_tier' => 'bike',
+            ])
+            ->assertRedirect(route('admin.supplier-catalog.index'));
+
+        $privateRecord = SupplierCatalogProduct::where('product_name', 'Supplier Samsung A15 128GB')->firstOrFail();
+        $this->assertNull($privateRecord->canonical_product_id);
+        $this->actingAs($admin)
+            ->post("/admin/supplier-catalog/private-products/{$privateRecord->id}/link", [
+                'canonical_product_id' => $product->id,
+                'match_notes' => 'Exact Samsung model, 128GB capacity and condition verified.',
+            ])
+            ->assertRedirect(route('admin.supplier-catalog.index'));
+
+        $privateRecord->refresh();
+        $offer = SupplierOffer::where('supplier_catalog_product_id', $privateRecord->id)->firstOrFail();
+        $this->assertSame($this->vendor->id, $offer->vendor_id);
+        $this->assertSame($this->shop->id, $offer->shop_id);
+        $this->assertTrue((bool) $offer->is_available, 'The supplier binary in-stock signal is preserved.');
+        $this->assertNull($offer->availability_confirmed_at, 'A binary stock signal is not an admin confirmation.');
+
+        $this->actingAs($admin)
+            ->patch("/admin/supplier-catalog/offers/{$offer->id}/cost", [
+                'wholesale_cost' => '35000.00',
+                'reason' => 'Regression test: direct wholesale cost edit must remain blocked.',
+            ])
+            ->assertSessionHasErrors('wholesale_cost');
+        $this->assertSame('27000', (string) $offer->fresh()->wholesale_cost);
+
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'action' => 'supplier_private_catalog_product_matched',
+            'target_id' => $privateRecord->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->post("/admin/supplier-catalog/products/{$product->id}/listing", ['action' => 'list'])
+            ->assertRedirect();
+
+        $this->assertSame('listed', $product->fresh()->listing_status);
+        $this->assertFalse(Product::marketplaceEligible()->whereKey($product->id)->exists());
+
+        $expiry = Carbon::now()->addDays(2)->format('Y-m-d\\TH:i');
+        $this->actingAs($admin)
+            ->post("/admin/supplier-offers/{$offer->id}/confirm-availability", [
+                'availability_expires_at' => $expiry,
+                'notes' => 'Supplier confirmed by admin test.',
+            ])
+            ->assertRedirect();
+
+        $this->assertTrue((bool) $offer->fresh()->is_available);
+        $this->assertTrue(Product::marketplaceEligible()->whereKey($product->id)->exists());
+
+        $this->actingAs($admin)
+            ->post("/admin/supplier-catalog/offers/{$offer->id}/disable", [
+                'reason' => 'Supplier stock could not be re-confirmed.',
+            ])
+            ->assertRedirect();
+
+        $this->assertFalse((bool) $offer->fresh()->is_available);
+        $this->assertSame('listed', $product->fresh()->listing_status);
+        $this->assertFalse(Product::marketplaceEligible()->whereKey($product->id)->exists());
+
+        // Soft-deleted offers remain visible to administrators as history, not as eligible offers.
+        $offer->delete();
+        $this->actingAs($admin)
+            ->get(route('admin.supplier-catalog.index'))
+            ->assertOk()
+            ->assertSee("Offer #{$offer->id}")
+            ->assertSee('retired');
+    }
+
     public function test_public_shop_directory_is_retired_to_protect_supplier_identity(): void
     {
         $this->getJson('/api/v1/shops')
@@ -1273,6 +1417,48 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ->assertJsonPath('data', [])
             ->assertJsonMissingPath('data.0.address')
             ->assertJsonMissingPath('data.0.name');
+    }
+
+    public function test_public_storefront_and_product_detail_do_not_reveal_supplier_identity(): void
+    {
+        $product = Product::create([
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'category_id' => $this->category->id,
+            'name' => 'Private Supplier Identity Test Product',
+            'slug' => 'private-supplier-identity-test-product',
+            'description' => 'Public product description',
+            'unit_price' => '10000.00',
+            'condition' => 'brand_new',
+            'package_tier' => 'bike',
+            'inventory_quantity' => 5,
+            'is_in_stock' => true,
+            'listing_status' => 'listed',
+            'is_approved' => true,
+            'listing_confirmed_at' => Carbon::now(),
+        ]);
+
+        SupplierOffer::create([
+            'product_id' => $product->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'wholesale_cost' => '5000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now(),
+            'availability_confirmed_by' => $this->vendorUser->id,
+            'availability_expires_at' => Carbon::now()->addDay(),
+        ]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Victorious MARKET — One Trusted Local Retailer')
+            ->assertDontSee($this->shop->name);
+
+        $this->get('/product/' . $product->slug)
+            ->assertOk()
+            ->assertSee($product->name)
+            ->assertDontSee($this->shop->name)
+            ->assertDontSee('Sourcing Partner');
     }
 
     public function test_public_product_api_does_not_expose_supplier_shop_or_vendor_ids(): void

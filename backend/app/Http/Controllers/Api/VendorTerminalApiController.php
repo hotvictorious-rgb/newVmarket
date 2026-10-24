@@ -10,6 +10,7 @@ use App\Models\OrderSupplierAssignment;
 use App\Models\PickupReservation;
 use App\Models\Product;
 use App\Models\Shop;
+use App\Models\SupplierOffer;
 use App\Models\VendorEmployeeProfile;
 use App\Models\VendorProfile;
 use App\Services\OrderSettlementService;
@@ -467,16 +468,81 @@ class VendorTerminalApiController extends Controller
             if ($order->retailer_model_order && $order->sourcing_status === 'supplier_rejected') {
                 return ['success' => false, 'status_code' => 409, 'message' => 'This order is on administrative sourcing hold after a supplier rejection. Do not confirm or prepare further packages until an administrator resolves it.'];
             }
+            // The confirmation is an order-specific statement that this supplier
+            // can fulfil every assigned line in its entirety. It is not catalog stock
+            // quantity and must be persisted against the paid order lines.
+            $assignedItems = \App\Models\OrderItem::where('order_id', $order->id)
+                ->where('fulfillment_supplier_vendor_id', $vendor->id)
+                ->where('fulfillment_supplier_shop_id', $assignment->supplier_shop_id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($assignedItems->isEmpty()) {
+                return ['success' => false, 'status_code' => 409, 'message' => 'This assignment has no current order lines. Admin reconciliation is required.'];
+            }
+
+            $confirmedItems = [];
+            $checkedAt = Carbon::now();
+            foreach ($assignedItems as $item) {
+                if ((int) $item->quantity < 1 || !$item->fulfillment_supplier_offer_id) {
+                    return ['success' => false, 'status_code' => 409, 'message' => 'An assigned line has no valid quantity or supplier offer. Admin reconciliation is required.'];
+                }
+
+                $product = Product::whereKey($item->product_id)->lockForUpdate()->first();
+                $offer = SupplierOffer::whereKey($item->fulfillment_supplier_offer_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$product || !$offer
+                    || (int) $offer->product_id !== (int) $item->product_id
+                    || (int) $offer->vendor_id !== (int) $vendor->id
+                    || (int) $offer->shop_id !== (int) $assignment->supplier_shop_id
+                    || $offer->is_admin_disabled
+                    || !$offer->is_available
+                    || !$offer->availability_confirmed_at
+                    || !$offer->availability_confirmed_by
+                    || !$offer->availability_expires_at
+                    || $offer->availability_expires_at->lte($checkedAt)
+                    || ($offer->unavailability_penalty_expires_at && $offer->unavailability_penalty_expires_at->gt($checkedAt))
+                    || BcMathService::comp((string) $offer->wholesale_cost, '0.00') <= 0
+                    || BcMathService::comp((string) $offer->wholesale_cost, (string) $product->unit_price) >= 0
+                ) {
+                    return ['success' => false, 'status_code' => 409, 'message' => 'A supplier offer is no longer eligible. The order remains blocked for safe sourcing recovery.'];
+                }
+
+                $confirmedItems[] = [
+                    'order_item_id' => (int) $item->id,
+                    'product_id' => (int) $item->product_id,
+                    'product_name_snapshot' => (string) $item->product_name,
+                    'requested_quantity' => (int) $item->quantity,
+                    'supplier_offer_id' => (int) $offer->id,
+                    'confirmed_at' => $checkedAt->toISOString(),
+                ];
+            }
+
+            $confirmationIdentity = array_map(function (array $item): array {
+                unset($item['confirmed_at']);
+                return $item;
+            }, $confirmedItems);
+            $confirmationHash = hash('sha256', json_encode($confirmationIdentity, JSON_UNESCAPED_SLASHES));
             if ($assignment->status === 'supplier_confirmed') {
-                return ['success' => true, 'message' => 'Your supplier assignment was already confirmed.', 'order' => $order];
+                if (!$assignment->confirmation_snapshot_hash
+                    || !hash_equals((string) $assignment->confirmation_snapshot_hash, $confirmationHash)) {
+                    return ['success' => false, 'status_code' => 409, 'message' => 'The current order lines differ from the saved supplier confirmation. Admin reconciliation is required.'];
+                }
+                return ['success' => true, 'message' => 'Your supplier assignment was already confirmed for the saved order-line quantities.', 'order' => $order];
             }
             if ($assignment->status !== 'awaiting_supplier_confirmation') {
                 return ['success' => false, 'status_code' => 422, 'message' => 'This supplier assignment is not awaiting confirmation.'];
             }
 
             $assignment->status = 'supplier_confirmed';
-            $assignment->supplier_confirmed_at = Carbon::now();
+            $assignment->supplier_confirmed_at = $checkedAt;
             $assignment->supplier_response_notes = $validated['notes'] ?? null;
+            $assignment->confirmed_order_items = $confirmedItems;
+            $assignment->confirmation_snapshot_hash = $confirmationHash;
+            $assignment->supplier_confirmed_by_user_id = $ctx['user']->id;
             $assignment->save();
 
             $hasPending = OrderSupplierAssignment::where('order_id', $order->id)
@@ -564,6 +630,25 @@ class VendorTerminalApiController extends Controller
             $assignment->handover_ready_at = null;
             $assignment->save();
 
+            // A qualifying rejection starts the existing SKU-specific 24-hour
+            // cooldown before candidate selection, preventing immediate reassignment
+            // to the same failed supplier offer.
+            $assignedItems = \App\Models\OrderItem::where('order_id', $order->id)
+                ->where('fulfillment_supplier_vendor_id', $vendor->id)
+                ->where('fulfillment_supplier_shop_id', $assignment->supplier_shop_id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            foreach ($assignedItems as $item) {
+                if (!$item->fulfillment_supplier_offer_id) {
+                    continue;
+                }
+                SupplierOffer::whereKey($item->fulfillment_supplier_offer_id)
+                    ->where('vendor_id', $vendor->id)
+                    ->where('shop_id', $assignment->supplier_shop_id)
+                    ->update(['unavailability_penalty_expires_at' => Carbon::now()->addHours(24)]);
+            }
+
             // If the order was waiting for rider collection, move it back to a
             // non-dispatchable pre-dispatch state. The order-wide hold is checked
             // again inside the custody service, so stale OTPs cannot bypass it.
@@ -597,10 +682,41 @@ class VendorTerminalApiController extends Controller
 
             return [
                 'success' => true,
-                'message' => 'Rejection recorded. This paid order is now on hold for Victorious MARKET administrative resolution. No automatic refund or supplier payment was triggered.',
+                'assignment_id' => (int) $assignment->id,
+                'message' => 'Rejection recorded. The failed offer is on cooldown; the system will attempt eligible alternatives. No automatic refund or supplier payment was triggered.',
                 'sourcing_status' => $order->sourcing_status,
             ];
         });
+
+        if (($result['success'] ?? false) && !empty($result['assignment_id'])) {
+            try {
+                $failover = app(\App\Services\SupplierReassignmentRecoveryService::class)
+                    ->attemptAutomaticFailover($id, (int) $result['assignment_id']);
+                if (($failover['success'] ?? false) && (int) ($failover['reassigned_groups'] ?? 0) > 0) {
+                    $result['message'] = 'Rejection recorded. Eligible alternative supplier assignment(s) were created; each replacement supplier must confirm the exact order quantities before fulfilment resumes.';
+                    $result['sourcing_status'] = Order::find($id)?->sourcing_status;
+                } elseif (($failover['exhausted'] ?? false) === true) {
+                    $result['message'] = 'Rejection recorded. No complete eligible alternative plan remains; the paid order is held for Super Admin resolution. No automatic refund or supplier payment was triggered.';
+                } elseif (!($failover['success'] ?? false)) {
+                    $result['message'] = 'Rejection recorded. Automatic failover could not safely complete; the paid order remains held for Super Admin reconciliation.';
+                }
+            } catch (\Throwable $exception) {
+                AdminAuditLog::create([
+                    'user_id' => null,
+                    'action' => 'automatic_supplier_failover_attempt_failed',
+                    'target_type' => Order::class,
+                    'target_id' => $id,
+                    'old_values' => ['assignment_id' => (int) $result['assignment_id']],
+                    'new_values' => [
+                        'reason' => 'Automatic failover raised an exception and failed closed.',
+                        'exception_class' => get_class($exception),
+                    ],
+                    'ip_address' => $request->ip() ?? '127.0.0.1',
+                    'user_agent' => $request->userAgent() ?? 'System/API',
+                ]);
+                $result['message'] = 'Rejection recorded. Automatic failover needs Super Admin reconciliation; the paid order remains held. No automatic refund or supplier payment was triggered.';
+            }
+        }
 
         return response()->json([
             'status' => (bool) ($result['success'] ?? false),
@@ -1220,7 +1336,14 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             return response()->json(['success' => false, 'message' => 'Only the supplier account owner can request supplier payouts.'], 403);
         }
 
-        $result = app(RetailerSupplierPayoutService::class)->requestPayout($context['vendor']);
+        $validated = $request->validate([
+            'order_item_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'order_item_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+        ]);
+        $result = app(RetailerSupplierPayoutService::class)->requestPayout(
+            $context['vendor'],
+            $validated['order_item_ids']
+        );
         if (!$result['success']) {
             return response()->json([
                 'success' => false,

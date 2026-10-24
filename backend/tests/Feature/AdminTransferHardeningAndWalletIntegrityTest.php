@@ -55,16 +55,16 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             ['name' => 'Nigeria', 'phone_code' => '+234', 'currency_code' => 'NGN', 'is_active' => true]
         );
         $state = State::firstOrCreate(
-            ['code' => 'AK'],
+            ['state_code' => 'AK'],
             ['country_id' => $country->id, 'name' => 'Akwa Ibom', 'is_active' => true]
         );
         $this->uyoLga = Lga::firstOrCreate(
-            ['code' => 'UYO'],
-            ['state_id' => $state->id, 'name' => 'Uyo', 'is_active' => true]
+            ['state_id' => $state->id, 'name' => 'Uyo'],
+            ['is_active' => true]
         );
         $this->eketLga = Lga::firstOrCreate(
-            ['code' => 'EKT'],
-            ['state_id' => $state->id, 'name' => 'Eket', 'is_active' => true]
+            ['state_id' => $state->id, 'name' => 'Eket'],
+            ['is_active' => true]
         );
 
         // Admins
@@ -244,6 +244,31 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         return [$order, $item];
     }
 
+    public function test_super_admin_settlement_desk_surfaces_pending_payment_capture_exceptions(): void
+    {
+        [$order] = $this->createSupplierPayableOrderItem('7000.00');
+        \App\Models\PaymentCaptureException::create([
+            'order_id' => $order->id,
+            'gateway_provider' => 'paystack',
+            'gateway_transaction_id' => 'CAPTURE-REVIEW-TEST-1',
+            'payment_reference' => $order->payment_reference,
+            'amount_kobo' => 700000,
+            'currency' => 'NGN',
+            'exception_type' => 'distinct_successful_capture',
+            'idempotency_key' => 'PAYSTACK-ADMIN-QUEUE-TEST-1',
+            'status' => 'pending_admin_review',
+            'evidence' => ['test_case' => 'admin_queue_visibility'],
+            'detected_at' => Carbon::now(),
+        ]);
+
+        $response = $this->actingAs($this->superAdmin)->get(route('admin.settlements.index'));
+
+        $response->assertOk();
+        $response->assertSee('Payment Capture Exceptions');
+        $response->assertSee('CAPTURE-REVIEW-TEST-1');
+        $response->assertSee('distinct successful capture');
+    }
+
     public function test_supplier_payout_request_does_not_reserve_funds_during_bank_cooldown(): void
     {
         $this->vendor->update(['bank_updated_at' => Carbon::now()]);
@@ -275,7 +300,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         [$order, $item] = $this->createSupplierPayableOrderItem('7000.00');
         $service = app(RetailerSupplierPayoutService::class);
 
-        $requestResult = $service->requestPayout($this->vendor);
+        $requestResult = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requestResult['success'], $requestResult['message'] ?? 'Supplier payout request failed.');
         /** @var RetailerSupplierPayoutRequest $payout */
         $payout = $requestResult['payout'];
@@ -283,7 +308,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame(1, $payout->allocations->count());
         $this->assertTrue($service->requestJournalComplete($payout));
 
-        $duplicateRequest = $service->requestPayout($this->vendor);
+        $duplicateRequest = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertFalse($duplicateRequest['success']);
         $this->assertSame(1, RetailerSupplierPayoutRequest::where('supplier_vendor_id', $this->vendor->id)->count());
 
@@ -305,11 +330,40 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
+    public function test_supplier_payout_uses_only_explicitly_selected_items_and_never_fifo_allocates(): void
+    {
+        [, $olderItem] = $this->createSupplierPayableOrderItem('6000.00');
+        [, $selectedItem] = $this->createSupplierPayableOrderItem('7000.00');
+        $service = app(RetailerSupplierPayoutService::class);
+
+        $preview = $service->previewEligibleItems($this->vendor);
+        $this->assertContains((int) $olderItem->id, array_column($preview, 'order_item_id'));
+        $this->assertContains((int) $selectedItem->id, array_column($preview, 'order_item_id'));
+
+        $missingSelection = $service->requestPayout($this->vendor);
+        $this->assertFalse($missingSelection['success']);
+        $this->assertStringContainsString('Select the specific eligible order items', $missingSelection['message']);
+
+        $request = $service->requestPayout($this->vendor, [$selectedItem->id]);
+        $this->assertTrue($request['success'], $request['message'] ?? 'Explicit supplier payout selection failed.');
+        $this->assertSame('7000.00', (string) $request['payout']->amount);
+        $this->assertSame(
+            [$selectedItem->id],
+            $request['payout']->allocations->pluck('order_item_id')->all(),
+            'Only the item explicitly selected by the supplier may be reserved.'
+        );
+        $this->assertSame(
+            0,
+            RetailerSupplierPayoutAllocation::where('order_item_id', $olderItem->id)->count(),
+            'An older eligible item must not be included by FIFO or automatic selection.'
+        );
+    }
+
     public function test_retailer_supplier_payout_reversal_restores_item_payable_once(): void
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('9000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requestResult = $service->requestPayout($this->vendor);
+        $requestResult = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requestResult['success'], $requestResult['message'] ?? 'Supplier payout request failed.');
         $payout = $requestResult['payout'];
 
@@ -394,7 +448,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         ]);
         $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
 
-        $result = app(RetailerSupplierPayoutService::class)->requestPayout($this->vendor);
+        $result = app(RetailerSupplierPayoutService::class)->requestPayout($this->vendor, [$item->id]);
 
         $this->assertFalse($result['success']);
         $this->assertTrue($result['protected'] ?? false);
@@ -422,7 +476,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 
@@ -444,7 +498,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 
@@ -461,7 +515,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 
@@ -480,7 +534,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
         $processing = $service->markProcessing($payout->id, $this->superAdmin->id, 'RCP_TEST_SUPPLIER', 'SUPPAYOUT-IN-FLIGHT-RECON');
@@ -502,7 +556,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 
@@ -525,7 +579,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 
@@ -547,7 +601,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('8500.00');
         $service = app(RetailerSupplierPayoutService::class);
-        $requested = $service->requestPayout($this->vendor);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
         $this->assertTrue($requested['success'], $requested['message'] ?? 'Supplier payout request failed.');
         $payout = $requested['payout'];
 

@@ -510,7 +510,7 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertStringContainsString('Package packed and ready', $order->sourcing_notes);
     }
 
-    public function test_checkout_execution_populates_order_sourcing_and_order_item_snapshots(): void
+    public function test_checkout_keeps_supplier_sourcing_non_binding_until_verified_payment(): void
     {
         [$userA, $vendorA, $shopA] = $this->createSupplier('Supplier Alpha', 'alpha8@supplier.ng', '08098765438');
 
@@ -576,31 +576,24 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertSame('500.00', (string) $order->delivery_fee);
         $this->assertSame('450.00', (string) $order->logistics_company_payable_amount);
 
-        // Assert Order sourcing fields for retailer multi-supplier model
-        $this->assertEquals('awaiting_payment', $order->sourcing_status);
+        // Checkout performs only a non-binding feasibility check. No supplier
+        // assignment, wholesale-cost snapshot or sourcing timestamp may exist yet.
+        $this->assertSame('awaiting_payment', $order->sourcing_status);
         $this->assertNull($order->selected_supplier_id);
         $this->assertNull($order->selected_shop_id);
-        $this->assertNotNull($order->sourced_at);
+        $this->assertNull($order->sourced_at);
+        $this->assertNull($order->supplier_cost_total_snapshot);
+        $this->assertNull($order->fulfillment_supplier_cost_total_snapshot);
+        $this->assertSame(0, OrderSupplierAssignment::where('order_id', $order->id)->count());
 
-        // Assert per-supplier assignment is created
-        $assignment = OrderSupplierAssignment::where('order_id', $order->id)->first();
-        $this->assertNotNull($assignment);
-        $this->assertEquals($vendorA->id, $assignment->supplier_vendor_id);
-        $this->assertEquals($shopA->id, $assignment->supplier_shop_id);
-        $this->assertEquals('awaiting_payment', $assignment->status);
-
-        // Assert OrderItem snapshot fields
         $orderItem = $order->items()->first();
         $this->assertNotNull($orderItem);
-        $this->assertEquals($offer->id, $orderItem->supplier_offer_id);
-        $this->assertEquals($vendorA->id, $orderItem->supplier_vendor_id);
-        $this->assertEquals($shopA->id, $orderItem->supplier_shop_id);
-        $this->assertEquals('26500.00', $orderItem->supplier_cost_snapshot);
-        $this->assertEquals('26500.00', $orderItem->cost_price);
-        $this->assertEquals('NGN', $orderItem->supplier_cost_currency);
-        $this->assertNotNull($orderItem->supplier_snapshot_at);
-        $this->assertNotEmpty($orderItem->supplier_name_snapshot);
-        $this->assertNotEmpty($orderItem->supplier_shop_name_snapshot);
+        $this->assertNull($orderItem->supplier_offer_id);
+        $this->assertNull($orderItem->supplier_vendor_id);
+        $this->assertNull($orderItem->supplier_shop_id);
+        $this->assertNull($orderItem->supplier_cost_snapshot);
+        $this->assertNull($orderItem->supplier_snapshot_at);
+        $this->assertSame('0.00', (string) $orderItem->cost_price);
 
         // Missing company tariff must fail closed before a new order or payment intent is created.
         DeliveryLane::where('origin_lga_id', $this->uyoLga->id)
@@ -621,4 +614,302 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertStringContainsString('no approved logistics-company payable tariff', strtolower($blocked['message']));
         $this->assertSame($ordersBeforeMissingTariffAttempt, Order::count());
     }
+
+    public function test_paid_supplier_confirmation_timeout_automatically_fails_over_with_balanced_payable_recovery(): void
+    {
+        [$userA, $vendorA, $shopA] = $this->createSupplier('Primary Supplier', 'primary-failover@supplier.ng', '08011110001');
+        [$userB, $vendorB, $shopB] = $this->createSupplier('Backup Supplier', 'backup-failover@supplier.ng', '08011110002');
+
+        $product = Product::create([
+            'vendor_id' => null,
+            'shop_id' => null,
+            'category_id' => $this->category->id,
+            'name' => 'Supplier Failover Test Product',
+            'slug' => 'supplier-failover-test-product',
+            'unit_price' => '32000.00',
+            'cost_price' => '0.00',
+            'is_in_stock' => true,
+            'inventory_quantity' => 0,
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now()->subMinute(),
+            'freshness_confirmed_at' => Carbon::now()->subMinute(),
+        ]);
+
+        $this->createConfirmedOffer([
+            'product_id' => $product->id,
+            'vendor_id' => $vendorA->id,
+            'shop_id' => $shopA->id,
+            'wholesale_cost' => '25000.00',
+        ]);
+        $this->createConfirmedOffer([
+            'product_id' => $product->id,
+            'vendor_id' => $vendorB->id,
+            'shop_id' => $shopB->id,
+            'wholesale_cost' => '27000.00',
+        ]);
+
+        DeliveryLane::create([
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'base_fee' => '500.00',
+            'bulky_surcharge' => '1000.00',
+            'logistics_company_base_payable' => '450.00',
+            'logistics_company_bulky_surcharge' => '800.00',
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+
+        $checkout = app(\App\Services\CheckoutExecutionService::class)->execute($this->customerUser, [
+            'shop_id' => $shopA->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'destination_lga_id' => $this->uyoLga->id,
+            '_checkout_idempotency_key' => 'IDEMP-FAILOVER-' . uniqid(),
+            '_checkout_request_hash' => hash('sha256', 'supplier-failover-quantity-three'),
+            'items' => [
+                ['product_id' => $product->id, 'quantity' => 3],
+            ],
+        ]);
+        $this->assertTrue($checkout['success'], $checkout['message'] ?? 'Checkout failed.');
+        $order = $checkout['order'];
+
+        $settlement = app(\App\Services\OrderSettlementService::class)->settlePaystackOrder($order, [
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => (int) bcmul((string) $order->grand_total, '100', 0),
+            'reference' => (string) $order->payment_reference,
+            'id' => 'TX-FAILOVER-' . $order->id,
+            'channel' => 'card',
+        ], $this->customerUser);
+        $this->assertTrue($settlement['success'] ?? false, $settlement['message'] ?? 'Payment settlement failed.');
+
+        $order->refresh();
+        $item = OrderItem::where('order_id', $order->id)->firstOrFail();
+        $this->assertSame((int) $vendorA->id, (int) $item->supplier_vendor_id);
+        $this->assertSame('25000.00', (string) $item->supplier_cost_snapshot);
+        $failedAssignment = OrderSupplierAssignment::where('order_id', $order->id)
+            ->where('supplier_vendor_id', $vendorA->id)
+            ->firstOrFail();
+
+        // Exercise the real 60-operating-minute timeout worker and its automatic
+        // failover path, not only the manual supplier-rejection endpoint.
+        // Keep the frozen SLA clock at or after the offers' confirmation timestamps.
+        // Freezing to a fixed past date makes fresh offers appear to be confirmed in
+        // the future, which correctly excludes them from failover eligibility.
+        $slaNow = Carbon::now('Africa/Lagos');
+        if ($slaNow->hour < 10) {
+            $slaNow->setTime(10, 1, 0);
+        } elseif ($slaNow->hour >= 18) {
+            $slaNow->addDay()->setTime(10, 1, 0);
+        } else {
+            $slaNow->addMinute();
+        }
+        Carbon::setTestNow($slaNow);
+        OrderSupplierAssignment::whereKey($failedAssignment->id)->update([
+            'status' => 'awaiting_supplier_confirmation',
+            'assigned_at' => $slaNow->copy()->subMinutes(62)->utc(),
+        ]);
+        try {
+            $this->artisan('supplier:check-confirmation-sla')->assertExitCode(0);
+        } finally {
+            Carbon::setTestNow();
+        }
+
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'target_type' => Order::class,
+            'target_id' => $order->id,
+            'action' => 'supplier_confirmation_sla_timed_out',
+        ]);
+
+        $order->refresh();
+        $item->refresh();
+        $failedAssignment->refresh();
+        $replacementAssignment = OrderSupplierAssignment::where('order_id', $order->id)
+            ->where('supplier_vendor_id', $vendorB->id)
+            ->firstOrFail();
+
+        $this->assertSame('paid', $order->payment_status);
+        $this->assertSame('confirmed', $order->order_status);
+        $this->assertSame('awaiting_supplier_confirmation', $order->sourcing_status);
+        $this->assertSame('admin_reassigned', $failedAssignment->status);
+        $this->assertSame('awaiting_supplier_confirmation', $replacementAssignment->status);
+        $this->assertSame((int) $vendorA->id, (int) $item->supplier_vendor_id, 'Capture-time supplier identity must remain immutable.');
+        $this->assertSame('25000.00', (string) $item->supplier_cost_snapshot, 'Capture-time cost must remain immutable.');
+        $this->assertSame((int) $vendorB->id, (int) $item->fulfillment_supplier_vendor_id);
+        $this->assertSame((int) $shopB->id, (int) $item->fulfillment_supplier_shop_id);
+        $this->assertSame('27000.00', (string) $item->fulfillment_supplier_cost_snapshot);
+
+        $oldSupplierNet = '0.00';
+        foreach (\App\Models\FinancialJournalEntry::where('order_id', $order->id)
+            ->where('account_name', 'supplier_payable')
+            ->where('beneficiary_type', VendorProfile::class)
+            ->where('beneficiary_id', $vendorA->id)
+            ->get() as $entry) {
+            $oldSupplierNet = $entry->entry_type === 'credit'
+                ? \App\Services\BcMathService::add($oldSupplierNet, (string) $entry->amount)
+                : \App\Services\BcMathService::sub($oldSupplierNet, (string) $entry->amount);
+        }
+        $newSupplierNet = '0.00';
+        foreach (\App\Models\FinancialJournalEntry::where('order_id', $order->id)
+            ->where('account_name', 'supplier_payable')
+            ->where('beneficiary_type', VendorProfile::class)
+            ->where('beneficiary_id', $vendorB->id)
+            ->get() as $entry) {
+            $newSupplierNet = $entry->entry_type === 'credit'
+                ? \App\Services\BcMathService::add($newSupplierNet, (string) $entry->amount)
+                : \App\Services\BcMathService::sub($newSupplierNet, (string) $entry->amount);
+        }
+
+        $this->assertSame('0.00', $oldSupplierNet, 'Failed supplier payable must be reversed exactly once.');
+        $this->assertSame('81000.00', $newSupplierNet, 'Replacement payable must match three units at the replacement source cost.');
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'target_type' => Order::class,
+            'target_id' => $order->id,
+            'action' => 'automatic_supplier_failover_applied',
+        ]);
+
+        // Replaying the timeout/rejection recovery after the assignment has
+        // transitioned must be a no-op: no second payable reversal, replacement
+        // payable, assignment, or audit success may be created.
+        $journalCountBeforeReplay = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->count();
+        $assignmentCountBeforeReplay = OrderSupplierAssignment::where('order_id', $order->id)->count();
+        $replay = app(\App\Services\SupplierReassignmentRecoveryService::class)
+            ->attemptAutomaticFailover($order->id, $failedAssignment->id);
+
+        $this->assertFalse($replay['success'] ?? false);
+        $this->assertSame(
+            $journalCountBeforeReplay,
+            \App\Models\FinancialJournalEntry::where('order_id', $order->id)->count(),
+            'A replay must not duplicate any financial journal entry.'
+        );
+        $this->assertSame(
+            $assignmentCountBeforeReplay,
+            OrderSupplierAssignment::where('order_id', $order->id)->count(),
+            'A replay must not create another supplier assignment.'
+        );
+    }
+
+
+    public function test_partial_multi_supplier_failover_preserves_completed_group_and_holds_unresolved_items(): void
+    {
+        [$userA, $vendorA, $shopA] = $this->createSupplier('Primary Group Supplier', 'primary-groups@supplier.ng', '08011112001');
+        [$userB, $vendorB, $shopB] = $this->createSupplier('Backup Group Supplier B', 'backup-b-groups@supplier.ng', '08011112002');
+        [$userC, $vendorC, $shopC] = $this->createSupplier('Backup Group Supplier C', 'backup-c-groups@supplier.ng', '08011112003');
+
+        $productOne = Product::create([
+            'vendor_id' => null, 'shop_id' => null, 'category_id' => $this->category->id,
+            'name' => 'Grouped Failover Product One', 'slug' => 'grouped-failover-product-one',
+            'unit_price' => '20000.00', 'cost_price' => '0.00', 'is_in_stock' => true,
+            'inventory_quantity' => 0, 'is_approved' => true, 'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now()->subMinute(), 'freshness_confirmed_at' => Carbon::now()->subMinute(),
+        ]);
+        $productTwo = Product::create([
+            'vendor_id' => null, 'shop_id' => null, 'category_id' => $this->category->id,
+            'name' => 'Grouped Failover Product Two', 'slug' => 'grouped-failover-product-two',
+            'unit_price' => '20000.00', 'cost_price' => '0.00', 'is_in_stock' => true,
+            'inventory_quantity' => 0, 'is_approved' => true, 'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now()->subMinute(), 'freshness_confirmed_at' => Carbon::now()->subMinute(),
+        ]);
+
+        $primaryOfferOne = $this->createConfirmedOffer([
+            'product_id' => $productOne->id, 'vendor_id' => $vendorA->id, 'shop_id' => $shopA->id,
+            'wholesale_cost' => '10000.00',
+        ]);
+        $primaryOfferTwo = $this->createConfirmedOffer([
+            'product_id' => $productTwo->id, 'vendor_id' => $vendorA->id, 'shop_id' => $shopA->id,
+            'wholesale_cost' => '10000.00',
+        ]);
+        $this->createConfirmedOffer([
+            'product_id' => $productOne->id, 'vendor_id' => $vendorB->id, 'shop_id' => $shopB->id,
+            'wholesale_cost' => '12000.00',
+        ]);
+        $this->createConfirmedOffer([
+            'product_id' => $productTwo->id, 'vendor_id' => $vendorC->id, 'shop_id' => $shopC->id,
+            'wholesale_cost' => '13000.00',
+        ]);
+
+        DeliveryLane::create([
+            'origin_lga_id' => $this->uyoLga->id, 'destination_lga_id' => $this->uyoLga->id,
+            'base_fee' => '500.00', 'bulky_surcharge' => '1000.00',
+            'logistics_company_base_payable' => '450.00', 'logistics_company_bulky_surcharge' => '800.00',
+            'estimated_delivery_hours_min' => 2, 'estimated_delivery_hours_max' => 4, 'is_active' => true,
+        ]);
+
+        $checkout = app(\App\Services\CheckoutExecutionService::class)->execute($this->customerUser, [
+            'fulfillment_type' => 'doorstep_delivery', 'destination_lga_id' => $this->uyoLga->id,
+            '_checkout_idempotency_key' => 'IDEMP-GROUP-FAILOVER-' . uniqid(),
+            '_checkout_request_hash' => hash('sha256', 'grouped-partial-failover'),
+            'items' => [
+                ['product_id' => $productOne->id, 'quantity' => 1],
+                ['product_id' => $productTwo->id, 'quantity' => 1],
+            ],
+        ]);
+        $this->assertTrue($checkout['success'], $checkout['message'] ?? 'Grouped checkout failed.');
+        $order = $checkout['order'];
+
+        $settlement = app(\App\Services\OrderSettlementService::class)->settlePaystackOrder($order, [
+            'status' => 'success', 'currency' => 'NGN',
+            'amount' => (int) bcmul((string) $order->grand_total, '100', 0),
+            'reference' => (string) $order->payment_reference,
+            'id' => 'TX-GROUP-FAILOVER-' . $order->id, 'channel' => 'card',
+        ], $this->customerUser);
+        $this->assertTrue($settlement['success'] ?? false, $settlement['message'] ?? 'Grouped payment settlement failed.');
+
+        $items = OrderItem::where('order_id', $order->id)->orderBy('id')->get();
+        $this->assertCount(2, $items);
+        $this->assertSame((int) $vendorA->id, (int) $items[0]->supplier_vendor_id);
+        $this->assertSame((int) $vendorA->id, (int) $items[1]->supplier_vendor_id);
+        $failedAssignment = OrderSupplierAssignment::where('order_id', $order->id)
+            ->where('supplier_vendor_id', $vendorA->id)->firstOrFail();
+
+        // Simulate the primary supplier's rejection and exhaust that supplier's
+        // current offer signals. The remaining valid plan necessarily uses two shops.
+        $primaryOfferOne->forceFill(['is_available' => false])->save();
+        $primaryOfferTwo->forceFill(['is_available' => false])->save();
+        $failedAssignment->forceFill(['status' => 'supplier_rejected'])->save();
+        $order->forceFill(['sourcing_status' => 'supplier_rejected'])->save();
+
+        // Deterministically fail the second supplier group while its item snapshot
+        // is being changed. This exercises the real nested-transaction recovery path:
+        // the first group must remain committed, the second must roll back.
+        OrderItem::saving(function (OrderItem $item) use ($vendorC) {
+            if ((int) $item->fulfillment_supplier_vendor_id === (int) $vendorC->id
+                && $item->isDirty('fulfillment_supplier_vendor_id')) {
+                throw new \RuntimeException('Injected second-group persistence failure for regression proof.');
+            }
+        });
+
+        $beforeJournalCount = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->count();
+        $result = app(\App\Services\SupplierReassignmentRecoveryService::class)
+            ->attemptAutomaticFailover($order->id, $failedAssignment->id);
+
+        $this->assertFalse($result['success'] ?? true);
+        $this->assertTrue($result['partial'] ?? false);
+        $this->assertSame(1, (int) ($result['reassigned_groups'] ?? 0));
+
+        $items = OrderItem::where('order_id', $order->id)->orderBy('id')->get();
+        $this->assertSame((int) $vendorB->id, (int) $items[0]->fulfillment_supplier_vendor_id);
+        $this->assertSame((int) $vendorA->id, (int) $items[1]->fulfillment_supplier_vendor_id);
+        $this->assertSame((int) $vendorA->id, (int) $items[1]->supplier_vendor_id, 'Capture-time supplier identity must remain immutable.');
+        $this->assertSame('10000.00', (string) $items[1]->supplier_cost_snapshot);
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'target_type' => Order::class, 'target_id' => $order->id,
+            'action' => 'automatic_supplier_failover_attempt_failed',
+        ]);
+        $failureAudit = AdminAuditLog::where('target_type', Order::class)
+            ->where('target_id', $order->id)
+            ->where('action', 'automatic_supplier_failover_attempt_failed')
+            ->latest('id')->firstOrFail();
+        $this->assertTrue((bool) data_get($failureAudit->new_values, 'partial_recovery'));
+        $this->assertSame(1, (int) data_get($failureAudit->new_values, 'reassigned_groups'));
+        $this->assertTrue((bool) data_get($failureAudit->new_values, 'admin_action_required'));
+        $this->assertFalse((bool) data_get($failureAudit->new_values, 'refund_dispatched'));
+
+        $failedAssignment->refresh();
+        $this->assertSame('supplier_rejected', $failedAssignment->status, 'Unresolved primary assignment must remain visible for admin review.');
+        $this->assertSame($beforeJournalCount + 3, \App\Models\FinancialJournalEntry::where('order_id', $order->id)->count(),
+            'Exactly one old-payable reversal, replacement payable and variance journal may be committed for the successful group.');
+    }
+
 }

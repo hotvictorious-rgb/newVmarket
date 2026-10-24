@@ -11,10 +11,13 @@ class SupplierOffer extends Model
 
     protected $fillable = [
         'product_id',
+        'supplier_catalog_product_id',
         'vendor_id',
         'shop_id',
         'wholesale_cost',
         'is_available',
+        'is_admin_disabled',
+        'admin_disabled_reason',
         'availability_confirmed_at',
         'availability_confirmed_by',
         'availability_expires_at',
@@ -25,6 +28,7 @@ class SupplierOffer extends Model
     protected $casts = [
         'wholesale_cost' => 'string',
         'is_available' => 'boolean',
+        'is_admin_disabled' => 'boolean',
         'availability_confirmed_at' => 'datetime',
         'availability_expires_at' => 'datetime',
         'unavailability_penalty_expires_at' => 'datetime',
@@ -42,6 +46,11 @@ class SupplierOffer extends Model
     public function availabilityConfirmer()
     {
         return $this->belongsTo(User::class, 'availability_confirmed_by');
+    }
+
+    public function supplierCatalogProduct()
+    {
+        return $this->belongsTo(SupplierCatalogProduct::class, 'supplier_catalog_product_id')->withTrashed();
     }
 
     public function product()

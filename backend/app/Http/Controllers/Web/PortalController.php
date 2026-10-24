@@ -121,7 +121,8 @@ class PortalController extends Controller
 
         // Query eligible products across the central retailer catalog
         $query = Product::marketplaceEligible()
-            ->with(['shop:id,name,slug,lga_id', 'category:id,name,slug']);
+            // Supplier/shop relations are private sourcing data; public cards need only category data.
+            ->with(['category:id,name,slug']);
 
         if ($request->filled('category')) {
             $query->whereHas('category', function ($q) use ($request) {
@@ -158,12 +159,9 @@ class PortalController extends Controller
             ->take(6)
             ->get();
 
-        // Sourcing hubs based in Uyo
-        $shops = Shop::with('lga:id,name')
-            ->where('is_active', true)
-            ->where('lga_id', $uyoLgaId)
-            ->take(6)
-            ->get();
+        // Supplier locations are private sourcing data, never a public storefront directory.
+        // The existing view's empty state presents Victorious MARKET as the single retailer.
+        $shops = collect();
 
         $lgas = Lga::where('is_active', true)->orderBy('name', 'asc')->get();
 
@@ -497,6 +495,11 @@ class PortalController extends Controller
         $pendingVendorPayouts = VendorPayoutRequest::with('vendor')->latest()->get();
         $totalLogisticsEscrowBalance = LogisticsCompanyProfile::sum('wallet_balance');
         $refundWindowHours = (int) \App\Models\SystemSetting::get('refund_window_hours', 24);
+        $pendingPaymentCaptureExceptionCount = \App\Models\PaymentCaptureException::where('status', 'pending_admin_review')->count();
+        $pendingPaymentCaptureExceptions = \App\Models\PaymentCaptureException::with('order:id,order_number,grand_total,payment_status')
+            ->where('status', 'pending_admin_review')
+            ->latest('detected_at')
+            ->paginate(50);
 
         return view('admin.settlements', compact(
             'pendingSettlements',
@@ -509,7 +512,9 @@ class PortalController extends Controller
             'pendingLogisticsPayouts',
             'pendingVendorPayouts',
             'totalLogisticsEscrowBalance',
-            'refundWindowHours'
+            'refundWindowHours',
+            'pendingPaymentCaptureExceptions',
+            'pendingPaymentCaptureExceptionCount'
         ));
     }
 
@@ -1540,7 +1545,15 @@ class PortalController extends Controller
             ->take(20)
             ->get();
 
-        return view('vendor.payout', compact('vendor', 'vendorMetrics', 'payoutRequests', 'retailerSupplierPayoutRequests'));
+        $eligibleRetailerSupplierItems = app(RetailerSupplierPayoutService::class)->previewEligibleItems($vendor);
+
+        return view('vendor.payout', compact(
+            'vendor',
+            'vendorMetrics',
+            'payoutRequests',
+            'retailerSupplierPayoutRequests',
+            'eligibleRetailerSupplierItems'
+        ));
     }
 
     /**
@@ -1553,7 +1566,11 @@ class PortalController extends Controller
             abort(403, 'Only the supplier account owner can request supplier-payable payouts.');
         }
 
-        $result = $service->requestPayout($vendor);
+        $validated = $request->validate([
+            'order_item_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'order_item_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+        ]);
+        $result = $service->requestPayout($vendor, $validated['order_item_ids']);
         if (!$result['success']) {
             return back()->with('error', $result['message'] ?? 'Supplier payable payout request could not be created.');
         }
@@ -4522,7 +4539,8 @@ class PortalController extends Controller
     {
         $product = Product::marketplaceEligible()
             ->where('slug', $slug)
-            ->with(['shop.lga', 'vendor', 'category'])
+            // Supplier identity is resolved only by private sourcing services, not the public view.
+            ->with(['category'])
             ->firstOrFail();
 
         $categories = Category::where('is_active', true)->orderBy('priority', 'asc')->get();

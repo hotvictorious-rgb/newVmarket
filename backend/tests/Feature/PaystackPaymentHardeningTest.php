@@ -460,6 +460,7 @@ class PaystackPaymentHardeningTest extends TestCase
         $cases = [
             'status' => ['status' => 'pending', 'currency' => 'NGN', 'amount' => 1500000],
             'amount' => ['status' => 'success', 'currency' => 'NGN', 'amount' => 1499999],
+            'fractional_kobo' => ['status' => 'success', 'currency' => 'NGN', 'amount' => '1500000.5'],
             'currency' => ['status' => 'success', 'currency' => 'USD', 'amount' => 1500000],
             'reference' => ['status' => 'success', 'currency' => 'NGN', 'amount' => 1500000, 'reference' => 'VM-FORGED-REFERENCE'],
         ];
@@ -495,7 +496,7 @@ class PaystackPaymentHardeningTest extends TestCase
 
             $expectedCode = match ($field) {
                 'status' => 'STATUS_NOT_SUCCESS',
-                'amount' => 'AMOUNT_MISMATCH',
+                'amount', 'fractional_kobo' => 'AMOUNT_MISMATCH',
                 'currency' => 'CURRENCY_MISMATCH',
                 'reference' => 'REFERENCE_MISMATCH',
             };
@@ -504,7 +505,83 @@ class PaystackPaymentHardeningTest extends TestCase
             $this->assertSame($expectedCode, $result['code'], "Tampered {$field} should fail with its specific validation code.");
         }
 
-        Http::assertSentCount(4);
+        Http::assertSentCount(5);
+    }
+
+    /**
+     * A distinct successful gateway transaction against an already-paid order is
+     * not an ordinary webhook replay. It creates one durable admin-review case
+     * and cannot repeat any settlement-side financial effects.
+     */
+    public function test_distinct_successful_capture_on_paid_order_is_recorded_once_for_admin_review(): void
+    {
+        $order = $this->createTestOrder(['grand_total' => '8000.00']);
+        $service = app(OrderSettlementService::class);
+
+        $originalCapture = [
+            'id' => 112233,
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => 800000,
+            'reference' => $order->payment_reference,
+            'channel' => 'bank_transfer',
+            'customer' => ['email' => $this->customer->email],
+        ];
+
+        $first = $service->settlePaystackOrder($order, $originalCapture);
+        $this->assertTrue($first['success']);
+        $this->assertSame('PAID', $first['status']);
+
+        $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
+        $cashbackCount = CustomerCashbackLedger::where('order_id', $order->id)->count();
+
+        $secondCapture = $originalCapture;
+        $secondCapture['id'] = 112234;
+        $second = $service->settlePaystackOrder($order->fresh(), $secondCapture);
+
+        $this->assertTrue($second['success']);
+        $this->assertSame('DUPLICATE_CAPTURE_REQUIRES_REVIEW', $second['status']);
+        $this->assertTrue($second['requires_admin_review']);
+        $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
+        $this->assertSame($cashbackCount, CustomerCashbackLedger::where('order_id', $order->id)->count());
+        $this->assertSame(0, \App\Models\FinancialOperation::where('operation_type', 'customer_refund')
+            ->whereJsonContains('metadata->order_id', $order->id)->count(),
+            'A duplicate-capture exception must not automatically create or dispatch a refund.');
+        $this->assertDatabaseHas('payment_capture_exceptions', [
+            'order_id' => $order->id,
+            'gateway_transaction_id' => '112234',
+            'exception_type' => 'distinct_successful_capture',
+            'status' => 'pending_admin_review',
+        ]);
+
+        // Re-delivery of that second capture is idempotent: one case and one audit record.
+        $again = $service->settlePaystackOrder($order->fresh(), $secondCapture);
+        $this->assertSame('DUPLICATE_CAPTURE_REQUIRES_REVIEW', $again['status']);
+        $this->assertSame(1, \App\Models\PaymentCaptureException::where('order_id', $order->id)->count());
+        $this->assertSame(1, AdminAuditLog::where('target_id', $order->id)
+            ->where('action', 'paystack_duplicate_capture_review_required')->count());
+    }
+
+    public function test_settlement_rejects_fractional_kobo_amount_without_financial_effects(): void
+    {
+        $order = $this->createTestOrder(['grand_total' => '8000.00']);
+        $payload = [
+            'id' => 123456,
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => '800000.5',
+            'reference' => $order->payment_reference,
+            'channel' => 'card',
+            'customer' => ['email' => $this->customer->email],
+        ];
+
+        $result = app(OrderSettlementService::class)->settlePaystackOrder($order, $payload);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('AMOUNT_MISMATCH', $result['status']);
+        $this->assertSame('pending', $order->fresh()->payment_status);
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $order->id)->count());
+        $this->assertSame(0, CustomerCashbackLedger::where('order_id', $order->id)->count());
     }
 
     /**
@@ -684,6 +761,50 @@ class PaystackPaymentHardeningTest extends TestCase
 
         // Zero HTTP requests sent to Paystack /refund endpoint
         Http::assertNothingSent();
+    }
+
+    public function test_late_payment_settlement_rolls_back_if_pending_refund_operation_cannot_be_persisted(): void
+    {
+        $order = $this->createTestOrder([
+            'order_number' => 'VM-LATE-ROLLBACK-01',
+            'payment_reference' => 'VM-LATE-ROLLBACK-REF-01',
+            'grand_total' => '12500.50',
+            'order_status' => 'cancelled',
+            'payment_status' => 'pending',
+            'vendor_settlement_status' => 'held',
+        ]);
+
+        \App\Models\SupplierOffer::where('product_id', $this->product->id)->update(['is_available' => false]);
+        $this->product->update(['inventory_quantity' => 0, 'is_in_stock' => false]);
+
+        $payload = [
+            'id' => 776656,
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => 1250050,
+            'reference' => $order->payment_reference,
+            'channel' => 'card',
+            'customer' => ['email' => $this->customer->email],
+        ];
+
+        $this->mock(\App\Services\FinancialOperationService::class, function ($mock) {
+            $mock->shouldReceive('createRefundOperation')
+                ->once()
+                ->andThrow(new \RuntimeException('Simulated pending refund-operation persistence failure.'));
+        });
+
+        try {
+            app(OrderSettlementService::class)->settlePaystackOrder($order, $payload);
+            $this->fail('Settlement must fail closed if the refund operation cannot be persisted atomically.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('persistence failure', $exception->getMessage());
+        }
+
+        $this->assertSame('pending', $order->fresh()->payment_status);
+        $this->assertSame('cancelled', $order->fresh()->order_status);
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $order->id)->count());
+        $this->assertSame(0, \App\Models\FinancialOperation::whereJsonContains('metadata->order_id', $order->id)->count());
+        $this->assertSame(0, CustomerCashbackLedger::where('order_id', $order->id)->count());
     }
 
     /**

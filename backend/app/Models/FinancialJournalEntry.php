@@ -7,6 +7,37 @@ use Illuminate\Database\Eloquent\Model;
 
 class FinancialJournalEntry extends Model
 {
+    protected static function booted(): void
+    {
+        static::creating(function (self $entry): void {
+            // The database unique index is only useful when every normal writer
+            // supplies a stable key. Preserve explicit keys; otherwise derive one
+            // from the business event and ledger leg, never from the amount, so a
+            // changed amount cannot masquerade as a new financial instruction.
+            if (trim((string) $entry->idempotency_key) !== '') {
+                return;
+            }
+
+            $eventId = trim((string) $entry->event_id);
+            $transactionIdentity = $eventId !== ''
+                ? 'event:' . $eventId
+                : 'reference:' . trim((string) $entry->transaction_reference);
+
+            $identity = implode('|', [
+                (string) ($entry->order_id ?? '-'),
+                (string) ($entry->order_item_id ?? '-'),
+                $transactionIdentity,
+                (string) ($entry->beneficiary_type ?? '-'),
+                (string) ($entry->beneficiary_id ?? '-'),
+                trim((string) $entry->account_name),
+                trim((string) $entry->entry_type),
+                strtoupper(trim((string) ($entry->currency ?? 'NGN'))),
+            ]);
+
+            $entry->idempotency_key = 'JRN-' . hash('sha256', $identity);
+        });
+    }
+
     protected $fillable = [
         'order_id',
         'order_item_id',

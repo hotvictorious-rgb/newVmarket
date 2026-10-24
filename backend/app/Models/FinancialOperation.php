@@ -19,6 +19,7 @@ class FinancialOperation extends Model
         'currency',
         'status',
         'gateway_provider',
+        'gateway_reference',
         'lease_token',
         'lease_expires_at',
         'metadata',

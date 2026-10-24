@@ -78,7 +78,9 @@ class SupplierOfferSelectionService
             ->with(['vendor.user', 'shop'])
             ->where('product_id', $product->id)
             ->where('is_available', true)
+            ->where('is_admin_disabled', false)
             ->where('wholesale_cost', '>', 0)
+            ->whereRaw('supplier_offers.wholesale_cost < (select products.unit_price from products where products.id = supplier_offers.product_id)')
             ->whereNotNull('availability_confirmed_at')
             ->where('availability_confirmed_at', '<=', $now)
             ->whereNotNull('availability_confirmed_by')
@@ -88,11 +90,25 @@ class SupplierOfferSelectionService
                 $q->whereNull('unavailability_penalty_expires_at')
                     ->orWhere('unavailability_penalty_expires_at', '<=', $now);
             })
+            ->where(function ($catalogLink) {
+                // Legacy offers remain readable during migration, but any offer
+                // linked to a private supplier record must still match that record.
+                $catalogLink->whereNull('supplier_catalog_product_id')
+                    ->orWhereHas('supplierCatalogProduct', function ($catalog) {
+                        $catalog->whereNull('supplier_catalog_products.deleted_at')
+                            ->where('supplier_catalog_products.status', 'active')
+                            ->where('supplier_catalog_products.is_in_stock', true)
+                            ->whereColumn('supplier_catalog_products.canonical_product_id', 'supplier_offers.product_id')
+                            ->whereColumn('supplier_catalog_products.supplier_vendor_id', 'supplier_offers.vendor_id')
+                            ->whereColumn('supplier_catalog_products.supplier_shop_id', 'supplier_offers.shop_id')
+                            ->whereColumn('supplier_catalog_products.source_price', 'supplier_offers.wholesale_cost');
+                    });
+            })
             ->whereHas('vendor', function ($query) {
                 $query->whereNull('vendor_profiles.deleted_at')
                     ->where('marketplace_status', 'active')
                     ->where('kyc_status', 'verified')
-                    ->whereRaw('(select count(*) from shops as active_supplier_shops where active_supplier_shops.vendor_id = vendor_profiles.id and active_supplier_shops.deleted_at is null and active_supplier_shops.is_active = 1) = 1')
+                    ->whereRaw('(select count(*) from shops as active_supplier_shops where active_supplier_shops.vendor_id = vendor_profiles.id and active_supplier_shops.deleted_at is null and active_supplier_shops.is_active = true) = 1')
                     ->whereRaw('(select count(*) from order_supplier_assignments as pending_assignments where pending_assignments.supplier_vendor_id = vendor_profiles.id and pending_assignments.status in (\'awaiting_supplier_confirmation\', \'supplier_confirmed\', \'ready_for_collection\')) < 5')
                     ->whereHas('user', function ($userQuery) {
                         $userQuery->where('status', 'active');

@@ -12,6 +12,39 @@ class FinancialJournalIdempotencySchemaTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_model_generates_stable_idempotency_key_for_journal_legs(): void
+    {
+        $base = [
+            'order_id' => null,
+            'transaction_reference' => 'JRN-MODEL-REF-A',
+            'event_id' => 'JRN-MODEL-EVENT-1',
+            'beneficiary_type' => null,
+            'beneficiary_id' => null,
+            'account_name' => 'cash_in_escrow',
+            'entry_type' => 'debit',
+            'amount' => '100.00',
+            'currency' => 'NGN',
+            'description' => 'Model generated idempotency key',
+        ];
+
+        $entry = \App\Models\FinancialJournalEntry::create($base);
+        $this->assertNotEmpty($entry->idempotency_key);
+        $this->assertStringStartsWith('JRN-', $entry->idempotency_key);
+
+        // A retry that changes descriptive/reference fields but reuses the same
+        // business event and ledger leg must collide at the database boundary.
+        $retry = $base;
+        $retry['transaction_reference'] = 'JRN-MODEL-REF-B';
+        $retry['description'] = 'Retry with changed reference/description';
+
+        try {
+            \App\Models\FinancialJournalEntry::create($retry);
+            $this->fail('A repeated event/ledger leg must not create a second journal row.');
+        } catch (QueryException $exception) {
+            $this->assertNotEmpty($exception->getMessage());
+        }
+    }
+
     public function test_financial_journal_idempotency_key_is_unique_at_database_level(): void
     {
         $this->assertTrue(

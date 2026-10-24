@@ -54,7 +54,7 @@ class CheckoutExecutionService
             return [
                 'success' => false,
                 'status_code' => 422,
-                'message' => 'Wallet credit cannot be used to pay for orders at launch. Use an approved Paystack payment method or reserve for in-shop payment through the authorised workflow.',
+                'message' => 'Wallet credit cannot be used to pay for orders at launch. Use an approved Paystack payment method. Cash-on-delivery and public in-shop payment reservations are not available.',
             ];
         }
 
@@ -149,13 +149,9 @@ class CheckoutExecutionService
                     ];
                 }
 
-                if (isset($product->inventory_quantity) && (int)$product->inventory_quantity > 0 && (int)$product->inventory_quantity < $item['quantity']) {
-                    return [
-                        'error' => true,
-                        'message' => "Insufficient stock for {$product->name}. Only {$product->inventory_quantity} available.",
-                    ];
-                }
-
+                // Supplier stock is binary at catalog level. Exact quantity is
+                // confirmed against eligible supplier offers after verified payment;
+                // legacy canonical inventory_quantity must not reject the cart here.
                 $lineTotal = BcMathService::mul($product->unit_price, (string)$item['quantity']);
                 $merchandiseSubtotal = BcMathService::add($merchandiseSubtotal, $lineTotal);
 
@@ -304,34 +300,17 @@ class CheckoutExecutionService
             $subtotalAfterCashback = BcMathService::sub($merchandiseSubtotal, $cashbackApplied);
             $totalBeforeWallet = BcMathService::add($subtotalAfterCashback, $deliveryFee);
 
-            // Retailer accounting: snapshot the actual wholesale cost per item. Supplier payables
-            // are cost-based, never a merchandise commission percentage.
-            $supplierCostTotal = '0.00';
-            foreach ($itemsToCreate as $itemData) {
-                $offer = $itemData['resolved_offer'] ?? null;
-                $unitCost = $offer['wholesale_cost'] ?? null;
-                if ($unitCost === null || BcMathService::comp((string) $unitCost, '0.00') <= 0) {
-                    return [
-                        'error' => true,
-                        'status_code' => 422,
-                        'message' => 'The selected supplier offer has no valid wholesale cost snapshot. Checkout cannot proceed.',
-                    ];
-                }
-                $supplierCostTotal = BcMathService::add(
-                    $supplierCostTotal,
-                    BcMathService::mul((string) $unitCost, (string) $itemData['quantity'])
-                );
-            }
+            // Pre-payment sourcing is a non-binding feasibility check only. Do not
+            // persist supplier identity/cost or create supplier payables until Paystack
+            // verifies payment and settlement performs the binding allocation.
+            $supplierCostTotal = null;
 
             // Cashback is 5% of eligible merchandise funded by real money through
             // Paystack after cashback redemption. Delivery is excluded.
             $customerCashback5 = BcMathService::mul($subtotalAfterCashback, '0.05');
             $vendorNet90 = '0.00'; // no new 90% marketplace merchandise commission
-            $platformMargin5 = '0.00'; // retailer margin is computed from price - supplier cost - cashback
-            $retailerMerchandiseMargin = BcMathService::sub(
-                BcMathService::sub($merchandiseSubtotal, $supplierCostTotal),
-                $customerCashback5
-            );
+            $platformMargin5 = '0.00';
+            $retailerMerchandiseMargin = null;
 
             // Logistics company payable must come from an independent, admin-maintained
             // corridor tariff snapshot, never from the customer-facing delivery fee.
@@ -394,8 +373,8 @@ class CheckoutExecutionService
                 'paystack_initialization_status' => 'not_started',
                 'customer_id' => $user->id,
                 'customer_address_id' => $validated['customer_address_id'] ?? null,
-                'vendor_id' => $primarySourceShop->vendor_id,
-                'shop_id' => $primarySourceShop->id,
+                'vendor_id' => null, // bound only after verified payment
+                'shop_id' => null, // bound only after verified payment
                 'collection_point_id' => $collectionPointId,
                 'rider_id' => $rider ? $rider->id : null,
                 'logistics_company_id' => $logisticsCompanyId,
@@ -415,10 +394,10 @@ class CheckoutExecutionService
                 'delivery_base_fee_snapshot' => $deliveryBaseFee,
                 'delivery_bulky_surcharge_per_unit_snapshot' => $deliveryBulkySurcharge,
                 'delivery_bulky_quantity_snapshot' => $deliveryBulkyQuantity,
-                'supplier_cost_total_snapshot' => $supplierCostTotal,
-                'fulfillment_supplier_cost_total_snapshot' => $supplierCostTotal,
-                'retailer_merchandise_margin' => $retailerMerchandiseMargin,
-                'sourcing_plan_locations_count' => $sourcingPlan['locations_count'],
+                'supplier_cost_total_snapshot' => null,
+                'fulfillment_supplier_cost_total_snapshot' => null,
+                'retailer_merchandise_margin' => null,
+                'sourcing_plan_locations_count' => 0,
                 'logistics_company_payable_default_amount' => $defaultCompanyPayable,
                 'logistics_company_payable_amount' => $defaultCompanyPayable,
                 'logistics_subsidy_amount' => $deliverySubsidy,
@@ -436,10 +415,10 @@ class CheckoutExecutionService
                 'pickup_verification_code' => Order::generateUniquePickupOtp(),
                 'verification_code' => Order::generateUniqueDeliveryOtp(),
                 'vendor_settlement_status' => 'held',
-                'sourcing_status' => $isFullyWalletPaid ? 'awaiting_supplier_confirmation' : 'awaiting_payment',
+                'sourcing_status' => 'awaiting_payment',
                 'selected_supplier_id' => null,
                 'selected_shop_id' => null,
-                'sourced_at' => Carbon::now(),
+                'sourced_at' => null,
                 'expires_at' => Carbon::now()->addMinutes(30),
             ]);
 
@@ -454,39 +433,19 @@ class CheckoutExecutionService
                 ]);
             }
 
-            // Order creation binds the 30-minute payment safety reservation with immutable supplier snapshots
+            // Store only customer/order-line facts before payment. Supplier IDs,
+            // wholesale costs and assignment rows are deliberately absent until the
+            // verified-payment settlement transaction binds the actual source.
             foreach ($itemsToCreate as $itemData) {
-                $resolvedOffer = $itemData['resolved_offer'] ?? null;
-                $snapshotData = $this->sourcingService->buildOrderItemSnapshot(
-                    $resolvedOffer,
-                    $itemData['product'],
-                    $itemData['quantity'],
-                    (string)$itemData['unit_price'],
-                    (string)$itemData['line_total']
-                );
-                $snapshotData['order_id'] = $order->id;
-
-                OrderItem::create($snapshotData);
-            }
-
-            // Record one internal assignment row per distinct supplier shop. Item-level
-            // snapshots remain the financial authority; these rows coordinate acceptance.
-            $supplierGroups = [];
-            foreach ($itemsToCreate as $itemData) {
-                $offer = $itemData['resolved_offer'];
-                $groupKey = (int) $offer['vendor_id'] . ':' . (int) $offer['shop_id'];
-                $supplierGroups[$groupKey] = [
-                    'supplier_vendor_id' => (int) $offer['vendor_id'],
-                    'supplier_shop_id' => (int) $offer['shop_id'],
-                ];
-            }
-            foreach ($supplierGroups as $supplierGroup) {
-                OrderSupplierAssignment::create([
+                OrderItem::create([
                     'order_id' => $order->id,
-                    'supplier_vendor_id' => $supplierGroup['supplier_vendor_id'],
-                    'supplier_shop_id' => $supplierGroup['supplier_shop_id'],
-                    'status' => $isFullyWalletPaid ? 'awaiting_supplier_confirmation' : 'awaiting_payment',
-                    'assigned_at' => $isFullyWalletPaid ? Carbon::now() : null,
+                    'product_id' => $itemData['product']->id,
+                    'product_name' => $itemData['product']->name,
+                    'quantity' => (int) $itemData['quantity'],
+                    'unit_price' => (string) $itemData['unit_price'],
+                    'cost_price' => '0.00',
+                    'line_total' => (string) $itemData['line_total'],
+                    'package_tier' => (string) ($itemData['product']->package_tier ?? 'bike'),
                 ]);
             }
 

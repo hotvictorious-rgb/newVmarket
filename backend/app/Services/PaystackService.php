@@ -225,9 +225,13 @@ class PaystackService
                 ];
             }
 
-            // INVARIANT 3: Exact Integer Kobo Amount Equality Check (Mathematically prevents underpayment attacks)
-            $actualAmountKobo = (int) ($data['amount'] ?? 0);
-            if ($actualAmountKobo !== $expectedAmountInKobo) {
+            // INVARIANT 3: Amount must be an integer number of kobo before comparison.
+            // Casting first would silently truncate malformed fractional-kobo evidence.
+            $actualAmountRaw = $data['amount'] ?? null;
+            $actualAmountIsIntegerKobo = is_int($actualAmountRaw)
+                || (is_string($actualAmountRaw) && preg_match('/^\\d+$/', $actualAmountRaw) === 1);
+            $actualAmountKobo = $actualAmountIsIntegerKobo ? (int) $actualAmountRaw : -1;
+            if (!$actualAmountIsIntegerKobo || $actualAmountKobo !== $expectedAmountInKobo) {
                 Log::critical("Paystack Underpayment/Amount Fraud Detected! Order {$order->order_number} Expected: {$expectedAmountInKobo} Kobo, Received: {$actualAmountKobo} Kobo.");
                 return [
                     'success' => false,

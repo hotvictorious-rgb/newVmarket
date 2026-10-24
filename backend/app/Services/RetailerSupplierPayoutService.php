@@ -8,6 +8,8 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\RetailerSupplierPayoutAllocation;
 use App\Models\RetailerSupplierPayoutRequest;
+use App\Models\TreasuryBankCreditBatch;
+use App\Models\TreasuryBankCreditBatchAllocation;
 use App\Models\VendorProfile;
 use App\Models\VendorRecoveryLedger;
 use App\Models\User;
@@ -18,15 +20,204 @@ use Illuminate\Support\Str;
 class RetailerSupplierPayoutService
 {
     private const MINIMUM_AMOUNT = '5000.00';
-    private const MAXIMUM_AMOUNT = '500000.00';
+    private const MAXIMUM_AMOUNT = '1000000.00';
 
     /**
-     * Reserve whole, reconciled supplier item payables in FIFO order. This method
-     * never uses legacy order-level vendor earnings for retailer-model orders.
+     * Reserve a reconciled corporate bank-credit batch before any transfer recipient
+     * creation or gateway transfer call. The batch row is locked to serialize competing
+     * payout workers; pending/processing/uncertain/paid requests all consume capacity.
      */
-    public function requestPayout(VendorProfile $supplier): array
+    public function reserveTreasuryBankCreditBatch(int $payoutId): array
     {
-        return DB::transaction(function () use ($supplier) {
+        return DB::transaction(function () use ($payoutId) {
+            $payout = RetailerSupplierPayoutRequest::whereKey($payoutId)->lockForUpdate()->first();
+            if (!$payout) {
+                return ['success' => false, 'message' => 'Supplier payout request was not found.'];
+            }
+            if ($payout->status !== 'pending') {
+                return ['success' => false, 'message' => 'Only a pending payout can reserve treasury bank-credit evidence.'];
+            }
+
+            $batchQuery = $payout->treasury_bank_credit_batch_id
+                ? TreasuryBankCreditBatch::whereKey($payout->treasury_bank_credit_batch_id)
+                : TreasuryBankCreditBatch::where('status', 'reconciled')
+                    ->where('currency', 'NGN')
+                    ->whereNotNull('confirmed_by_admin_id')
+                    ->whereColumn('prepared_by_admin_id', '!=', 'confirmed_by_admin_id')
+                    ->orderBy('statement_value_date')
+                    ->orderBy('id');
+
+            $batch = $batchQuery->lockForUpdate()->first();
+            if (!$batch || $batch->status !== 'reconciled'
+                || strtoupper((string) $batch->currency) !== 'NGN'
+                || empty($batch->confirmed_at)
+                || (int) $batch->prepared_by_admin_id === (int) $batch->confirmed_by_admin_id) {
+                return ['success' => false, 'message' => 'No dual-reviewed corporate bank-credit batch is available. Record and reconcile the actual gateway settlement and corporate bank statement before submitting any supplier transfer.'];
+            }
+
+            $allocations = TreasuryBankCreditBatchAllocation::where('treasury_bank_credit_batch_id', $batch->id)
+                ->orderBy('id')->lockForUpdate()->get();
+            if ($allocations->isEmpty()) {
+                return ['success' => false, 'message' => 'Treasury batch has no verified order-capture allocations; supplier payout remains blocked.'];
+            }
+
+            $allocatedGrossKobo = 0;
+            foreach ($allocations as $allocation) {
+                $order = Order::whereKey($allocation->order_id)->lockForUpdate()->first();
+                if (!$order || $order->payment_status !== 'paid'
+                    || trim((string) $order->payment_reference) === ''
+                    || !hash_equals((string) $order->payment_reference, (string) $allocation->payment_reference)
+                    || trim((string) $order->paystack_transaction_id) === ''
+                    || !hash_equals((string) $order->paystack_transaction_id, (string) $allocation->gateway_transaction_id)
+                    || strtoupper((string) $allocation->currency) !== 'NGN'
+                    || (int) $allocation->amount_kobo !== (int) bcmul((string) $order->grand_total, '100', 0)) {
+                    return ['success' => false, 'message' => 'Treasury batch capture evidence no longer matches its paid order; supplier payout is blocked for reconciliation.'];
+                }
+                $allocatedGrossKobo += (int) $allocation->amount_kobo;
+            }
+            if ($allocatedGrossKobo !== (int) $batch->gross_collection_amount_kobo
+                || (int) $batch->gross_collection_amount_kobo - (int) $batch->provider_fee_amount_kobo !== (int) $batch->net_credit_amount_kobo) {
+                return ['success' => false, 'message' => 'Treasury batch gross, fees, net credit and order allocations do not reconcile; supplier payout is blocked.'];
+            }
+
+            // Convert each decimal amount to integer kobo in application code. SQL
+            // CAST/decimal multiplication differs across SQLite and PostgreSQL and can
+            // silently introduce rounding in financial capacity checks.
+            $reservedPayouts = RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)
+                ->whereIn('status', ['pending', 'processing', 'uncertain', 'paid'])
+                ->where('id', '!=', $payout->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get(['amount']);
+            $usedKobo = 0;
+            foreach ($reservedPayouts as $reservedPayout) {
+                $usedKobo += (int) bcmul((string) $reservedPayout->amount, '100', 0);
+            }
+
+            $amountKobo = (int) bcmul((string) $payout->amount, '100', 0);
+            if ($usedKobo + $amountKobo > (int) $batch->net_credit_amount_kobo) {
+                return [
+                    'success' => false,
+                    'message' => 'Supplier payout blocked: the reconciled corporate bank-credit batch does not have enough unreserved net credited funds.',
+                    'available_kobo' => max(0, (int) $batch->net_credit_amount_kobo - $usedKobo),
+                ];
+            }
+
+            if ((int) $payout->treasury_bank_credit_batch_id !== (int) $batch->id) {
+                $payout->forceFill(['treasury_bank_credit_batch_id' => $batch->id])->save();
+            }
+
+            AdminAuditLog::create([
+                'user_id' => null,
+                'action' => 'supplier_payout_treasury_bank_credit_reserved',
+                'target_type' => RetailerSupplierPayoutRequest::class,
+                'target_id' => $payout->id,
+                'old_values' => ['treasury_bank_credit_batch_id' => null],
+                'new_values' => [
+                    'treasury_bank_credit_batch_id' => $batch->id,
+                    'payout_amount_kobo' => $amountKobo,
+                    'batch_net_credit_amount_kobo' => (int) $batch->net_credit_amount_kobo,
+                    'prior_reserved_or_paid_kobo' => $usedKobo,
+                    'remaining_after_reservation_kobo' => (int) $batch->net_credit_amount_kobo - $usedKobo - $amountKobo,
+                ],
+                'ip_address' => '127.0.0.1',
+                'user_agent' => 'Treasury payout funding gate',
+            ]);
+
+            return ['success' => true, 'payout' => $payout, 'batch' => $batch];
+        }, 3);
+    }
+
+    /**
+     * Preview currently eligible net supplier-payable balances for explicit selection.
+     * This is display-only: requestPayout rechecks every invariant under locks.
+     */
+    public function previewEligibleItems(VendorProfile $supplier): array
+    {
+        $items = OrderItem::with('order')
+            ->where('fulfillment_supplier_vendor_id', $supplier->id)
+            ->whereHas('order', function ($query) {
+                $query->where('retailer_model_order', true)
+                    ->where('payment_status', 'paid')
+                    ->where('order_status', 'delivered')
+                    ->whereNotNull('refund_window_expires_at')
+                    ->where('refund_window_expires_at', '<=', now())
+                    ->whereDoesntHave('dispute', function ($dispute) {
+                        $dispute->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled']);
+                    })
+                    ->whereDoesntHave('returnCases', function ($returnCase) {
+                        $returnCase->whereNotIn('status', ['rejected', 'closed', 'refunded', 'resolved', 'replacement_completed']);
+                    });
+            })
+            ->orderByDesc('id')
+            ->get();
+
+        if ($items->isEmpty()) {
+            return [];
+        }
+
+        $orderIds = $items->pluck('order_id')->unique()->values()->all();
+        $reconciledOrderIds = [];
+        $reconciliation = app(FinancialReconciliationEngine::class);
+        foreach ($orderIds as $orderId) {
+            $check = $reconciliation->reconcileRetailerSupplierPayables((int) $orderId);
+            if (($check['mismatches'] ?? 1) === 0) {
+                $reconciledOrderIds[(int) $orderId] = true;
+            }
+        }
+
+        $itemIds = $items->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $reservedIds = RetailerSupplierPayoutAllocation::whereIn('order_item_id', $itemIds)
+            ->whereIn('status', ['allocated', 'settled'])
+            ->pluck('order_item_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $reservedLookup = array_fill_keys($reservedIds, true);
+        $journalEntries = FinancialJournalEntry::whereIn('order_item_id', $itemIds)
+            ->where('account_name', 'supplier_payable')
+            ->where('beneficiary_type', VendorProfile::class)
+            ->where('beneficiary_id', $supplier->id)
+            ->get(['order_item_id', 'entry_type', 'amount'])
+            ->groupBy('order_item_id');
+
+        $eligible = [];
+        foreach ($items as $item) {
+            if (!isset($reconciledOrderIds[(int) $item->order_id])
+                || isset($reservedLookup[(int) $item->id])) {
+                continue;
+            }
+
+            $net = '0.00';
+            foreach ($journalEntries->get($item->id, collect()) as $entry) {
+                $net = $entry->entry_type === 'credit'
+                    ? BcMathService::add($net, (string) $entry->amount)
+                    : BcMathService::sub($net, (string) $entry->amount);
+            }
+            if (BcMathService::comp($net, '0.00') <= 0) {
+                continue;
+            }
+
+            $eligible[] = [
+                'order_item_id' => (int) $item->id,
+                'order_id' => (int) $item->order_id,
+                'order_number' => (string) ($item->order?->order_number ?? ('Order #' . $item->order_id)),
+                'product_name' => (string) $item->product_name,
+                'quantity' => (int) $item->quantity,
+                'amount' => $net,
+            ];
+        }
+
+        return $eligible;
+    }
+
+    /**
+     * Reserve only the supplier's explicitly selected, reconciled item payables.
+     * Selection is never inferred from order age or FIFO. The selected item set is
+     * revalidated under locks and must fit within one allowed payout transaction.
+     */
+    public function requestPayout(VendorProfile $supplier, array $selectedOrderItemIds = []): array
+    {
+        return DB::transaction(function () use ($supplier, $selectedOrderItemIds) {
             $lockedSupplier = VendorProfile::whereKey($supplier->id)->lockForUpdate()->first();
             if (!$lockedSupplier || $lockedSupplier->marketplace_status !== 'active'
                 || !$lockedSupplier->user()->where('status', 'active')->exists()) {
@@ -64,7 +255,17 @@ class RetailerSupplierPayoutService
                 return ['success' => false, 'message' => 'A supplier payout is already pending or requires reconciliation.'];
             }
 
+            if (!$selectedOrderItemIds) {
+                return ['success' => false, 'message' => 'Select the specific eligible order items to include in this payout. Automatic FIFO selection is disabled.'];
+            }
+            $selectedOrderItemIds = array_values(array_map('intval', $selectedOrderItemIds));
+            if (count($selectedOrderItemIds) !== count(array_unique($selectedOrderItemIds))
+                || min($selectedOrderItemIds) < 1) {
+                return ['success' => false, 'message' => 'Selected order-item IDs must be positive and unique.'];
+            }
+
             $candidateItems = OrderItem::with('order')
+                ->whereIn('id', $selectedOrderItemIds)
                 ->where('fulfillment_supplier_vendor_id', $lockedSupplier->id)
                 ->whereHas('order', function ($query) {
                     $query->where('retailer_model_order', true)
@@ -83,8 +284,8 @@ class RetailerSupplierPayoutService
                 ->orderBy('id')
                 ->get();
 
-            if ($candidateItems->isEmpty()) {
-                return ['success' => false, 'message' => 'No delivered, reconciled supplier item payables are currently eligible for payout.'];
+            if ($candidateItems->isEmpty() || $candidateItems->count() !== count($selectedOrderItemIds)) {
+                return ['success' => false, 'protected' => true, 'message' => 'One or more selected items are not eligible delivered payables for this supplier. No payout was reserved.'];
             }
 
             $orderIds = $candidateItems->pluck('order_id')->unique()->sort()->values()->all();
@@ -100,12 +301,15 @@ class RetailerSupplierPayoutService
                     return ['success' => false, 'protected' => true, 'message' => "Order #{$lockedOrder->id} changed eligibility while supplier payout was being prepared."];
                 }
             }
-            $items = OrderItem::whereIn('order_id', $orderIds)
+            $items = OrderItem::whereIn('id', $selectedOrderItemIds)
+                ->whereIn('order_id', $orderIds)
                 ->where('fulfillment_supplier_vendor_id', $lockedSupplier->id)
-                ->orderBy('order_id')
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
+            if ($items->count() !== count($selectedOrderItemIds)) {
+                return ['success' => false, 'protected' => true, 'message' => 'The selected supplier items changed while the payout was being prepared. No payout was reserved.'];
+            }
 
             $audit = app(FinancialReconciliationEngine::class);
             foreach ($orderIds as $orderId) {
@@ -158,32 +362,21 @@ class RetailerSupplierPayoutService
                 ];
             }
 
-            usort($eligible, function ($a, $b) {
-                $orderCompare = $a['order_id'] <=> $b['order_id'];
-                return $orderCompare !== 0 ? $orderCompare : ($a['item']->id <=> $b['item']->id);
-            });
-
-            if (!$eligible) {
-                return ['success' => false, 'message' => 'No unreserved supplier-payable journal balances are eligible for payout.'];
+            if (!$eligible || count($eligible) !== count($selectedOrderItemIds)) {
+                return ['success' => false, 'protected' => true, 'message' => 'One or more selected items have no positive, unreconciled supplier-payable balance. No payout was reserved.'];
             }
 
-            $allocations = [];
+            $allocations = $eligible;
             $total = '0.00';
-            foreach ($eligible as $candidate) {
-                if (BcMathService::comp($candidate['amount'], self::MAXIMUM_AMOUNT) > 0 && !$allocations) {
-                    return [
-                        'success' => false,
-                        'protected' => true,
-                        'message' => "Supplier item #{$candidate['item']->id} exceeds the ₦500,000 launch payout cap and requires finance review.",
-                    ];
-                }
-
-                $nextTotal = BcMathService::add($total, $candidate['amount']);
-                if (BcMathService::comp($nextTotal, self::MAXIMUM_AMOUNT) > 0) {
-                    break;
-                }
-                $allocations[] = $candidate;
-                $total = $nextTotal;
+            foreach ($allocations as $candidate) {
+                $total = BcMathService::add($total, $candidate['amount']);
+            }
+            if (BcMathService::comp($total, self::MAXIMUM_AMOUNT) > 0) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'message' => 'Selected supplier payables exceed the ₦1,000,000 maximum per payout. Select a smaller explicit set of items; the request will not be silently split.',
+                ];
             }
 
             if (BcMathService::comp($total, self::MINIMUM_AMOUNT) < 0) {

@@ -7,6 +7,7 @@ use App\Models\FinancialJournalEntry;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderSupplierAssignment;
+use App\Models\Product;
 use App\Models\Shop;
 use App\Models\SupplierOffer;
 use App\Models\User;
@@ -31,14 +32,23 @@ class SupplierReassignmentRecoveryService
         int $newVendorId,
         int $newShopId,
         array $orderItemIds,
-        User $admin,
+        ?User $admin,
         string $reason,
         string $idempotencyKey
     ): array {
-        if ($admin->user_type !== 'super_admin' || $admin->status !== 'active') {
+        $isAutomatic = $admin === null;
+        if ($isAutomatic) {
+            // Null actor is reserved for the internal bounded failover entry point.
+            // It is never accepted as an administrator override.
+            if (!str_starts_with($idempotencyKey, 'auto-failover-')
+                || !str_starts_with(trim($reason), 'Automatic supplier failover:')) {
+                throw new InvalidArgumentException('System recovery requires the explicit automatic-failover identity and reason.');
+            }
+        } elseif ($admin->user_type !== 'super_admin' || $admin->status !== 'active') {
             throw new InvalidArgumentException('Only an active super administrator may resolve a paid supplier rejection.');
         }
 
+        $auditAction = $isAutomatic ? 'automatic_supplier_failover_applied' : 'admin_recover_rejected_supplier_items';
         $reason = trim($reason);
         $idempotencyKey = trim($idempotencyKey);
         if ($reason === '' || mb_strlen($reason) > 2000) {
@@ -65,7 +75,7 @@ class SupplierReassignmentRecoveryService
 
         return DB::transaction(function () use (
             $orderId, $rejectedAssignmentId, $newVendorId, $newShopId,
-            $itemIds, $admin, $reason, $idempotencyKey, $requestHash
+            $itemIds, $admin, $reason, $idempotencyKey, $requestHash, $isAutomatic, $auditAction
         ) {
             $order = Order::whereKey($orderId)->lockForUpdate()->firstOrFail();
 
@@ -73,7 +83,7 @@ class SupplierReassignmentRecoveryService
             // idempotency audit lookup and all journal/assignment mutations.
             $prior = AdminAuditLog::where('target_type', Order::class)
                 ->where('target_id', $order->id)
-                ->where('action', 'admin_recover_rejected_supplier_items')
+                ->where('action', $auditAction)
                 ->latest('id')
                 ->get()
                 ->first(fn (AdminAuditLog $log) => ($log->new_values['idempotency_key'] ?? null) === $idempotencyKey);
@@ -149,7 +159,25 @@ class SupplierReassignmentRecoveryService
                     ->where('vendor_id', $newVendor->id)
                     ->where('shop_id', $newShop->id)
                     ->where('is_available', true)
+                    ->where('is_admin_disabled', false)
                     ->where('wholesale_cost', '>', 0)
+                    ->whereRaw('supplier_offers.wholesale_cost < (select products.unit_price from products where products.id = supplier_offers.product_id)')
+                    ->where(function ($query) use ($offerCheckAt) {
+                        $query->whereNull('unavailability_penalty_expires_at')
+                            ->orWhere('unavailability_penalty_expires_at', '<=', $offerCheckAt);
+                    })
+                    ->where(function ($catalogLink) {
+                        $catalogLink->whereNull('supplier_catalog_product_id')
+                            ->orWhereHas('supplierCatalogProduct', function ($catalog) {
+                                $catalog->whereNull('supplier_catalog_products.deleted_at')
+                                    ->where('supplier_catalog_products.status', 'active')
+                                    ->where('supplier_catalog_products.is_in_stock', true)
+                                    ->whereColumn('supplier_catalog_products.canonical_product_id', 'supplier_offers.product_id')
+                                    ->whereColumn('supplier_catalog_products.supplier_vendor_id', 'supplier_offers.vendor_id')
+                                    ->whereColumn('supplier_catalog_products.supplier_shop_id', 'supplier_offers.shop_id')
+                                    ->whereColumn('supplier_catalog_products.source_price', 'supplier_offers.wholesale_cost');
+                            });
+                    })
                     ->whereNotNull('availability_confirmed_at')
                     ->where('availability_confirmed_at', '<=', $offerCheckAt)
                     ->whereNotNull('availability_confirmed_by')
@@ -248,8 +276,8 @@ class SupplierReassignmentRecoveryService
                     'supplier_shop_id' => $newShop->id,
                     'status' => 'awaiting_supplier_confirmation',
                     'assigned_at' => Carbon::now(),
-                    'admin_override_by' => $admin->id,
-                    'admin_override_reason' => $reason,
+                    'admin_override_by' => $admin?->id,
+                    'admin_override_reason' => $isAutomatic ? null : $reason,
                 ]);
             } elseif ($replacementAssignment->status === 'admin_reassigned') {
                 $replacementAssignment->status = 'awaiting_supplier_confirmation';
@@ -257,17 +285,38 @@ class SupplierReassignmentRecoveryService
                 $replacementAssignment->supplier_confirmed_at = null;
                 $replacementAssignment->supplier_rejected_at = null;
                 $replacementAssignment->supplier_response_notes = null;
+                $replacementAssignment->confirmed_order_items = null;
+                $replacementAssignment->confirmation_snapshot_hash = null;
+                $replacementAssignment->supplier_confirmed_by_user_id = null;
                 $replacementAssignment->supplier_pickup_code = null;
                 $replacementAssignment->handover_ready_at = null;
                 $replacementAssignment->collected_at = null;
-                $replacementAssignment->admin_override_by = $admin->id;
-                $replacementAssignment->admin_override_reason = $reason;
+                $replacementAssignment->admin_override_by = $admin?->id;
+                $replacementAssignment->admin_override_reason = $isAutomatic ? null : $reason;
+                $replacementAssignment->save();
+            } elseif ($isAutomatic && in_array($replacementAssignment->status, ['supplier_confirmed', 'ready_for_collection'], true)
+                && $replacementAssignment->collected_at === null) {
+                // New lines joining a previously confirmed supplier group invalidate
+                // the old group-level confirmation; require the supplier to confirm
+                // the complete revised set of line quantities again.
+                $replacementAssignment->status = 'awaiting_supplier_confirmation';
+                $replacementAssignment->assigned_at = Carbon::now();
+                $replacementAssignment->supplier_confirmed_at = null;
+                $replacementAssignment->supplier_rejected_at = null;
+                $replacementAssignment->supplier_response_notes = null;
+                $replacementAssignment->confirmed_order_items = null;
+                $replacementAssignment->confirmation_snapshot_hash = null;
+                $replacementAssignment->supplier_confirmed_by_user_id = null;
+                $replacementAssignment->supplier_pickup_code = null;
+                $replacementAssignment->handover_ready_at = null;
+                $replacementAssignment->admin_override_by = null;
+                $replacementAssignment->admin_override_reason = null;
                 $replacementAssignment->save();
             } elseif ($replacementAssignment->status !== 'awaiting_supplier_confirmation') {
                 throw new InvalidArgumentException('Replacement supplier already has an assignment in a state that cannot safely absorb these items.');
             } else {
-                $replacementAssignment->admin_override_by = $admin->id;
-                $replacementAssignment->admin_override_reason = $reason;
+                $replacementAssignment->admin_override_by = $admin?->id;
+                $replacementAssignment->admin_override_reason = $isAutomatic ? null : $reason;
                 $replacementAssignment->save();
             }
 
@@ -330,8 +379,8 @@ class SupplierReassignmentRecoveryService
             $order->save();
 
             AdminAuditLog::create([
-                'user_id' => $admin->id,
-                'action' => 'admin_recover_rejected_supplier_items',
+                'user_id' => $admin?->id,
+                'action' => $auditAction,
                 'target_type' => Order::class,
                 'target_id' => $order->id,
                 'old_values' => [
@@ -367,6 +416,182 @@ class SupplierReassignmentRecoveryService
                     : 'Supplier recovery was recorded. The replacement supplier must confirm availability before collection can resume.',
             ];
         }, 3);
+    }
+
+    /**
+     * Automatically attempt the next eligible supplier plan after a supplier
+     * rejection or confirmation timeout. The existing recovery path performs
+     * row locks, immutable-capture preservation and balanced compensating journals.
+     * If no complete plan remains, keep the paid order held for Super Admin review.
+     */
+    public function attemptAutomaticFailover(int $orderId, int $failedAssignmentId): array
+    {
+        return DB::transaction(function () use ($orderId, $failedAssignmentId): array {
+            $order = Order::whereKey($orderId)->lockForUpdate()->firstOrFail();
+            $failed = OrderSupplierAssignment::whereKey($failedAssignmentId)
+                ->where('order_id', $order->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$failed || !$order->retailer_model_order || $order->payment_status !== 'paid'
+                || $order->order_status !== 'confirmed'
+                || !in_array($failed->status, ['supplier_rejected', 'timed_out', 'stockout_revalidation_hold', 'counter_breach'], true)) {
+                return ['success' => false, 'reason' => 'The paid order or failed assignment is no longer eligible for automatic failover.'];
+            }
+
+            $items = OrderItem::where('order_id', $order->id)
+                ->where('fulfillment_supplier_vendor_id', $failed->supplier_vendor_id)
+                ->where('fulfillment_supplier_shop_id', $failed->supplier_shop_id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($items->isEmpty()) {
+                return ['success' => true, 'replayed' => true, 'reassigned_groups' => 0, 'reason' => 'No order lines remain on the failed assignment.'];
+            }
+
+            $planItems = [];
+            foreach ($items as $item) {
+                $product = Product::whereKey($item->product_id)->lockForUpdate()->first();
+                if (!$product) {
+                    return $this->recordAutomaticFailoverExhausted($order, $failed, 'A paid order line no longer has a canonical product record.');
+                }
+                $planItems[] = ['product' => $product, 'quantity' => (int) $item->quantity];
+            }
+
+            $plan = app(SourcingAllocationService::class)->resolveOptimalWholeOrderPlan(
+                $planItems,
+                (string) $order->fulfillment_type
+            );
+
+            if (!$plan) {
+                return $this->recordAutomaticFailoverExhausted(
+                    $order,
+                    $failed,
+                    'No complete eligible Uyo supplier plan remains for the failed assignment; admin decision required.'
+                );
+            }
+
+            $groups = [];
+            foreach (array_values($plan['items'] ?? []) as $index => $line) {
+                $item = $items[$index] ?? null;
+                $offer = $line['resolved_offer'] ?? [];
+                if (!$item || empty($offer['supplier_offer_id']) || empty($offer['vendor_id']) || empty($offer['shop_id'])
+                    || ((int) $offer['vendor_id'] === (int) $failed->supplier_vendor_id
+                        && (int) $offer['shop_id'] === (int) $failed->supplier_shop_id)) {
+                    return $this->recordAutomaticFailoverExhausted(
+                        $order,
+                        $failed,
+                        'The next candidate plan was invalid or included the failed supplier; admin decision required.'
+                    );
+                }
+
+                $key = (int) $offer['vendor_id'] . ':' . (int) $offer['shop_id'];
+                $groups[$key]['vendor_id'] = (int) $offer['vendor_id'];
+                $groups[$key]['shop_id'] = (int) $offer['shop_id'];
+                $groups[$key]['item_ids'][] = (int) $item->id;
+            }
+
+            if (!$groups) {
+                return $this->recordAutomaticFailoverExhausted($order, $failed, 'No alternative supplier candidate was selected.');
+            }
+
+            $reassignedGroups = 0;
+            foreach ($groups as $group) {
+                sort($group['item_ids']);
+                $groupHash = substr(hash('sha256', implode(',', $group['item_ids']) . ':' . $group['vendor_id'] . ':' . $group['shop_id']), 0, 10);
+                $key = 'auto-failover-' . $failed->id . '-' . $group['vendor_id'] . '-' . $group['shop_id'] . '-' . $groupHash;
+                $reason = 'Automatic supplier failover: previous supplier declined or timed out; candidate selected by the approved eligible sourcing plan.';
+
+                try {
+                    $this->reassignRejectedItems(
+                        $order->id,
+                        $failed->id,
+                        $group['vendor_id'],
+                        $group['shop_id'],
+                        $group['item_ids'],
+                        null,
+                        $reason,
+                        $key
+                    );
+                    $reassignedGroups++;
+                } catch (\Throwable $exception) {
+                    AdminAuditLog::create([
+                        'user_id' => null,
+                        'action' => 'automatic_supplier_failover_attempt_failed',
+                        'target_type' => Order::class,
+                        'target_id' => $order->id,
+                        'old_values' => [
+                            'failed_assignment_id' => $failed->id,
+                            'failed_supplier_vendor_id' => $failed->supplier_vendor_id,
+                            'failed_supplier_shop_id' => $failed->supplier_shop_id,
+                        ],
+                        'new_values' => [
+                            'idempotency_key' => $key,
+                            'candidate_vendor_id' => $group['vendor_id'],
+                            'candidate_shop_id' => $group['shop_id'],
+                            'order_item_ids' => $group['item_ids'],
+                            'reason' => 'Automatic failover attempt failed closed; admin reconciliation is required.',
+                            'exception_class' => get_class($exception),
+                            'partial_recovery' => $reassignedGroups > 0,
+                            'reassigned_groups' => $reassignedGroups,
+                            'admin_action_required' => true,
+                            'refund_dispatched' => false,
+                        ],
+                        'ip_address' => '127.0.0.1',
+                        'user_agent' => 'System/AutomaticSupplierFailover',
+                    ]);
+                    return [
+                        'success' => false,
+                        'partial' => $reassignedGroups > 0,
+                        'reassigned_groups' => $reassignedGroups,
+                        'reason' => 'Automatic failover could not safely complete every candidate group. The order remains held for admin reconciliation.',
+                    ];
+                }
+            }
+
+            return [
+                'success' => true,
+                'replayed' => false,
+                'reassigned_groups' => $reassignedGroups,
+                'reason' => 'Eligible replacement supplier assignment(s) created; order-line quantities must be confirmed by the replacement supplier(s).',
+            ];
+        }, 3);
+    }
+
+    private function recordAutomaticFailoverExhausted(Order $order, OrderSupplierAssignment $failed, string $reason): array
+    {
+        $key = 'auto-failover-exhausted-' . $failed->id;
+        $alreadyRecorded = AdminAuditLog::where('target_type', Order::class)
+            ->where('target_id', $order->id)
+            ->where('action', 'automatic_supplier_failover_exhausted')
+            ->get()
+            ->contains(fn (AdminAuditLog $log) => ($log->new_values['idempotency_key'] ?? null) === $key);
+
+        if (!$alreadyRecorded) {
+            AdminAuditLog::create([
+                'user_id' => null,
+                'action' => 'automatic_supplier_failover_exhausted',
+                'target_type' => Order::class,
+                'target_id' => $order->id,
+                'old_values' => [
+                    'failed_assignment_id' => $failed->id,
+                    'failed_supplier_vendor_id' => $failed->supplier_vendor_id,
+                    'failed_supplier_shop_id' => $failed->supplier_shop_id,
+                    'sourcing_status' => $order->sourcing_status,
+                ],
+                'new_values' => [
+                    'idempotency_key' => $key,
+                    'reason' => $reason,
+                    'admin_action_required' => true,
+                    'refund_dispatched' => false,
+                ],
+                'ip_address' => '127.0.0.1',
+                'user_agent' => 'System/AutomaticSupplierFailover',
+            ]);
+        }
+
+        return ['success' => false, 'exhausted' => true, 'reassigned_groups' => 0, 'reason' => $reason];
     }
 
     private function assertSupplierPayableReconciles(Order $order, int $vendorId): void

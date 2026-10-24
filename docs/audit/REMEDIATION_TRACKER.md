@@ -20,6 +20,7 @@
 
 | ID | Severity | Finding | Approved rule | Change / next action | Status |
 |---|---|---|---|---|---|
+| VM-AUD-132 | Critical | Historical finding: checkout used to persist supplier identities, wholesale costs and assignment rows before payment verification. | Pre-payment sourcing must remain non-binding; bind exact supplier offers and immutable operational snapshots only after verified payment. | `CheckoutExecutionService::execute()` now performs a non-binding feasibility check only, leaves supplier identity/cost snapshots and assignments empty, and fails closed on missing logistics payable tariff. `test_checkout_keeps_supplier_sourcing_non_binding_until_verified_payment` asserts no supplier assignment, supplier identity, wholesale snapshot or sourcing timestamp exists before payment; verified-payment settlement performs the binding allocation. | FIXED — current branch CI passed (run [40057097763](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/40057097763)); true simultaneous-payment/allocation concurrency remains a separate acceptance item |
 | VM-AUD-065 | Critical | Order execution accepted retries without idempotency and could create multiple orders/payment initializations. | One logical keyed attempt creates at most one order; retries replay the order, and uncertain Paystack initialization is not blindly repeated. | Added per-customer unique checkout key + normalized request hash, DB uniqueness race recovery, replay response, persisted Paystack initialization state/authorization details, and regression test for same-key replay, payload conflict, and single initialization. Financial/payment hardening proof tests passed on commit `b2548cdf8916176354bde09e7192bf4ad2f82430` ([run 39516844005](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39516844005)); key remains optional for backward compatibility, so client integration and universal enforcement remain required. | PARTIALLY IMPLEMENTED — tests passed; unkeyed clients remain exposed |
 | VM-AUD-064 | High | Checkout intent creation is not universally request-idempotent: callers that omit a key still create a fresh intent per request. | Same client idempotency key + same normalized checkout request returns the original intent; same key + changed request is rejected; distinct keys remain distinct checkout attempts. | Added persisted per-user `Idempotency-Key` support, unique DB constraint, normalized request hash, replay/conflict responses and a feature regression. Still require frontend/client integration and key enforcement before the endpoint is universally protected. Regression and OpenAPI contract CI passed on branch commit `1161addc9ecb62d0e00f7f3b32d287fb69de0fdb` (runs [39517285060](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39517285060) and [39517250888](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39517250888)). | PARTIALLY IMPLEMENTED — tests passed; key remains optional |
 | VM-AUD-063 | Medium | Valid signed Paystack event types outside the handled financial set returned `200` but left their inbox rows in `processing` forever. | Every accepted webhook identity reaches a terminal, auditable state; unsupported events do not mutate money and duplicate delivery is idempotent. | Unsupported valid events now mark the inbox row `completed` with `processed_at`; regression checks first delivery, duplicate delivery, terminal status and unchanged attempt count. | FIXED — CI passed (run [39514755366](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39514755366); branch validation [39514781254](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39514781254)) |
@@ -602,7 +603,7 @@ The following findings were confirmed during source review and hardened on `docs
 
 | VM-AUD-130 | High | Supplier notification flows used the placeholder phone `+2348000000001` when a vendor phone was missing, potentially routing order details, handover PINs, payout/account details or return notices to an unrelated recipient. | Removed the placeholder fallback across supplier order/handover/delivery/payout/return notifications; phone recipients now use configured business phone or account phone, and WhatsApp/SMS dispatch is skipped when no valid recipient exists. Return OTP flow raises an admin alert when no private channel is available. | FIXED — tests/CI pending |
 
-## VM-AUD-071 — Independent logistics corridor payable and missing-tariff recovery (23 October 2026)
+## VM-AUD-131 — Independent logistics corridor payable and missing-tariff recovery (23 October 2026)
 
 **Severity:** High — financial integrity / checkout correctness.
 
@@ -621,3 +622,145 @@ The following findings were confirmed during source review and hardened on `docs
 **Operational requirement:** Run the migration, then have an authorized Super Admin configure and verify both company tariff fields on every enabled delivery corridor before enabling checkout there. Existing orders with missing tariffs require explicit assignment and audited override reconciliation; do not bulk-fill them from the customer delivery fee.
 
 **Verification status:** Changes and regression tests are committed to the working branch. The application test suite has not been executed in this session; the latest queried commit status returned no CI status entries. Do not mark this finding fully verified until the migration, PHP syntax checks, targeted feature tests and relevant CI pass on the target environment. No merge or deployment is claimed.
+
+
+## VM-AUD-132 — Settlement capture identity, webhook verification, atomic refund obligation, and journal idempotency (24 October 2026)
+
+**Severity:** Critical — payment correctness and financial-ledger durability.
+
+**Evidence found:** The paid-order guard returned ALREADY_PAID before checking the incoming successful transaction identity; charge.success settled directly from the signed webhook body instead of requiring server-to-server verification; fractional-kobo values could be truncated by integer casts; a late-payment refund liability could commit while pending-operation creation was attempted afterward and its exception swallowed; journal writers did not consistently populate the database-unique idempotency key.
+
+**Changes committed on docs/retailer-central-fulfilment-model:**
+- Added payment_capture_exceptions and PaymentCaptureException to durably record a distinct successful capture or unproven capture identity for admin review. Repeated detection uses a stable unique idempotency key. No automatic refund is dispatched.
+- Paid-order settlement now validates status, NGN currency, reference and integer-kobo amount before returning a replay result. A distinct transaction ID creates one admin-review exception and does not post new supplier payable, cashback or settlement effects.
+- charge.success now performs server-to-server Paystack verification and compares webhook transaction ID, status, currency, amount and reference against the verified response. Uncertain verification leaves the order unpaid and the inbox event retryable; mismatched evidence is durably recorded and settlement is blocked.
+- Late-payment refund liability and its pending admin-review FinancialOperation are now created within the same database transaction. If the operation cannot be recorded, settlement rolls back rather than committing an orphan liability. This does not authorize or dispatch an outflow.
+- Settlement and Paystack verification reject malformed fractional-kobo amounts before casting.
+- FinancialJournalEntry generates a stable idempotency key for model-created journal legs when a caller does not supply one, activating the existing database unique constraint for ordinary journal writers.
+- Added regressions for distinct successful captures, repeated capture-event delivery, webhook/server-verification transaction mismatch, fractional-kobo amounts, and automatic journal-key generation.
+
+**Verification:** Latest queried working-branch run 40050739926 passed on commit 227f4946aee6020ce3558ffe1a7e5d50fb4f38b2: **240 tests passed / 1,600 assertions**, plus the supplier bank-update regression (1 test / 9 assertions) and PHP syntax scan. This is branch CI evidence, not production PostgreSQL concurrency or live Paystack sandbox proof.
+
+**Still open:** A raw unique index on orders.payment_reference is intentionally not added: the legacy parent/child settlement model can share one payment reference across related order rows. Reference uniqueness must be enforced at the payment-intent/root-capture boundary, not by incorrectly constraining every order row. Production-equivalent PostgreSQL crash/concurrency proof, corporate-bank settlement reconciliation before supplier payout, and live Paystack verification remain launch gates.
+
+## VM-AUD-133 — Retailer supplier payout selection and cap contradict active policy (24 October 2026)
+
+**Severity:** High — payout policy enforcement.
+
+**Evidence found:** RetailerSupplierPayoutService still has a ₦500,000 cap and automatically selects eligible order-item payables in FIFO order. Active business policy requires a ₦1,000,000 maximum per transaction and explicitly prohibits FIFO; eligible payable selection must be an explicit, auditable choice.
+
+**Changes committed on docs/retailer-central-fulfilment-model:**
+- Raised the retailer supplier payout cap to ₦1,000,000 while retaining the ₦5,000 minimum.
+- Removed automatic FIFO selection. The supplier must explicitly select order-item IDs; the service rechecks supplier ownership, delivery/refund-window/dispute/return eligibility, reconciliation, reservations and the exact net payable under database locks.
+- Rejects empty, duplicate, foreign/ineligible, or no-longer-eligible selections. It reserves only selected items and rejects a selection above the cap instead of silently splitting it.
+- Added a read-only eligible-payables preview to the supplier page, explicit checkbox selection, and web/API validation for selected item IDs.
+- Added a regression proving an older eligible item is not automatically included when a different item is selected.
+
+**Verification:** Later working-branch CI passed on commit c8379a4ca9189793d9102239622786c0a0ee5f33: **244 tests / 1,646 assertions**, plus supplier bank-update regression (1 test / 9 assertions) and PHP syntax scan. The explicit-selection/no-FIFO regression and Super Admin exception-queue visibility are included.
+
+**Remaining:** Confirmed collection settlement into the corporate bank account is not yet represented by a reconciled settlement-batch/allocation ledger and therefore is not yet a proven payout prerequisite. **Status: PARTIALLY FIXED — selection and amount policy aligned; corporate collection-settlement gate remains a launch blocker.**
+
+
+## VM-AUD-134 — Supplier payout is not yet gated by reconciled corporate-bank collections (24 October 2026)
+
+**Severity:** Critical — treasury liquidity and unauthorized use of unsettled funds.
+
+**Evidence found:** Retailer supplier payout eligibility currently proves verified customer payment, delivery, refund-window expiry, no open return/dispute, and reconciled supplier-payable journals. It does not prove the corresponding Paystack collection batch has settled and the net funds have been credited to Victorious MARKET's corporate bank account. A successful charge is not equivalent to a bank settlement.
+
+**Required correction before any supplier payout launch:**
+1. Persist provider settlement batches with unique provider settlement IDs, gross amount, provider fees, net amount, settlement date, and reconciliation status.
+2. Persist the individual verified gateway transaction/order allocations included in each batch, with immutable transaction IDs, amount/currency, and uniqueness constraints.
+3. Require a separate bank-credit proof/reference and authorized Super Admin reconciliation before a batch becomes available for treasury use. A gateway settlement report alone must not be treated as proof the bank account was credited.
+4. Make supplier payout reservation recheck that every selected payable's source collection is reconciled to a settled batch and that aggregate reconciled available funds cover all existing reservations and the proposed outflow.
+5. Test duplicate batch imports, missing/extra transactions, fees/net mismatches, bank-credit mismatch, partial batches, replay, and concurrent payout requests.
+
+**Status: OPEN — do not claim settlement is launch-ready or permit production supplier disbursement until this gate and production-equivalent concurrency tests are implemented and verified.**
+
+## VM-AUD-135 — Payment exception review workflow is visible but not yet resolvable end-to-end (24 October 2026)
+
+**Severity:** High — customer recovery and financial exception handling.
+
+**Evidence found:** Pending capture exceptions are now durable and visible on the Super Admin treasury desk. The current UI is a read-only triage queue. It does not yet provide a fully audited resolution workflow that can distinguish a harmless replay, confirmed second capture, provider-verification mismatch, and a pending customer refund tied to the exact captured transaction.
+
+**Required correction:** Add an authorized resolution action with required outcome, notes, actor and timestamps. For a confirmed extra capture, create a separate pending refund instruction bound to that exact gateway transaction ID and amount; do not apply the original order refund ceiling to the second capture, and do not dispatch automatically. Reconcile provider-confirmed refund completion before closing the exception. For mismatches or unproven identity, retain the hold until independent evidence resolves the case.
+
+**Status: OPEN — exceptions are recorded and visible, but full resolution and exact-capture refund workflow remain incomplete.**
+
+
+
+## VM-AUD-136 — Supplier catalog and exact-order confirmation alignment (24 October 2026)
+
+**Severity:** High — order fulfilment correctness, supplier-data integrity and sourcing auditability.
+
+**Original gap:** Supplier confirmation changed an assignment status but did not persist the exact paid order lines/quantities accepted or identify the confirming supplier user. The catalog was also tied directly to canonical public products, the binary stock signal could be confused with quantity, and admin disablement shared the same flag as supplier stock.
+
+**Changes committed on `docs/retailer-central-fulfilment-model`:**
+- Added `confirmed_order_items`, a deterministic `confirmation_snapshot_hash`, and `supplier_confirmed_by_user_id` to supplier assignments. Confirmation locks the paid order and its assigned lines, revalidates each linked offer and positive margin, records exact line IDs/product IDs/names/quantities/offer IDs, and rejects changed snapshots on replay.
+- Added `supplier_catalog_products` as a private supplier-owned catalog with product details, source price, specs/photo path, and binary `is_in_stock`; the table intentionally has no `quantity` or `inventory_quantity` column.
+- Added supplier-owner API endpoints to list/create/update private catalog records. Requests that submit quantity fields or try to set canonical matching/ownership are rejected. Stock transitions invalidate prior availability confirmation and cannot override an admin-disabled offer.
+- Added a Super Admin private-record workflow to create a record, review an exact canonical match, link it to one canonical product, and create/synchronize the corresponding supplier offer. Direct offer creation without a private source record has been removed from the admin route/UI.
+- Added a unique offer-to-private-record relationship, protected hard-delete references, audited source-price corrections, and an explicit admin re-enable action requiring a reason and fresh confirmation.
+- Separated `is_admin_disabled` from the supplier's stock signal. Selection, public product eligibility, recovery, confirmation and supplier stock updates all respect admin disablement.
+- Removed the fake `available_quantity = 999` inference for centrally managed canonical products. Their supplier availability remains binary; requested quantity is confirmed only against a paid order line.
+- Added automatic failover after supplier rejection and the existing SLA timeout. The service reuses the transactional recovery path, deterministic idempotency keys, immutable capture snapshots and compensating supplier-payable journals. It applies the SKU cooldown first and moves to the next eligible whole-order plan. If no safe complete plan remains, the order stays held for Super Admin resolution; no automatic refund or transfer is triggered.
+- Public listing eligibility now hides products when all offers are stale, disabled, out of stock, cooldown-blocked, non-positive-margin or at the supplier pending-handover limit.
+- Added integration/regression tests for exact quantity snapshots, duplicate confirmation, successful paid-order failover with three units and balanced supplier payables, private catalog ownership, no quantity field, one-record/one-canonical matching, stock confirmation invalidation, admin disable protection, and cooldown-driven public listing hiding.
+
+**Latest verification evidence (24 October 2026):** GitHub Actions run [#40055627833](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/40055627833), commit `9ae0c4a0aae5f6c6e52f682f9017185896f88375`, completed successfully:
+- Refund/payment hardening suite: **246 passed (1,725 assertions)**.
+- Supplier bank-update regression: **1 passed (9 assertions)**.
+- PostgreSQL settlement proof: **113 passed (695 assertions)**.
+- Changed-file PHP syntax check and full backend PHP syntax scan passed.
+- The suite now exercises the actual supplier confirmation SLA command and timeout-triggered automatic failover, and verifies a repeated failover attempt does not create duplicate supplier assignments or financial journal entries.
+
+**PostgreSQL compatibility fixes verified:** Added a forward migration to replace obsolete PostgreSQL `CHECK` constraints left behind when enum columns were converted to strings, covering current product package tiers and current order/settlement lifecycle states. Corrected a raw supplier-eligibility query from boolean/integer comparison to a PostgreSQL-compatible boolean predicate. The repeated-journal uniqueness test now isolates its expected constraint violation in a nested transaction/savepoint so PostgreSQL's failed-transaction state does not leak into subsequent assertions.
+
+**Still open / launch-critical:**
+1. Add a true concurrent-worker test for two failover workers competing on the same rejected/timed-out assignment, and a multi-supplier grouped recovery partial-failure test. Current replay regression proves no duplicate financial/assignment effects after a completed failover, but is not a simultaneous-worker stress test.
+2. Complete an audited unmatch/rematch workflow for an incorrectly linked private catalog record; current linking correctly refuses a second canonical match but does not yet offer a guided correction path.
+3. Safely migrate or retire legacy supplier offers that have no private catalog record. They remain eligible for backward compatibility during transition, even though new admin offer creation now requires a private record.
+4. Finish cross-path stock reconciliation for checkout, settlement, expiry/restoration, cancellation/refund and concurrent payment events. Do not remove legacy guards without those tests.
+5. Complete corporate-bank settlement/bank-credit proof before supplier payouts (VM-AUD-134) and the payment-capture exception resolution workflow (VM-AUD-135).
+
+**Status:** The current refund-safety and PostgreSQL proof workflows are green, and the supplier timeout/failover and replay regressions are covered. The entire sourcing/settlement system is **not yet launch-certified** because the remaining concurrency, grouped partial-failure, catalog-recovery, legacy-data and financial/stock gates are still open. No merge or deployment was performed.
+
+
+## Current branch verification — 24 October 2026
+
+The active integration branch `docs/retailer-central-fulfilment-model` has additional code and regression coverage after the earlier entries above. The current focused workflow passed on commit `5a8c7f458b6536a0e41abc12cb67439e8d6697c0` (run [40057097763](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/40057097763)): both the refund/payment hardening job and PostgreSQL settlement proof job succeeded, including PHP syntax scans.
+
+- **Partial multi-supplier failover:** a regression injects failure in the second supplier group and checks that the first group's committed recovery remains intact, unresolved lines stay with the failed supplier, capture-time snapshots remain unchanged, audit metadata explicitly requires admin action, and no refund is dispatched.
+- **Catalog correction:** Super Admin can unmatch an incorrect private-record/canonical-product link with a required reason. The old offer is detached, unavailable and soft-deleted; active fulfilments block correction; a later rematch creates or restores an unconfirmed offer and requires fresh availability confirmation.
+- **Legacy offers:** migration `2026_10_24_000009_backfill_legacy_supplier_offers_into_private_catalog.php` backfills eligible legacy offer rows into private supplier catalog records without inventing missing supplier-specific model/variant data. Orphaned or invalid rows remain detached for manual reconciliation; rollback is intentionally non-destructive.
+- **Still not merge/launch certified:** true simultaneous-worker failover/payment concurrency has not been demonstrated by a multi-connection PostgreSQL test. VM-AUD-134 remains a critical blocker because no reconciled collection-settlement/bank-credit ledger gates supplier payout disbursement. VM-AUD-135 remains open because capture exceptions still need the full audited resolution and exact-extra-capture refund-instruction workflow. These are not waived by the green targeted workflow.
+
+
+
+## Implementation update — treasury, capture exceptions and supplier stock truth (24 October 2026)
+
+Verified CI on commit `bd03c29c50e624fbeefc2e25c4030a402d796605`: [run 40059417462](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/40059417462) completed successfully. Both `refund-safety` and `postgres-settlement-proof` passed; the PostgreSQL job included 132 tests / 931 assertions and the expanded SQLite/refund-safety job passed.
+
+### VM-AUD-134 — current implementation state
+
+Added:
+- `treasury_bank_credit_batches`: unique gateway settlement and corporate bank-credit references, net credited kobo, gross collection kobo, provider-fee kobo, statement value date/evidence reference, and dual-review status.
+- `treasury_bank_credit_batch_allocations`: unique gateway transaction IDs and payment references tied to exact paid orders, captured amount, currency and the adding administrator.
+- Confirmation fails unless allocations sum exactly to gross collections, gross less provider fees equals the bank-credit amount, and every allocation matches a paid order's exact gateway transaction ID, payment reference, currency and grand total.
+- Supplier payout submission is blocked before recipient creation/transfer unless a dual-reviewed batch is reconciled and has sufficient unreserved net credited balance. Batch row locking serializes reservation attempts; pending, processing, uncertain and paid requests consume capacity. Payout capacity is not inferred from a successful customer charge alone.
+- Regression tests cover missing treasury proof, independent reviewer approval, exact order-capture allocation, idempotent reservation and insufficient remaining balance.
+
+**Status: IMPLEMENTED WITH MANUAL BANK EVIDENCE; final simultaneous payout-worker proof and production evidence-operating procedure remain required before launch certification.** The application does not independently connect to the bank or validate a statement reference with the bank; the second reviewer must inspect the actual corporate statement and supporting gateway settlement evidence.
+
+### VM-AUD-135 — current implementation state
+
+Added an admin resolution desk and `payment_capture_exception_resolutions` with immutable capture identity and amount, reason, idempotency key, preparer/confirming administrators, manual refund reference and confirmation timestamp. Identity-unproven captures cannot receive refund instructions. A distinct successful capture can receive a manual instruction tied to its exact transaction ID and amount. The application never dispatches the refund; a different active Super Admin must record the completed gateway refund with an exact amount and reference before the exception is closed. Tests cover no automatic dispatch, unproven identity rejection, dual control and exact-amount enforcement.
+
+**Status: MANUAL RESOLUTION IMPLEMENTED AND CI-VERIFIED.** Gateway refund completion is confirmed by human-entered gateway evidence rather than an automated provider refund-status lookup; the admin must inspect the actual gateway transaction before confirmation.
+
+### Supplier stock / payment / expiry reconciliation
+
+Checkout no longer uses legacy `inventory_quantity` to promise exact supplier quantity. Supplier-backed retailer settlement does not decrement legacy inventory, and expiry does not add stock for a retailer order because no stock was reserved before payment. Tests were updated to prove that supplier availability and exact quantity confirmation—not a legacy quantity counter—govern the new retailer model. Late captured payments still follow the payment-truth and cancellation recovery rules.
+
+### Remaining merge acceptance item
+
+A dedicated **true simultaneous-worker** test is still needed for two processes competing on the same supplier failover assignment and for two payout workers reserving the same treasury batch at the same time. Existing tests prove sequential replay/idempotency, locking is implemented, and payout capacity is rechecked under row locks; these are not a substitute for the multi-process concurrency proof. Keep the branch unmerged until that test and final branch CI pass.

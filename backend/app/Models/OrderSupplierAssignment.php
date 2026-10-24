@@ -6,6 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class OrderSupplierAssignment extends Model
 {
+    // Internal actor IDs and integrity hashes are for audit/reconciliation, not
+    // supplier-facing serialized order payloads.
+    protected $hidden = [
+        'supplier_confirmed_by_user_id',
+        'confirmation_snapshot_hash',
+    ];
+
     protected $fillable = [
         'order_id',
         'supplier_vendor_id',
@@ -15,6 +22,9 @@ class OrderSupplierAssignment extends Model
         'supplier_confirmed_at',
         'supplier_rejected_at',
         'supplier_response_notes',
+        'confirmed_order_items',
+        'confirmation_snapshot_hash',
+        'supplier_confirmed_by_user_id',
         'supplier_pickup_code',
         'handover_ready_at',
         'collected_at',
@@ -30,6 +40,7 @@ class OrderSupplierAssignment extends Model
         'assigned_at' => 'datetime',
         'supplier_confirmed_at' => 'datetime',
         'supplier_rejected_at' => 'datetime',
+        'confirmed_order_items' => 'array',
         'handover_ready_at' => 'datetime',
         'collected_at' => 'datetime',
         'pickup_locked_until' => 'datetime',
@@ -49,6 +60,11 @@ class OrderSupplierAssignment extends Model
     public function order()
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function confirmedBy()
+    {
+        return $this->belongsTo(User::class, 'supplier_confirmed_by_user_id');
     }
 
     public function supplier()

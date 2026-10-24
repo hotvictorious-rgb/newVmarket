@@ -23,6 +23,9 @@
             </p>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <a href="{{ route('admin.supplier-catalog.index') }}" class="btn-dash btn-dash-primary" style="font-size: 12px; padding: 6px 12px;">
+                Supplier Catalog &amp; Listings
+            </a>
             <a href="{{ route('admin.dashboard') }}" class="btn-dash btn-dash-outline" style="font-size: 12px; padding: 6px 12px;">
                 &larr; Back to Command Tower
             </a>

@@ -72,12 +72,27 @@
                     Separate from legacy merchant sales payouts. This requests eligible item-level supplier costs from Victorious MARKET orders after verified payment, delivery, refund-window expiry, and finance reconciliation.
                 </p>
             </div>
-            <form method="POST" action="{{ route('vendor.supplier-payout.request') }}">
+            <form method="POST" action="{{ route('vendor.supplier-payout.request') }}" style="min-width: 280px; max-width: 520px;">
                 @csrf
+                <div style="margin-bottom: 12px; max-height: 320px; overflow: auto; padding: 10px; border: 1px solid var(--adm-border, #ddd); border-radius: 8px;">
+                    <strong style="display:block; margin-bottom:8px;">Select payable items for this request</strong>
+                    @forelse($eligibleRetailerSupplierItems ?? [] as $eligibleItem)
+                        <label style="display:flex; gap:8px; align-items:flex-start; padding:8px 0; border-bottom:1px solid rgba(128,128,128,.18); font-size:12px;">
+                            <input type="checkbox" name="order_item_ids[]" value="{{ $eligibleItem['order_item_id'] }}" style="margin-top:3px;">
+                            <span>
+                                <strong>{{ $eligibleItem['product_name'] }}</strong><br>
+                                Order {{ $eligibleItem['order_number'] }} · Qty {{ $eligibleItem['quantity'] }} ·
+                                <strong>₦{{ number_format((float) $eligibleItem['amount'], 2) }}</strong>
+                            </span>
+                        </label>
+                    @empty
+                        <span style="font-size:12px; color:var(--adm-muted, #666);">No delivered supplier items are currently eligible after refund-window and finance reconciliation checks.</span>
+                    @endforelse
+                </div>
                 <button type="submit" class="btn-dash btn-dash-primary"
-                    {{ $activeRetailerSupplierPayout ? 'disabled' : '' }}
-                    title="{{ $activeRetailerSupplierPayout ? 'Resolve the active request before requesting another payout.' : 'Calculate and reserve eligible supplier item payables.' }}">
-                    Request Supplier Payables
+                    {{ ($activeRetailerSupplierPayout || empty($eligibleRetailerSupplierItems)) ? 'disabled' : '' }}
+                    title="{{ $activeRetailerSupplierPayout ? 'Resolve the active request before requesting another payout.' : 'Reserve only the item payables you explicitly select.' }}">
+                    Request Selected Supplier Payables
                 </button>
             </form>
         </div>
@@ -107,7 +122,7 @@
                 </tbody>
             </table>
         </div>
-        <small>Launch controls: minimum ₦5,000 and maximum ₦500,000 per request. Supplier KYC and bank details must remain valid. These are payout safeguards, not commercial tariff promises.</small>
+        <small>Launch controls: minimum ₦5,000 and maximum ₦1,000,000 per request. Select exact items explicitly; the system does not allocate supplier payables by FIFO or silently split an over-cap request. Supplier KYC and bank details must remain valid.</small>
     </section>
 
     <!-- 4 Financial Stats Cards: Clarifying Lifetime Earnings vs Withdrawable Balance -->
