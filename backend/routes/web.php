@@ -104,6 +104,7 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/supplier-catalog/products/{productId}/listing', [AdminSupplierCatalogController::class, 'setListing'])->whereNumber('productId')->name('admin.supplier-catalog.products.listing');
     Route::patch('/supplier-catalog/offers/{offerId}/cost', [AdminSupplierCatalogController::class, 'updateOfferCost'])->whereNumber('offerId')->name('admin.supplier-catalog.offers.cost');
     Route::post('/supplier-catalog/offers/{offerId}/disable', [AdminSupplierCatalogController::class, 'disableOffer'])->whereNumber('offerId')->name('admin.supplier-catalog.offers.disable');
+    Route::post('/supplier-catalog/offers/{offerId}/enable', [AdminSupplierCatalogController::class, 'enableOffer'])->whereNumber('offerId')->name('admin.supplier-catalog.offers.enable');
     Route::post('/supplier-offers/{offerId}/confirm-availability', [AdminSupplierOfferAvailabilityController::class, 'confirm'])
         ->whereNumber('offerId')
         ->name('admin.supplier_offers.confirm_availability');
