@@ -62,7 +62,6 @@ class PaymentCaptureExceptionResolutionTest extends TestCase
         $this->assertSame('refund_instruction_pending', $exception->fresh()->status);
         $this->assertDatabaseMissing('gateway_attempts', [
             'gateway_reference' => 'TX-DUPLICATE-002',
-            'attempt_type' => 'refund',
         ]);
         $this->assertDatabaseHas('admin_audit_logs', [
             'action' => 'payment_capture_exception_resolution_prepared',
