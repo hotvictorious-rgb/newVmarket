@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -38,6 +39,15 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // SQLite requires dependent indexes to be removed before dropping a
+        // column. PostgreSQL removes them automatically with the column.
+        if (DB::getDriverName() === 'sqlite'
+            && Schema::hasIndex('rider_profiles', 'rider_profiles_vendor_id_is_active_index')) {
+            Schema::table('rider_profiles', function (Blueprint $table) {
+                $table->dropIndex('rider_profiles_vendor_id_is_active_index');
+            });
+        }
+
         Schema::table('rider_profiles', function (Blueprint $table) {
             if (Schema::hasColumn('rider_profiles', 'vendor_id')) {
                 $table->dropForeign(['vendor_id']);
