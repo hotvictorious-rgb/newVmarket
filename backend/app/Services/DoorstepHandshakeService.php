@@ -54,6 +54,20 @@ class DoorstepHandshakeService
                 return ['success' => false, 'message' => 'Unpaid orders cannot undergo doorstep handover.'];
             }
 
+            // Guard against duplicate / replayed delivery execution:
+            if (in_array($lockedOrder->order_status, ['delivered', 'returned'], true)) {
+                $expectedOtp = trim((string)$lockedOrder->verification_code);
+                $providedOtp = trim((string)$deliveryOtp);
+                if (!empty($expectedOtp) && hash_equals($expectedOtp, $providedOtp)) {
+                    return [
+                        'success' => true,
+                        'replayed' => true,
+                        'message' => 'Doorstep delivery was already confirmed and recorded.',
+                        'order' => $lockedOrder,
+                    ];
+                }
+            }
+
             // This service is the terminal doorstep handover transition, not a shortcut
             // from vendor preparation or pickup-ready states. Rider custody must already
             // have moved the order into out_for_delivery.
