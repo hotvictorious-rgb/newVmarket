@@ -685,3 +685,23 @@ The following findings were confirmed during source review and hardened on `docs
 **Required correction:** Add an authorized resolution action with required outcome, notes, actor and timestamps. For a confirmed extra capture, create a separate pending refund instruction bound to that exact gateway transaction ID and amount; do not apply the original order refund ceiling to the second capture, and do not dispatch automatically. Reconcile provider-confirmed refund completion before closing the exception. For mismatches or unproven identity, retain the hold until independent evidence resolves the case.
 
 **Status: OPEN — exceptions are recorded and visible, but full resolution and exact-capture refund workflow remain incomplete.**
+
+
+## VM-AUD-136 — Supplier confirmation did not persist the exact paid order quantities (24 October 2026)
+
+**Severity:** High — order fulfilment correctness and supplier-response auditability.
+
+**Evidence found:** The supplier confirmation endpoint previously accepted a generic confirmation and changed the assignment status, but did not persist the exact order lines/quantities the supplier had accepted or identify the confirming user. A later order-line edit or stale assignment state could therefore make it difficult to prove what the supplier actually confirmed.
+
+**Changes committed on `docs/retailer-central-fulfilment-model`:**
+- Added nullable `confirmed_order_items` JSON, `confirmation_snapshot_hash`, and `supplier_confirmed_by_user_id` to `order_supplier_assignments`.
+- Supplier confirmation now locks the order and assigned lines, verifies each line's offer still belongs to the assigned supplier/shop, is currently available with fresh confirmation, is outside cooldown, and retains positive margin.
+- Stores an order-scoped snapshot of exact line IDs, product IDs/names, requested quantities, offer IDs and confirmation timestamps, together with a deterministic hash and the confirming user ID.
+- A duplicate confirmation is accepted only when the currently assigned lines match the saved snapshot hash; changed or invalid state fails closed for admin reconciliation.
+- Added regression assertions for exact line/quantity persistence, confirming actor, and idempotent duplicate confirmation.
+
+**Impact:** Victorious MARKET can prove which quantities a supplier accepted for a specific paid order, instead of treating the supplier catalog's binary stock flag as a quantity promise. The confirmation endpoint also refuses to accept an offer that has become stale, unavailable, cooldown-blocked or non-positive-margin.
+
+**Verification status:** Code and tests are committed, but this change has not yet been verified by a completed branch CI run in this session. Migration execution, targeted tests and full regression results remain pending.
+
+**Still open / launch-critical:** This does **not** implement automatic supplier failover. The current rejection/timeout paths place the paid order on an admin-managed sourcing hold; they do not yet automatically walk the next eligible supplier candidates and execute a balanced, idempotent reassignment. Automatic failover must reuse the existing immutable snapshot and compensating-journal safeguards, be bounded and concurrency-safe, and stop in the admin exception queue only after eligible candidates are exhausted. Do not claim the approved workflow is fully implemented until that behavior and its failure/concurrency tests pass.
