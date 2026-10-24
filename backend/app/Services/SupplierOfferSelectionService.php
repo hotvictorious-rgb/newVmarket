@@ -108,7 +108,7 @@ class SupplierOfferSelectionService
                 $query->whereNull('vendor_profiles.deleted_at')
                     ->where('marketplace_status', 'active')
                     ->where('kyc_status', 'verified')
-                    ->whereRaw('(select count(*) from shops as active_supplier_shops where active_supplier_shops.vendor_id = vendor_profiles.id and active_supplier_shops.deleted_at is null and active_supplier_shops.is_active = 1) = 1')
+                    ->whereRaw('(select count(*) from shops as active_supplier_shops where active_supplier_shops.vendor_id = vendor_profiles.id and active_supplier_shops.deleted_at is null and active_supplier_shops.is_active = true) = 1')
                     ->whereRaw('(select count(*) from order_supplier_assignments as pending_assignments where pending_assignments.supplier_vendor_id = vendor_profiles.id and pending_assignments.status in (\'awaiting_supplier_confirmation\', \'supplier_confirmed\', \'ready_for_collection\')) < 5')
                     ->whereHas('user', function ($userQuery) {
                         $userQuery->where('status', 'active');
