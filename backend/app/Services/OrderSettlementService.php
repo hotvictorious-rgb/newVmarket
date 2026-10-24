@@ -26,12 +26,6 @@ class OrderSettlementService
         $this->paystackService = $paystackService ?? app(PaystackService::class);
     }
     /**
-     * Authoritative Paystack Order Settlement Core.
-     * Enforces pessimistic locking, actor IDOR check, exact kobo invariant,
-     * currency check, idempotency against replay attacks, state transition,
-     * 5% customer cashback maturation queue, and immutable audit log.
-     */
-    /**
      * Settle an independently verified direct bank credit. The caller must already
      * have matched a unique bank transaction reference and exact credited amount to
      * the immutable order payment reference. This deliberately does not create a
