@@ -111,7 +111,7 @@
                 Order Placed Successfully!
             </h1>
             <p style="font-size: 13.5px; color: #64748B; margin: 0 0 16px;">
-                Your payment is safely secured in Victorious MARKET Escrow.
+                @if($order->payment_status === 'paid') Payment has been verified by Victorious MARKET. @elseif($order->payment_method === 'manual_bank_transfer') Your transfer is not confirmed yet. Admin verification of actual bank credit is required. @else Payment verification is pending. Do not assume payment is complete until the status confirms it. @endif
             </p>
         @endif
 
@@ -487,7 +487,7 @@
             $status = $order->order_status;
             $steps = [
                 ['key' => 'placed', 'title' => 'Order Placed', 'desc' => 'Order created in system', 'done' => true, 'time' => $order->created_at->format('h:i A')],
-                ['key' => 'paid', 'title' => 'Payment Confirmed', 'desc' => 'Escrow locked via Paystack', 'done' => true, 'time' => $order->created_at->addMinutes(2)->format('h:i A')],
+                ['key' => 'paid', 'title' => 'Payment Confirmed', 'desc' => $order->payment_method === 'manual_bank_transfer' ? 'Actual bank credit verified and approved by admin' : 'Payment verified through Paystack', 'done' => $order->payment_status === 'paid', 'time' => $order->paid_at?->format('h:i A') ?? 'Awaiting verification'],
                 ['key' => 'preparing', 'title' => 'Victorious MARKET Preparing', 'desc' => $order->retailer_model_order ? 'Supplier sourcing and collection are coordinated privately by Victorious MARKET' : "Verified at {$order->shop->name} ({$order->shop->lga->name} LGA)", 'done' => in_array($status, ['processing', 'ready_for_pickup', 'out_for_delivery', 'delivered']), 'time' => '11:15 AM'],
                 ['key' => 'dispatch', 'title' => $order->fulfillment_type === 'in_shop_pickup' ? 'Ready for Counter Pickup' : 'Out for Delivery', 'desc' => $order->fulfillment_type === 'in_shop_pickup' ? 'Waiting at branch counter' : ($order->hasRiderArrived() ? 'Rider arrived at doorstep' : 'Courier in transit'), 'done' => in_array($status, ['out_for_delivery', 'delivered']), 'time' => $order->rider_arrived_at ? $order->rider_arrived_at->format('h:i A') : '12:30 PM (ETA)'],
                 ['key' => 'delivered', 'title' => 'Delivered & Received', 'desc' => 'Customer phone PIN verified', 'done' => ($status === 'delivered'), 'time' => $order->received_at ? $order->received_at->format('h:i A') : 'Pending Confirmation'],
