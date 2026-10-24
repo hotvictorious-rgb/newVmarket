@@ -289,21 +289,8 @@
                     <p style="font-size:12px;color:#64748B;">No supplier offers are attached. The product cannot be purchased until an eligible offer is added and confirmed.</p>
                 @endforelse
 
-                <form method="POST" action="{{ route('admin.supplier-catalog.offers.store', $product->id) }}" style="display:grid;grid-template-columns:minmax(220px,1fr) 180px auto;gap:10px;align-items:end;margin-top:12px;background:#F8FAFC;border-radius:9px;padding:12px;">
-                    @csrf
-                    <label>Approved Uyo supplier shop
-                        <select name="shop_id" required class="form-control">
-                            <option value="">Select private supplier</option>
-                            @foreach($shops as $shop)
-                                <option value="{{ $shop->id }}">{{ $shop->vendor->business_name ?? 'Supplier' }} — {{ $shop->name }}</option>
-                            @endforeach
-                        </select>
-                    </label>
-                    <label>Wholesale cost (₦)
-                        <input type="number" name="wholesale_cost" required min="0.01" step="0.01" max="100000000" class="form-control">
-                    </label>
-                    <button type="submit" class="btn-dash btn-dash-primary">Attach unconfirmed offer</button>
-                </form>
+                <p style="font-size:12px;color:#64748B;margin-top:12px;">To add a supplier, first create or review that supplier's private catalog record above, then link the exact matching record to this canonical product. Direct offers without a private source record are no longer supported.</p>
+
             </div>
         </section>
     @empty
