@@ -305,6 +305,35 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
+    public function test_supplier_payout_uses_only_explicitly_selected_items_and_never_fifo_allocates(): void
+    {
+        [, $olderItem] = $this->createSupplierPayableOrderItem('6000.00');
+        [, $selectedItem] = $this->createSupplierPayableOrderItem('7000.00');
+        $service = app(RetailerSupplierPayoutService::class);
+
+        $preview = $service->previewEligibleItems($this->vendor);
+        $this->assertContains((int) $olderItem->id, array_column($preview, 'order_item_id'));
+        $this->assertContains((int) $selectedItem->id, array_column($preview, 'order_item_id'));
+
+        $missingSelection = $service->requestPayout($this->vendor);
+        $this->assertFalse($missingSelection['success']);
+        $this->assertStringContainsString('Select the specific eligible order items', $missingSelection['message']);
+
+        $request = $service->requestPayout($this->vendor, [$selectedItem->id]);
+        $this->assertTrue($request['success'], $request['message'] ?? 'Explicit supplier payout selection failed.');
+        $this->assertSame('7000.00', (string) $request['payout']->amount);
+        $this->assertSame(
+            [$selectedItem->id],
+            $request['payout']->allocations->pluck('order_item_id')->all(),
+            'Only the item explicitly selected by the supplier may be reserved.'
+        );
+        $this->assertSame(
+            0,
+            RetailerSupplierPayoutAllocation::where('order_item_id', $olderItem->id)->count(),
+            'An older eligible item must not be included by FIFO or automatic selection.'
+        );
+    }
+
     public function test_retailer_supplier_payout_reversal_restores_item_payable_once(): void
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('9000.00');
