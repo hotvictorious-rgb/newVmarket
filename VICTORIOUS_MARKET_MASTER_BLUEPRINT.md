@@ -80,7 +80,7 @@ Apply only the discounts and cashback redemption permitted by the active checkou
 
 * **Mandatory Customer Account Registration:** Guests are permitted to browse the storefront catalog, view products, calculate delivery estimates, and add items to cart freely. However, **guest checkout is strictly prohibited**. Before proceeding to checkout or initializing Paystack payment, the customer must register or log in. This ensures that every order is bound to an authenticated customer record with a verified phone number for the rider's mandatory pre-departure call and secure Delivery OTP dispatch.
 * **No Cash-on-Delivery (COD):** The customer must complete payment via **Paystack** (Card or standard bank transfer, the approved launch rails).
-* **Payment Verification Gate:** A browser redirect, screenshot or payment initialization does not trigger fulfilment. A trusted, correctly verified Paystack webhook or authoritative server-side transaction verification may establish payment only after checking reference, order binding, exact amount, NGN currency and idempotency. Only then may the order enter its verified-paid processing state and proceed to supplier allocation.
+* **Payment Verification Gate:** A browser redirect, screenshot or payment initialization does not trigger fulfilment. Each order is immutably bound to exactly one enabled method: Paystack or direct Manual Bank Transfer. Paystack requires trusted provider-side verification; manual transfer requires authorized independent verification of actual bank credit. Check exact order binding, amount, NGN currency, unique transaction identity and idempotency. Only verified payment may proceed to supplier allocation; never cross-verify payment rails.
 
 ---
 
