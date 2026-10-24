@@ -30,7 +30,9 @@
             <div class="col-md-4"><label class="form-label">Gateway settlement reference</label><input name="gateway_settlement_reference" required minlength="4" maxlength="120" class="form-control"></div>
             <div class="col-md-4"><label class="form-label">Corporate bank credit reference</label><input name="bank_credit_reference" required minlength="4" maxlength="120" class="form-control"></div>
             <div class="col-md-3"><label class="form-label">Corporate account last 4 digits</label><input name="corporate_account_last4" required pattern="[0-9]{4}" maxlength="4" class="form-control"></div>
-            <div class="col-md-3"><label class="form-label">Net credited amount (kobo)</label><input type="number" name="net_credit_amount_kobo" required min="1" step="1" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label">Gross collections (kobo)</label><input type="number" name="gross_collection_amount_kobo" required min="1" step="1" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label">Provider fees (kobo)</label><input type="number" name="provider_fee_amount_kobo" required min="0" step="1" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label">Net bank credit (kobo)</label><input type="number" name="net_credit_amount_kobo" required min="1" step="1" class="form-control"></div>
             <div class="col-md-3"><label class="form-label">Currency</label><select name="currency" required class="form-control"><option value="NGN">NGN</option></select></div>
             <div class="col-md-3"><label class="form-label">Bank statement value date</label><input type="date" name="statement_value_date" required max="{{ now()->toDateString() }}" class="form-control"></div>
             <div class="col-md-6"><label class="form-label">Statement evidence reference</label><input name="statement_evidence_reference" required minlength="4" maxlength="255" class="form-control" placeholder="Statement file/page or bank portal reference"></div>
@@ -42,13 +44,29 @@
 
 <div class="table-responsive">
 <table class="table table-striped align-middle">
-<thead><tr><th>Batch</th><th>Settlement / bank credit</th><th>Net credited</th><th>Evidence</th><th>Status / reviewers</th><th>Action</th></tr></thead>
+<thead><tr><th>Batch</th><th>Settlement / bank credit</th><th>Gross / fees / net</th><th>Order allocations</th><th>Evidence</th><th>Status / reviewers</th><th>Action</th></tr></thead>
 <tbody>
 @forelse($batches as $batch)
 <tr>
     <td>#{{ $batch->id }}<br><small>Value date: {{ optional($batch->statement_value_date)->toDateString() }}</small></td>
     <td><div>Gateway: <code>{{ $batch->gateway_settlement_reference }}</code></div><div>Bank: <code>{{ $batch->bank_credit_reference }}</code></div><div>Account ending {{ $batch->corporate_account_last4 }}</div></td>
-    <td>₦{{ number_format($batch->net_credit_amount_kobo / 100, 2) }}<br><small>{{ number_format($batch->net_credit_amount_kobo) }} kobo</small></td>
+    <td>Gross: ₦{{ number_format($batch->gross_collection_amount_kobo / 100, 2) }}<br>Fees: ₦{{ number_format($batch->provider_fee_amount_kobo / 100, 2) }}<br>Net: ₦{{ number_format($batch->net_credit_amount_kobo / 100, 2) }}</td>
+    <td>
+        <div>{{ $batch->allocations->count() }} capture(s) allocated</div>
+        @foreach($batch->allocations as $allocation)
+            <div style="font-size:12px;margin-bottom:6px;">Order #{{ $allocation->order_id }} · {{ $allocation->gateway_transaction_id }} · ₦{{ number_format($allocation->amount_kobo / 100, 2) }}</div>
+        @endforeach
+        @if($batch->status === 'pending_second_review')
+            <form method="POST" action="{{ route('admin.treasury-bank-credit-batches.allocations.store', $batch->id) }}" style="display:grid;gap:6px;min-width:250px;">
+                @csrf
+                <input type="number" name="order_id" required min="1" step="1" class="form-control" placeholder="Paid order ID">
+                <input name="gateway_transaction_id" required maxlength="100" class="form-control" placeholder="Exact gateway transaction ID">
+                <input name="payment_reference" required maxlength="100" class="form-control" placeholder="Exact order payment reference">
+                <input type="number" name="amount_kobo" required min="1" step="1" class="form-control" placeholder="Full captured amount in kobo">
+                <button type="submit" class="btn btn-outline-primary">Allocate paid order capture</button>
+            </form>
+        @endif
+    </td>
     <td><div>{{ $batch->statement_evidence_reference }}</div><small>{{ $batch->reconciliation_notes }}</small></td>
     <td><strong>{{ $batch->status }}</strong><div>Prepared by #{{ $batch->prepared_by_admin_id }}</div>@if($batch->confirmed_by_admin_id)<div>Confirmed by #{{ $batch->confirmed_by_admin_id }}</div>@endif<div>Linked payout requests: {{ $batch->supplier_payouts_count }}</div></td>
     <td>
@@ -64,7 +82,7 @@
     </td>
 </tr>
 @empty
-<tr><td colspan="6">No treasury bank-credit batches recorded.</td></tr>
+<tr><td colspan="7">No treasury bank-credit batches recorded.</td></tr>
 @endforelse
 </tbody>
 </table>
