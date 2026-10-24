@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\Shop;
 use App\Models\SupplierOffer;
+use App\Models\SupplierCatalogProduct;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Services\BcMathService;
@@ -40,6 +41,11 @@ class AdminSupplierCatalogController extends Controller
         }
 
         $products = $query->orderByDesc('updated_at')->paginate(20)->withQueryString();
+        $supplierCatalogProducts = SupplierCatalogProduct::withTrashed()
+            ->with(['supplier.user', 'shop.lga', 'canonicalProduct', 'linkedOffer' => fn ($offers) => $offers->withTrashed()])
+            ->orderByDesc('updated_at')
+            ->paginate(20, ['*'], 'supplier_catalog_page')
+            ->withQueryString();
         $categories = Category::where('is_active', true)->orderBy('name')->get();
         $shops = Shop::query()
             ->with(['vendor.user', 'lga.state'])
@@ -60,7 +66,177 @@ class AdminSupplierCatalogController extends Controller
             ->filter(fn (Shop $shop) => Shop::where('vendor_id', $shop->vendor_id)->whereNull('deleted_at')->where('is_active', true)->count() === 1)
             ->values();
 
-        return view('admin.supplier_catalog', compact('products', 'categories', 'shops'));
+        return view('admin.supplier_catalog', compact('products', 'categories', 'shops', 'supplierCatalogProducts'));
+    }
+
+    public function storeSupplierCatalogProduct(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'shop_id' => ['required', 'integer', 'exists:shops,id'],
+            'product_name' => ['required', 'string', 'max:180'],
+            'description' => ['nullable', 'string', 'max:10000'],
+            'photo_path' => ['nullable', 'string', 'max:2048'],
+            'brand' => ['nullable', 'string', 'max:120'],
+            'model' => ['nullable', 'string', 'max:180'],
+            'variant' => ['nullable', 'string', 'max:180'],
+            'condition' => ['nullable', 'in:brand_new,uk_used'],
+            'package_tier' => ['nullable', 'in:bike,keke,standard,bulky,fragile'],
+            'specifications' => ['nullable', 'array'],
+            'source_price' => ['required', 'numeric', 'gt:0', 'max:100000000'],
+            'is_in_stock' => ['required', 'boolean'],
+        ]);
+
+        $shop = Shop::with(['vendor.user', 'lga.state'])->findOrFail($data['shop_id']);
+        $this->assertApprovedUyoShop($shop);
+
+        $record = DB::transaction(function () use ($request, $data, $shop) {
+            $record = SupplierCatalogProduct::create([
+                'supplier_vendor_id' => $shop->vendor_id,
+                'supplier_shop_id' => $shop->id,
+                'product_name' => trim($data['product_name']),
+                'description' => $data['description'] ?? null,
+                'photo_path' => $data['photo_path'] ?? null,
+                'brand' => isset($data['brand']) ? trim($data['brand']) : null,
+                'model' => isset($data['model']) ? trim($data['model']) : null,
+                'variant' => isset($data['variant']) ? trim($data['variant']) : null,
+                'condition' => $data['condition'] ?? null,
+                'package_tier' => $data['package_tier'] ?? null,
+                'specifications' => $data['specifications'] ?? null,
+                'source_price' => BcMathService::add((string) $data['source_price'], '0.00'),
+                'is_in_stock' => (bool) $data['is_in_stock'],
+                'status' => 'active',
+            ]);
+
+            $this->audit($request, 'supplier_private_catalog_product_created', SupplierCatalogProduct::class, $record->id, null, [
+                'supplier_vendor_id' => $record->supplier_vendor_id,
+                'supplier_shop_id' => $record->supplier_shop_id,
+                'product_name' => $record->product_name,
+                'source_price' => (string) $record->source_price,
+                'is_in_stock' => (bool) $record->is_in_stock,
+                'canonical_product_id' => null,
+            ]);
+
+            return $record;
+        }, 3);
+
+        return back()->with('success', "Private supplier catalog record #{$record->id} created. It is not public and has not been matched to a canonical product.");
+    }
+
+    public function linkSupplierCatalogProduct(Request $request, int $catalogProductId): RedirectResponse
+    {
+        $data = $request->validate([
+            'canonical_product_id' => ['required', 'integer', 'exists:products,id'],
+            'match_notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        DB::transaction(function () use ($request, $catalogProductId, $data) {
+            $record = SupplierCatalogProduct::query()->lockForUpdate()->findOrFail($catalogProductId);
+            if ($record->status !== 'active' || $record->trashed()) {
+                throw ValidationException::withMessages(['canonical_product_id' => 'Only an active private supplier catalog record can be matched.']);
+            }
+
+            $shop = Shop::with(['vendor.user', 'lga.state'])->lockForUpdate()->findOrFail($record->supplier_shop_id);
+            $this->assertApprovedUyoShop($shop);
+            if ((int) $shop->vendor_id !== (int) $record->supplier_vendor_id) {
+                throw ValidationException::withMessages(['canonical_product_id' => 'The supplier record no longer belongs to its approved shop.']);
+            }
+
+            $product = Product::query()->lockForUpdate()->findOrFail($data['canonical_product_id']);
+            if (BcMathService::comp((string) $record->source_price, (string) $product->unit_price) >= 0) {
+                throw ValidationException::withMessages(['canonical_product_id' => 'This match would have no positive retail margin. Set a viable retail price before linking the record.']);
+            }
+
+            if ($record->canonical_product_id !== null && (int) $record->canonical_product_id !== (int) $product->id) {
+                throw ValidationException::withMessages(['canonical_product_id' => 'This supplier record is already linked to another canonical product. Resolve the existing match through an audited correction; it cannot be attached to two products.']);
+            }
+
+            $offer = SupplierOffer::withTrashed()
+                ->where('supplier_catalog_product_id', $record->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$offer) {
+                $offer = SupplierOffer::withTrashed()
+                    ->where('product_id', $product->id)
+                    ->where('vendor_id', $record->supplier_vendor_id)
+                    ->where('shop_id', $record->supplier_shop_id)
+                    ->lockForUpdate()
+                    ->first();
+            }
+
+            if ($offer && $offer->supplier_catalog_product_id
+                && (int) $offer->supplier_catalog_product_id !== (int) $record->id) {
+                throw ValidationException::withMessages(['canonical_product_id' => 'Another private supplier catalog record already owns this supplier offer.']);
+            }
+            if ($offer && (int) $offer->product_id !== (int) $product->id) {
+                throw ValidationException::withMessages(['canonical_product_id' => 'The existing supplier offer belongs to a different canonical product. Retire and reconcile it before rematching.']);
+            }
+
+            $old = [
+                'canonical_product_id' => $record->canonical_product_id,
+                'supplier_offer_id' => $offer?->id,
+                'source_price' => (string) $record->source_price,
+            ];
+
+            if (!$offer) {
+                $offer = new SupplierOffer();
+                $offer->product_id = $product->id;
+                $offer->vendor_id = $record->supplier_vendor_id;
+                $offer->shop_id = $record->supplier_shop_id;
+            } elseif ($offer->trashed()) {
+                $offer->restore();
+            }
+
+            $offer->forceFill([
+                'supplier_catalog_product_id' => $record->id,
+                'product_id' => $product->id,
+                'vendor_id' => $record->supplier_vendor_id,
+                'shop_id' => $record->supplier_shop_id,
+                'wholesale_cost' => BcMathService::add((string) $record->source_price, '0.00'),
+                'is_available' => (bool) $record->is_in_stock,
+                // A supplier's binary stock signal is not the admin's fresh
+                // availability confirmation and cannot make this offer selectable.
+                'availability_confirmed_at' => null,
+                'availability_confirmed_by' => null,
+                'availability_expires_at' => null,
+                'unavailability_penalty_expires_at' => null,
+            ])->save();
+
+            $record->forceFill([
+                'canonical_product_id' => $product->id,
+                'linked_by_admin_id' => $request->user()->id,
+                'linked_at' => now(),
+                'match_notes' => isset($data['match_notes']) ? trim($data['match_notes']) : null,
+            ])->save();
+
+            $this->audit($request, 'supplier_private_catalog_product_matched', SupplierCatalogProduct::class, $record->id, $old, [
+                'canonical_product_id' => $product->id,
+                'supplier_offer_id' => $offer->id,
+                'supplier_vendor_id' => $record->supplier_vendor_id,
+                'supplier_shop_id' => $record->supplier_shop_id,
+                'source_price' => (string) $record->source_price,
+                'offer_available_signal' => (bool) $offer->is_available,
+                'availability_confirmation_cleared' => true,
+                'match_notes' => $record->match_notes,
+            ]);
+        }, 3);
+
+        return back()->with('success', 'Private supplier record matched to the canonical product. Its binary stock signal is recorded, but the offer remains unselectable until fresh admin availability confirmation.');
+    }
+
+    private function assertApprovedUyoShop(Shop $shop): void
+    {
+        $vendor = $shop->vendor;
+        if (!$vendor || $vendor->trashed() || $vendor->marketplace_status !== 'active'
+            || $vendor->kyc_status !== 'verified' || !$vendor->user || $vendor->user->status !== 'active'
+            || $shop->trashed() || !$shop->is_active
+            || strtolower(trim((string) ($shop->lga->name ?? ''))) !== 'uyo'
+            || strtolower(trim((string) ($shop->lga->state->name ?? ''))) !== 'akwa ibom'
+            || Shop::where('vendor_id', $shop->vendor_id)->whereNull('deleted_at')->where('is_active', true)->count() !== 1) {
+            throw ValidationException::withMessages([
+                'shop_id' => 'Choose the active, verified supplier’s single approved shop in Uyo, Akwa Ibom State.',
+            ]);
+        }
     }
 
     public function storeProduct(Request $request): RedirectResponse
