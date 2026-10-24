@@ -327,7 +327,8 @@ class OrderSettlementService
                             && $item->supplier_offer_id
                             && $prod->vendor_id === null
                             && $prod->shop_id === null
-                            && (int) $prod->inventory_quantity === 0;
+                            && (int) $prod->inventory_quantity === 0
+                            && (bool) $prod->is_in_stock;
 
                         if ($supplierSourcedCanonicalProduct) {
                             continue;
