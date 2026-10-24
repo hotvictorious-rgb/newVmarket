@@ -50,7 +50,9 @@ For each order, the system generates a unique, non-editable order code. The paym
 - retain the bank transaction reference/receipt for their records; and
 - wait for Victorious MARKET to verify the actual credit before treating the order as paid.
 
-The order code is a matching aid, not proof of payment. A customer-uploaded screenshot, email, SMS, transfer initiation screen or customer-supplied transaction ID alone must never establish payment.
+The order code is a matching aid, not proof of payment. **After making a manual bank transfer, the customer must upload a screenshot or image of the transfer receipt against that specific order before submitting it for admin review.** The order remains awaiting verification while the evidence is reviewed. The upload must be securely stored and linked to the order/payment attempt; it must not be exposed through a public, guessable URL. Preserve upload metadata and review history. If the customer replaces or resubmits evidence, retain the previous version and audit trail rather than silently overwriting it. Accept only configured, validated file types and size limits, and apply available file-safety checks.
+
+The screenshot is supporting evidence only. It may help the admin locate and compare the transaction, but a customer-uploaded screenshot, email, SMS, transfer initiation screen or customer-supplied transaction ID alone must never establish payment. The authorized admin must independently verify the actual receiving-account credit and then explicitly approve or reject/request replacement evidence. Record reviewer identity, decision, timestamp, reason, bank transaction reference, amount and the evidence version reviewed. Rejection or missing evidence leaves the order unpaid/on hold. Only a successful, audited payment approval may start sourcing.
 
 ## 4. Payment states and admin verification
 
@@ -103,6 +105,9 @@ At minimum, tests must prove:
 - cross-method references, webhooks, bank credits, approvals, refunds and transaction reuse are rejected;
 - deactivation preserves existing orders and evidence; pending/unknown attempts cannot be switched, and late payments are held for review;
 - unique order codes and correct customer instructions/account snapshot;
+- manual-transfer customers must upload a valid payment screenshot/receipt against the correct order before admin review; upload failure does not mark the order paid;
+- secure evidence storage, order-scoped access, file validation, evidence version history and immutable admin review/audit decisions;
+- admin can approve only after independent actual-credit verification; reject/request-more-evidence leaves order unpaid;
 - screenshots and customer claims cannot mark an order paid;
 - exact match, missing/wrong narration, underpayment, overpayment, pending/reversed credit and unknown transaction handling;
 - duplicate bank transaction cannot be used for two orders;
