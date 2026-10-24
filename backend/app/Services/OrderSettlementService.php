@@ -317,6 +317,7 @@ class OrderSettlementService
             // lookup key. Enforce this across tenders even if an old database lacks a
             // unique index on the legacy orders.payment_reference column.
             if (Order::where('payment_reference', $reference)
+                ->whereNull('parent_order_id')
                 ->where('id', '!=', $lockedOrder->id)
                 ->exists()) {
                 return ['success' => false, 'status' => 'PAYMENT_REFERENCE_ALREADY_BOUND', 'message' => 'This payment reference is already bound to another order.'];
