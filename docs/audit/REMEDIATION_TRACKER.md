@@ -734,3 +734,33 @@ The active integration branch `docs/retailer-central-fulfilment-model` has addit
 - **Legacy offers:** migration `2026_10_24_000009_backfill_legacy_supplier_offers_into_private_catalog.php` backfills eligible legacy offer rows into private supplier catalog records without inventing missing supplier-specific model/variant data. Orphaned or invalid rows remain detached for manual reconciliation; rollback is intentionally non-destructive.
 - **Still not merge/launch certified:** true simultaneous-worker failover/payment concurrency has not been demonstrated by a multi-connection PostgreSQL test. VM-AUD-134 remains a critical blocker because no reconciled collection-settlement/bank-credit ledger gates supplier payout disbursement. VM-AUD-135 remains open because capture exceptions still need the full audited resolution and exact-extra-capture refund-instruction workflow. These are not waived by the green targeted workflow.
 
+
+
+## Implementation update — treasury, capture exceptions and supplier stock truth (24 October 2026)
+
+Verified CI on commit `bd03c29c50e624fbeefc2e25c4030a402d796605`: [run 40059417462](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/40059417462) completed successfully. Both `refund-safety` and `postgres-settlement-proof` passed; the PostgreSQL job included 132 tests / 931 assertions and the expanded SQLite/refund-safety job passed.
+
+### VM-AUD-134 — current implementation state
+
+Added:
+- `treasury_bank_credit_batches`: unique gateway settlement and corporate bank-credit references, net credited kobo, gross collection kobo, provider-fee kobo, statement value date/evidence reference, and dual-review status.
+- `treasury_bank_credit_batch_allocations`: unique gateway transaction IDs and payment references tied to exact paid orders, captured amount, currency and the adding administrator.
+- Confirmation fails unless allocations sum exactly to gross collections, gross less provider fees equals the bank-credit amount, and every allocation matches a paid order's exact gateway transaction ID, payment reference, currency and grand total.
+- Supplier payout submission is blocked before recipient creation/transfer unless a dual-reviewed batch is reconciled and has sufficient unreserved net credited balance. Batch row locking serializes reservation attempts; pending, processing, uncertain and paid requests consume capacity. Payout capacity is not inferred from a successful customer charge alone.
+- Regression tests cover missing treasury proof, independent reviewer approval, exact order-capture allocation, idempotent reservation and insufficient remaining balance.
+
+**Status: IMPLEMENTED WITH MANUAL BANK EVIDENCE; final simultaneous payout-worker proof and production evidence-operating procedure remain required before launch certification.** The application does not independently connect to the bank or validate a statement reference with the bank; the second reviewer must inspect the actual corporate statement and supporting gateway settlement evidence.
+
+### VM-AUD-135 — current implementation state
+
+Added an admin resolution desk and `payment_capture_exception_resolutions` with immutable capture identity and amount, reason, idempotency key, preparer/confirming administrators, manual refund reference and confirmation timestamp. Identity-unproven captures cannot receive refund instructions. A distinct successful capture can receive a manual instruction tied to its exact transaction ID and amount. The application never dispatches the refund; a different active Super Admin must record the completed gateway refund with an exact amount and reference before the exception is closed. Tests cover no automatic dispatch, unproven identity rejection, dual control and exact-amount enforcement.
+
+**Status: MANUAL RESOLUTION IMPLEMENTED AND CI-VERIFIED.** Gateway refund completion is confirmed by human-entered gateway evidence rather than an automated provider refund-status lookup; the admin must inspect the actual gateway transaction before confirmation.
+
+### Supplier stock / payment / expiry reconciliation
+
+Checkout no longer uses legacy `inventory_quantity` to promise exact supplier quantity. Supplier-backed retailer settlement does not decrement legacy inventory, and expiry does not add stock for a retailer order because no stock was reserved before payment. Tests were updated to prove that supplier availability and exact quantity confirmation—not a legacy quantity counter—govern the new retailer model. Late captured payments still follow the payment-truth and cancellation recovery rules.
+
+### Remaining merge acceptance item
+
+A dedicated **true simultaneous-worker** test is still needed for two processes competing on the same supplier failover assignment and for two payout workers reserving the same treasury batch at the same time. Existing tests prove sequential replay/idempotency, locking is implemented, and payout capacity is rechecked under row locks; these are not a substitute for the multi-process concurrency proof. Keep the branch unmerged until that test and final branch CI pass.
