@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\RetailerSupplierPayoutRequest;
 use App\Models\State;
 use App\Models\TreasuryBankCreditBatch;
+use App\Models\TreasuryBankCreditBatchAllocation;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Services\RetailerSupplierPayoutService;
@@ -64,11 +65,16 @@ class TreasuryBankCreditBatchTest extends TestCase
 
     private function createReconciledBatch(int $amountKobo): TreasuryBankCreditBatch
     {
-        return TreasuryBankCreditBatch::create([
+        $transactionId = 'TX-TREASURY-' . uniqid();
+        $paymentReference = 'PAY-TREASURY-' . uniqid();
+        $amountNaira = bcdiv((string) $amountKobo, '100', 2);
+        $batch = TreasuryBankCreditBatch::create([
             'gateway_provider' => 'paystack',
             'gateway_settlement_reference' => 'SETTLE-' . uniqid(),
             'bank_credit_reference' => 'BANK-CREDIT-' . uniqid(),
             'corporate_account_last4' => '4321',
+            'gross_collection_amount_kobo' => $amountKobo,
+            'provider_fee_amount_kobo' => 0,
             'net_credit_amount_kobo' => $amountKobo,
             'currency' => 'NGN',
             'statement_value_date' => now()->toDateString(),
@@ -81,6 +87,40 @@ class TreasuryBankCreditBatchTest extends TestCase
             'confirmed_at' => now(),
             'idempotency_key' => 'TREASURY-' . uniqid(),
         ]);
+        $order = Order::create([
+            'order_number' => 'VM-TREASURY-CAPTURE-' . uniqid(),
+            'customer_id' => $this->customer->id,
+            'vendor_id' => null,
+            'shop_id' => null,
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'retailer_model_order' => true,
+            'order_status' => 'confirmed',
+            'payment_status' => 'paid',
+            'sourcing_status' => 'awaiting_supplier_confirmation',
+            'fulfillment_type' => 'doorstep_delivery',
+            'delivery_fee' => '0.00',
+            'merchandise_subtotal' => $amountNaira,
+            'grand_total' => $amountNaira,
+            'vendor_net_90' => '0.00',
+            'customer_cashback_5' => '0.00',
+            'platform_margin_5' => '0.00',
+            'payment_reference' => $paymentReference,
+            'paystack_transaction_id' => $transactionId,
+        ]);
+        TreasuryBankCreditBatchAllocation::create([
+            'treasury_bank_credit_batch_id' => $batch->id,
+            'order_id' => $order->id,
+            'gateway_transaction_id' => $transactionId,
+            'payment_reference' => $paymentReference,
+            'amount_kobo' => $amountKobo,
+            'currency' => 'NGN',
+            'idempotency_key' => 'TREASURY-ALLOC-' . uniqid(),
+            'added_by_admin_id' => $this->adminOne->id,
+            'added_at' => now(),
+        ]);
+
+        return $batch;
     }
 
     public function test_supplier_payout_fails_closed_without_dual_reviewed_bank_credit(): void
