@@ -2,6 +2,9 @@
 
 # VICTORIOUS MARKET — Payment, Refund, Settlement & Paystack Webhook Policy
 
+> **Current owner-approved payment-policy override — 24 October 2026:** This policy must now conform to the [Manual Bank Transfer and Proactive Supplier Payment Policy](docs/architecture/MANUAL_BANK_TRANSFER_AND_PROACTIVE_SUPPLIER_PAYMENT_POLICY_2026-10-24.md) and the [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). Manual bank transfer and Paystack are mutually exclusive for new orders; each order remains pinned to one rail. In manual mode, screenshots are untrusted submissions pending actual bank-credit verification, and supplier payables are paid proactively by a human Super Admin from the corporate bank account without a supplier request. Paystack-specific webhook material below applies only to orders pinned to Paystack or is historical. Documentation is not implementation proof.
+
+
 > **Current policy authority:** This policy must conform to [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). The root [Master Blueprint](VICTORIOUS_MARKET_MASTER_BLUEPRINT.md) supplies implementation detail only where it does not conflict with the active rules. This document contains legacy vendor/parent-child implementation history; legacy terminology is not authority for new retailer-model behaviour.
 
 
