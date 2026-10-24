@@ -2,7 +2,7 @@
 
 **Decision date:** 24 October 2026  
 **Status:** Owner-approved operating direction; implementation must be audited and tested before launch.  
-**Scope:** Customer payment collection, admin payment verification, supplier payables and outgoing supplier bank transfers for the Uyo-only centrally managed retailer model.  
+**Scope:** Coexisting customer payment collection methods, admin payment verification, supplier payables and outgoing manual bank transfers to suppliers and logistics companies for the Uyo-only centrally managed retailer model.  
 **Authority:** This policy is a binding addendum to [Active Business Rules](ACTIVE_BUSINESS_RULES_2026-10-22.md). It supersedes conflicting Paystack-only customer collection and Paystack-settlement prerequisites for orders created in manual-transfer mode. It does not authorize mixing payment rails on one order.
 
 ## 1. Operating principle
