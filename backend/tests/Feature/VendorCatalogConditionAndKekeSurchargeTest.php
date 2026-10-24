@@ -1361,7 +1361,10 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertNull($offer->availability_confirmed_at, 'A binary stock signal is not an admin confirmation.');
 
         $this->actingAs($admin)
-            ->patch("/admin/supplier-catalog/offers/{$offer->id}/cost", ['wholesale_cost' => '35000.00'])
+            ->patch("/admin/supplier-catalog/offers/{$offer->id}/cost", [
+                'wholesale_cost' => '35000.00',
+                'reason' => 'Regression test: direct wholesale cost edit must remain blocked.',
+            ])
             ->assertSessionHasErrors('wholesale_cost');
         $this->assertSame('27000', (string) $offer->fresh()->wholesale_cost);
 
