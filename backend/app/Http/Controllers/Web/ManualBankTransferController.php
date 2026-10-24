@@ -253,6 +253,9 @@ class ManualBankTransferController extends Controller
                 if (ManualBankTransferPayment::where('bank_transaction_reference', $bankReference)->where('id', '!=', $payment->id)->exists()) {
                     throw ValidationException::withMessages(['bank_transaction_reference' => 'This bank transaction reference has already been assigned to another order.']);
                 }
+                if (Order::where('payment_reference', $bankReference)->orWhere('paystack_transaction_id', $bankReference)->exists()) {
+                    throw ValidationException::withMessages(['bank_transaction_reference' => 'This reference is already used by an order/payment identity and cannot be reused as a manual bank transaction.']);
+                }
 
                 $expectedKobo = (int) bcmul(bcadd((string) $order->grand_total, '0', 2), '100', 0);
                 if ($amountKobo !== $expectedKobo) {
