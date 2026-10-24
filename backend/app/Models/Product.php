@@ -205,6 +205,7 @@ class Product extends Model
             ->where('listing_confirmed_at', '<=', $now)
             ->whereHas('supplierOffers', function (Builder $offers) use ($now) {
                 $offers->where('is_available', true)
+                    ->where('is_admin_disabled', false)
                     ->whereColumn('supplier_offers.wholesale_cost', '<', 'products.unit_price')
                     ->whereNotNull('availability_confirmed_at')
                     ->whereNotNull('availability_confirmed_by')
