@@ -383,6 +383,18 @@ class OrderSettlementService
             $hasStockoutIssue = false;
             $stockoutReason = '';
             $allocationResult = null;
+            // Manual bank transfers arriving after the order's expiry must never
+            // revive the order or trigger supplier sourcing, even if the expiry worker
+            // has not yet updated its state. Record the real credit and hold it for
+            // the separate manual-refund review path.
+            if ($provider === 'manual_bank_transfer'
+                && $lockedOrder->expires_at
+                && $lockedOrder->expires_at->lte($now)
+                && !in_array($lockedOrder->order_status, ['cancelled', 'canceled', 'failed', 'paid_stock_unavailable'], true)) {
+                $lockedOrder->order_status = 'cancelled';
+                $lockedOrder->vendor_settlement_status = 'refund_pending';
+            }
+
             $lockedOrder->payment_status = 'paid';
             $lockedOrder->paid_at = $now;
             $lockedOrder->payment_channel = $provider === 'manual_bank_transfer'
@@ -400,7 +412,7 @@ class OrderSettlementService
                 // A retailer order that expired/cancelled before payment must not be
                 // silently resurrected after a late charge. Keep its funds held for
                 // an authorized refund-review decision under the binding recovery policy.
-                $canReinstate = !$lockedOrder->retailer_model_order && $lockedOrder->items->isNotEmpty();
+                $canReinstate = $provider !== 'manual_bank_transfer' && !$lockedOrder->retailer_model_order && $lockedOrder->items->isNotEmpty();
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
                         $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
