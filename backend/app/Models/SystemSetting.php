@@ -51,6 +51,22 @@ class SystemSetting extends Model
     }
 
     /**
+     * Read a safety-critical setting directly from the database, bypassing the
+     * long-lived dictionary cache. Payment-method activation and receiving-account
+     * snapshots must observe the committed single-row configuration promptly.
+     */
+    public static function getFresh(string $key, mixed $default = null): mixed
+    {
+        $value = static::query()->where('key', $key)->value('value');
+        if ($value === null) {
+            return $default;
+        }
+
+        $decoded = json_decode((string) $value, true);
+        return json_last_error() === JSON_ERROR_NONE ? $decoded : $value;
+    }
+
+    /**
      * Store or update a setting by key
      */
     public static function set(string $key, mixed $value, string $group = 'general'): self
