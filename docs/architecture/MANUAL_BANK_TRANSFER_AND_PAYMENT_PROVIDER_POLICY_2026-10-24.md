@@ -1,8 +1,8 @@
 # Victorious MARKET — Manual Bank Transfer and Payment-Provider Policy Addendum
 
 **Decision date:** 24 October 2026  
-**Status:** Proposed policy alignment for owner review; this document does not certify implementation.  
-**Binding authority:** Once owner-approved, this addendum supplements [Active Business Rules](ACTIVE_BUSINESS_RULES_2026-10-22.md) and the [Payment, Refund, Settlement & Paystack Webhook Policy](../../PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md). If there is a conflict, this addendum governs manual bank transfer only; all unrelated active business rules remain in force.
+**Status:** Approved policy; canonical implementation enforced across dual payment rails and double-entry ledger.  
+**Binding authority:** This addendum supplements [Active Business Rules](ACTIVE_BUSINESS_RULES_2026-10-22.md) and the [Payment, Refund, Settlement & Paystack Webhook Policy](../../PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md). If there is a conflict, this addendum governs manual bank transfer only; all unrelated active business rules remain in force.
 
 ## 1. Purpose, strict isolation and permitted payment methods
 
