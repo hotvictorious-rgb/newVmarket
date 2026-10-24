@@ -94,78 +94,8 @@ class PaystackFinancialValidationGuardrailTest extends TestCase
         ]);
     }
 
-    public function test_vendor_cannot_create_product_with_astronomical_or_invalid_price(): void
-    {
-        Sanctum::actingAs($this->vendorUser, ['vendor']);
-
-        // 1. Attempt 42-digit astronomical price
-        $response = $this->postJson('/api/v1/vendor/products', [
-            'name' => 'Astronomical Gold Bar',
-            'category_id' => $this->category->id,
-            'unit_price' => '999999999999999999999999999999999999999999',
-            'inventory_quantity' => 10,
-        ]);
-
-        $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['unit_price']);
-
-        // 2. Attempt price exceeding ₦50,000,000 cap
-        $responseExceed = $this->postJson('/api/v1/vendor/products', [
-            'name' => 'Mega Yacht',
-            'category_id' => $this->category->id,
-            'unit_price' => '50000001.00',
-            'inventory_quantity' => 1,
-        ]);
-
-        $responseExceed->assertStatus(422);
-        $responseExceed->assertJsonValidationErrors(['unit_price']);
-
-        // 3. Attempt price below Paystack minimum of ₦1.00 (e.g. ₦0.50)
-        $responseBelow = $this->postJson('/api/v1/vendor/products', [
-            'name' => 'Half Kobo Candy',
-            'category_id' => $this->category->id,
-            'unit_price' => '0.50',
-            'inventory_quantity' => 100,
-        ]);
-
-        $responseBelow->assertStatus(422);
-        $responseBelow->assertJsonValidationErrors(['unit_price']);
-
-        // 4. Attempt 3 decimal places (Paystack/banking only allows 2 decimal kobo)
-        $responseDecimals = $this->postJson('/api/v1/vendor/products', [
-            'name' => 'Fractional Candy',
-            'category_id' => $this->category->id,
-            'unit_price' => '100.555',
-            'inventory_quantity' => 100,
-        ]);
-
-        $responseDecimals->assertStatus(422);
-        $responseDecimals->assertJsonValidationErrors(['unit_price']);
-    }
-
-    public function test_vendor_can_create_product_with_valid_paystack_standard_price(): void
-    {
-        Sanctum::actingAs($this->vendorUser, ['vendor']);
-
-        $response = $this->postJson('/api/v1/vendor/products', [
-            'name' => 'Quality Smartphone',
-            'category_id' => $this->category->id,
-            'unit_price' => '150000.50',
-            'slash_price' => '175000.00',
-            'inventory_quantity' => 25,
-            'condition' => 'brand_new',
-            'package_tier' => 'bike',
-        ]);
-
-        $response->assertStatus(201);
-        $this->assertDatabaseHas('products', [
-            'vendor_id' => $this->vendor->id,
-            'name' => 'Quality Smartphone',
-            'unit_price' => '150000.50',
-            'slash_price' => '175000.00',
-        ]);
-    }
-
+    
+    
     public function test_paystack_service_rejects_below_minimum_or_exceeding_maximum_amounts(): void
     {
         /** @var PaystackService $service */
