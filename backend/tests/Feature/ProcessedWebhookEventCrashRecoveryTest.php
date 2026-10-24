@@ -393,6 +393,21 @@ class ProcessedWebhookEventCrashRecoveryTest extends TestCase
     {
         $order = $this->createTestOrder(['grand_total' => '10000.00']);
         $secretKey = app(PaystackService::class)->getSecretKey();
+        Http::fake([
+            'https://api.paystack.co/transaction/verify/*' => Http::response([
+                'status' => true,
+                'message' => 'Verification successful',
+                'data' => [
+                    'id' => 888777,
+                    'status' => 'success',
+                    'currency' => 'NGN',
+                    'amount' => 1000000,
+                    'reference' => $order->payment_reference,
+                    'channel' => 'card',
+                    'customer' => ['email' => $this->customer->email],
+                ],
+            ], 200),
+        ]);
 
         // 1. Deliver Event A
         $payloadA = $this->buildWebhookPayload($order, 'EVT-AAA-001');
