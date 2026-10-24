@@ -708,7 +708,7 @@ The following findings were confirmed during source review and hardened on `docs
 
 **Verification evidence:** The refund-safety GitHub Actions job passed at commit `579027e4774b55a4038165766b1bf1b8841814fd`: **246 tests passed (1,722 assertions)**, the supplier bank-update regression passed (**1 test, 9 assertions**), and the PHP syntax scan passed. This verified the private catalog test suite and automatic rejection failover test. Subsequent schema/SQL hardening commits for PostgreSQL compatibility and the admin-disabled confirmation guard were still running through CI when this tracker was updated.
 
-**PostgreSQL verification caveat:** Earlier PostgreSQL proof runs failed because the active schema lacked `states.code` and `financial_operations.gateway_reference`. Compatibility migrations and fresh-schema definitions have since been added, but a successful PostgreSQL proof run is still required before claiming cross-driver CI is green.
+**PostgreSQL verification caveat:** Earlier PostgreSQL proof runs exposed two separate gaps: a test fixture queried geography `code` columns that do not exist in the canonical schema, and the active financial-operation model/webhook lookup expected `financial_operations.gateway_reference` without a matching column. The test fixture now uses canonical `state_code` and LGA `state_id`/`name` keys; `gateway_reference` is added to both the fresh financial schema and an upgrade migration. A successful PostgreSQL proof run is still required before claiming cross-driver CI is green.
 
 **Still open / launch-critical:**
 1. Verify latest complete SQLite/refund-safety and PostgreSQL CI after all current commits.
