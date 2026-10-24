@@ -6,6 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class OrderSupplierAssignment extends Model
 {
+    // Internal actor IDs and integrity hashes are for audit/reconciliation, not
+    // supplier-facing serialized order payloads.
+    protected $hidden = [
+        'supplier_confirmed_by_user_id',
+        'confirmation_snapshot_hash',
+    ];
+
     protected $fillable = [
         'order_id',
         'supplier_vendor_id',
