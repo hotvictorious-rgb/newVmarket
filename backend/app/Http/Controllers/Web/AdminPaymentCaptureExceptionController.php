@@ -1,14 +1,14 @@
 <?php
 
-namespace App\\Http\\Controllers\\Web;
+namespace App\Http\Controllers\Web;
 
-use App\\Http\\Controllers\\Controller;
-use App\\Models\\AdminAuditLog;
-use App\\Models\\PaymentCaptureException;
-use App\\Models\\PaymentCaptureExceptionResolution;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Validation\\ValidationException;
+use App\Http\Controllers\Controller;
+use App\Models\AdminAuditLog;
+use App\Models\PaymentCaptureException;
+use App\Models\PaymentCaptureExceptionResolution;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class AdminPaymentCaptureExceptionController extends Controller
 {
