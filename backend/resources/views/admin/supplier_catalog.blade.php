@@ -169,6 +169,13 @@
                             @if($record->canonical_product_id)
                                 <div style="font-size:12px;margin-top:3px;">Matched to canonical product #{{ $record->canonical_product_id }} — {{ $record->canonicalProduct->name ?? 'product unavailable' }}</div>
                                 <div style="font-size:11px;color:#64748B;">Offer #{{ $record->linkedOffer->id ?? 'not found' }} · Catalog stock signal does not replace fresh admin confirmation.</div>
+                                @if(!$record->trashed() && $record->status === 'active')
+                                    <form method="POST" action="{{ route('admin.supplier-catalog.private-products.unmatch', $record->id) }}" style="display:grid;gap:7px;margin-top:8px;max-width:340px;">
+                                        @csrf
+                                        <input name="reason" required minlength="10" maxlength="1000" class="form-control" placeholder="Correction reason (required)">
+                                        <button type="submit" class="btn-dash btn-dash-outline" onclick="return confirm('Retire this offer and detach the incorrect match? Active fulfilments will block the action.')">Correct / unmatch record</button>
+                                    </form>
+                                @endif
                             @else
                                 <div style="font-size:12px;color:#92400E;margin-top:3px;">Not matched — not a public listing.</div>
                             @endif
