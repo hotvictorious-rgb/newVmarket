@@ -24,6 +24,12 @@ class State extends Model
         $this->attributes['state_code'] = $value;
     }
 
+    public function setStateCodeAttribute($value): void
+    {
+        $this->attributes['state_code'] = $value;
+        $this->attributes['code'] = $value;
+    }
+
     public function getCodeAttribute($value): ?string
     {
         return $value ?? ($this->attributes['state_code'] ?? null);
