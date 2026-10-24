@@ -14,7 +14,7 @@ return new class extends Migration
         // Guard the addition so databases whose schema already has "code" remain safe.
         if (!Schema::hasColumn('states', 'code')) {
             Schema::table('states', function (Blueprint $table) {
-                $table->string('code', 10)->nullable();
+                $table->string('code', 10)->nullable()->index();
             });
         }
 
