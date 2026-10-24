@@ -1151,7 +1151,7 @@ class OrderSettlementService
                 }
 
                 // Credit: Customer Cashback Liability (5% Merchandise Split)
-                if (bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
+                if ($provider !== 'manual_bank_transfer' && bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
                     FinancialJournalEntry::create([
                         'order_id' => $lockedOrder->id,
                         'transaction_reference' => $reference,
@@ -1213,7 +1213,7 @@ class OrderSettlementService
                     'payment_status' => 'paid',
                     'payment_channel' => $lockedOrder->payment_channel,
                     'payment_reference' => $reference,
-                    'bank_transaction_reference' => $provider === 'manual_bank_transfer' ? (string) ($paystackData['id'] ?? '') : null,
+                    'bank_transaction_reference' => $provider === 'manual_bank_transfer' ? (string) ($paymentData['id'] ?? '') : null,
                     'paystack_reference' => $provider === 'paystack' ? $reference : null,
                     'paystack_transaction_id' => $provider === 'paystack' ? $lockedOrder->paystack_transaction_id : null,
                     'paid_at' => $lockedOrder->paid_at->toIso8601String(),
