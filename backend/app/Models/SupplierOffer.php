@@ -16,6 +16,8 @@ class SupplierOffer extends Model
         'shop_id',
         'wholesale_cost',
         'is_available',
+        'is_admin_disabled',
+        'admin_disabled_reason',
         'availability_confirmed_at',
         'availability_confirmed_by',
         'availability_expires_at',
@@ -26,6 +28,7 @@ class SupplierOffer extends Model
     protected $casts = [
         'wholesale_cost' => 'string',
         'is_available' => 'boolean',
+        'is_admin_disabled' => 'boolean',
         'availability_confirmed_at' => 'datetime',
         'availability_expires_at' => 'datetime',
         'unavailability_penalty_expires_at' => 'datetime',
