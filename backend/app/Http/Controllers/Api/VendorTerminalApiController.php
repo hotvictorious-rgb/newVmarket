@@ -1220,7 +1220,14 @@ public function refreshFreshness(Request $request, int $id): JsonResponse
             return response()->json(['success' => false, 'message' => 'Only the supplier account owner can request supplier payouts.'], 403);
         }
 
-        $result = app(RetailerSupplierPayoutService::class)->requestPayout($context['vendor']);
+        $validated = $request->validate([
+            'order_item_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'order_item_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+        ]);
+        $result = app(RetailerSupplierPayoutService::class)->requestPayout(
+            $context['vendor'],
+            $validated['order_item_ids']
+        );
         if (!$result['success']) {
             return response()->json([
                 'success' => false,
