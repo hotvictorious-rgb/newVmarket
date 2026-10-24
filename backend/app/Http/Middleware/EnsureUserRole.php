@@ -42,7 +42,14 @@ class EnsureUserRole
         }
 
         // 3. Role authorization check
-        if (!empty($roles) && !in_array($user->user_type, $roles, true)) {
+        if (!empty($roles)) {
+            if (in_array('super_admin', $roles, true) && !$user->isSuperAdmin()) {
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => 'Forbidden: Only the single designated Super Admin can access this resource.'], 403);
+                }
+                return response()->view('errors.role-mismatch', ['user' => $user, 'requiredRoles' => $roles], 403);
+            }
+            if (!in_array($user->user_type, $roles, true)) {
             if ($request->expectsJson()) {
                 return response()->json([
                     'message' => 'Forbidden: Insufficient role permissions.',
@@ -55,6 +62,7 @@ class EnsureUserRole
                 'user' => $user,
                 'requiredRoles' => $roles,
             ], 403);
+        }
         }
 
         // 4. Cascading Role Profile & Parent Fleet/Merchant Active Checks

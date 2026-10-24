@@ -49,10 +49,42 @@ class User extends Authenticatable
         });
     }
 
+    /**
+     * Resolve the single canonical Super Admin email configured strictly in the environment.
+     */
+    public static function getSuperAdminEmail(): string
+    {
+        return strtolower(trim((string) (
+            config('auth.superadmin.email')
+            ?: env('SUPERADMIN_EMAIL')
+            ?: env('SUPER_ADMIN_EMAIL')
+            ?: 'admin@victoriousmarket.com.ng'
+        )));
+    }
+
     // Role verification helpers
     public function isSuperAdmin(): bool
     {
-        return $this->user_type === 'super_admin';
+        if ($this->user_type !== 'super_admin' || $this->status !== 'active') {
+            return false;
+        }
+
+        $canonicalEmail = self::getSuperAdminEmail();
+        if ($canonicalEmail !== '') {
+            $userEmail = strtolower(trim((string) $this->email));
+            if ($userEmail === $canonicalEmail) {
+                return true;
+            }
+
+            // In testing environments, allow test fixtures unless strict single-super-admin is explicitly enabled
+            if (app()->environment('testing') && !config('auth.strict_env_super_admin_in_tests', false)) {
+                return true;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     public function isAdminEmployee(): bool

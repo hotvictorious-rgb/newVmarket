@@ -33,6 +33,9 @@ class OrderSettlementService
      */
     public function settleManualBankTransferOrder(Order $order, string $bankTransactionReference, int $amountKobo, User $admin): array
     {
+        if (!$admin->isSuperAdmin()) {
+            return ['success' => false, 'status' => 'UNAUTHORIZED_SUPER_ADMIN_ONLY', 'message' => 'Security Invariant Violation: Only the designated single Super Admin can mark a manual bank transfer order as paid.'];
+        }
         if (trim($bankTransactionReference) === '' || $amountKobo < 1) {
             return ['success' => false, 'status' => 'INVALID_BANK_EVIDENCE', 'message' => 'A bank transaction reference and positive credited amount are required.'];
         }
@@ -98,6 +101,10 @@ class OrderSettlementService
     ): array {
         if (!in_array($provider, ['paystack', 'manual_bank_transfer'], true)) {
             return ['success' => false, 'status' => 'UNSUPPORTED_PAYMENT_PROVIDER', 'message' => 'Unsupported payment provider.'];
+        }
+
+        if ($provider === 'manual_bank_transfer' && (!$actorUser || !$actorUser->isSuperAdmin())) {
+            return ['success' => false, 'status' => 'UNAUTHORIZED_SUPER_ADMIN_ONLY', 'message' => 'Security Invariant Violation: Only the designated single Super Admin can mark a manual bank transfer order as paid.'];
         }
 
         $result = DB::transaction(function () use ($order, $paymentData, $actorUser, $channel, $webhookEventId, $webhookAttempt, $provider) {

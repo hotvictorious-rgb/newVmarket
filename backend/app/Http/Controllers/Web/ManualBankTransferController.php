@@ -238,6 +238,7 @@ class ManualBankTransferController extends Controller
 
     public function saveSettings(Request $request)
     {
+        $this->authorizeSuperAdmin($request);
         $hasExplicitBooleans = $request->has('paystack_enabled') || $request->has('manual_bank_transfer_enabled');
 
         if ($hasExplicitBooleans) {
@@ -305,6 +306,7 @@ class ManualBankTransferController extends Controller
 
     public function approve(Request $request, int $id, OrderSettlementService $settlementService)
     {
+        $this->authorizeSuperAdmin($request);
         $validated = $request->validate([
             'bank_transaction_reference' => ['required', 'string', 'min:3', 'max:150', 'regex:/^[A-Za-z0-9._\/-]+$/'],
             'credited_amount' => ['required', 'string', 'regex:/^\d{1,12}(?:\.\d{1,2})?$/'],
@@ -407,6 +409,7 @@ class ManualBankTransferController extends Controller
 
     public function reject(Request $request, int $id)
     {
+        $this->authorizeSuperAdmin($request);
         $validated = $request->validate([
             'decision_reason' => ['nullable', 'string', 'min:5', 'max:2000'],
             'rejection_reason' => ['nullable', 'string', 'min:5', 'max:2000'],
@@ -462,7 +465,7 @@ class ManualBankTransferController extends Controller
 
     public function requestReplacementEvidence(Request $request, int $id)
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeSuperAdmin($request);
         $reason = (string) ($request->input('reason') ?: $request->input('request_reason'));
         if (strlen(trim($reason)) < 3) {
             return back()->withErrors(['reason' => 'A valid reason is required (at least 3 characters).']);
