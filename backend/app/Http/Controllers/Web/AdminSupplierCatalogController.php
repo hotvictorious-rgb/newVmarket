@@ -223,6 +223,82 @@ class AdminSupplierCatalogController extends Controller
         return back()->with('success', 'Private supplier record matched to the canonical product. Its binary stock signal is recorded, but the offer remains unselectable until fresh admin availability confirmation.');
     }
 
+    /**
+     * Retire an incorrect private-record match without rewriting historical orders.
+     * The supplier offer is detached and soft-deleted; a later reviewed rematch creates
+     * a fresh unconfirmed offer. Active fulfilment assignments block correction.
+     */
+    public function unmatchSupplierCatalogProduct(Request $request, int $catalogProductId): RedirectResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:1000'],
+        ]);
+
+        DB::transaction(function () use ($request, $catalogProductId, $data) {
+            $record = SupplierCatalogProduct::query()->lockForUpdate()->findOrFail($catalogProductId);
+            if ($record->canonical_product_id === null) {
+                throw ValidationException::withMessages([
+                    'reason' => 'This supplier record is already unmatched; no correction was applied.',
+                ]);
+            }
+
+            $offer = SupplierOffer::withTrashed()
+                ->where('supplier_catalog_product_id', $record->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($offer && OrderItem::where('fulfillment_supplier_offer_id', $offer->id)
+                ->whereHas('order', fn ($orders) => $orders->whereNotIn('order_status', [
+                    'delivered', 'completed', 'cancelled', 'refunded',
+                ]))
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'reason' => 'This offer is attached to an active fulfilment. Resolve or complete that order before correcting the catalog match.',
+                ]);
+            }
+
+            $old = [
+                'canonical_product_id' => $record->canonical_product_id,
+                'supplier_offer_id' => $offer?->id,
+                'source_price' => (string) $record->source_price,
+                'linked_at' => $record->linked_at?->toISOString(),
+                'match_notes' => $record->match_notes,
+            ];
+
+            if ($offer) {
+                $offer->forceFill([
+                    'supplier_catalog_product_id' => null,
+                    'is_available' => false,
+                    'availability_confirmed_at' => null,
+                    'availability_confirmed_by' => null,
+                    'availability_expires_at' => null,
+                ])->save();
+                if (!$offer->trashed()) {
+                    $offer->delete();
+                }
+            }
+
+            $record->forceFill([
+                'canonical_product_id' => null,
+                'linked_by_admin_id' => null,
+                'linked_at' => null,
+                'match_notes' => 'Unmatched by admin #' . $request->user()->id . ': ' . trim($data['reason']),
+            ])->save();
+
+            $this->audit($request, 'supplier_private_catalog_match_corrected_unmatched',
+                SupplierCatalogProduct::class, $record->id, $old, [
+                    'canonical_product_id' => null,
+                    'supplier_offer_id' => $offer?->id,
+                    'offer_retired' => (bool) $offer,
+                    'reason' => trim($data['reason']),
+                    'historical_order_snapshots_unchanged' => true,
+                    'fresh_confirmation_required_on_rematch' => true,
+                ]);
+        }, 3);
+
+        return back()->with('success', 'The incorrect match was audited and detached. The old offer is retired for new sourcing; historical order snapshots remain unchanged. Review the exact variant before linking this record again.');
+    }
+
     private function assertApprovedUyoShop(Shop $shop): void
     {
         $vendor = $shop->vendor;
