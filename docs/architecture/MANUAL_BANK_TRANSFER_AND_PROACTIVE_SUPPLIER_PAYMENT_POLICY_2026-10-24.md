@@ -44,9 +44,9 @@ No binding supplier availability request, order assignment, supplier payable or 
 - The system calculates supplier payables from immutable order-item wholesale-cost snapshots and maintains an admin-facing **Eligible Supplier Payables** queue. The queue is derived from verified fulfilment and financial records; it is not triggered by a supplier asking for money.
 - A supplier payable becomes eligible only after verified delivery, expiry of the applicable 24-hour return/dispute window, no unresolved dispute/return/recovery hold, and successful order-level financial reconciliation, except where an authorized completion exception is documented and reconciled.
 - The Super Admin reviews eligible items, selects the specific payable items to pay (non-FIFO; no automatic ranking), confirms the supplier's verified bank beneficiary and amount, and manually initiates the bank transfer using Victorious MARKET's normal bank channel.
-- Each transfer must be at least ₦5,000 and no more than ₦1,000,000. Do not silently split an over-cap payout. The admin may leave it queued or select an allowed subset of eligible payable items.
+- There is no artificial minimum or maximum payout amount. Pay the exact total of the eligible payable items explicitly selected and approved by the Super Admin, subject only to verified available reconciled funds, beneficiary verification, existing holds/debts, and ledger integrity. Do not silently omit eligible amounts or split a payout to satisfy an arbitrary threshold.
 - The supplier does not have to request payment. Supplier-facing statements/status can show accrued, held, eligible and paid balances, but must not expose another supplier's data or permit a supplier to bypass admin approval.
-- Before transfer, recheck supplier identity/KYC, active status, verified bank details, recovery debts/offsets, selected items, previous reservations, available reconciled corporate funds and payout caps. Bank-detail changes require the existing verification and cooldown controls.
+- Before transfer, recheck supplier identity/KYC, active status, verified bank details, recovery debts/offsets, selected items, previous reservations, available reconciled corporate funds and exact eligible payable totals. Bank-detail changes require the existing verification and cooldown controls.
 - Record the human initiating admin, beneficiary snapshot, amount, selected payable IDs, timestamp, bank transaction reference and supporting evidence. Mark paid only after checking the actual bank debit and beneficiary transfer outcome. If outcome is uncertain, hold for reconciliation; never blindly retry.
 - Every transfer requires explicit human Super Admin authorization. The system may calculate, queue, validate, remind and reconcile; it may not autonomously dispatch funds.
 - Payments are manually initiated Monday through Friday after reconciliation of the actual corporate bank balance/statement and the relevant receipts and payables. Paystack settlement is not a prerequisite when the customer collection mode is manual bank transfer.
@@ -69,7 +69,7 @@ Before enabling this mode in production, verify all active checkout, payment, we
 - simultaneous admin approvals, duplicate upload/replay, application crash/restart and concurrent requests;
 - payment approval is the only gate that allows supplier sourcing;
 - unmatched/underpaid/overpaid/reversed bank credit and bank statement reconciliation;
-- proactive payable queue, no supplier request prerequisite, payout min/max, non-FIFO explicit selection, duplicate-transfer prevention, uncertain outcome hold and verified bank debit before paid status;
+- proactive payable queue, no supplier request prerequisite, exact eligible payable amount, non-FIFO explicit selection, duplicate-transfer prevention, uncertain outcome hold and verified bank debit before paid status;
 - no Paystack API call for manual-mode customer orders or manual supplier payouts;
 - migration compatibility on SQLite and PostgreSQL, including rollback and unique-index behavior.
 
