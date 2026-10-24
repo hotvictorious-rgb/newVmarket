@@ -92,6 +92,111 @@
         </section>
     </div>
 
+    <section style="background:#fff;border:1px solid var(--adm-border);border-radius:12px;padding:18px;margin-bottom:20px;">
+        <h2 style="font-size:18px;margin:0 0 5px;">Supplier-owned private catalog</h2>
+        <p style="font-size:12px;color:#64748B;margin:0 0 14px;">Private source records are separate from public Victorious MARKET products. There is deliberately no supplier quantity field. The supplier's binary stock signal is not an order reservation or a quantity guarantee.</p>
+        <form method="POST" action="{{ route('admin.supplier-catalog.private-products.store') }}" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:18px;">
+            @csrf
+            <label>Supplier's approved Uyo shop
+                <select name="shop_id" required class="form-control">
+                    <option value="">Select supplier</option>
+                    @foreach($shops as $shop)
+                        <option value="{{ $shop->id }}" @selected(old('shop_id') == $shop->id)>{{ $shop->vendor->business_name ?? 'Supplier' }} — {{ $shop->name }}</option>
+                    @endforeach
+                </select>
+            </label>
+            <label>Supplier product name
+                <input name="product_name" value="{{ old('product_name') }}" required maxlength="180" class="form-control">
+            </label>
+            <label>Supplier source price (₦)
+                <input type="number" name="source_price" value="{{ old('source_price') }}" required min="0.01" step="0.01" max="100000000" class="form-control">
+            </label>
+            <label>Stock signal
+                <select name="is_in_stock" required class="form-control">
+                    <option value="1" @selected(old('is_in_stock','1') == '1')>In stock</option>
+                    <option value="0" @selected(old('is_in_stock') === '0')>Out of stock</option>
+                </select>
+            </label>
+            <label>Brand
+                <input name="brand" value="{{ old('brand') }}" maxlength="120" class="form-control">
+            </label>
+            <label>Model
+                <input name="model" value="{{ old('model') }}" maxlength="180" class="form-control">
+            </label>
+            <label>Variant / capacity / size
+                <input name="variant" value="{{ old('variant') }}" maxlength="180" class="form-control">
+            </label>
+            <label>Condition
+                <select name="condition" class="form-control">
+                    <option value="">Not specified</option>
+                    <option value="brand_new" @selected(old('condition') === 'brand_new')>Brand new</option>
+                    <option value="uk_used" @selected(old('condition') === 'uk_used')>UK used</option>
+                </select>
+            </label>
+            <label>Delivery class
+                <select name="package_tier" class="form-control">
+                    <option value="">Not specified</option>
+                    <option value="bike" @selected(old('package_tier') === 'bike')>Bike</option>
+                    <option value="standard" @selected(old('package_tier') === 'standard')>Standard</option>
+                    <option value="keke" @selected(old('package_tier') === 'keke')>Keke</option>
+                    <option value="bulky" @selected(old('package_tier') === 'bulky')>Bulky</option>
+                    <option value="fragile" @selected(old('package_tier') === 'fragile')>Fragile</option>
+                </select>
+            </label>
+            <label>Supplier photo URL / storage path
+                <input name="photo_path" value="{{ old('photo_path') }}" maxlength="2048" class="form-control">
+            </label>
+            <label style="grid-column:1/-1;">Supplier description
+                <textarea name="description" rows="2" maxlength="10000" class="form-control">{{ old('description') }}</textarea>
+            </label>
+            <div style="grid-column:1/-1;">
+                <button type="submit" class="btn-dash btn-dash-primary">Save private supplier record</button>
+            </div>
+        </form>
+
+        <h3 style="font-size:15px;margin:0 0 10px;">Private records and matching review</h3>
+        @forelse($supplierCatalogProducts as $record)
+            <div style="border:1px solid #E2E8F0;border-radius:9px;padding:12px;margin-bottom:10px;">
+                <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                    <div style="display:flex;gap:10px;min-width:0;flex:1;">
+                        @if($record->photo_path)
+                            <img src="{{ $record->photo_path }}" alt="" style="width:60px;height:60px;object-fit:cover;border-radius:7px;border:1px solid #E2E8F0;">
+                        @endif
+                        <div>
+                            <strong>{{ $record->product_name }}</strong>
+                            <div style="font-size:12px;color:#64748B;">Private record #{{ $record->id }} · {{ $record->supplier->business_name ?? 'Supplier unavailable' }} · {{ $record->shop->name ?? 'Shop unavailable' }}</div>
+                            <div style="font-size:12px;margin-top:3px;">Source price: <strong>₦{{ number_format((float)$record->source_price, 2) }}</strong> · Stock: <strong>{{ $record->is_in_stock ? 'In stock' : 'Out of stock' }}</strong> · Status: <strong>{{ $record->status }}{{ $record->trashed() ? ' / retired' : '' }}</strong></div>
+                            @if($record->canonical_product_id)
+                                <div style="font-size:12px;margin-top:3px;">Matched to canonical product #{{ $record->canonical_product_id }} — {{ $record->canonicalProduct->name ?? 'product unavailable' }}</div>
+                                <div style="font-size:11px;color:#64748B;">Offer #{{ $record->linkedOffer->id ?? 'not found' }} · Catalog stock signal does not replace fresh admin confirmation.</div>
+                            @else
+                                <div style="font-size:12px;color:#92400E;margin-top:3px;">Not matched — not a public listing.</div>
+                            @endif
+                        </div>
+                    </div>
+                    @if(!$record->canonical_product_id && !$record->trashed() && $record->status === 'active')
+                        <form method="POST" action="{{ route('admin.supplier-catalog.private-products.link', $record->id) }}" style="display:grid;gap:7px;min-width:260px;max-width:340px;">
+                            @csrf
+                            <label>Exact canonical match
+                                <select name="canonical_product_id" required class="form-control">
+                                    <option value="">Select reviewed public product</option>
+                                    @foreach($products as $candidate)
+                                        <option value="{{ $candidate->id }}">{{ $candidate->name }} — #{{ $candidate->id }} — ₦{{ number_format((float)$candidate->unit_price, 2) }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
+                            <input name="match_notes" maxlength="2000" class="form-control" placeholder="Match evidence: model, capacity, variant, package">
+                            <button type="submit" class="btn-dash btn-dash-primary" onclick="return confirm('Confirm this exact supplier-record-to-canonical-product match?')">Link reviewed record</button>
+                        </form>
+                    @endif
+                </div>
+            </div>
+        @empty
+            <p style="font-size:12px;color:#64748B;">No private supplier records have been created yet.</p>
+        @endforelse
+        <div style="margin-top:12px;">{{ $supplierCatalogProducts->links() }}</div>
+    </section>
+
     <section style="background:#fff;border:1px solid var(--adm-border);border-radius:12px;padding:16px;margin-bottom:18px;">
         <form method="GET" action="{{ route('admin.supplier-catalog.index') }}" style="display:grid;grid-template-columns:minmax(180px,1fr) 180px auto;gap:10px;align-items:end;">
             <label>Search canonical catalog
