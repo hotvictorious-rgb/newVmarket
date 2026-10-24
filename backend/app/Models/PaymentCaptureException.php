@@ -35,6 +35,11 @@ class PaymentCaptureException extends Model
         return $this->belongsTo(Order::class);
     }
 
+    public function resolution()
+    {
+        return $this->hasOne(PaymentCaptureExceptionResolution::class, 'payment_capture_exception_id');
+    }
+
     public function resolvedByAdmin()
     {
         return $this->belongsTo(User::class, 'resolved_by_admin_id');
