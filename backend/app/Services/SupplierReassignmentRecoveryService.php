@@ -159,6 +159,7 @@ class SupplierReassignmentRecoveryService
                     ->where('vendor_id', $newVendor->id)
                     ->where('shop_id', $newShop->id)
                     ->where('is_available', true)
+                    ->where('is_admin_disabled', false)
                     ->where('wholesale_cost', '>', 0)
                     ->whereRaw('supplier_offers.wholesale_cost < (select products.unit_price from products where products.id = supplier_offers.product_id)')
                     ->where(function ($query) use ($offerCheckAt) {
