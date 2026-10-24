@@ -615,7 +615,7 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertSame($ordersBeforeMissingTariffAttempt, Order::count());
     }
 
-    public function test_paid_supplier_rejection_automatically_fails_over_with_balanced_payable_recovery(): void
+    public function test_paid_supplier_confirmation_timeout_automatically_fails_over_with_balanced_payable_recovery(): void
     {
         [$userA, $vendorA, $shopA] = $this->createSupplier('Primary Supplier', 'primary-failover@supplier.ng', '08011110001');
         [$userB, $vendorB, $shopB] = $this->createSupplier('Backup Supplier', 'backup-failover@supplier.ng', '08011110002');
@@ -692,11 +692,23 @@ class AutomatedSupplierSourcingTest extends TestCase
             ->where('supplier_vendor_id', $vendorA->id)
             ->firstOrFail();
 
-        \Laravel\Sanctum\Sanctum::actingAs($userA, ['*']);
-        $rejection = $this->postJson("/api/v1/vendor/orders/{$order->id}/reject-availability", [
-            'reason' => 'Physical stock check confirms insufficient units.',
+        // Exercise the real 60-operating-minute timeout worker and its automatic
+        // failover path, not only the manual supplier-rejection endpoint.
+        Carbon::setTestNow(Carbon::parse('2026-10-24 10:01:00', 'Africa/Lagos'));
+        OrderSupplierAssignment::whereKey($failedAssignment->id)->update([
+            'assigned_at' => Carbon::parse('2026-10-24 08:59:00', 'Africa/Lagos'),
         ]);
-        $rejection->assertOk()->assertJsonPath('status', true);
+        try {
+            $this->artisan('supplier:check-confirmation-sla')->assertExitCode(0);
+        } finally {
+            Carbon::setTestNow();
+        }
+
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'target_type' => Order::class,
+            'target_id' => $order->id,
+            'action' => 'supplier_confirmation_sla_timed_out',
+        ]);
 
         $order->refresh();
         $item->refresh();
