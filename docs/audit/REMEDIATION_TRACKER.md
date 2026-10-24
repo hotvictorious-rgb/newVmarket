@@ -649,4 +649,39 @@ The following findings were confirmed during source review and hardened on `docs
 
 **Evidence found:** RetailerSupplierPayoutService still has a ₦500,000 cap and automatically selects eligible order-item payables in FIFO order. Active business policy requires a ₦1,000,000 maximum per transaction and explicitly prohibits FIFO; eligible payable selection must be an explicit, auditable choice.
 
-**Required correction:** Replace automatic FIFO allocation with explicit selected order-item IDs validated against current eligible net supplier-payable balances; reject empty, ineligible, duplicate, or cross-supplier selections; enforce ₦5,000 minimum and ₦1,000,000 maximum without silently splitting a request. Update supplier web/API inputs, admin audit evidence, and regression tests. **Status: OPEN — do not treat supplier payout selection as policy-aligned until implemented and verified.**
+**Changes committed on docs/retailer-central-fulfilment-model:**
+- Raised the retailer supplier payout cap to ₦1,000,000 while retaining the ₦5,000 minimum.
+- Removed automatic FIFO selection. The supplier must explicitly select order-item IDs; the service rechecks supplier ownership, delivery/refund-window/dispute/return eligibility, reconciliation, reservations and the exact net payable under database locks.
+- Rejects empty, duplicate, foreign/ineligible, or no-longer-eligible selections. It reserves only selected items and rejects a selection above the cap instead of silently splitting it.
+- Added a read-only eligible-payables preview to the supplier page, explicit checkbox selection, and web/API validation for selected item IDs.
+- Added a regression proving an older eligible item is not automatically included when a different item is selected.
+
+**Verification:** CI passed on commit 11e127b8e2b90f5372f518543cb6441c9479f3b7: **241 tests / 1,608 assertions**, plus supplier bank-update regression (1 test / 9 assertions). The admin exception queue and visibility regression also passed on commit bbdb0abf06410021a1c443568948537acc8e6a77: **242 tests / 1,612 assertions**, plus the same bank-update regression.
+
+**Remaining:** Confirmed collection settlement into the corporate bank account is not yet represented by a reconciled settlement-batch/allocation ledger and therefore is not yet a proven payout prerequisite. **Status: PARTIALLY FIXED — selection and amount policy aligned; corporate collection-settlement gate remains a launch blocker.**
+
+
+## VM-AUD-134 — Supplier payout is not yet gated by reconciled corporate-bank collections (24 October 2026)
+
+**Severity:** Critical — treasury liquidity and unauthorized use of unsettled funds.
+
+**Evidence found:** Retailer supplier payout eligibility currently proves verified customer payment, delivery, refund-window expiry, no open return/dispute, and reconciled supplier-payable journals. It does not prove the corresponding Paystack collection batch has settled and the net funds have been credited to Victorious MARKET's corporate bank account. A successful charge is not equivalent to a bank settlement.
+
+**Required correction before any supplier payout launch:**
+1. Persist provider settlement batches with unique provider settlement IDs, gross amount, provider fees, net amount, settlement date, and reconciliation status.
+2. Persist the individual verified gateway transaction/order allocations included in each batch, with immutable transaction IDs, amount/currency, and uniqueness constraints.
+3. Require a separate bank-credit proof/reference and authorized Super Admin reconciliation before a batch becomes available for treasury use. A gateway settlement report alone must not be treated as proof the bank account was credited.
+4. Make supplier payout reservation recheck that every selected payable's source collection is reconciled to a settled batch and that aggregate reconciled available funds cover all existing reservations and the proposed outflow.
+5. Test duplicate batch imports, missing/extra transactions, fees/net mismatches, bank-credit mismatch, partial batches, replay, and concurrent payout requests.
+
+**Status: OPEN — do not claim settlement is launch-ready or permit production supplier disbursement until this gate and production-equivalent concurrency tests are implemented and verified.**
+
+## VM-AUD-135 — Payment exception review workflow is visible but not yet resolvable end-to-end (24 October 2026)
+
+**Severity:** High — customer recovery and financial exception handling.
+
+**Evidence found:** Pending capture exceptions are now durable and visible on the Super Admin treasury desk. The current UI is a read-only triage queue. It does not yet provide a fully audited resolution workflow that can distinguish a harmless replay, confirmed second capture, provider-verification mismatch, and a pending customer refund tied to the exact captured transaction.
+
+**Required correction:** Add an authorized resolution action with required outcome, notes, actor and timestamps. For a confirmed extra capture, create a separate pending refund instruction bound to that exact gateway transaction ID and amount; do not apply the original order refund ceiling to the second capture, and do not dispatch automatically. Reconcile provider-confirmed refund completion before closing the exception. For mismatches or unproven identity, retain the hold until independent evidence resolves the case.
+
+**Status: OPEN — exceptions are recorded and visible, but full resolution and exact-capture refund workflow remain incomplete.**
