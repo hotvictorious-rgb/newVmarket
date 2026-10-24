@@ -825,7 +825,7 @@ class AutomatedSupplierSourcingTest extends TestCase
             'estimated_delivery_hours_min' => 2, 'estimated_delivery_hours_max' => 4, 'is_active' => true,
         ]);
 
-        $checkout = app(\\App\\Services\\CheckoutExecutionService::class)->execute($this->customerUser, [
+        $checkout = app(\App\Services\CheckoutExecutionService::class)->execute($this->customerUser, [
             'fulfillment_type' => 'doorstep_delivery', 'destination_lga_id' => $this->uyoLga->id,
             '_checkout_idempotency_key' => 'IDEMP-GROUP-FAILOVER-' . uniqid(),
             '_checkout_request_hash' => hash('sha256', 'grouped-partial-failover'),
@@ -837,7 +837,7 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertTrue($checkout['success'], $checkout['message'] ?? 'Grouped checkout failed.');
         $order = $checkout['order'];
 
-        $settlement = app(\\App\\Services\\OrderSettlementService::class)->settlePaystackOrder($order, [
+        $settlement = app(\App\Services\OrderSettlementService::class)->settlePaystackOrder($order, [
             'status' => 'success', 'currency' => 'NGN',
             'amount' => (int) bcmul((string) $order->grand_total, '100', 0),
             'reference' => (string) $order->payment_reference,
@@ -865,12 +865,12 @@ class AutomatedSupplierSourcingTest extends TestCase
         OrderItem::saving(function (OrderItem $item) use ($vendorC) {
             if ((int) $item->fulfillment_supplier_vendor_id === (int) $vendorC->id
                 && $item->isDirty('fulfillment_supplier_vendor_id')) {
-                throw new \\RuntimeException('Injected second-group persistence failure for regression proof.');
+                throw new \RuntimeException('Injected second-group persistence failure for regression proof.');
             }
         });
 
-        $beforeJournalCount = \\App\\Models\\FinancialJournalEntry::where('order_id', $order->id)->count();
-        $result = app(\\App\\Services\\SupplierReassignmentRecoveryService::class)
+        $beforeJournalCount = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->count();
+        $result = app(\App\Services\SupplierReassignmentRecoveryService::class)
             ->attemptAutomaticFailover($order->id, $failedAssignment->id);
 
         $this->assertFalse($result['success'] ?? true);
@@ -897,7 +897,7 @@ class AutomatedSupplierSourcingTest extends TestCase
 
         $failedAssignment->refresh();
         $this->assertSame('supplier_rejected', $failedAssignment->status, 'Unresolved primary assignment must remain visible for admin review.');
-        $this->assertSame($beforeJournalCount + 3, \\App\\Models\\FinancialJournalEntry::where('order_id', $order->id)->count(),
+        $this->assertSame($beforeJournalCount + 3, \App\Models\FinancialJournalEntry::where('order_id', $order->id)->count(),
             'Exactly one old-payable reversal, replacement payable and variance journal may be committed for the successful group.');
     }
 
