@@ -388,10 +388,11 @@ class OrderSettlementService
             // has not yet updated its state. Record the real credit and hold it for
             // the separate manual-refund review path.
             if ($provider === 'manual_bank_transfer'
-                && $lockedOrder->expires_at
-                && $lockedOrder->expires_at->lte($now)
-                && !in_array($lockedOrder->order_status, ['cancelled', 'canceled', 'failed', 'paid_stock_unavailable'], true)) {
-                $lockedOrder->order_status = 'cancelled';
+                && (($lockedOrder->expires_at && $lockedOrder->expires_at->lte($now))
+                    || in_array($lockedOrder->order_status, ['cancelled', 'canceled', 'failed', 'paid_stock_unavailable'], true))) {
+                if (!in_array($lockedOrder->order_status, ['cancelled', 'canceled', 'failed', 'paid_stock_unavailable'], true)) {
+                    $lockedOrder->order_status = 'cancelled';
+                }
                 $lockedOrder->vendor_settlement_status = 'refund_pending';
             }
 
