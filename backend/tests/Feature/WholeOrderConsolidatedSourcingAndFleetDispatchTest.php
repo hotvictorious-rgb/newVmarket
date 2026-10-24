@@ -816,8 +816,8 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
         $order1 = Order::create([
             'order_number' => 'VM-RACE-01',
             'customer_id' => $this->customer->id,
-            'vendor_id' => $this->supplierA->id,
-            'shop_id' => $this->shopA->id,
+            'vendor_id' => null,
+            'shop_id' => null,
             'origin_lga_id' => $this->uyoLga->id,
             'destination_lga_id' => $this->uyoLga->id,
             'retailer_model_order' => true,
@@ -849,8 +849,8 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
         $order2 = Order::create([
             'order_number' => 'VM-RACE-02',
             'customer_id' => $this->customer->id,
-            'vendor_id' => $this->supplierA->id,
-            'shop_id' => $this->shopA->id,
+            'vendor_id' => null,
+            'shop_id' => null,
             'origin_lga_id' => $this->uyoLga->id,
             'destination_lga_id' => $this->uyoLga->id,
             'retailer_model_order' => true,
