@@ -313,7 +313,7 @@
                 </div>
 
                 @php
-                    $cashbackReward = (float)$merchandiseSubtotal * 0.05;
+                    $cashbackReward = $activePaymentMethod === 'paystack' ? (float)$merchandiseSubtotal * 0.05 : 0.00;
                 @endphp
                 <!-- 5% Loyalty Cashback Reward -->
                 <div style="display: flex; justify-content: space-between; color: #047857; font-weight: 700; background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%); border: 1px solid #A7F3D0; padding: 10px 12px; border-radius: 8px; align-items: center;">
@@ -433,7 +433,7 @@ function vmSelectFulfillment(type) {
             } else {
                 payBtn.disabled = false;
                 payBtn.style.cursor = 'pointer';
-                payBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <span>Pay ₦${newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })} via Paystack &amp; Secure Order</span> <span style="font-size: 18px;">&rarr;</span>`;
+                payBtn.innerHTML = activePaymentMethod === 'manual_bank_transfer' ? '<span>Place order &amp; view transfer instructions — ₦' + newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 }) + '</span> <span style="font-size: 18px;">&rarr;</span>' : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <span>Pay ₦' + newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 }) + ' via Paystack &amp; Secure Order</span> <span style="font-size: 18px;">&rarr;</span>';
             }
         }
     }
