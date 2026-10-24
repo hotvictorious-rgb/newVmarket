@@ -136,4 +136,6 @@ jobs:
             tests/Feature/FinancialJournalIdempotencySchemaTest.php \
             tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php \
             tests/Feature/PaystackWebhookInboxRecoveryTest.php \
+            tests/Feature/AutomatedSupplierSourcingTest.php \
+            tests/Feature/SupplierPrivateCatalogPolicyTest.php \
             --display-warnings
