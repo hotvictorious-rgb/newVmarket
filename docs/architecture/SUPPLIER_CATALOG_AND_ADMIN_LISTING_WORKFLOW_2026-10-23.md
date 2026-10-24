@@ -11,7 +11,7 @@ Victorious MARKET is the only customer-facing retailer. A public product is a ca
 
 - One canonical product may have many supplier offers.
 - Each offer belongs to one approved supplier and that supplier's single approved shop/pickup point in Uyo.
-- A supplier offer stores its wholesale cost, stock/quantity assertion, availability confirmation evidence and expiry, stockout penalty/cooldown, notes, and active/disabled state.
+- A supplier-owned private catalog record stores the supplier's own product name/photos, source price, relevant model/variant/condition/package/compatibility specifications, and a binary **In stock / Out of stock** signal. Do not require or maintain a permanent supplier quantity field. A linked supplier offer stores its canonical-product link, wholesale cost, eligibility/confirmation evidence and expiry, SKU cooldown, notes, and active/disabled state. Order-specific quantity confirmation is recorded against a paid order line, never as catalog quantity.
 - The public product stores the customer-facing title, description, images, category, variant-defining attributes, retail price, approval/listing state, and product handling/bulky attributes.
 - Supplier identities, shop details, wholesale costs, sourcing comparisons and supplier assignment decisions must never be exposed to customers or public storefront APIs.
 - Historical orders and immutable supplier-cost snapshots must not change when a product or offer is edited later.
@@ -38,7 +38,7 @@ A supplier may be active while one offer is disabled. A product may be approved 
 ### Supplier offer lifecycle
 - Draft: created by an authorized admin, not allocatable.
 - Active but unconfirmed: known sourcing option, not allocatable.
-- Confirmed in stock: eligible only while the confirmation is valid and every supplier/shop/quantity/cooldown/capacity rule passes.
+- Confirmed in stock: eligible only while the confirmation is valid and every supplier/shop/cooldown/capacity/margin rule passes. This binary signal does not prove the supplier can fulfill any particular order quantity.
 - Out of stock / unavailable: excluded from allocation.
 - Disabled by admin: excluded immediately from new allocations regardless of reported stock.
 - Cooldown: excluded until the applicable penalty expiry; do not bypass it by toggling active.
@@ -51,7 +51,7 @@ Availability confirmation is evidence, not a reservation. Catalogue browsing, ad
 1. Search the canonical catalog by exact model/SKU, brand, size, capacity, colour, condition, pack size and other variant-defining attributes before creating a new product.
 2. If the same sellable item already exists, attach a new supplier offer to that product instead of duplicating the public listing.
 3. If a critical variant differs (for example, 4x6 versus 6x6 mattress, or phone storage capacity), create a distinct product/variant. Do not merge based only on similar names or category.
-4. Record the supplier, their approved Uyo shop, wholesale cost, known stock quantity/availability, notes and evidence source.
+4. Record the supplier's private product details, approved Uyo shop, wholesale cost, binary in-stock/out-of-stock signal, notes and evidence source. Do not record a permanent stock quantity.
 5. Keep a newly created/edited offer unavailable for sourcing until authorized confirmation requirements are met. Never fabricate confirmation evidence.
 6. Admin sets or updates the public retail price and listing content separately from wholesale costs.
 7. Preview the public listing and verify that only Victorious MARKET branding, customer-facing product details, retail price and Uyo delivery information appear.
@@ -75,7 +75,7 @@ The admin interface should provide separate actions:
 - **View product availability summary**, including why a product is hidden or unavailable
 - **Audit changes** with actor, timestamp, reason, and before/after values
 
-Disabling an offer must prevent future allocation immediately. It must not silently cancel or rewrite an already-paid order assignment. Existing in-flight assignments require the prescribed explicit admin review/recovery workflow. Re-enabling an offer must not override supplier suspension, invalid/expired confirmation, insufficient quantity, cooldown, capacity limits, Uyo boundary, or other hard eligibility rules.
+Disabling an offer must prevent future allocation immediately. It must not silently cancel or rewrite an already-paid order assignment. Existing in-flight assignments require the prescribed explicit admin review/recovery workflow. Re-enabling an offer must not override supplier suspension, invalid/expired confirmation, cooldown, capacity limits, Uyo boundary, positive-margin requirement, or other hard eligibility rules; it does not create a quantity claim.
 
 ## 6. Availability and storefront rules
 
@@ -85,7 +85,7 @@ A product is publicly purchasable only when:
 - at least one offer is currently eligible under the shared supplier eligibility rules;
 - the supplier is approved, active and verified, with exactly one active approved shop in Uyo;
 - the shop and destination/service-area requirements pass;
-- the offer is explicitly in stock with sufficient quantity and valid confirmation;
+- the linked supplier product is explicitly marked **In stock** and the offer has sufficiently fresh confirmation; the binary status is not a quantity guarantee;
 - the applicable 24-hour stockout penalty cooldown has expired; and
 - supplier active-pending-handover capacity rules pass.
 
@@ -96,8 +96,8 @@ If all offers become unavailable or ineligible, mark the product unavailable to 
 ## 7. Payment and allocation boundary
 
 - Before verified Paystack payment, perform only non-binding catalogue and feasibility checks. Do not reserve stock, notify a supplier of a binding order, allocate a supplier to an order, or create supplier payables.
-- After independently verified payment, re-check current offer eligibility and quantity under concurrency-safe transaction/locking rules before selecting the best feasible whole-order plan.
-- If no offer remains eligible after payment, move the paid order to the visible admin-managed exception process. Do not silently refund or substitute an item.
+- After independently verified payment, re-check current offer eligibility under concurrency-safe transaction/locking rules, then request an explicit order-specific confirmation that the supplier can fulfill the exact requested quantity for the paid line. The supplier's response is not a permanent catalog quantity field. Try eligible candidates in the defined priority order after a decline, inability to fulfill, or qualifying timeout.
+- If all eligible candidates decline, cannot fulfill the full line quantity, time out, or become ineligible, stop the bounded sourcing cycle and move the paid order/line to the visible admin-managed exception process. Do not split one line across suppliers unless a separately approved workflow authorizes it; do not silently refund or substitute an item.
 - Snapshot the selected supplier offer, supplier identity, wholesale cost, product variant and relevant sourcing terms immutably against the order line at allocation. Later catalog/offer edits must not rewrite that snapshot.
 - Supplier assignment overrides require authorized Super Admin permission, a reason and immutable audit evidence. They cannot bypass verified payment or hard safety requirements.
 
@@ -125,14 +125,14 @@ Merging means attaching a supplier offer to the same canonical product, not merg
 
 1. One canonical product with multiple eligible supplier offers appears once in the public catalog.
 2. Supplier identities and wholesale costs never appear in public APIs or customer HTML.
-3. Cheapest eligible offer is selectable; cheaper but unconfirmed, expired, suspended, out-of-stock or cooldown-blocked offers are excluded.
+3. Cheapest eligible offer is selectable only after hard eligibility checks; stale, suspended, out-of-stock, cooldown-blocked, over-capacity or non-positive-margin offers are excluded. Binary stock status never substitutes for order-specific quantity confirmation.
 4. Disabling one offer excludes it from new sourcing while other eligible offers keep the product available.
 5. Disabling the last eligible offer hides/makes the product unavailable without deleting it or its history.
-6. Re-enabling an offer does not bypass confirmation expiry, cooldown, supplier suspension, location, quantity or capacity rules.
+6. Re-enabling an offer does not bypass confirmation expiry, cooldown, supplier suspension, location, margin or capacity rules; it does not create a quantity claim.
 7. Manual delisting remains effective even when an offer is reactivated; manual relisting does not make an unsourceable product purchasable.
 8. Product matching does not merge distinct variants or conditions.
 9. Supplier offer changes before payment do not create reservations or assignments.
-10. Post-payment allocation revalidates stock under concurrent requests and never allocates an ineligible offer.
+10. Post-payment sourcing requests explicit full-line-quantity confirmation, revalidates eligibility under concurrent requests, and never assigns an unconfirmed/ineligible offer.
 11. Existing paid/in-flight assignments are preserved for explicit recovery review when an offer or supplier is disabled.
 12. Order wholesale snapshots remain unchanged after offer cost edits, offer retirement or catalog merge.
 13. Unauthorized users cannot create, activate, disable, merge or reprice products/offers.
@@ -142,3 +142,8 @@ Merging means attaching a supplier offer to the same canonical product, not merg
 ## 11. Implementation note
 
 The current codebase already has `Product` and `SupplierOffer` models, a product-to-offers relationship, an admin products route, and an admin offer-availability confirmation route. That is a useful foundation, not proof that the workflow is complete. Audit the existing controllers, views, migrations, public API serializers, offer availability service and sourcing/allocation service before changing the schema or UI. Align implementation incrementally on the `docs/retailer-central-fulfilment-model` candidate branch and run focused plus regression tests. Do not merge or deploy based only on this document.
+
+
+## 12. Order-specific supplier confirmation and failover policy
+
+The binding detail is defined in [Supplier Catalog and Order-Specific Availability Confirmation Policy](SUPPLIER_ORDER_SPECIFIC_AVAILABILITY_CONFIRMATION_POLICY_2026-10-24.md). In short: the supplier catalog has a binary stock signal and no permanent quantity field; binding supplier requests begin only after independently verified payment; each request identifies the paid order line and exact quantity; one supplier must confirm the whole line; and declines, inability, timeouts or eligibility loss trigger bounded, idempotent failover to the next eligible candidate. Exhaustion routes to the admin-managed exception process. Preserve the existing 8:00 AM–6:00 PM Africa/Lagos operating window, 60 operating-minute SLA, restart-at-8-AM rule, SKU-specific cooldown, whole-order pickup-location optimization, immutable supplier-cost snapshots, and manual refund/transfer authorization. Runtime compliance remains unverified until the acceptance tests in the policy and cross-path regression suite pass.
