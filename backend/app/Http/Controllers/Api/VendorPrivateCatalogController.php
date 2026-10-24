@@ -126,7 +126,7 @@ class VendorPrivateCatalogController extends Controller
             if ($offer) {
                 $offerChanges = [
                     'wholesale_cost' => (string) $record->source_price,
-                    'is_available' => $record->status === 'active' && (bool) $record->is_in_stock,
+                    'is_available' => $record->status === 'active' && (bool) $record->is_in_stock && !(bool) $offer->is_admin_disabled,
                 ];
                 if ($stockChanged || $statusChanged) {
                     // Any supplier stock-state transition invalidates the previous
