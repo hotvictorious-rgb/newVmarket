@@ -66,6 +66,35 @@
     </form>
 </div>
 
+<div class="dash-card" style="margin-bottom:24px;border-left:4px solid #d97706">
+    <div class="dash-card-header">
+        <div class="dash-card-title">Manual Transfer Refund Holds</div>
+        <strong>{{ $refundCases->total() }} pending / recorded</strong>
+    </div>
+    <div style="padding:0 18px 18px">
+        <p style="margin-top:0;color:#92400e">These cases arise when a verified transfer belongs to an expired/cancelled or otherwise unfulfillable order. They are not Paystack refunds. No automatic refund or bank outflow is permitted; keep the case on hold until the manual-refund procedure is separately approved and a Super Admin authorizes the next step.</p>
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead><tr><th>Created</th><th>Order</th><th>Amount</th><th>Status</th><th>Reason</th></tr></thead>
+                <tbody>
+                @forelse($refundCases as $refundCase)
+                    <tr>
+                        <td>{{ $refundCase->created_at?->format('d M Y H:i:s') ?? '—' }}</td>
+                        <td><strong>{{ $refundCase->order?->order_number ?? ('Order #' . $refundCase->order_id) }}</strong></td>
+                        <td>₦{{ number_format($refundCase->amount_kobo / 100, 2) }} {{ $refundCase->currency }}</td>
+                        <td>{{ strtoupper(str_replace('_', ' ', $refundCase->status)) }}</td>
+                        <td>{{ $refundCase->reason }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5" class="text-center">No manual-transfer refund holds recorded.</td></tr>
+                @endforelse
+                </tbody>
+            </table>
+            {{ $refundCases->links() }}
+        </div>
+    </div>
+</div>
+
 <div class="dash-card">
     <div class="dash-card-header">
         <div class="dash-card-title">Receipt submissions</div>
