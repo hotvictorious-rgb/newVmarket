@@ -468,7 +468,7 @@ class OrderSettlementService
                     }
 
                     AdminAuditLog::create([
-                        'user_id' => $lockedOrder->customer_id,
+                        'user_id' => $provider === 'manual_bank_transfer' ? $actorUser?->id : $lockedOrder->customer_id,
                         'action' => 'paid_after_expiration_reinstated',
                         'target_type' => Order::class,
                         'target_id' => $lockedOrder->id,
