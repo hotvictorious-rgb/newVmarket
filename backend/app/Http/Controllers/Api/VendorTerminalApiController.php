@@ -498,6 +498,7 @@ class VendorTerminalApiController extends Controller
                     || (int) $offer->product_id !== (int) $item->product_id
                     || (int) $offer->vendor_id !== (int) $vendor->id
                     || (int) $offer->shop_id !== (int) $assignment->supplier_shop_id
+                    || $offer->is_admin_disabled
                     || !$offer->is_available
                     || !$offer->availability_confirmed_at
                     || !$offer->availability_confirmed_by
