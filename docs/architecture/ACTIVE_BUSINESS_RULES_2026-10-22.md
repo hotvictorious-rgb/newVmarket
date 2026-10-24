@@ -1,4 +1,16 @@
 # Victorious MARKET — Active Business Rules and Documentation Source of Truth
+
+## Owner-confirmed policy alignment — 24 October 2026
+
+This section supersedes conflicting older supplier-settlement wording. It records policy decisions and does not certify implementation.
+
+- Supplier settlement minimum: ₦1. Maximum: ₦1,000,000 per individual settlement transaction/request. No FIFO/oldest-first selection and no silent splitting.
+- The initiating authorized admin may complete supplier-settlement reconciliation; a second administrator is not mandatory for that outgoing-settlement reconciliation. Audit, transaction uniqueness, idempotency, cleared funds, destination validation, ledger balancing and actual bank-outcome evidence remain mandatory.
+- Admin-uploaded outgoing-transfer evidence applies to supplier settlements. Customer-uploaded incoming-transfer screenshots are separate supporting evidence for manual customer-payment review; they are never proof of actual incoming credit by themselves.
+- Supplier settlements may proceed only against eligible reconciled supplier payables and cleared/reconciled platform funds, regardless of whether customer money originated through Paystack or the separately isolated manual-transfer method. Do not fabricate Paystack identities for manual transfers.
+- Preserve Monday–Friday operating days, but do not make Paystack settlement a prerequisite when cleared funds came through the separately approved manual-transfer collection path.
+- Legacy vendor-wallet/vendor-payout caps and FIFO rules do not govern new retailer-model supplier payables. No automated refunds or transfers are permitted.
+
 **Decision date:** 22 October 2026  
 **Scope:** Business policy and documentation only. This document does not certify code implementation.
 
@@ -73,8 +85,8 @@ This document records the owner's active decisions. If older documents conflict 
 - **The Zero-Automated-Outflow Law:** Money NEVER leaves the platform or payment gateway automatically. Under no circumstances may any server script, webhook, queue worker, cron job, or timeout autonomously trigger a Paystack refund or bank transfer.
 - **100% Manual Human Super Admin Authorization:** Every customer refund (including verified duplicate charges, pre-action cancellations, out-of-stock items, or customer returns) and every bank transfer (supplier wholesale disbursements and logistics company settlements) must generate an immutable, auditable pending request in the Admin Command Tower and requires explicit review, authorization, and manual dispatch initiation by an authorized human Super Administrator.
 - Supplier payables use immutable agreed wholesale-cost snapshots and become eligible only after verified delivery or an explicitly authorized completion exception followed by reconciliation. Supplier stock acceptance alone does not make a payable due.
-- **Supplier payable disbursement limits:** each supplier-payment request/disbursement must be at least ₦5,000 and no more than ₦1,000,000 at a time. Do not silently split an over-cap request into multiple transfers; it must be reduced to an allowed amount or handled through a separately authorized decision.
-- **Disbursement schedule:** Supplier and logistics fleet disbursements occur strictly Monday through Friday after Paystack transactions have fully settled into Victorious MARKET's corporate settlement account.
+- **Supplier payable disbursement limits:** each supplier-payment request/disbursement must be at least ₦1 and no more than ₦1,000,000 per individual settlement transaction/request. Do not silently split an over-cap request into multiple transfers; it must be reduced to an allowed amount or handled through a separately authorized decision.
+- **Disbursement schedule:** Supplier and logistics-company disbursements occur Monday through Friday only after the relevant platform funds have cleared and been reconciled in the corporate receiving account, regardless of the customer tender.
 - **No FIFO:** do not use FIFO, oldest-earning-first, oldest-order-first, or automatic FIFO allocation to decide which eligible supplier payables are included in a payment. Selection must use an authorized, auditable non-FIFO process. Do not invent an automatic alternative ranking/selection algorithm without owner approval. Admin approval, reconciliation, idempotency and provider-confirmed payment remain required; eligibility is not automatic payment.
 - Keep customer receipts, refunds, supplier payables, logistics-company payables, retailer margin, delivery revenue/costs, bulky surcharges, cashback and recovery/reconciliation as distinct money paths.
 - Cashback remains a separate 5% loyalty benefit on eligible post-discount merchandise actually funded by verified Paystack money, subject to existing caps, maturity and reversal rules. Former 90/5/5 merchandise splits and vendor-managed delivery allocations are historical only.
