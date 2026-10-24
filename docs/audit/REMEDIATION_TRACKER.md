@@ -656,7 +656,7 @@ The following findings were confirmed during source review and hardened on `docs
 - Added a read-only eligible-payables preview to the supplier page, explicit checkbox selection, and web/API validation for selected item IDs.
 - Added a regression proving an older eligible item is not automatically included when a different item is selected.
 
-**Verification:** CI passed on commit 11e127b8e2b90f5372f518543cb6441c9479f3b7: **241 tests / 1,608 assertions**, plus supplier bank-update regression (1 test / 9 assertions). The admin exception queue and visibility regression also passed on commit bbdb0abf06410021a1c443568948537acc8e6a77: **242 tests / 1,612 assertions**, plus the same bank-update regression.
+**Verification:** Later working-branch CI passed on commit c8379a4ca9189793d9102239622786c0a0ee5f33: **244 tests / 1,646 assertions**, plus supplier bank-update regression (1 test / 9 assertions) and PHP syntax scan. The explicit-selection/no-FIFO regression and Super Admin exception-queue visibility are included.
 
 **Remaining:** Confirmed collection settlement into the corporate bank account is not yet represented by a reconciled settlement-batch/allocation ledger and therefore is not yet a proven payout prerequisite. **Status: PARTIALLY FIXED — selection and amount policy aligned; corporate collection-settlement gate remains a launch blocker.**
 
