@@ -14,7 +14,8 @@ return new class extends Migration
 
         Schema::create('payment_capture_exception_resolutions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('payment_capture_exception_id')->unique()->constrained('payment_capture_exceptions')->cascadeOnDelete();
+            $table->foreignId('payment_capture_exception_id')->constrained('payment_capture_exceptions', 'id', 'pcer_capture_exception_fk')->cascadeOnDelete();
+            $table->unique('payment_capture_exception_id', 'pcer_capture_exception_unique');
             $table->string('resolution_type', 40);
             $table->string('status', 40)->default('pending_manual_action')->index();
             $table->string('gateway_provider', 40)->default('paystack');
