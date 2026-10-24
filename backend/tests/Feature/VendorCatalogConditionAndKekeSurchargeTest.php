@@ -16,6 +16,7 @@ use App\Models\Shop;
 use App\Models\State;
 use App\Models\SystemSetting;
 use App\Models\SupplierOffer;
+use App\Models\SupplierCatalogProduct;
 use App\Models\User;
 use App\Models\VendorProfile;
 use App\Services\FulfillmentAvailabilityService;
@@ -1330,17 +1331,34 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertFalse((bool) $product->is_approved);
 
         $this->actingAs($admin)
-            ->post("/admin/supplier-catalog/products/{$product->id}/offers", [
+            ->post('/admin/supplier-catalog/private-products', [
                 'shop_id' => $this->shop->id,
-                'wholesale_cost' => '27000.00',
+                'product_name' => 'Supplier Samsung A15 128GB',
+                'source_price' => '27000.00',
+                'is_in_stock' => '1',
+                'brand' => 'Samsung',
+                'model' => 'Galaxy A15',
+                'variant' => '128GB',
+                'condition' => 'brand_new',
+                'package_tier' => 'bike',
             ])
             ->assertRedirect(route('admin.supplier-catalog.index'));
 
-        $offer = SupplierOffer::where('product_id', $product->id)->firstOrFail();
+        $privateRecord = SupplierCatalogProduct::where('product_name', 'Supplier Samsung A15 128GB')->firstOrFail();
+        $this->assertNull($privateRecord->canonical_product_id);
+        $this->actingAs($admin)
+            ->post("/admin/supplier-catalog/private-products/{$privateRecord->id}/link", [
+                'canonical_product_id' => $product->id,
+                'match_notes' => 'Exact Samsung model, 128GB capacity and condition verified.',
+            ])
+            ->assertRedirect(route('admin.supplier-catalog.index'));
+
+        $privateRecord->refresh();
+        $offer = SupplierOffer::where('supplier_catalog_product_id', $privateRecord->id)->firstOrFail();
         $this->assertSame($this->vendor->id, $offer->vendor_id);
         $this->assertSame($this->shop->id, $offer->shop_id);
-        $this->assertFalse((bool) $offer->is_available);
-        $this->assertNull($offer->availability_confirmed_at);
+        $this->assertTrue((bool) $offer->is_available, 'The supplier binary in-stock signal is preserved.');
+        $this->assertNull($offer->availability_confirmed_at, 'A binary stock signal is not an admin confirmation.');
 
         $this->actingAs($admin)
             ->patch("/admin/supplier-catalog/offers/{$offer->id}/cost", ['wholesale_cost' => '35000.00'])
@@ -1348,8 +1366,8 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertSame('27000', (string) $offer->fresh()->wholesale_cost);
 
         $this->assertDatabaseHas('admin_audit_logs', [
-            'action' => 'supplier_offer_attached_unconfirmed',
-            'target_id' => $offer->id,
+            'action' => 'supplier_private_catalog_product_matched',
+            'target_id' => $privateRecord->id,
         ]);
 
         $this->actingAs($admin)
