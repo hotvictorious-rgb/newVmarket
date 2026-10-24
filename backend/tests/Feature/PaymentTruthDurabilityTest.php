@@ -302,9 +302,9 @@ class PaymentTruthDurabilityTest extends TestCase
     }
 
     /**
-     * Verify that genuinely abandoned orders (unpaid at gateway) ARE cancelled and inventory restored.
+     * Verify abandoned retailer orders are cancelled without inventing a stock restoration that never occurred.
      */
-    public function test_genuinely_abandoned_unpaid_order_is_cancelled_and_inventory_restored(): void
+    public function test_genuinely_abandoned_retailer_order_is_cancelled_without_fabricating_inventory(): void
     {
         $this->product->inventory_quantity = 3;
         $this->product->save();
@@ -367,8 +367,8 @@ class PaymentTruthDurabilityTest extends TestCase
         $this->assertSame(1, $cancelledCount);
         $this->assertSame('cancelled', $order->order_status);
         $this->assertSame('pending', $order->payment_status);
-        // Inventory restored: was 3, restored +1 = 4
-        $this->assertSame(4, (int) $this->product->inventory_quantity);
+        // Retailer checkout did not reserve/decrement stock before payment; expiry must not add phantom inventory.
+        $this->assertSame(3, (int) $this->product->inventory_quantity);
     }
 
     /**
