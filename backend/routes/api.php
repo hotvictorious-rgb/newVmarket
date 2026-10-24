@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\ProductApiController;
 use App\Http\Controllers\Api\RiderTerminalApiController;
 use App\Http\Controllers\Api\SystemConfigApiController;
 use App\Http\Controllers\Api\VendorTerminalApiController;
+use App\Http\Controllers\Api\VendorPrivateCatalogController;
 use App\Http\Controllers\Web\PaystackPaymentController;
 use Illuminate\Support\Facades\Route;
 
@@ -151,6 +152,12 @@ Route::prefix('v1')->group(function () {
 
         // Sovereign Vendor App Terminal
         Route::prefix('vendor')->group(function () {
+            // Supplier-owned private catalog. These records never become public
+            // listings until an authorized admin links them to canonical products.
+            Route::get('private-catalog', [VendorPrivateCatalogController::class, 'index']);
+            Route::post('private-catalog', [VendorPrivateCatalogController::class, 'store']);
+            Route::patch('private-catalog/{id}', [VendorPrivateCatalogController::class, 'update'])->whereNumber('id');
+
             // Dashboard & FinTech Metrics
             Route::get('dashboard', [VendorTerminalApiController::class, 'dashboard']);
 
