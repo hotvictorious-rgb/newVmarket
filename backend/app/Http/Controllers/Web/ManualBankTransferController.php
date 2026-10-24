@@ -161,7 +161,7 @@ class ManualBankTransferController extends Controller
 
     public function index()
     {
-        $paymentConfig = SystemSetting::get('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
+        $paymentConfig = SystemSetting::getFresh('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
         $activePaymentMethod = is_array($paymentConfig) ? (string) ($paymentConfig['active_method'] ?? 'paystack') : 'paystack';
         $bankAccount = is_array($paymentConfig) ? ($paymentConfig['manual_bank_transfer_account'] ?? []) : [];
         $refundCases = ManualBankTransferRefundCase::with(['order', 'payment', 'reviewer'])
@@ -187,7 +187,7 @@ class ManualBankTransferController extends Controller
             'customer_instructions' => ['required_if:active_payment_method,manual_bank_transfer', 'nullable', 'string', 'max:2000'],
         ]);
 
-        $oldConfig = SystemSetting::get('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
+        $oldConfig = SystemSetting::getFresh('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
         $account = [
             'bank_name' => trim((string) ($validated['bank_name'] ?? '')),
             'account_name' => trim((string) ($validated['account_name'] ?? '')),
