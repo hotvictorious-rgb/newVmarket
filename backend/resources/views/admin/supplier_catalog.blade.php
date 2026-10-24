@@ -261,10 +261,11 @@
                             </div>
                             @if(!$offer->trashed())
                                 <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;">
-                                    <form method="POST" action="{{ route('admin.supplier-catalog.offers.cost', $offer->id) }}" style="display:flex;gap:6px;align-items:center;">
+                                    <form method="POST" action="{{ route('admin.supplier-catalog.offers.cost', $offer->id) }}" style="display:grid;grid-template-columns:120px minmax(160px,1fr) auto;gap:6px;align-items:center;">
                                         @csrf @method('PATCH')
-                                        <input type="number" name="wholesale_cost" min="0.01" step="0.01" max="100000000" required value="{{ $offer->wholesale_cost }}" aria-label="Wholesale cost" style="width:120px;" class="form-control">
-                                        <button type="submit" class="btn-dash btn-dash-outline">Update cost</button>
+                                        <input type="number" name="wholesale_cost" min="0.01" step="0.01" max="100000000" required value="{{ $offer->wholesale_cost }}" aria-label="Wholesale cost" class="form-control">
+                                        <input name="reason" required minlength="5" maxlength="500" aria-label="Source price correction reason" placeholder="Reason for source-price correction" class="form-control">
+                                        <button type="submit" class="btn-dash btn-dash-outline">Correct source price</button>
                                     </form>
                                     <form method="POST" action="{{ route('admin.supplier_offers.confirm_availability', $offer->id) }}" style="display:grid;grid-template-columns:minmax(190px,1fr);gap:6px;max-width:280px;">
                                         @csrf
