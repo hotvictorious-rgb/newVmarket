@@ -110,7 +110,7 @@
                     <span class="dash-card-subtitle">Distinct or unproven successful captures and webhook/server-verification mismatches. These cases block silent replay handling; this queue does not dispatch refunds.</span>
                 </div>
             </div>
-            <span class="dash-badge dash-badge-gold">{{ $pendingPaymentCaptureExceptionCount ?? ($pendingPaymentCaptureExceptions->count() ?? 0) }} Pending</span>
+            <span class="dash-badge dash-badge-gold">{{ $pendingPaymentCaptureExceptionCount ?? 0 }} Pending</span>
         </div>
         <div class="table-responsive" style="padding: 0 20px 20px;">
             <table class="table table-striped align-middle">
@@ -154,7 +154,7 @@
                     @endforelse
                 </tbody>
             </table>
-            @if(method_exists($pendingPaymentCaptureExceptions ?? null, 'links'))
+            @if(isset($pendingPaymentCaptureExceptions) && method_exists($pendingPaymentCaptureExceptions, 'links'))
                 <div style="padding-top: 12px;">{{ $pendingPaymentCaptureExceptions->links() }}</div>
             @endif
         </div>
