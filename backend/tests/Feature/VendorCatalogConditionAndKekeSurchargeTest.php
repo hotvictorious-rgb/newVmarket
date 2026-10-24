@@ -1350,6 +1350,14 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertFalse((bool) $offer->fresh()->is_available);
         $this->assertSame('listed', $product->fresh()->listing_status);
         $this->assertFalse(Product::marketplaceEligible()->whereKey($product->id)->exists());
+
+        // Soft-deleted offers remain visible to administrators as history, not as eligible offers.
+        $offer->delete();
+        $this->actingAs($admin)
+            ->get(route('admin.supplier-catalog.index'))
+            ->assertOk()
+            ->assertSee("Offer #{$offer->id}")
+            ->assertSee('retired');
     }
 
     public function test_public_shop_directory_is_retired_to_protect_supplier_identity(): void
