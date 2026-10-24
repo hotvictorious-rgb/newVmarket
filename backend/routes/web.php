@@ -8,6 +8,7 @@ use App\Http\Controllers\Web\AdminRetailerSupplierPayoutController;
 use App\Http\Controllers\Web\AdminPaymentCaptureExceptionController;
 use App\Http\Controllers\Web\AdminTreasuryBankCreditBatchController;
 use App\Http\Controllers\Web\PaystackPaymentController;
+use App\Http\Controllers\Web\ManualBankTransferController;
 use App\Http\Controllers\Web\PortalController;
 use App\Http\Controllers\Web\WebAuthController;
 use Illuminate\Support\Facades\Route;
@@ -71,6 +72,11 @@ Route::post('/demo/quick-login', [WebAuthController::class, 'quickDemoLogin'])->
 
 // 1. Super Admin Command Tower
 Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
+    Route::get('/manual-bank-transfers', [ManualBankTransferController::class, 'index'])->name('admin.manual-bank-transfers.index');
+    Route::post('/manual-bank-transfers/{id}/approve', [ManualBankTransferController::class, 'approve'])->whereNumber('id')->name('admin.manual-bank-transfers.approve');
+    Route::post('/manual-bank-transfers/{id}/reject', [ManualBankTransferController::class, 'reject'])->whereNumber('id')->name('admin.manual-bank-transfers.reject');
+    Route::get('/manual-bank-transfers/{id}/evidence', [ManualBankTransferController::class, 'evidence'])->whereNumber('id')->name('admin.manual-bank-transfers.evidence');
+
     Route::get('/', [PortalController::class, 'adminDashboard'])->name('admin.dashboard');
     Route::get('/delivery-lanes', [PortalController::class, 'adminDeliveryLanesPage'])->name('admin.delivery_lanes.index');
     Route::get('/settlements', [PortalController::class, 'adminSettlementsPage'])->name('admin.settlements.index');
@@ -285,6 +291,9 @@ Route::post('/payment/paystack/webhook', [PaystackPaymentController::class, 'han
 Route::post('/reservation/create', [PortalController::class, 'createReservation'])->name('reservation.create');
 Route::get('/reservation/{code}', [PortalController::class, 'showReservationPass'])->name('reservation.pass');
 Route::get('/order/{order_number}', [PortalController::class, 'showOrderStatus'])->name('order.status');
+Route::post('/order/{order_number}/manual-bank-transfer-evidence', [ManualBankTransferController::class, 'submitEvidence'])
+    ->middleware('throttle:5,10')
+    ->name('customer.manual-bank-transfer.submit');
 Route::get('/order/{order_number}/handshake-status', [PortalController::class, 'customerCheckArrivalStatus'])->name('order.handshake_status');
 Route::get('/order/{order_number}/pickup-handshake-status', [PortalController::class, 'vendorCheckPickupHandshakeStatus'])->name('order.pickup_handshake_status');
 Route::post('/order/{order_number}/confirm-delivery', [PortalController::class, 'customerConfirmDelivery'])->name('order.customer_confirm_delivery');
