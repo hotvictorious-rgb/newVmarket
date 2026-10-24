@@ -35,7 +35,7 @@ Every scenario must verify:
 5. **Authorization:** customer, vendor, vendor employee, rider and admin cannot act outside their ownership, role, branch or assigned job.
 6. **Evidence:** required OTPs, uploaded proof, provider verification and human approvals are verified server-side—not trusted from client claims.
 7. **Auditability:** rejected transitions and accepted financial actions leave accurate, non-duplicated audit/idempotency records without leaking OTPs or secrets.
-8. **Race safety:** concurrent operations serialize or fail safely. Run database race tests against PostgreSQL before launch; SQLite/unit tests alone do not prove row-lock correctness.
+8. **Race safety:** concurrent operations serialize or fail safely. Run database race tests against MySQL/InnoDB before launch; SQLite/unit tests alone do not prove row-lock correctness.
 9. **Recovery:** timeout or ambiguous provider response stays in an uncertain/reconciliation state; it is never assumed to mean success or failure.
 10. **Customer rights:** operational timers never silently remove statutory rights or delay an approved customer refund while vendor recovery is pending.
 
