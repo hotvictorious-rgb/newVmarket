@@ -38,6 +38,7 @@ return new class extends Migration
                     'reversed',
                 ])->default('pending')->index();
                 $table->string('gateway_provider', 50)->default('paystack');
+                $table->string('gateway_reference', 100)->nullable()->index();
                 $table->string('lease_token', 100)->nullable();
                 $table->timestamp('lease_expires_at')->nullable()->index();
                 $table->json('metadata')->nullable();
