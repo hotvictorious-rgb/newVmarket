@@ -47,7 +47,7 @@ class FinancialSplitAndFulfillmentTest extends TestCase
         $this->assertTrue($intraUyo['is_available']);
         $this->assertEquals('500.00', $intraUyo['fee']);
 
-        // Uyo to Eket is available only because an explicit directional route is enabled.
+        // Uyo to Eket is blocked by launch policy (all deliveries confined to Uyo).
         DeliveryLane::updateOrCreate([
             'origin_lga_id' => $uyo->id,
             'destination_lga_id' => $eket->id,
@@ -59,9 +59,8 @@ class FinancialSplitAndFulfillmentTest extends TestCase
             'is_active' => true,
         ]);
         $interLga = $service->checkDeliveryAvailability($shop->id, $eket->id);
-        $this->assertTrue($interLga['is_available']);
-        $this->assertEquals('1500.00', $interLga['fee']);
-        $this->assertEquals('logistics_managed', $interLga['delivery_mode']);
+        $this->assertFalse($interLga['is_available']);
+        $this->assertEquals('outside_uyo_launch_boundary', $interLga['rate_tier']);
 
         // Real-World Scenario: Asymmetric unserviceable corridor
         // Vendor shop located in Eket

@@ -11,24 +11,14 @@ use App\Models\TreasuryBankCreditBatch;
 use App\Models\TreasuryBankCreditBatchAllocation;
 use App\Models\User;
 use App\Models\VendorProfile;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class TreasuryBankCreditConcurrencyTest extends TestCase
 {
-    use DatabaseMigrations;
-
-    protected function runDatabaseMigrations()
-    {
-        if (DB::connection()->getDriverName() === 'pgsql') {
-            $this->artisan('migrate:fresh');
-            $this->beforeApplicationDestroyed(function () {
-                $this->artisan('migrate:rollback');
-            });
-        }
-    }
+    use RefreshDatabase;
 
 
     public function test_two_processes_cannot_overreserve_one_treasury_bank_credit_batch(): void

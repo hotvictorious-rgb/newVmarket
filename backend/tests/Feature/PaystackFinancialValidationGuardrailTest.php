@@ -186,6 +186,7 @@ class PaystackFinancialValidationGuardrailTest extends TestCase
 
     public function test_paystack_initialization_connection_failure_is_not_retried_blindly(): void
     {
+        app()->forgetInstance(PaystackService::class);
         config([
             'services.paystack.secret_key' => 'sk_test_guardrail',
             'services.paystack.simulate_in_tests' => false,
@@ -218,7 +219,8 @@ class PaystackFinancialValidationGuardrailTest extends TestCase
             throw new ConnectionException('Simulated timeout after request dispatch.');
         });
 
-        $result = app(PaystackService::class)->initializeTransaction(
+        $service = new PaystackService();
+        $result = $service->initializeTransaction(
             $order,
             'https://example.com/callback',
             $this->customerUser->email
