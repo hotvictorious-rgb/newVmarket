@@ -2084,13 +2084,20 @@ class OrderSettlementService
                     ->whereIn('status', ['reserved', 'pending_payment'])
                     ->update(['status' => 'canceled']);
 
-                foreach ($locked->items as $item) {
-                    if ($item->product_id) {
-                        $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
-                        if ($product && isset($product->inventory_quantity) && (int)$product->inventory_quantity >= 0) {
-                            $product->increment('inventory_quantity', (int)$item->quantity);
-                            $product->is_in_stock = true;
-                            $product->save();
+                // New Victorious MARKET retailer orders do not reserve/decrement
+                // canonical inventory before payment: supplier stock is an availability
+                // signal and exact quantity is confirmed only after verified payment.
+                // Restoring quantity for these orders would fabricate stock and can turn
+                // the zero-inventory sentinel into a false legacy stock counter.
+                if (!$locked->retailer_model_order) {
+                    foreach ($locked->items as $item) {
+                        if ($item->product_id) {
+                            $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
+                            if ($product && isset($product->inventory_quantity) && (int) $product->inventory_quantity >= 0) {
+                                $product->increment('inventory_quantity', (int) $item->quantity);
+                                $product->is_in_stock = true;
+                                $product->save();
+                            }
                         }
                     }
                 }
