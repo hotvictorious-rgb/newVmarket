@@ -46,9 +46,14 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('supplier_offers', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('supplier_catalog_product_id');
-        });
+        if (Schema::hasTable('supplier_offers') && Schema::hasColumn('supplier_offers', 'supplier_catalog_product_id')) {
+            Schema::table('supplier_offers', function (Blueprint $table) {
+                // Drop the unique index before SQLite attempts to rebuild the table.
+                // dropConstrainedForeignId removes the FK/column, not this unique index.
+                $table->dropUnique('supplier_offers_supplier_catalog_product_id_unique');
+                $table->dropConstrainedForeignId('supplier_catalog_product_id');
+            });
+        }
 
         Schema::dropIfExists('supplier_catalog_products');
     }
