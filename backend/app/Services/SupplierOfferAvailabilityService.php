@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AdminAuditLog;
 use App\Models\Shop;
 use App\Models\SupplierOffer;
+use App\Models\SupplierCatalogProduct;
 use App\Models\User;
 use App\Models\VendorProfile;
 use Carbon\Carbon;
@@ -47,6 +48,25 @@ class SupplierOfferAvailabilityService
                 throw ValidationException::withMessages([
                     'supplier_offer' => 'Supplier wholesale cost must be lower than Victorious MARKET retail price before availability can be confirmed.',
                 ]);
+            }
+
+            if ($offer->supplier_catalog_product_id !== null) {
+                $catalogRecord = SupplierCatalogProduct::query()
+                    ->whereKey($offer->supplier_catalog_product_id)
+                    ->lockForUpdate()
+                    ->first();
+                if (!$catalogRecord
+                    || $catalogRecord->status !== 'active'
+                    || !$catalogRecord->is_in_stock
+                    || (int) $catalogRecord->canonical_product_id !== (int) $offer->product_id
+                    || (int) $catalogRecord->supplier_vendor_id !== (int) $offer->vendor_id
+                    || (int) $catalogRecord->supplier_shop_id !== (int) $offer->shop_id
+                    || BcMathService::comp((string) $catalogRecord->source_price, (string) $offer->wholesale_cost) !== 0
+                ) {
+                    throw ValidationException::withMessages([
+                        'supplier_offer' => 'The linked private supplier record is inactive, out of stock, mismatched or out of sync. Correct the private catalog record before confirming availability.',
+                    ]);
+                }
             }
 
             $vendor = VendorProfile::query()
