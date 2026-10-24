@@ -14,7 +14,7 @@
 <li class="sidebar-nav-item">
     <a href="{{ route('admin.settlements.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.settlements.*') ? 'active' : '' }}">
         <span class="nav-link-icon">💰</span>
-        <span>90/5/5 Settlement Desk</span>
+        <span>Financial Settlement Desk</span>
         @if(isset($pendingSettlementsCount) && $pendingSettlementsCount > 0)
             <span class="nav-link-badge">{{ $pendingSettlementsCount }}</span>
         @elseif(isset($pendingSettlements) && count($pendingSettlements) > 0)
@@ -27,6 +27,18 @@
     <a href="{{ route('admin.retailer-supplier-payouts.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.retailer-supplier-payouts.*') ? 'active' : '' }}">
         <span class="nav-link-icon">🏦</span>
         <span>Retailer Supplier Payables</span>
+    </a>
+</li>
+<li class="sidebar-nav-item">
+    <a href="{{ route('admin.treasury-bank-credit-batches.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.treasury-bank-credit-batches.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">🏛️</span>
+        <span>Treasury Bank Credit Proof</span>
+    </a>
+</li>
+<li class="sidebar-nav-item">
+    <a href="{{ route('admin.payment-capture-exceptions.index') }}" class="sidebar-nav-link {{ request()->routeIs('admin.payment-capture-exceptions.*') ? 'active' : '' }}">
+        <span class="nav-link-icon">🧾</span>
+        <span>Payment Capture Exceptions</span>
     </a>
 </li>
 @endif
