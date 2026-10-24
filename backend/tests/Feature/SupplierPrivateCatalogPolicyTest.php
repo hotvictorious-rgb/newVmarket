@@ -174,7 +174,7 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
         $offer = SupplierOffer::where('supplier_catalog_product_id', $record->id)->firstOrFail();
         $this->assertSame((int) $canonical->id, (int) $record->canonical_product_id);
         $this->assertSame((int) $canonical->id, (int) $offer->product_id);
-        $this->assertSame('18000.00', (string) $offer->wholesale_cost);
+        $this->assertSame(0, \App\Services\BcMathService::comp((string) $offer->wholesale_cost, '18000.00'));
         $this->assertTrue($offer->is_available, 'The supplier binary signal can be stored on the offer.');
         $this->assertNull($offer->availability_confirmed_at, 'The stock signal must not impersonate admin confirmation.');
         $this->assertNull($offer->availability_confirmed_by);
