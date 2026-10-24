@@ -243,6 +243,39 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
         $this->assertTrue($offer->is_available);
         $this->assertNull($offer->availability_confirmed_at, 'Returning to in-stock must not revive stale admin confirmation.');
 
+        $this->actingAs($this->admin)
+            ->post("/admin/supplier-catalog/offers/{$offer->id}/disable", [
+                'reason' => 'Admin safety hold after supplier review.',
+            ])
+            ->assertRedirect();
+        $offer->refresh();
+        $this->assertTrue($offer->is_admin_disabled);
+        $this->assertFalse($offer->is_available);
+
+        Sanctum::actingAs($this->supplierUser, ['*']);
+        $this->patchJson("/api/v1/vendor/private-catalog/{$record->id}", ['is_in_stock' => false])->assertOk();
+        $this->patchJson("/api/v1/vendor/private-catalog/{$record->id}", ['is_in_stock' => true])->assertOk();
+        $offer->refresh();
+        $this->assertTrue($offer->is_admin_disabled, 'Supplier stock changes must not override an admin disable.');
+        $this->assertFalse($offer->is_available);
+
+        $this->actingAs($this->admin)
+            ->post("/admin/supplier-offers/{$offer->id}/confirm-availability", [
+                'availability_expires_at' => Carbon::now()->addHours(2)->format('Y-m-d\\TH:i'),
+                'notes' => 'Must not bypass admin disable.',
+            ])
+            ->assertSessionHasErrors('supplier_offer');
+
+        $this->actingAs($this->admin)
+            ->post("/admin/supplier-catalog/offers/{$offer->id}/enable", [
+                'reason' => 'Safety review completed; allow fresh confirmation.',
+            ])
+            ->assertRedirect();
+        $offer->refresh();
+        $this->assertFalse($offer->is_admin_disabled);
+        $this->assertTrue($offer->is_available);
+        $this->assertNull($offer->availability_confirmed_at, 'Admin re-enable must require fresh confirmation.');
+
         $otherUser = User::create([
             'name' => 'Other Supplier',
             'email' => 'other-private-catalog@example.test',
