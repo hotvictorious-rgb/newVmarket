@@ -9,6 +9,7 @@ class State extends Model
     protected $fillable = [
         'country_id',
         'name',
+        'code',
         'state_code',
         'is_active',
     ];
@@ -16,6 +17,17 @@ class State extends Model
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    public function setCodeAttribute($value): void
+    {
+        $this->attributes['code'] = $value;
+        $this->attributes['state_code'] = $value;
+    }
+
+    public function getCodeAttribute($value): ?string
+    {
+        return $value ?? ($this->attributes['state_code'] ?? null);
+    }
 
     public function country()
     {
