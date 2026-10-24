@@ -31,7 +31,7 @@ class ManualBankTransferController extends Controller
         ]);
 
         $order = Order::where('order_number', trim($orderNumber))->firstOrFail();
-        $user = Auth::user();
+        $user = $request->user();
         $providedToken = (string) ($validated['token'] ?? $request->query('token', ''));
         $sessionToken = (string) session('order_guest_token_' . $order->order_number);
 
@@ -139,6 +139,14 @@ class ManualBankTransferController extends Controller
             }
             report($e);
             return back()->withErrors(['payment_screenshot' => 'The receipt could not be recorded. No payment was approved; contact support if this continues.']);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status' => true,
+                'message' => 'Receipt submitted for admin review. The order remains unpaid until actual bank credit is verified.',
+                'payment_status' => 'pending_review',
+            ], 201);
         }
 
         return redirect()->route('order.status', ['order_number' => $order->order_number, 'token' => $providedToken ?: null])
