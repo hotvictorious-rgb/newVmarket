@@ -168,8 +168,7 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
             'canonical_product_id' => $canonical->id,
             'match_notes' => 'Exact brand, model, capacity, port and condition reviewed.',
         ]);
-        $linked->assertRedirect();
-        $this->assertSessionHas('success');
+        $linked->assertRedirect()->assertSessionHas('success');
 
         $record->refresh();
         $offer = SupplierOffer::where('supplier_catalog_product_id', $record->id)->firstOrFail();
