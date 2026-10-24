@@ -644,7 +644,7 @@ class OrderSettlementService
 
                 AdminAuditLog::create([
                     'user_id' => $lockedOrder->customer_id,
-                    'action' => 'paystack_settlement_refund_pending_recorded',
+                    'action' => $provider === 'manual_bank_transfer' ? 'manual_bank_transfer_settlement_refund_pending_recorded' : 'paystack_settlement_refund_pending_recorded',
                     'target_type' => Order::class,
                     'target_id' => $lockedOrder->id,
                     'old_values' => ['order_status' => 'cancelled', 'payment_status' => $oldPaymentStatus],
@@ -1162,7 +1162,7 @@ class OrderSettlementService
                 // 11. Register 5% Customer Cashback Reward in Ledger
                 // Invariant: Cashback is strictly NOT redeemable at payment!
                 // Maturation countdown commences ONLY upon physical delivery / counter handover inspection.
-                if ($lockedOrder->customer_id && bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
+                if ($provider !== 'manual_bank_transfer' && $lockedOrder->customer_id && bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
                     CustomerCashbackLedger::updateOrCreate([
                         'order_id' => $lockedOrder->id,
                     ], [
@@ -1179,7 +1179,7 @@ class OrderSettlementService
             // 10. Immutable Audit Trail
             AdminAuditLog::create([
                 'user_id' => $actorUser ? $actorUser->id : null,
-                'action' => 'paystack_payment_verified',
+                'action' => $provider === 'manual_bank_transfer' ? 'manual_bank_transfer_payment_verified' : 'paystack_payment_verified',
                 'target_type' => Order::class,
                 'target_id' => $lockedOrder->id,
                 'old_values' => [
@@ -1188,8 +1188,10 @@ class OrderSettlementService
                 'new_values' => [
                     'payment_status' => 'paid',
                     'payment_channel' => $lockedOrder->payment_channel,
-                    'paystack_reference' => $reference,
-                    'paystack_transaction_id' => $lockedOrder->paystack_transaction_id,
+                    'payment_reference' => $reference,
+                    'bank_transaction_reference' => $provider === 'manual_bank_transfer' ? (string) ($paystackData['id'] ?? '') : null,
+                    'paystack_reference' => $provider === 'paystack' ? $reference : null,
+                    'paystack_transaction_id' => $provider === 'paystack' ? $lockedOrder->paystack_transaction_id : null,
                     'paid_at' => $lockedOrder->paid_at->toIso8601String(),
                     'grand_total' => $lockedOrder->grand_total,
                     'amount_kobo' => $actualKobo,
