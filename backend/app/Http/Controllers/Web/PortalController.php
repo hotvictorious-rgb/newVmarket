@@ -495,6 +495,11 @@ class PortalController extends Controller
         $pendingVendorPayouts = VendorPayoutRequest::with('vendor')->latest()->get();
         $totalLogisticsEscrowBalance = LogisticsCompanyProfile::sum('wallet_balance');
         $refundWindowHours = (int) \App\Models\SystemSetting::get('refund_window_hours', 24);
+        $pendingPaymentCaptureExceptions = \App\Models\PaymentCaptureException::with('order:id,order_number,grand_total,payment_status')
+            ->where('status', 'pending_admin_review')
+            ->latest('detected_at')
+            ->limit(100)
+            ->get();
 
         return view('admin.settlements', compact(
             'pendingSettlements',
@@ -507,7 +512,8 @@ class PortalController extends Controller
             'pendingLogisticsPayouts',
             'pendingVendorPayouts',
             'totalLogisticsEscrowBalance',
-            'refundWindowHours'
+            'refundWindowHours',
+            'pendingPaymentCaptureExceptions'
         ));
     }
 
