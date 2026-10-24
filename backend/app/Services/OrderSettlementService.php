@@ -1161,7 +1161,941 @@ class OrderSettlementService
             ];
         }, 5);
 
-        // Late-payment refund obligations are created inside the settlement transaction
-        // above. There is deliberately no post-commit best-effort creation step here:
-        // a committed refund liability must never be missing its admin-review operation.
+        // Late-payment refund obligations are created inside the settlement transaction.
+        // A committed customer refund liability must never lack its admin-review operation.
         return $result;
+    }
+    /**
+     * Handshake 1A: Vendor signals courier arrival / handover readiness at branch counter.
+     * Sets vendor_handover_ready_at, updates order status to ready_for_pickup,
+     * and reveals the secret 6-digit pickup_verification_code to the vendor.
+     */
+    public function markVendorHandoverReady(Order $order, $merchantUser = null): array
+    {
+        return DB::transaction(function () use ($order, $merchantUser) {
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+
+            // New retailer orders require each supplier assignment to be prepared
+            // independently. The legacy order-level shortcut must never bypass this.
+            if ($lockedOrder->retailer_model_order
+                && \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)->exists()) {
+                return [
+                    'success' => false,
+                    'message' => 'Retailer orders require supplier-specific collection readiness. Use the assigned supplier order workflow.',
+                ];
+            }
+
+            // Authorization & Branch Isolation Guard for Merchant Owner / Counter Staff
+            if ($merchantUser) {
+                if ($merchantUser->status !== 'active') {
+                    return ['success' => false, 'message' => 'Unauthorized: User account is inactive.'];
+                }
+
+                if ($merchantUser->isVendorEmployee()) {
+                    $employee = $merchantUser->vendorEmployeeProfile;
+                    if (!$employee || !$employee->is_active || !$employee->canAccessBranch($lockedOrder->shop_id)) {
+                        return ['success' => false, 'message' => 'Unauthorized: Branch isolation prevents access to this order.'];
+                    }
+                } elseif ($merchantUser->isVendor()) {
+                    $vendor = $merchantUser->vendorProfile;
+                    if (!$vendor || (int)$vendor->id !== (int)$lockedOrder->vendor_id) {
+                        return ['success' => false, 'message' => 'Unauthorized: Merchant ownership barrier prevents access to this order.'];
+                    }
+                    if ($vendor->marketplace_status !== 'active') {
+                        return ['success' => false, 'message' => 'Unauthorized: Merchant marketplace account is suspended.'];
+                    }
+                }
+            }
+
+            if ($lockedOrder->fulfillment_type !== 'doorstep_delivery') {
+                return [
+                    'success' => false,
+                    'message' => 'Courier handover staging is only for doorstep delivery orders. In-shop pickup orders are staged for customer counter collection.',
+                ];
+            }
+
+            if ($lockedOrder->payment_status !== 'paid') {
+                return [
+                    'success' => false,
+                    'message' => 'Only paid orders can be staged for courier handover.',
+                ];
+            }
+
+            if ($lockedOrder->retailer_model_order && $lockedOrder->sourcing_status !== 'supplier_confirmed') {
+                return [
+                    'success' => false,
+                    'message' => 'Courier handover is blocked until every assigned supplier has confirmed availability.',
+                ];
+            }
+
+            if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'])) {
+                return [
+                    'success' => false,
+                    'message' => "Order cannot be staged for handover in status {$lockedOrder->order_status}.",
+                ];
+            }
+
+            $lockedOrder->vendor_handover_ready_at = Carbon::now();
+            $lockedOrder->order_status = 'ready_for_pickup';
+            $lockedOrder->pickup_failed_attempts = 0;
+            $lockedOrder->pickup_locked_until = null;
+            $lockedOrder->save();
+
+            // Dispatch handover authorized alert with OTP to merchant counter & alert assigned courier
+            NotificationDispatchService::dispatchVendorHandoverReady($lockedOrder);
+
+            return [
+                'success' => true,
+                'message' => 'Handover authorized! Show the 6-digit pickup code to the courier at the counter.',
+                'pickup_otp' => $lockedOrder->pickup_verification_code,
+                'order' => $lockedOrder,
+            ];
+        });
+    }
+
+    /**
+     * Handshake 1B: Rider collects package from Vendor.
+     * Courier inputs the secret 6-digit pickup_verification_code on their own phone,
+     * with optional package condition photo proof.
+     * Enforces strict authorization, vendor readiness, non-collision, and timed lockout protection.
+     */
+    public function verifyRiderPickupOtp(
+        Order $order,
+        string $otp,
+        RiderProfile $rider,
+        ?string $proofImagePath = null,
+        ?string $pickupNotes = null
+    ): array {
+        return DB::transaction(function () use ($order, $otp, $rider, $proofImagePath, $pickupNotes) {
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+
+            if (!$lockedOrder) {
+                return ['success' => false, 'message' => 'Order record not found under lock.'];
+            }
+
+            if ($lockedOrder->fulfillment_type !== 'doorstep_delivery') {
+                return ['success' => false, 'message' => 'Rider courier pickup is only applicable to doorstep delivery orders. In-shop pickup orders are collected directly at the shop counter.'];
+            }
+
+            // Payment is a prerequisite for physical custody. Never let legacy status
+            // aliases or stale handover fields authorize dispatch of an unpaid order.
+            if ($lockedOrder->payment_status !== 'paid') {
+                return ['success' => false, 'message' => 'Unpaid orders cannot be handed to a rider.'];
+            }
+
+            // Enforce the supplier-rejection hold at the custody boundary too.
+            // Controller checks are not enough: this service can be called by other
+            // API/web flows and a valid-looking stale pickup OTP must not dispatch
+            // a paid order whose sourcing has been administratively frozen.
+            if ($lockedOrder->retailer_model_order && $lockedOrder->sourcing_status === 'supplier_rejected') {
+                return ['success' => false, 'message' => 'Rider collection is blocked while this retailer order is on supplier-rejection hold. An administrator must resolve sourcing first.'];
+            }
+
+            if (!in_array($lockedOrder->order_status, ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'])) {
+                return ['success' => false, 'message' => "Order cannot be picked up in status {$lockedOrder->order_status}."];
+            }
+
+            // Strict 6-Digit Format Validation
+            if (!preg_match('/^[0-9]{6}$/', trim($otp))) {
+                return ['success' => false, 'message' => 'Pickup verification code must be exactly 6 digits.'];
+            }
+
+            // New retailer deliveries use central logistics. Supplier/vendor association
+            // is private sourcing metadata and never authorizes physical custody.
+            if (!$rider->isEligibleForCentralOrder($lockedOrder)) {
+                return ['success' => false, 'message' => 'Unauthorized: Rider must be active and linked exclusively to the active logistics company assigned to this order.'];
+            }
+
+            // New retailer orders may contain packages from several private suppliers.
+            // Each supplier has its own one-time collection OTP and mandatory proof photo.
+            if ($lockedOrder->retailer_model_order
+                && \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)->exists()) {
+                if (empty($proofImagePath) || trim($proofImagePath) === '') {
+                    return ['success' => false, 'message' => 'Mandatory courier pickup photo proof is required to verify handover collection.'];
+                }
+                if ($lockedOrder->order_status !== 'ready_for_pickup') {
+                    return ['success' => false, 'message' => 'All supplier packages must be marked ready before the rider starts the complete-order collection.'];
+                }
+                if ($lockedOrder->isPickupLocked()) {
+                    $minutesRemaining = max(1, Carbon::now()->diffInMinutes($lockedOrder->pickup_locked_until));
+                    return ['success' => false, 'message' => "Pickup verification is locked. Try again in {$minutesRemaining} minute(s)."];
+                }
+
+                $assignment = \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                    ->where('supplier_pickup_code', trim($otp))
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($assignment && $assignment->status === 'collected') {
+                    return [
+                        'success' => true,
+                        'message' => 'This supplier package was already collected and sealed.',
+                        'remaining_supplier_packages' => \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                            ->whereNotIn('status', ['collected', 'admin_reassigned'])
+                            ->count(),
+                    ];
+                }
+
+                if (!$assignment || $assignment->status !== 'ready_for_collection') {
+                    $lockedOrder->pickup_failed_attempts = (int) $lockedOrder->pickup_failed_attempts + 1;
+                    if ($lockedOrder->pickup_failed_attempts >= 5) {
+                        $lockedOrder->pickup_locked_until = Carbon::now()->addMinutes(15);
+                        $lockedOrder->save();
+                        return ['success' => false, 'message' => 'Pickup verification locked for 15 minutes after 5 incorrect attempts.'];
+                    }
+                    $lockedOrder->save();
+                    return ['success' => false, 'message' => 'Invalid supplier collection OTP. Verify the code for this supplier package.'];
+                }
+
+                $assignment->status = 'collected';
+                $assignment->collected_at = Carbon::now();
+                $assignment->collection_proof_image_path = $proofImagePath;
+                $assignment->collection_notes = $pickupNotes;
+                $assignment->save();
+
+                $lockedOrder->pickup_failed_attempts = 0;
+                $lockedOrder->pickup_locked_until = null;
+                $allCollected = !\App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                    ->whereNotIn('status', ['collected', 'admin_reassigned'])
+                    ->exists();
+
+                if ($allCollected) {
+                    $lockedOrder->order_status = 'out_for_delivery';
+                    $lockedOrder->pickup_confirmed_by_rider = true;
+                    $lockedOrder->picked_up_at = Carbon::now();
+                    $lockedOrder->pickup_proof_image = $proofImagePath;
+                    if ($pickupNotes) {
+                        $lockedOrder->pickup_notes = $pickupNotes;
+                    }
+                    $lockedOrder->save();
+                    NotificationDispatchService::dispatchRiderPickedUp($lockedOrder);
+
+                    return [
+                        'success' => true,
+                        'message' => 'All supplier packages have been collected with separate OTP and photo proof. Order is out for delivery.',
+                        'order' => $lockedOrder,
+                    ];
+                }
+
+                $lockedOrder->save();
+
+                return [
+                    'success' => true,
+                    'message' => 'Supplier package collection verified. Continue to the remaining supplier collection point(s).',
+                    'order' => $lockedOrder,
+                    'remaining_supplier_packages' => \App\Models\OrderSupplierAssignment::where('order_id', $lockedOrder->id)
+                        ->whereNotIn('status', ['collected', 'admin_reassigned'])
+                        ->count(),
+                ];
+            }
+
+            // Enforce Vendor Handover Readiness
+            if (!$lockedOrder->isVendorHandoverReady() && $lockedOrder->order_status !== 'ready_for_pickup') {
+                return [
+                    'success' => false,
+                    'message' => 'Merchant handover has not been authorized yet. Please ask merchant counter staff to click "Handover Ready" on their screen.',
+                ];
+            }
+
+            // Timed Lockout Protection: Check if pickup is currently locked
+            if ($lockedOrder->isPickupLocked()) {
+                $minutesRemaining = max(1, Carbon::now()->diffInMinutes($lockedOrder->pickup_locked_until));
+                return [
+                    'success' => false,
+                    'message' => "Pickup verification locked due to excessive failed attempts. Try again in {$minutesRemaining} minute(s) or request merchant re-authorization at counter.",
+                ];
+            }
+
+            // Mathematical Equality Check (Constant-time hash comparison prevents side-channel leaks)
+            if (!hash_equals((string)$lockedOrder->pickup_verification_code, trim($otp))) {
+                $lockedOrder->increment('pickup_failed_attempts');
+                if ($lockedOrder->pickup_failed_attempts >= 5) {
+                    $lockedOrder->pickup_locked_until = Carbon::now()->addMinutes(15);
+                    $lockedOrder->save();
+                    return [
+                        'success' => false,
+                        'message' => 'Pickup verification temporarily locked for 15 minutes due to 5 consecutive incorrect attempts. Merchant can re-authorize at counter.',
+                    ];
+                }
+                return [
+                    'success' => false,
+                    'message' => 'Invalid merchant pickup verification OTP. Please verify with counter staff.',
+                ];
+            }
+
+            // Reset failed attempts & lockout upon successful authentication
+            $lockedOrder->pickup_failed_attempts = 0;
+            $lockedOrder->pickup_locked_until = null;
+            $lockedOrder->order_status = 'out_for_delivery';
+            $lockedOrder->pickup_confirmed_by_rider = true;
+            $lockedOrder->picked_up_at = Carbon::now();
+
+            if ($proofImagePath) {
+                $lockedOrder->pickup_proof_image = $proofImagePath;
+            }
+
+            if ($pickupNotes) {
+                $lockedOrder->pickup_notes = $pickupNotes;
+            }
+
+            $lockedOrder->save();
+
+            // Multi-channel alert to customer and vendor
+            NotificationDispatchService::dispatchRiderPickedUp($lockedOrder);
+
+            return [
+                'success' => true,
+                'message' => 'Pickup verified successfully. Order is out for delivery.',
+                'order' => $lockedOrder,
+            ];
+        });
+    }
+
+    /**
+     * Handshake 2A: Rider arrives at Customer Doorstep.
+     * Records arrival time and signals customer phone to open verification prompt.
+     */
+    public function markRiderArrived(Order $order, RiderProfile $rider): array
+    {
+        return DB::transaction(function () use ($order, $rider) {
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+
+            if ($lockedOrder->fulfillment_type !== 'doorstep_delivery') {
+                return ['success' => false, 'message' => 'Rider doorstep arrival is only applicable to doorstep delivery orders.'];
+            }
+
+            if ($lockedOrder->order_status !== 'out_for_delivery') {
+                return [
+                    'success' => false,
+                    'message' => "Order cannot be marked arrived in status {$lockedOrder->order_status}.",
+                ];
+            }
+
+            // Arrival requires the exact centrally assigned active logistics rider.
+            if (!$rider->isEligibleForCentralOrder($lockedOrder)) {
+                return [
+                    'success' => false,
+                    'message' => 'Unauthorized: Only the active rider assigned through this order active logistics company may mark arrival.',
+                ];
+            }
+
+            $lockedOrder->rider_arrived_at = Carbon::now();
+            $lockedOrder->save();
+
+            // Multi-channel SMS & WhatsApp alert to customer with secret OTP
+            NotificationDispatchService::dispatchRiderArrived($lockedOrder);
+
+            return [
+                'success' => true,
+                'message' => 'Arrival signaled! Handshake prompt is now active on the customer\'s phone.',
+                'order' => $lockedOrder,
+            ];
+        });
+    }
+
+    /**
+     * Handshake 2B: Customer enters 6-digit PIN on their own device with optional photo snap.
+     * Verifies verification_code, sets delivered, enqueues cashback, and credits rider wallet.
+     */
+    public function verifyCustomerDeliveryOtp(
+        Order $order,
+        string $otp,
+        ?RiderProfile $rider = null,
+        ?string $proofImagePath = null,
+        ?string $customerNotes = null
+    ): array {
+        return DB::transaction(function () use ($order, $otp, $rider, $proofImagePath, $customerNotes) {
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+
+            if (!$lockedOrder) {
+                return ['success' => false, 'message' => 'Order record not found under lock.'];
+            }
+
+            if ($lockedOrder->fulfillment_type !== 'doorstep_delivery') {
+                return ['success' => false, 'message' => 'Customer doorstep verification is only for doorstep delivery orders.'];
+            }
+
+            // A valid customer OTP proves receipt, not payment. Payment must be verified
+            // independently before the terminal fulfilment transition or cashback enqueue.
+            if ($lockedOrder->payment_status !== 'paid') {
+                return ['success' => false, 'message' => 'Unpaid orders cannot be confirmed as delivered.'];
+            }
+
+            if ($lockedOrder->order_status !== 'out_for_delivery') {
+                return ['success' => false, 'message' => 'Order is not currently out for delivery.'];
+            }
+
+            // Strict 6-Digit Format Validation
+            if (!preg_match('/^[0-9]{6}$/', trim($otp))) {
+                return ['success' => false, 'message' => 'Delivery verification code must be exactly 6 digits.'];
+            }
+
+            // Lockout Protection: Check if delivery verification is currently locked
+            if ($lockedOrder->isDeliveryLocked()) {
+                $minutesRemaining = max(1, Carbon::now()->diffInMinutes($lockedOrder->delivery_locked_until));
+                return [
+                    'success' => false,
+                    'message' => "Delivery verification locked due to excessive failed attempts. Try again in {$minutesRemaining} minute(s).",
+                ];
+            }
+
+            // 1. Central logistics rider hardening. Direct service calls must enforce
+            // the same exact assignment as the controller; no vendor fallback is allowed.
+            $activeRider = $rider ?? ($lockedOrder->rider_id
+                ? RiderProfile::with(['user', 'logisticsCompany.user'])->find($lockedOrder->rider_id)
+                : null);
+            $haltReason = null;
+            if (!$activeRider) {
+                $haltReason = 'Unauthorized: No assigned central logistics rider is available for delivery confirmation.';
+            } elseif (!$activeRider->isEligibleForCentralOrder($lockedOrder)) {
+                $haltReason = 'Unauthorized: Delivery confirmation requires the assigned active rider linked exclusively to the order active logistics company.';
+            }
+
+            if ($haltReason) {
+                $lockedOrder->delivery_halted_reason = $haltReason;
+                $lockedOrder->delivery_halted_at = Carbon::now();
+                $lockedOrder->save();
+
+                AdminAuditLog::create([
+                    'user_id' => $activeRider ? $activeRider->user_id : ($lockedOrder->customer_id ?? null),
+                    'action' => 'delivery_handshake_halted_entity_inactive',
+                    'target_type' => Order::class,
+                    'target_id' => $lockedOrder->id,
+                    'old_values' => ['order_status' => $lockedOrder->order_status],
+                    'new_values' => [
+                        'order_number' => $lockedOrder->order_number,
+                        'delivery_halted_reason' => $haltReason,
+                    ],
+                    'ip_address' => request()->ip() ?? '127.0.0.1',
+                    'user_agent' => request()->userAgent() ?? 'System Settlement Worker',
+                ]);
+
+                return ['success' => false, 'message' => $haltReason];
+            }
+
+            if (!hash_equals((string)$lockedOrder->verification_code, trim($otp))) {
+                $lockedOrder->increment('delivery_failed_attempts');
+                if ($lockedOrder->delivery_failed_attempts >= 5) {
+                    $lockedOrder->delivery_locked_until = Carbon::now()->addMinutes(15);
+                    $lockedOrder->save();
+                    return [
+                        'success' => false,
+                        'message' => 'Delivery verification temporarily locked for 15 minutes due to 5 consecutive incorrect attempts.',
+                    ];
+                }
+                return ['success' => false, 'message' => 'Invalid customer delivery verification OTP. Please check your phone SMS or screen.'];
+            }
+
+            // The customer OTP alone is not sufficient evidence of doorstep handover.
+            // Every route into this service must supply server-stored photo proof before
+            // changing order state, releasing any fulfilment transition, or enqueueing cashback.
+            if (!is_string($proofImagePath) || trim($proofImagePath) === '') {
+                return ['success' => false, 'message' => 'Doorstep photo proof is required before delivery can be confirmed.'];
+            }
+
+            $lockedOrder->delivery_failed_attempts = 0;
+            $lockedOrder->delivery_locked_until = null;
+
+            $now = Carbon::now();
+            $refundHours = max(1, (int) SystemSetting::get('refund_window_hours', 24));
+            $lockedOrder->order_status = 'delivered';
+            $lockedOrder->delivery_confirmed_by_customer = true;
+            $lockedOrder->received_at = $now;
+            $lockedOrder->refund_window_expires_at = $now->copy()->addHours($refundHours);
+            $lockedOrder->vendor_settlement_status = 'held';
+
+            if ($proofImagePath) {
+                $lockedOrder->proof_of_delivery_image = $proofImagePath;
+            }
+
+            if ($customerNotes) {
+                $lockedOrder->customer_delivery_notes = $customerNotes;
+            }
+
+            if (!$lockedOrder->rider_id && $rider) {
+                $lockedOrder->rider_id = $rider->id;
+            }
+
+            $lockedOrder->save();
+
+            if ($lockedOrder->retailer_model_order) {
+                app(\App\Services\LogisticsCompanyPayableService::class)->releaseAfterVerifiedDelivery($lockedOrder);
+            }
+
+            // Do not credit a logistics-company or rider wallet from a delivery event.
+            // Vendor delivery earnings and the 90/10 fee split must be sourced from the
+            // immutable parent/child allocation ledger and released only by vendor settlement
+            // after the protection window, dispute/return checks, and payout-security gates.
+
+            // Update/Enqueue 5% Customer Cashback reward with exact refund window maturation lock
+            CustomerCashbackLedger::updateOrCreate([
+                'order_id' => $lockedOrder->id,
+            ], [
+                'customer_id' => $lockedOrder->customer_id,
+                'amount' => $lockedOrder->customer_cashback_5,
+                'status' => 'pending_maturation',
+                'matures_at' => $lockedOrder->refund_window_expires_at->copy()->addHours(24),
+                'expires_at' => $lockedOrder->refund_window_expires_at->copy()->addHours(24)->addDays(365),
+            ]);
+
+            // Multi-channel notifications to Logistics Fleet, Customer, and Vendor
+            NotificationDispatchService::dispatchOrderDelivered($lockedOrder);
+
+            return [
+                'success' => true,
+                'message' => "Package delivery confirmed successfully! {$refundHours}-hour return window is now active.",
+                'order' => $lockedOrder,
+            ];
+        });
+    }
+
+    /**
+     * Handshake 3: In-Shop Physical Inspection Sign-Off.
+     * Store employee marks reservation inspected and accepted by customer.
+     */
+    public function approvePickupInspection(PickupReservation $reservation, User $staffUser): array
+    {
+        if ($staffUser->status !== 'active') {
+            return ['success' => false, 'message' => 'Unauthorized: User account is inactive.'];
+        }
+
+        return DB::transaction(function () use ($reservation, $staffUser): array {
+            // Serialize inspection against customer cancellation, expiry, and order creation.
+            $lockedReservation = PickupReservation::whereKey($reservation->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$lockedReservation) {
+                return ['success' => false, 'message' => 'Reservation no longer exists.'];
+            }
+
+            if ($staffUser->isVendorEmployee()) {
+                $employee = $staffUser->vendorEmployeeProfile;
+                if (!$employee || !$employee->is_active || !$employee->canAccessBranch($lockedReservation->shop_id)) {
+                    return ['success' => false, 'message' => 'Unauthorized: Branch isolation prevents access to this shop.'];
+                }
+            } elseif ($staffUser->isVendor()) {
+                $vendor = $staffUser->vendorProfile;
+                if (!$vendor || (int) $vendor->id !== (int) $lockedReservation->vendor_id) {
+                    return ['success' => false, 'message' => 'Unauthorized: Merchant ownership mismatch.'];
+                }
+                if ($vendor->marketplace_status !== 'active') {
+                    return ['success' => false, 'message' => 'Merchant marketplace account is suspended.'];
+                }
+            } elseif (!$staffUser->isSuperAdmin() && $staffUser->user_type !== 'admin_employee') {
+                return ['success' => false, 'message' => 'Unauthorized: Only authorized shop staff can inspect reservations.'];
+            }
+
+            if ($lockedReservation->status !== 'reserved') {
+                return ['success' => false, 'message' => "Reservation cannot be inspected in status {$lockedReservation->status}."];
+            }
+
+            if (!$lockedReservation->expires_at || $lockedReservation->isExpired()) {
+                $lockedReservation->status = 'expired';
+                $lockedReservation->save();
+                return ['success' => false, 'message' => 'This reservation has expired.'];
+            }
+
+            $lockedReservation->status = 'inspected_accepted';
+            $lockedReservation->inspected_at = Carbon::now();
+            $lockedReservation->inspected_by_staff_id = $staffUser->id;
+            $lockedReservation->save();
+
+            return [
+                'success' => true,
+                'message' => 'Inspection approved. Customer digital payment is now unlocked.',
+                'reservation' => $lockedReservation,
+            ];
+        });
+    }
+
+    /**
+     * Handshake 4: In-Shop Counter Handover OTP Verification.
+     * Goods released to customer after verified digital payment.
+     */
+    public function verifyPickupHandoverOtp(
+        Order $order,
+        string $otp,
+        User $staffUser,
+        string $reservationCode,
+        string $proofImagePath
+    ): array {
+        if ($staffUser->status !== 'active') {
+            return ['success' => false, 'message' => 'Unauthorized: User account is inactive.'];
+        }
+        if ($staffUser->isVendorEmployee()) {
+            $employee = $staffUser->vendorEmployeeProfile;
+            if (!$employee || !$employee->canAccessBranch($order->shop_id)) {
+                return ['success' => false, 'message' => 'Unauthorized: Branch isolation prevents access to this shop.'];
+            }
+        } elseif ($staffUser->isVendor()) {
+            $vendor = $staffUser->vendorProfile;
+            if (!$vendor || (int)$vendor->id !== (int)$order->vendor_id) {
+                return ['success' => false, 'message' => 'Unauthorized: Merchant ownership barrier prevents access to this order.'];
+            }
+        } else {
+            return ['success' => false, 'message' => 'Unauthorized: Only this shop’s active merchant or branch staff can release in-shop pickup orders.'];
+        }
+
+        if (!preg_match('/^[0-9]{6}$/', trim($otp))) {
+            return ['success' => false, 'message' => 'Handover verification code must be exactly 6 digits.'];
+        }
+        if (trim($reservationCode) === '' || trim($proofImagePath) === '') {
+            return ['success' => false, 'message' => 'The customer reservation pass and pickup photo evidence are required.'];
+        }
+
+        return DB::transaction(function () use ($order, $otp, $staffUser, $reservationCode, $proofImagePath) {
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedOrder->fulfillment_type !== 'in_shop_pickup') {
+                return ['success' => false, 'message' => 'This is not an in-shop pickup order.'];
+            }
+            if ($lockedOrder->payment_status !== 'paid') {
+                return ['success' => false, 'message' => 'Goods cannot be handed over before verified payment.'];
+            }
+            if (in_array($lockedOrder->order_status, ['picked_up', 'delivered', 'cancelled'], true)
+                || !empty($lockedOrder->picked_up_at)) {
+                return ['success' => false, 'message' => 'This pickup has already been completed or cancelled; the customer OTP cannot be reused.'];
+            }
+
+            $reservation = PickupReservation::where('order_id', $lockedOrder->id)
+                ->where('customer_id', $lockedOrder->customer_id)
+                ->where('vendor_id', $lockedOrder->vendor_id)
+                ->where('shop_id', $lockedOrder->shop_id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$reservation || !hash_equals((string) $reservation->reservation_code, strtoupper(trim($reservationCode)))) {
+                return ['success' => false, 'message' => 'Reservation pass does not match this order and branch.'];
+            }
+            if ($reservation->status !== 'payment_completed') {
+                return ['success' => false, 'message' => 'Reservation is not in a paid, eligible handover state.'];
+            }
+
+            if ($lockedOrder->isPickupLocked()) {
+                $minutesRemaining = max(1, Carbon::now()->diffInMinutes($lockedOrder->pickup_locked_until));
+                return [
+                    'success' => false,
+                    'message' => "Handover verification locked due to excessive failed attempts. Try again in {$minutesRemaining} minute(s).",
+                ];
+            }
+
+            // verification_code is the customer-facing pickup OTP; pickup_verification_code is
+            // the separate vendor-to-rider custody OTP and is never accepted for customer pickup.
+            if (empty($lockedOrder->verification_code)
+                || !hash_equals((string) $lockedOrder->verification_code, trim($otp))) {
+                $lockedOrder->increment('pickup_failed_attempts');
+                if ($lockedOrder->pickup_failed_attempts >= 5) {
+                    $lockedOrder->pickup_locked_until = Carbon::now()->addMinutes(15);
+                    $lockedOrder->save();
+                    return [
+                        'success' => false,
+                        'message' => 'Handover verification temporarily locked for 15 minutes due to 5 consecutive incorrect attempts.',
+                    ];
+                }
+                return ['success' => false, 'message' => 'Invalid customer pickup OTP.'];
+            }
+
+            $lockedOrder->pickup_failed_attempts = 0;
+            $lockedOrder->pickup_locked_until = null;
+            $previousOrderStatus = $lockedOrder->order_status;
+            $now = Carbon::now();
+            $refundHours = max(1, (int) SystemSetting::get('refund_window_hours', 24));
+            $lockedOrder->order_status = 'picked_up';
+            $lockedOrder->received_at = $now;
+            $lockedOrder->picked_up_at = $now;
+            $lockedOrder->customer_pickup_photo_path = $proofImagePath;
+            $lockedOrder->verification_code = null; // one-time customer pickup OTP
+            $lockedOrder->refund_window_expires_at = $now->copy()->addHours($refundHours);
+            $lockedOrder->vendor_settlement_status = 'held';
+            $lockedOrder->save();
+
+            $reservation->status = 'handed_over';
+            $reservation->save();
+
+            AdminAuditLog::create([
+                'user_id' => $staffUser->id,
+                'action' => 'in_shop_customer_pickup_verified',
+                'target_type' => Order::class,
+                'target_id' => $lockedOrder->id,
+                'old_values' => [
+                    'order_status' => $previousOrderStatus,
+                    'reservation_status' => 'payment_completed',
+                ],
+                'new_values' => [
+                    'order_status' => 'picked_up',
+                    'reservation_status' => 'handed_over',
+                    'reservation_id' => $reservation->id,
+                    'reservation_code_suffix' => substr((string) $reservation->reservation_code, -4),
+                    'customer_pickup_photo_path' => $proofImagePath,
+                    'customer_otp_consumed' => true,
+                ],
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent(),
+            ]);
+
+            CustomerCashbackLedger::updateOrCreate([
+                'order_id' => $lockedOrder->id,
+            ], [
+                'customer_id' => $lockedOrder->customer_id,
+                'amount' => $lockedOrder->customer_cashback_5,
+                'status' => 'pending_maturation',
+                'matures_at' => $lockedOrder->refund_window_expires_at->copy()->addHours(24),
+                'expires_at' => $lockedOrder->refund_window_expires_at->copy()->addHours(24)->addDays(365),
+            ]);
+
+            return [
+                'success' => true,
+                'message' => "Goods handed over successfully. {$refundHours}-hour return window has commenced.",
+                'order' => $lockedOrder,
+            ];
+        });
+    }
+
+    /**
+     * Evaluates order post-receipt maturation (called via scheduler/cron).
+     * Transitions vendor settlement to 'eligible' and cashback to 'available' if configured refund window expired with zero disputes.
+     */
+    public function evaluateMaturation(Order $order): void
+    {
+        if (!$order->isFulfilled() || !$order->isReturnWindowExpired()) {
+            return;
+        }
+
+        $shouldMatureCashback = false;
+        DB::transaction(function () use ($order, &$shouldMatureCashback) {
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+            if (!$lockedOrder) {
+                return;
+            }
+
+            $hasDispute = $lockedOrder->dispute()->whereIn('status', ['filed', 'under_review'])->exists();
+            $hasReturnCase = $lockedOrder->returnCases()->whereNotIn('status', ['resolved', 'refunded', 'replacement_completed', 'rejected', 'closed'])->exists();
+
+            if ($hasDispute || $hasReturnCase) {
+                // Preserve legacy quarantine semantics for historical vendor settlement.
+                // Retailer cashback remains pending so it can mature after the case is resolved.
+                if (!$lockedOrder->retailer_model_order) {
+                    $lockedOrder->vendor_settlement_status = 'disputed';
+                    $lockedOrder->save();
+                    CustomerCashbackLedger::where('order_id', $lockedOrder->id)->update([
+                        'status' => 'quarantined_dispute',
+                    ]);
+                }
+                return;
+            }
+
+            if (!$lockedOrder->retailer_model_order && $lockedOrder->vendor_settlement_status === 'held') {
+                $lockedOrder->vendor_settlement_status = 'eligible';
+                $lockedOrder->save();
+            }
+            $shouldMatureCashback = true;
+        });
+
+        if ($shouldMatureCashback) {
+            app(CashbackMaturityService::class)->matureOrder($order);
+        }
+    }
+
+    /**
+     * Super Admin Manual Settlement Disbursement with Mandatory Bank Transfer Proof.
+     */
+    public function disburseVendorSettlement(Order $order, User $adminUser, string $proofPath): array
+    {
+        return DB::transaction(function () use ($order, $adminUser, $proofPath) {
+            $lockedOrder = Order::where('id', $order->id)->lockForUpdate()->first();
+
+            // Administrator Authorization & Status Check
+            if ($adminUser->status !== 'active') {
+                return ['success' => false, 'message' => 'Unauthorized: Administrator account is inactive.'];
+            }
+
+            if (!$adminUser->isSuperAdmin() && !$adminUser->isAdminEmployee()) {
+                return ['success' => false, 'message' => 'Unauthorized: User lacks administrative financial disbursement privileges.'];
+            }
+
+            // Documented Bank Transfer Proof Validation
+            if (empty(trim($proofPath))) {
+                return ['success' => false, 'message' => 'Settlement disbursement requires documented bank transfer proof.'];
+            }
+
+            // Retailer-model supplier payables are item-level liabilities and must
+            // never flow through the legacy order-level vendor payout (vendor_net_90).
+            // A journal credit alone is not payout authorization: the retailer workflow
+            // must reconcile sourcing, collection, customer receipt, disputes/returns,
+            // and supplier-specific payable before a dedicated payout path is permitted.
+            if ($lockedOrder->retailer_model_order) {
+                return [
+                    'success' => false,
+                    'message' => 'Retailer-model orders cannot use the legacy order-level vendor payout workflow.',
+                ];
+            }
+
+            if ($lockedOrder->vendor_settlement_status !== 'eligible') {
+                return [
+                    'success' => false,
+                    'message' => "Order is not eligible for disbursement (current state: {$lockedOrder->vendor_settlement_status}).",
+                ];
+            }
+
+            // Merchant Integrity & 48-Hour Bank Cooldown Defense
+            $vendor = $lockedOrder->vendor;
+            if (!$vendor) {
+                return ['success' => false, 'message' => 'Merchant profile not found for this order.'];
+            }
+
+            if ($vendor->marketplace_status !== 'active') {
+                return [
+                    'success' => false,
+                    'message' => "Disbursement blocked: Merchant marketplace account is {$vendor->marketplace_status}.",
+                ];
+            }
+
+            if ($vendor->isWithinBankCooldown()) {
+                return [
+                    'success' => false,
+                    'message' => 'Disbursement blocked: Merchant bank account was recently updated and is under a 48-hour security cooldown.',
+                ];
+            }
+
+            $lockedOrder->vendor_settlement_status = 'settled';
+            $lockedOrder->settled_at = Carbon::now();
+            $lockedOrder->settled_by_admin_id = $adminUser->id;
+            $lockedOrder->settlement_proof_path = $proofPath;
+            $lockedOrder->save();
+
+            // Authoritative Double-Entry Financial Journal: Debit vendor_payable, Credit cash_in_escrow
+            $payoutRef = 'VND-PAY-' . $lockedOrder->order_number . '-' . date('YmdHis');
+            FinancialJournalEntry::create([
+                'order_id' => $lockedOrder->id,
+                'transaction_reference' => $payoutRef,
+                'event_id' => 'EVT-VND-PAY-' . $lockedOrder->order_number,
+                'beneficiary_type' => VendorProfile::class,
+                'beneficiary_id' => $vendor->id,
+                'account_name' => 'vendor_payable',
+                'entry_type' => 'debit',
+                'amount' => $lockedOrder->vendor_net_90,
+                'currency' => 'NGN',
+                'description' => "Bank settlement disbursement of ₦{$lockedOrder->vendor_net_90} to {$vendor->business_name} (Acct: {$vendor->account_number})",
+            ]);
+
+            FinancialJournalEntry::create([
+                'order_id' => $lockedOrder->id,
+                'transaction_reference' => $payoutRef,
+                'event_id' => 'EVT-VND-PAY-' . $lockedOrder->order_number,
+                'beneficiary_type' => VendorProfile::class,
+                'beneficiary_id' => $vendor->id,
+                'account_name' => 'cash_in_escrow',
+                'entry_type' => 'credit',
+                'amount' => $lockedOrder->vendor_net_90,
+                'currency' => 'NGN',
+                'description' => "Escrow cash outflow via verified bank transfer to {$vendor->business_name}",
+            ]);
+
+            // Immutable Financial Audit Log
+            AdminAuditLog::create([
+                'user_id' => $adminUser->id,
+                'action' => 'vendor_settlement_disbursed',
+                'target_type' => Order::class,
+                'target_id' => $lockedOrder->id,
+                'old_values' => [
+                    'vendor_settlement_status' => 'eligible',
+                ],
+                'new_values' => [
+                    'vendor_settlement_status' => 'settled',
+                    'vendor_net_90' => $lockedOrder->vendor_net_90,
+                    'vendor_id' => $vendor->id,
+                    'merchant_name' => $vendor->business_name,
+                    'proof_path' => $proofPath,
+                    'settled_at' => $lockedOrder->settled_at->toIso8601String(),
+                ],
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent(),
+            ]);
+
+            return [
+                'success' => true,
+                'message' => "Settlement of ₦{$lockedOrder->vendor_net_90} disbursed successfully.",
+                'order' => $lockedOrder,
+            ];
+        });
+    }
+
+    /**
+     * Reclaims inventory and cancels abandoned orders whose payment expiration deadline passed.
+     */
+    public function expireAbandonedPendingOrders(): int
+    {
+        $now = Carbon::now();
+        $expiredOrders = Order::where('payment_status', 'pending')
+            ->where('order_status', 'pending')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', $now)
+            ->get();
+
+        $count = 0;
+        foreach ($expiredOrders as $order) {
+            // P0 Control: Payment Truth Outranks Expiration
+            // If the order has an initiated payment reference, verify gateway truth before cancelling.
+            if (!empty($order->payment_reference)) {
+                $verification = $this->paystackService->verifyTransaction($order->payment_reference, $order);
+
+                if (!empty($verification['success']) && ($verification['data']['status'] ?? '') === 'success') {
+                    \Illuminate\Support\Facades\Log::info("Payment Truth Defense: Order #{$order->id} (Ref: {$order->payment_reference}) was captured by Paystack before expiration. Settling order.");
+                    $this->settlePaystackOrder(
+                        $order,
+                        $verification['data'],
+                        null,
+                        'expiration_defense_reconciliation'
+                    );
+                    continue; // Successfully settled, do NOT cancel or restore stock!
+                }
+
+                // If verification failed due to transient gateway network timeout, defer cancellation to next cycle
+                if (($verification['code'] ?? '') === 'GATEWAY_ERROR' && str_contains(strtolower($verification['message'] ?? ''), 'timeout')) {
+                    \Illuminate\Support\Facades\Log::warning("Skipping order #{$order->id} expiry: Paystack gateway check timed out. Deferring to next cycle.");
+                    continue;
+                }
+            }
+
+            DB::transaction(function () use ($order, &$count) {
+                $locked = Order::where('id', $order->id)->lockForUpdate()->first();
+                if (
+                    !$locked
+                    || $locked->payment_status !== 'pending'
+                    || $locked->order_status !== 'pending'
+                    || !$locked->expires_at
+                    || $locked->expires_at->gt(Carbon::now())
+                ) {
+                    // The candidate query may be stale. Re-check expiry under the row
+                    // lock so a renewed/extended pending order is never cancelled by an
+                    // older scheduler snapshot.
+                    return;
+                }
+
+                $locked->order_status = 'cancelled';
+                $locked->save();
+
+                // Cancel any pending pickup reservation
+                \App\Models\PickupReservation::where('order_id', $locked->id)
+                    ->whereIn('status', ['reserved', 'pending_payment'])
+                    ->update(['status' => 'canceled']);
+
+                foreach ($locked->items as $item) {
+                    if ($item->product_id) {
+                        $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
+                        if ($product && isset($product->inventory_quantity) && (int)$product->inventory_quantity >= 0) {
+                            $product->increment('inventory_quantity', (int)$item->quantity);
+                            $product->is_in_stock = true;
+                            $product->save();
+                        }
+                    }
+                }
+
+                $count++;
+            });
+        }
+
+        return $count;
+    }
+}
