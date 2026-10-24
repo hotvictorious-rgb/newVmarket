@@ -1818,7 +1818,7 @@ class FinancialAuditRemediationProofTest extends TestCase
             // Isolate the expected unique-constraint violation in a savepoint.
             // PostgreSQL marks the current transaction failed after a statement
             // error unless the failing nested transaction is rolled back first.
-            \\Illuminate\\Support\\Facades\\DB::transaction(function () use ($firstEntry): void {
+            \Illuminate\\Support\\Facades\\DB::transaction(function () use ($firstEntry): void {
                 FinancialJournalEntry::create([
                     'order_id' => $firstEntry->order_id,
                     'financial_operation_id' => $firstEntry->financial_operation_id,
@@ -1835,7 +1835,7 @@ class FinancialAuditRemediationProofTest extends TestCase
                 ]);
             });
             $this->fail('Duplicate financial journal idempotency key should be rejected by the database.');
-        } catch (\\Illuminate\\Database\\QueryException $e) {
+        } catch (\Illuminate\\Database\\QueryException $e) {
             $this->assertSame($journalCountAfterFirst, FinancialJournalEntry::where('financial_operation_id', $operation->id)->count());
         }
 
