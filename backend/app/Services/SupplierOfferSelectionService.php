@@ -78,6 +78,7 @@ class SupplierOfferSelectionService
             ->with(['vendor.user', 'shop'])
             ->where('product_id', $product->id)
             ->where('is_available', true)
+            ->where('is_admin_disabled', false)
             ->where('wholesale_cost', '>', 0)
             ->whereRaw('supplier_offers.wholesale_cost < (select products.unit_price from products where products.id = supplier_offers.product_id)')
             ->whereNotNull('availability_confirmed_at')
