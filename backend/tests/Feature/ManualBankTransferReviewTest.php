@@ -51,6 +51,12 @@ class ManualBankTransferReviewTest extends TestCase
             'payment_status' => 'pending',
             'payment_method' => 'manual_bank_transfer',
             'payment_reference' => 'VM-PAY-' . strtoupper(bin2hex(random_bytes(6))),
+            'manual_bank_transfer_account_snapshot' => [
+                'bank_name' => 'Test Bank',
+                'account_name' => 'Victorious MARKET',
+                'account_number' => '0123456789',
+                'customer_instructions' => 'Copy the order number into narration.',
+            ],
             'guest_access_token' => bin2hex(random_bytes(32)),
             'origin_lga_id' => $this->shop->lga_id,
             'destination_lga_id' => $this->shop->lga_id,
