@@ -75,3 +75,16 @@ Before enabling this mode in production, verify all active checkout, payment, we
 - migration compatibility on SQLite and PostgreSQL, including rollback and unique-index behavior.
 
 Documentation changes alone do not certify implementation. Do not enable manual mode until the code and tests prove these invariants on the target commit.
+
+
+## Owner-confirmed superseding clarification — 24 October 2026
+
+This clarification supersedes conflicting earlier payment-provider and settlement wording in this document.
+
+- Paystack and direct Manual Bank Transfer may both be enabled and offered to customers at once. There is no global mutual-exclusion requirement. Each order is bound to exactly one selected method; verification remains method-specific, with no cross-method references or switching after an attempt begins. If neither method is enabled, checkout is disabled.
+- A single order may have only one accepted payment, and each provider/bank transaction may be applied to at most one order. Require exact amount/currency/order binding, unique transaction references, atomic transitions, idempotency and concurrency-safe verification. A customer screenshot is not proof of incoming credit.
+- During an open manual-receipt review, an authorized admin may request replacement evidence while retaining all versions and audit history. Final rejection prevents ordinary resubmission or a second payment on that order. Any claim of actual credit after rejection requires a separate support investigation and audited reconciliation, not silent order reopening.
+- Both supplier and logistics-company settlements are manual bank transfers performed through the business bank and recorded/reconciled in the system. Each individual request/transfer has a ₦1 minimum and ₦1,000,000 maximum; no FIFO/oldest-first requirement and no silent splitting. The initiating authorized admin may reconcile their own transfer with full audit and duplicate safeguards; a second admin is not mandatory. Admin-uploaded outgoing-transfer evidence applies to both payee types and does not alone prove completion.
+- Both settlement types require an eligible payable and cleared/reconciled funds, follow the Monday–Friday operating schedule, and must not be marked settled while pending, uncertain, failed or reversed. Reconcile before retry. No automated outflow. Keep supplier and logistics payables distinct and ledger-balanced; legacy vendor-wallet payout rules do not apply to retailer-model payables.
+- Manual bank-transfer refunds require a separately authorized manual process; never misapply Paystack refund APIs or mark refunds complete before the outgoing bank outcome is verified. Paystack-funded cashback remains limited to eligible Paystack-funded purchases unless the owner separately amends that rule.
+- Documentation does not certify implementation; code, permissions, database constraints and acceptance tests require separate verification.
