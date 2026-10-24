@@ -213,7 +213,7 @@ Customer payment is recorded only after trusted Paystack verification. A success
 
 A payable becoming eligible is not the same as a payment being approved, initiated, or confirmed. Every payout/payment and refund operation must strictly enforce the **Zero-Automated-Outflow Law**:
 - **Zero Automated Outflow Mandate:** No cron, queue worker, or webhook may ever execute an automated Paystack refund or automated bank transfer. All money outflows require recorded human Super Admin review and manual dispatch.
-- **Settlement Dependency:** Supplier and fleet disbursements occur only after the relevant platform funds have cleared and been reconciled in the corporate receiving account, regardless of the customer tender. Any operating-day schedule must be consistently enforced by the settlement procedure; do not assume all funds originated through Paystack.
+- **Settlement Dependency:** Supplier and fleet disbursements occur Monday through Friday only after the relevant platform funds have cleared and been reconciled in the corporate receiving account, regardless of the customer tender.
 - **Auditable Non-FIFO Controls:** Every payout request must adhere to the ₦1 minimum and ₦1,000,000 maximum per individual settlement transaction/request, selected through an authorized non-FIFO audit process.
 Provider timeout remains uncertain until reconciled; payout completion requires authoritative provider confirmation. Preserve legacy vendor earning/payout records as historical records and do not relabel them as supplier costs without an approved accounting migration.
 
