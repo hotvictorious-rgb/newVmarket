@@ -4,6 +4,18 @@
 
 # VICTORIOUS MARKET — Payment, Refund, Settlement & Paystack Webhook Policy
 
+## Owner-confirmed policy alignment — 24 October 2026
+
+This section supersedes any conflicting older supplier-settlement wording in this document. It records policy decisions; it does not certify implementation.
+
+- **Supplier settlement amount:** minimum ₦1 and maximum ₦1,000,000 per individual settlement transaction/request. A valid request still requires sufficient eligible reconciled payable, authorization, destination validation and all financial safeguards. The cap does not authorize automatic splitting; no FIFO/oldest-first selection or silent splitting is allowed.
+- **Single-admin reconciliation:** the initiating authorized admin may complete reconciliation; a second administrator is not mandatory. The same-admin path must still require evidence of the actual outgoing bank outcome, immutable actor/timestamp/amount/payee/destination/reference/evidence records, transaction-reference uniqueness, idempotent state transitions, ledger reconciliation and safe handling of pending, uncertain, failed or reversed transfers. Evidence upload alone is not proof of payment.
+- **Evidence scope:** admin-uploaded outgoing-transfer evidence applies to supplier settlements. Customer-submitted incoming-transfer screenshots belong only to the separate manual customer-payment review workflow; they are supporting evidence and never prove incoming credit by themselves.
+- **Funding and settlement rail neutrality:** supplier settlement eligibility depends on reconciled, cleared platform funds and eligible supplier payables, not on the customer payment provider being Paystack specifically. Manual bank-transfer customer receipts must not be represented as Paystack transactions. Preserve separate customer-tender records while using the same audited supplier-payable controls.
+- **Legacy separation:** historical vendor-wallet/vendor-payout limits and FIFO logic must not govern new retailer-model supplier payables. Legacy records remain preserved and must be reconciled through their separately authorized migration/exception path.
+- **No automated outflow:** no webhook, queue, cron, timeout or retry may autonomously send money. Human authorization and controlled manual dispatch remain required. An uncertain transfer must be reconciled before retry to prevent duplicate payment.
+
+
 > **Current policy authority:** This policy must conform to [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). The root [Master Blueprint](VICTORIOUS_MARKET_MASTER_BLUEPRINT.md) supplies implementation detail only where it does not conflict with the active rules. This document contains legacy vendor/parent-child implementation history; legacy terminology is not authority for new retailer-model behaviour.
 
 
@@ -139,7 +151,7 @@ For new retailer-model transactions, do not create marketplace vendor earning re
 - Link each supplier payable to the sourced order item/unit, canonical product, selected supplier offer, immutable agreed purchase cost and currency.
 - Supplier payable eligibility requires verified delivery, or an explicitly authorized completion exception, followed by reconciliation and required proof.
 - Keep payable eligibility, human approval, payment attempt, provider confirmation, reversal and reconciliation separate and idempotent. Do not infer payment success from a timeout or supplier screenshot.
-- **Active supplier-payable payment policy (owner-confirmed 22 October 2026):** each supplier-payable payment request/disbursement must be at least ₦5,000 and at most ₦1,000,000 at a time. FIFO, oldest-first and automatic FIFO allocation are prohibited. Eligible payable selection must use an authorized, auditable non-FIFO process; no alternative automatic ranking is approved by this rule. Do not silently split an over-cap request into multiple transfers. Admin approval, reconciliation, idempotency and provider-confirmed completion remain mandatory. These rules govern new retailer-model supplier payments, not historical vendor-wallet balances.
+- **Active supplier-payable payment policy (owner-confirmed 22 October 2026):** each supplier-payable payment request/disbursement must be at least ₦1 and at most ₦1,000,000 per individual settlement transaction/request. FIFO, oldest-first and automatic FIFO allocation are prohibited. Eligible payable selection must use an authorized, auditable non-FIFO process; no alternative automatic ranking is approved by this rule. Do not silently split an over-cap request into multiple transfers. Admin approval, reconciliation, idempotency and provider-confirmed completion remain mandatory. These rules govern new retailer-model supplier payments, not historical vendor-wallet balances.
 - Existing vendor earning and payout records remain historical and must be preserved/reconciled during migration. Do not relabel old journal entries as supplier costs without an approved accounting migration.
 
 ### Dispute lifecycle
@@ -233,7 +245,7 @@ These are requirements to verify against code; listing them does not mean they a
 - [ ] Keep DVA disabled at launch; reject or ignore DVA-only flows safely and do not subscribe to `dedicatedaccount.assign.success` / `dedicatedaccount.assign.failed` until DVA is separately approved.
 - [ ] Add an immutable earning ledger: one merchandise earning per vendor order-item line and one separate delivery earning per vendor child order; store source IDs, integer-kobo amount, allocation snapshot, lifecycle, and refund/recovery links.
 - [ ] Make vendor withdrawable balance a derived total of eligible earning records, not an order-level aggregate alone; apply payment, fulfilment, 24-hour window, returns/disputes, KYC/vendor status, bank cooldown and recovery checks per earning.
-- [ ] **Legacy marketplace only:** preserve and reconcile historical vendor payout batch records with their original rules. Do not apply historical ₦5,000/₦500,000 FIFO vendor-payout rules to new supplier payables. New retailer-model supplier payments use the owner-confirmed ₦5,000 minimum, ₦1,000,000 maximum per request/disbursement and prohibited-FIFO rule; require verified handover, immutable item-level cost, authorization, reconciliation and idempotency.
+- [ ] **Legacy marketplace only:** preserve and reconcile historical vendor payout batch records with their original rules. Do not apply historical ₦5,000/₦500,000 FIFO vendor-payout rules to new supplier payables. New retailer-model supplier payments use the owner-confirmed ₦1 minimum, ₦1,000,000 maximum per request/disbursement and prohibited-FIFO rule; require verified handover, immutable item-level cost, authorization, reconciliation and idempotency.
 - [ ] Split admin payout approval from payment initiation. Pending review cannot call Paystack; only an approved request can enter processing; verified transfer success finalizes the exact earning snapshot.
 - [ ] Test rejection/failed/reversed/timeout payout states, exact reservation restoration, webhook races, and no rider/logistics beneficiary for new vendor-managed orders.
 
