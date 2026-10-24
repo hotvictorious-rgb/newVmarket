@@ -28,7 +28,6 @@ return new class extends Migration
             $table->foreignId('country_id')->constrained('countries')->cascadeOnDelete();
             $table->string('name');
             $table->string('state_code', 10)->nullable();
-            $table->string('code', 10)->nullable()->index(); // Compatibility alias used by older fixtures/integrations.
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
