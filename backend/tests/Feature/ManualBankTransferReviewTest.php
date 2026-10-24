@@ -208,7 +208,7 @@ class ManualBankTransferReviewTest extends TestCase
     public function test_payment_method_cannot_be_changed_after_order_creation(): void
     {
         $order = $this->manualOrder();
-        $this->expectException(\\LogicException::class);
+        $this->expectException(\LogicException::class);
         $order->payment_method = 'paystack';
         $order->save();
     }
