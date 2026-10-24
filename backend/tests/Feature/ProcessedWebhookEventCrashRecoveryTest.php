@@ -443,6 +443,53 @@ class ProcessedWebhookEventCrashRecoveryTest extends TestCase
     }
 
     /**
+     * A signed webhook must not settle unless its transaction identity matches
+     * the authoritative server-to-server Paystack verification response.
+     */
+    public function test_webhook_transaction_identity_mismatch_is_held_for_admin_review(): void
+    {
+        $order = $this->createTestOrder(['grand_total' => '10000.00']);
+        $payload = $this->buildWebhookPayload($order, 'evt_identity_mismatch_008');
+        $payloadJson = json_encode($payload);
+        $signature = hash_hmac('sha512', $payloadJson, $this->secretKey);
+
+        Http::fake([
+            'https://api.paystack.co/transaction/verify/*' => Http::response([
+                'status' => true,
+                'message' => 'Verification successful',
+                'data' => [
+                    'id' => 999000,
+                    'status' => 'success',
+                    'currency' => 'NGN',
+                    'amount' => 1000000,
+                    'reference' => $order->payment_reference,
+                    'channel' => 'card',
+                    'customer' => ['email' => $this->customer->email],
+                ],
+            ], 200),
+        ]);
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payload, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJson(['status' => false]);
+        $this->assertSame('pending', $order->fresh()->payment_status);
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $order->id)->count());
+        $this->assertDatabaseHas('payment_capture_exceptions', [
+            'order_id' => $order->id,
+            'gateway_transaction_id' => '888777',
+            'exception_type' => 'webhook_verification_mismatch',
+            'status' => 'pending_admin_review',
+        ]);
+        $this->assertDatabaseHas('processed_webhook_events', [
+            'event_id' => 'evt_identity_mismatch_008',
+            'status' => 'failed',
+        ]);
+    }
+
+    /**
      * TEST 6: Journal Duplication Proof - 100x Replay Storm
      * Replay the exact same webhook event 100 times in succession.
      * Every call returns HTTP 200, and all financial side effects remain strictly 1.
