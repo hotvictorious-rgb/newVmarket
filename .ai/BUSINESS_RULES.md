@@ -42,7 +42,7 @@ This section supersedes conflicting older supplier-settlement wording. It record
 
 - Supplier settlement minimum: ₦1. Maximum: ₦1,000,000 per individual settlement transaction/request. No FIFO/oldest-first selection and no silent splitting.
 - The initiating authorized admin may complete supplier-settlement reconciliation; a second administrator is not mandatory for that outgoing-settlement reconciliation. Audit, transaction uniqueness, idempotency, cleared funds, destination validation, ledger balancing and actual bank-outcome evidence remain mandatory.
-- Admin-uploaded outgoing-transfer evidence applies to supplier settlements. Customer-uploaded incoming-transfer screenshots are separate supporting evidence for manual customer-payment review; they are never proof of actual incoming credit by themselves.
+- Admin-uploaded outgoing-transfer evidence applies to both supplier and logistics-company settlements. Customer-uploaded incoming-transfer screenshots are separate supporting evidence for manual customer-payment review; they are never proof of actual incoming credit by themselves.
 - Supplier settlements may proceed only against eligible reconciled supplier payables and cleared/reconciled platform funds, regardless of whether customer money originated through Paystack or the separately isolated manual-transfer method. Do not fabricate Paystack identities for manual transfers.
 - Preserve Monday–Friday operating days, but do not make Paystack settlement a prerequisite when cleared funds came through the separately approved manual-transfer collection path.
 - Legacy vendor-wallet/vendor-payout caps and FIFO rules do not govern new retailer-model supplier payables. No automated refunds or transfers are permitted.
