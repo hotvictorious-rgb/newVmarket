@@ -211,6 +211,11 @@ class Order extends Model
             && !$this->pickup_confirmed_by_rider;
     }
 
+    public function manualBankTransferPayment()
+    {
+        return $this->hasOne(ManualBankTransferPayment::class, 'order_id');
+    }
+
     public function scopeDelivery($query)
     {
         return $query->where('fulfillment_type', 'doorstep_delivery');
