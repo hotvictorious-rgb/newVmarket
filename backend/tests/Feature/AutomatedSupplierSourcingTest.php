@@ -696,6 +696,7 @@ class AutomatedSupplierSourcingTest extends TestCase
         // failover path, not only the manual supplier-rejection endpoint.
         Carbon::setTestNow(Carbon::parse('2026-10-24 10:01:00', 'Africa/Lagos'));
         OrderSupplierAssignment::whereKey($failedAssignment->id)->update([
+            'status' => 'awaiting_supplier_confirmation',
             'assigned_at' => Carbon::parse('2026-10-24 08:59:00', 'Africa/Lagos'),
         ]);
         try {
