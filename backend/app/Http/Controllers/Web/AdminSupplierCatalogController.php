@@ -193,7 +193,7 @@ class AdminSupplierCatalogController extends Controller
                 'vendor_id' => $record->supplier_vendor_id,
                 'shop_id' => $record->supplier_shop_id,
                 'wholesale_cost' => BcMathService::add((string) $record->source_price, '0.00'),
-                'is_available' => (bool) $record->is_in_stock,
+                'is_available' => (bool) $record->is_in_stock && !(bool) $offer->is_admin_disabled,
                 // A supplier's binary stock signal is not the admin's fresh
                 // availability confirmation and cannot make this offer selectable.
                 'availability_confirmed_at' => null,
@@ -447,15 +447,20 @@ class AdminSupplierCatalogController extends Controller
             $offer = SupplierOffer::query()->lockForUpdate()->findOrFail($offerId);
             $old = [
                 'is_available' => (bool) $offer->is_available,
+                'is_admin_disabled' => (bool) $offer->is_admin_disabled,
+                'admin_disabled_reason' => $offer->admin_disabled_reason,
                 'availability_expires_at' => $offer->availability_expires_at?->toISOString(),
             ];
             $offer->forceFill([
                 'is_available' => false,
+                'is_admin_disabled' => true,
+                'admin_disabled_reason' => trim($data['reason']),
                 'notes' => trim($data['reason']),
             ])->save();
 
             $this->audit($request, 'supplier_offer_admin_disabled', SupplierOffer::class, $offer->id, $old, [
                 'is_available' => false,
+                'is_admin_disabled' => true,
                 'reason' => trim($data['reason']),
                 'product_id' => $offer->product_id,
                 'vendor_id' => $offer->vendor_id,
@@ -464,6 +469,55 @@ class AdminSupplierCatalogController extends Controller
         }, 3);
 
         return back()->with('success', 'Offer disabled for new allocations. Existing paid order snapshots and assignments were not changed. Reconfirm availability before reactivation.');
+    }
+
+    public function enableOffer(Request $request, int $offerId): RedirectResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        DB::transaction(function () use ($request, $offerId, $data) {
+            $offer = SupplierOffer::query()->lockForUpdate()->findOrFail($offerId);
+            if (!$offer->is_admin_disabled) {
+                throw ValidationException::withMessages(['reason' => 'This offer is not administratively disabled.']);
+            }
+
+            $catalogRecord = $offer->supplier_catalog_product_id
+                ? SupplierCatalogProduct::query()->whereKey($offer->supplier_catalog_product_id)->lockForUpdate()->first()
+                : null;
+            $stockSignalAvailable = $catalogRecord
+                ? ($catalogRecord->status === 'active' && (bool) $catalogRecord->is_in_stock)
+                : true;
+            $old = [
+                'is_available' => (bool) $offer->is_available,
+                'is_admin_disabled' => true,
+                'admin_disabled_reason' => $offer->admin_disabled_reason,
+            ];
+
+            $offer->forceFill([
+                'is_admin_disabled' => false,
+                'admin_disabled_reason' => null,
+                'is_available' => $stockSignalAvailable,
+                'availability_confirmed_at' => null,
+                'availability_confirmed_by' => null,
+                'availability_expires_at' => null,
+                'notes' => trim($data['reason']),
+            ])->save();
+
+            $this->audit($request, 'supplier_offer_admin_reenabled_unconfirmed', SupplierOffer::class, $offer->id, $old, [
+                'is_available' => (bool) $offer->is_available,
+                'is_admin_disabled' => false,
+                'confirmation_cleared' => true,
+                'reason' => trim($data['reason']),
+                'supplier_catalog_product_id' => $offer->supplier_catalog_product_id,
+                'product_id' => $offer->product_id,
+                'vendor_id' => $offer->vendor_id,
+                'shop_id' => $offer->shop_id,
+            ]);
+        }, 3);
+
+        return back()->with('success', 'Offer re-enabled with an audit reason. Fresh admin availability confirmation is required before sourcing can use it; existing SKU cooldowns remain in force.');
     }
 
     public function setListing(Request $request, int $productId): RedirectResponse
