@@ -25,7 +25,7 @@ This document records the owner's active decisions. If older documents conflict 
 - The customer must complete upfront Paystack payment. A browser redirect, screenshot, payment initialization or unverified event is not proof of payment.
 - The backend independently verifies payment (including the trusted webhook/signature, amount, currency, reference and idempotency) before any order-specific supplier allocation, assignment or reservation begins.
 - Before payment, the system may display catalogue availability, quote a price, validate a cart or perform a non-binding feasibility check. It must not lock suppliers, reserve their stock, notify them of a binding order, or create supplier payables.
-- After verified payment, revalidate current stock and eligibility, then allocate the paid order. Preserve the payment and allocation events for audit.
+- After verified payment, revalidate current supplier/offer eligibility, then request order-specific confirmation that an eligible supplier can fulfill the exact quantity on each paid line. Try eligible candidates in priority order after decline, inability, qualifying timeout or loss of eligibility; allocate only after valid confirmation. If candidates are exhausted, move the paid order/line to the admin-managed exception process. Preserve payment, confirmation-attempt, allocation and exception events for audit.
 
 ## 4. Supplier allocation & Confirmation SLA
 - **Operating Hours:** Sourcing confirmation timers run strictly from **8:00 AM to 6:00 PM**. Suppliers have exactly **60 minutes** to confirm stock readiness.
