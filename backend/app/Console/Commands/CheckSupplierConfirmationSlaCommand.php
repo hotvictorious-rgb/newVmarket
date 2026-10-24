@@ -75,15 +75,15 @@ class CheckSupplierConfirmationSlaCommand extends Command
                         ->get();
 
                     foreach ($items as $item) {
+                        $offerPenaltyQuery = SupplierOffer::where('product_id', $item->product_id)
+                            ->where('vendor_id', $lockedAssignment->supplier_vendor_id)
+                            ->where('shop_id', $lockedAssignment->supplier_shop_id);
                         if ($item->fulfillment_supplier_offer_id) {
-                            SupplierOffer::whereKey($item->fulfillment_supplier_offer_id)
-                                ->where('product_id', $item->product_id)
-                                ->where('vendor_id', $lockedAssignment->supplier_vendor_id)
-                                ->where('shop_id', $lockedAssignment->supplier_shop_id)
-                                ->update([
-                                    'unavailability_penalty_expires_at' => Carbon::now()->addHours(24),
-                                ]);
+                            $offerPenaltyQuery->whereKey($item->fulfillment_supplier_offer_id);
                         }
+                        $offerPenaltyQuery->update([
+                            'unavailability_penalty_expires_at' => Carbon::now()->addHours(24),
+                        ]);
                     }
 
                     $lockedOrder->sourcing_status = 'timed_out';
