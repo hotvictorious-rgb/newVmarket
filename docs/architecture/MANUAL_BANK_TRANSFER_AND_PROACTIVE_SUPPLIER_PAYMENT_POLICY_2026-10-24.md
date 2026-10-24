@@ -9,13 +9,13 @@
 
 Victorious MARKET runs the money flow as a centrally managed retailer. Customers pay Victorious MARKET; an authorized admin verifies incoming payments; Victorious MARKET sources and fulfils the order; and Victorious MARKET proactively pays eligible suppliers. Supplier identities and source prices remain private. Suppliers do not operate customer-facing storefronts and do not need to request payout for earned, eligible payables to enter the admin queue.
 
-## 2. Mutually exclusive customer collection modes
+## 2. Coexisting customer collection modes with per-order isolation
 
-- The Super Admin may select either `manual_bank_transfer` or `paystack` as the active mode for **new** orders. Only one mode may be active for new orders at any time.
-- Store the chosen mode immutably on each order/payment intent. Changing the global setting affects new orders only. It does not migrate, reinitialize or settle existing orders through a different rail.
-- A single order must never be settled through both rails. The same incoming bank transaction or Paystack transaction must never settle two orders. An order can have at most one accepted successful payment.
-- When manual bank transfer is active, new checkout orders must not initialize Paystack, call Paystack verification as their proof of payment, or depend on Paystack webhooks. When Paystack is active, manual-transfer screenshot approval must not settle that order.
-- Supplier payments are outgoing transfers from Victorious MARKET's corporate bank account and are a separate workflow from customer collection. In the manual operating model, the admin makes supplier transfers through the bank's normal approved channel; the website records and reconciles evidence and must not call Paystack's transfer API.
+- Paystack and direct Manual Bank Transfer may both be enabled and offered for new orders at the same time. If neither is enabled, checkout is disabled. There is no global mutual-exclusion requirement.
+- At checkout, the order/payment intent is immutably bound to exactly one selected method. That order uses only the selected method's verification and refund path. No mixed payment, cross-method evidence, top-up or silent switching is allowed.
+- A pending, unknown, disputed or potentially late payment must be reconciled before an explicitly audited reset. A single order may have only one accepted payment; a Paystack transaction or incoming bank transaction may be applied to at most one order. Enforce uniqueness, exact amount/currency/order binding, atomic transitions, idempotency and concurrency safety.
+- When Manual Bank Transfer is selected, the customer must submit evidence and an authorized admin must independently verify actual bank credit. When Paystack is selected, use trusted Paystack verification/webhook controls. Neither path may impersonate the other.
+- Supplier and logistics-company payments are outgoing manual bank transfers through the business bank; the website records and reconciles them and must not call Paystack's transfer API.
 
 ## 3. Customer manual-transfer workflow
 
