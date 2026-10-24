@@ -708,7 +708,7 @@ class AutomatedSupplierSourcingTest extends TestCase
         Carbon::setTestNow($slaNow);
         OrderSupplierAssignment::whereKey($failedAssignment->id)->update([
             'status' => 'awaiting_supplier_confirmation',
-            'assigned_at' => $slaNow->copy()->subMinutes(62),
+            'assigned_at' => $slaNow->copy()->subMinutes(62)->utc(),
         ]);
         try {
             $this->artisan('supplier:check-confirmation-sla')->assertExitCode(0);
