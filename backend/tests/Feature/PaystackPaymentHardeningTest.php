@@ -460,6 +460,7 @@ class PaystackPaymentHardeningTest extends TestCase
         $cases = [
             'status' => ['status' => 'pending', 'currency' => 'NGN', 'amount' => 1500000],
             'amount' => ['status' => 'success', 'currency' => 'NGN', 'amount' => 1499999],
+            'fractional_kobo' => ['status' => 'success', 'currency' => 'NGN', 'amount' => '1500000.5'],
             'currency' => ['status' => 'success', 'currency' => 'USD', 'amount' => 1500000],
             'reference' => ['status' => 'success', 'currency' => 'NGN', 'amount' => 1500000, 'reference' => 'VM-FORGED-REFERENCE'],
         ];
@@ -495,7 +496,7 @@ class PaystackPaymentHardeningTest extends TestCase
 
             $expectedCode = match ($field) {
                 'status' => 'STATUS_NOT_SUCCESS',
-                'amount' => 'AMOUNT_MISMATCH',
+                'amount', 'fractional_kobo' => 'AMOUNT_MISMATCH',
                 'currency' => 'CURRENCY_MISMATCH',
                 'reference' => 'REFERENCE_MISMATCH',
             };
@@ -504,7 +505,7 @@ class PaystackPaymentHardeningTest extends TestCase
             $this->assertSame($expectedCode, $result['code'], "Tampered {$field} should fail with its specific validation code.");
         }
 
-        Http::assertSentCount(4);
+        Http::assertSentCount(5);
     }
 
     /**
@@ -556,6 +557,28 @@ class PaystackPaymentHardeningTest extends TestCase
         $this->assertSame(1, \App\Models\PaymentCaptureException::where('order_id', $order->id)->count());
         $this->assertSame(1, AdminAuditLog::where('target_id', $order->id)
             ->where('action', 'paystack_duplicate_capture_review_required')->count());
+    }
+
+    public function test_settlement_rejects_fractional_kobo_amount_without_financial_effects(): void
+    {
+        $order = $this->createTestOrder(['grand_total' => '8000.00']);
+        $payload = [
+            'id' => 123456,
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => '800000.5',
+            'reference' => $order->payment_reference,
+            'channel' => 'card',
+            'customer' => ['email' => $this->customer->email],
+        ];
+
+        $result = app(OrderSettlementService::class)->settlePaystackOrder($order, $payload);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('AMOUNT_MISMATCH', $result['status']);
+        $this->assertSame('pending', $order->fresh()->payment_status);
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $order->id)->count());
+        $this->assertSame(0, CustomerCashbackLedger::where('order_id', $order->id)->count());
     }
 
     /**
