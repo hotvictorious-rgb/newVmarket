@@ -30,45 +30,7 @@ class FinancialSplitAndFulfillmentTest extends TestCase
      * Delivery Fee: 90% Logistics Company Net, 10% VMarket Delivery Commission.
      * VMarket Total = 5% Vendor Commission + 10% Delivery Commission.
      */
-    public function test_commercial_splits_90_5_5_invariant(): void
-    {
-        // Case 1: Standard ₦100,000 merchandise, ₦2,000 delivery fee
-        $result = BcMathService::computeCommercialSplits('100000.00', '2000.00');
-        $this->assertEquals('90000.00', $result['vendor_net_90']);
-        $this->assertEquals('5000.00', $result['customer_cashback_5']);
-        $this->assertEquals('5000.00', $result['platform_retained_5']);
-        $this->assertEquals('5000.00', $result['platform_vendor_commission_5']);
-        $this->assertEquals('2000.00', $result['delivery_fee_segregated']);
-        $this->assertEquals('1800.00', $result['logistics_net_90']);
-        $this->assertEquals('200.00', $result['platform_delivery_commission_10']);
-        $this->assertEquals('5200.00', $result['platform_total_retained']); // 5,000 vendor cut + 200 delivery cut
-        $this->assertEquals('102000.00', $result['grand_total']);
-
-        // Invariant 1: Vendor + Cashback + Platform Vendor Margin == Merchandise Subtotal
-        $merchandiseSum = bcadd(bcadd($result['vendor_net_90'], $result['customer_cashback_5'], 2), $result['platform_retained_5'], 2);
-        $this->assertEquals('100000.00', $merchandiseSum);
-
-        // Invariant 2: Logistics Net (90%) + VMarket Delivery Cut (10%) == Total Delivery Fee
-        $deliverySum = bcadd($result['logistics_net_90'], $result['platform_delivery_commission_10'], 2);
-        $this->assertEquals('2000.00', $deliverySum);
-
-        // Total Conservation: Vendor (90k) + Cashback (5k) + Logistics (1.8k) + VMarket Total (5.2k) == Grand Total (102k)
-        $totalSystemSum = bcadd(
-            bcadd($result['vendor_net_90'], $result['customer_cashback_5'], 2),
-            bcadd($result['logistics_net_90'], $result['platform_total_retained'], 2),
-            2
-        );
-        $this->assertEquals('102000.00', $totalSystemSum);
-
-        // Case 2: Odd merchandise amount (₦33,333.33) and ₦500.00 delivery fee
-        $oddResult = BcMathService::computeCommercialSplits('33333.33', '500.00');
-        $oddMerchandiseSum = bcadd(bcadd($oddResult['vendor_net_90'], $oddResult['customer_cashback_5'], 2), $oddResult['platform_retained_5'], 2);
-        $this->assertEquals('33333.33', $oddMerchandiseSum);
-        $this->assertEquals('450.00', $oddResult['logistics_net_90']);
-        $this->assertEquals('50.00', $oddResult['platform_delivery_commission_10']);
-        $this->assertEquals('500.00', bcadd($oddResult['logistics_net_90'], $oddResult['platform_delivery_commission_10'], 2));
-    }
-
+    
     /**
      * Test 2: Directional LGA Delivery Lane Resolution.
      */

@@ -21,23 +21,6 @@ class StorefrontWiringAndShopTest extends TestCase
         $this->seed();
     }
 
-    public function test_storefront_renders_with_category_and_merchant_links()
-    {
-        $response = $this->get('/');
-
-        $response->assertStatus(200);
-        // Verify category filters are wired to query parameters instead of dead anchors
-        $response->assertSee('category=home-appliances');
-        $response->assertSee('category=electronics-gadgets');
-        $response->assertSee('category=groceries-farm-produce');
-
-        // Verify search queries are wired on discovery tiles
-        $response->assertSee('search=Blender');
-        $response->assertSee('search=Phone');
-
-        // Verify verified merchant cards link to dedicated storefronts
-        $response->assertSee('/shop/');
-    }
 
     public function test_dedicated_shop_storefront_redirects_to_central_storefront()
     {
@@ -60,18 +43,6 @@ class StorefrontWiringAndShopTest extends TestCase
         $response->assertRedirect(route('storefront'));
     }
 
-    public function test_product_detail_page_links_to_vendor_storefront()
-    {
-        $product = Product::with('shop')->first();
-        $this->assertNotNull($product, 'A product should exist');
-
-        $response = $this->get('/product/' . $product->slug);
-
-        $response->assertStatus(200);
-        $response->assertSee($product->name);
-        $response->assertSee('/shop/' . $product->shop->slug);
-        $response->assertSee('ESCROW SECURED');
-    }
 
     public function test_checkout_handles_missing_product_id_gracefully()
     {

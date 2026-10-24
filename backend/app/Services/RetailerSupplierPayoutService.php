@@ -19,6 +19,8 @@ use Illuminate\Support\Str;
 
 class RetailerSupplierPayoutService
 {
+    private const MINIMUM_AMOUNT = '1.00';
+    private const MAXIMUM_AMOUNT = '1000000.00';
     /**
      * Reserve a reconciled corporate bank-credit batch before any transfer recipient
      * creation or gateway transfer call. The batch row is locked to serialize competing
@@ -368,6 +370,17 @@ class RetailerSupplierPayoutService
             $total = '0.00';
             foreach ($allocations as $candidate) {
                 $total = BcMathService::add($total, $candidate['amount']);
+            }
+            if (BcMathService::comp($total, self::MAXIMUM_AMOUNT) > 0) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'message' => 'Selected supplier payables exceed the ₦1,000,000 maximum per payout. Select a smaller explicit set of items; the request will not be silently split.',
+                ];
+            }
+
+            if (BcMathService::comp($total, self::MINIMUM_AMOUNT) < 0) {
+                return ['success' => false, 'message' => 'Eligible supplier payables are below the ₦1 minimum payout.'];
             }
             $payout = RetailerSupplierPayoutRequest::create([
                 'supplier_vendor_id' => $lockedSupplier->id,

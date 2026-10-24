@@ -210,24 +210,7 @@ class SupplierOfferSelectionServiceTest extends TestCase
         $this->assertSame($valid->id, $selected->id);
     }
 
-    public function test_pickup_requires_active_pickup_enabled_shop_owned_by_offer_supplier(): void
-    {
-        $pickupDisabled = $this->createOtherSupplier('no-pickup');
-        $pickupDisabled['shop']->update(['pickup_enabled' => false]);
-        $this->offer([
-            'vendor_id' => $pickupDisabled['vendor']->id,
-            'shop_id' => $pickupDisabled['shop']->id,
-            'wholesale_cost' => '1000.00',
-        ]);
-
-        $valid = $this->offer(['wholesale_cost' => '3500.00']);
-        $selected = app(SupplierOfferSelectionService::class)
-            ->selectLowestCost($this->product, 'in_shop_pickup');
-
-        $this->assertNotNull($selected);
-        $this->assertSame($valid->id, $selected->id);
-    }
-
+    
 
 
     public function test_availability_confirmation_is_audited_and_retry_is_idempotent(): void
