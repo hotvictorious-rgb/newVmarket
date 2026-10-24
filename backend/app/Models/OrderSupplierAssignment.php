@@ -17,6 +17,7 @@ class OrderSupplierAssignment extends Model
         'supplier_response_notes',
         'confirmed_order_items',
         'confirmation_snapshot_hash',
+        'supplier_confirmed_by_user_id',
         'supplier_pickup_code',
         'handover_ready_at',
         'collected_at',
@@ -52,6 +53,11 @@ class OrderSupplierAssignment extends Model
     public function order()
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function confirmedBy()
+    {
+        return $this->belongsTo(User::class, 'supplier_confirmed_by_user_id');
     }
 
     public function supplier()
