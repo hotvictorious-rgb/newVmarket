@@ -764,3 +764,20 @@ Checkout no longer uses legacy `inventory_quantity` to promise exact supplier qu
 ### Remaining merge acceptance item
 
 A dedicated **true simultaneous-worker** test is still needed for two processes competing on the same supplier failover assignment and for two payout workers reserving the same treasury batch at the same time. Existing tests prove sequential replay/idempotency, locking is implemented, and payout capacity is rechecked under row locks; these are not a substitute for the multi-process concurrency proof. Keep the branch unmerged until that test and final branch CI pass.
+
+## Owner-approved payment-rail change and implementation gap — 24 October 2026
+
+### VM-AUD-136 — Critical — Manual bank-transfer collection and proactive supplier payouts are not implemented end-to-end
+
+**Owner-approved rule:** Manual bank transfer is the chosen customer collection mode when operating without Paystack. Only one customer collection mode may be active for new orders at a time; every order is pinned to its original rail. Customer screenshots are untrusted evidence and require an authorized admin to verify actual bank credit. One bank transaction may settle only one order, and one order may have only one accepted payment. Supplier payables must be surfaced proactively in the admin queue after verified delivery, expiry of the applicable claim window and reconciliation. Suppliers do not need to request payout. Supplier transfers are initiated manually through the corporate bank channel, with bank evidence recorded; no Paystack transfer API is used for that manual workflow.
+
+**Current code finding from branch inspection:**
+- `CheckoutExecutionService` currently initializes Paystack for positive-payment orders and does not yet pin a configurable mutually exclusive payment rail.
+- The current checkout response and storefront flow expect Paystack authorization; the manual screenshot upload/review/approve/reject workflow is not yet wired end-to-end to settlement.
+- `OrderSettlementService::settlePaystackOrder()` is explicitly Paystack-oriented; manual bank-credit approval must not spoof gateway data or bypass its ledger, supplier allocation, idempotency and concurrency protections.
+- The supplier portal still exposes `vendorRequestRetailerSupplierPayout`; the admin disbursement controller calls `PaystackService::createTransferRecipient()` and `initiateTransfer()`. This conflicts with proactive admin-selected supplier payables and manual bank-channel disbursement.
+- The new treasury bank-credit batch schema currently requires gateway settlement references and order gateway transaction IDs; it cannot be reused unchanged as evidence for direct customer bank transfers.
+
+**Required remediation:** Add an admin-controlled, mutually exclusive rail setting; persist the rail on each order; build private screenshot submission plus actual-bank-credit evidence review; enforce database uniqueness and transaction/row-lock protections for one accepted bank transaction per order; add a manual-bank-credit settlement path that shares the authoritative accounting and sourcing invariants without impersonating Paystack; replace the supplier-request prerequisite with an admin-managed eligible-payables queue; replace gateway transfer dispatch with a manually initiated transfer-evidence workflow; and test SQLite/PostgreSQL migration, replay, crash, concurrency, duplicate transaction, rejected evidence, and ledger invariants.
+
+**Status: OPEN — policy documented, code not yet aligned. Do not enable manual mode or merge for launch until implementation and CI evidence prove the required invariants.**
