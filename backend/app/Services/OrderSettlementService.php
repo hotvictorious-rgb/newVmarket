@@ -607,7 +607,7 @@ class OrderSettlementService
                     'success' => true,
                     'status' => 'REFUND_PENDING',
                     'is_refund_only' => true,
-                    'message' => 'Order was cancelled prior to payment and inventory is depleted. 100% of payment held in escrow as customer refund liability and automated refund requested.',
+                    'message' => 'Order was cancelled before payment and inventory is unavailable. The full captured amount is held as customer refund liability, with a pending admin-review request; no automatic refund is dispatched.',
                     'order' => $lockedOrder,
                     'trigger_gateway_refund' => true,
                     'refund_reference' => $reference,
