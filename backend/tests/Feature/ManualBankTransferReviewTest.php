@@ -173,6 +173,46 @@ class ManualBankTransferReviewTest extends TestCase
         $this->assertSame(1, ManualBankTransferPayment::where('order_id', $order->id)->count());
     }
 
+    public function test_same_bank_transaction_reference_cannot_pay_two_orders(): void
+    {
+        $firstOrder = $this->manualOrder();
+        $firstPayment = $this->submitReceipt($firstOrder);
+        $bankReference = 'BANK-REF-ONE-ORDER-ONLY';
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.manual-bank-transfers.approve', $firstPayment->id), [
+                'bank_transaction_reference' => $bankReference,
+                'credited_amount' => '12500.50',
+                'confirm_bank_credit' => '1',
+            ])
+            ->assertRedirect(route('admin.manual-bank-transfers.index'));
+
+        $secondOrder = $this->manualOrder();
+        $secondPayment = $this->submitReceipt($secondOrder);
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.manual-bank-transfers.index'))
+            ->post(route('admin.manual-bank-transfers.approve', $secondPayment->id), [
+                'bank_transaction_reference' => $bankReference,
+                'credited_amount' => '12500.50',
+                'confirm_bank_credit' => '1',
+            ])
+            ->assertSessionHasErrors('bank_transaction_reference');
+
+        $this->assertSame('paid', $firstOrder->fresh()->payment_status);
+        $this->assertSame('pending', $secondOrder->fresh()->payment_status);
+        $this->assertSame('pending_review', $secondPayment->fresh()->status);
+        $this->assertSame(1, ManualBankTransferPayment::where('bank_transaction_reference', $bankReference)->count());
+    }
+
+    public function test_payment_method_cannot_be_changed_after_order_creation(): void
+    {
+        $order = $this->manualOrder();
+        $this->expectException(\\LogicException::class);
+        $order->payment_method = 'paystack';
+        $order->save();
+    }
+
     public function test_paystack_order_cannot_accept_manual_transfer_receipt(): void
     {
         $order = $this->manualOrder(['payment_method' => 'paystack']);
