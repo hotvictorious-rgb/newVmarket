@@ -21,6 +21,88 @@ class RetailerSupplierPayoutService
     private const MAXIMUM_AMOUNT = '1000000.00';
 
     /**
+     * Preview currently eligible net supplier-payable balances for explicit selection.
+     * This is display-only: requestPayout rechecks every invariant under locks.
+     */
+    public function previewEligibleItems(VendorProfile $supplier): array
+    {
+        $items = OrderItem::with('order')
+            ->where('fulfillment_supplier_vendor_id', $supplier->id)
+            ->whereHas('order', function ($query) {
+                $query->where('retailer_model_order', true)
+                    ->where('payment_status', 'paid')
+                    ->where('order_status', 'delivered')
+                    ->whereNotNull('refund_window_expires_at')
+                    ->where('refund_window_expires_at', '<=', now())
+                    ->whereDoesntHave('dispute', function ($dispute) {
+                        $dispute->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled']);
+                    })
+                    ->whereDoesntHave('returnCases', function ($returnCase) {
+                        $returnCase->whereNotIn('status', ['rejected', 'closed', 'refunded', 'resolved', 'replacement_completed']);
+                    });
+            })
+            ->orderByDesc('id')
+            ->get();
+
+        if ($items->isEmpty()) {
+            return [];
+        }
+
+        $orderIds = $items->pluck('order_id')->unique()->values()->all();
+        $reconciledOrderIds = [];
+        $reconciliation = app(FinancialReconciliationEngine::class);
+        foreach ($orderIds as $orderId) {
+            $check = $reconciliation->reconcileRetailerSupplierPayables((int) $orderId);
+            if (($check['mismatches'] ?? 1) === 0) {
+                $reconciledOrderIds[(int) $orderId] = true;
+            }
+        }
+
+        $itemIds = $items->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $reservedIds = RetailerSupplierPayoutAllocation::whereIn('order_item_id', $itemIds)
+            ->whereIn('status', ['allocated', 'settled'])
+            ->pluck('order_item_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $reservedLookup = array_fill_keys($reservedIds, true);
+        $journalEntries = FinancialJournalEntry::whereIn('order_item_id', $itemIds)
+            ->where('account_name', 'supplier_payable')
+            ->where('beneficiary_type', VendorProfile::class)
+            ->where('beneficiary_id', $supplier->id)
+            ->get(['order_item_id', 'entry_type', 'amount'])
+            ->groupBy('order_item_id');
+
+        $eligible = [];
+        foreach ($items as $item) {
+            if (!isset($reconciledOrderIds[(int) $item->order_id])
+                || isset($reservedLookup[(int) $item->id])) {
+                continue;
+            }
+
+            $net = '0.00';
+            foreach ($journalEntries->get($item->id, collect()) as $entry) {
+                $net = $entry->entry_type === 'credit'
+                    ? BcMathService::add($net, (string) $entry->amount)
+                    : BcMathService::sub($net, (string) $entry->amount);
+            }
+            if (BcMathService::comp($net, '0.00') <= 0) {
+                continue;
+            }
+
+            $eligible[] = [
+                'order_item_id' => (int) $item->id,
+                'order_id' => (int) $item->order_id,
+                'order_number' => (string) ($item->order?->order_number ?? ('Order #' . $item->order_id)),
+                'product_name' => (string) $item->product_name,
+                'quantity' => (int) $item->quantity,
+                'amount' => $net,
+            ];
+        }
+
+        return $eligible;
+    }
+
+    /**
      * Reserve only the supplier's explicitly selected, reconciled item payables.
      * Selection is never inferred from order age or FIFO. The selected item set is
      * revalidated under locks and must fit within one allowed payout transaction.
