@@ -165,6 +165,7 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
         $this->assertNull($offer->availability_confirmed_at, 'The stock signal must not impersonate admin confirmation.');
         $this->assertNull($offer->availability_confirmed_by);
         $this->assertNull(app(SupplierOfferSelectionService::class)->selectLowestCost($canonical, 'doorstep_delivery'));
+        $this->assertNull($canonical->fresh()->available_quantity, 'Canonical retailer listings must not invent a supplier quantity such as 999.');
 
         $publicProductData = $canonical->fresh()->toArray();
         $this->assertArrayNotHasKey('source_price', $publicProductData);
@@ -173,6 +174,23 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
 
     public function test_supplier_stock_toggle_invalidates_prior_offer_confirmation_and_cannot_change_other_supplier_records(): void
     {
+        $canonical = Product::create([
+            'vendor_id' => null,
+            'shop_id' => null,
+            'category_id' => $this->category->id,
+            'name' => 'USB-C Charger 65W',
+            'slug' => 'usb-c-charger-65w',
+            'unit_price' => '10000.00',
+            'cost_price' => '0.00',
+            'is_in_stock' => true,
+            'inventory_quantity' => 0,
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now()->subMinute(),
+            'freshness_confirmed_at' => Carbon::now()->subMinute(),
+            'condition' => 'brand_new',
+            'package_tier' => 'bike',
+        ]);
         $record = SupplierCatalogProduct::create([
             'supplier_vendor_id' => $this->supplier->id,
             'supplier_shop_id' => $this->shop->id,
@@ -180,6 +198,20 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
             'source_price' => '7000.00',
             'is_in_stock' => true,
             'status' => 'active',
+            'canonical_product_id' => $canonical->id,
+            'linked_by_admin_id' => $this->admin->id,
+            'linked_at' => Carbon::now(),
+        ]);
+        $offer = SupplierOffer::create([
+            'supplier_catalog_product_id' => $record->id,
+            'product_id' => $canonical->id,
+            'vendor_id' => $this->supplier->id,
+            'shop_id' => $this->shop->id,
+            'wholesale_cost' => '7000.00',
+            'is_available' => true,
+            'availability_confirmed_at' => Carbon::now(),
+            'availability_confirmed_by' => $this->admin->id,
+            'availability_expires_at' => Carbon::now()->addHours(24),
         ]);
 
         Sanctum::actingAs($this->supplierUser, ['*']);
@@ -188,7 +220,20 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
         ]);
         $updated->assertOk()->assertJsonPath('data.stock_status', 'out_of_stock');
         $record->refresh();
+        $offer->refresh();
         $this->assertFalse($record->is_in_stock);
+        $this->assertFalse($offer->is_available);
+        $this->assertNull($offer->availability_confirmed_at);
+        $this->assertNull($offer->availability_confirmed_by);
+        $this->assertNull($offer->availability_expires_at);
+
+        $restoredSignal = $this->patchJson("/api/v1/vendor/private-catalog/{$record->id}", [
+            'is_in_stock' => true,
+        ]);
+        $restoredSignal->assertOk()->assertJsonPath('data.stock_status', 'in_stock');
+        $offer->refresh();
+        $this->assertTrue($offer->is_available);
+        $this->assertNull($offer->availability_confirmed_at, 'Returning to in-stock must not revive stale admin confirmation.');
 
         $otherUser = User::create([
             'name' => 'Other Supplier',
