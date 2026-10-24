@@ -30,7 +30,7 @@ This document records the owner's active decisions. If older documents conflict 
 ## 4. Supplier allocation & Confirmation SLA
 - **Operating Hours:** Sourcing confirmation timers run strictly from **8:00 AM to 6:00 PM**. Suppliers have exactly **60 minutes** to confirm stock readiness.
   - After 6:00 PM, timers pause; merchants can see incoming orders, but 60-minute confirmation countdowns **restart fresh at 8:00 AM** the next morning.
-- Apply hard eligibility checks first: supplier active and approved, approved location within Uyo, product offer explicitly in stock with sufficient quantity, applicable 24-hour product-specific out-of-stock cooldown expired, and supplier below the limit of five active pending handovers.
+- Apply hard eligibility checks first: supplier active, approved and verified; approved location within Uyo; supplier product's binary catalog signal is explicitly **In stock**; availability confirmation is fresh; applicable 24-hour SKU-specific cooldown has expired; supplier is below the limit of five active pending handovers; and wholesale/source cost is strictly below retail price. Do **not** require or infer a permanent supplier quantity field. After verified payment, the supplier must explicitly confirm it can fulfill the exact quantity on the paid order line.
 - Compare only feasible plans that can fulfil the whole customer order. First minimize the number of distinct supplier pickup locations; among plans using the same minimum number of locations, minimize total wholesale cost; then prefer documented fulfilment reliability and apply a stable deterministic tie-break.
 - A customer order may use multiple supplier locations, but the whole customer order remains assigned to one rider from one approved logistics company.
 - **Failover, Counter Breaches & Admin Override:**
@@ -96,6 +96,11 @@ These are the active business decisions to align across documentation. Code, sch
 
 The owner-approved [Exception and Reverse-Logistics Policies](APPROVED_EXCEPTION_AND_REVERSE_LOGISTICS_POLICIES_2026-10-23.md) are binding additions to these Active Business Rules. They govern supplier-stockout recovery, admin-managed partial fulfilment, the 24-hour response deadline (silence means rejection of the partial offer), item-level and whole-order cancellation/refund handling, doorstep rejection, post-purchase defective-item returns on compatible return routes, no redelivery, removal of independent logistics-company orders from platform scope, admin-configurable major-road/landmark hierarchy, and the related evidence and financial safeguards. Dependent documents must conform to that addendum. Documentation alignment does not certify runtime implementation.
 
+
+
+## Owner-approved supplier catalog and order-specific availability policy — 24 October 2026
+
+The owner-approved [Supplier Catalog and Order-Specific Availability Confirmation Policy](SUPPLIER_ORDER_SPECIFIC_AVAILABILITY_CONFIRMATION_POLICY_2026-10-24.md) is a binding addition to these Active Business Rules. Supplier catalogs use binary **In stock / Out of stock** signals and no permanent supplier quantity field. Admins review and link supplier-owned private product records to one canonical public product, or create a new canonical listing when no exact match exists. Only after independently verified payment does the system ask eligible suppliers, in priority order, to confirm the exact requested quantity for each paid line; declines, inability and qualifying timeouts trigger bounded, idempotent failover. If no eligible supplier can fulfill the full line quantity, the paid order enters the existing admin-managed exception process. No line splitting across suppliers, silent substitution, or automated refund/transfer is authorized by this policy. The existing operating-hour SLA, SKU cooldown, supplier eligibility, whole-order logistics, immutable snapshots and Zero-Automated-Outflow Law remain binding. Documentation alignment does not certify runtime implementation.
 
 
 ## Owner-approved Order State, Custody and Recovery Policy — 23 October 2026
