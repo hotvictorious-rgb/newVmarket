@@ -45,7 +45,7 @@ jobs:
                   errors.append(f"Missing required section: {question}")
                   continue
               start = match.end()
-              next_heading = re.search(r"(?m)^###\s+", body[start:])
+          next_heading = re.search(r"(?m)^#{2,3}\\s+", body[start:])
               end = start + next_heading.start() if next_heading else len(body)
               answer = body[start:end].strip()
               answer = re.sub(r"(?m)^Answer:\s*", "", answer).strip()
