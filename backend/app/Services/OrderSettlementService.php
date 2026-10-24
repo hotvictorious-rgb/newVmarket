@@ -429,7 +429,6 @@ class OrderSettlementService
                         }
 
                         $supplierSourcedCanonicalProduct = $lockedOrder->retailer_model_order
-                            && $item->supplier_offer_id
                             && $prod->vendor_id === null
                             && $prod->shop_id === null
                             && (bool) $prod->is_in_stock;
