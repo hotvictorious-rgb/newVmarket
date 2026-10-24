@@ -129,5 +129,12 @@ class TreasuryBankCreditConcurrencyTest extends TestCase
             ->whereIn('status', ['pending', 'processing', 'uncertain', 'paid'])
             ->sum(DB::raw('CAST(amount * 100 AS BIGINT)'));
         $this->assertSame(600000, $reservedAmountKobo);
+
+        // This class uses committed fixtures so child processes can see them.
+        // Remove the FK-linked rows before DatabaseMigrations rolls the schema back.
+        RetailerSupplierPayoutRequest::whereIn('id', collect($payouts)->pluck('id'))->delete();
+        TreasuryBankCreditBatchAllocation::where('treasury_bank_credit_batch_id', $batch->id)->delete();
+        Order::whereKey($order->id)->delete();
+        TreasuryBankCreditBatch::whereKey($batch->id)->delete();
     }
 }
