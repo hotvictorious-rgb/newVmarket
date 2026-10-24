@@ -206,8 +206,8 @@ class PaymentTruthDurabilityTest extends TestCase
         $this->assertSame('confirmed', $order->order_status, 'Order must be confirmed.');
         $this->assertSame('awaiting_supplier_confirmation', $order->sourcing_status);
 
-        // Inventory must be claimed (decremented from 5 to 4)
-        $this->assertSame(4, (int) $this->product->inventory_quantity);
+        // Supplier-backed canonical listings do not consume the legacy inventory counter.
+        $this->assertSame(5, (int) $this->product->inventory_quantity);
     }
 
     /**
