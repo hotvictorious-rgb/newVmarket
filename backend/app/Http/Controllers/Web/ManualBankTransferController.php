@@ -147,8 +147,9 @@ class ManualBankTransferController extends Controller
 
     public function index()
     {
-        $activePaymentMethod = SystemSetting::get('checkout.active_payment_method', 'paystack');
-        $bankAccount = SystemSetting::get('manual_bank_transfer.account', []);
+        $paymentConfig = SystemSetting::get('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
+        $activePaymentMethod = is_array($paymentConfig) ? (string) ($paymentConfig['active_method'] ?? 'paystack') : 'paystack';
+        $bankAccount = is_array($paymentConfig) ? ($paymentConfig['manual_bank_transfer_account'] ?? []) : [];
         $payments = ManualBankTransferPayment::with(['order.customer', 'customer', 'reviewer'])
             ->whereIn('status', ['pending_review', 'approved', 'rejected'])
             ->orderByRaw("CASE WHEN status = 'pending_review' THEN 0 ELSE 1 END")
@@ -168,8 +169,7 @@ class ManualBankTransferController extends Controller
             'customer_instructions' => ['required_if:active_payment_method,manual_bank_transfer', 'nullable', 'string', 'max:2000'],
         ]);
 
-        $oldMethod = SystemSetting::get('checkout.active_payment_method', 'paystack');
-        $oldAccount = SystemSetting::get('manual_bank_transfer.account', []);
+        $oldConfig = SystemSetting::get('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
         $account = [
             'bank_name' => trim((string) ($validated['bank_name'] ?? '')),
             'account_name' => trim((string) ($validated['account_name'] ?? '')),
@@ -178,24 +178,22 @@ class ManualBankTransferController extends Controller
             'updated_at' => now()->toIso8601String(),
         ];
 
-        DB::transaction(function () use ($validated, $account, $oldMethod, $oldAccount, $request) {
-            // A single persisted enum value makes dual activation impossible by design.
-            SystemSetting::set('manual_bank_transfer.account', $account, 'payments');
-            SystemSetting::set('checkout.active_payment_method', $validated['active_payment_method'], 'payments');
+        DB::transaction(function () use ($validated, $account, $oldConfig, $request) {
+            // One atomic JSON setting is the single source of truth; dual activation is unrepresentable.
+            $newConfig = [
+                'active_method' => $validated['active_payment_method'],
+                'manual_bank_transfer_account' => $account,
+                'updated_at' => now()->toIso8601String(),
+            ];
+            SystemSetting::set('checkout.payment_configuration', $newConfig, 'payments');
 
             AdminAuditLog::create([
                 'user_id' => $request->user()->id,
                 'action' => 'payment_method_configuration_changed',
                 'target_type' => SystemSetting::class,
                 'target_id' => null,
-                'old_values' => [
-                    'active_payment_method' => $oldMethod,
-                    'manual_bank_transfer_account' => $oldAccount,
-                ],
-                'new_values' => [
-                    'active_payment_method' => $validated['active_payment_method'],
-                    'manual_bank_transfer_account' => $account,
-                ],
+                'old_values' => ['payment_configuration' => $oldConfig],
+                'new_values' => ['payment_configuration' => $newConfig],
                 'ip_address' => $request->ip() ?? '127.0.0.1',
                 'user_agent' => substr((string) $request->userAgent(), 0, 1000),
             ]);
