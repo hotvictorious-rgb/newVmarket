@@ -1154,6 +1154,63 @@ class PaystackPaymentController extends Controller
         if (empty($verification['success'])) {
             $verificationCode = (string) ($verification['code'] ?? 'GATEWAY_ERROR');
             $verificationMessage = (string) ($verification['message'] ?? 'Server-to-server payment verification failed.');
+
+            // A definitive provider rejection of a signed charge.success payload is
+            // an operational exception, not just a failed webhook attempt. Preserve
+            // the evidence for treasury review; transient/configuration failures are
+            // left retryable without being mislabeled as a captured payment.
+            if (!in_array($verificationCode, ['GATEWAY_ERROR', 'EXCEPTION', 'CONFIG_MISSING'], true)) {
+                $incomingTransactionId = trim((string) ($data['id'] ?? ''));
+                $incomingAmount = $data['amount'] ?? null;
+                $incomingAmountIsInteger = is_int($incomingAmount)
+                    || (is_string($incomingAmount) && preg_match('/^\\d+$/', $incomingAmount) === 1);
+                $exceptionKey = 'PAYSTACK-VERIFY-REJECT-' . hash(
+                    'sha256',
+                    $order->id . '|' . (string) $processedEvent->event_id . '|' . $verificationCode
+                );
+                $verificationException = \\App\\Models\\PaymentCaptureException::firstOrCreate(
+                    ['idempotency_key' => $exceptionKey],
+                    [
+                        'order_id' => $order->id,
+                        'gateway_provider' => 'paystack',
+                        'gateway_transaction_id' => $incomingTransactionId !== '' ? $incomingTransactionId : null,
+                        'payment_reference' => $reference,
+                        'amount_kobo' => $incomingAmountIsInteger ? (int) $incomingAmount : null,
+                        'currency' => strtoupper((string) ($data['currency'] ?? '')) ?: null,
+                        'exception_type' => 'server_verification_rejected_' . strtolower($verificationCode),
+                        'status' => 'pending_admin_review',
+                        'evidence' => [
+                            'event_id' => (string) $processedEvent->event_id,
+                            'webhook_transaction_id' => $incomingTransactionId ?: null,
+                            'webhook_amount' => $incomingAmount,
+                            'webhook_currency' => $data['currency'] ?? null,
+                            'webhook_status' => $data['status'] ?? null,
+                            'webhook_reference' => $reference,
+                            'server_verification_code' => $verificationCode,
+                            'server_verification_message' => $verificationMessage,
+                        ],
+                        'detected_at' => Carbon::now(),
+                    ]
+                );
+
+                if ($verificationException->wasRecentlyCreated) {
+                    \\App\\Models\\AdminAuditLog::create([
+                        'user_id' => null,
+                        'action' => 'paystack_server_verification_rejected_charge',
+                        'target_type' => Order::class,
+                        'target_id' => $order->id,
+                        'new_values' => [
+                            'exception_key' => $exceptionKey,
+                            'verification_code' => $verificationCode,
+                            'payment_reference' => $reference,
+                            'settlement_blocked' => true,
+                        ],
+                        'ip_address' => request()->ip() ?? '127.0.0.1',
+                        'user_agent' => 'Paystack webhook verification',
+                    ]);
+                }
+            }
+
             $this->updateProcessedEvent($processedEvent, [
                 'status' => 'failed',
                 'error_reason' => 'SERVER_VERIFICATION_' . $verificationCode . ': ' . $verificationMessage,
