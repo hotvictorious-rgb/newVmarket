@@ -23,18 +23,18 @@ return new class extends Migration
             $table->string('payment_reference', 100)->nullable();
             $table->unsignedBigInteger('captured_amount_kobo')->nullable();
             $table->string('currency', 10)->nullable();
-            $table->string('refund_reference', 120)->nullable()->unique();
+            $table->string('refund_reference', 120)->nullable()->unique('pcer_refund_ref_unique');
             $table->unsignedBigInteger('refunded_amount_kobo')->nullable();
-            $table->foreignId('prepared_by_admin_id')->constrained('users');
-            $table->foreignId('confirmed_by_admin_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('prepared_by_admin_id')->constrained('users', 'id', 'pcer_prepared_admin_fk');
+            $table->foreignId('confirmed_by_admin_id')->nullable()->constrained('users', 'id', 'pcer_confirmed_admin_fk')->nullOnDelete();
             $table->text('reason');
             $table->text('confirmation_notes')->nullable();
             $table->timestamp('prepared_at')->useCurrent();
             $table->timestamp('confirmed_at')->nullable();
-            $table->string('idempotency_key', 120)->unique();
+            $table->string('idempotency_key', 120)->unique('pcer_idempotency_unique');
             $table->timestamps();
 
-            $table->index(['status', 'resolution_type']);
+            $table->index(['status', 'resolution_type'], 'pcer_status_res_type_idx');
         });
     }
 

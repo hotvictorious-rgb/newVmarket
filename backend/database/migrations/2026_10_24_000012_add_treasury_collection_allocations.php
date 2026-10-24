@@ -26,11 +26,11 @@ return new class extends Migration
                     ->constrained('treasury_bank_credit_batches', 'id', 'tbcba_batch_fk')
                     ->cascadeOnDelete();
                 $table->foreignId('order_id')->constrained('orders', 'id', 'tbcba_order_fk')->restrictOnDelete();
-                $table->string('gateway_transaction_id', 100)->unique();
-                $table->string('payment_reference', 100)->unique();
+                $table->string('gateway_transaction_id', 100)->unique('tbcba_gw_tx_id_unique');
+                $table->string('payment_reference', 100)->unique('tbcba_payment_ref_unique');
                 $table->unsignedBigInteger('amount_kobo');
                 $table->string('currency', 10)->default('NGN');
-                $table->string('idempotency_key', 120)->unique();
+                $table->string('idempotency_key', 120)->unique('tbcba_idempotency_unique');
                 $table->foreignId('added_by_admin_id')->constrained('users', 'id', 'tbcba_added_admin_fk');
                 $table->timestamp('added_at')->useCurrent();
                 $table->timestamps();
