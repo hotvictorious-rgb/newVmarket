@@ -636,7 +636,9 @@ class OrderSettlementService
                     'entry_type' => 'debit',
                     'amount' => $lockedOrder->grand_total,
                     'currency' => 'NGN',
-                    'description' => "Paystack gateway capture for cancelled/out-of-stock Order #{$lockedOrder->order_number}",
+                    'description' => $provider === 'manual_bank_transfer'
+                        ? "Verified manual bank transfer credit held for refund review for Order #{$lockedOrder->order_number}"
+                        : "Paystack gateway capture for cancelled/out-of-stock Order #{$lockedOrder->order_number}",
                 ]);
 
                 FinancialJournalEntry::create([
@@ -652,19 +654,47 @@ class OrderSettlementService
                     'description' => "Customer Refund Liability held in escrow for Order #{$lockedOrder->order_number} (Inventory depleted after expiration)",
                 ]);
 
-                // The payment capture and its customer refund obligation must commit
-                // atomically. If the pending admin-review operation cannot be persisted,
-                // throw and roll back the payment state + liability journal together.
-                // This creates a request only; it never dispatches a gateway refund.
+                // Record the refund obligation atomically with the payment/liability.
+                // Direct bank transfers must never be represented as Paystack gateway
+                // refunds. They receive a separate manual-review case and no automated
+                // or gateway refund instruction.
                 $latePaymentRefundReason = "Refund pending administrative authorization for cancelled/depleted Order #{$lockedOrder->order_number}";
-                app(\App\Services\FinancialOperationService::class)->createRefundOperation(
-                    $lockedOrder,
-                    (string) $lockedOrder->grand_total,
-                    $latePaymentRefundReason,
-                    null,
-                    'PAYSTACK-LATE-REFUND-' . $lockedOrder->id,
-                    ['type' => 'pending_admin_review_late_payment']
-                );
+                if ($provider === 'manual_bank_transfer') {
+                    $manualPayment = \App\Models\ManualBankTransferPayment::where('order_id', $lockedOrder->id)
+                        ->lockForUpdate()
+                        ->first();
+                    if (!$manualPayment || $manualPayment->status !== 'pending_review') {
+                        throw new \RuntimeException('Manual bank transfer refund hold requires its unique pending receipt-review record.');
+                    }
+
+                    $refundCase = \App\Models\ManualBankTransferRefundCase::firstOrCreate(
+                        ['order_id' => $lockedOrder->id],
+                        [
+                            'manual_bank_transfer_payment_id' => $manualPayment->id,
+                            'idempotency_key' => 'MANUAL-BANK-REFUND-' . $lockedOrder->id,
+                            'amount_kobo' => $actualKobo,
+                            'currency' => 'NGN',
+                            'status' => 'pending_admin_review',
+                            'reason' => $latePaymentRefundReason,
+                            'created_by_admin_id' => $actorUser?->id,
+                        ]
+                    );
+
+                    if ((int) $refundCase->manual_bank_transfer_payment_id !== (int) $manualPayment->id
+                        || (int) $refundCase->amount_kobo !== $actualKobo
+                        || $refundCase->currency !== 'NGN') {
+                        throw new \RuntimeException('Existing manual bank transfer refund case does not match the verified credit.');
+                    }
+                } else {
+                    app(\App\Services\FinancialOperationService::class)->createRefundOperation(
+                        $lockedOrder,
+                        (string) $lockedOrder->grand_total,
+                        $latePaymentRefundReason,
+                        null,
+                        'PAYSTACK-LATE-REFUND-' . $lockedOrder->id,
+                        ['type' => 'pending_admin_review_late_payment']
+                    );
+                }
 
                 // Invariant: Customer cashback balance is LEFT UNTOUCHED (zero lots consumed)
                 // Invariant: ZERO new cashback reward is accrued for unfulfilled orders
@@ -686,7 +716,7 @@ class OrderSettlementService
                         'payment_status' => 'paid',
                         'vendor_settlement_status' => 'refund_pending',
                         'refund_liability_amount' => $lockedOrder->grand_total,
-                        'paystack_refund_reference' => $lockedOrder->paystack_refund_reference,
+                        'paystack_refund_reference' => $provider === 'paystack' ? $lockedOrder->paystack_refund_reference : null,
                     ],
                     'ip_address' => request()->ip() ?? '127.0.0.1',
                     'user_agent' => request()->userAgent(),
@@ -698,7 +728,8 @@ class OrderSettlementService
                     'is_refund_only' => true,
                     'message' => 'Order was cancelled before payment and inventory is unavailable. The full captured amount is held as customer refund liability, with a pending admin-review request; no automatic refund is dispatched.',
                     'order' => $lockedOrder,
-                    'trigger_gateway_refund' => true,
+                    'trigger_gateway_refund' => $provider === 'paystack',
+                    'requires_manual_refund_review' => $provider === 'manual_bank_transfer',
                     'refund_reference' => $reference,
                     'refund_amount' => (string)$lockedOrder->grand_total,
                     'refund_order_id' => $lockedOrder->id,
