@@ -250,8 +250,10 @@
                                     State:
                                     @if($offer->trashed())
                                         <strong>retired</strong>
+                                    @elseif($offer->is_admin_disabled)
+                                        <strong>disabled by admin</strong> — {{ $offer->admin_disabled_reason }}
                                     @elseif(!$offer->is_available)
-                                        <strong>unavailable / disabled</strong>
+                                        <strong>unavailable / out of stock</strong>
                                     @elseif(!$offer->availability_confirmed_at || !$offer->availability_expires_at || !$offer->availability_expires_at->isFuture())
                                         <strong>confirmation missing or expired</strong>
                                     @else
@@ -275,11 +277,17 @@
                                         <input name="notes" maxlength="500" class="form-control" placeholder="Confirmation source / notes (optional)">
                                         <button type="submit" class="btn-dash btn-dash-primary">Confirm availability</button>
                                     </form>
-                                    @if($offer->is_available)
+                                    @if(!$offer->is_admin_disabled)
                                         <form method="POST" action="{{ route('admin.supplier-catalog.offers.disable', $offer->id) }}" style="display:grid;gap:6px;max-width:220px;">
                                             @csrf
                                             <input name="reason" required minlength="5" maxlength="500" class="form-control" placeholder="Reason to disable">
                                             <button type="submit" class="btn-dash btn-dash-outline" onclick="return confirm('Disable this offer for new allocations?')">Disable offer</button>
+                                        </form>
+                                    @else
+                                        <form method="POST" action="{{ route('admin.supplier-catalog.offers.enable', $offer->id) }}" style="display:grid;gap:6px;max-width:220px;">
+                                            @csrf
+                                            <input name="reason" required minlength="5" maxlength="500" class="form-control" placeholder="Reason to re-enable">
+                                            <button type="submit" class="btn-dash btn-dash-primary" onclick="return confirm('Re-enable this offer but require fresh availability confirmation?')">Re-enable unconfirmed</button>
                                         </form>
                                     @endif
                                 </div>
