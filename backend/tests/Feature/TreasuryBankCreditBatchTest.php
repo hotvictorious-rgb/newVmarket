@@ -103,4 +103,41 @@ class TreasuryBankCreditBatchTest extends TestCase
         $this->assertStringContainsString('does not have enough unreserved', $secondResult['message']);
         $this->assertNull($second->fresh()->treasury_bank_credit_batch_id);
     }
+
+    public function test_treasury_bank_credit_batch_requires_second_admin_confirmation(): void
+    {
+        $this->actingAs($this->adminOne)->post(route('admin.treasury-bank-credit-batches.prepare'), [
+            'gateway_provider' => 'paystack',
+            'gateway_settlement_reference' => 'SETTLE-TEST-DUAL-001',
+            'bank_credit_reference' => 'BANK-TEST-DUAL-001',
+            'corporate_account_last4' => '4321',
+            'net_credit_amount_kobo' => 5000000,
+            'currency' => 'NGN',
+            'statement_value_date' => now()->toDateString(),
+            'statement_evidence_reference' => 'Bank statement page 2 row 17',
+            'reconciliation_notes' => 'Settlement statement and matching corporate bank credit have been located.',
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $batch = TreasuryBankCreditBatch::where('gateway_settlement_reference', 'SETTLE-TEST-DUAL-001')->firstOrFail();
+        $this->assertSame('pending_second_review', $batch->status);
+
+        $this->actingAs($this->adminOne)->post(route('admin.treasury-bank-credit-batches.confirm', $batch->id), [
+            'confirmation_notes' => 'Same preparer must not be allowed to approve this batch.',
+        ])->assertSessionHasErrors('confirmation_notes');
+        $this->assertSame('pending_second_review', $batch->fresh()->status);
+
+        $this->actingAs($this->adminTwo)->post(route('admin.treasury-bank-credit-batches.confirm', $batch->id), [
+            'confirmation_notes' => 'Independent review confirms the bank credit and settlement references match.',
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $batch->refresh();
+        $this->assertSame('reconciled', $batch->status);
+        $this->assertSame((int) $this->adminTwo->id, (int) $batch->confirmed_by_admin_id);
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'action' => 'treasury_bank_credit_batch_reconciled',
+            'target_type' => TreasuryBankCreditBatch::class,
+            'target_id' => $batch->id,
+        ]);
+    }
+
 }
