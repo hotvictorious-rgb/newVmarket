@@ -514,6 +514,25 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $responseB->assertOk();
         $this->assertEquals('partially_supplier_confirmed', $orderTwoBulky->fresh()->sourcing_status);
 
+        $assignmentB = OrderSupplierAssignment::where('order_id', $orderTwoBulky->id)
+            ->where('supplier_vendor_id', $supplierB->id)
+            ->firstOrFail();
+        $this->assertNotEmpty($assignmentB->confirmed_order_items);
+        $this->assertNotEmpty($assignmentB->confirmation_snapshot_hash);
+        $expectedSupplierBItems = OrderItem::where('order_id', $orderTwoBulky->id)
+            ->where('fulfillment_supplier_vendor_id', $supplierB->id)
+            ->where('fulfillment_supplier_shop_id', $shopB->id)
+            ->orderBy('id')
+            ->get();
+        $this->assertSame(
+            $expectedSupplierBItems->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            collect($assignmentB->confirmed_order_items)->pluck('order_item_id')->all()
+        );
+        $this->assertSame(
+            $expectedSupplierBItems->pluck('quantity')->map(fn ($quantity) => (int) $quantity)->all(),
+            collect($assignmentB->confirmed_order_items)->pluck('requested_quantity')->all()
+        );
+
         Sanctum::actingAs($this->vendorUser, ['*']);
         $responseA = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
             'notes' => 'Confirmed the screen protector stock.',
