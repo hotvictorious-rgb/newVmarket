@@ -48,6 +48,21 @@
                     <p style="margin:0;color:#991b1b">Your payment submission was rejected. This order cannot accept another payment submission. Contact Victorious MARKET support before making another transfer.</p>
                 @endif
             @elseif(in_array($order->payment_status, ['pending', 'unpaid'], true) && !$order->paid_at)
+                @php($transferAccount = $order->manual_bank_transfer_account_snapshot ?? [])
+                @if(!empty($transferAccount['account_number']))
+                    <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:14px;margin-bottom:14px">
+                        <div style="font-size:12px;color:#64748b;font-weight:800;text-transform:uppercase;margin-bottom:8px">Transfer only to this Victorious MARKET account</div>
+                        <div style="margin:4px 0"><strong>Bank:</strong> {{ $transferAccount['bank_name'] ?? '—' }}</div>
+                        <div style="margin:4px 0"><strong>Account name:</strong> {{ $transferAccount['account_name'] ?? '—' }}</div>
+                        <div style="margin:4px 0"><strong>Account number:</strong> <span style="font-size:18px;font-weight:900;letter-spacing:1px">{{ $transferAccount['account_number'] }}</span></div>
+                        <div style="margin:8px 0;padding:10px;background:#fff;border:1px dashed #94a3b8;border-radius:8px"><strong>Bank narration / remarks:</strong> copy exactly <span style="font-size:16px;font-weight:900">{{ $order->order_number }}</span></div>
+                        @if(!empty($transferAccount['customer_instructions']))
+                            <p style="margin:8px 0 0;color:#475569">{{ $transferAccount['customer_instructions'] }}</p>
+                        @endif
+                    </div>
+                @else
+                    <p style="margin:0 0 12px;color:#991b1b">The receiving-account snapshot is unavailable. Do not transfer money; contact support.</p>
+                @endif
                 <p style="margin:0 0 12px;color:#475569">Upload a clear screenshot or image of the transfer receipt for this order. This image is supporting evidence only. An admin will independently verify the actual credit in the official receiving bank account.</p>
                 <p style="margin:0 0 14px;font-weight:800;color:#0f172a">Order amount: ₦{{ number_format((float)$order->grand_total, 2) }}</p>
                 <form method="POST" action="{{ route('customer.manual-bank-transfer.submit', ['order_number' => $order->order_number]) }}" enctype="multipart/form-data">
