@@ -312,8 +312,11 @@ class ManualBankTransferController extends Controller
             return back()->withErrors(['payment' => 'This bank transaction reference may already be in use. The payment was not approved.']);
         }
 
-        return redirect()->route('admin.manual-bank-transfers.index')
-            ->with('status', 'Payment verified and approved. The order has entered the existing post-payment settlement/sourcing workflow.');
+        $message = ($result['status'] ?? '') === 'REFUND_PENDING'
+            ? 'Bank credit verified and recorded. The order could not be safely fulfilled after its prior cancellation/expiry and is held for authorized refund review; no automatic refund was sent.'
+            : 'Payment verified and approved. The order has entered the existing post-payment settlement/sourcing workflow.';
+
+        return redirect()->route('admin.manual-bank-transfers.index')->with('status', $message);
     }
 
     public function reject(Request $request, int $id)
