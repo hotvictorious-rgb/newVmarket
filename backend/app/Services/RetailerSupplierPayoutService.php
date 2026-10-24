@@ -21,6 +21,78 @@ class RetailerSupplierPayoutService
     private const MAXIMUM_AMOUNT = '1000000.00';
 
     /**
+     * Reserve a reconciled corporate bank-credit batch before any transfer recipient
+     * creation or gateway transfer call. The batch row is locked to serialize competing
+     * payout workers; pending/processing/uncertain/paid requests all consume capacity.
+     */
+    public function reserveTreasuryBankCreditBatch(int $payoutId): array
+    {
+        return DB::transaction(function () use ($payoutId) {
+            $payout = RetailerSupplierPayoutRequest::whereKey($payoutId)->lockForUpdate()->first();
+            if (!$payout) {
+                return ['success' => false, 'message' => 'Supplier payout request was not found.'];
+            }
+            if ($payout->status !== 'pending') {
+                return ['success' => false, 'message' => 'Only a pending payout can reserve treasury bank-credit evidence.'];
+            }
+
+            $batchQuery = $payout->treasury_bank_credit_batch_id
+                ? TreasuryBankCreditBatch::whereKey($payout->treasury_bank_credit_batch_id)
+                : TreasuryBankCreditBatch::where('status', 'reconciled')
+                    ->where('currency', 'NGN')
+                    ->whereNotNull('confirmed_by_admin_id')
+                    ->whereColumn('prepared_by_admin_id', '!=', 'confirmed_by_admin_id')
+                    ->orderBy('statement_value_date')
+                    ->orderBy('id');
+
+            $batch = $batchQuery->lockForUpdate()->first();
+            if (!$batch || $batch->status !== 'reconciled'
+                || strtoupper((string) $batch->currency) !== 'NGN'
+                || empty($batch->confirmed_at)
+                || (int) $batch->prepared_by_admin_id === (int) $batch->confirmed_by_admin_id) {
+                return ['success' => false, 'message' => 'No dual-reviewed corporate bank-credit batch is available. Record and reconcile the actual gateway settlement and corporate bank statement before submitting any supplier transfer.'];
+            }
+
+            $usedKobo = (int) RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)
+                ->whereIn('status', ['pending', 'processing', 'uncertain', 'paid'])
+                ->whereKeyNot($payout->id)
+                ->sum(DB::raw('CAST(amount * 100 AS BIGINT)'));
+
+            $amountKobo = (int) bcmul((string) $payout->amount, '100', 0);
+            if ($usedKobo + $amountKobo > (int) $batch->net_credit_amount_kobo) {
+                return [
+                    'success' => false,
+                    'message' => 'Supplier payout blocked: the reconciled corporate bank-credit batch does not have enough unreserved net credited funds.',
+                    'available_kobo' => max(0, (int) $batch->net_credit_amount_kobo - $usedKobo),
+                ];
+            }
+
+            if ((int) $payout->treasury_bank_credit_batch_id !== (int) $batch->id) {
+                $payout->forceFill(['treasury_bank_credit_batch_id' => $batch->id])->save();
+            }
+
+            AdminAuditLog::create([
+                'user_id' => null,
+                'action' => 'supplier_payout_treasury_bank_credit_reserved',
+                'target_type' => RetailerSupplierPayoutRequest::class,
+                'target_id' => $payout->id,
+                'old_values' => ['treasury_bank_credit_batch_id' => null],
+                'new_values' => [
+                    'treasury_bank_credit_batch_id' => $batch->id,
+                    'payout_amount_kobo' => $amountKobo,
+                    'batch_net_credit_amount_kobo' => (int) $batch->net_credit_amount_kobo,
+                    'prior_reserved_or_paid_kobo' => $usedKobo,
+                    'remaining_after_reservation_kobo' => (int) $batch->net_credit_amount_kobo - $usedKobo - $amountKobo,
+                ],
+                'ip_address' => '127.0.0.1',
+                'user_agent' => 'Treasury payout funding gate',
+            ]);
+
+            return ['success' => true, 'payout' => $payout, 'batch' => $batch];
+        }, 3);
+    }
+
+    /**
      * Preview currently eligible net supplier-payable balances for explicit selection.
      * This is display-only: requestPayout rechecks every invariant under locks.
      */
