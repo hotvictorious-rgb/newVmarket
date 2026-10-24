@@ -74,6 +74,16 @@ Only after the manual transfer is verified and approved may the order enter the 
 
 A late transfer for an expired/cancelled order must not automatically reactivate the order or start fulfilment. Hold it for authorized review and reconcile the real bank credit with the order's current state before deciding the next action.
 
+## Supplier settlement controls (owner-confirmed 24 October 2026)
+
+These controls apply to outgoing supplier payments and are distinct from customer incoming manual-transfer review.
+
+- Minimum ₦1; maximum ₦1,000,000 per settlement transaction/request. No FIFO, automatic oldest-first selection or silent splitting.
+- The initiating authorized admin may complete reconciliation; mandatory dual-admin approval is not required. Audit, uniqueness, idempotency, destination verification, ledger balancing and evidence safeguards remain mandatory.
+- The admin must attach outgoing-transfer evidence to the supplier settlement. Evidence must be linked to the settlement, supplier, amount, destination and bank transaction reference. An uploaded screenshot alone cannot prove final payment; reconcile the actual transaction outcome.
+- If the bank outcome is pending, uncertain, failed or reversed, do not mark the payable paid. Reconcile the original attempt before any retry.
+- Supplier settlement is permitted only against eligible supplier payables and cleared/reconciled platform funds. It is not tied exclusively to Paystack-originated customer money; never fabricate or cross-use Paystack transaction identities for manual customer transfers.
+
 ## 6. Reconciliation, refunds and financial safety
 
 Manual bank transfers must be represented as their own tender/provider type and must not be given fabricated Paystack references, Paystack webhook events or Paystack verification status. Keep customer receipts, payment attempts, verified bank credits, refunds, supplier payables, logistics-company payables, cashback and reconciliation adjustments as distinct auditable records. The current cashback rule specifies eligible merchandise funded by verified Paystack money; therefore, manual-transfer orders do not qualify for cashback unless the owner explicitly amends that rule and its funding/reversal controls.
