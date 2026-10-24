@@ -17,7 +17,7 @@
 
 ## Customer registration, Paystack gate and allocation
 - **Mandatory Customer Account Registration:** Guests can freely browse the catalog and add items to cart, but guest checkout is strictly disabled. Customers must register or log in before initiating checkout or Paystack payment.
-- Delivery payment is upfront through an enabled approved method: Paystack (trusted provider verification/webhook, reference, amount, currency and idempotency) or Manual Bank Transfer (authorized admin verifies actual receiving-account credit and explicitly approves it with audit evidence). Screenshots and customer claims alone never prove payment. Manual transfer is not a Paystack transaction.
+- Delivery payment is upfront through an enabled approved method: Paystack (trusted provider verification/webhook, reference, amount, currency and idempotency) or Manual Bank Transfer (customer uploads a transfer screenshot/receipt for the order; an authorized admin independently verifies actual receiving-account credit and explicitly approves it with audit evidence). The screenshot is mandatory supporting evidence but never proof of credited funds by itself. Securely link uploads to the order, preserve evidence versions/review history, and keep the order unpaid until actual credit is verified. Manual transfer is not a Paystack transaction.
 - Before verified payment, stock/catalogue/cart checks are non-binding. No supplier lock, order-specific reservation, binding notification or supplier payable may be created.
 - After verified payment, revalidate current stock and supplier eligibility before allocation.
 - Sourcing confirmation runs strictly from **8:00 AM to 6:00 PM** (60-minute supplier SLA; pauses after 6:00 PM and restarts fresh at 8:00 AM).
@@ -52,7 +52,7 @@
 
 ## Manual bank transfer and provider replaceability
 - Admin-configured manual bank transfer is a separate tender path. Customers receive the configured Victorious MARKET bank details, exact amount and unique order code, which they should copy into the bank narration/remarks.
-- An authorized admin must verify actual credited funds and approve the payment through an auditable, concurrency-safe operation. A transaction cannot be applied to multiple orders. Discrepancies and late payments remain on hold for review.
+- The customer must upload a transfer screenshot/receipt against the order for review. Securely link it to the order and preserve evidence versions and review history. An authorized admin must independently verify actual credited funds and approve the payment through an auditable, concurrency-safe operation; the screenshot alone never proves payment. A transaction cannot be applied to multiple orders. Discrepancies and late payments remain on hold for review.
 - No supplier confirmation/allocation, fulfilment or supplier payable may begin before the payment is verified and approved. Paystack and manual bank transfer must share payment/order safety invariants while retaining distinct provider evidence.
 - Refunds for manual-transfer orders require authorized human Super Admin review and manual dispatch; never dispatch automatically. The refund destination procedure must be explicitly approved before production release. See [Manual Bank Transfer and Payment-Provider Policy](../docs/architecture/MANUAL_BANK_TRANSFER_AND_PAYMENT_PROVIDER_POLICY_2026-10-24.md).
 
