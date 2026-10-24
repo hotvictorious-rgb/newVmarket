@@ -244,6 +244,16 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
         $this->assertNull($offer->availability_confirmed_at, 'Returning to in-stock must not revive stale admin confirmation.');
 
         $this->actingAs($this->admin)
+            ->post("/admin/supplier-offers/{$offer->id}/confirm-availability", [
+                'availability_expires_at' => Carbon::now()->addHours(2)->format('Y-m-d\\TH:i'),
+                'notes' => 'Confirm after supplier reports stock restored.',
+            ])
+            ->assertRedirect();
+        $offer->refresh();
+        $this->assertNotNull($offer->availability_confirmed_at);
+        $this->assertNotNull(app(SupplierOfferSelectionService::class)->selectLowestCost($canonical->fresh(), 'doorstep_delivery'));
+
+        $this->actingAs($this->admin)
             ->post("/admin/supplier-catalog/offers/{$offer->id}/disable", [
                 'reason' => 'Admin safety hold after supplier review.',
             ])
@@ -251,6 +261,7 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
         $offer->refresh();
         $this->assertTrue($offer->is_admin_disabled);
         $this->assertFalse($offer->is_available);
+        $this->assertNull(app(SupplierOfferSelectionService::class)->selectLowestCost($canonical->fresh(), 'doorstep_delivery'));
 
         Sanctum::actingAs($this->supplierUser, ['*']);
         $this->patchJson("/api/v1/vendor/private-catalog/{$record->id}", ['is_in_stock' => false])->assertOk();
@@ -275,6 +286,7 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
         $this->assertFalse($offer->is_admin_disabled);
         $this->assertTrue($offer->is_available);
         $this->assertNull($offer->availability_confirmed_at, 'Admin re-enable must require fresh confirmation.');
+        $this->assertNull(app(SupplierOfferSelectionService::class)->selectLowestCost($canonical->fresh(), 'doorstep_delivery'));
 
         $otherUser = User::create([
             'name' => 'Other Supplier',
