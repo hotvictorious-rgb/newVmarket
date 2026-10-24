@@ -534,6 +534,15 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             collect($assignmentB->confirmed_order_items)->pluck('requested_quantity')->all()
         );
 
+        // A duplicate confirmation must replay the same order-scoped decision
+        // rather than rewrite the confirmation snapshot or create another effect.
+        $savedConfirmationHash = $assignmentB->confirmation_snapshot_hash;
+        $replayConfirmation = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
+            'notes' => 'Duplicate delivery retry.',
+        ]);
+        $replayConfirmation->assertOk();
+        $this->assertSame($savedConfirmationHash, $assignmentB->fresh()->confirmation_snapshot_hash);
+
         Sanctum::actingAs($this->vendorUser, ['*']);
         $responseA = $this->postJson("/api/v1/vendor/orders/{$orderTwoBulky->id}/confirm-availability", [
             'notes' => 'Confirmed the screen protector stock.',
