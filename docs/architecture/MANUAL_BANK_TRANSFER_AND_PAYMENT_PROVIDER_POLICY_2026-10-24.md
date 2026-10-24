@@ -4,16 +4,37 @@
 **Status:** Proposed policy alignment for owner review; this document does not certify implementation.  
 **Binding authority:** Once owner-approved, this addendum supplements [Active Business Rules](ACTIVE_BUSINESS_RULES_2026-10-22.md) and the [Payment, Refund, Settlement & Paystack Webhook Policy](../../PAYMENT_REFUND_POLICY_AND_WEBHOOK_MATRIX.md). If there is a conflict, this addendum governs manual bank transfer only; all unrelated active business rules remain in force.
 
-## 1. Purpose and permitted payment methods
+## 1. Purpose, strict isolation and permitted payment methods
 
-Victorious MARKET may offer these distinct payment methods when enabled by an authorized admin:
+Victorious MARKET has two distinct customer payment paths:
 
-1. **Paystack checkout:** Paystack-supported card and bank-transfer channels, verified through trusted provider verification/webhook mechanisms.
-2. **Manual bank transfer:** The customer transfers directly to the Victorious MARKET receiving bank account configured in the admin dashboard. The transfer is not a Paystack transaction and must not be represented or processed as one.
+1. **Paystack checkout:** Paystack-supported card and Paystack bank-transfer channels, verified through trusted Paystack verification/webhook mechanisms.
+2. **Manual Bank Transfer:** The customer transfers directly to the Victorious MARKET receiving bank account configured in the admin dashboard. This is a direct bank credit, is not a Paystack transaction, and must never be represented or processed as one.
+
+### 1.1 Mutual-exclusion activation rule
+
+Only **one customer payment method may be active globally at any time**. An authorized admin may activate Paystack, activate Manual Bank Transfer, or deactivate both. The system must reject any attempt to enable the second method while the other is active. This rule must be enforced server-side and in persistent configuration, not merely by hiding a checkout option in the user interface. Configuration updates must be atomic and concurrency-safe so two admins or requests cannot activate both methods simultaneously.
+
+If neither method is active, checkout must not accept payment or create a payable order. Existing orders and pending transactions must remain auditable and must be handled according to their recorded payment method; deactivation must not delete them or pretend they were paid, cancelled or refunded.
+
+### 1.2 Per-order payment-method lock
+
+At order/payment-intent creation, the system records exactly one immutable payment-method identity: paystack or manual_bank_transfer. That identity governs all attempts, evidence, verification, approval, settlement, refund routing and reconciliation for the order.
+
+- An order must never be paid partly through Paystack and partly through Manual Bank Transfer.
+- A Paystack reference, webhook, capture or refund must never verify, approve, settle or refund a manual-transfer payment.
+- A manual bank credit, narration, bank reference or admin approval must never verify, approve, settle or refund a Paystack payment.
+- Neither method may be used as a fallback to complete, top up, replace or settle the other method's order.
+- Provider identifiers and evidence must remain namespaced by method. A matching amount or order code alone cannot make evidence from one path valid for the other.
+- The system must reject cross-method callbacks, transaction reuse, duplicate application and attempts to attach a transaction from another method to an existing order.
+
+The order's payment method cannot be silently switched after a payment attempt has been created or a transfer may have been sent. If an attempt definitively failed or was cancelled and there is authoritative evidence that no payment was captured/credited, an authorized admin may start a separately audited payment-method reset under a defined, tested procedure. The original attempt and method must remain in the audit trail. If a result is pending, unknown, disputed, or a bank transfer may still arrive, switching is prohibited until the original path is reconciled. A late or duplicate payment must be held for investigation and must not automatically fulfil or settle the order.
+
+### 1.3 Shared financial core without shared transaction identity
+
+The methods share only provider-neutral order lifecycle and financial safety rules: exact amount and currency, one verified payment per order, idempotency, transaction uniqueness, auditability, reconciliation, payment-before-sourcing, and manual human authorization for outflows. They do not share provider transactions, verification evidence, transaction references, settlement mechanisms or refund rails. The architecture may use common interfaces or common ledger infrastructure only if method-specific identity and permissions remain enforced end-to-end.
 
 Cash on delivery remains disabled. Suppliers may not collect customer payments or direct customers to private/off-platform accounts. All customer payments must be made to an account officially configured for Victorious MARKET.
-
-The architecture must permit payment methods/providers to be added, enabled, disabled or replaced without weakening the shared order, ledger, refund, reconciliation, audit or idempotency controls. Provider-specific evidence must remain distinguishable from provider-neutral order/payment state.
 
 ## 2. Admin-configured receiving account
 
@@ -75,7 +96,12 @@ Manual bank transfer is a separately verified tender path, not a fake gateway ad
 ## 8. Required acceptance tests before release
 
 At minimum, tests must prove:
-- admin permissions, validation and audit history for account configuration;
+- admin permissions, validation and audit history for payment-method activation and account configuration;
+- server-side and concurrency-safe proof that Paystack and Manual Bank Transfer cannot both be active globally;
+- checkout rejects payment when both methods are disabled and rejects any invalid dual-enabled configuration;
+- each order is bound to exactly one payment method and cannot mix, top up, switch or settle through the other method;
+- cross-method references, webhooks, bank credits, approvals, refunds and transaction reuse are rejected;
+- deactivation preserves existing orders and evidence; pending/unknown attempts cannot be switched, and late payments are held for review;
 - unique order codes and correct customer instructions/account snapshot;
 - screenshots and customer claims cannot mark an order paid;
 - exact match, missing/wrong narration, underpayment, overpayment, pending/reversed credit and unknown transaction handling;
