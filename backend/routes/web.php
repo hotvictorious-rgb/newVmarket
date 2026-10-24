@@ -5,6 +5,7 @@ use App\Http\Controllers\Web\AdminSupplierCatalogController;
 use App\Http\Controllers\Web\AdminOrderSupplierAssignmentController;
 use App\Http\Controllers\Web\AdminSupplierRecoveryController;
 use App\Http\Controllers\Web\AdminRetailerSupplierPayoutController;
+use App\Http\Controllers\Web\AdminPaymentCaptureExceptionController;
 use App\Http\Controllers\Web\PaystackPaymentController;
 use App\Http\Controllers\Web\PortalController;
 use App\Http\Controllers\Web\WebAuthController;
@@ -73,6 +74,9 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/delivery-lanes', [PortalController::class, 'adminDeliveryLanesPage'])->name('admin.delivery_lanes.index');
     Route::get('/settlements', [PortalController::class, 'adminSettlementsPage'])->name('admin.settlements.index');
     Route::get('/retailer-supplier-payouts', [AdminRetailerSupplierPayoutController::class, 'index'])->name('admin.retailer-supplier-payouts.index');
+    Route::get('/payment-capture-exceptions', [AdminPaymentCaptureExceptionController::class, 'index'])->name('admin.payment-capture-exceptions.index');
+    Route::post('/payment-capture-exceptions/{id}/prepare', [AdminPaymentCaptureExceptionController::class, 'prepare'])->whereNumber('id')->name('admin.payment-capture-exceptions.prepare');
+    Route::post('/payment-capture-exception-resolutions/{id}/confirm-manual-refund', [AdminPaymentCaptureExceptionController::class, 'confirmManualRefund'])->whereNumber('id')->name('admin.payment-capture-exceptions.confirm-manual-refund');
     Route::post('/retailer-supplier-payouts/{id}/disburse', [AdminRetailerSupplierPayoutController::class, 'disburse'])->whereNumber('id')->name('admin.retailer-supplier-payouts.disburse');
     Route::post('/retailer-supplier-payouts/{id}/reconcile', [AdminRetailerSupplierPayoutController::class, 'reconcile'])->whereNumber('id')->name('admin.retailer-supplier-payouts.reconcile');
     Route::post('/retailer-supplier-payouts/{id}/reject', [AdminRetailerSupplierPayoutController::class, 'reject'])->whereNumber('id')->name('admin.retailer-supplier-payouts.reject');
