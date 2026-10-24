@@ -53,12 +53,15 @@ class CheckSupplierConfirmationSlaCommand extends Command
             $elapsedMinutes = $this->calculateOperatingMinutes($assignedAt, $now);
 
             if ($elapsedMinutes >= 60) {
-                DB::transaction(function () use ($assignment, $order, $elapsedMinutes, &$breachedCount) {
+                $didTimeout = DB::transaction(function () use ($assignment, $order, $elapsedMinutes, &$breachedCount): bool {
                     $lockedAssignment = OrderSupplierAssignment::whereKey($assignment->id)->lockForUpdate()->first();
                     $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->first();
 
-                    if (!$lockedAssignment || $lockedAssignment->status !== 'awaiting_supplier_confirmation') {
-                        return;
+                    if (!$lockedAssignment || !$lockedOrder
+                        || $lockedAssignment->status !== 'awaiting_supplier_confirmation'
+                        || !$lockedOrder->retailer_model_order
+                        || $lockedOrder->payment_status !== 'paid') {
+                        return false;
                     }
 
                     $lockedAssignment->status = 'timed_out';
@@ -72,11 +75,15 @@ class CheckSupplierConfirmationSlaCommand extends Command
                         ->get();
 
                     foreach ($items as $item) {
-                        SupplierOffer::where('product_id', $item->product_id)
-                            ->where('vendor_id', $lockedAssignment->supplier_vendor_id)
-                            ->update([
-                                'unavailability_penalty_expires_at' => Carbon::now()->addHours(24),
-                            ]);
+                        if ($item->fulfillment_supplier_offer_id) {
+                            SupplierOffer::whereKey($item->fulfillment_supplier_offer_id)
+                                ->where('product_id', $item->product_id)
+                                ->where('vendor_id', $lockedAssignment->supplier_vendor_id)
+                                ->where('shop_id', $lockedAssignment->supplier_shop_id)
+                                ->update([
+                                    'unavailability_penalty_expires_at' => Carbon::now()->addHours(24),
+                                ]);
+                        }
                     }
 
                     $lockedOrder->sourcing_status = 'timed_out';
@@ -105,7 +112,33 @@ class CheckSupplierConfirmationSlaCommand extends Command
                     ]);
 
                     $breachedCount++;
+                    return true;
                 });
+
+                if ($didTimeout) {
+                    try {
+                        $failover = app(\App\Services\SupplierReassignmentRecoveryService::class)
+                            ->attemptAutomaticFailover($order->id, $assignment->id);
+                        if (!($failover['success'] ?? false)) {
+                            $this->warn("Order #{$order->id}: automatic failover did not complete; Super Admin review remains required.");
+                        }
+                    } catch (\Throwable $exception) {
+                        AdminAuditLog::create([
+                            'user_id' => null,
+                            'action' => 'automatic_supplier_failover_attempt_failed',
+                            'target_type' => Order::class,
+                            'target_id' => $order->id,
+                            'old_values' => ['assignment_id' => (int) $assignment->id],
+                            'new_values' => [
+                                'reason' => 'Automatic failover after SLA timeout raised an exception and failed closed.',
+                                'exception_class' => get_class($exception),
+                            ],
+                            'ip_address' => '127.0.0.1',
+                            'user_agent' => 'System/CLI',
+                        ]);
+                        $this->error("Order #{$order->id}: automatic failover failed closed; Super Admin review remains required.");
+                    }
+                }
             }
         }
 
