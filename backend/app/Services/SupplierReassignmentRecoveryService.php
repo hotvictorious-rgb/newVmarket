@@ -166,6 +166,18 @@ class SupplierReassignmentRecoveryService
                         $query->whereNull('unavailability_penalty_expires_at')
                             ->orWhere('unavailability_penalty_expires_at', '<=', $offerCheckAt);
                     })
+                    ->where(function ($catalogLink) {
+                        $catalogLink->whereNull('supplier_catalog_product_id')
+                            ->orWhereHas('supplierCatalogProduct', function ($catalog) {
+                                $catalog->whereNull('supplier_catalog_products.deleted_at')
+                                    ->where('supplier_catalog_products.status', 'active')
+                                    ->where('supplier_catalog_products.is_in_stock', true)
+                                    ->whereColumn('supplier_catalog_products.canonical_product_id', 'supplier_offers.product_id')
+                                    ->whereColumn('supplier_catalog_products.supplier_vendor_id', 'supplier_offers.vendor_id')
+                                    ->whereColumn('supplier_catalog_products.supplier_shop_id', 'supplier_offers.shop_id')
+                                    ->whereColumn('supplier_catalog_products.source_price', 'supplier_offers.wholesale_cost');
+                            });
+                    })
                     ->whereNotNull('availability_confirmed_at')
                     ->where('availability_confirmed_at', '<=', $offerCheckAt)
                     ->whereNotNull('availability_confirmed_by')
