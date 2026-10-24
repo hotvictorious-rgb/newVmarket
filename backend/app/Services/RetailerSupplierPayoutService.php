@@ -19,7 +19,7 @@ use Illuminate\Support\Str;
 
 class RetailerSupplierPayoutService
 {
-    private const MINIMUM_AMOUNT = '5000.00';
+    private const MINIMUM_AMOUNT = '1.00';
     private const MAXIMUM_AMOUNT = '1000000.00';
 
     /**
@@ -380,7 +380,7 @@ class RetailerSupplierPayoutService
             }
 
             if (BcMathService::comp($total, self::MINIMUM_AMOUNT) < 0) {
-                return ['success' => false, 'message' => 'Eligible supplier payables are below the ₦5,000 minimum payout.'];
+                return ['success' => false, 'message' => 'Eligible supplier payables are below the ₦1 minimum payout.'];
             }
 
             $payout = RetailerSupplierPayoutRequest::create([
