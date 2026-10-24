@@ -80,10 +80,19 @@ class RetailerSupplierPayoutService
                 return ['success' => false, 'message' => 'Treasury batch gross, fees, net credit and order allocations do not reconcile; supplier payout is blocked.'];
             }
 
-            $usedKobo = (int) RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)
+            // Convert each decimal amount to integer kobo in application code. SQL
+            // CAST/decimal multiplication differs across SQLite and PostgreSQL and can
+            // silently introduce rounding in financial capacity checks.
+            $reservedPayouts = RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)
                 ->whereIn('status', ['pending', 'processing', 'uncertain', 'paid'])
                 ->where('id', '!=', $payout->id)
-                ->sum(DB::raw('CAST(amount * 100 AS BIGINT)'));
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get(['amount']);
+            $usedKobo = 0;
+            foreach ($reservedPayouts as $reservedPayout) {
+                $usedKobo += (int) bcmul((string) $reservedPayout->amount, '100', 0);
+            }
 
             $amountKobo = (int) bcmul((string) $payout->amount, '100', 0);
             if ($usedKobo + $amountKobo > (int) $batch->net_credit_amount_kobo) {
