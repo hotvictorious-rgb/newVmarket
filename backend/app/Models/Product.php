@@ -212,6 +212,18 @@ class Product extends Model
                     ->whereNotNull('availability_expires_at')
                     ->where('availability_expires_at', '>', $now)
                     ->whereNull('deleted_at')
+                    ->where(function (Builder $catalogLink) {
+                        $catalogLink->whereNull('supplier_catalog_product_id')
+                            ->orWhereHas('supplierCatalogProduct', function (Builder $catalog) {
+                                $catalog->whereNull('supplier_catalog_products.deleted_at')
+                                    ->where('supplier_catalog_products.status', 'active')
+                                    ->where('supplier_catalog_products.is_in_stock', true)
+                                    ->whereColumn('supplier_catalog_products.canonical_product_id', 'supplier_offers.product_id')
+                                    ->whereColumn('supplier_catalog_products.supplier_vendor_id', 'supplier_offers.vendor_id')
+                                    ->whereColumn('supplier_catalog_products.supplier_shop_id', 'supplier_offers.shop_id')
+                                    ->whereColumn('supplier_catalog_products.source_price', 'supplier_offers.wholesale_cost');
+                            });
+                    })
                     ->whereHas('vendor', function ($vendor) {
                         $vendor->whereNull('vendor_profiles.deleted_at')
                             ->where('marketplace_status', 'active')
