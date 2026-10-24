@@ -139,4 +139,5 @@ jobs:
             tests/Feature/AutomatedSupplierSourcingTest.php \
             tests/Feature/SupplierPrivateCatalogPolicyTest.php \
             tests/Feature/PaymentCaptureExceptionResolutionTest.php \
+            tests/Feature/TreasuryBankCreditBatchTest.php \
             --display-warnings
