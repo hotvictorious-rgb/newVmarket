@@ -489,6 +489,44 @@ class ProcessedWebhookEventCrashRecoveryTest extends TestCase
         ]);
     }
 
+    public function test_server_verified_amount_mismatch_is_persisted_as_payment_exception(): void
+    {
+        $order = $this->createTestOrder(['grand_total' => '10000.00']);
+        $payload = $this->buildWebhookPayload($order, 'evt_amount_mismatch_009');
+        $payloadJson = json_encode($payload);
+        $signature = hash_hmac('sha512', $payloadJson, $this->secretKey);
+
+        Http::fake([
+            'https://api.paystack.co/transaction/verify/*' => Http::response([
+                'status' => true,
+                'message' => 'Verification successful',
+                'data' => [
+                    'id' => 888777,
+                    'status' => 'success',
+                    'currency' => 'NGN',
+                    'amount' => 999999,
+                    'reference' => $order->payment_reference,
+                    'channel' => 'card',
+                    'customer' => ['email' => $this->customer->email],
+                ],
+            ], 200),
+        ]);
+
+        $response = $this->postJson(route('payment.paystack.webhook'), $payload, [
+            'x-paystack-signature' => $signature,
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertSame('pending', $order->fresh()->payment_status);
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $order->id)->count());
+        $this->assertDatabaseHas('payment_capture_exceptions', [
+            'order_id' => $order->id,
+            'gateway_transaction_id' => '888777',
+            'exception_type' => 'server_verification_rejected_amount_mismatch',
+            'status' => 'pending_admin_review',
+        ]);
+    }
+
     /**
      * TEST 6: Journal Duplication Proof - 100x Replay Storm
      * Replay the exact same webhook event 100 times in succession.
