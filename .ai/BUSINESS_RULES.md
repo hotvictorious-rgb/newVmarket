@@ -55,3 +55,9 @@
 - An authorized admin must verify actual credited funds and approve the payment through an auditable, concurrency-safe operation. A transaction cannot be applied to multiple orders. Discrepancies and late payments remain on hold for review.
 - No supplier confirmation/allocation, fulfilment or supplier payable may begin before the payment is verified and approved. Paystack and manual bank transfer must share payment/order safety invariants while retaining distinct provider evidence.
 - Refunds for manual-transfer orders require authorized human Super Admin review and manual dispatch; never dispatch automatically. The refund destination procedure must be explicitly approved before production release. See [Manual Bank Transfer and Payment-Provider Policy](../docs/architecture/MANUAL_BANK_TRANSFER_AND_PAYMENT_PROVIDER_POLICY_2026-10-24.md).
+
+
+## Exclusive payment methods and isolation
+- Only one customer payment method may be active globally: Paystack or Manual Bank Transfer, or neither. Admin activation is atomic and concurrency-safe; the server must reject dual-enabled configuration. If neither is active, checkout cannot accept payment.
+- Every order is immutably bound to exactly one method. No mixed payment, top-up, cross-method verification, settlement, refund, or silent switching is allowed. Paystack references/webhooks apply only to Paystack orders; bank-credit evidence/admin approval apply only to manual-transfer orders.
+- Deactivation never deletes or rewrites existing orders. Pending, unknown, disputed or potentially late payment must be reconciled before any audited reset. See [Manual Bank Transfer and Payment-Provider Policy](../docs/architecture/MANUAL_BANK_TRANSFER_AND_PAYMENT_PROVIDER_POLICY_2026-10-24.md).
