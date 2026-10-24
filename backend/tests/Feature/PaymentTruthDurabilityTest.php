@@ -332,13 +332,7 @@ class PaymentTruthDurabilityTest extends TestCase
             'order_id' => $order->id, 'product_id' => $this->product->id,
             'product_name' => $this->product->name, 'quantity' => 1,
             'unit_price' => '150000.00', 'line_total' => '150000.00',
-            'supplier_offer_id' => $this->offer->id, 'supplier_vendor_id' => $this->supplier->id,
-            'supplier_shop_id' => $this->shop->id, 'supplier_cost_snapshot' => '130000.00',
             'package_tier' => 'bulky',
-        ]);
-        OrderSupplierAssignment::create([
-            'order_id' => $order->id, 'supplier_vendor_id' => $this->supplier->id,
-            'supplier_shop_id' => $this->shop->id, 'status' => 'awaiting_payment',
         ]);
         $result = app(OrderSettlementService::class)->settlePaystackOrder($order, [
             'id' => 998877, 'reference' => $order->payment_reference, 'status' => 'success',
