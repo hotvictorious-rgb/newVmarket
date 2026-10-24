@@ -8,6 +8,7 @@ class RetailerSupplierPayoutRequest extends Model
 {
     protected $fillable = [
         'supplier_vendor_id',
+        'treasury_bank_credit_batch_id',
         'amount',
         'status',
         'gateway_status',
@@ -35,6 +36,11 @@ class RetailerSupplierPayoutRequest extends Model
     public function supplier()
     {
         return $this->belongsTo(VendorProfile::class, 'supplier_vendor_id');
+    }
+
+    public function treasuryBankCreditBatch()
+    {
+        return $this->belongsTo(TreasuryBankCreditBatch::class, 'treasury_bank_credit_batch_id');
     }
 
     public function allocations()
