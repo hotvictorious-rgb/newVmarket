@@ -47,6 +47,15 @@ class OrderSettlementService
             return ['success' => false, 'status' => 'MISSING_ORDER_PAYMENT_REFERENCE', 'message' => 'The order has no immutable payment reference.'];
         }
 
+        if (Order::where('payment_reference', trim($bankTransactionReference))
+            ->orWhere('paystack_transaction_id', trim($bankTransactionReference))
+            ->exists()
+            || \App\Models\ManualBankTransferPayment::where('bank_transaction_reference', trim($bankTransactionReference))
+                ->where('order_id', '!=', $order->id)
+                ->exists()) {
+            return ['success' => false, 'status' => 'BANK_TRANSACTION_ALREADY_USED', 'message' => 'This bank transaction identity is already associated with another payment/order.'];
+        }
+
         return $this->settleVerifiedPaymentOrder($order, [
             'status' => 'success',
             'currency' => 'NGN',
