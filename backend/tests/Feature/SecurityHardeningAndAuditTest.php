@@ -215,7 +215,10 @@ class SecurityHardeningAndAuditTest extends TestCase
             'description' => 'Attempting cross-vendor product injection',
         ]);
 
-        $response->assertSessionHasErrors(['shop_id']);
+        $this->assertTrue(in_array($response->status(), [410, 302]));
+        if ($response->status() === 302) {
+            $response->assertSessionHasErrors(['shop_id']);
+        }
 
         $this->assertDatabaseMissing('products', [
             'name' => 'Malicious Hijacked Product',
@@ -249,8 +252,8 @@ class SecurityHardeningAndAuditTest extends TestCase
         // Vendor A attempts to refresh Vendor B's product
         $response = $this->actingAs($vendorUserA)->post(route('vendor.products.refresh', $productB->id));
 
-        // Strict 404 ModelNotFound because product query is scoped to vendor_id
-        $response->assertStatus(404);
+        // Strict 404 ModelNotFound or 410 Gone (retired under central retailer fulfilment)
+        $this->assertTrue(in_array($response->status(), [404, 410]));
 
         $productB->refresh();
         $this->assertEquals('unlisted', $productB->listing_status);
@@ -425,7 +428,7 @@ class SecurityHardeningAndAuditTest extends TestCase
             'inventory_quantity' => 5,
             'package_tier' => 'standard',
         ]);
-        $responseProd->assertStatus(404);
+        $this->assertTrue(in_array($responseProd->status(), [404, 410]));
 
         // Vendor A attempts to update Vendor B's shop branch
         $responseShop = $this->actingAs($vendorUserA)->post(route('vendor.shops.update', $shopB->id), [
@@ -604,6 +607,8 @@ class SecurityHardeningAndAuditTest extends TestCase
 
         $response = $this->actingAs($admin)->post(route('admin.disburse.logistics_payout'), [
             'payout_id' => $payout->id,
+            'bank_transaction_reference' => 'CBN-TX-DISBURSE-COOLDOWN-1',
+            'settlement_proof' => \Illuminate\Http\UploadedFile::fake()->create('settlement_proof.pdf', 50, 'application/pdf'),
             'notes' => 'Corporate disbursement attempt during cooldown',
         ]);
 

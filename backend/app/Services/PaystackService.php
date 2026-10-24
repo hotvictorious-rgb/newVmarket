@@ -73,7 +73,7 @@ class PaystackService
         $reference = $order->payment_reference ?? ('VM-' . date('YmdHis') . '-' . strtoupper(\Illuminate\Support\Str::random(8)));
 
         // Safe deterministic mock in testing environment
-        if (app()->environment('testing')) {
+        if (app()->environment('testing') && config('services.paystack.simulate_in_tests', true)) {
             return [
                 'success' => true,
                 'is_simulated' => true,

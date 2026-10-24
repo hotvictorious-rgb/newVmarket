@@ -212,7 +212,9 @@ class PaystackFinancialValidationGuardrailTest extends TestCase
             'platform_margin_5' => '500.00',
         ]);
 
-        Http::fake(function () {
+        $dispatchAttempts = 0;
+        Http::fake(function () use (&$dispatchAttempts) {
+            $dispatchAttempts++;
             throw new ConnectionException('Simulated timeout after request dispatch.');
         });
 
@@ -224,7 +226,7 @@ class PaystackFinancialValidationGuardrailTest extends TestCase
 
         $this->assertFalse($result['success']);
         $this->assertSame('NETWORK_ERROR', $result['code']);
-        Http::assertSentCount(1);
+        $this->assertSame(1, $dispatchAttempts);
     }
 
 }

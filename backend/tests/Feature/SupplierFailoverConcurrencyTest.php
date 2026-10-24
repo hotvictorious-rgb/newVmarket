@@ -28,6 +28,17 @@ class SupplierFailoverConcurrencyTest extends TestCase
 {
     use DatabaseMigrations;
 
+    protected function runDatabaseMigrations()
+    {
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $this->artisan('migrate:fresh');
+            $this->beforeApplicationDestroyed(function () {
+                $this->artisan('migrate:rollback');
+            });
+        }
+    }
+
+
     public function test_two_processes_competing_for_one_failed_assignment_create_one_recovery_only(): void
     {
         if (DB::connection()->getDriverName() !== 'pgsql') {

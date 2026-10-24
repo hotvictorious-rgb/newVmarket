@@ -20,6 +20,17 @@ class TreasuryBankCreditConcurrencyTest extends TestCase
 {
     use DatabaseMigrations;
 
+    protected function runDatabaseMigrations()
+    {
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $this->artisan('migrate:fresh');
+            $this->beforeApplicationDestroyed(function () {
+                $this->artisan('migrate:rollback');
+            });
+        }
+    }
+
+
     public function test_two_processes_cannot_overreserve_one_treasury_bank_credit_batch(): void
     {
         if (DB::connection()->getDriverName() !== 'pgsql') {
