@@ -35,9 +35,23 @@ Route::get('/auth/google/redirect', [WebAuthController::class, 'redirectToGoogle
 Route::get('/auth/google/callback', [WebAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
 Route::post('/auth/google/one-tap', [WebAuthController::class, 'handleGoogleOneTap'])->name('auth.google.one_tap');
 
+$adminPrefix = trim((string) config('auth.admin_panel_path', env('ADMIN_PANEL_PATH', 'admin')), '/');
+if (empty($adminPrefix)) {
+    $adminPrefix = 'admin';
+}
+
 // Portal 2: Super Admin Command Gate
-Route::get('/admin/login', [WebAuthController::class, 'showAdminLogin'])->name('admin.login');
-Route::post('/admin/login', [WebAuthController::class, 'loginAdmin'])->name('admin.login.post')->middleware('throttle:5,1');
+Route::get('/' . $adminPrefix . '/login', [WebAuthController::class, 'showAdminLogin'])->name('admin.login');
+Route::post('/' . $adminPrefix . '/login', [WebAuthController::class, 'loginAdmin'])->name('admin.login.post')->middleware('throttle:5,1');
+Route::get('/' . $adminPrefix . '/verify-2fa', [WebAuthController::class, 'showAdminVerify2Fa'])->name('admin.verify_2fa');
+Route::post('/' . $adminPrefix . '/verify-2fa', [WebAuthController::class, 'verifyAdmin2Fa'])->name('admin.verify_2fa.post')->middleware('throttle:5,1');
+Route::post('/' . $adminPrefix . '/resend-2fa', [WebAuthController::class, 'resendAdmin2Fa'])->name('admin.resend_2fa')->middleware('throttle:3,1');
+
+if ($adminPrefix !== 'admin') {
+    Route::any('/admin{any?}', function () {
+        abort(404);
+    })->where('any', '.*');
+}
 
 // Portal 3: Admin Staff (Finance, Dispatch, Support)
 Route::get('/admin-staff/login', [WebAuthController::class, 'showAdminStaffLogin'])->name('admin.staff.login');
@@ -71,7 +85,7 @@ Route::post('/demo/quick-login', [WebAuthController::class, 'quickDemoLogin'])->
 // ==========================================
 
 // 1. Super Admin Command Tower
-Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
+Route::middleware(['role:super_admin', 'admin.session'])->prefix($adminPrefix)->group(function () {
     Route::get('/manual-bank-transfers', [ManualBankTransferController::class, 'index'])->name('admin.manual-bank-transfers.index');
     Route::post('/manual-bank-transfers/settings', [ManualBankTransferController::class, 'saveSettings'])->name('admin.manual-bank-transfers.settings');
     Route::post('/manual-bank-transfers/{id}/approve', [ManualBankTransferController::class, 'approve'])->whereNumber('id')->name('admin.manual-bank-transfers.approve');
@@ -266,7 +280,7 @@ Route::middleware(['role:customer'])->prefix('customer')->group(function () {
 // ==========================================
 
 // Stage 1: Super Admin Command Routes
-Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
+Route::middleware(['role:super_admin', 'admin.session'])->prefix($adminPrefix)->group(function () {
     Route::post('/delivery-lanes', [PortalController::class, 'adminStoreDeliveryLane'])->name('admin.delivery_lanes.store');
     Route::post('/delivery-lanes/zonal-rates', [PortalController::class, 'adminUpdateZonalRates'])->name('admin.delivery_lanes.zonal');
     Route::delete('/delivery-lanes/{id}', [PortalController::class, 'adminDeleteDeliveryLane'])->name('admin.delivery_lanes.delete');

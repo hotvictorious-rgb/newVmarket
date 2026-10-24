@@ -136,11 +136,11 @@
 
                 <div class="vm-val-prop-item" style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; box-shadow: var(--vm-shadow-xs);">
                     <div class="vm-val-prop-icon-wrap" style="width: 38px; height: 38px; border-radius: 8px; background: rgba(217, 119, 6, 0.1); color: #D97706; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                     </div>
                     <div class="vm-val-prop-text">
-                        <strong class="vm-val-prop-title" style="display: block; font-size: 13px; font-weight: 700; color: #0F172A;">In-Shop Inspection</strong>
-                        <span class="vm-val-prop-desc" style="display: block; font-size: 11px; color: #64748B;">Inspect physically before payment</span>
+                        <strong class="vm-val-prop-title" style="display: block; font-size: 13px; font-weight: 700; color: #0F172A;">Quality Inspected</strong>
+                        <span class="vm-val-prop-desc" style="display: block; font-size: 11px; color: #64748B;">Verified before doorstep dispatch</span>
                     </div>
                 </div>
 
@@ -149,8 +149,8 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
                     </div>
                     <div class="vm-val-prop-text">
-                        <strong class="vm-val-prop-title" style="display: block; font-size: 13px; font-weight: 700; color: #0F172A;">Uyo Local Delivery</strong>
-                        <span class="vm-val-prop-desc" style="display: block; font-size: 11px; color: #64748B;">Uyo, Eket & nationwide logistics</span>
+                        <strong class="vm-val-prop-title" style="display: block; font-size: 13px; font-weight: 700; color: #0F172A;">Uyo Doorstep Delivery</strong>
+                        <span class="vm-val-prop-desc" style="display: block; font-size: 11px; color: #64748B;">Tracked local delivery to your door</span>
                     </div>
                 </div>
 
@@ -159,8 +159,8 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
                     </div>
                     <div class="vm-val-prop-text">
-                        <strong class="vm-val-prop-title" style="display: block; font-size: 13px; font-weight: 700; color: #0F172A;">Paystack Escrow</strong>
-                        <span class="vm-val-prop-desc" style="display: block; font-size: 11px; color: #64748B;">Cards, transfers & cashbacks</span>
+                        <strong class="vm-val-prop-title" style="display: block; font-size: 13px; font-weight: 700; color: #0F172A;">Dual Secure Payment</strong>
+                        <span class="vm-val-prop-desc" style="display: block; font-size: 11px; color: #64748B;">Paystack & direct bank transfer</span>
                     </div>
                 </div>
 
@@ -211,8 +211,8 @@
             </div>
 
             <div class="vm-discovery-card-footer">
-                <a href="#merchants" class="vm-discovery-card-link" style="font-size: 12.5px; font-weight: 700; color: var(--vm-primary); text-decoration: none;">
-                    Explore Sourcing Hubs in Uyo →
+                <a href="#catalog" class="vm-discovery-card-link" style="font-size: 12.5px; font-weight: 700; color: var(--vm-primary); text-decoration: none;">
+                    Explore Full Uyo Catalog →
                 </a>
             </div>
         </div>

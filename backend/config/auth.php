@@ -131,4 +131,13 @@ return [
         'phone' => env('SUPERADMIN_PHONE', '+2348011110001'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Super Admin Panel Hardening Options
+    |--------------------------------------------------------------------------
+    */
+    'admin_panel_path' => env('ADMIN_PANEL_PATH', 'admin'),
+    'admin_session_lifetime_minutes' => (int) env('ADMIN_SESSION_LIFETIME_MINUTES', 15),
+    'admin_2fa_enabled' => (bool) env('ADMIN_2FA_ENABLED', false),
+
 ];

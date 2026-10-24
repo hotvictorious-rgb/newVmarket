@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserRole::class,
+            'admin.session' => \App\Http\Middleware\AdminSessionSecurityMiddleware::class,
         ]);
         $middleware->validateCsrfTokens(except: [
             'payment/paystack/webhook',

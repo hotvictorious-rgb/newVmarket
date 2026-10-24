@@ -347,7 +347,55 @@ class WebAuthController extends Controller
     {
         $response = $this->authenticateRole($request, ['super_admin'], redirect()->route('admin.dashboard'));
 
-        if (Auth::check() && Auth::user()->isSuperAdmin()) {
+        if (Auth::check()) {
+            $user = Auth::user();
+            if (!$user->isSuperAdmin()) {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+                throw ValidationException::withMessages([
+                    'login' => ['Security Violation: Only the designated single Super Admin configured in the server environment is permitted to access this gate.'],
+                ]);
+            }
+
+            // Anti-hijack & Inactivity session bindings
+            $request->session()->put('admin_session_ip', (string) ($request->ip() ?? '127.0.0.1'));
+            $request->session()->put('admin_session_ua', hash('sha256', (string) $request->userAgent()));
+            $request->session()->put('admin_last_activity_at', now()->timestamp);
+
+            if (config('auth.admin_2fa_enabled', false)) {
+                $otp = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+                $request->session()->put('admin_2fa_otp', \Illuminate\Support\Facades\Hash::make($otp));
+                $request->session()->put('admin_2fa_expires_at', now()->addMinutes(5)->timestamp);
+                $request->session()->put('admin_2fa_attempts', 0);
+                $request->session()->put('admin_2fa_verified', false);
+
+                try {
+                    \Illuminate\Support\Facades\Mail::raw(
+                        "Your Victorious MARKET Super Admin One-Time Passcode (OTP) is: {$otp}\n\nThis security code expires in 5 minutes.\nIf you did not initiate this login, your platform credentials may be compromised.",
+                        function ($message) use ($user) {
+                            $message->to($user->email)->subject('Victorious MARKET: Super Admin 2FA Code');
+                        }
+                    );
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+
+                AdminAuditLog::create([
+                    'user_id' => $user->id,
+                    'action' => 'super_admin_2fa_otp_dispatched',
+                    'target_type' => User::class,
+                    'target_id' => $user->id,
+                    'new_values' => ['email' => $user->email],
+                    'ip_address' => $request->ip() ?? '127.0.0.1',
+                    'user_agent' => $request->userAgent(),
+                ]);
+
+                return redirect()->route('admin.verify_2fa');
+            }
+
+            $request->session()->put('admin_2fa_verified', true);
+
             AdminAuditLog::create([
                 'user_id' => Auth::id(),
                 'action' => 'super_admin_login_success',
@@ -363,6 +411,103 @@ class WebAuthController extends Controller
         }
 
         return $response;
+    }
+
+    public function showAdminVerify2Fa(Request $request)
+    {
+        if (!Auth::check() || !Auth::user()->isSuperAdmin()) {
+            return redirect()->route('admin.login');
+        }
+
+        if ($request->session()->get('admin_2fa_verified', false)) {
+            return redirect()->route('admin.dashboard');
+        }
+
+        $email = Auth::user()->email;
+        $expiresAt = (int) $request->session()->get('admin_2fa_expires_at', 0);
+        $remainingSeconds = max(0, $expiresAt - now()->timestamp);
+
+        return view('auth.admin-verify-otp', compact('email', 'remainingSeconds'));
+    }
+
+    public function verifyAdmin2Fa(Request $request)
+    {
+        if (!Auth::check() || !Auth::user()->isSuperAdmin()) {
+            return redirect()->route('admin.login');
+        }
+
+        $validated = $request->validate([
+            'otp' => ['required', 'string', 'size:6', 'regex:/^[0-9]{6}$/'],
+        ]);
+
+        $session = $request->session();
+        $storedHashedOtp = $session->get('admin_2fa_otp');
+        $expiresAt = (int) $session->get('admin_2fa_expires_at', 0);
+        $attempts = (int) $session->get('admin_2fa_attempts', 0);
+
+        if ($attempts >= 5 || now()->timestamp > $expiresAt || empty($storedHashedOtp)) {
+            Auth::logout();
+            $session->invalidate();
+            $session->regenerateToken();
+            return redirect()->route('admin.login')->withErrors([
+                'login' => 'The 2FA security code has expired or exceeded maximum validation attempts. Please log in again.',
+            ]);
+        }
+
+        if (!\Illuminate\Support\Facades\Hash::check($validated['otp'], $storedHashedOtp)) {
+            $session->put('admin_2fa_attempts', $attempts + 1);
+            $remaining = 5 - ($attempts + 1);
+            return back()->withErrors([
+                'otp' => "Invalid security code. {$remaining} attempts remaining.",
+            ]);
+        }
+
+        // OTP verified successfully
+        $session->forget(['admin_2fa_otp', 'admin_2fa_expires_at', 'admin_2fa_attempts']);
+        $session->put('admin_2fa_verified', true);
+        $session->put('admin_last_activity_at', now()->timestamp);
+
+        AdminAuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'super_admin_2fa_verification_success',
+            'target_type' => User::class,
+            'target_id' => Auth::id(),
+            'new_values' => [
+                'session_id' => session()->getId(),
+                'verified_at' => Carbon::now()->toIso8601String(),
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return redirect()->route('admin.dashboard')->with('status', 'Super Admin two-factor identity verified successfully.');
+    }
+
+    public function resendAdmin2Fa(Request $request)
+    {
+        if (!Auth::check() || !Auth::user()->isSuperAdmin()) {
+            return redirect()->route('admin.login');
+        }
+
+        $user = Auth::user();
+        $otp = str_pad((string) random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+        $session = $request->session();
+        $session->put('admin_2fa_otp', \Illuminate\Support\Facades\Hash::make($otp));
+        $session->put('admin_2fa_expires_at', now()->addMinutes(5)->timestamp);
+        $session->put('admin_2fa_attempts', 0);
+
+        try {
+            \Illuminate\Support\Facades\Mail::raw(
+                "Your replacement Victorious MARKET Super Admin One-Time Passcode (OTP) is: {$otp}\n\nThis security code expires in 5 minutes.",
+                function ($message) use ($user) {
+                    $message->to($user->email)->subject('Victorious MARKET: Replacement Super Admin 2FA Code');
+                }
+            );
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return back()->with('status', 'A replacement 6-digit verification code has been dispatched to your email.');
     }
 
     // ==========================================
