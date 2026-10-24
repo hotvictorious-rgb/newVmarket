@@ -16,6 +16,7 @@ class LogisticsPayoutRequest extends Model
         'approved_by_admin_id',
         'disbursed_at',
         'settlement_proof_path',
+        'bank_transaction_reference',
         'transfer_reference',
         'gateway_status',
         'paystack_transfer_code',
