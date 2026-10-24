@@ -47,7 +47,7 @@ class OrderSettlementService
             return ['success' => false, 'status' => 'MISSING_ORDER_PAYMENT_REFERENCE', 'message' => 'The order has no immutable payment reference.'];
         }
 
-        return $this->settlePaystackOrder($order, [
+        return $this->settleVerifiedPaymentOrder($order, [
             'status' => 'success',
             'currency' => 'NGN',
             'amount' => $amountKobo,
@@ -60,11 +60,35 @@ class OrderSettlementService
         ], $admin, 'manual_bank_transfer_admin_review', null, null, 'manual_bank_transfer');
     }
 
+    /**
+     * Backward-compatible Paystack entry point. All existing Paystack callers stay
+     * on the Paystack-only route; manual transfers call the provider-neutral core
+     * directly with their own verified bank-credit evidence.
+     */
     public function settlePaystackOrder(
         Order $order,
         array $paystackData,
         ?User $actorUser = null,
         string $channel = 'paystack_webhook',
+        ?int $webhookEventId = null,
+        ?int $webhookAttempt = null
+    ): array {
+        return $this->settleVerifiedPaymentOrder(
+            $order,
+            $paystackData,
+            $actorUser,
+            $channel,
+            $webhookEventId,
+            $webhookAttempt,
+            'paystack'
+        );
+    }
+
+    public function settleVerifiedPaymentOrder(
+        Order $order,
+        array $paymentData,
+        ?User $actorUser = null,
+        string $channel = 'payment_provider',
         ?int $webhookEventId = null,
         ?int $webhookAttempt = null,
         string $provider = 'paystack'
@@ -73,7 +97,7 @@ class OrderSettlementService
             return ['success' => false, 'status' => 'UNSUPPORTED_PAYMENT_PROVIDER', 'message' => 'Unsupported payment provider.'];
         }
 
-        $result = DB::transaction(function () use ($order, $paystackData, $actorUser, $channel, $webhookEventId, $webhookAttempt, $provider) {
+        $result = DB::transaction(function () use ($order, $paymentData, $actorUser, $channel, $webhookEventId, $webhookAttempt, $provider) {
             // For webhook settlement, hold the inbox generation lock in the same
             // transaction as order/payment settlement and journal side effects.
             if ($webhookEventId !== null || $webhookAttempt !== null) {
