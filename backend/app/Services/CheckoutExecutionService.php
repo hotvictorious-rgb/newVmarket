@@ -47,6 +47,7 @@ class CheckoutExecutionService
         if (!in_array($activePaymentMethod, ['paystack', 'manual_bank_transfer'], true)) {
             return ['success' => false, 'status_code' => 503, 'message' => 'Checkout payments are temporarily disabled. Please contact Victorious MARKET support.'];
         }
+        $manualTransferAccountSnapshot = [];
         $requestedPaymentMethod = (string) ($validated['payment_method'] ?? $activePaymentMethod);
         if (!hash_equals($activePaymentMethod, $requestedPaymentMethod)) {
             return ['success' => false, 'status_code' => 409, 'message' => 'The selected payment method is no longer active. Refresh checkout and try again.'];
@@ -59,6 +60,13 @@ class CheckoutExecutionService
                 || !preg_match('/^[0-9]{10}$/', (string) ($account['account_number'] ?? ''))) {
                 return ['success' => false, 'status_code' => 503, 'message' => 'Manual bank transfer is not configured correctly. Checkout is blocked until an authorized admin fixes the receiving account.'];
             }
+            $manualTransferAccountSnapshot = [
+                'bank_name' => trim((string) $account['bank_name']),
+                'account_name' => trim((string) $account['account_name']),
+                'account_number' => trim((string) $account['account_number']),
+                'customer_instructions' => trim((string) ($account['customer_instructions'] ?? '')),
+                'configuration_snapshot_at' => now()->toIso8601String(),
+            ];
         }
 
         if (($validated['fulfillment_type'] ?? null) !== 'doorstep_delivery') {
@@ -141,7 +149,7 @@ class CheckoutExecutionService
         }
 
         try {
-            $result = DB::transaction(function () use ($validated, $user, $idempotencyKey, $requestHash) {
+            $result = DB::transaction(function () use ($validated, $user, $idempotencyKey, $requestHash, $activePaymentMethod, $manualTransferAccountSnapshot) {
             $merchandiseSubtotal = '0.00';
             $itemsToCreate = [];
 
@@ -406,6 +414,7 @@ class CheckoutExecutionService
                 'paid_at' => $paidAt,
                 'payment_method' => $paymentMethod,
                 'payment_reference' => $paymentRef,
+                'manual_bank_transfer_account_snapshot' => $paymentMethod === 'manual_bank_transfer' ? $manualTransferAccountSnapshot : null,
                 'guest_access_token' => bin2hex(random_bytes(32)),
                 'origin_lga_id' => $primarySourceShop->lga_id,
                 'destination_lga_id' => $destLgaId,
