@@ -78,13 +78,113 @@ class OrderSettlementService
                 }
             }
 
-            // 2. IDEMPOTENCY GUARD: Already settled payment (Prevents duplicate captures / cashback replays)
+            // 2. Paid-order replay guard. Validate gateway evidence BEFORE returning
+            // ALREADY_PAID: a second successful capture must not be mistaken for a replay.
             if ($lockedOrder->payment_status === 'paid') {
+                $paidStatus = strtolower((string) ($paystackData['status'] ?? ''));
+                $paidCurrency = strtoupper((string) ($paystackData['currency'] ?? ''));
+                $paidReference = (string) ($paystackData['reference'] ?? '');
+                $paidAmountRaw = $paystackData['amount'] ?? null;
+                $paidAmountIsIntegerKobo = (is_int($paidAmountRaw) || (is_string($paidAmountRaw) && preg_match('/^\\d+$/', $paidAmountRaw) === 1));
+                $paidAmountKobo = $paidAmountIsIntegerKobo ? (int) $paidAmountRaw : -1;
+                $expectedPaidKobo = (int) bcmul(bcadd((string) $lockedOrder->grand_total, '0', 2), '100', 0);
+
+                if ($paidStatus !== 'success') {
+                    return ['success' => false, 'status' => 'STATUS_NOT_SUCCESS', 'message' => "Gateway status '{$paidStatus}' is not successful."];
+                }
+                if ($paidCurrency !== 'NGN') {
+                    return ['success' => false, 'status' => 'CURRENCY_MISMATCH', 'message' => "Currency mismatch: gateway sent '{$paidCurrency}', expected 'NGN'."];
+                }
+                if ($paidReference === '' || empty($lockedOrder->payment_reference) || !hash_equals((string) $lockedOrder->payment_reference, $paidReference)) {
+                    return ['success' => false, 'status' => 'REFERENCE_MISMATCH', 'message' => 'Payment reference does not match the already-paid order.'];
+                }
+                if (!$paidAmountIsIntegerKobo || $paidAmountKobo !== $expectedPaidKobo) {
+                    return ['success' => false, 'status' => 'AMOUNT_MISMATCH', 'message' => 'Incoming capture does not match the already-paid order amount in integer kobo.'];
+                }
+
+                $incomingTransactionId = trim((string) ($paystackData['id'] ?? ''));
+                $storedTransactionId = trim((string) ($lockedOrder->paystack_transaction_id ?? ''));
+                $storedIdentityIsKnown = $storedTransactionId !== ''
+                    && $storedTransactionId !== (string) $lockedOrder->payment_reference;
+                $isExactCaptureReplay = $incomingTransactionId !== ''
+                    && $storedIdentityIsKnown
+                    && hash_equals($storedTransactionId, $incomingTransactionId);
+
+                if (!$isExactCaptureReplay) {
+                    // The order is already paid, but the incoming success cannot be
+                    // proven to be the same gateway capture. Record a durable,
+                    // idempotent exception for admin reconciliation; never create a
+                    // second supplier payable, cashback credit, or automatic refund.
+                    $exceptionIdentity = $incomingTransactionId !== ''
+                        ? 'transaction:' . $incomingTransactionId
+                        : 'evidence:' . hash('sha256', json_encode([
+                            $paidReference,
+                            $paidAmountKobo,
+                            $paidCurrency,
+                            $paidStatus,
+                            $paystackData['channel'] ?? null,
+                        ], JSON_UNESCAPED_SLASHES) ?: '');
+                    $exceptionKey = 'PAYSTACK-DUP-CAP-' . hash('sha256', $exceptionIdentity);
+
+                    \App\Models\PaymentCaptureException::firstOrCreate(
+                        ['idempotency_key' => $exceptionKey],
+                        [
+                            'order_id' => $lockedOrder->id,
+                            'gateway_provider' => 'paystack',
+                            'gateway_transaction_id' => $incomingTransactionId !== '' ? $incomingTransactionId : null,
+                            'payment_reference' => $paidReference,
+                            'amount_kobo' => $paidAmountKobo,
+                            'currency' => $paidCurrency,
+                            'exception_type' => $storedIdentityIsKnown ? 'distinct_successful_capture' : 'payment_identity_unproven',
+                            'status' => 'pending_admin_review',
+                            'evidence' => [
+                                'stored_transaction_id' => $storedTransactionId !== '' ? $storedTransactionId : null,
+                                'incoming_transaction_id' => $incomingTransactionId !== '' ? $incomingTransactionId : null,
+                                'payment_reference' => $paidReference,
+                                'amount_kobo' => $paidAmountKobo,
+                                'currency' => $paidCurrency,
+                                'channel' => (string) ($paystackData['channel'] ?? ''),
+                                'detected_via' => $channel,
+                            ],
+                            'detected_at' => Carbon::now(),
+                        ]
+                    );
+
+                    \App\Models\AdminAuditLog::create([
+                        'user_id' => null,
+                        'action' => 'paystack_duplicate_capture_review_required',
+                        'target_type' => Order::class,
+                        'target_id' => $lockedOrder->id,
+                        'old_values' => ['paystack_transaction_id' => $storedTransactionId],
+                        'new_values' => [
+                            'exception_key' => $exceptionKey,
+                            'exception_type' => $storedIdentityIsKnown ? 'distinct_successful_capture' : 'payment_identity_unproven',
+                            'incoming_transaction_id' => $incomingTransactionId !== '' ? $incomingTransactionId : null,
+                            'payment_reference' => $paidReference,
+                            'amount_kobo' => $paidAmountKobo,
+                            'currency' => $paidCurrency,
+                            'requires_admin_review' => true,
+                            'automatic_refund_dispatched' => false,
+                        ],
+                        'ip_address' => request()->ip() ?? '127.0.0.1',
+                        'user_agent' => 'Paystack settlement reconciliation',
+                    ]);
+
+                    return [
+                        'success' => true,
+                        'status' => 'DUPLICATE_CAPTURE_REQUIRES_REVIEW',
+                        'is_replayed' => false,
+                        'requires_admin_review' => true,
+                        'message' => 'The order was already paid, but this capture could not be proven to be the original transaction. A durable admin-review exception was recorded; no additional financial effects were posted.',
+                        'order' => $lockedOrder,
+                    ];
+                }
+
                 return [
                     'success' => true,
                     'status' => 'ALREADY_PAID',
                     'is_replayed' => true,
-                    'message' => 'Payment has already been successfully verified and settled.',
+                    'message' => 'The same gateway transaction was already verified and settled.',
                     'order' => $lockedOrder,
                 ];
             }
