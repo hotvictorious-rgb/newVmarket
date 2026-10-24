@@ -154,10 +154,10 @@ class OrderSettlementService
             // 2. Paid-order replay guard. Validate gateway evidence BEFORE returning
             // ALREADY_PAID: a second successful capture must not be mistaken for a replay.
             if ($lockedOrder->payment_status === 'paid') {
-                $paidStatus = strtolower((string) ($paystackData['status'] ?? ''));
-                $paidCurrency = strtoupper((string) ($paystackData['currency'] ?? ''));
-                $paidReference = (string) ($paystackData['reference'] ?? '');
-                $paidAmountRaw = $paystackData['amount'] ?? null;
+                $paidStatus = strtolower((string) ($paymentData['status'] ?? ''));
+                $paidCurrency = strtoupper((string) ($paymentData['currency'] ?? ''));
+                $paidReference = (string) ($paymentData['reference'] ?? '');
+                $paidAmountRaw = $paymentData['amount'] ?? null;
                 $paidAmountIsIntegerKobo = (is_int($paidAmountRaw) || (is_string($paidAmountRaw) && preg_match('/^\\d+$/', $paidAmountRaw) === 1));
                 $paidAmountKobo = $paidAmountIsIntegerKobo ? (int) $paidAmountRaw : -1;
                 $expectedPaidKobo = (int) bcmul(bcadd((string) $lockedOrder->grand_total, '0', 2), '100', 0);
@@ -175,7 +175,7 @@ class OrderSettlementService
                     return ['success' => false, 'status' => 'AMOUNT_MISMATCH', 'message' => 'Incoming capture does not match the already-paid order amount in integer kobo.'];
                 }
 
-                $incomingTransactionId = trim((string) ($paystackData['id'] ?? ''));
+                $incomingTransactionId = trim((string) ($paymentData['id'] ?? ''));
                 $storedTransactionId = trim((string) ($lockedOrder->paystack_transaction_id ?? ''));
                 $storedIdentityIsKnown = $storedTransactionId !== ''
                     && $storedTransactionId !== (string) $lockedOrder->payment_reference;
@@ -195,7 +195,7 @@ class OrderSettlementService
                             $paidAmountKobo,
                             $paidCurrency,
                             $paidStatus,
-                            $paystackData['channel'] ?? null,
+                            $paymentData['channel'] ?? null,
                         ], JSON_UNESCAPED_SLASHES) ?: '');
                     $exceptionKey = 'PAYSTACK-DUP-CAP-' . hash('sha256', $lockedOrder->id . '|' . $exceptionIdentity);
 
@@ -216,7 +216,7 @@ class OrderSettlementService
                                 'payment_reference' => $paidReference,
                                 'amount_kobo' => $paidAmountKobo,
                                 'currency' => $paidCurrency,
-                                'channel' => (string) ($paystackData['channel'] ?? ''),
+                                'channel' => (string) ($paymentData['channel'] ?? ''),
                                 'detected_via' => $channel,
                             ],
                             'detected_at' => Carbon::now(),
@@ -265,7 +265,7 @@ class OrderSettlementService
             }
 
             // 3. Status Invariant
-            $txStatus = strtolower((string)($paystackData['status'] ?? ''));
+            $txStatus = strtolower((string)($paymentData['status'] ?? ''));
             if ($txStatus !== 'success') {
                 return [
                     'success' => false,
@@ -275,7 +275,7 @@ class OrderSettlementService
             }
 
             // 4. Currency Invariant
-            $currency = strtoupper((string)($paystackData['currency'] ?? ''));
+            $currency = strtoupper((string)($paymentData['currency'] ?? ''));
             if ($currency !== 'NGN') {
                 return [
                     'success' => false,
@@ -287,7 +287,7 @@ class OrderSettlementService
             // 5. Exact Mathematical Integer Kobo Equality Guard (BCMath Zero Epsilon)
             $grandTotalNormalized = bcadd((string)$lockedOrder->grand_total, '0', 2);
             $expectedKobo = (int) bcmul($grandTotalNormalized, '100', 0);
-            $actualKoboRaw = $paystackData['amount'] ?? null;
+            $actualKoboRaw = $paymentData['amount'] ?? null;
             $actualKoboIsInteger = is_int($actualKoboRaw)
                 || (is_string($actualKoboRaw) && preg_match('/^\\d+$/', $actualKoboRaw) === 1);
             $actualKobo = $actualKoboIsInteger ? (int) $actualKoboRaw : -1;
@@ -301,7 +301,7 @@ class OrderSettlementService
             }
 
             // 6. Reference Invariant
-            $reference = (string)($paystackData['reference'] ?? '');
+            $reference = (string)($paymentData['reference'] ?? '');
             if (empty($reference) || empty($lockedOrder->payment_reference) || !hash_equals((string)$lockedOrder->payment_reference, $reference)) {
                 return [
                     'success' => false,
@@ -311,7 +311,7 @@ class OrderSettlementService
             }
 
             // 7. Customer Identity Invariant
-            $payerEmail = strtolower(trim((string)($paystackData['customer']['email'] ?? '')));
+            $payerEmail = strtolower(trim((string)($paymentData['customer']['email'] ?? '')));
             $orderCustomerEmail = strtolower(trim((string)($lockedOrder->customer->email ?? '')));
             if (!empty($payerEmail) && !empty($orderCustomerEmail) && $payerEmail !== $orderCustomerEmail) {
                 return [
@@ -384,12 +384,12 @@ class OrderSettlementService
             $lockedOrder->paid_at = $now;
             $lockedOrder->payment_channel = $provider === 'manual_bank_transfer'
                 ? 'manual_bank_transfer'
-                : (string)($paystackData['channel'] ?? 'paystack');
+                : (string)($paymentData['channel'] ?? 'paystack');
             // Direct bank transfers are recorded in their own table. Never forge a
             // Paystack transaction ID for a manual bank credit.
             $lockedOrder->paystack_transaction_id = $provider === 'manual_bank_transfer'
                 ? null
-                : (string)($paystackData['id'] ?? $reference);
+                : (string)($paymentData['id'] ?? $reference);
 
             if ($lockedOrder->order_status === 'cancelled') {
                 // The order was previously cancelled by the expiration worker.
