@@ -100,6 +100,7 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/supplier-catalog', [AdminSupplierCatalogController::class, 'index'])->name('admin.supplier-catalog.index');
     Route::post('/supplier-catalog/private-products', [AdminSupplierCatalogController::class, 'storeSupplierCatalogProduct'])->name('admin.supplier-catalog.private-products.store');
     Route::post('/supplier-catalog/private-products/{catalogProductId}/link', [AdminSupplierCatalogController::class, 'linkSupplierCatalogProduct'])->whereNumber('catalogProductId')->name('admin.supplier-catalog.private-products.link');
+    Route::post('/supplier-catalog/private-products/{catalogProductId}/unmatch', [AdminSupplierCatalogController::class, 'unmatchSupplierCatalogProduct'])->whereNumber('catalogProductId')->name('admin.supplier-catalog.private-products.unmatch');
     Route::post('/supplier-catalog/products', [AdminSupplierCatalogController::class, 'storeProduct'])->name('admin.supplier-catalog.products.store');
     Route::post('/supplier-catalog/products/{productId}/listing', [AdminSupplierCatalogController::class, 'setListing'])->whereNumber('productId')->name('admin.supplier-catalog.products.listing');
     Route::patch('/supplier-catalog/offers/{offerId}/cost', [AdminSupplierCatalogController::class, 'updateOfferCost'])->whereNumber('offerId')->name('admin.supplier-catalog.offers.cost');
