@@ -19,9 +19,6 @@ use Illuminate\Support\Str;
 
 class RetailerSupplierPayoutService
 {
-    private const MINIMUM_AMOUNT = '5000.00';
-    private const MAXIMUM_AMOUNT = '1000000.00';
-
     /**
      * Reserve a reconciled corporate bank-credit batch before any transfer recipient
      * creation or gateway transfer call. The batch row is locked to serialize competing
@@ -213,7 +210,8 @@ class RetailerSupplierPayoutService
     /**
      * Reserve only the supplier's explicitly selected, reconciled item payables.
      * Selection is never inferred from order age or FIFO. The selected item set is
-     * revalidated under locks and must fit within one allowed payout transaction.
+     * revalidated under locks. The payout amount is the exact eligible balance of the
+     * explicitly selected items; no arbitrary minimum or maximum payout threshold applies.
      */
     public function requestPayout(VendorProfile $supplier, array $selectedOrderItemIds = []): array
     {
@@ -371,18 +369,6 @@ class RetailerSupplierPayoutService
             foreach ($allocations as $candidate) {
                 $total = BcMathService::add($total, $candidate['amount']);
             }
-            if (BcMathService::comp($total, self::MAXIMUM_AMOUNT) > 0) {
-                return [
-                    'success' => false,
-                    'protected' => true,
-                    'message' => 'Selected supplier payables exceed the ₦1,000,000 maximum per payout. Select a smaller explicit set of items; the request will not be silently split.',
-                ];
-            }
-
-            if (BcMathService::comp($total, self::MINIMUM_AMOUNT) < 0) {
-                return ['success' => false, 'message' => 'Eligible supplier payables are below the ₦5,000 minimum payout.'];
-            }
-
             $payout = RetailerSupplierPayoutRequest::create([
                 'supplier_vendor_id' => $lockedSupplier->id,
                 'amount' => $total,
