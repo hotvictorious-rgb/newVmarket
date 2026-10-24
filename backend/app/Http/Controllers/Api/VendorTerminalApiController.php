@@ -629,6 +629,25 @@ class VendorTerminalApiController extends Controller
             $assignment->handover_ready_at = null;
             $assignment->save();
 
+            // A qualifying rejection starts the existing SKU-specific 24-hour
+            // cooldown before candidate selection, preventing immediate reassignment
+            // to the same failed supplier offer.
+            $assignedItems = \App\Models\OrderItem::where('order_id', $order->id)
+                ->where('fulfillment_supplier_vendor_id', $vendor->id)
+                ->where('fulfillment_supplier_shop_id', $assignment->supplier_shop_id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            foreach ($assignedItems as $item) {
+                if (!$item->fulfillment_supplier_offer_id) {
+                    continue;
+                }
+                SupplierOffer::whereKey($item->fulfillment_supplier_offer_id)
+                    ->where('vendor_id', $vendor->id)
+                    ->where('shop_id', $assignment->supplier_shop_id)
+                    ->update(['unavailability_penalty_expires_at' => Carbon::now()->addHours(24)]);
+            }
+
             // If the order was waiting for rider collection, move it back to a
             // non-dispatchable pre-dispatch state. The order-wide hold is checked
             // again inside the custody service, so stale OTPs cannot bypass it.
@@ -662,10 +681,41 @@ class VendorTerminalApiController extends Controller
 
             return [
                 'success' => true,
-                'message' => 'Rejection recorded. This paid order is now on hold for Victorious MARKET administrative resolution. No automatic refund or supplier payment was triggered.',
+                'assignment_id' => (int) $assignment->id,
+                'message' => 'Rejection recorded. The failed offer is on cooldown; the system will attempt eligible alternatives. No automatic refund or supplier payment was triggered.',
                 'sourcing_status' => $order->sourcing_status,
             ];
         });
+
+        if (($result['success'] ?? false) && !empty($result['assignment_id'])) {
+            try {
+                $failover = app(\App\Services\SupplierReassignmentRecoveryService::class)
+                    ->attemptAutomaticFailover($id, (int) $result['assignment_id']);
+                if (($failover['success'] ?? false) && (int) ($failover['reassigned_groups'] ?? 0) > 0) {
+                    $result['message'] = 'Rejection recorded. Eligible alternative supplier assignment(s) were created; each replacement supplier must confirm the exact order quantities before fulfilment resumes.';
+                    $result['sourcing_status'] = Order::find($id)?->sourcing_status;
+                } elseif (($failover['exhausted'] ?? false) === true) {
+                    $result['message'] = 'Rejection recorded. No complete eligible alternative plan remains; the paid order is held for Super Admin resolution. No automatic refund or supplier payment was triggered.';
+                } elseif (!($failover['success'] ?? false)) {
+                    $result['message'] = 'Rejection recorded. Automatic failover could not safely complete; the paid order remains held for Super Admin reconciliation.';
+                }
+            } catch (\Throwable $exception) {
+                AdminAuditLog::create([
+                    'user_id' => null,
+                    'action' => 'automatic_supplier_failover_attempt_failed',
+                    'target_type' => Order::class,
+                    'target_id' => $id,
+                    'old_values' => ['assignment_id' => (int) $result['assignment_id']],
+                    'new_values' => [
+                        'reason' => 'Automatic failover raised an exception and failed closed.',
+                        'exception_class' => get_class($exception),
+                    ],
+                    'ip_address' => $request->ip() ?? '127.0.0.1',
+                    'user_agent' => $request->userAgent() ?? 'System/API',
+                ]);
+                $result['message'] = 'Rejection recorded. Automatic failover needs Super Admin reconciliation; the paid order remains held. No automatic refund or supplier payment was triggered.';
+            }
+        }
 
         return response()->json([
             'status' => (bool) ($result['success'] ?? false),
