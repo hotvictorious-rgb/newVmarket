@@ -614,4 +614,136 @@ class AutomatedSupplierSourcingTest extends TestCase
         $this->assertStringContainsString('no approved logistics-company payable tariff', strtolower($blocked['message']));
         $this->assertSame($ordersBeforeMissingTariffAttempt, Order::count());
     }
+
+    public function test_paid_supplier_rejection_automatically_fails_over_with_balanced_payable_recovery(): void
+    {
+        [$userA, $vendorA, $shopA] = $this->createSupplier('Primary Supplier', 'primary-failover@supplier.ng', '08011110001');
+        [$userB, $vendorB, $shopB] = $this->createSupplier('Backup Supplier', 'backup-failover@supplier.ng', '08011110002');
+
+        $product = Product::create([
+            'vendor_id' => null,
+            'shop_id' => null,
+            'category_id' => $this->category->id,
+            'name' => 'Supplier Failover Test Product',
+            'slug' => 'supplier-failover-test-product',
+            'unit_price' => '32000.00',
+            'cost_price' => '0.00',
+            'is_in_stock' => true,
+            'inventory_quantity' => 0,
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'listing_confirmed_at' => Carbon::now()->subMinute(),
+            'freshness_confirmed_at' => Carbon::now()->subMinute(),
+        ]);
+
+        $this->createConfirmedOffer([
+            'product_id' => $product->id,
+            'vendor_id' => $vendorA->id,
+            'shop_id' => $shopA->id,
+            'wholesale_cost' => '25000.00',
+        ]);
+        $this->createConfirmedOffer([
+            'product_id' => $product->id,
+            'vendor_id' => $vendorB->id,
+            'shop_id' => $shopB->id,
+            'wholesale_cost' => '27000.00',
+        ]);
+
+        DeliveryLane::create([
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'base_fee' => '500.00',
+            'bulky_surcharge' => '1000.00',
+            'logistics_company_base_payable' => '450.00',
+            'logistics_company_bulky_surcharge' => '800.00',
+            'estimated_delivery_hours_min' => 2,
+            'estimated_delivery_hours_max' => 4,
+            'is_active' => true,
+        ]);
+
+        $checkout = app(\App\Services\CheckoutExecutionService::class)->execute($this->customerUser, [
+            'shop_id' => $shopA->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'destination_lga_id' => $this->uyoLga->id,
+            '_checkout_idempotency_key' => 'IDEMP-FAILOVER-' . uniqid(),
+            '_checkout_request_hash' => hash('sha256', 'supplier-failover-quantity-three'),
+            'items' => [
+                ['product_id' => $product->id, 'quantity' => 3],
+            ],
+        ]);
+        $this->assertTrue($checkout['success'], $checkout['message'] ?? 'Checkout failed.');
+        $order = $checkout['order'];
+
+        $settlement = app(\App\Services\OrderSettlementService::class)->settlePaystackOrder($order, [
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => (int) bcmul((string) $order->grand_total, '100', 0),
+            'reference' => (string) $order->payment_reference,
+            'id' => 'TX-FAILOVER-' . $order->id,
+            'channel' => 'card',
+        ], $this->customerUser);
+        $this->assertTrue($settlement['success'] ?? false, $settlement['message'] ?? 'Payment settlement failed.');
+
+        $order->refresh();
+        $item = OrderItem::where('order_id', $order->id)->firstOrFail();
+        $this->assertSame((int) $vendorA->id, (int) $item->supplier_vendor_id);
+        $this->assertSame('25000.00', (string) $item->supplier_cost_snapshot);
+        $failedAssignment = OrderSupplierAssignment::where('order_id', $order->id)
+            ->where('supplier_vendor_id', $vendorA->id)
+            ->firstOrFail();
+
+        \Laravel\Sanctum\Sanctum::actingAs($userA, ['*']);
+        $rejection = $this->postJson("/api/v1/vendor/orders/{$order->id}/reject-availability", [
+            'reason' => 'Physical stock check confirms insufficient units.',
+        ]);
+        $rejection->assertOk()->assertJsonPath('status', true);
+
+        $order->refresh();
+        $item->refresh();
+        $failedAssignment->refresh();
+        $replacementAssignment = OrderSupplierAssignment::where('order_id', $order->id)
+            ->where('supplier_vendor_id', $vendorB->id)
+            ->firstOrFail();
+
+        $this->assertSame('paid', $order->payment_status);
+        $this->assertSame('confirmed', $order->order_status);
+        $this->assertSame('awaiting_supplier_confirmation', $order->sourcing_status);
+        $this->assertSame('admin_reassigned', $failedAssignment->status);
+        $this->assertSame('awaiting_supplier_confirmation', $replacementAssignment->status);
+        $this->assertSame((int) $vendorA->id, (int) $item->supplier_vendor_id, 'Capture-time supplier identity must remain immutable.');
+        $this->assertSame('25000.00', (string) $item->supplier_cost_snapshot, 'Capture-time cost must remain immutable.');
+        $this->assertSame((int) $vendorB->id, (int) $item->fulfillment_supplier_vendor_id);
+        $this->assertSame((int) $shopB->id, (int) $item->fulfillment_supplier_shop_id);
+        $this->assertSame('27000.00', (string) $item->fulfillment_supplier_cost_snapshot);
+
+        $oldSupplierNet = '0.00';
+        foreach (\App\Models\FinancialJournalEntry::where('order_id', $order->id)
+            ->where('account_name', 'supplier_payable')
+            ->where('beneficiary_type', VendorProfile::class)
+            ->where('beneficiary_id', $vendorA->id)
+            ->get() as $entry) {
+            $oldSupplierNet = $entry->entry_type === 'credit'
+                ? \App\Services\BcMathService::add($oldSupplierNet, (string) $entry->amount)
+                : \App\Services\BcMathService::sub($oldSupplierNet, (string) $entry->amount);
+        }
+        $newSupplierNet = '0.00';
+        foreach (\App\Models\FinancialJournalEntry::where('order_id', $order->id)
+            ->where('account_name', 'supplier_payable')
+            ->where('beneficiary_type', VendorProfile::class)
+            ->where('beneficiary_id', $vendorB->id)
+            ->get() as $entry) {
+            $newSupplierNet = $entry->entry_type === 'credit'
+                ? \App\Services\BcMathService::add($newSupplierNet, (string) $entry->amount)
+                : \App\Services\BcMathService::sub($newSupplierNet, (string) $entry->amount);
+        }
+
+        $this->assertSame('0.00', $oldSupplierNet, 'Failed supplier payable must be reversed exactly once.');
+        $this->assertSame('81000.00', $newSupplierNet, 'Replacement payable must match three units at the replacement source cost.');
+        $this->assertDatabaseHas('admin_audit_logs', [
+            'target_type' => Order::class,
+            'target_id' => $order->id,
+            'action' => 'automatic_supplier_failover_applied',
+        ]);
+    }
+
 }
