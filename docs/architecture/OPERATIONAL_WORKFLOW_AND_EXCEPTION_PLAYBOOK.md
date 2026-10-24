@@ -12,7 +12,7 @@ Victorious MARKET operates as a centralized, deterministic retail and logistics 
 ### The Zero-Automated-Outflow Law
 Victorious MARKET enforces an unbreakable financial rule: **Money NEVER leaves the platform automatically.**
 * **Zero Automated Paystack Refunds:** No webhook, cron job, queue worker, timeout, or automated script may ever trigger a Paystack refund directly. Every single refund (whether due to out-of-stock items, customer cancellation, 24-hour partial fulfilment expiration, or duplicate charges) is queued as an immutable **Pending Refund Request** on the **Super Admin Command Tower**. It requires explicit review, authorization, and manual dispatch initiation by a human Super Administrator.
-* **Zero Automated Bank Transfers:** Supplier wholesale disbursements and logistics company settlements are never automated. Each payout is reviewed and manually authorized and dispatched by an authorized Super Admin strictly after customer funds have cleared and settled from Paystack into the platform's corporate account.
+* **Zero Automated Bank Transfers:** Supplier wholesale disbursements and logistics company settlements are never automated. Each settlement is reviewed, authorized and manually dispatched by an authorized Super Admin only after the relevant customer funds have cleared and been reconciled in the corporate receiving account. Paystack settlement is not a prerequisite for a manual-bank-transfer-funded order.
 
 ### Mandatory Customer Registration Gate (No Guest Checkout)
 * **Open Guest Browsing:** Visitors may browse the catalog, view real-time Uyo product prices, and populate their shopping cart freely without signing in.
@@ -22,7 +22,10 @@ Victorious MARKET enforces an unbreakable financial rule: **Money NEVER leaves t
 [Customer Browses Freely (Guest) ──► Must Register/Login to Checkout]
                   │
                   ▼
-[Customer Pays Upfront via Paystack]
+[Customer Pays Upfront via Paystack OR Manual Bank Transfer]
+                  │
+                  ▼
+[Method-Specific Verification; one payment rail per order]
                   │
                   ▼
 [Automated Sourcing Engine Allocates Supplier(s)]
@@ -224,8 +227,8 @@ To balance robust fraud prevention with low friction for local Uyo merchants, th
   - Orders verified over the weekend mature into eligibility once Paystack funds settle on Monday morning.
   - **Zero Automated Outflow Mandate:** Under no circumstances are automated bank transfers dispatched by cron or background queue. Every single NUBAN disbursement to a supplier or logistics company must be manually authorized, reviewed, and initiated by an authorized Super Administrator.
 * **Payout Guardrails:**
-  - Minimum payout request/batch: **₦5,000**.
-  - Maximum single transaction: **₦1,000,000**.
+  - Minimum supplier or logistics-company settlement request/transfer: **₦1**.
+  - Maximum individual transaction: **₦1,000,000**.
   - Non-FIFO, auditable selection of verified order line-item wholesale payables.
   - Full cryptographic and audit trail linking each transfer to settled Paystack receipts.
 
