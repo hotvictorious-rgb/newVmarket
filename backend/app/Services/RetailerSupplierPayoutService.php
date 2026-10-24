@@ -140,6 +140,77 @@ class RetailerSupplierPayoutService
     }
 
     /**
+     * Verify that a supplier payout is backed by cleared customer collections
+     * (e.g. verified manual bank transfers or settled orders) when a corporate
+     * Paystack treasury batch is not attached.
+     */
+    public function verifyClearedCollectionFunding(int|RetailerSupplierPayoutRequest $payoutTarget): array
+    {
+        return DB::transaction(function () use ($payoutTarget) {
+            $payout = $payoutTarget instanceof RetailerSupplierPayoutRequest
+                ? RetailerSupplierPayoutRequest::whereKey($payoutTarget->id)->lockForUpdate()->first()
+                : RetailerSupplierPayoutRequest::whereKey((int) $payoutTarget)->lockForUpdate()->first();
+
+            if (!$payout) {
+                return ['success' => false, 'message' => 'Payout request was not found.'];
+            }
+            if ($payout->status !== 'pending') {
+                return ['success' => false, 'message' => 'Only a pending payout can verify cleared collection funding.'];
+            }
+
+            $allocations = $payout->allocations()->orderBy('order_id')->orderBy('order_item_id')->lockForUpdate()->get();
+            if ($allocations->isEmpty()) {
+                return ['success' => false, 'message' => 'Payout request has no item allocations; funding check blocked.'];
+            }
+
+            $orderIds = $allocations->pluck('order_id')->unique()->sort()->values()->all();
+            $orders = Order::whereIn('id', $orderIds)->orderBy('id')->lockForUpdate()->get();
+
+            foreach ($orders as $order) {
+                if (!$order->retailer_model_order || $order->payment_status !== 'paid') {
+                    return [
+                        'success' => false,
+                        'message' => "Order #{$order->id} is not a verified paid retailer-model order; payout cannot be funded.",
+                    ];
+                }
+                if ($order->order_status !== 'delivered') {
+                    return [
+                        'success' => false,
+                        'message' => "Order #{$order->id} is not yet delivered; payout funding blocked until delivery is confirmed.",
+                    ];
+                }
+                if (!$order->refund_window_expires_at || $order->refund_window_expires_at->gt(now())) {
+                    return [
+                        'success' => false,
+                        'message' => "Order #{$order->id} return/claim window remains active; payout funding held.",
+                    ];
+                }
+                if ($order->dispute()->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled'])->exists()
+                    || $order->returnCases()->whereNotIn('status', ['rejected', 'closed', 'refunded', 'resolved', 'replacement_completed'])->exists()) {
+                    return [
+                        'success' => false,
+                        'message' => "Order #{$order->id} has an open return or dispute; payout funding held.",
+                    ];
+                }
+            }
+
+            // Check reconciliation engine
+            $audit = app(FinancialReconciliationEngine::class);
+            foreach ($orderIds as $orderId) {
+                $check = $audit->reconcileRetailerSupplierPayables((int) $orderId);
+                if (($check['mismatches'] ?? 0) > 0) {
+                    return [
+                        'success' => false,
+                        'message' => "Order #{$orderId} has an unresolved supplier payable ledger mismatch; payout held.",
+                    ];
+                }
+            }
+
+            return ['success' => true, 'payout' => $payout, 'order_count' => count($orderIds)];
+        }, 3);
+    }
+
+    /**
      * Preview currently eligible net supplier-payable balances for explicit selection.
      * This is display-only: requestPayout rechecks every invariant under locks.
      */
@@ -449,19 +520,22 @@ class RetailerSupplierPayoutService
         }, 3);
     }
 
-    public function markProcessing(int $payoutId, int $adminId, string $recipientCode, string $processingToken): array
+    public function markProcessing(int $payoutId, int $adminId, ?string $recipientCode, string $processingToken, string $channel = 'manual_bank_transfer'): array
     {
         // Fail closed even when this service is called outside the current admin
         // controller. These values identify the authorized transfer attempt.
-        if ($adminId < 1 || trim($recipientCode) === '' || mb_strlen($recipientCode) > 200
-            || !preg_match('/^[A-Za-z0-9._:-]{12,100}$/', trim($processingToken))) {
-            return ['success' => false, 'protected' => true, 'message' => 'A valid administrator, verified transfer recipient, and unique processing token are required.'];
+                $isManual = ($channel === 'manual_bank_transfer' || $recipientCode === 'MANUAL_BANK_TRANSFER' || empty($recipientCode));
+        if ($adminId < 1 || !preg_match('/^[A-Za-z0-9._:-]{12,100}$/', trim($processingToken))) {
+            return ['success' => false, 'protected' => true, 'message' => 'A valid administrator and unique processing token are required.'];
+        }
+        if (!$isManual && (trim((string) $recipientCode) === '' || mb_strlen((string) $recipientCode) > 200)) {
+            return ['success' => false, 'protected' => true, 'message' => 'A verified transfer recipient is required for gateway transfers.'];
         }
 
-        $recipientCode = trim($recipientCode);
+        $recipientCode = $isManual ? null : trim((string) $recipientCode);
         $processingToken = trim($processingToken);
 
-        return DB::transaction(function () use ($payoutId, $adminId, $recipientCode, $processingToken) {
+        return DB::transaction(function () use ($payoutId, $adminId, $recipientCode, $processingToken, $isManual) {
             $authorizedAdmin = User::whereKey($adminId)
                 ->where('user_type', 'super_admin')
                 ->where('status', 'active')
@@ -503,7 +577,7 @@ class RetailerSupplierPayoutService
             if (!$this->hasExactlyOneActiveUyoShop($supplier)) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier must have exactly one active shop located in Uyo, Akwa Ibom State before payout.'];
             }
-            if (trim($recipientCode) === '') {
+            if (!$isManual && trim((string) $recipientCode) === '') {
                 return ['success' => false, 'message' => 'A verified Paystack transfer recipient is required.'];
             }
             if (!$this->requestJournalComplete($payout)) {
@@ -550,7 +624,7 @@ class RetailerSupplierPayoutService
             }
 
             $payout->status = 'processing';
-            $payout->gateway_status = 'processing';
+            $payout->gateway_status = $isManual ? 'manual_transfer_dispatched' : 'processing';
             $payout->recipient_code = $recipientCode;
             $payout->processing_token = $processingToken;
             $payout->processing_started_at = now();

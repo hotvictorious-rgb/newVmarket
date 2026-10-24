@@ -58,17 +58,22 @@ class AdminRetailerSupplierPayoutController extends Controller
             ]);
         }
 
+        // Check treasury bank credit reservation; if not linked to a gateway batch, verify cleared collections
         $treasuryReservation = app(RetailerSupplierPayoutService::class)->reserveTreasuryBankCreditBatch($payout->id);
         if (!($treasuryReservation['success'] ?? false)) {
-            $this->audit($request, 'retailer_supplier_payout_blocked_missing_treasury_bank_credit', $payout, [
-                'status' => $payout->status,
-                'amount' => (string) $payout->amount,
-            ], [
-                'reason' => $treasuryReservation['message'] ?? 'No reconciled bank-credit batch available.',
-                'action' => 'transfer_blocked_before_disbursement',
-            ]);
-            return back()->with('error', $treasuryReservation['message']
-                ?? 'Supplier payout blocked until treasury bank-credit evidence is reconciled.');
+            $sourceVerification = app(RetailerSupplierPayoutService::class)->verifyClearedCollectionFunding($payout->id);
+            if (!($sourceVerification['success'] ?? false)) {
+                $this->audit($request, 'retailer_supplier_payout_blocked_missing_funding', $payout, [
+                    'status' => $payout->status,
+                    'amount' => (string) $payout->amount,
+                ], [
+                    'treasury_reason' => $treasuryReservation['message'] ?? null,
+                    'collection_reason' => $sourceVerification['message'] ?? null,
+                    'action' => 'transfer_blocked_before_disbursement',
+                ]);
+                return back()->with('error', $sourceVerification['message'] ?? $treasuryReservation['message']
+                    ?? 'Supplier payout blocked until treasury bank-credit or cleared order collection evidence is verified.');
+            }
         }
 
         $file = $request->file('settlement_proof');
@@ -88,8 +93,9 @@ class AdminRetailerSupplierPayoutController extends Controller
         $processing = app(RetailerSupplierPayoutService::class)->markProcessing(
             $payout->id,
             (int) $request->user()->id,
-            'MANUAL_BANK_TRANSFER',
-            $transferRef
+            null,
+            $transferRef,
+            'manual_bank_transfer'
         );
 
         if (!$processing['success']) {

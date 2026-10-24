@@ -530,15 +530,41 @@ class ReturnAndRefundService
             return ['success' => false, 'message' => 'Unauthorized: Only Super Admin can disburse treasury refunds.'];
         }
 
-        // Launch policy: customer refunds must return through the verified original
-        // Paystack transaction. Manual bank transfers and wallet credits are disabled
-        // at the service boundary, even if a caller supplies a reference or proof file.
-        if ($bankReference !== null && trim($bankReference) !== '') {
-            return [
-                'success' => false,
-                'status' => 'disabled',
-                'message' => 'Manual bank and wallet refunds are disabled at launch. Use the authorized Paystack refund workflow for the original payment.',
-            ];
+        // Payment Rail Isolation: Verify whether the order was paid via Paystack or Manual Bank Transfer
+        $orderPreview = Order::where('id', $case->order_id)->first();
+        if (!$orderPreview) {
+            return ['success' => false, 'message' => 'The order linked to this return case was not found.'];
+        }
+
+        $isManualOrder = ($orderPreview->payment_method === 'manual_bank_transfer');
+
+        if ($isManualOrder) {
+            if ($bankReference === null || trim($bankReference) === '') {
+                return [
+                    'success' => false,
+                    'message' => 'A unique bank transaction reference is required to record a manual bank transfer refund.',
+                ];
+            }
+            $bankRefClean = trim($bankReference);
+            // Verify uniqueness of bank reference across all rails
+            if (\App\Models\ManualBankTransferRefundCase::where('manual_dispatch_reference', $bankRefClean)->exists()
+                || \App\Models\RetailerSupplierPayoutRequest::where('bank_transaction_reference', $bankRefClean)->exists()
+                || \App\Models\LogisticsPayoutRequest::where('bank_transaction_reference', $bankRefClean)->exists()
+                || \App\Models\ManualBankTransferPayment::where('bank_transaction_reference', $bankRefClean)->exists()) {
+                return [
+                    'success' => false,
+                    'message' => 'This bank transaction reference has already been recorded in the system and cannot be reused.',
+                ];
+            }
+        } else {
+            // Paystack order: cannot accept manual bank reference
+            if ($bankReference !== null && trim($bankReference) !== '') {
+                return [
+                    'success' => false,
+                    'status' => 'cross_rail_blocked',
+                    'message' => 'A manual bank reference cannot be used to refund an order paid via Paystack. Use the authorized Paystack gateway refund workflow.',
+                ];
+            }
         }
 
         // 1. Initial State Validation & Pre-disbursement Lock
@@ -689,6 +715,7 @@ class ReturnAndRefundService
             return [
                 'valid' => true,
                 'order_id' => $order->id,
+                'order_payment_method' => $order->payment_method,
                 'order_payment_reference' => $order->payment_reference,
                 'case_number' => $lockedCase->case_number,
                 'existing_paystack_refund_id' => $lockedCase->paystack_refund_id,

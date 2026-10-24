@@ -84,6 +84,64 @@ jobs:
         run: |
           php artisan test tests/Feature/SecurityHardeningAndAuditTest.php --filter='vendor_bank_update_activates_48h_cooldown_and_validates_10_digit_nuban' --display-warnings
 
+  mysql-settlement-proof:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: newvmarket_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      APP_KEY: "base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI="
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: newvmarket_test
+      DB_USERNAME: root
+      DB_PASSWORD: root
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP with MySQL driver
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: bcmath, curl, dom, fileinfo, mbstring, pdo_mysql, mysql, xml
+          coverage: none
+
+      - name: Prepare test environment
+        run: touch .env
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Run financial settlement proof tests on MySQL
+        run: |
+          php artisan test \
+            tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ManualBankTransferReviewTest.php \
+            tests/Feature/FinancialAuditRemediationProofTest.php \
+            tests/Feature/FinancialJournalIdempotencySchemaTest.php \
+            tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php \
+            tests/Feature/PaystackWebhookInboxRecoveryTest.php \
+            tests/Feature/AutomatedSupplierSourcingTest.php \
+            tests/Feature/SupplierPrivateCatalogPolicyTest.php \
+            tests/Feature/PaymentCaptureExceptionResolutionTest.php \
+            tests/Feature/TreasuryBankCreditBatchTest.php \
+            tests/Feature/TreasuryBankCreditConcurrencyTest.php tests/Feature/SupplierFailoverConcurrencyTest.php \
+            --display-warnings
+
   postgres-settlement-proof:
     runs-on: ubuntu-latest
     services:

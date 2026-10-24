@@ -11,20 +11,29 @@ use App\Models\TreasuryBankCreditBatch;
 use App\Models\TreasuryBankCreditBatchAllocation;
 use App\Models\User;
 use App\Models\VendorProfile;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class TreasuryBankCreditConcurrencyTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
 
+    protected function runDatabaseMigrations()
+    {
+        if (in_array(DB::connection()->getDriverName(), ['mysql', 'pgsql'], true)) {
+            $this->artisan('migrate:fresh');
+            $this->beforeApplicationDestroyed(function () {
+                $this->artisan('migrate:rollback');
+            });
+        }
+    }
 
     public function test_two_processes_cannot_overreserve_one_treasury_bank_credit_batch(): void
     {
-        if (DB::connection()->getDriverName() !== 'pgsql') {
-            $this->markTestSkipped('True multi-process row-lock proof runs against PostgreSQL only.');
+        if (!in_array(DB::connection()->getDriverName(), ['mysql', 'pgsql'], true)) {
+            $this->markTestSkipped('True multi-process row-lock proof runs against MySQL or PostgreSQL only.');
         }
 
         $adminOne = User::factory()->create(['user_type' => 'super_admin', 'status' => 'active']);
@@ -126,9 +135,12 @@ class TreasuryBankCreditConcurrencyTest extends TestCase
 
         $reservedCount = RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)->count();
         $this->assertSame(1, $reservedCount, 'Two simultaneous ₦6,000 reservations must not overreserve a ₦10,000 reconciled bank-credit batch.');
-        $reservedAmountKobo = (int) RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)
+        $reservedAmountKobo = 0;
+        foreach (RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)
             ->whereIn('status', ['pending', 'processing', 'uncertain', 'paid'])
-            ->sum(DB::raw('CAST(amount * 100 AS BIGINT)'));
+            ->get(['amount']) as $reservedReq) {
+            $reservedAmountKobo += (int) bcmul((string) $reservedReq->amount, '100', 0);
+        }
         $this->assertSame(600000, $reservedAmountKobo);
 
         // This class uses committed fixtures so child processes can see them.
