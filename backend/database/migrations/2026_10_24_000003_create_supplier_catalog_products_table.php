@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create('supplier_catalog_products', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('supplier_vendor_id')->constrained('vendor_profiles')->cascadeOnDelete();
-            $table->foreignId('supplier_shop_id')->constrained('shops')->cascadeOnDelete();
+            $table->foreignId('supplier_vendor_id')->constrained('vendor_profiles')->restrictOnDelete();
+            $table->foreignId('supplier_shop_id')->constrained('shops')->restrictOnDelete();
             $table->string('product_name', 180);
             $table->text('description')->nullable();
             $table->string('photo_path', 2048)->nullable();
@@ -24,7 +24,7 @@ return new class extends Migration
             $table->decimal('source_price', 12, 2);
             $table->boolean('is_in_stock')->default(false);
             $table->string('status', 24)->default('active')->index();
-            $table->foreignId('canonical_product_id')->nullable()->constrained('products')->nullOnDelete();
+            $table->foreignId('canonical_product_id')->nullable()->constrained('products')->restrictOnDelete();
             $table->foreignId('linked_by_admin_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('linked_at')->nullable();
             $table->text('match_notes')->nullable();
@@ -40,7 +40,7 @@ return new class extends Migration
                 ->nullable()
                 ->unique()
                 ->constrained('supplier_catalog_products')
-                ->nullOnDelete();
+                ->restrictOnDelete();
         });
     }
 
