@@ -47,6 +47,11 @@ class ManualBankTransferController extends Controller
             return back()->withErrors(['payment_screenshot' => 'This order is not assigned to Manual Bank Transfer. Payment methods cannot be crossed.']);
         }
 
+        $accountSnapshot = $order->manual_bank_transfer_account_snapshot;
+        if (!is_array($accountSnapshot) || empty($accountSnapshot['account_number']) || empty($accountSnapshot['bank_name']) || empty($accountSnapshot['account_name'])) {
+            return back()->withErrors(['payment_screenshot' => 'This order has no valid receiving-account snapshot. Do not transfer money; contact Victorious MARKET support.']);
+        }
+
         if (!in_array($order->payment_status, ['pending', 'unpaid'], true) || $order->paid_at) {
             return back()->withErrors(['payment_screenshot' => 'This order is no longer eligible for a manual payment submission.']);
         }
