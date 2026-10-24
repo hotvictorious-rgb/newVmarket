@@ -16,6 +16,18 @@ This section supersedes any conflicting older supplier-settlement wording in thi
 - **No automated outflow:** no webhook, queue, cron, timeout or retry may autonomously send money. Human authorization and controlled manual dispatch remain required. An uncertain transfer must be reconciled before retry to prevent duplicate payment.
 
 
+## Owner-confirmed policy alignment — 24 October 2026
+
+This section supersedes any conflicting older supplier-settlement wording in this document. It records policy decisions; it does not certify implementation.
+
+- **Supplier settlement amount:** minimum ₦1 and maximum ₦1,000,000 per individual settlement transaction/request. A valid request still requires sufficient eligible reconciled payable, authorization, destination validation and all financial safeguards. The cap does not authorize automatic splitting; no FIFO/oldest-first selection or silent splitting is allowed.
+- **Single-admin reconciliation:** the initiating authorized admin may complete reconciliation; a second administrator is not mandatory. The same-admin path must still require evidence of the actual outgoing bank outcome, immutable actor/timestamp/amount/payee/destination/reference/evidence records, transaction-reference uniqueness, idempotent state transitions, ledger reconciliation and safe handling of pending, uncertain, failed or reversed transfers. Evidence upload alone is not proof of payment.
+- **Evidence scope:** admin-uploaded outgoing-transfer evidence applies to supplier settlements. Customer-submitted incoming-transfer screenshots belong only to the separate manual customer-payment review workflow; they are supporting evidence and never prove incoming credit by themselves.
+- **Funding and settlement rail neutrality:** supplier settlement eligibility depends on reconciled, cleared platform funds and eligible supplier payables, not on the customer payment provider being Paystack specifically. Manual bank-transfer customer receipts must not be represented as Paystack transactions. Preserve separate customer-tender records while using the same audited supplier-payable controls.
+- **Legacy separation:** historical vendor-wallet/vendor-payout limits and FIFO logic must not govern new retailer-model supplier payables. Legacy records remain preserved and must be reconciled through their separately authorized migration/exception path.
+- **No automated outflow:** no webhook, queue, cron, timeout or retry may autonomously send money. Human authorization and controlled manual dispatch remain required. An uncertain transfer must be reconciled before retry to prevent duplicate payment.
+
+
 > **Current policy authority:** This policy must conform to [Active Business Rules](docs/architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md). The root [Master Blueprint](VICTORIOUS_MARKET_MASTER_BLUEPRINT.md) supplies implementation detail only where it does not conflict with the active rules. This document contains legacy vendor/parent-child implementation history; legacy terminology is not authority for new retailer-model behaviour.
 
 
