@@ -418,8 +418,8 @@ class OrderSettlementService
 
                 // Legacy product inventory remains authoritative for legacy-owned stock.
                 // New canonical retailer products have no vendor/shop owner and use the
-                // verified supplier offer as the stock signal. Their inventory_quantity=0
-                // is a compatibility sentinel, not a depleted legacy inventory counter.
+                // verified supplier offer as the stock signal. Their legacy inventory_quantity is not an authoritative quantity counter for supplier-backed
+                // listings; the supplier's post-payment quantity confirmation is authoritative.
                 // Do not turn that sentinel into a false post-payment stockout/refund hold.
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
@@ -432,7 +432,6 @@ class OrderSettlementService
                             && $item->supplier_offer_id
                             && $prod->vendor_id === null
                             && $prod->shop_id === null
-                            && (int) $prod->inventory_quantity === 0
                             && (bool) $prod->is_in_stock;
 
                         if ($supplierSourcedCanonicalProduct) {
