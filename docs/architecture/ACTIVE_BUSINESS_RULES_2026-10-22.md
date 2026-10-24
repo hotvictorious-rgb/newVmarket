@@ -126,7 +126,7 @@ The [Manual Bank Transfer and Payment-Provider Policy](MANUAL_BANK_TRANSFER_AND_
 
 
 ### Strict payment-path isolation and exclusive activation
-Only one customer payment method may be active globally at a time: Paystack or Manual Bank Transfer, or neither. Admin activation must be atomic, concurrency-safe and enforced server-side; enabling both is forbidden. When neither is active, checkout cannot accept payment. Every order is bound to one immutable payment method. The order cannot combine, switch, top up, verify, settle or refund through the other method. Paystack evidence can apply only to Paystack orders; actual bank-credit evidence and admin approval can apply only to manual-transfer orders. Deactivation does not erase or rewrite existing orders or attempts. Any reset after a definitively failed attempt requires an audited procedure proving no capture/credit occurred; pending, unknown, disputed or potentially late payments must be reconciled first. See [Manual Bank Transfer and Payment-Provider Policy](MANUAL_BANK_TRANSFER_AND_PAYMENT_PROVIDER_POLICY_2026-10-24.md).
+Paystack and direct Manual Bank Transfer may both be active simultaneously, or neither may be active. If neither is active, checkout is disabled. Each order is bound to exactly one selected method and its own verification path.
 
 
 ## Owner-confirmed payment and settlement alignment — 24 October 2026
