@@ -47,7 +47,7 @@
                 @else
                     <p style="margin:0;color:#991b1b">Your payment submission was rejected. This order cannot accept another payment submission. Contact Victorious MARKET support before making another transfer.</p>
                 @endif
-            @elseif(in_array($order->payment_status, ['pending', 'unpaid'], true) && !$order->paid_at)
+            @elseif(in_array($order->payment_status, ['pending', 'unpaid'], true) && !$order->paid_at && !empty($order->manual_bank_transfer_account_snapshot['account_number']))
                 @php($transferAccount = $order->manual_bank_transfer_account_snapshot ?? [])
                 @if(!empty($transferAccount['account_number']))
                     <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:14px;margin-bottom:14px">
@@ -75,6 +75,8 @@
                     <button type="submit" style="border:0;border-radius:8px;padding:11px 16px;background:#1d4ed8;color:#fff;font-weight:800" onclick="return confirm('Submit this receipt for admin verification? You can submit only once for this order.')">Upload receipt for review</button>
                 </form>
                 <p style="font-size:12px;color:#64748b;margin:10px 0 0">Never upload a receipt for a different order. Do not make a second transfer for this order. If you are unsure whether the first transfer succeeded, contact support before taking further action.</p>
+            @else
+                <p style="margin:0;color:#991b1b">This order has no valid saved receiving-account instructions. Do not transfer money. Contact Victorious MARKET support for a safe resolution.</p>
             @endif
         </section>
     @endif
