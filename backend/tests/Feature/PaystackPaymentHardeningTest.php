@@ -760,6 +760,50 @@ class PaystackPaymentHardeningTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_late_payment_settlement_rolls_back_if_pending_refund_operation_cannot_be_persisted(): void
+    {
+        $order = $this->createTestOrder([
+            'order_number' => 'VM-LATE-ROLLBACK-01',
+            'payment_reference' => 'VM-LATE-ROLLBACK-REF-01',
+            'grand_total' => '12500.50',
+            'order_status' => 'cancelled',
+            'payment_status' => 'pending',
+            'vendor_settlement_status' => 'held',
+        ]);
+
+        \App\Models\SupplierOffer::where('product_id', $this->product->id)->update(['is_available' => false]);
+        $this->product->update(['inventory_quantity' => 0, 'is_in_stock' => false]);
+
+        $payload = [
+            'id' => 776656,
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => 1250050,
+            'reference' => $order->payment_reference,
+            'channel' => 'card',
+            'customer' => ['email' => $this->customer->email],
+        ];
+
+        $this->mock(\App\Services\FinancialOperationService::class, function ($mock) {
+            $mock->shouldReceive('createRefundOperation')
+                ->once()
+                ->andThrow(new \RuntimeException('Simulated pending refund-operation persistence failure.'));
+        });
+
+        try {
+            app(OrderSettlementService::class)->settlePaystackOrder($order, $payload);
+            $this->fail('Settlement must fail closed if the refund operation cannot be persisted atomically.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('persistence failure', $exception->getMessage());
+        }
+
+        $this->assertSame('pending', $order->fresh()->payment_status);
+        $this->assertSame('cancelled', $order->fresh()->order_status);
+        $this->assertSame(0, FinancialJournalEntry::where('order_id', $order->id)->count());
+        $this->assertSame(0, \App\Models\FinancialOperation::whereJsonContains('metadata->order_id', $order->id)->count());
+        $this->assertSame(0, CustomerCashbackLedger::where('order_id', $order->id)->count());
+    }
+
     /**
      * PROOF 16: Zero-Automated-Outflow Law: FinancialOperationService strictly blocks
      * refund dispatch if authorization lacks an active human Super Admin.
