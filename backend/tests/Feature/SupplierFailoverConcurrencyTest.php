@@ -184,5 +184,9 @@ class SupplierFailoverConcurrencyTest extends TestCase
         }
         $this->assertSame('0.00', $oldSupplierNet);
         $this->assertSame('27000.00', $newSupplierNet);
+
+        // The committed multi-process fixture is rebound only for migration teardown;
+        // all behavioural assertions above exercise the unbound-before-payment model.
+        $order->forceFill(['vendor_id' => $primaryVendor->id, 'shop_id' => $primaryShop->id])->save();
     }
 }
