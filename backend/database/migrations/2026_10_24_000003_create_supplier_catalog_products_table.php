@@ -47,15 +47,20 @@ return new class extends Migration
     public function down(): void
     {
         if (Schema::hasTable('supplier_offers') && Schema::hasColumn('supplier_offers', 'supplier_catalog_product_id')) {
-            // SQLite's table-rebuild/drop-column path can still see an index
-            // queued for removal in the same Blueprint. Commit the unique-index
-            // drop as a separate schema operation before removing the FK column.
+            // The unique index also supports the foreign key on MySQL/InnoDB.
+            // Drop the FK first, then its unique index, then the column in
+            // separate schema operations so MySQL never removes an index that
+            // is still required by a foreign-key constraint.
+            Schema::table('supplier_offers', function (Blueprint $table) {
+                $table->dropForeign(['supplier_catalog_product_id']);
+            });
+
             Schema::table('supplier_offers', function (Blueprint $table) {
                 $table->dropUnique('supplier_offers_supplier_catalog_product_id_unique');
             });
 
             Schema::table('supplier_offers', function (Blueprint $table) {
-                $table->dropConstrainedForeignId('supplier_catalog_product_id');
+                $table->dropColumn('supplier_catalog_product_id');
             });
         }
 
