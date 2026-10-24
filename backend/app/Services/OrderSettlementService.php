@@ -313,6 +313,24 @@ class OrderSettlementService
                 ];
             }
 
+            // A provider/order reference is a single-order identity, not a reusable
+            // lookup key. Enforce this across tenders even if an old database lacks a
+            // unique index on the legacy orders.payment_reference column.
+            if (Order::where('payment_reference', $reference)
+                ->where('id', '!=', $lockedOrder->id)
+                ->exists()) {
+                return ['success' => false, 'status' => 'PAYMENT_REFERENCE_ALREADY_BOUND', 'message' => 'This payment reference is already bound to another order.'];
+            }
+
+            $normalizedTransactionId = trim((string) ($paymentData['id'] ?? ''));
+            if ($provider === 'paystack'
+                && $normalizedTransactionId !== ''
+                && Order::where('paystack_transaction_id', $normalizedTransactionId)
+                    ->where('id', '!=', $lockedOrder->id)
+                    ->exists()) {
+                return ['success' => false, 'status' => 'PAYMENT_TRANSACTION_ALREADY_APPLIED', 'message' => 'This Paystack transaction ID has already been applied to another order.'];
+            }
+
             // 7. Customer Identity Invariant
             $payerEmail = strtolower(trim((string)($paymentData['customer']['email'] ?? '')));
             $orderCustomerEmail = strtolower(trim((string)($lockedOrder->customer->email ?? '')));
