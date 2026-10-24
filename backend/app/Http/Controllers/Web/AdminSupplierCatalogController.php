@@ -24,7 +24,7 @@ class AdminSupplierCatalogController extends Controller
     {
         $query = Product::query()->with([
             'category',
-            'supplierOffers' => fn ($offers) => $offers->with(['vendor.user', 'shop.lga'])->orderBy('id'),
+            'supplierOffers' => fn ($offers) => $offers->withTrashed()->with(['vendor.user', 'shop.lga'])->orderBy('id'),
         ]);
 
         if ($request->filled('search')) {
