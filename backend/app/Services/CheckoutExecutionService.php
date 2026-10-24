@@ -16,6 +16,7 @@ use App\Models\OrderSupplierAssignment;
 use App\Models\Product;
 use App\Models\RiderProfile;
 use App\Models\Shop;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\VendorProfile;
 use Carbon\Carbon;
@@ -40,6 +41,35 @@ class CheckoutExecutionService
      */
     public function execute(User $user, array $validated): array
     {
+        // Single authoritative global selector: Paystack OR manual transfer OR disabled.
+        // There is no dual-enabled state to race or accidentally expose at checkout.
+        $paymentConfig = SystemSetting::getFresh('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
+        $activePaymentMethod = is_array($paymentConfig) ? (string) ($paymentConfig['active_method'] ?? 'paystack') : 'paystack';
+        if (!in_array($activePaymentMethod, ['paystack', 'manual_bank_transfer'], true)) {
+            return ['success' => false, 'status_code' => 503, 'message' => 'Checkout payments are temporarily disabled. Please contact Victorious MARKET support.'];
+        }
+        $manualTransferAccountSnapshot = [];
+        $requestedPaymentMethod = (string) ($validated['payment_method'] ?? $activePaymentMethod);
+        if (!hash_equals($activePaymentMethod, $requestedPaymentMethod)) {
+            return ['success' => false, 'status_code' => 409, 'message' => 'The selected payment method is no longer active. Refresh checkout and try again.'];
+        }
+        if ($activePaymentMethod === 'manual_bank_transfer') {
+            $account = is_array($paymentConfig) ? ($paymentConfig['manual_bank_transfer_account'] ?? []) : [];
+            if (!is_array($account)
+                || empty($account['bank_name'])
+                || empty($account['account_name'])
+                || !preg_match('/^[0-9]{10}$/', (string) ($account['account_number'] ?? ''))) {
+                return ['success' => false, 'status_code' => 503, 'message' => 'Manual bank transfer is not configured correctly. Checkout is blocked until an authorized admin fixes the receiving account.'];
+            }
+            $manualTransferAccountSnapshot = [
+                'bank_name' => trim((string) $account['bank_name']),
+                'account_name' => trim((string) $account['account_name']),
+                'account_number' => trim((string) $account['account_number']),
+                'customer_instructions' => trim((string) ($account['customer_instructions'] ?? '')),
+                'configuration_snapshot_at' => now()->toIso8601String(),
+            ];
+        }
+
         if (($validated['fulfillment_type'] ?? null) !== 'doorstep_delivery') {
             return [
                 'success' => false,
@@ -120,7 +150,7 @@ class CheckoutExecutionService
         }
 
         try {
-            $result = DB::transaction(function () use ($validated, $user, $idempotencyKey, $requestHash) {
+            $result = DB::transaction(function () use ($validated, $user, $idempotencyKey, $requestHash, $activePaymentMethod, $manualTransferAccountSnapshot) {
             $merchandiseSubtotal = '0.00';
             $itemsToCreate = [];
 
@@ -307,7 +337,7 @@ class CheckoutExecutionService
 
             // Cashback is 5% of eligible merchandise funded by real money through
             // Paystack after cashback redemption. Delivery is excluded.
-            $customerCashback5 = BcMathService::mul($subtotalAfterCashback, '0.05');
+            $customerCashback5 = $activePaymentMethod === 'manual_bank_transfer' ? '0.00' : BcMathService::mul($subtotalAfterCashback, '0.05');
             $vendorNet90 = '0.00'; // no new 90% marketplace merchandise commission
             $platformMargin5 = '0.00';
             $retailerMerchandiseMargin = null;
@@ -349,12 +379,12 @@ class CheckoutExecutionService
             if (bccomp($grandTotal, '100000000.00', 2) > 0) {
                 return [
                     'error' => true,
-                    'message' => 'Payable amount exceeds Paystack maximum single transaction limit of ₦100,000,000.00.',
+                    'message' => 'Payable amount exceeds the maximum single-order payment limit of ₦100,000,000.00.',
                 ];
             }
 
             $isFullyWalletPaid = (BcMathService::comp($grandTotal, '0.00') === 0);
-            $paymentMethod = $isFullyWalletPaid ? 'wallet_credit' : ($validated['payment_method'] ?? ($validated['fulfillment_type'] === 'in_shop_pickup' ? 'in_shop_counter' : 'paystack'));
+            $paymentMethod = $isFullyWalletPaid ? 'wallet_credit' : $activePaymentMethod;
             $orderStatus = $isFullyWalletPaid ? 'confirmed' : ($validated['fulfillment_type'] === 'in_shop_pickup' ? 'ready_for_pickup' : 'pending');
             $paymentStatus = $isFullyWalletPaid ? 'paid' : 'pending';
             $paidAt = $isFullyWalletPaid ? Carbon::now() : null;
@@ -385,6 +415,7 @@ class CheckoutExecutionService
                 'paid_at' => $paidAt,
                 'payment_method' => $paymentMethod,
                 'payment_reference' => $paymentRef,
+                'manual_bank_transfer_account_snapshot' => $paymentMethod === 'manual_bank_transfer' ? $manualTransferAccountSnapshot : null,
                 'guest_access_token' => bin2hex(random_bytes(32)),
                 'origin_lga_id' => $primarySourceShop->lga_id,
                 'destination_lga_id' => $destLgaId,
@@ -632,7 +663,9 @@ class CheckoutExecutionService
 
         $message = ($order->payment_status === 'paid')
             ? 'Order created and paid in full with refund wallet credit.'
-            : 'Order created successfully. Proceed to payment.';
+            : ($order->payment_method === 'manual_bank_transfer'
+                ? 'Order created. Transfer the exact amount to the configured Victorious MARKET account and upload your receipt for admin review.'
+                : 'Order created successfully. Proceed to Paystack payment.');
 
         return [
             'success' => true,

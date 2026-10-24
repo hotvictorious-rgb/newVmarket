@@ -92,6 +92,13 @@ class FinancialOperationService
                 $returnCase = $lockedReturnCase;
             }
 
+            // Direct bank transfers have no Paystack refund rail. Never create a
+            // Paystack-backed FinancialOperation for a manual-transfer order; its
+            // refund must be held in the dedicated manual-review case workflow.
+            if ($lockedOrder->payment_method === 'manual_bank_transfer') {
+                throw new \DomainException('Manual bank transfer refunds cannot use the Paystack gateway refund path; use the manual refund review workflow.');
+            }
+
             // 1. Idempotency Guard: Check if exact idempotency key exists first so retries do not fail against their own reservation
             $existingOp = FinancialOperation::where('idempotency_key', $key)->first();
             if ($existingOp) {

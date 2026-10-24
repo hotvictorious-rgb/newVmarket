@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\SystemConfigApiController;
 use App\Http\Controllers\Api\VendorTerminalApiController;
 use App\Http\Controllers\Api\VendorPrivateCatalogController;
 use App\Http\Controllers\Web\PaystackPaymentController;
+use App\Http\Controllers\Web\ManualBankTransferController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -110,6 +111,7 @@ Route::prefix('v1')->group(function () {
         Route::post('customer/reviews', [CustomerReviewApiController::class, 'store']);
         Route::get('customer/reviews/my-reviews', [CustomerReviewApiController::class, 'myReviews']);
         Route::prefix('customer/orders')->group(function () {
+            Route::post('{order_number}/manual-bank-transfer-evidence', [ManualBankTransferController::class, 'submitEvidence'])->middleware('throttle:5,10')->name('api.customer.orders.manual-bank-transfer-evidence');
             Route::get('', [CustomerOrderApiController::class, 'index']);
             Route::post('checkout', [CustomerOrderApiController::class, 'executeCheckout']);
             Route::post('verify-payment', [CustomerOrderApiController::class, 'verifyPayment']);

@@ -52,7 +52,7 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 </div>
                 <div style="font-size: 12.5px; color: #166534; line-height: 1.4;">
-                    <strong>Payment verification:</strong> Submitting your order does not reserve supplier inventory. Victorious MARKET confirms supplier availability after Paystack payment is verified; if sourcing fails, support will manage the order under the published exception policy.
+                    <strong>Payment verification:</strong> Submitting your order does not reserve supplier inventory. @if($activePaymentMethod === 'manual_bank_transfer') After placing your order, transfer the exact amount to the receiving account shown on the order page, copy the order code into the narration, and upload your receipt. An admin verifies actual bank credit before sourcing begins. @else Victorious MARKET confirms supplier availability after Paystack payment is verified; if sourcing fails, support will manage the order under the published exception policy. @endif
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -152,13 +152,14 @@
                 <div style="background: #FFFFFF; border: 1px solid var(--vm-border); border-radius: 14px; padding: 22px; margin-bottom: 24px; box-shadow: var(--vm-shadow-xs);">
                     <div style="font-weight: 800; font-size: 15px; color: #0F172A; margin-bottom: 6px; display: flex; align-items: center; gap: 10px;">
                         <span style="background: #5E17EB; color: #FFF; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;">3</span>
-                        <span id="vmStep3Title">Select Paystack Payment Channel</span>
+                        <span id="vmStep3Title">{{ $activePaymentMethod === 'manual_bank_transfer' ? 'Manual Bank Transfer' : 'Select Paystack Payment Channel' }}</span>
                     </div>
                     <p id="vmStep3Subtitle" style="font-size: 12px; color: #64748B; margin: 0 0 16px 34px;">
-                        All delivery payments are processed exclusively and securely through <strong>Paystack</strong> (Nigeria’s leading PCI-DSS Level 1 certified gateway).
+                        @if($activePaymentMethod === 'manual_bank_transfer') Transfer to the official receiving account shown after order creation. Receipt upload is required, and admin verification is manual. @else All delivery payments are processed exclusively and securely through <strong>Paystack</strong> (Nigeria’s leading PCI-DSS Level 1 certified gateway). @endif
                     </p>
 
-                    <!-- Payment Options Grid (for Doorstep Delivery) -->
+                    @if($activePaymentMethod === 'paystack')
+                    <!-- Payment Options Grid (Paystack is the sole active tender) -->
                     <div id="vmPaymentGatewayOptions" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;">
                         
                         <!-- Option A: Cards (Visa, Mastercard, Verve via Paystack) -->
@@ -224,13 +225,19 @@
                         @endif
 
                     </div>
+                    @else
+                    <div id="vmManualTransferNotice" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:14px;margin-bottom:18px">
+                        <strong style="display:block;margin-bottom:6px">Manual bank transfer is active</strong>
+                        <p style="margin:0;color:#475569;font-size:13px">After you place the order, the next page will show the configured receiving account and your unique order code. Copy the code into the bank narration, transfer the exact order amount, then upload one clear receipt image. Your order stays unpaid until an admin verifies the actual bank credit.</p>
+                    </div>
+                    @endif
 
                     <!-- Escrow Trust Guarantee Banner -->
                     <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 12px 14px; font-size: 11.5px; color: #64748B; display: flex; align-items: center; gap: 10px;">
                         <div style="color: var(--vm-primary); flex-shrink: 0;">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                         </div>
-                        <span><strong>Paystack Escrow Assurance:</strong> Your money is held securely until you inspect your items or confirm handover with your secret OTP.</span>
+                        <span>@if($activePaymentMethod === 'manual_bank_transfer') <strong>Manual verification:</strong> Uploading a receipt does not confirm payment. An authorized admin must independently verify actual bank credit before supplier sourcing starts. @else <strong>Paystack payment verification:</strong> Your order proceeds only after trusted payment verification. @endif</span>
                     </div>
                 </div>
 
@@ -241,7 +248,7 @@
                         @if($isOutOfStock)
                             Out of Stock &mdash; Cannot Proceed to Payment
                         @else
-                            Pay &#8358;{{ number_format((float)$totalPayable, 2) }} via Paystack &amp; Secure Order
+                            {{ $activePaymentMethod === 'manual_bank_transfer' ? 'Place order & view bank transfer instructions — ₦' . number_format((float)$totalPayable, 2) : 'Pay ₦' . number_format((float)$totalPayable, 2) . ' via Paystack & Secure Order' }}
                         @endif
                     </span>
                     @if(!$isOutOfStock)
@@ -251,7 +258,7 @@
 
                 <div style="text-align: center; margin-top: 12px; font-size: 11.5px; color: #64748B; display: flex; align-items: center; justify-content: center; gap: 6px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span>100% Processed by Paystack &bull; PCI-DSS Level 1 Certified &bull; Zero Card Details Stored on Server</span>
+                    <span>{{ $activePaymentMethod === 'manual_bank_transfer' ? 'Manual bank transfer • Receipt required • Admin verification required' : '100% Processed by Paystack • PCI-DSS Level 1 Certified • Zero Card Details Stored on Server' }}</span>
                 </div>
             </form>
         </div>
@@ -306,7 +313,7 @@
                 </div>
 
                 @php
-                    $cashbackReward = (float)$merchandiseSubtotal * 0.05;
+                    $cashbackReward = $activePaymentMethod === 'paystack' ? (float)$merchandiseSubtotal * 0.05 : 0.00;
                 @endphp
                 <!-- 5% Loyalty Cashback Reward -->
                 <div style="display: flex; justify-content: space-between; color: #047857; font-weight: 700; background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%); border: 1px solid #A7F3D0; padding: 10px 12px; border-radius: 8px; align-items: center;">
@@ -317,7 +324,7 @@
                     <span style="font-size: 14px; font-weight: 800;">+&#8358;{{ number_format($cashbackReward, 2) }}</span>
                 </div>
                 <div style="font-size: 11px; color: #059669; margin-top: -4px; padding-left: 2px;">
-                    &#10003; 5% earned strictly on real money paid through Paystack (excl. delivery &amp; redeemed cashback) &bull; Rewarded to customer wallet on delivery OTP confirmation
+                    &#10003; {{ $activePaymentMethod === 'manual_bank_transfer' ? 'Manual bank transfer orders do not earn cashback under the current policy' : '5% earned strictly on real money paid through Paystack (excl. delivery & redeemed cashback) • Rewarded to customer wallet on delivery OTP confirmation' }}
                 </div>
 
                 <div style="border-top: 2px dashed #E2E8F0; padding-top: 14px; margin-top: 4px; display: flex; justify-content: space-between; font-size: 18px; font-weight: 900; color: #5E17EB;">
@@ -356,6 +363,8 @@ function vmSelectFulfillment(type) {
     const grandTotalEl = document.getElementById('vmSummaryGrandTotal');
     const payBtn = document.getElementById('vmPayNowBtn');
     const gatewayOptions = document.getElementById('vmPaymentGatewayOptions');
+    const manualTransferNotice = document.getElementById('vmManualTransferNotice');
+    const activePaymentMethod = @json($activePaymentMethod);
     const pickupNotice = document.getElementById('vmPickupPaymentNotice');
     const step3Title = document.getElementById('vmStep3Title');
     const step3Subtitle = document.getElementById('vmStep3Subtitle');
@@ -407,10 +416,11 @@ function vmSelectFulfillment(type) {
             const destLgaVal = destLgaEl ? parseInt(destLgaEl.value) : 0;
             cpFields.style.display = (destLgaVal !== shopOriginLgaId) ? 'block' : 'none';
         }
-        if (gatewayOptions) gatewayOptions.style.display = 'flex';
+        if (gatewayOptions) gatewayOptions.style.display = activePaymentMethod === 'paystack' ? 'flex' : 'none';
+        if (manualTransferNotice) manualTransferNotice.style.display = activePaymentMethod === 'manual_bank_transfer' ? 'block' : 'none';
         if (pickupNotice) pickupNotice.style.display = 'none';
-        if (step3Title) step3Title.textContent = 'Select Paystack Payment Channel';
-        if (step3Subtitle) step3Subtitle.textContent = 'All delivery payments are processed exclusively and securely through Paystack.';
+        if (step3Title) step3Title.textContent = activePaymentMethod === 'manual_bank_transfer' ? 'Manual Bank Transfer' : 'Select Paystack Payment Channel';
+        if (step3Subtitle) step3Subtitle.textContent = activePaymentMethod === 'manual_bank_transfer' ? 'Transfer to the configured account after placing the order; admin verification is required.' : 'All delivery payments are processed exclusively and securely through Paystack.';
 
         if (deliveryFeeEl) deliveryFeeEl.textContent = '₦' + currentDeliveryFee.toLocaleString('en-NG', { minimumFractionDigits: 2 });
         const newTotal = subtotal + currentDeliveryFee;
@@ -423,7 +433,7 @@ function vmSelectFulfillment(type) {
             } else {
                 payBtn.disabled = false;
                 payBtn.style.cursor = 'pointer';
-                payBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <span>Pay ₦${newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 })} via Paystack &amp; Secure Order</span> <span style="font-size: 18px;">&rarr;</span>`;
+                payBtn.innerHTML = activePaymentMethod === 'manual_bank_transfer' ? '<span>Place order &amp; view transfer instructions — ₦' + newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 }) + '</span> <span style="font-size: 18px;">&rarr;</span>' : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> <span>Pay ₦' + newTotal.toLocaleString('en-NG', { minimumFractionDigits: 2 }) + ' via Paystack &amp; Secure Order</span> <span style="font-size: 18px;">&rarr;</span>';
             }
         }
     }

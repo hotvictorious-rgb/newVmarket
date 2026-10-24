@@ -26,10 +26,47 @@ class OrderSettlementService
         $this->paystackService = $paystackService ?? app(PaystackService::class);
     }
     /**
-     * Authoritative Paystack Order Settlement Core.
-     * Enforces pessimistic locking, actor IDOR check, exact kobo invariant,
-     * currency check, idempotency against replay attacks, state transition,
-     * 5% customer cashback maturation queue, and immutable audit log.
+     * Settle an independently verified direct bank credit. The caller must already
+     * have matched a unique bank transaction reference and exact credited amount to
+     * the immutable order payment reference. This deliberately does not create a
+     * Paystack transaction ID or invoke Paystack APIs.
+     */
+    public function settleManualBankTransferOrder(Order $order, string $bankTransactionReference, int $amountKobo, User $admin): array
+    {
+        if (trim($bankTransactionReference) === '' || $amountKobo < 1) {
+            return ['success' => false, 'status' => 'INVALID_BANK_EVIDENCE', 'message' => 'A bank transaction reference and positive credited amount are required.'];
+        }
+
+        if (empty($order->payment_reference)) {
+            return ['success' => false, 'status' => 'MISSING_ORDER_PAYMENT_REFERENCE', 'message' => 'The order has no immutable payment reference.'];
+        }
+
+        if (Order::where('payment_reference', trim($bankTransactionReference))
+            ->orWhere('paystack_transaction_id', trim($bankTransactionReference))
+            ->exists()
+            || \App\Models\ManualBankTransferPayment::where('bank_transaction_reference', trim($bankTransactionReference))
+                ->where('order_id', '!=', $order->id)
+                ->exists()) {
+            return ['success' => false, 'status' => 'BANK_TRANSACTION_ALREADY_USED', 'message' => 'This bank transaction identity is already associated with another payment/order.'];
+        }
+
+        return $this->settleVerifiedPaymentOrder($order, [
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => $amountKobo,
+            // This is the order's own immutable internal payment reference, not a
+            // Paystack reference. The bank reference remains in the manual tender table.
+            'reference' => (string) $order->payment_reference,
+            'id' => $bankTransactionReference,
+            'channel' => 'manual_bank_transfer',
+            'customer' => ['email' => (string) ($order->customer->email ?? '')],
+        ], $admin, 'manual_bank_transfer_admin_review', null, null, 'manual_bank_transfer');
+    }
+
+    /**
+     * Backward-compatible Paystack entry point. All existing Paystack callers stay
+     * on the Paystack-only route; manual transfers call the provider-neutral core
+     * directly with their own verified bank-credit evidence.
      */
     public function settlePaystackOrder(
         Order $order,
@@ -39,7 +76,31 @@ class OrderSettlementService
         ?int $webhookEventId = null,
         ?int $webhookAttempt = null
     ): array {
-        $result = DB::transaction(function () use ($order, $paystackData, $actorUser, $channel, $webhookEventId, $webhookAttempt) {
+        return $this->settleVerifiedPaymentOrder(
+            $order,
+            $paystackData,
+            $actorUser,
+            $channel,
+            $webhookEventId,
+            $webhookAttempt,
+            'paystack'
+        );
+    }
+
+    public function settleVerifiedPaymentOrder(
+        Order $order,
+        array $paymentData,
+        ?User $actorUser = null,
+        string $channel = 'payment_provider',
+        ?int $webhookEventId = null,
+        ?int $webhookAttempt = null,
+        string $provider = 'paystack'
+    ): array {
+        if (!in_array($provider, ['paystack', 'manual_bank_transfer'], true)) {
+            return ['success' => false, 'status' => 'UNSUPPORTED_PAYMENT_PROVIDER', 'message' => 'Unsupported payment provider.'];
+        }
+
+        $result = DB::transaction(function () use ($order, $paymentData, $actorUser, $channel, $webhookEventId, $webhookAttempt, $provider) {
             // For webhook settlement, hold the inbox generation lock in the same
             // transaction as order/payment settlement and journal side effects.
             if ($webhookEventId !== null || $webhookAttempt !== null) {
@@ -68,6 +129,15 @@ class OrderSettlementService
                 return ['success' => false, 'status' => 'NOT_FOUND', 'message' => 'Order record not found under lock.'];
             }
 
+            // Payment methods are isolated. Manual bank evidence can never settle a Paystack order,
+            // and Paystack callbacks can never settle a manual-transfer order.
+            if ($provider === 'manual_bank_transfer' && $lockedOrder->payment_method !== 'manual_bank_transfer') {
+                return ['success' => false, 'status' => 'PAYMENT_METHOD_MISMATCH', 'message' => 'Manual bank transfer cannot settle an order assigned to another payment method.'];
+            }
+            if ($provider === 'paystack' && $lockedOrder->payment_method === 'manual_bank_transfer') {
+                return ['success' => false, 'status' => 'PAYMENT_METHOD_MISMATCH', 'message' => 'Paystack cannot settle a manual bank transfer order.'];
+            }
+
             // 1. Actor IDOR Authorization Check
             if ($actorUser) {
                 if ($actorUser->status !== 'active') {
@@ -78,13 +148,19 @@ class OrderSettlementService
                 }
             }
 
+            // A manual bank transfer is a one-shot tender: once settled, a second approval
+            // is never treated as a harmless replay and cannot create another payment.
+            if ($provider === 'manual_bank_transfer' && $lockedOrder->payment_status === 'paid') {
+                return ['success' => false, 'status' => 'ALREADY_PAID', 'message' => 'This order already has a settled payment; another manual payment is forbidden.'];
+            }
+
             // 2. Paid-order replay guard. Validate gateway evidence BEFORE returning
             // ALREADY_PAID: a second successful capture must not be mistaken for a replay.
             if ($lockedOrder->payment_status === 'paid') {
-                $paidStatus = strtolower((string) ($paystackData['status'] ?? ''));
-                $paidCurrency = strtoupper((string) ($paystackData['currency'] ?? ''));
-                $paidReference = (string) ($paystackData['reference'] ?? '');
-                $paidAmountRaw = $paystackData['amount'] ?? null;
+                $paidStatus = strtolower((string) ($paymentData['status'] ?? ''));
+                $paidCurrency = strtoupper((string) ($paymentData['currency'] ?? ''));
+                $paidReference = (string) ($paymentData['reference'] ?? '');
+                $paidAmountRaw = $paymentData['amount'] ?? null;
                 $paidAmountIsIntegerKobo = (is_int($paidAmountRaw) || (is_string($paidAmountRaw) && preg_match('/^\\d+$/', $paidAmountRaw) === 1));
                 $paidAmountKobo = $paidAmountIsIntegerKobo ? (int) $paidAmountRaw : -1;
                 $expectedPaidKobo = (int) bcmul(bcadd((string) $lockedOrder->grand_total, '0', 2), '100', 0);
@@ -102,7 +178,7 @@ class OrderSettlementService
                     return ['success' => false, 'status' => 'AMOUNT_MISMATCH', 'message' => 'Incoming capture does not match the already-paid order amount in integer kobo.'];
                 }
 
-                $incomingTransactionId = trim((string) ($paystackData['id'] ?? ''));
+                $incomingTransactionId = trim((string) ($paymentData['id'] ?? ''));
                 $storedTransactionId = trim((string) ($lockedOrder->paystack_transaction_id ?? ''));
                 $storedIdentityIsKnown = $storedTransactionId !== ''
                     && $storedTransactionId !== (string) $lockedOrder->payment_reference;
@@ -122,7 +198,7 @@ class OrderSettlementService
                             $paidAmountKobo,
                             $paidCurrency,
                             $paidStatus,
-                            $paystackData['channel'] ?? null,
+                            $paymentData['channel'] ?? null,
                         ], JSON_UNESCAPED_SLASHES) ?: '');
                     $exceptionKey = 'PAYSTACK-DUP-CAP-' . hash('sha256', $lockedOrder->id . '|' . $exceptionIdentity);
 
@@ -143,7 +219,7 @@ class OrderSettlementService
                                 'payment_reference' => $paidReference,
                                 'amount_kobo' => $paidAmountKobo,
                                 'currency' => $paidCurrency,
-                                'channel' => (string) ($paystackData['channel'] ?? ''),
+                                'channel' => (string) ($paymentData['channel'] ?? ''),
                                 'detected_via' => $channel,
                             ],
                             'detected_at' => Carbon::now(),
@@ -192,7 +268,7 @@ class OrderSettlementService
             }
 
             // 3. Status Invariant
-            $txStatus = strtolower((string)($paystackData['status'] ?? ''));
+            $txStatus = strtolower((string)($paymentData['status'] ?? ''));
             if ($txStatus !== 'success') {
                 return [
                     'success' => false,
@@ -202,7 +278,7 @@ class OrderSettlementService
             }
 
             // 4. Currency Invariant
-            $currency = strtoupper((string)($paystackData['currency'] ?? ''));
+            $currency = strtoupper((string)($paymentData['currency'] ?? ''));
             if ($currency !== 'NGN') {
                 return [
                     'success' => false,
@@ -214,7 +290,7 @@ class OrderSettlementService
             // 5. Exact Mathematical Integer Kobo Equality Guard (BCMath Zero Epsilon)
             $grandTotalNormalized = bcadd((string)$lockedOrder->grand_total, '0', 2);
             $expectedKobo = (int) bcmul($grandTotalNormalized, '100', 0);
-            $actualKoboRaw = $paystackData['amount'] ?? null;
+            $actualKoboRaw = $paymentData['amount'] ?? null;
             $actualKoboIsInteger = is_int($actualKoboRaw)
                 || (is_string($actualKoboRaw) && preg_match('/^\\d+$/', $actualKoboRaw) === 1);
             $actualKobo = $actualKoboIsInteger ? (int) $actualKoboRaw : -1;
@@ -228,7 +304,7 @@ class OrderSettlementService
             }
 
             // 6. Reference Invariant
-            $reference = (string)($paystackData['reference'] ?? '');
+            $reference = (string)($paymentData['reference'] ?? '');
             if (empty($reference) || empty($lockedOrder->payment_reference) || !hash_equals((string)$lockedOrder->payment_reference, $reference)) {
                 return [
                     'success' => false,
@@ -237,8 +313,28 @@ class OrderSettlementService
                 ];
             }
 
+            // A provider/order reference is a single-order identity, not a reusable
+            // lookup key. Enforce this across tenders even if an old database lacks a
+            // unique index on the legacy orders.payment_reference column.
+            if ($lockedOrder->parent_order_id === null
+                && Order::where('payment_reference', $reference)
+                    ->whereNull('parent_order_id')
+                    ->where('id', '!=', $lockedOrder->id)
+                    ->exists()) {
+                return ['success' => false, 'status' => 'PAYMENT_REFERENCE_ALREADY_BOUND', 'message' => 'This payment reference is already bound to another order.'];
+            }
+
+            $normalizedTransactionId = trim((string) ($paymentData['id'] ?? ''));
+            if ($provider === 'paystack'
+                && $normalizedTransactionId !== ''
+                && Order::where('paystack_transaction_id', $normalizedTransactionId)
+                    ->where('id', '!=', $lockedOrder->id)
+                    ->exists()) {
+                return ['success' => false, 'status' => 'PAYMENT_TRANSACTION_ALREADY_APPLIED', 'message' => 'This Paystack transaction ID has already been applied to another order.'];
+            }
+
             // 7. Customer Identity Invariant
-            $payerEmail = strtolower(trim((string)($paystackData['customer']['email'] ?? '')));
+            $payerEmail = strtolower(trim((string)($paymentData['customer']['email'] ?? '')));
             $orderCustomerEmail = strtolower(trim((string)($lockedOrder->customer->email ?? '')));
             if (!empty($payerEmail) && !empty($orderCustomerEmail) && $payerEmail !== $orderCustomerEmail) {
                 return [
@@ -307,10 +403,29 @@ class OrderSettlementService
             $hasStockoutIssue = false;
             $stockoutReason = '';
             $allocationResult = null;
+            // Manual bank transfers arriving after the order's expiry must never
+            // revive the order or trigger supplier sourcing, even if the expiry worker
+            // has not yet updated its state. Record the real credit and hold it for
+            // the separate manual-refund review path.
+            if ($provider === 'manual_bank_transfer'
+                && (($lockedOrder->expires_at && $lockedOrder->expires_at->lte($now))
+                    || in_array($lockedOrder->order_status, ['cancelled', 'canceled', 'failed', 'paid_stock_unavailable'], true))) {
+                if (!in_array($lockedOrder->order_status, ['cancelled', 'canceled', 'failed', 'paid_stock_unavailable'], true)) {
+                    $lockedOrder->order_status = 'cancelled';
+                }
+                $lockedOrder->vendor_settlement_status = 'refund_pending';
+            }
+
             $lockedOrder->payment_status = 'paid';
             $lockedOrder->paid_at = $now;
-            $lockedOrder->payment_channel = (string)($paystackData['channel'] ?? 'paystack');
-            $lockedOrder->paystack_transaction_id = (string)($paystackData['id'] ?? $reference);
+            $lockedOrder->payment_channel = $provider === 'manual_bank_transfer'
+                ? 'manual_bank_transfer'
+                : (string)($paymentData['channel'] ?? 'paystack');
+            // Direct bank transfers are recorded in their own table. Never forge a
+            // Paystack transaction ID for a manual bank credit.
+            $lockedOrder->paystack_transaction_id = $provider === 'manual_bank_transfer'
+                ? null
+                : (string)($paymentData['id'] ?? $reference);
 
             if ($lockedOrder->order_status === 'cancelled') {
                 // The order was previously cancelled by the expiration worker.
@@ -318,7 +433,7 @@ class OrderSettlementService
                 // A retailer order that expired/cancelled before payment must not be
                 // silently resurrected after a late charge. Keep its funds held for
                 // an authorized refund-review decision under the binding recovery policy.
-                $canReinstate = !$lockedOrder->retailer_model_order && $lockedOrder->items->isNotEmpty();
+                $canReinstate = $provider !== 'manual_bank_transfer' && !$lockedOrder->retailer_model_order && $lockedOrder->items->isNotEmpty();
                 foreach ($lockedOrder->items as $item) {
                     if ($item->product_id) {
                         $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
@@ -353,7 +468,7 @@ class OrderSettlementService
                     }
 
                     AdminAuditLog::create([
-                        'user_id' => $lockedOrder->customer_id,
+                        'user_id' => $provider === 'manual_bank_transfer' ? $actorUser?->id : $lockedOrder->customer_id,
                         'action' => 'paid_after_expiration_reinstated',
                         'target_type' => Order::class,
                         'target_id' => $lockedOrder->id,
@@ -548,7 +663,9 @@ class OrderSettlementService
                     'entry_type' => 'debit',
                     'amount' => $lockedOrder->grand_total,
                     'currency' => 'NGN',
-                    'description' => "Paystack gateway capture for cancelled/out-of-stock Order #{$lockedOrder->order_number}",
+                    'description' => $provider === 'manual_bank_transfer'
+                        ? "Verified manual bank transfer credit held for refund review for Order #{$lockedOrder->order_number}"
+                        : "Paystack gateway capture for cancelled/out-of-stock Order #{$lockedOrder->order_number}",
                 ]);
 
                 FinancialJournalEntry::create([
@@ -564,19 +681,47 @@ class OrderSettlementService
                     'description' => "Customer Refund Liability held in escrow for Order #{$lockedOrder->order_number} (Inventory depleted after expiration)",
                 ]);
 
-                // The payment capture and its customer refund obligation must commit
-                // atomically. If the pending admin-review operation cannot be persisted,
-                // throw and roll back the payment state + liability journal together.
-                // This creates a request only; it never dispatches a gateway refund.
+                // Record the refund obligation atomically with the payment/liability.
+                // Direct bank transfers must never be represented as Paystack gateway
+                // refunds. They receive a separate manual-review case and no automated
+                // or gateway refund instruction.
                 $latePaymentRefundReason = "Refund pending administrative authorization for cancelled/depleted Order #{$lockedOrder->order_number}";
-                app(\App\Services\FinancialOperationService::class)->createRefundOperation(
-                    $lockedOrder,
-                    (string) $lockedOrder->grand_total,
-                    $latePaymentRefundReason,
-                    null,
-                    'PAYSTACK-LATE-REFUND-' . $lockedOrder->id,
-                    ['type' => 'pending_admin_review_late_payment']
-                );
+                if ($provider === 'manual_bank_transfer') {
+                    $manualPayment = \App\Models\ManualBankTransferPayment::where('order_id', $lockedOrder->id)
+                        ->lockForUpdate()
+                        ->first();
+                    if (!$manualPayment || $manualPayment->status !== 'pending_review') {
+                        throw new \RuntimeException('Manual bank transfer refund hold requires its unique pending receipt-review record.');
+                    }
+
+                    $refundCase = \App\Models\ManualBankTransferRefundCase::firstOrCreate(
+                        ['order_id' => $lockedOrder->id],
+                        [
+                            'manual_bank_transfer_payment_id' => $manualPayment->id,
+                            'idempotency_key' => 'MANUAL-BANK-REFUND-' . $lockedOrder->id,
+                            'amount_kobo' => $actualKobo,
+                            'currency' => 'NGN',
+                            'status' => 'pending_admin_review',
+                            'reason' => $latePaymentRefundReason,
+                            'created_by_admin_id' => $actorUser?->id,
+                        ]
+                    );
+
+                    if ((int) $refundCase->manual_bank_transfer_payment_id !== (int) $manualPayment->id
+                        || (int) $refundCase->amount_kobo !== $actualKobo
+                        || $refundCase->currency !== 'NGN') {
+                        throw new \RuntimeException('Existing manual bank transfer refund case does not match the verified credit.');
+                    }
+                } else {
+                    app(\App\Services\FinancialOperationService::class)->createRefundOperation(
+                        $lockedOrder,
+                        (string) $lockedOrder->grand_total,
+                        $latePaymentRefundReason,
+                        null,
+                        'PAYSTACK-LATE-REFUND-' . $lockedOrder->id,
+                        ['type' => 'pending_admin_review_late_payment']
+                    );
+                }
 
                 // Invariant: Customer cashback balance is LEFT UNTOUCHED (zero lots consumed)
                 // Invariant: ZERO new cashback reward is accrued for unfulfilled orders
@@ -589,7 +734,7 @@ class OrderSettlementService
 
                 AdminAuditLog::create([
                     'user_id' => $lockedOrder->customer_id,
-                    'action' => 'paystack_settlement_refund_pending_recorded',
+                    'action' => $provider === 'manual_bank_transfer' ? 'manual_bank_transfer_settlement_refund_pending_recorded' : 'paystack_settlement_refund_pending_recorded',
                     'target_type' => Order::class,
                     'target_id' => $lockedOrder->id,
                     'old_values' => ['order_status' => 'cancelled', 'payment_status' => $oldPaymentStatus],
@@ -598,7 +743,7 @@ class OrderSettlementService
                         'payment_status' => 'paid',
                         'vendor_settlement_status' => 'refund_pending',
                         'refund_liability_amount' => $lockedOrder->grand_total,
-                        'paystack_refund_reference' => $lockedOrder->paystack_refund_reference,
+                        'paystack_refund_reference' => $provider === 'paystack' ? $lockedOrder->paystack_refund_reference : null,
                     ],
                     'ip_address' => request()->ip() ?? '127.0.0.1',
                     'user_agent' => request()->userAgent(),
@@ -610,7 +755,8 @@ class OrderSettlementService
                     'is_refund_only' => true,
                     'message' => 'Order was cancelled before payment and inventory is unavailable. The full captured amount is held as customer refund liability, with a pending admin-review request; no automatic refund is dispatched.',
                     'order' => $lockedOrder,
-                    'trigger_gateway_refund' => true,
+                    'trigger_gateway_refund' => $provider === 'paystack',
+                    'requires_manual_refund_review' => $provider === 'manual_bank_transfer',
                     'refund_reference' => $reference,
                     'refund_amount' => (string)$lockedOrder->grand_total,
                     'refund_order_id' => $lockedOrder->id,
@@ -876,7 +1022,7 @@ class OrderSettlementService
                         }
                     }
 
-                    if (BcMathService::comp((string) $lockedOrder->customer_cashback_5, '0.00') > 0) {
+                    if ($provider !== 'manual_bank_transfer' && BcMathService::comp((string) $lockedOrder->customer_cashback_5, '0.00') > 0) {
                         FinancialJournalEntry::create([
                             'order_id' => $lockedOrder->id,
                             'transaction_reference' => $reference,
@@ -1072,7 +1218,7 @@ class OrderSettlementService
                 }
 
                 // Credit: Customer Cashback Liability (5% Merchandise Split)
-                if (bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
+                if ($provider !== 'manual_bank_transfer' && bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
                     FinancialJournalEntry::create([
                         'order_id' => $lockedOrder->id,
                         'transaction_reference' => $reference,
@@ -1107,7 +1253,7 @@ class OrderSettlementService
                 // 11. Register 5% Customer Cashback Reward in Ledger
                 // Invariant: Cashback is strictly NOT redeemable at payment!
                 // Maturation countdown commences ONLY upon physical delivery / counter handover inspection.
-                if ($lockedOrder->customer_id && bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
+                if ($provider !== 'manual_bank_transfer' && $lockedOrder->customer_id && bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
                     CustomerCashbackLedger::updateOrCreate([
                         'order_id' => $lockedOrder->id,
                     ], [
@@ -1124,7 +1270,7 @@ class OrderSettlementService
             // 10. Immutable Audit Trail
             AdminAuditLog::create([
                 'user_id' => $actorUser ? $actorUser->id : null,
-                'action' => 'paystack_payment_verified',
+                'action' => $provider === 'manual_bank_transfer' ? 'manual_bank_transfer_payment_verified' : 'paystack_payment_verified',
                 'target_type' => Order::class,
                 'target_id' => $lockedOrder->id,
                 'old_values' => [
@@ -1133,8 +1279,10 @@ class OrderSettlementService
                 'new_values' => [
                     'payment_status' => 'paid',
                     'payment_channel' => $lockedOrder->payment_channel,
-                    'paystack_reference' => $reference,
-                    'paystack_transaction_id' => $lockedOrder->paystack_transaction_id,
+                    'payment_reference' => $reference,
+                    'bank_transaction_reference' => $provider === 'manual_bank_transfer' ? (string) ($paymentData['id'] ?? '') : null,
+                    'paystack_reference' => $provider === 'paystack' ? $reference : null,
+                    'paystack_transaction_id' => $provider === 'paystack' ? $lockedOrder->paystack_transaction_id : null,
                     'paid_at' => $lockedOrder->paid_at->toIso8601String(),
                     'grand_total' => $lockedOrder->grand_total,
                     'amount_kobo' => $actualKobo,

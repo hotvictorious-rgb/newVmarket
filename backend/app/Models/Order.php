@@ -7,6 +7,21 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
+    protected static function booted(): void
+    {
+        static::updating(function (Order $order): void {
+            // The selected tender and the receiving-account instructions are immutable
+            // after order creation. A retry/reset must use a separate audited workflow,
+            // never silently rewrite an order from Paystack to manual transfer or back.
+            if ($order->isDirty('payment_method')) {
+                throw new \LogicException('An order payment method is immutable after creation.');
+            }
+            if ($order->isDirty('manual_bank_transfer_account_snapshot')) {
+                throw new \LogicException('The receiving-account snapshot is immutable after order creation.');
+            }
+        });
+    }
+
     protected $fillable = [
         'order_number',
         'checkout_idempotency_key',
@@ -30,6 +45,7 @@ class Order extends Model
         'paystack_transaction_id',
         'payment_method',
         'payment_reference',
+        'manual_bank_transfer_account_snapshot',
         'origin_lga_id',
         'destination_lga_id',
         'delivery_lane_id',
@@ -129,6 +145,7 @@ class Order extends Model
         'logistics_company_wallet_credited_at' => 'datetime',
         'logistics_company_wallet_credited_amount' => 'decimal:2',
         'retailer_model_order' => 'boolean',
+        'manual_bank_transfer_account_snapshot' => 'array',
         'cashback_redeemed' => 'decimal:2',
         'wallet_credit_applied' => 'decimal:2',
         'grand_total' => 'decimal:2',
@@ -209,6 +226,11 @@ class Order extends Model
         return $this->isDelivery()
             && in_array($this->order_status, ['confirmed', 'processing', 'ready_for_dispatch', 'ready_for_pickup'], true)
             && !$this->pickup_confirmed_by_rider;
+    }
+
+    public function manualBankTransferPayment()
+    {
+        return $this->hasOne(ManualBankTransferPayment::class, 'order_id');
     }
 
     public function scopeDelivery($query)

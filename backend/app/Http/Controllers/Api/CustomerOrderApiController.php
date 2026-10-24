@@ -113,7 +113,7 @@ class CustomerOrderApiController extends Controller
             'items.*.quantity' => 'required|integer|min:1|max:1000',
             'redeem_cashback' => 'nullable|boolean',
             'redeem_wallet_credit' => 'prohibited',
-            'payment_method' => 'nullable|string|in:paystack',
+            'payment_method' => 'nullable|string|in:paystack,manual_bank_transfer',
             'rider_id' => 'prohibited',
             'logistics_company_id' => 'prohibited',
         ], [
@@ -175,7 +175,13 @@ class CustomerOrderApiController extends Controller
                 'payment_method' => $order->payment_method,
                 'payment_status' => $order->payment_status,
                 'wallet_credit_applied' => $order->wallet_credit_applied,
-                'paystack' => $result['paystack'],
+                'paystack' => $result['paystack'] ?? null,
+                'manual_bank_transfer' => $order->payment_method === 'manual_bank_transfer' ? [
+                    'account' => $order->manual_bank_transfer_account_snapshot,
+                    'order_code_for_narration' => $order->order_number,
+                    'receipt_upload_url' => route('api.customer.orders.manual-bank-transfer-evidence', ['order_number' => $order->order_number]),
+                    'admin_verification_required' => true,
+                ] : null,
                 'order' => $this->formatOrderFull($order),
             ],
         ], $result['http_status'] ?? 201);

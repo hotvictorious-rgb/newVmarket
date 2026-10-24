@@ -36,6 +36,51 @@
         </div>
     @endif
     
+    @if($order->payment_method === 'manual_bank_transfer')
+        <section style="background:#fff;border:1px solid #cbd5e1;border-radius:14px;padding:20px;margin-bottom:24px">
+            <h2 style="font-size:18px;font-weight:800;margin:0 0 8px;color:#0f172a">Manual Bank Transfer Receipt</h2>
+            @if($order->manualBankTransferPayment)
+                @if($order->manualBankTransferPayment->status === 'pending_review')
+                    <p style="margin:0;color:#92400e">Your receipt has been received and is awaiting admin review. Your order is not yet paid. Sourcing will start only after the admin verifies the actual bank credit.</p>
+                @elseif($order->manualBankTransferPayment->status === 'approved')
+                    <p style="margin:0;color:#065f46">Your bank transfer has been verified and approved. Your order has entered the post-payment process.</p>
+                @else
+                    <p style="margin:0;color:#991b1b">Your payment submission was rejected. This order cannot accept another payment submission. Contact Victorious MARKET support before making another transfer.</p>
+                @endif
+            @elseif(in_array($order->payment_status, ['pending', 'unpaid'], true) && !$order->paid_at && !empty($order->manual_bank_transfer_account_snapshot['account_number']))
+                @php($transferAccount = $order->manual_bank_transfer_account_snapshot ?? [])
+                @if(!empty($transferAccount['account_number']))
+                    <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:14px;margin-bottom:14px">
+                        <div style="font-size:12px;color:#64748b;font-weight:800;text-transform:uppercase;margin-bottom:8px">Transfer only to this Victorious MARKET account</div>
+                        <div style="margin:4px 0"><strong>Bank:</strong> {{ $transferAccount['bank_name'] ?? '—' }}</div>
+                        <div style="margin:4px 0"><strong>Account name:</strong> {{ $transferAccount['account_name'] ?? '—' }}</div>
+                        <div style="margin:4px 0"><strong>Account number:</strong> <span style="font-size:18px;font-weight:900;letter-spacing:1px">{{ $transferAccount['account_number'] }}</span></div>
+                        <div style="margin:8px 0;padding:10px;background:#fff;border:1px dashed #94a3b8;border-radius:8px"><strong>Bank narration / remarks:</strong> copy exactly <span style="font-size:16px;font-weight:900">{{ $order->order_number }}</span></div>
+                        @if(!empty($transferAccount['customer_instructions']))
+                            <p style="margin:8px 0 0;color:#475569">{{ $transferAccount['customer_instructions'] }}</p>
+                        @endif
+                    </div>
+                @else
+                    <p style="margin:0 0 12px;color:#991b1b">The receiving-account snapshot is unavailable. Do not transfer money; contact support.</p>
+                @endif
+                <p style="margin:0 0 12px;color:#475569">Upload a clear screenshot or image of the transfer receipt for this order. This image is supporting evidence only. An admin will independently verify the actual credit in the official receiving bank account.</p>
+                <p style="margin:0 0 14px;font-weight:800;color:#0f172a">Order amount: ₦{{ number_format((float)$order->grand_total, 2) }}</p>
+                <form method="POST" action="{{ route('customer.manual-bank-transfer.submit', ['order_number' => $order->order_number]) }}" enctype="multipart/form-data">
+                    @csrf
+                    @if(request()->query('token'))
+                        <input type="hidden" name="token" value="{{ request()->query('token') }}">
+                    @endif
+                    <label for="payment_screenshot" style="display:block;font-weight:700;margin-bottom:6px">Transfer screenshot / receipt (JPEG, PNG or WebP, max 5 MB)</label>
+                    <input id="payment_screenshot" type="file" name="payment_screenshot" accept="image/jpeg,image/png,image/webp" required style="display:block;width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+                    <button type="submit" style="border:0;border-radius:8px;padding:11px 16px;background:#1d4ed8;color:#fff;font-weight:800" onclick="return confirm('Submit this receipt for admin verification? You can submit only once for this order.')">Upload receipt for review</button>
+                </form>
+                <p style="font-size:12px;color:#64748b;margin:10px 0 0">Never upload a receipt for a different order. Do not make a second transfer for this order. If you are unsure whether the first transfer succeeded, contact support before taking further action.</p>
+            @else
+                <p style="margin:0;color:#991b1b">This order has no valid saved receiving-account instructions. Do not transfer money. Contact Victorious MARKET support for a safe resolution.</p>
+            @endif
+        </section>
+    @endif
+
     <!-- ========================================== -->
     <!-- 1. ORDER CONFIRMATION BANNER (SCREEN 13) -->
     <!-- ========================================== -->
@@ -68,7 +113,7 @@
                 Order Placed Successfully!
             </h1>
             <p style="font-size: 13.5px; color: #64748B; margin: 0 0 16px;">
-                Your payment is safely secured in Victorious MARKET Escrow.
+                @if($order->payment_status === 'paid') Payment has been verified by Victorious MARKET. @elseif($order->payment_method === 'manual_bank_transfer') Your transfer is not confirmed yet. Admin verification of actual bank credit is required. @else Payment verification is pending. Do not assume payment is complete until the status confirms it. @endif
             </p>
         @endif
 
@@ -444,7 +489,7 @@
             $status = $order->order_status;
             $steps = [
                 ['key' => 'placed', 'title' => 'Order Placed', 'desc' => 'Order created in system', 'done' => true, 'time' => $order->created_at->format('h:i A')],
-                ['key' => 'paid', 'title' => 'Payment Confirmed', 'desc' => 'Escrow locked via Paystack', 'done' => true, 'time' => $order->created_at->addMinutes(2)->format('h:i A')],
+                ['key' => 'paid', 'title' => 'Payment Confirmed', 'desc' => $order->payment_method === 'manual_bank_transfer' ? 'Actual bank credit verified and approved by admin' : 'Payment verified through Paystack', 'done' => $order->payment_status === 'paid', 'time' => $order->paid_at?->format('h:i A') ?? 'Awaiting verification'],
                 ['key' => 'preparing', 'title' => 'Victorious MARKET Preparing', 'desc' => $order->retailer_model_order ? 'Supplier sourcing and collection are coordinated privately by Victorious MARKET' : "Verified at {$order->shop->name} ({$order->shop->lga->name} LGA)", 'done' => in_array($status, ['processing', 'ready_for_pickup', 'out_for_delivery', 'delivered']), 'time' => '11:15 AM'],
                 ['key' => 'dispatch', 'title' => $order->fulfillment_type === 'in_shop_pickup' ? 'Ready for Counter Pickup' : 'Out for Delivery', 'desc' => $order->fulfillment_type === 'in_shop_pickup' ? 'Waiting at branch counter' : ($order->hasRiderArrived() ? 'Rider arrived at doorstep' : 'Courier in transit'), 'done' => in_array($status, ['out_for_delivery', 'delivered']), 'time' => $order->rider_arrived_at ? $order->rider_arrived_at->format('h:i A') : '12:30 PM (ETA)'],
                 ['key' => 'delivered', 'title' => 'Delivered & Received', 'desc' => 'Customer phone PIN verified', 'done' => ($status === 'delivered'), 'time' => $order->received_at ? $order->received_at->format('h:i A') : 'Pending Confirmation'],
