@@ -73,6 +73,7 @@ Route::post('/demo/quick-login', [WebAuthController::class, 'quickDemoLogin'])->
 // 1. Super Admin Command Tower
 Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/manual-bank-transfers', [ManualBankTransferController::class, 'index'])->name('admin.manual-bank-transfers.index');
+    Route::post('/manual-bank-transfers/settings', [ManualBankTransferController::class, 'saveSettings'])->name('admin.manual-bank-transfers.settings');
     Route::post('/manual-bank-transfers/{id}/approve', [ManualBankTransferController::class, 'approve'])->whereNumber('id')->name('admin.manual-bank-transfers.approve');
     Route::post('/manual-bank-transfers/{id}/reject', [ManualBankTransferController::class, 'reject'])->whereNumber('id')->name('admin.manual-bank-transfers.reject');
     Route::get('/manual-bank-transfers/{id}/evidence', [ManualBankTransferController::class, 'evidence'])->whereNumber('id')->name('admin.manual-bank-transfers.evidence');
