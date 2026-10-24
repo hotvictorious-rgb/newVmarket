@@ -4579,7 +4579,7 @@ class PortalController extends Controller
                 ->with('info', 'Please sign in or create an account to proceed with checkout. Your cart has been saved.');
         }
 
-        $paymentConfig = SystemSetting::get('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
+        $paymentConfig = SystemSetting::getFresh('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
         $activePaymentMethod = is_array($paymentConfig) ? (string) ($paymentConfig['active_method'] ?? 'paystack') : 'paystack';
         if (!in_array($activePaymentMethod, ['paystack', 'manual_bank_transfer'], true)) {
             return redirect()->route('storefront')->with('error', 'Checkout payments are temporarily disabled. Please contact Victorious MARKET support.');
@@ -4775,7 +4775,7 @@ class PortalController extends Controller
                 ]
             ],
             'redeem_cashback' => !empty($validated['redeem_cashback']),
-            'payment_method' => (function () { $config = SystemSetting::get('checkout.payment_configuration', ['active_method' => 'paystack']); return is_array($config) ? ($config['active_method'] ?? 'paystack') : 'paystack'; })(),
+            'payment_method' => (function () { $config = SystemSetting::getFresh('checkout.payment_configuration', ['active_method' => 'paystack']); return is_array($config) ? ($config['active_method'] ?? 'paystack') : 'paystack'; })(),
             'callback_url' => route('payment.paystack.callback'),
         ];
 
