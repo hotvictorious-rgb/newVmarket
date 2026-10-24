@@ -225,7 +225,7 @@ No production merge or deployment is authorized by this register.
 - Confirmed the initial migration creates a database unique constraint on `processed_webhook_events.event_id`; the handler also stores a SHA-256 payload hash and rejects a reused event ID with a different payload.
 - Fixed the stale-worker fencing warning so it correctly interpolates the event ID and logs the claimed attempt generation (commit recorded in Git history).
 - **Still unverified:** existing tests cover HMAC rejection and payment settlement replay, but do not establish the inbox's own duplicate event delivery, concurrent claim, conflicting payload, failed/unmatched retry, stale worker fencing, or database-specific duplicate-key recovery behavior.
-- The duplicate-key recovery currently catches a database `QueryException` inside the transaction callback. Verify on the production database engine whether a uniqueness exception leaves the transaction usable; add a supported-engine-safe strategy if not. Do not assume SQLite test success proves PostgreSQL/MySQL behavior.
+- The duplicate-key recovery currently catches a database `QueryException` inside the transaction callback. Verify on the production database engine whether a uniqueness exception leaves the transaction usable; add a supported-engine-safe strategy if not. Do not assume SQLite or historical PostgreSQL test success proves MySQL/InnoDB behavior.
 - Required acceptance tests: identical completed event is a no-op; same ID/different signed payload is quarantined; concurrent same-ID deliveries cause exactly one financial effect; failed and unmatched retries retain the original identity/hash; stale workers cannot overwrite a newer attempt; all error paths leave an observable inbox status.
 
 
@@ -293,7 +293,7 @@ Vendor balance calculation and vendor payout request validation treat `resolved`
 
 ### VM-AUD-043 — refund-failure inbox generation fence proof
 
-A `refund.failed` handler may mark an operation failed, release its active reservation, update gateway attempts, and recompute the order summary only while holding the current inbox generation inside the same transaction. The regression simulates a generation change after operation lookup; generation 1 returns retryable HTTP 429 and must not mutate operation/reservation/journals or overwrite generation 2. CI passed on `f20026303486320b35c4f09cd78d73dc0ff6ab24`: **179 tests / 1,125 assertions**. Concurrent execution on PostgreSQL/production DB is still unverified.
+A `refund.failed` handler may mark an operation failed, release its active reservation, update gateway attempts, and recompute the order summary only while holding the current inbox generation inside the same transaction. The regression simulates a generation change after operation lookup; generation 1 returns retryable HTTP 429 and must not mutate operation/reservation/journals or overwrite generation 2. CI passed on `f20026303486320b35c4f09cd78d73dc0ff6ab24`: **179 tests / 1,125 assertions**. Concurrent execution on the target MySQL/InnoDB database is still unverified.
 ### VM-AUD-044 — confirmed payout fallback allocation and journal rules
 
 For a confirmed vendor transfer where pre-transfer allocation records are missing or incomplete, fallback allocation follows the same canonical FIFO (`created_at`, then `id`) and only allocates whole earning records that fit. It may allocate earlier whole records and leave a residual; it must never split the next record. Any residual is a treasury reconciliation discrepancy, not vendor debt and not a reason to pretend the confirmed transfer failed. If existing allocated rows exceed the transfer amount, do not mark those orders settled from the suspect rows; quarantine the confirmed cash amount in treasury suspense pending finance reconciliation. Legacy disbursement journals without a request-time payout liability journal must balance for exact, shortfall, and over-allocation cases; never debit vendor payable above the confirmed transfer amount. Regressions passed on `53b7081485f2cb60e4061c7fb41d577a363e38a3`: **181 tests / 1,139 assertions** (https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39504779791).
@@ -378,7 +378,7 @@ Allowed: eligible unplaced reservation -> `canceled`, only after locking and rec
 
 ### VM-AUD-060/061 verification update (21 October 2026)
 
-CI for the guarded admin return-rejection transition and serialized pickup-reservation cancellation has passed, including regression coverage and latest branch-head validation ([run 39512965854](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39512965854)). This does not certify the entire state-transition inventory; PostgreSQL concurrent execution, Paystack sandbox payload compatibility, and remaining direct-writer inventory are still open.
+CI for the guarded admin return-rejection transition and serialized pickup-reservation cancellation has passed, including regression coverage and latest branch-head validation ([run 39512965854](https://github.com/hotvictorious-rgb/newVmarket/actions/runs/39512965854)). This does not certify the entire state-transition inventory; MySQL/InnoDB concurrent execution, Paystack sandbox payload compatibility, and remaining direct-writer inventory are still open.
 
 
 ### VM-AUD-062 — pickup inspection transition serialization
