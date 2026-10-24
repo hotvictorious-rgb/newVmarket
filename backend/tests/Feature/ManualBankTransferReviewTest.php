@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\ManualBankTransferPayment;
+use App\Models\ManualBankTransferRefundCase;
+use App\Models\FinancialOperation;
 use App\Models\Order;
 use App\Models\SystemSetting;
 use App\Services\OrderSettlementService;
@@ -219,6 +221,33 @@ class ManualBankTransferReviewTest extends TestCase
         $this->expectException(\LogicException::class);
         $order->payment_method = 'paystack';
         $order->save();
+    }
+
+    public function test_late_manual_transfer_is_recorded_but_never_reactivates_order_or_sends_paystack_refund(): void
+    {
+        $order = $this->manualOrder(['expires_at' => now()->subMinute()]);
+        $payment = $this->submitReceipt($order);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.manual-bank-transfers.approve', $payment->id), [
+                'bank_transaction_reference' => 'BANK-REF-LATE-3001',
+                'credited_amount' => '12500.50',
+                'confirm_bank_credit' => '1',
+                'decision_reason' => 'Verified actual credit; order had expired.',
+            ])
+            ->assertRedirect(route('admin.manual-bank-transfers.index'));
+
+        $this->assertSame('paid', $order->fresh()->payment_status);
+        $this->assertSame('paid_stock_unavailable', $order->fresh()->order_status);
+        $this->assertSame('approved', $payment->fresh()->status);
+        $this->assertDatabaseHas('manual_bank_transfer_refund_cases', [
+            'order_id' => $order->id,
+            'manual_bank_transfer_payment_id' => $payment->id,
+            'status' => 'pending_admin_review',
+        ]);
+        $this->assertDatabaseMissing('financial_operations', [
+            'idempotency_key' => 'PAYSTACK-LATE-REFUND-' . $order->id,
+        ]);
     }
 
     public function test_paystack_settlement_cannot_settle_a_manual_transfer_order(): void
