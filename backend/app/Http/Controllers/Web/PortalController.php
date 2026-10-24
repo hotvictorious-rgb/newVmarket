@@ -4579,18 +4579,25 @@ class PortalController extends Controller
                 ->with('info', 'Please sign in or create an account to proceed with checkout. Your cart has been saved.');
         }
 
-        $paymentConfig = SystemSetting::getFresh('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
-        $activePaymentMethod = is_array($paymentConfig) ? (string) ($paymentConfig['active_method'] ?? 'paystack') : 'paystack';
-        if (!in_array($activePaymentMethod, ['paystack', 'manual_bank_transfer'], true)) {
+        $paymentConfig = CheckoutExecutionService::getPaymentConfiguration();
+        $paystackEnabled = $paymentConfig['paystack_enabled'];
+        $manualBankTransferEnabled = $paymentConfig['manual_bank_transfer_enabled'];
+        $manualTransferAccount = $paymentConfig['manual_bank_transfer_account'];
+
+        if ($manualBankTransferEnabled && !$paymentConfig['is_account_configured']) {
+            if (!$paystackEnabled) {
+                return redirect()->route('storefront')->with('error', 'Manual bank transfer is not configured correctly. No payment has been requested.');
+            }
+            $manualBankTransferEnabled = false;
+        }
+
+        if (!$paystackEnabled && !$manualBankTransferEnabled) {
             return redirect()->route('storefront')->with('error', 'Checkout payments are temporarily disabled. Please contact Victorious MARKET support.');
         }
-        $manualTransferAccount = is_array($paymentConfig) ? ($paymentConfig['manual_bank_transfer_account'] ?? []) : [];
-        if ($activePaymentMethod === 'manual_bank_transfer'
-            && (!is_array($manualTransferAccount) || empty($manualTransferAccount['bank_name'])
-                || empty($manualTransferAccount['account_name'])
-                || !preg_match('/^[0-9]{10}$/', (string) ($manualTransferAccount['account_number'] ?? '')))) {
-            return redirect()->route('storefront')->with('error', 'Manual bank transfer is not configured correctly. No payment has been requested.');
-        }
+
+        $activePaymentMethod = ($paystackEnabled && $manualBankTransferEnabled)
+            ? 'coexistence'
+            : ($paystackEnabled ? 'paystack' : 'manual_bank_transfer');
 
         $productId = $request->input('product_id');
         $quantity = max(1, (int)$request->input('quantity', 1));
@@ -4672,7 +4679,7 @@ class PortalController extends Controller
         ];
         $collectionPoints = collect();
 
-        return view('storefront.checkout', compact('product', 'quantity', 'merchandiseSubtotal', 'deliveryFee', 'totalPayable', 'deliveryCheck', 'pickupCheck', 'destLga', 'lgas', 'allShops', 'availableCashback', 'activeCity', 'activeLanesMap', 'collectionPoints', 'activePaymentMethod', 'manualTransferAccount'));
+        return view('storefront.checkout', compact('product', 'quantity', 'merchandiseSubtotal', 'deliveryFee', 'totalPayable', 'deliveryCheck', 'pickupCheck', 'destLga', 'lgas', 'allShops', 'availableCashback', 'activeCity', 'activeLanesMap', 'collectionPoints', 'activePaymentMethod', 'manualTransferAccount', 'paystackEnabled', 'manualBankTransferEnabled'));
     }
 
     public function processCheckout(Request $request, CheckoutExecutionService $checkoutExecutionService)
@@ -4695,6 +4702,7 @@ class PortalController extends Controller
             'delivery_address' => 'nullable|string|max:255',
             'shop_id' => 'nullable|integer|exists:shops,id',
             'redeem_cashback' => 'nullable',
+            'payment_method' => 'nullable|string|in:paystack,manual_bank_transfer',
             '_checkout_idempotency_key' => 'nullable|string|max:100',
         ]);
 
@@ -4775,7 +4783,10 @@ class PortalController extends Controller
                 ]
             ],
             'redeem_cashback' => !empty($validated['redeem_cashback']),
-            'payment_method' => (function () { $config = SystemSetting::getFresh('checkout.payment_configuration', ['active_method' => 'paystack']); return is_array($config) ? ($config['active_method'] ?? 'paystack') : 'paystack'; })(),
+            'payment_method' => $validated['payment_method'] ?? ((function () {
+                $paymentConfig = CheckoutExecutionService::getPaymentConfiguration();
+                return $paymentConfig['paystack_enabled'] ? 'paystack' : 'manual_bank_transfer';
+            })()),
             'callback_url' => route('payment.paystack.callback'),
         ];
 

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Country;
 use App\Models\Lga;
+use App\Models\ManualBankTransferPayment;
 use App\Models\Order;
 use App\Models\RetailerSupplierPayoutRequest;
 use App\Models\State;
@@ -220,4 +221,93 @@ class TreasuryBankCreditBatchTest extends TestCase
         ]);
     }
 
+    public function test_manual_bank_transfer_order_reconciles_treasury_batch_and_funds_supplier_payout(): void
+    {
+        // 1. AdminOne prepares a manual bank transfer corporate credit batch
+        $batchResponse = $this->actingAs($this->adminOne)->post(route('admin.treasury-bank-credit-batches.prepare'), [
+            'gateway_provider' => 'manual_bank_transfer',
+            'gateway_settlement_reference' => 'MANUAL-BATCH-CREDIT-001',
+            'bank_credit_reference' => 'CORP-BANK-CREDIT-777',
+            'corporate_account_last4' => '9988',
+            'gross_collection_amount_kobo' => 3000000, // ₦30,000.00
+            'provider_fee_amount_kobo' => 0,
+            'net_credit_amount_kobo' => 3000000,
+            'currency' => 'NGN',
+            'statement_value_date' => now()->toDateString(),
+            'statement_evidence_reference' => 'Statement sheet line 44 - FirstBank direct transfer credit',
+            'reconciliation_notes' => 'Direct corporate bank statement credit for manual transfer customer payments.',
+        ]);
+        $batchResponse->assertRedirect()->assertSessionHas('success');
+
+        $batch = TreasuryBankCreditBatch::where('gateway_settlement_reference', 'MANUAL-BATCH-CREDIT-001')->firstOrFail();
+        $this->assertSame('manual_bank_transfer', $batch->gateway_provider);
+        $this->assertSame('pending_second_review', $batch->status);
+
+        // 2. Create a manual_bank_transfer paid order with verified payment record
+        $order = Order::create([
+            'order_number' => 'VM-MANUAL-TREASURY-' . uniqid(),
+            'customer_id' => $this->customer->id,
+            'vendor_id' => null,
+            'shop_id' => null,
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'retailer_model_order' => true,
+            'order_status' => 'confirmed',
+            'payment_status' => 'paid',
+            'payment_method' => 'manual_bank_transfer',
+            'payment_channel' => 'manual_bank_transfer',
+            'sourcing_status' => 'awaiting_supplier_confirmation',
+            'fulfillment_type' => 'doorstep_delivery',
+            'delivery_fee' => '0.00',
+            'merchandise_subtotal' => '30000.00',
+            'grand_total' => '30000.00',
+            'vendor_net_90' => '0.00',
+            'customer_cashback_5' => '0.00',
+            'platform_margin_5' => '0.00',
+            'payment_reference' => 'VM-PAY-MANUAL-001',
+            'paystack_transaction_id' => null, // Intentionally null for direct manual bank transfer
+        ]);
+
+        ManualBankTransferPayment::create([
+            'order_id' => $order->id,
+            'customer_id' => $this->customer->id,
+            'evidence_path' => 'receipts/test.jpg',
+            'evidence_mime' => 'image/jpeg',
+            'evidence_size_bytes' => 1024,
+            'evidence_sha256' => hash('sha256', 'test-receipt'),
+            'status' => 'approved',
+            'bank_transaction_reference' => 'DIRECT-BANK-REF-999',
+            'credited_amount_kobo' => 3000000,
+            'currency' => 'NGN',
+            'reviewed_by_admin_id' => $this->adminOne->id,
+            'submitted_at' => now()->subHours(2),
+            'reviewed_at' => now()->subHour(),
+            'decision_reason' => 'Direct credit verified in FirstBank corporate account.',
+        ]);
+
+        // 3. AdminOne allocates the manual payment to the treasury batch
+        $allocResponse = $this->actingAs($this->adminOne)->post(route('admin.treasury-bank-credit-batches.allocations.store', $batch->id), [
+            'order_id' => $order->id,
+            'gateway_transaction_id' => 'DIRECT-BANK-REF-999', // Verified bank transaction reference
+            'payment_reference' => 'VM-PAY-MANUAL-001',
+            'amount_kobo' => 3000000,
+        ]);
+        $allocResponse->assertRedirect()->assertSessionHas('success');
+
+        // 4. AdminTwo confirms the batch (dual review)
+        $confirmResponse = $this->actingAs($this->adminTwo)->post(route('admin.treasury-bank-credit-batches.confirm', $batch->id), [
+            'confirmation_notes' => 'Confirmed matching corporate bank credit and verified manual transfer payment reference.',
+        ]);
+        $confirmResponse->assertRedirect()->assertSessionHas('success');
+
+        $batch->refresh();
+        $this->assertSame('reconciled', $batch->status);
+
+        // 5. Verify RetailerSupplierPayoutService accepts this manual-transfer treasury funding!
+        $payout = $this->createPayout('20000.00'); // ₦20,000.00 obligation
+        $reserveResult = app(RetailerSupplierPayoutService::class)->reserveTreasuryBankCreditBatch($payout->id);
+
+        $this->assertTrue($reserveResult['success'], 'Manual transfer corporate batch must fund retailer supplier payouts');
+        $this->assertSame($batch->id, $payout->fresh()->treasury_bank_credit_batch_id);
+    }
 }

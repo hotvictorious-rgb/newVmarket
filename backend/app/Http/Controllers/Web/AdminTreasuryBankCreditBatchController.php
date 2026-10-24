@@ -28,7 +28,7 @@ class AdminTreasuryBankCreditBatchController extends Controller
     {
         $this->authorizeSuperAdmin($request);
         $data = $request->validate([
-            'gateway_provider' => ['required', 'in:paystack'],
+            'gateway_provider' => ['required', 'in:paystack,manual_bank_transfer'],
             'gateway_settlement_reference' => ['required', 'string', 'min:4', 'max:120'],
             'bank_credit_reference' => ['required', 'string', 'min:4', 'max:120'],
             'corporate_account_last4' => ['required', 'regex:/^\d{4}$/'],
@@ -124,27 +124,30 @@ class AdminTreasuryBankCreditBatchController extends Controller
             }
 
             $order = Order::whereKey($data['order_id'])->lockForUpdate()->first();
-            $expectedKobo = $order ? (int) bcmul((string) $order->grand_total, '100', 0) : 0;
-            if (!$order || $order->payment_status !== 'paid'
-                || trim((string) $order->payment_reference) === ''
-                || !hash_equals((string) $order->payment_reference, trim($data['payment_reference']))
-                || trim((string) $order->paystack_transaction_id) === ''
-                || !hash_equals((string) $order->paystack_transaction_id, trim($data['gateway_transaction_id']))
-                || strtoupper((string) $batch->currency) !== 'NGN'
-                || (int) $data['amount_kobo'] !== $expectedKobo) {
+            if (!$order) {
                 throw ValidationException::withMessages([
-                    'order_id' => 'Allocation must exactly match a paid order, its stored gateway transaction ID, payment reference, NGN currency and full captured amount.',
+                    'order_id' => 'Paid order not found.',
                 ]);
             }
+
+            $match = TreasuryBankCreditBatchAllocation::verifyOrderMatch($order, $data, $batch->gateway_provider, $batch->currency);
+            if (!$match['valid']) {
+                throw ValidationException::withMessages([
+                    'order_id' => 'Allocation must exactly match a paid order: ' . $match['error'],
+                ]);
+            }
+
+            $expectedKobo = (int) bcmul((string) $order->grand_total, '100', 0);
+            $txKey = trim($data['gateway_transaction_id']);
 
             $allocation = TreasuryBankCreditBatchAllocation::create([
                 'treasury_bank_credit_batch_id' => $batch->id,
                 'order_id' => $order->id,
-                'gateway_transaction_id' => trim($data['gateway_transaction_id']),
+                'gateway_transaction_id' => $txKey,
                 'payment_reference' => trim($data['payment_reference']),
                 'amount_kobo' => $expectedKobo,
                 'currency' => 'NGN',
-                'idempotency_key' => 'TREASURY-ALLOC-' . hash('sha256', $batch->id . '|' . $order->id . '|' . $order->paystack_transaction_id),
+                'idempotency_key' => 'TREASURY-ALLOC-' . hash('sha256', $batch->id . '|' . $order->id . '|' . $txKey),
                 'added_by_admin_id' => $request->user()->id,
                 'added_at' => now(),
             ]);
@@ -201,15 +204,15 @@ class AdminTreasuryBankCreditBatchController extends Controller
             $allocatedGrossKobo = 0;
             foreach ($allocations as $allocation) {
                 $order = Order::whereKey($allocation->order_id)->lockForUpdate()->first();
-                if (!$order || $order->payment_status !== 'paid'
-                    || trim((string) $order->payment_reference) === ''
-                    || !hash_equals((string) $order->payment_reference, (string) $allocation->payment_reference)
-                    || trim((string) $order->paystack_transaction_id) === ''
-                    || !hash_equals((string) $order->paystack_transaction_id, (string) $allocation->gateway_transaction_id)
-                    || strtoupper((string) $allocation->currency) !== 'NGN'
-                    || (int) $allocation->amount_kobo !== (int) bcmul((string) $order->grand_total, '100', 0)) {
+                if (!$order) {
                     throw ValidationException::withMessages([
-                        'confirmation_notes' => 'A collection allocation does not exactly match a paid order, gateway transaction ID, payment reference, NGN currency and captured order amount.',
+                        'confirmation_notes' => 'Allocated order was not found.',
+                    ]);
+                }
+                $match = TreasuryBankCreditBatchAllocation::verifyOrderMatch($order, $allocation, $batch->gateway_provider, $batch->currency);
+                if (!$match['valid']) {
+                    throw ValidationException::withMessages([
+                        'confirmation_notes' => 'A collection allocation does not match: ' . $match['error'],
                     ]);
                 }
                 $allocatedGrossKobo += (int) $allocation->amount_kobo;

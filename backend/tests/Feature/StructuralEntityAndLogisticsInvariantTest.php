@@ -545,15 +545,13 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
             ->assertJsonPath('status', false)
             ->assertJsonPath('message', 'Your customer account is deactivated or suspended.');
 
-        // In-Shop Pickup Reservation by suspended customer
+        // In-Shop Pickup Reservation is retired with 410 Gone
         $resPickupCustomer = $this->postJson('/api/v1/customer/pickup-reservations', [
             'shop_id' => $this->shop->id,
             'product_id' => $product->id,
             'quantity' => 1,
         ]);
-        $resPickupCustomer->assertStatus(403)
-            ->assertJsonPath('status', false)
-            ->assertJsonPath('message', 'Your customer account is deactivated or suspended.');
+        $resPickupCustomer->assertStatus(410);
 
         // Restore customer account
         $this->customer->status = 'active';

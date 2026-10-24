@@ -63,14 +63,12 @@ class RetailerSupplierPayoutService
             $allocatedGrossKobo = 0;
             foreach ($allocations as $allocation) {
                 $order = Order::whereKey($allocation->order_id)->lockForUpdate()->first();
-                if (!$order || $order->payment_status !== 'paid'
-                    || trim((string) $order->payment_reference) === ''
-                    || !hash_equals((string) $order->payment_reference, (string) $allocation->payment_reference)
-                    || trim((string) $order->paystack_transaction_id) === ''
-                    || !hash_equals((string) $order->paystack_transaction_id, (string) $allocation->gateway_transaction_id)
-                    || strtoupper((string) $allocation->currency) !== 'NGN'
-                    || (int) $allocation->amount_kobo !== (int) bcmul((string) $order->grand_total, '100', 0)) {
-                    return ['success' => false, 'message' => 'Treasury batch capture evidence no longer matches its paid order; supplier payout is blocked for reconciliation.'];
+                if (!$order) {
+                    return ['success' => false, 'message' => 'Treasury batch allocated order not found; supplier payout is blocked.'];
+                }
+                $match = TreasuryBankCreditBatchAllocation::verifyOrderMatch($order, $allocation, $batch->gateway_provider, $batch->currency);
+                if (!$match['valid']) {
+                    return ['success' => false, 'message' => 'Treasury batch capture evidence no longer matches its paid order: ' . $match['error']];
                 }
                 $allocatedGrossKobo += (int) $allocation->amount_kobo;
             }

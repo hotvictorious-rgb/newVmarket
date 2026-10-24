@@ -48,7 +48,9 @@
                     <p style="margin:0;color:#991b1b">Your payment submission was rejected. This order cannot accept another payment submission. Contact Victorious MARKET support before making another transfer.</p>
                 @endif
             @elseif(in_array($order->payment_status, ['pending', 'unpaid'], true) && !$order->paid_at && !empty($order->manual_bank_transfer_account_snapshot['account_number']))
-                @php($transferAccount = $order->manual_bank_transfer_account_snapshot ?? [])
+                @php
+                    $transferAccount = $order->manual_bank_transfer_account_snapshot ?? [];
+                @endphp
                 @if(!empty($transferAccount['account_number']))
                     <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:14px;margin-bottom:14px">
                         <div style="font-size:12px;color:#64748b;font-weight:800;text-transform:uppercase;margin-bottom:8px">Transfer only to this Victorious MARKET account</div>

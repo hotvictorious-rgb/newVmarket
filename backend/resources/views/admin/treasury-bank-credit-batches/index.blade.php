@@ -26,7 +26,7 @@
     <div class="card-body">
         <form method="POST" action="{{ route('admin.treasury-bank-credit-batches.prepare') }}" class="row g-3">
             @csrf
-            <div class="col-md-4"><label class="form-label">Gateway provider</label><select name="gateway_provider" required class="form-control"><option value="paystack">Paystack</option></select></div>
+            <div class="col-md-4"><label class="form-label">Gateway provider / Funding Rail</label><select name="gateway_provider" required class="form-control"><option value="paystack">Paystack Gateway Settlement</option><option value="manual_bank_transfer">Direct Manual Bank Transfer (Corporate Account Statement)</option></select></div>
             <div class="col-md-4"><label class="form-label">Gateway settlement reference</label><input name="gateway_settlement_reference" required minlength="4" maxlength="120" class="form-control"></div>
             <div class="col-md-4"><label class="form-label">Corporate bank credit reference</label><input name="bank_credit_reference" required minlength="4" maxlength="120" class="form-control"></div>
             <div class="col-md-3"><label class="form-label">Corporate account last 4 digits</label><input name="corporate_account_last4" required pattern="[0-9]{4}" maxlength="4" class="form-control"></div>

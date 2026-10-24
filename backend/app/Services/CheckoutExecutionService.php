@@ -35,30 +35,98 @@ class CheckoutExecutionService
     }
 
     /**
+     * Authoritative payment configuration status.
+     * Paystack and direct Manual Bank Transfer may coexist simultaneously,
+     * or either may be enabled, or checkout disabled entirely.
+     */
+    public static function getPaymentConfiguration(?array $rawConfig = null): array
+    {
+        $config = $rawConfig ?? SystemSetting::getFresh('checkout.payment_configuration', [
+            'paystack_enabled' => true,
+            'manual_bank_transfer_enabled' => false,
+            'manual_bank_transfer_account' => [],
+        ]);
+
+        if (!is_array($config)) {
+            $config = [];
+        }
+
+        $activeMethod = (string) ($config['active_method'] ?? '');
+
+        // Determine Paystack enablement
+        if (array_key_exists('paystack_enabled', $config)) {
+            $paystackEnabled = (bool) $config['paystack_enabled'];
+        } else {
+            $paystackEnabled = in_array($activeMethod, ['paystack', 'both', 'coexistence'], true)
+                || ($activeMethod !== 'disabled' && $activeMethod !== 'manual_bank_transfer');
+        }
+
+        // Determine Manual Bank Transfer enablement
+        if (array_key_exists('manual_bank_transfer_enabled', $config)) {
+            $manualTransferEnabled = (bool) $config['manual_bank_transfer_enabled'];
+        } else {
+            $manualTransferEnabled = in_array($activeMethod, ['manual_bank_transfer', 'both', 'coexistence'], true);
+        }
+
+        $account = is_array($config['manual_bank_transfer_account'] ?? null)
+            ? $config['manual_bank_transfer_account']
+            : [];
+
+        $isAccountConfigured = !empty($account['bank_name'])
+            && !empty($account['account_name'])
+            && (bool) preg_match('/^[0-9]{10}$/', (string) ($account['account_number'] ?? ''));
+
+        $computedActiveMethod = ($paystackEnabled && $manualTransferEnabled)
+            ? 'coexistence'
+            : ($paystackEnabled ? 'paystack' : ($manualTransferEnabled ? 'manual_bank_transfer' : 'disabled'));
+
+        return [
+            'paystack_enabled' => $paystackEnabled,
+            'manual_bank_transfer_enabled' => $manualTransferEnabled,
+            'manual_bank_transfer_account' => $account,
+            'is_account_configured' => $isAccountConfigured,
+            'active_method' => $computedActiveMethod,
+            'raw' => $config,
+        ];
+    }
+
+    /**
      * Authoritative Order Checkout Execution Engine.
      * Pessimistically locks catalog stock, applies cashback/wallet credits,
      * routes logistics, and prepares Paystack payment intent.
      */
     public function execute(User $user, array $validated): array
     {
-        // Single authoritative global selector: Paystack OR manual transfer OR disabled.
-        // There is no dual-enabled state to race or accidentally expose at checkout.
-        $paymentConfig = SystemSetting::getFresh('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
-        $activePaymentMethod = is_array($paymentConfig) ? (string) ($paymentConfig['active_method'] ?? 'paystack') : 'paystack';
-        if (!in_array($activePaymentMethod, ['paystack', 'manual_bank_transfer'], true)) {
+        // Authoritative payment configuration: Paystack and direct Manual Bank Transfer
+        // may coexist simultaneously, or either may be enabled, or checkout disabled.
+        $paymentConfig = self::getPaymentConfiguration();
+        $isPaystackEnabled = $paymentConfig['paystack_enabled'];
+        $isManualTransferEnabled = $paymentConfig['manual_bank_transfer_enabled'];
+
+        if (!$isPaystackEnabled && !$isManualTransferEnabled) {
             return ['success' => false, 'status_code' => 503, 'message' => 'Checkout payments are temporarily disabled. Please contact Victorious MARKET support.'];
         }
-        $manualTransferAccountSnapshot = [];
-        $requestedPaymentMethod = (string) ($validated['payment_method'] ?? $activePaymentMethod);
-        if (!hash_equals($activePaymentMethod, $requestedPaymentMethod)) {
+
+        $defaultMethod = $isPaystackEnabled ? 'paystack' : 'manual_bank_transfer';
+        $requestedPaymentMethod = (string) ($validated['payment_method'] ?? $defaultMethod);
+
+        if ($requestedPaymentMethod === 'paystack') {
+            if (!$isPaystackEnabled) {
+                return ['success' => false, 'status_code' => 409, 'message' => 'The selected payment method is no longer active. Refresh checkout and try again.'];
+            }
+        } elseif ($requestedPaymentMethod === 'manual_bank_transfer') {
+            if (!$isManualTransferEnabled) {
+                return ['success' => false, 'status_code' => 409, 'message' => 'The selected payment method is no longer active. Refresh checkout and try again.'];
+            }
+        } else {
             return ['success' => false, 'status_code' => 409, 'message' => 'The selected payment method is no longer active. Refresh checkout and try again.'];
         }
+
+        $activePaymentMethod = $requestedPaymentMethod;
+        $manualTransferAccountSnapshot = [];
         if ($activePaymentMethod === 'manual_bank_transfer') {
-            $account = is_array($paymentConfig) ? ($paymentConfig['manual_bank_transfer_account'] ?? []) : [];
-            if (!is_array($account)
-                || empty($account['bank_name'])
-                || empty($account['account_name'])
-                || !preg_match('/^[0-9]{10}$/', (string) ($account['account_number'] ?? ''))) {
+            $account = $paymentConfig['manual_bank_transfer_account'];
+            if (!$paymentConfig['is_account_configured']) {
                 return ['success' => false, 'status_code' => 503, 'message' => 'Manual bank transfer is not configured correctly. Checkout is blocked until an authorized admin fixes the receiving account.'];
             }
             $manualTransferAccountSnapshot = [
@@ -335,9 +403,9 @@ class CheckoutExecutionService
             // verifies payment and settlement performs the binding allocation.
             $supplierCostTotal = null;
 
-            // Cashback is 5% of eligible merchandise funded by real money through
-            // Paystack after cashback redemption. Delivery is excluded.
-            $customerCashback5 = $activePaymentMethod === 'manual_bank_transfer' ? '0.00' : BcMathService::mul($subtotalAfterCashback, '0.05');
+            // Cashback is 5% of eligible merchandise funded by real money after
+            // cashback redemption, applicable to both Paystack and verified manual bank transfers. Delivery is excluded.
+            $customerCashback5 = BcMathService::mul($subtotalAfterCashback, '0.05');
             $vendorNet90 = '0.00'; // no new 90% marketplace merchandise commission
             $platformMargin5 = '0.00';
             $retailerMerchandiseMargin = null;
@@ -665,7 +733,7 @@ class CheckoutExecutionService
             ? 'Order created and paid in full with refund wallet credit.'
             : ($order->payment_method === 'manual_bank_transfer'
                 ? 'Order created. Transfer the exact amount to the configured Victorious MARKET account and upload your receipt for admin review.'
-                : 'Order created successfully. Proceed to Paystack payment.');
+                : 'Order created successfully. Proceed to payment.');
 
         return [
             'success' => true,

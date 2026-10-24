@@ -1022,7 +1022,7 @@ class OrderSettlementService
                         }
                     }
 
-                    if ($provider !== 'manual_bank_transfer' && BcMathService::comp((string) $lockedOrder->customer_cashback_5, '0.00') > 0) {
+                    if (BcMathService::comp((string) $lockedOrder->customer_cashback_5, '0.00') > 0) {
                         FinancialJournalEntry::create([
                             'order_id' => $lockedOrder->id,
                             'transaction_reference' => $reference,
@@ -1041,6 +1041,7 @@ class OrderSettlementService
                         ], [
                             'customer_id' => $lockedOrder->customer_id,
                             'amount' => $lockedOrder->customer_cashback_5,
+                            'funding_source' => $provider,
                             'status' => 'pending_maturation',
                             'matures_at' => null,
                             'expires_at' => null,
@@ -1218,7 +1219,7 @@ class OrderSettlementService
                 }
 
                 // Credit: Customer Cashback Liability (5% Merchandise Split)
-                if ($provider !== 'manual_bank_transfer' && bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
+                if (bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
                     FinancialJournalEntry::create([
                         'order_id' => $lockedOrder->id,
                         'transaction_reference' => $reference,
@@ -1253,12 +1254,13 @@ class OrderSettlementService
                 // 11. Register 5% Customer Cashback Reward in Ledger
                 // Invariant: Cashback is strictly NOT redeemable at payment!
                 // Maturation countdown commences ONLY upon physical delivery / counter handover inspection.
-                if ($provider !== 'manual_bank_transfer' && $lockedOrder->customer_id && bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
+                if ($lockedOrder->customer_id && bccomp((string)$lockedOrder->customer_cashback_5, '0.00', 2) > 0) {
                     CustomerCashbackLedger::updateOrCreate([
                         'order_id' => $lockedOrder->id,
                     ], [
                         'customer_id' => $lockedOrder->customer_id,
                         'amount' => $lockedOrder->customer_cashback_5,
+                        'funding_source' => $provider,
                         'status' => 'pending_maturation',
                         'matures_at' => null, // No maturity clock before verified fulfilment.
                         'expires_at' => null, // Validity starts only after maturity.

@@ -8,6 +8,7 @@ use App\Models\ManualBankTransferPayment;
 use App\Models\ManualBankTransferRefundCase;
 use App\Models\Order;
 use App\Models\SystemSetting;
+use App\Services\CheckoutExecutionService;
 use App\Services\OrderSettlementService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -161,9 +162,11 @@ class ManualBankTransferController extends Controller
 
     public function index()
     {
-        $paymentConfig = SystemSetting::getFresh('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
-        $activePaymentMethod = is_array($paymentConfig) ? (string) ($paymentConfig['active_method'] ?? 'paystack') : 'paystack';
-        $bankAccount = is_array($paymentConfig) ? ($paymentConfig['manual_bank_transfer_account'] ?? []) : [];
+        $paymentConfig = CheckoutExecutionService::getPaymentConfiguration();
+        $paystackEnabled = $paymentConfig['paystack_enabled'];
+        $manualBankTransferEnabled = $paymentConfig['manual_bank_transfer_enabled'];
+        $activePaymentMethod = $paymentConfig['active_method'];
+        $bankAccount = $paymentConfig['manual_bank_transfer_account'];
         $refundCases = ManualBankTransferRefundCase::with(['order', 'payment', 'reviewer'])
             ->orderByRaw("CASE WHEN status = 'pending_admin_review' THEN 0 ELSE 1 END")
             ->orderBy('created_at')
@@ -174,32 +177,51 @@ class ManualBankTransferController extends Controller
             ->orderBy('submitted_at')
             ->paginate(25);
 
-        return view('admin.manual-bank-transfers.index', compact('payments', 'refundCases', 'activePaymentMethod', 'bankAccount'));
+        return view('admin.manual-bank-transfers.index', compact('payments', 'refundCases', 'activePaymentMethod', 'bankAccount', 'paystackEnabled', 'manualBankTransferEnabled'));
     }
 
     public function saveSettings(Request $request)
     {
-        $validated = $request->validate([
-            'active_payment_method' => ['required', 'in:paystack,manual_bank_transfer,disabled'],
-            'bank_name' => ['required_if:active_payment_method,manual_bank_transfer', 'nullable', 'string', 'max:100'],
-            'account_name' => ['required_if:active_payment_method,manual_bank_transfer', 'nullable', 'string', 'max:150'],
-            'account_number' => ['required_if:active_payment_method,manual_bank_transfer', 'nullable', 'regex:/^[0-9]{10}$/'],
-            'customer_instructions' => ['required_if:active_payment_method,manual_bank_transfer', 'nullable', 'string', 'max:2000'],
-        ]);
+        // Support both boolean switches (paystack_enabled & manual_bank_transfer_enabled)
+        // and legacy active_payment_method selection for seamless backwards compatibility.
+        $hasExplicitBooleans = $request->has('paystack_enabled') || $request->has('manual_bank_transfer_enabled');
 
-        $oldConfig = SystemSetting::getFresh('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
+        if ($hasExplicitBooleans) {
+            $paystackEnabled = $request->boolean('paystack_enabled');
+            $manualTransferEnabled = $request->boolean('manual_bank_transfer_enabled');
+        } else {
+            $legacyMethod = (string) $request->input('active_payment_method', 'disabled');
+            $paystackEnabled = in_array($legacyMethod, ['paystack', 'both', 'coexistence'], true);
+            $manualTransferEnabled = in_array($legacyMethod, ['manual_bank_transfer', 'both', 'coexistence'], true);
+        }
+
+        if ($manualTransferEnabled) {
+            $request->validate([
+                'bank_name' => ['required', 'string', 'max:100'],
+                'account_name' => ['required', 'string', 'max:150'],
+                'account_number' => ['required', 'regex:/^[0-9]{10}$/'],
+                'customer_instructions' => ['nullable', 'string', 'max:2000'],
+            ]);
+        }
+
+        $oldConfig = CheckoutExecutionService::getPaymentConfiguration()['raw'];
         $account = [
-            'bank_name' => trim((string) ($validated['bank_name'] ?? '')),
-            'account_name' => trim((string) ($validated['account_name'] ?? '')),
-            'account_number' => trim((string) ($validated['account_number'] ?? '')),
-            'customer_instructions' => trim((string) ($validated['customer_instructions'] ?? '')),
+            'bank_name' => trim((string) $request->input('bank_name', '')),
+            'account_name' => trim((string) $request->input('account_name', '')),
+            'account_number' => trim((string) $request->input('account_number', '')),
+            'customer_instructions' => trim((string) $request->input('customer_instructions', '')),
             'updated_at' => now()->toIso8601String(),
         ];
 
-        DB::transaction(function () use ($validated, $account, $oldConfig, $request) {
-            // One atomic JSON setting is the single source of truth; dual activation is unrepresentable.
+        DB::transaction(function () use ($paystackEnabled, $manualTransferEnabled, $account, $oldConfig, $request) {
+            $activeMethod = ($paystackEnabled && $manualTransferEnabled)
+                ? 'coexistence'
+                : ($paystackEnabled ? 'paystack' : ($manualTransferEnabled ? 'manual_bank_transfer' : 'disabled'));
+
             $newConfig = [
-                'active_method' => $validated['active_payment_method'],
+                'paystack_enabled' => $paystackEnabled,
+                'manual_bank_transfer_enabled' => $manualTransferEnabled,
+                'active_method' => $activeMethod,
                 'manual_bank_transfer_account' => $account,
                 'updated_at' => now()->toIso8601String(),
             ];
@@ -217,8 +239,14 @@ class ManualBankTransferController extends Controller
             ]);
         });
 
-        return redirect()->route('admin.manual-bank-transfers.index')
-            ->with('status', 'Payment configuration saved. Exactly one payment method is active, or checkout is disabled.');
+        $statusMsg = match (true) {
+            $paystackEnabled && $manualTransferEnabled => 'Payment configuration saved: Paystack and Manual Bank Transfer are coexisting simultaneously.',
+            $paystackEnabled => 'Payment configuration saved: Paystack is active.',
+            $manualTransferEnabled => 'Payment configuration saved: Manual Bank Transfer is active.',
+            default => 'Payment configuration saved: All checkout payment methods are disabled.',
+        };
+
+        return redirect()->route('admin.manual-bank-transfers.index')->with('status', $statusMsg);
     }
 
     public function approve(Request $request, int $id, OrderSettlementService $settlementService)

@@ -6,7 +6,9 @@ use App\Models\ManualBankTransferPayment;
 use App\Models\ManualBankTransferRefundCase;
 use App\Models\FinancialOperation;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\SystemSetting;
+use App\Services\CheckoutExecutionService;
 use App\Services\OrderSettlementService;
 use App\Models\Shop;
 use App\Models\User;
@@ -270,36 +272,86 @@ class ManualBankTransferReviewTest extends TestCase
         $this->assertNull($order->fresh()->paystack_transaction_id);
     }
 
-    public function test_admin_payment_configuration_selects_one_method_or_disables_checkout(): void
+    public function test_admin_payment_configuration_supports_simultaneous_coexistence(): void
     {
-        SystemSetting::set('checkout.payment_configuration', [
-            'active_method' => 'paystack',
-            'manual_bank_transfer_account' => [],
-        ], 'payments');
-
         $this->actingAs($this->admin)
             ->post(route('admin.manual-bank-transfers.settings'), [
-                'active_payment_method' => 'manual_bank_transfer',
-                'bank_name' => 'Test Bank',
-                'account_name' => 'Victorious MARKET',
+                'paystack_enabled' => '1',
+                'manual_bank_transfer_enabled' => '1',
+                'bank_name' => 'First Bank of Nigeria',
+                'account_name' => 'Victorious MARKET Ltd',
                 'account_number' => '0123456789',
-                'customer_instructions' => 'Copy the order code into narration.',
+                'customer_instructions' => 'Copy the order code into bank narration.',
             ])
-            ->assertRedirect(route('admin.manual-bank-transfers.index'));
+            ->assertRedirect(route('admin.manual-bank-transfers.index'))
+            ->assertSessionHas('status');
 
-        $config = SystemSetting::getFresh('checkout.payment_configuration');
-        $this->assertSame('manual_bank_transfer', $config['active_method']);
+        $config = CheckoutExecutionService::getPaymentConfiguration();
+        $this->assertTrue($config['paystack_enabled']);
+        $this->assertTrue($config['manual_bank_transfer_enabled']);
+        $this->assertSame('coexistence', $config['active_method']);
+        $this->assertTrue($config['is_account_configured']);
         $this->assertSame('0123456789', $config['manual_bank_transfer_account']['account_number']);
-        $this->assertArrayNotHasKey('paystack_enabled', $config);
-        $this->assertArrayNotHasKey('manual_bank_transfer_enabled', $config);
+        $this->assertSame('First Bank of Nigeria', $config['manual_bank_transfer_account']['bank_name']);
+    }
 
+    public function test_admin_payment_configuration_supports_single_rail_and_disabled_states(): void
+    {
+        // 1. Paystack only
         $this->actingAs($this->admin)
             ->post(route('admin.manual-bank-transfers.settings'), [
-                'active_payment_method' => 'disabled',
+                'paystack_enabled' => '1',
+                'manual_bank_transfer_enabled' => '0',
             ])
             ->assertRedirect(route('admin.manual-bank-transfers.index'));
 
-        $this->assertSame('disabled', SystemSetting::getFresh('checkout.payment_configuration')['active_method']);
+        $config = CheckoutExecutionService::getPaymentConfiguration();
+        $this->assertTrue($config['paystack_enabled']);
+        $this->assertFalse($config['manual_bank_transfer_enabled']);
+        $this->assertSame('paystack', $config['active_method']);
+
+        // 2. Manual Bank Transfer only
+        $this->actingAs($this->admin)
+            ->post(route('admin.manual-bank-transfers.settings'), [
+                'paystack_enabled' => '0',
+                'manual_bank_transfer_enabled' => '1',
+                'bank_name' => 'Zenith Bank',
+                'account_name' => 'Victorious MARKET Ltd',
+                'account_number' => '9876543210',
+                'customer_instructions' => 'Include order code.',
+            ])
+            ->assertRedirect(route('admin.manual-bank-transfers.index'));
+
+        $config = CheckoutExecutionService::getPaymentConfiguration();
+        $this->assertFalse($config['paystack_enabled']);
+        $this->assertTrue($config['manual_bank_transfer_enabled']);
+        $this->assertSame('manual_bank_transfer', $config['active_method']);
+
+        // 3. Both disabled
+        $this->actingAs($this->admin)
+            ->post(route('admin.manual-bank-transfers.settings'), [
+                'paystack_enabled' => '0',
+                'manual_bank_transfer_enabled' => '0',
+            ])
+            ->assertRedirect(route('admin.manual-bank-transfers.index'));
+
+        $config = CheckoutExecutionService::getPaymentConfiguration();
+        $this->assertFalse($config['paystack_enabled']);
+        $this->assertFalse($config['manual_bank_transfer_enabled']);
+        $this->assertSame('disabled', $config['active_method']);
+    }
+
+    public function test_admin_payment_configuration_requires_valid_bank_account_when_manual_transfer_enabled(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.manual-bank-transfers.settings'), [
+                'paystack_enabled' => '1',
+                'manual_bank_transfer_enabled' => '1',
+                'bank_name' => '',
+                'account_name' => '',
+                'account_number' => 'not-10-digits',
+            ])
+            ->assertSessionHasErrors(['bank_name', 'account_name', 'account_number']);
     }
 
     public function test_paystack_order_cannot_accept_manual_transfer_receipt(): void
@@ -315,5 +367,119 @@ class ManualBankTransferReviewTest extends TestCase
 
         $this->assertDatabaseCount('manual_bank_transfer_payments', 0);
         $this->assertSame('pending', $order->fresh()->payment_status);
+    }
+
+    public function test_manual_bank_transfer_approval_accrues_cashback_with_explicit_funding_source_and_balanced_ledger(): void
+    {
+        $order = $this->manualOrder([
+            'merchandise_subtotal' => '10000.00',
+            'delivery_fee' => '2500.50',
+            'grand_total' => '12500.50',
+            'vendor_net_90' => '9000.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '500.00',
+            'retailer_model_order' => false,
+        ]);
+        $payment = $this->submitReceipt($order);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.manual-bank-transfers.approve', $payment->id), [
+                'bank_transaction_reference' => 'BANK-REF-CASHBACK-2026',
+                'credited_amount' => '12500.50',
+                'confirm_bank_credit' => '1',
+                'decision_reason' => 'Deposit verified in manual bank account.',
+            ])
+            ->assertRedirect(route('admin.manual-bank-transfers.index'));
+
+        $this->assertSame('paid', $order->fresh()->payment_status);
+        $this->assertSame('manual_bank_transfer', $order->fresh()->payment_channel);
+
+        // Verify CustomerCashbackLedger accrued with explicit funding_source
+        $cashback = \App\Models\CustomerCashbackLedger::where('order_id', $order->id)->first();
+        $this->assertNotNull($cashback, 'Cashback ledger entry must be created on verified manual bank transfer');
+        $this->assertSame('500.00', number_format((float)$cashback->amount, 2, '.', ''));
+        $this->assertSame('pending_maturation', $cashback->status);
+        $this->assertSame('manual_bank_transfer', $cashback->funding_source, 'Funding source must explicitly record manual_bank_transfer');
+
+        // Zero-discrepancy balance verification
+        $debits = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'debit')->sum('amount');
+        $credits = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->where('entry_type', 'credit')->sum('amount');
+        $this->assertEqualsWithDelta((float)$debits, (float)$credits, 0.001, 'Double-entry journal must balance with zero discrepancy');
+    }
+
+    public function test_payment_method_coexistence_allows_customer_selection_and_honors_choice(): void
+    {
+        SystemSetting::set('checkout.payment_configuration', [
+            'active_method' => 'both',
+            'paystack_enabled' => true,
+            'manual_bank_transfer_enabled' => true,
+            'manual_bank_transfer_account' => [
+                'bank_name' => 'Zenith Bank',
+                'account_name' => 'Victorious MARKET Ltd',
+                'account_number' => '1012345678',
+                'customer_instructions' => 'Include order code in narration.',
+            ],
+        ]);
+
+        $product = \App\Models\Product::first();
+        $this->assertNotNull($product, 'Test requires at least one product');
+        $product->update([
+            'is_approved' => true,
+            'listing_status' => 'listed',
+            'is_available_for_sale' => true,
+            'is_in_stock' => true,
+            'listing_confirmed_at' => now(),
+        ]);
+        \App\Models\SupplierOffer::updateOrCreate([
+            'product_id' => $product->id,
+        ], [
+            'vendor_id' => $product->vendor_id,
+            'shop_id' => $product->shop_id,
+            'wholesale_cost' => '1000.00',
+            'is_available' => true,
+            'is_admin_disabled' => false,
+            'availability_confirmed_at' => now(),
+            'availability_confirmed_by' => $product->vendor?->user_id ?? 1,
+            'availability_expires_at' => now()->addHours(24),
+        ]);
+        // Customer accesses checkout page; both methods should be available
+        $viewResponse = $this->actingAs($this->customer)->get(route('checkout', ['product_id' => $product->id]));
+        $viewResponse->assertOk();
+        $viewResponse->assertSee('Paystack Online');
+        $viewResponse->assertSee('Manual Bank Transfer');
+        $viewResponse->assertViewHas('paystackEnabled', true);
+        $viewResponse->assertViewHas('manualBankTransferEnabled', true);
+
+        // Customer selects manual_bank_transfer
+        $manualResponse = $this->actingAs($this->customer)->post(route('checkout.process'), [
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'fulfillment_type' => 'doorstep_delivery',
+            'customer_name' => 'Test Customer',
+            'customer_phone' => '+2348011112222',
+            'delivery_address' => '12 Shelter Afrique, Uyo',
+            'destination_lga_id' => $this->shop->lga_id,
+            'payment_method' => 'manual_bank_transfer',
+        ]);
+        $manualResponse->assertRedirect();
+        $createdManualOrder = Order::where('customer_id', $this->customer->id)->latest('id')->first();
+        $this->assertSame('manual_bank_transfer', $createdManualOrder->payment_method);
+        $this->assertSame('pending', $createdManualOrder->payment_status);
+
+        // Customer selects paystack
+        $paystackResponse = $this->actingAs($this->customer)->post(route('checkout.process'), [
+            'product_id' => $product->id,
+            'quantity' => 1,
+            'fulfillment_type' => 'doorstep_delivery',
+            'customer_name' => 'Test Customer',
+            'customer_phone' => '+2348011112222',
+            'delivery_address' => '12 Shelter Afrique, Uyo',
+            'destination_lga_id' => $this->shop->lga_id,
+            'payment_method' => 'paystack',
+        ]);
+        $paystackResponse->assertRedirect();
+        $createdPaystackOrder = Order::where('customer_id', $this->customer->id)->latest('id')->first();
+        $this->assertSame('paystack', $createdPaystackOrder->payment_method);
+        $this->assertSame('pending', $createdPaystackOrder->payment_status);
     }
 }

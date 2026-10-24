@@ -11,6 +11,7 @@ class CustomerCashbackLedger extends Model
         'customer_id',
         'order_id',
         'amount',
+        'funding_source',
         'status',
         'matures_at',
         'expires_at',
