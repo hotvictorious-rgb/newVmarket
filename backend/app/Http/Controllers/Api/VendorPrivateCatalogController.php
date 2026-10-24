@@ -38,6 +38,7 @@ class VendorPrivateCatalogController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $this->rejectProtectedFields($request);
         [$vendor, $shop] = $this->supplierContext($request);
         $data = $request->validate([
             'product_name' => ['required', 'string', 'max:180'],
@@ -84,6 +85,7 @@ class VendorPrivateCatalogController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
+        $this->rejectProtectedFields($request);
         [$vendor, $shop] = $this->supplierContext($request);
         $data = $request->validate([
             'product_name' => ['sometimes', 'required', 'string', 'max:180'],
@@ -150,6 +152,25 @@ class VendorPrivateCatalogController extends Controller
             'message' => 'Private catalog record updated. Stock-state changes invalidate the previous offer confirmation; no quantity is stored and no order or financial state was changed.',
             'data' => $this->supplierSafeRecord($record),
         ]);
+    }
+
+    private function rejectProtectedFields(Request $request): void
+    {
+        foreach (['quantity', 'inventory_quantity'] as $field) {
+            if ($request->exists($field)) {
+                throw ValidationException::withMessages([
+                    $field => 'Supplier catalog is binary-stock only. Do not submit quantities; use is_in_stock for the stock signal.',
+                ]);
+            }
+        }
+
+        foreach (['canonical_product_id', 'supplier_vendor_id', 'supplier_shop_id', 'supplier_offer_id'] as $field) {
+            if ($request->exists($field)) {
+                throw ValidationException::withMessages([
+                    $field => 'Supplier ownership and canonical product matching are controlled by Victorious MARKET administrators.',
+                ]);
+            }
+        }
     }
 
     private function supplierContext(Request $request): array
