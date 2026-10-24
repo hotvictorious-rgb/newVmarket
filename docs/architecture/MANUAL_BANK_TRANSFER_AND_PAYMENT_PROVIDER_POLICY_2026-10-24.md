@@ -36,7 +36,7 @@ Cash on delivery remains disabled. Suppliers may not collect customer payments o
 
 ## 2. Admin-configured receiving account
 
-An appropriately authorized admin can activate Manual Bank Transfer only when Paystack is inactive, or deactivate Manual Bank Transfer; activating it must atomically ensure Paystack is inactive. Activating Paystack must likewise ensure Manual Bank Transfer is inactive. The dashboard must display the current active method and reject conflicting concurrent changes. When Manual Bank Transfer is inactive, customers cannot start new manual-transfer payments. The admin can configure the receiving bank name, account name, account number, customer-facing instructions and effective status. Account-detail changes must be permission-checked and leave an immutable audit record identifying the actor, timestamp and changed fields. Never expose private credentials or internal bank integration secrets in customer-facing pages.
+An appropriately authorized admin can activate or deactivate Manual Bank Transfer and Paystack independently. Both methods may be active and offered to customers simultaneously, or either method may be enabled individually, or both disabled. The dashboard displays the status of both payment rails and rejects conflicting concurrent changes. When Manual Bank Transfer is inactive, customers cannot start new manual-transfer payments. The admin can configure the receiving bank name, account name, account number, customer-facing instructions and effective status. Account-detail changes must be permission-checked and leave an immutable audit record identifying the actor, timestamp and changed fields. Never expose private credentials or internal bank integration secrets in customer-facing pages.
 
 Customers must see the active configured account details and the amount payable for their order. Historical orders must retain a snapshot of the instructions/account destination shown when the payment method was selected, while new orders use the currently active configuration. Changing or disabling account details must not silently rewrite an existing order's payment instructions or payment status.
 
@@ -108,8 +108,8 @@ Manual bank transfer is a separately verified tender path, not a fake gateway ad
 
 At minimum, tests must prove:
 - admin permissions, validation and audit history for payment-method activation and account configuration;
-- server-side and concurrency-safe proof that Paystack and Manual Bank Transfer cannot both be active globally;
-- checkout rejects payment when both methods are disabled and rejects any invalid dual-enabled configuration;
+- server-side and concurrency-safe proof that Paystack and Manual Bank Transfer can coexist simultaneously, operate individually, or both be disabled;
+- checkout rejects payment when both methods are disabled;
 - each order is bound to exactly one payment method and cannot mix, top up, switch or settle through the other method;
 - cross-method references, webhooks, bank credits, approvals, refunds and transaction reuse are rejected;
 - deactivation preserves existing orders and evidence; pending/unknown attempts cannot be switched, and late payments are held for review;

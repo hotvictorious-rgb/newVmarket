@@ -482,4 +482,118 @@ class ManualBankTransferReviewTest extends TestCase
         $this->assertSame('paystack', $createdPaystackOrder->payment_method);
         $this->assertSame('pending', $createdPaystackOrder->payment_status);
     }
+
+    public function test_replacement_evidence_submission_while_review_is_open_preserves_history(): void
+    {
+        $order = $this->manualOrder();
+        $payment = $this->submitReceipt($order);
+        $this->assertSame('pending_review', $payment->status);
+        $firstProof = $payment->evidence_path;
+        $this->assertNotNull($firstProof);
+
+        // Admin requests replacement evidence
+        $requestReplacement = $this->actingAs($this->admin)->post(route('admin.manual-bank-transfers.request-replacement', $payment->id), [
+            'request_reason' => 'Receipt is blurry, please upload clearer screenshot with transaction reference.',
+        ]);
+        $requestReplacement->assertRedirect();
+        $payment->refresh();
+        $this->assertSame('evidence_requested', $payment->status);
+
+        // Customer submits replacement receipt
+        $file2 = UploadedFile::fake()->image('receipt2.png');
+        $submit2 = $this->actingAs($this->customer)->post(route('customer.manual-bank-transfer.submit', ['order_number' => $order->order_number]), [
+            'payment_screenshot' => $file2,
+        ]);
+        $submit2->assertRedirect();
+        $payment->refresh();
+        $this->assertSame('pending_review', $payment->status);
+        $this->assertNotSame($firstProof, $payment->evidence_path);
+        $history = $payment->evidence_history;
+        $this->assertIsArray($history);
+        $this->assertCount(2, $history);
+        $this->assertSame($firstProof, $history[1]['evidence_path']);
+
+        // Reject payment to establish terminal lock
+        $reject = $this->actingAs($this->admin)->post(route('admin.manual-bank-transfers.reject', $payment->id), [
+            'rejection_reason' => 'Transaction reference invalid on statement',
+        ]);
+        $reject->assertRedirect();
+        $payment->refresh();
+        $this->assertSame('rejected', $payment->status);
+
+        // Customer attempt to upload after terminal rejection is blocked
+        $file3 = UploadedFile::fake()->image('receipt3.png');
+        $submit3 = $this->actingAs($this->customer)->post(route('customer.manual-bank-transfer.submit', ['order_number' => $order->order_number]), [
+            'payment_screenshot' => $file3,
+        ]);
+        $submit3->assertSessionHasErrors('payment_screenshot');
+    }
+
+    public function test_manual_bank_refund_case_approval_dispatch_and_reconciliation_workflow(): void
+    {
+        $order = $this->manualOrder();
+        $payment = $this->submitReceipt($order);
+        $payment->update(['status' => 'rejected']);
+
+        $amountKobo = (int) round(((float)$order->grand_total) * 100);
+        $refundCase = ManualBankTransferRefundCase::create([
+            'order_id' => $order->id,
+            'manual_bank_transfer_payment_id' => $payment->id,
+            'idempotency_key' => 'REFUND-CASE-' . $payment->id . '-' . bin2hex(random_bytes(4)),
+            'amount_kobo' => $amountKobo,
+            'currency' => 'NGN',
+            'status' => 'pending_admin_review',
+            'reason' => 'Transfer arrived after order cancellation',
+            'created_by_admin_id' => $this->admin->id,
+        ]);
+
+        // 1. Super Admin approves refund
+        $approveResponse = $this->actingAs($this->admin)->post(route('admin.manual-bank-transfers.refunds.approve', $refundCase->id));
+        $approveResponse->assertRedirect();
+        $refundCase->refresh();
+        $this->assertSame('approved_for_dispatch', $refundCase->status);
+        $this->assertSame($this->admin->id, $refundCase->reviewed_by_admin_id);
+
+        // 2. Super Admin dispatches refund with bank reference and proof upload
+        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::parse('2026-10-24 12:00:00')); // Saturday
+        $proofFile = UploadedFile::fake()->create('refund_wire.pdf', 120);
+        $dispatchResponse = $this->actingAs($this->admin)->post(route('admin.manual-bank-transfers.refunds.dispatch', $refundCase->id), [
+            'manual_dispatch_reference' => 'REFUND-TXN-WIRE-001',
+            'dispatch_proof' => $proofFile,
+            'decision_notes' => 'Dispatched via business banking portal',
+        ]);
+        $dispatchResponse->assertRedirect();
+        $refundCase->refresh();
+        $this->assertSame('dispatched_awaiting_reconciliation', $refundCase->status);
+        $this->assertSame('REFUND-TXN-WIRE-001', $refundCase->manual_dispatch_reference);
+        $this->assertNotNull($refundCase->manual_dispatch_proof_path);
+
+        // 3. Super Admin reconciles refund against bank statement debit
+        $reconcileResponse = $this->actingAs($this->admin)->post(route('admin.manual-bank-transfers.refunds.reconcile', $refundCase->id));
+        $reconcileResponse->assertRedirect();
+        $refundCase->refresh();
+        $this->assertSame('completed', $refundCase->status);
+
+        // 4. Verify balanced double-entry financial journal entry posted
+        $refundDebits = \App\Models\FinancialJournalEntry::where('order_id', $order->id)
+            ->where('entry_type', 'debit')
+            ->where('account_name', 'escrow_holding')
+            ->sum('amount');
+        $refundCredits = \App\Models\FinancialJournalEntry::where('order_id', $order->id)
+            ->where('entry_type', 'credit')
+            ->where('account_name', 'cash_in_escrow')
+            ->sum('amount');
+
+        $expectedNaira = bcdiv((string) $amountKobo, '100', 2);
+        $this->assertSame(
+            $expectedNaira,
+            number_format((float)$refundDebits, 2, '.', ''),
+            'Refund debit leg must balance refund amount'
+        );
+        $this->assertSame(
+            number_format((float)$refundDebits, 2, '.', ''),
+            number_format((float)$refundCredits, 2, '.', ''),
+            'Refund double entry must balance with zero discrepancy'
+        );
+    }
 }

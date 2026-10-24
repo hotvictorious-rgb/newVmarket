@@ -11,10 +11,10 @@
 @endsection
 
 @section('content')
-<div class="page-header-row">
+<div class="page-header-row mb-4">
     <div>
         <h1 class="page-header-title">Manual Bank Transfer Review</h1>
-        <p class="page-header-subtitle">Inspect the customer's private receipt, independently verify actual funds in the Victorious MARKET receiving account, then approve or reject. A screenshot alone is never proof of payment.</p>
+        <p class="page-header-subtitle">Inspect customer private receipts, independently verify actual receiving-account credit, approve payments, manage refund workflows, and disburse customer refunds with outgoing transfer proof.</p>
     </div>
     <a href="{{ route('admin.dashboard') }}" class="btn-dash btn-dash-outline">Back to Command Tower</a>
 </div>
@@ -29,7 +29,7 @@
     </div>
 @endif
 
-<div class="dash-card" style="margin-bottom:24px">
+<div class="dash-card mb-4" style="margin-bottom:24px">
     <div class="dash-card-header">
         <div class="dash-card-title">Payment Method &amp; Receiving Account Configuration</div>
         <strong>Status: 
@@ -83,27 +83,108 @@
     </form>
 </div>
 
-<div class="dash-card" style="margin-bottom:24px;border-left:4px solid #d97706">
+<!-- =========================================================================
+     MANUAL BANK TRANSFER REFUND RESOLUTION SECTION
+     ========================================================================= -->
+<div class="dash-card mb-4" style="margin-bottom:24px;border-left:4px solid #d97706">
     <div class="dash-card-header">
-        <div class="dash-card-title">Manual Transfer Refund Holds</div>
-        <strong>{{ $refundCases->total() }} pending / recorded</strong>
+        <div class="dash-card-title">Manual Transfer Refund Cases &amp; Wire Resolutions</div>
+        <strong>{{ $refundCases->total() }} cases recorded</strong>
     </div>
     <div style="padding:0 18px 18px">
-        <p style="margin-top:0;color:#92400e">These cases arise when a verified transfer belongs to an expired/cancelled or otherwise unfulfillable order. They are not Paystack refunds. No automatic refund or bank outflow is permitted; keep the case on hold until the manual-refund procedure is separately approved and a Super Admin authorizes the next step.</p>
+        <p style="margin-top:0;color:#92400e">These cases represent customer refunds for orders paid via direct bank transfer. Under the Zero-Automated-Outflow Law, a manual transfer refund must NEVER be sent through Paystack API. An authorized Super Admin reviews the case, executes the refund wire transfer externally through the business bank, records outgoing transfer proof, and reconciles the debit to completion.</p>
         <div class="table-responsive">
             <table class="table table-striped align-middle">
-                <thead><tr><th>Created</th><th>Order</th><th>Amount</th><th>Status</th><th>Reason</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Created</th>
+                        <th>Order</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Reason / Notes</th>
+                        <th>Dispatch Evidence</th>
+                        <th style="min-width: 280px;">Action</th>
+                    </tr>
+                </thead>
                 <tbody>
                 @forelse($refundCases as $refundCase)
                     <tr>
                         <td>{{ $refundCase->created_at?->format('d M Y H:i:s') ?? '—' }}</td>
-                        <td><strong>{{ $refundCase->order?->order_number ?? ('Order #' . $refundCase->order_id) }}</strong></td>
-                        <td>₦{{ number_format($refundCase->amount_kobo / 100, 2) }} {{ $refundCase->currency }}</td>
-                        <td>{{ strtoupper(str_replace('_', ' ', $refundCase->status)) }}</td>
-                        <td>{{ $refundCase->reason }}</td>
+                        <td>
+                            <strong>{{ $refundCase->order?->order_number ?? ('Order #' . $refundCase->order_id) }}</strong>
+                            <div class="small text-muted">{{ $refundCase->order?->customer?->name }}</div>
+                        </td>
+                        <td><strong class="text-danger">₦{{ number_format($refundCase->amount_kobo / 100, 2) }}</strong> <small>{{ $refundCase->currency }}</small></td>
+                        <td>
+                            @if($refundCase->status === 'completed')
+                                <span class="badge bg-success">COMPLETED</span>
+                            @elseif($refundCase->status === 'dispatched_awaiting_reconciliation')
+                                <span class="badge bg-warning text-dark">DISPATCHED (PENDING RECON)</span>
+                            @elseif($refundCase->status === 'approved_for_dispatch')
+                                <span class="badge bg-info text-dark">APPROVED FOR DISPATCH</span>
+                            @elseif($refundCase->status === 'rejected')
+                                <span class="badge bg-secondary">REJECTED</span>
+                            @else
+                                <span class="badge bg-warning text-dark">PENDING ADMIN REVIEW</span>
+                            @endif
+                        </td>
+                        <td>
+                            <div>{{ $refundCase->reason }}</div>
+                            @if($refundCase->decision_notes)
+                                <div class="small text-muted mt-1"><em>Note: {{ $refundCase->decision_notes }}</em></div>
+                            @endif
+                            @if($refundCase->reviewed_at)
+                                <div class="small text-muted">Reviewed: {{ $refundCase->reviewed_at->format('d M Y H:i') }} ({{ $refundCase->reviewer?->name ?? 'Admin' }})</div>
+                            @endif
+                        </td>
+                        <td>
+                            @if($refundCase->manual_dispatch_reference)
+                                <div><small><strong>Ref:</strong> <code>{{ $refundCase->manual_dispatch_reference }}</code></small></div>
+                            @endif
+                            @if($refundCase->manual_dispatch_proof_path)
+                                <div class="mt-1">
+                                    <a href="{{ route('admin.manual-bank-transfers.refunds.proof', $refundCase->id) }}" target="_blank" class="btn btn-xs btn-outline-info">View Proof File</a>
+                                </div>
+                            @else
+                                <span class="text-muted small">—</span>
+                            @endif
+                        </td>
+                        <td>
+                            @if($refundCase->status === 'pending_admin_review')
+                                <div class="d-flex flex-column gap-2">
+                                    <form method="POST" action="{{ route('admin.manual-bank-transfers.refunds.approve', $refundCase->id) }}">
+                                        @csrf
+                                        <button type="submit" class="btn btn-sm btn-primary w-100">Approve for Wire Dispatch</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('admin.manual-bank-transfers.refunds.reject', $refundCase->id) }}" class="d-flex gap-1">
+                                        @csrf
+                                        <input name="rejection_reason" required minlength="5" maxlength="1000" placeholder="Rejection reason" class="form-control form-control-sm">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Reject</button>
+                                    </form>
+                                </div>
+                            @elseif($refundCase->status === 'approved_for_dispatch')
+                                <div class="border rounded p-2 bg-light">
+                                    <div class="small fw-bold text-primary mb-1">Execute External Wire Transfer:</div>
+                                    <form method="POST" action="{{ route('admin.manual-bank-transfers.refunds.dispatch', $refundCase->id) }}" enctype="multipart/form-data" class="d-flex flex-column gap-2">
+                                        @csrf
+                                        <input type="text" name="manual_dispatch_reference" required placeholder="Bank Transaction Reference" class="form-control form-control-sm font-monospace" pattern="[A-Za-z0-9._\/-]+" autocomplete="off">
+                                        <input type="file" name="dispatch_proof" required accept="image/*,.pdf" class="form-control form-control-sm">
+                                        <input type="text" name="decision_notes" placeholder="Notes (optional)" class="form-control form-control-sm">
+                                        <button class="btn btn-sm btn-warning w-100" type="submit">Record Wire Dispatched</button>
+                                    </form>
+                                </div>
+                            @elseif($refundCase->status === 'dispatched_awaiting_reconciliation')
+                                <form method="POST" action="{{ route('admin.manual-bank-transfers.refunds.reconcile', $refundCase->id) }}">
+                                    @csrf
+                                    <button class="btn btn-sm btn-success w-100" type="submit">Confirm Debit &amp; Reconcile to Completed</button>
+                                </form>
+                            @else
+                                <span class="text-muted small">Terminal</span>
+                            @endif
+                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="text-center">No manual-transfer refund holds recorded.</td></tr>
+                    <tr><td colspan="7" class="text-center py-3">No manual-transfer refund cases recorded.</td></tr>
                 @endforelse
                 </tbody>
             </table>
@@ -112,10 +193,13 @@
     </div>
 </div>
 
+<!-- =========================================================================
+     RECEIPT SUBMISSIONS SECTION
+     ========================================================================= -->
 <div class="dash-card">
     <div class="dash-card-header">
-        <div class="dash-card-title">Receipt submissions</div>
-        <span class="dash-badge dash-badge-gold">{{ $payments->where('status', 'pending_review')->count() }} pending on this page</span>
+        <div class="dash-card-title">Receipt Submissions &amp; Incoming Verifications</div>
+        <span class="dash-badge dash-badge-gold">{{ $payments->where('status', 'pending_review')->count() }} pending review</span>
     </div>
     <div class="table-responsive" style="padding:0 18px 18px">
         <table class="table table-striped align-middle">
@@ -138,12 +222,19 @@
                         <div><small>Order payment status: {{ strtoupper((string) ($payment->order?->payment_status ?? 'unknown')) }}</small></div>
                     </td>
                     <td>
-                        <a href="{{ route('admin.manual-bank-transfers.evidence', $payment->id) }}" target="_blank" rel="noopener noreferrer">Open private receipt</a>
+                        <a href="{{ route('admin.manual-bank-transfers.evidence', $payment->id) }}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-outline-primary">Open private receipt</a>
                         <div><small>{{ strtoupper(str_replace('image/', '', $payment->evidence_mime)) }} · {{ number_format($payment->evidence_size_bytes / 1024, 1) }} KB</small></div>
-                        <div><small>SHA-256: {{ $payment->evidence_sha256 }}</small></div>
+                        <div><small class="text-muted">SHA-256: {{ substr($payment->evidence_sha256, 0, 12) }}...</small></div>
+                        @if(is_array($payment->evidence_history) && count($payment->evidence_history) > 1)
+                            <div><span class="badge bg-info-subtle text-info border">{{ count($payment->evidence_history) }} versions</span></div>
+                        @endif
                     </td>
                     <td>
-                        <strong>{{ strtoupper(str_replace('_', ' ', $payment->status)) }}</strong>
+                        @if($payment->status === 'evidence_requested')
+                            <span class="badge bg-warning text-dark">REPLACEMENT REQUESTED</span>
+                        @else
+                            <strong>{{ strtoupper(str_replace('_', ' ', $payment->status)) }}</strong>
+                        @endif
                         @if($payment->reviewed_at)
                             <div><small>Reviewed {{ $payment->reviewed_at->format('d M Y H:i') }}</small></div>
                             <div><small>By {{ $payment->reviewer?->name ?? 'Former admin' }}</small></div>
@@ -152,11 +243,11 @@
                             <div><small>Bank ref: {{ $payment->bank_transaction_reference }}</small></div>
                         @endif
                         @if($payment->decision_reason)
-                            <div><small>{{ $payment->decision_reason }}</small></div>
+                            <div><small class="text-muted">{{ $payment->decision_reason }}</small></div>
                         @endif
                     </td>
                     <td style="min-width:300px">
-                    @if($payment->status === 'pending_review')
+                    @if(in_array($payment->status, ['pending_review', 'evidence_requested'], true))
                         <form method="POST" action="{{ route('admin.manual-bank-transfers.approve', $payment->id) }}" style="padding:12px;border:1px solid #d1d5db;border-radius:8px;margin-bottom:12px">
                             @csrf
                             <strong>Approve only after checking actual bank credit</strong>
@@ -172,13 +263,20 @@
                             </label>
                             <button type="submit" class="btn-dash btn-dash-primary" onclick="return confirm('Confirm that you independently verified the actual bank credit? This approves payment and starts post-payment sourcing.')">Verify &amp; approve</button>
                         </form>
-                        <form method="POST" action="{{ route('admin.manual-bank-transfers.reject', $payment->id) }}" style="padding:12px;border:1px solid #fecaca;border-radius:8px">
-                            @csrf
-                            <strong>Reject payment evidence</strong>
-                            <label for="reject-{{ $payment->id }}" style="display:block;margin-top:8px">Reason (required)</label>
-                            <textarea id="reject-{{ $payment->id }}" name="decision_reason" required minlength="5" maxlength="2000" rows="2" style="width:100%;padding:8px"></textarea>
-                            <button type="submit" class="btn-dash btn-dash-outline" style="color:#b91c1c;border-color:#b91c1c;margin-top:8px" onclick="return confirm('Reject this payment submission? The order will remain unpaid and cannot accept another payment submission.')">Reject</button>
-                        </form>
+                        <div class="d-flex gap-2">
+                            <form method="POST" action="{{ route('admin.manual-bank-transfers.request-replacement', $payment->id) }}" style="padding:10px;border:1px solid #fed7aa;border-radius:8px;flex:1">
+                                @csrf
+                                <strong>Request Clearer Receipt</strong>
+                                <input name="reason" required minlength="3" maxlength="500" placeholder="e.g. Blurry or incomplete receipt" class="form-control form-control-sm mt-1">
+                                <button type="submit" class="btn btn-sm btn-outline-warning mt-1 w-100">Request Replacement</button>
+                            </form>
+                            <form method="POST" action="{{ route('admin.manual-bank-transfers.reject', $payment->id) }}" style="padding:10px;border:1px solid #fecaca;border-radius:8px;flex:1">
+                                @csrf
+                                <strong>Reject Terminal</strong>
+                                <input name="decision_reason" required minlength="5" maxlength="2000" placeholder="Rejection reason" class="form-control form-control-sm mt-1">
+                                <button type="submit" class="btn btn-sm btn-outline-danger mt-1 w-100" onclick="return confirm('Reject this payment submission? The order will remain unpaid and cannot accept another payment submission.')">Reject</button>
+                            </form>
+                        </div>
                     @else
                         <span>Final decision recorded. This submission cannot be approved or rejected again.</span>
                     @endif

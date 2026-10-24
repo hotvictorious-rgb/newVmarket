@@ -1004,296 +1004,56 @@ class VendorTerminalApiController extends Controller
         ]);
     }
 
-    /**
+        /**
      * POST /api/v1/vendor/products
-     * Create Product strictly scoped to Merchant
+     * Retired: Confined to Private Catalog
      */
     public function storeProduct(Request $request): JsonResponse
     {
-        $ctx = $this->resolveVendorContext($request);
-        $vendor = $ctx['vendor'];
-        $shop = $ctx['shop'];
-
-        if (!$shop) {
-            return response()->json(['status' => false, 'message' => 'No active shop branch found to assign product.'], 422);
-        }
-
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'unit_price' => [
-                'required',
-                'numeric',
-                'min:1.00',
-                'max:50000000.00',
-                'regex:/^\d+(\.\d{1,2})?$/',
-            ],
-            'slash_price' => [
-                'nullable',
-                'numeric',
-                'gt:unit_price',
-                'max:100000000.00',
-                'regex:/^\d+(\.\d{1,2})?$/',
-            ],
-            'inventory_quantity' => 'required|integer|min:0|max:100000',
-            'category_id' => 'required|integer|exists:categories,id',
-            'condition' => 'nullable|string|in:brand_new,uk_used',
-            'package_tier' => 'nullable|string|in:bike,keke,standard,bulky',
-            'warranty_type' => 'nullable|string|in:in_store_testing,7_days_replacement,brand_warranty,as_is',
-            'description' => 'nullable|string|max:2000',
-            'image_url' => 'nullable|string|max:500',
-            'image' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:5120',
-            'images' => 'nullable|array|max:10',
-            'images.*' => 'file|mimes:jpeg,png,jpg,webp|max:5120',
-            'video_url' => [
-                'nullable',
-                'string',
-                'max:255',
-                'regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})([\?&].*)?$/'
-            ],
-        ], [
-            'unit_price.min' => 'Product unit price must be at least ₦1.00 (Paystack standard minimum).',
-            'unit_price.max' => 'Product unit price cannot exceed ₦50,000,000.00 per unit.',
-            'unit_price.regex' => 'Product unit price must be a valid amount with at most 2 decimal places (kobo).',
-            'slash_price.gt' => 'The original slash price must be greater than the selling price.',
-            'slash_price.max' => 'Original slash price cannot exceed ₦100,000,000.00.',
-            'slash_price.regex' => 'Original slash price must be a valid amount with at most 2 decimal places (kobo).',
-            'video_url.regex' => 'Please provide a valid YouTube product video link (e.g., https://youtube.com/watch?v=... or https://youtu.be/...).',
-            'condition.in' => 'Condition must be strictly Brand New or UK Used.',
-            'package_tier.in' => 'Delivery logistics must be strictly Bike or Keke Cargo.',
-        ]);
-
-        $resolvedTier = in_array(strtolower($validated['package_tier'] ?? 'bike'), ['keke', 'bulky'], true) ? 'keke' : 'bike';
-
-        $allImages = [];
-        $thumbnailUrl = $validated['image_url'] ?? null;
-
-        // Process gallery photos via ImageOptimizationService
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $imgFile) {
-                if ($imgFile->isValid()) {
-                    $opt = app(ImageOptimizationService::class)->optimizeAndStoreProof($imgFile, 'products', ['max_dimension' => 1600, 'quality' => 84]);
-                    $allImages[] = '/' . $opt['path'];
-                }
-            }
-        }
-
-        // Process primary photo
-        if ($request->hasFile('image') && $request->file('image')->isValid()) {
-            $opt = app(ImageOptimizationService::class)->optimizeAndStoreProof($request->file('image'), 'products', ['max_dimension' => 1600, 'quality' => 84]);
-            $singleUrl = '/' . $opt['path'];
-            $thumbnailUrl = $singleUrl;
-            if (!in_array($singleUrl, $allImages, true)) {
-                array_unshift($allImages, $singleUrl);
-            }
-        }
-
-        if (empty($thumbnailUrl) && !empty($allImages)) {
-            $thumbnailUrl = $allImages[0];
-        }
-
-        $product = Product::create([
-            'vendor_id' => $vendor->id,
-            'shop_id' => $shop->id,
-            'category_id' => $validated['category_id'],
-            'condition' => $validated['condition'] ?? 'brand_new',
-            'package_tier' => $resolvedTier,
-            'warranty_type' => $validated['warranty_type'] ?? 'in_store_testing',
-            'name' => strip_tags(trim($validated['name'])),
-            'slug' => Str::slug($validated['name']) . '-' . rand(100, 999),
-            'unit_price' => bcadd((string)$validated['unit_price'], '0', 2),
-            'slash_price' => !empty($validated['slash_price']) ? bcadd((string)$validated['slash_price'], '0', 2) : null,
-            'inventory_quantity' => $validated['inventory_quantity'],
-            'is_in_stock' => $validated['inventory_quantity'] > 0,
-            'description' => isset($validated['description']) ? strip_tags(trim($validated['description'])) : null,
-            'thumbnail' => $thumbnailUrl ?? 'storage/products/default.png',
-            'images' => !empty($allImages) ? $allImages : ($thumbnailUrl ? [$thumbnailUrl] : null),
-            'youtube_video_id' => Product::extractYoutubeVideoId($request->input('video_url')),
-            'listing_status' => 'listed',
-            'is_approved' => true,
-            'listing_confirmed_at' => Carbon::now(),
-        ]);
-
         return response()->json([
-            'status' => true,
-            'message' => "Product '{$product->name}' successfully published.",
-            'data' => $product,
-        ], 201);
+            'status' => false,
+            'code' => 'LEGACY_ROUTE_RETIRED',
+            'message' => 'Direct supplier product creation has been retired under the Victorious MARKET single-retailer model. All supplier submissions must be managed exclusively through the private catalog at /api/v1/vendor/private-catalog.',
+        ], 410);
     }
 
     /**
      * POST /api/v1/vendor/products/{id}
-     * Update Existing Product in Catalog
+     * Retired: Confined to Private Catalog
      */
     public function updateProduct(Request $request, int $id): JsonResponse
     {
-        $ctx = $this->resolveVendorContext($request);
-        $vendor = $ctx['vendor'];
-        $shop = $ctx['shop'];
-
-        $query = Product::where('vendor_id', $vendor->id);
-        if ($ctx['is_employee'] && $shop) {
-            $query->where('shop_id', $shop->id);
-        }
-        $product = $query->findOrFail($id);
-
-        $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'unit_price' => [
-                'sometimes',
-                'required',
-                'numeric',
-                'min:1.00',
-                'max:50000000.00',
-                'regex:/^\d+(\.\d{1,2})?$/',
-            ],
-            'slash_price' => [
-                'nullable',
-                'numeric',
-                'max:100000000.00',
-                'regex:/^\d+(\.\d{1,2})?$/',
-            ],
-            'inventory_quantity' => 'sometimes|required|integer|min:0|max:100000',
-            'category_id' => 'sometimes|required|integer|exists:categories,id',
-            'condition' => 'nullable|string|in:brand_new,uk_used',
-            'package_tier' => 'nullable|string|in:bike,keke,standard,bulky',
-            'warranty_type' => 'nullable|string|in:in_store_testing,7_days_replacement,brand_warranty,as_is',
-            'description' => 'nullable|string|max:2000',
-            'image_url' => 'nullable|string|max:500',
-            'image' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:5120',
-            'images' => 'nullable|array|max:10',
-            'images.*' => 'file|mimes:jpeg,png,jpg,webp|max:5120',
-            'video_url' => [
-                'nullable',
-                'string',
-                'max:255',
-                'regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})([\?&].*)?$/'
-            ],
-        ]);
-
-        if (isset($validated['name'])) {
-            $product->name = strip_tags(trim($validated['name']));
-        }
-        if (isset($validated['unit_price'])) {
-            $product->unit_price = bcadd((string)$validated['unit_price'], '0', 2);
-        }
-        if (array_key_exists('slash_price', $validated)) {
-            $product->slash_price = !empty($validated['slash_price']) ? bcadd((string)$validated['slash_price'], '0', 2) : null;
-        }
-        if (isset($validated['inventory_quantity'])) {
-            $product->inventory_quantity = $validated['inventory_quantity'];
-            $product->is_in_stock = $validated['inventory_quantity'] > 0;
-        }
-        if (isset($validated['category_id'])) {
-            $product->category_id = $validated['category_id'];
-        }
-        if (isset($validated['condition'])) {
-            $product->condition = $validated['condition'];
-        }
-        if (isset($validated['package_tier'])) {
-            $product->package_tier = in_array(strtolower($validated['package_tier']), ['keke', 'bulky'], true) ? 'keke' : 'bike';
-        }
-        if (isset($validated['warranty_type'])) {
-            $product->warranty_type = $validated['warranty_type'];
-        }
-        if (array_key_exists('description', $validated)) {
-            $product->description = !empty($validated['description']) ? strip_tags(trim($validated['description'])) : null;
-        }
-        if ($request->has('video_url')) {
-            $product->youtube_video_id = Product::extractYoutubeVideoId($request->input('video_url'));
-        }
-
-        $existingImages = is_array($product->images) ? $product->images : [];
-        $uploadedUrls = [];
-
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $file) {
-                if ($file->isValid()) {
-                    $opt = app(ImageOptimizationService::class)->optimizeAndStoreProof($file, 'products', ['max_dimension' => 1600, 'quality' => 84]);
-                    $uploadedUrls[] = '/' . $opt['path'];
-                }
-            }
-        }
-
-        if ($request->hasFile('image') && $request->file('image')->isValid()) {
-            $opt = app(ImageOptimizationService::class)->optimizeAndStoreProof($request->file('image'), 'products', ['max_dimension' => 1600, 'quality' => 84]);
-            $primaryUrl = '/' . $opt['path'];
-            $product->thumbnail = $primaryUrl;
-            if (!in_array($primaryUrl, $uploadedUrls, true)) {
-                array_unshift($uploadedUrls, $primaryUrl);
-            }
-        } elseif (!empty($validated['image_url'])) {
-            $product->thumbnail = $validated['image_url'];
-        }
-
-        if (!empty($uploadedUrls)) {
-            $product->images = array_values(array_unique(array_merge($uploadedUrls, $existingImages)));
-            if (empty($product->thumbnail) || $product->thumbnail === 'storage/products/default.png') {
-                $product->thumbnail = $uploadedUrls[0];
-            }
-        }
-
-        $product->save();
-
         return response()->json([
-            'status' => true,
-            'message' => "Product '{$product->name}' updated successfully.",
-            'data' => $product,
-        ]);
+            'status' => false,
+            'code' => 'LEGACY_ROUTE_RETIRED',
+            'message' => 'Direct supplier product modification has been retired under the Victorious MARKET single-retailer model. All supplier submissions must be managed exclusively through the private catalog at /api/v1/vendor/private-catalog.',
+        ], 410);
     }
-public function refreshFreshness(Request $request, int $id): JsonResponse
+
+    /**
+     * POST /api/v1/vendor/products/{id}/freshness
+     * Retired: Availability governed through supplier offers
+     */
+    public function refreshFreshness(Request $request, int $id): JsonResponse
     {
-        $ctx = $this->resolveVendorContext($request);
-        $vendor = $ctx['vendor'];
-
-        $product = Product::where('vendor_id', $vendor->id)->findOrFail($id);
-
-        $product->listing_confirmed_at = Carbon::now();
-        $product->listing_status = 'listed';
-        $product->is_in_stock = true;
-        $product->save();
-
         return response()->json([
-            'status' => true,
-            'message' => "Freshness lifecycle for '{$product->name}' extended for 7 days.",
-            'data' => [
-                'id' => $product->id,
-                'listing_confirmed_at' => $product->listing_confirmed_at->toIso8601String(),
-                'freshness_expires_at' => $product->listing_confirmed_at->copy()->addDays(7)->toIso8601String(),
-            ],
-        ]);
+            'status' => false,
+            'code' => 'LEGACY_ROUTE_RETIRED',
+            'message' => 'Legacy product freshness renewal has been retired under the Victorious MARKET single-retailer model. Supplier availability is governed through private catalog offers and admin verification.',
+        ], 410);
     }
 
     /**
      * POST /api/v1/vendor/products/{id}/toggle-stock
+     * Retired: Stock toggling handled via private catalog
      */
     public function toggleStock(Request $request, int $id): JsonResponse
     {
-        $ctx = $this->resolveVendorContext($request);
-        $vendor = $ctx['vendor'];
-
-        $validated = $request->validate([
-            'quantity' => 'nullable|integer|min:0',
-            'is_in_stock' => 'nullable|boolean',
-        ]);
-
-        $product = Product::where('vendor_id', $vendor->id)->findOrFail($id);
-
-        if (isset($validated['quantity'])) {
-            $product->inventory_quantity = $validated['quantity'];
-            $product->is_in_stock = $validated['quantity'] > 0;
-        }
-
-        if (isset($validated['is_in_stock'])) {
-            $product->is_in_stock = (bool)$validated['is_in_stock'];
-        }
-
-        $product->save();
-
         return response()->json([
-            'status' => true,
-            'message' => "Product stock updated.",
-            'data' => $product,
-        ]);
+            'status' => false,
+            'code' => 'LEGACY_ROUTE_RETIRED',
+            'message' => 'Direct product stock toggling has been retired under the Victorious MARKET single-retailer model. Suppliers update stock status via PATCH /api/v1/vendor/private-catalog/{id}.',
+        ], 410);
     }
 
     /**

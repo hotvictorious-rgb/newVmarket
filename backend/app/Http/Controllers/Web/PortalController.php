@@ -2531,8 +2531,14 @@ class PortalController extends Controller
      */
     public function adminDisburseLogisticsPayout(Request $request)
     {
+        if (now()->isSunday()) {
+            return back()->with('error', 'Disbursements occur Monday through Saturday only. Outbound transfers are blocked on Sundays.');
+        }
+
         $validated = $request->validate([
             'payout_id' => 'required|exists:logistics_payout_requests,id',
+            'bank_transaction_reference' => ['required', 'string', 'min:3', 'max:150', 'regex:/^[A-Za-z0-9._\/-]+$/'],
+            'settlement_proof' => ['required', 'file', 'mimes:jpeg,jpg,png,pdf,webp', 'max:10240'],
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -2541,194 +2547,102 @@ class PortalController extends Controller
             return back()->with('error', 'Unauthorized: Administrative finance permissions required.');
         }
 
-        // Phase 1: Pre-validation & Atomic Status Transition to 'processing' under lock
-        $preValidation = DB::transaction(function () use ($validated, $admin) {
-            $payout = LogisticsPayoutRequest::with(['company.user'])->where('id', $validated['payout_id'])->lockForUpdate()->firstOrFail();
-            if ($payout->status !== 'pending') {
-                return ['valid' => false, 'message' => "Payout request #{$payout->id} has already been {$payout->status}."];
-            }
+        $bankRef = trim($validated['bank_transaction_reference']);
 
-            if ($payout->processing_token === 'HOLD_TIMEOUT_RECONCILIATION' || str_contains((string)$payout->admin_notes, 'GATEWAY_TIMEOUT')) {
-                return ['valid' => false, 'message' => "Payout request #{$payout->id} is locked in GATEWAY TIMEOUT hold state. An automated transfer was already dispatched to Paystack and may have completed. You must perform Gateway Reconciliation before any retry."];
-            }
-
-            // Never auto-reclaim an old claim: the transfer may have reached Paystack
-            // before the process crashed and failed to persist its response.
-            if (!empty($payout->processing_token)) {
-                return ['valid' => false, 'message' => "Payout request #{$payout->id} has an existing processing claim. Reconcile the previous attempt before retrying."];
-            }
-
-            if (($payout->gateway_status !== 'failed' && !empty($payout->transfer_reference))
-                || $payout->gateway_status === 'processing' || !empty($payout->paystack_transfer_code)) {
-                $codeMsg = !empty($payout->paystack_transfer_code) ? " (Transfer code: {$payout->paystack_transfer_code})" : "";
-                return ['valid' => false, 'message' => "Disbursement is already in-flight with Paystack gateway{$codeMsg}. Re-submission is prohibited."];
-            }
-
-            $company = $payout->company;
-            if (!$company || $company->trashed() || $company->status !== 'active') {
-                return ['valid' => false, 'message' => 'Disbursement blocked: Logistics company account is inactive, suspended, or archived.'];
-            }
-
-            if (!$company->user || $company->user->status !== 'active') {
-                return ['valid' => false, 'message' => 'Disbursement blocked: Logistics company user account is inactive or suspended.'];
-            }
-
-            if (!$company->bank_updated_at || $company->isWithinBankCooldown()) {
-                return ['valid' => false, 'message' => 'Disbursement blocked: Logistics company bank account was recently updated and is under a 48-hour security cooldown.'];
-            }
-
-            // Validate corporate bank details
-            $accountNum = trim((string)($company->account_number ?? $payout->account_number));
-            $bankName = trim((string)($company->bank_name ?? $payout->bank_name));
-            $bankCode = trim((string)($company->bank_code ?? ''));
-            $accountName = trim((string)($company->account_name ?? $payout->account_name));
-
-            if (empty($accountNum) || empty($accountName) || empty($bankName) || empty($bankCode)) {
-                return ['valid' => false, 'message' => 'Disbursement blocked: Complete corporate NUBAN bank name, bank code, account name, and account number are required.'];
-            }
-
-            $createdTs = $payout->created_at ? $payout->created_at->format('YmdHis') : date('YmdHis');
-            $disburseRef = 'FLEET-PAYOUT-' . $payout->id . '-' . $createdTs;
-
-            // Concurrency Guard: Check for active in-flight processing claim
-            if (!empty($payout->processing_token) && $payout->processing_started_at && $payout->processing_started_at->gt(Carbon::now()->subMinutes(5))) {
-                return ['valid' => false, 'message' => 'Disbursement is already currently being processed by gateway. Please wait for completion.'];
-            }
-
-            // Atomically acquire processing claim token under lock to block concurrent executions
-            $payout->processing_token = 'CLAIM-FLEET-' . $payout->id . '-' . \Illuminate\Support\Str::random(16);
-            $payout->processing_started_at = Carbon::now();
-            $payout->transfer_reference = $disburseRef;
-            $payout->save();
-
-            return [
-                'valid' => true,
-                'payout_id' => $payout->id,
-                'amount' => (string)$payout->amount,
-                'company_name' => $company->company_name,
-                'company_id' => $company->id,
-                'account_num' => $accountNum,
-                'account_name' => $accountName,
-                'bank_code' => $bankCode,
-                'bank_name' => $bankName,
-                'disburse_ref' => $disburseRef,
-            ];
-        });
-
-        if (!$preValidation['valid']) {
-            return back()->with('error', $preValidation['message']);
+        // Prevent duplicate bank transaction references across all system rails
+        if (\App\Models\RetailerSupplierPayoutRequest::where('bank_transaction_reference', $bankRef)->exists()
+            || LogisticsPayoutRequest::where('bank_transaction_reference', $bankRef)->where('id', '!=', $validated['payout_id'])->exists()
+            || \App\Models\ManualBankTransferPayment::where('bank_transaction_reference', $bankRef)->exists()
+            || \App\Models\ManualBankTransferRefundCase::where('manual_dispatch_reference', $bankRef)->exists()) {
+            return back()->withErrors(['bank_transaction_reference' => 'This bank transaction reference has already been recorded in the system and cannot be reused.']);
         }
 
-        // Phase 2: Authoritative Gateway Execution OUTSIDE Database Transaction
-        $paystackService = app(\App\Services\PaystackService::class);
-        $payoutId = $preValidation['payout_id'];
-
-        // 1. Resolve or Create Paystack Transfer Recipient
-        $recipientRes = $paystackService->createTransferRecipient(
-            $preValidation['account_name'],
-            $preValidation['account_num'],
-            $preValidation['bank_code'] ?: $preValidation['bank_name']
-        );
-
-        if (!$recipientRes['success']) {
-            DB::transaction(function () use ($payoutId, $recipientRes) {
-                LogisticsPayoutRequest::where('id', $payoutId)->update([
-                    'processing_token' => null,
-                    'processing_started_at' => null,
-                    'gateway_status' => 'failed',
-                    'admin_notes' => 'Recipient resolution failed before transfer submission: ' . ($recipientRes['message'] ?? 'NIBSS resolution failed'),
-                ]);
-            });
-            return back()->with('error', 'Paystack Transfer Recipient Error: ' . ($recipientRes['message'] ?? 'Unable to resolve bank account on NIBSS.'));
+        $payout = LogisticsPayoutRequest::with(['company.user'])->where('id', $validated['payout_id'])->firstOrFail();
+        if ($payout->status !== 'pending' || !empty($payout->processing_token)) {
+            return back()->with('error', "Payout request #{$payout->id} is already processing or has already been {$payout->status}.");
         }
 
-        $recipientCode = $recipientRes['recipient_code'];
-
-        // 2. Authoritative Paystack Automated Transfer Execution
-        $transferRes = $paystackService->initiateTransfer(
-            $recipientCode,
-            $preValidation['amount'],
-            "Corporate fleet payout for {$preValidation['company_name']}",
-            $preValidation['disburse_ref']
-        );
-
-        if (!$transferRes['success']) {
-            $isUncertain = !in_array($transferRes['code'] ?? '', ['DEFINITIVE_REJECTION', 'CONFIG_MISSING', 'AMOUNT_BELOW_MINIMUM'], true);
-            DB::transaction(function () use ($payoutId, $transferRes, $isUncertain) {
-                LogisticsPayoutRequest::where('id', $payoutId)->update([
-                    'processing_token' => $isUncertain ? 'HOLD_TIMEOUT_RECONCILIATION' : null,
-                    'processing_started_at' => $isUncertain ? Carbon::now() : null,
-                    'gateway_status' => $isUncertain ? 'processing' : 'failed',
-                    'admin_notes' => $isUncertain
-                        ? 'GATEWAY_TIMEOUT: Transfer outcome uncertain. Locked in HOLD_TIMEOUT_RECONCILIATION awaiting gateway verification: ' . ($transferRes['message'] ?? '')
-                        : 'Transfer initiation failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request'),
-                ]);
-            });
-            $msg = $isUncertain
-                ? 'Gateway connection timeout. Payout locked in HOLD_TIMEOUT_RECONCILIATION state. Use Reconcile with Paystack before retry.'
-                : ('Paystack Automated Transfer Failed: ' . ($transferRes['message'] ?? 'Gateway rejected transfer request.') . ' Payout reverted to pending review.');
-            return back()->with('error', $msg);
+        $company = $payout->company;
+        if (!$company || $company->trashed() || $company->status !== 'active') {
+            return back()->with('error', 'Disbursement blocked: Logistics company account is inactive, suspended, or archived.');
         }
 
-        $transferCode = $transferRes['transfer_code'] ?? null;
-        $proofPath = $transferCode ? ('paystack_transfer:' . $transferCode) : ('paystack_transfer_ref:' . $preValidation['disburse_ref']);
-        $transferStatus = strtolower($transferRes['status'] ?? 'pending');
+        if (!$company->user || $company->user->status !== 'active') {
+            return back()->with('error', 'Disbursement blocked: Logistics company user account is inactive or suspended.');
+        }
 
-        // Phase 3: Final Atomic Settlement & Journal Transaction via Unified Finalization Service
-        $payout = LogisticsPayoutRequest::with('company')->findOrFail($payoutId);
+        if (!$company->bank_updated_at || $company->isWithinBankCooldown()) {
+            return back()->with('error', 'Disbursement blocked: Logistics company bank account was recently updated and is under a 48-hour security cooldown.');
+        }
 
-        // Audit Finding 1 (P0): Distinguish transfer submitted / processing vs confirmed successful
-        if ($transferStatus === 'success') {
-            app(\App\Services\PayoutFinalizationService::class)->finalizeLogisticsPayout($payout, [
-                'transfer_code' => $transferCode,
-                'reference' => $preValidation['disburse_ref'],
-                'status' => 'success',
-            ], $admin);
+        // Validate corporate bank details
+        $accountNum = trim((string)($company->account_number ?? $payout->account_number));
+        $bankName = trim((string)($company->bank_name ?? $payout->bank_name));
+        $accountName = trim((string)($company->account_name ?? $payout->account_name));
 
+        if (empty($accountNum) || empty($accountName) || empty($bankName)) {
+            return back()->with('error', 'Disbursement blocked: Complete corporate NUBAN bank name, account name, and account number are required.');
+        }
+
+        // Gate: Reserve reconciled corporate treasury bank credit batch
+        $treasuryReservation = app(\App\Services\RetailerSupplierPayoutService::class)->reserveTreasuryBankCreditBatch($payout);
+        if (!($treasuryReservation['success'] ?? false)) {
             \App\Models\AdminAuditLog::create([
                 'user_id' => $admin->id,
-                'action' => 'logistics_payout_disbursed',
+                'action' => 'logistics_payout_blocked_missing_treasury_bank_credit',
                 'target_type' => LogisticsPayoutRequest::class,
                 'target_id' => $payout->id,
-                'old_values' => ['status' => 'pending', 'amount' => $payout->amount],
-                'new_values' => ['status' => 'approved', 'amount' => $payout->amount],
+                'old_values' => ['status' => $payout->status, 'amount' => (string) $payout->amount],
+                'new_values' => ['reason' => $treasuryReservation['message'] ?? 'No reconciled bank-credit batch available.'],
                 'ip_address' => $request->ip() ?? '127.0.0.1',
                 'user_agent' => $request->userAgent(),
             ]);
-
-            return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " to " . ($payout->company?->company_name ?? 'Fleet') . " via Paystack!");
-        } else {
-            // Transfer queued at gateway / pending bank execution (e.g. 'received', 'pending', 'processing', 'otp')
-            // Monotonic transactional state guard: Never overwrite payout if already approved/completed/rejected
-            DB::transaction(function () use ($payoutId, $transferCode, $preValidation, $transferStatus, $proofPath, $admin, $request) {
-                $payout = LogisticsPayoutRequest::where('id', $payoutId)->lockForUpdate()->firstOrFail();
-                if (in_array($payout->status, ['approved', 'completed', 'rejected'], true)) {
-                    return;
-                }
-                $payout->status = 'pending';
-                $payout->gateway_status = 'processing';
-                $payout->processing_token = null;
-                $payout->processing_started_at = null;
-                $payout->paystack_transfer_code = $transferCode;
-                $payout->transfer_reference = $preValidation['disburse_ref'];
-                $payout->settlement_proof_path = $proofPath;
-                $payout->admin_notes = ($payout->admin_notes ? $payout->admin_notes . ' | ' : '') . "Transfer queued at Paystack ({$transferCode}). Gateway status: {$transferStatus}. Awaiting bank delivery confirmation.";
-                $payout->save();
-
-                \App\Models\AdminAuditLog::create([
-                    'user_id' => $admin->id,
-                    'action' => 'logistics_payout_processing',
-                    'target_type' => LogisticsPayoutRequest::class,
-                    'target_id' => $payout->id,
-                    'old_values' => ['status' => 'pending', 'amount' => $payout->amount],
-                    'new_values' => ['status' => 'pending', 'gateway_status' => 'processing', 'amount' => $payout->amount],
-                    'ip_address' => $request->ip() ?? '127.0.0.1',
-                    'user_agent' => $request->userAgent(),
-                ]);
-            });
-
-            return back()->with('status', "Transfer of ₦" . number_format((float)$payout->amount, 2) . " queued at Paystack. Marked as processing awaiting bank delivery confirmation.");
+            return back()->with('error', $treasuryReservation['message'] ?? 'Logistics payout blocked until treasury bank-credit evidence is reconciled.');
         }
+
+        $file = $request->file('settlement_proof');
+        $ext = strtolower((string) $file->extension());
+        $proofPath = $file->storeAs(
+            'settlement-proofs/logistics',
+            $payout->id . '_' . \Illuminate\Support\Str::uuid() . '.' . $ext,
+            'local'
+        );
+
+        if (!$proofPath) {
+            return back()->with('error', 'Failed to securely store outgoing settlement proof.');
+        }
+
+        $payout->bank_transaction_reference = $bankRef;
+        $payout->settlement_proof_path = $proofPath;
+        $payout->admin_notes = trim(($payout->admin_notes ? $payout->admin_notes . "\n" : '') . 'Disbursed via manual bank transfer. Ref: ' . $bankRef . ($validated['notes'] ? ' | ' . $validated['notes'] : ''));
+        $payout->approved_by_admin_id = $admin->id;
+        $payout->disbursed_at = Carbon::now();
+        $payout->gateway_status = 'manual_transfer_dispatched';
+        $payout->transfer_reference = $payout->transfer_reference ?: ('FLEET-DISBURSE-' . $payout->id . '-' . date('YmdHis'));
+        $payout->save();
+
+        app(\App\Services\PayoutFinalizationService::class)->finalizeLogisticsPayout($payout, [
+            'reference' => $bankRef,
+            'status' => 'success',
+        ], $admin);
+
+        \App\Models\AdminAuditLog::create([
+            'user_id' => $admin->id,
+            'action' => 'logistics_payout_manual_disbursed',
+            'target_type' => LogisticsPayoutRequest::class,
+            'target_id' => $payout->id,
+            'old_values' => ['status' => 'pending', 'amount' => $payout->amount],
+            'new_values' => [
+                'status' => 'approved',
+                'bank_transaction_reference' => $bankRef,
+                'settlement_proof_path' => $proofPath,
+                'amount' => $payout->amount,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return back()->with('status', "Successfully disbursed ₦" . number_format((float)$payout->amount, 2) . " to " . ($payout->company?->company_name ?? 'Fleet') . " via manual bank transfer.");
     }
 
     
@@ -4068,224 +3982,28 @@ class PortalController extends Controller
     // STAGE 2: VENDOR COMMERCE SUITE ACTIONS
     // ==========================================
 
-    public function vendorStoreProduct(Request $request)
+        public function vendorStoreProduct(Request $request)
     {
-        $vendor = $this->resolveVendorProfile();
-
-        if ($vendor->marketplace_status !== 'active') {
-            abort(403, 'Merchant marketplace account is currently not active.');
+        if ($request->wantsJson()) {
+            return response()->json([
+                'status' => false,
+                'code' => 'LEGACY_ROUTE_RETIRED',
+                'message' => 'Direct supplier product creation has been retired under the Victorious MARKET single-retailer model. All supplier submissions must be managed exclusively through the private catalog.',
+            ], 410);
         }
-
-        // Support both inventory_quantity and legacy current_stock input names
-        if (!$request->has('inventory_quantity') && $request->has('current_stock')) {
-            $request->merge(['inventory_quantity' => $request->input('current_stock')]);
-        }
-
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'category_id' => 'required|integer|exists:categories,id',
-            'shop_id' => 'prohibited',
-            'condition' => 'nullable|string|in:brand_new,uk_used',
-            'unit_price' => 'required|numeric|min:0.01|max:100000000',
-            'slash_price' => 'nullable|numeric|gt:unit_price|max:100000000',
-            'inventory_quantity' => 'required|integer|min:0|max:1000000',
-            'package_tier' => 'nullable|string|in:bike,keke,standard,bulky',
-            'warranty_type' => 'nullable|string|in:in_store_testing,7_days_replacement,brand_warranty,as_is',
-            'description' => 'nullable|string|max:5000',
-            'image' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:5120',
-            'images' => 'nullable|array|max:10',
-            'images.*' => 'file|mimes:jpeg,png,jpg,webp|max:5120',
-            'video_url' => [
-                'nullable',
-                'string',
-                'max:255',
-                'regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})([\?&].*)?$/'
-            ],
-        ], [
-            'slash_price.gt' => 'The original price before discount must be greater than the selling price (you cannot slash to a higher price than original).',
-            'condition.in' => 'Condition must be strictly Brand New or UK Used.',
-            'package_tier.in' => 'Delivery logistics must be strictly Bike or Keke Cargo.',
-            'video_url.regex' => 'Please provide a valid YouTube product video link (e.g., https://youtube.com/watch?v=... or https://youtu.be/...).',
-            'images.max' => 'You can upload up to 10 photos per listing.',
-        ]);
-
-        // Compulsory photo guard (required for merchant product listing)
-        $photoEnforced = !app()->environment('testing') || $request->header('X-Require-Photo') === 'true';
-        if ($photoEnforced && !$request->hasFile('image') && !$request->hasFile('images')) {
-            return back()->withErrors([
-                'images' => 'At least one product photo is compulsory to list on the marketplace.',
-                'image' => 'At least one product photo is compulsory to list on the marketplace.',
-            ])->withInput();
-        }
-
-        // Multi-Tenant Isolation Guard: Shop must belong to authenticated vendor
-        $shopId = $validated['shop_id'] ?? null;
-        if ($shopId) {
-            $shop = Shop::where('vendor_id', $vendor->id)->findOrFail($shopId);
-        } else {
-            $shop = Shop::where('vendor_id', $vendor->id)->where('is_active', true)->first();
-            if (!$shop) {
-                abort(422, 'No active shop branch found for merchant. Please create a shop outlet first.');
-            }
-        }
-
-        if (!$shop->is_active) {
-            abort(422, 'Cannot add products to an inactive shop branch.');
-        }
-
-        if (!$shop->lga_id) {
-            abort(422, 'Shop must be registered under an LGA before catalog listing.');
-        }
-
-        $cleanName = strip_tags(trim($validated['name']));
-        $cleanDesc = isset($validated['description']) ? strip_tags(trim($validated['description'])) : "Authentic certified {$cleanName} backed by Victorious MARKET escrow.";
-
-        $allImages = [];
-        $imagePath = null;
-
-        // Process multiple photo gallery if uploaded
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $file) {
-                if ($file && $file->isValid()) {
-                    $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($file, 'products', ['max_dimension' => 1600, 'quality' => 84]);
-                    $storedUrl = '/' . $opt['path'];
-                    $allImages[] = $storedUrl;
-                    if (!$imagePath) {
-                        $imagePath = $storedUrl;
-                    }
-                }
-            }
-        }
-
-        // Process single primary image if uploaded
-        if ($request->hasFile('image') && $request->file('image')->isValid()) {
-            $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('image'), 'products', ['max_dimension' => 1600, 'quality' => 84]);
-            $singleUrl = '/' . $opt['path'];
-            if (!$imagePath) {
-                $imagePath = $singleUrl;
-            }
-            if (!in_array($singleUrl, $allImages, true)) {
-                array_unshift($allImages, $singleUrl);
-            }
-        }
-
-        $resolvedTier = in_array(strtolower($validated['package_tier'] ?? 'bike'), ['keke', 'bulky'], true) ? 'keke' : 'bike';
-
-        $product = Product::create([
-            'vendor_id' => $vendor->id,
-            'shop_id' => $shop->id,
-            'category_id' => $validated['category_id'],
-            'condition' => $validated['condition'] ?? 'brand_new',
-            'package_tier' => $resolvedTier,
-            'warranty_type' => $validated['warranty_type'] ?? 'in_store_testing',
-            'name' => $cleanName,
-            'slug' => \Illuminate\Support\Str::slug($cleanName) . '-' . rand(1000, 9999),
-            'description' => $cleanDesc,
-            'unit_price' => number_format((float)$validated['unit_price'], 2, '.', ''),
-            'slash_price' => !empty($validated['slash_price']) ? number_format((float)$validated['slash_price'], 2, '.', '') : null,
-            'is_in_stock' => $request->has('is_in_stock') ? (bool)$request->input('is_in_stock') : ($validated['inventory_quantity'] > 0),
-            'inventory_quantity' => $validated['inventory_quantity'],
-            'listing_status' => 'listed',
-            'listing_confirmed_at' => Carbon::now(),
-            'is_approved' => true,
-            'is_vmarket_flagship' => false,
-            'thumbnail' => $imagePath ?? '/storage/products/default.png',
-            'primary_image' => $imagePath ?? '/storage/products/default.png',
-            'images' => !empty($allImages) ? $allImages : ($imagePath ? [$imagePath] : null),
-            'youtube_video_id' => Product::extractYoutubeVideoId($request->input('video_url')),
-        ]);
-
-        return redirect()->to(route('vendor.dashboard') . '#products-catalog')->with('status', "Product '{$product->name}' successfully published with 7-day certified freshness!");
+        abort(410, 'Direct supplier product creation has been retired under the Victorious MARKET single-retailer model. All supplier submissions must be managed exclusively through the private catalog.');
     }
 
     public function vendorUpdateProduct(Request $request, int $id)
     {
-        $vendor = $this->resolveVendorProfile();
-
-        if ($vendor->marketplace_status !== 'active') {
-            abort(403, 'Merchant marketplace account is currently not active.');
+        if ($request->wantsJson()) {
+            return response()->json([
+                'status' => false,
+                'code' => 'LEGACY_ROUTE_RETIRED',
+                'message' => 'Direct supplier product modification has been retired under the Victorious MARKET single-retailer model. All supplier submissions must be managed exclusively through the private catalog.',
+            ], 410);
         }
-
-        $product = Product::where('vendor_id', $vendor->id)->findOrFail($id);
-
-        if (!$request->has('inventory_quantity') && $request->has('current_stock')) {
-            $request->merge(['inventory_quantity' => $request->input('current_stock')]);
-        }
-
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'category_id' => 'required|integer|exists:categories,id',
-            'shop_id' => 'nullable|integer|exists:shops,id',
-            'condition' => 'nullable|string|in:brand_new,uk_used',
-            'unit_price' => 'required|numeric|min:0.01|max:100000000',
-            'slash_price' => 'nullable|numeric|gt:unit_price|max:100000000',
-            'inventory_quantity' => 'nullable|integer|min:0|max:1000000',
-            'is_in_stock' => 'nullable|boolean',
-            'package_tier' => 'nullable|string|in:bike,keke,standard,bulky',
-            'warranty_type' => 'nullable|string|in:in_store_testing,7_days_replacement,brand_warranty,as_is',
-            'description' => 'nullable|string|max:5000',
-            'image' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:5120',
-            'video_url' => [
-                'nullable',
-                'string',
-                'max:255',
-                'regex:/^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})([\?&].*)?$/'
-            ],
-        ], [
-            'slash_price.gt' => 'The original slash price must be greater than the selling price.',
-            'condition.in' => 'Condition must be strictly Brand New or UK Used.',
-            'package_tier.in' => 'Delivery logistics must be strictly Bike or Keke Cargo.',
-            'video_url.regex' => 'Please provide a valid YouTube product video link (e.g., https://youtube.com/watch?v=... or https://youtu.be/...).',
-        ]);
-
-        $shopId = $validated['shop_id'] ?? $product->shop_id;
-        $shop = Shop::where('vendor_id', $vendor->id)->findOrFail($shopId);
-
-        if (!$shop->is_active) {
-            abort(422, 'Cannot assign products to an inactive shop branch.');
-        }
-
-        $cleanName = strip_tags(trim($validated['name']));
-        $product->name = $cleanName;
-        $product->category_id = $validated['category_id'];
-        $product->shop_id = $shop->id;
-        if (isset($validated['condition'])) {
-            $product->condition = $validated['condition'];
-        }
-        if (isset($validated['warranty_type'])) {
-            $product->warranty_type = $validated['warranty_type'];
-        }
-        $product->unit_price = number_format((float)$validated['unit_price'], 2, '.', '');
-        $product->slash_price = !empty($validated['slash_price']) ? number_format((float)$validated['slash_price'], 2, '.', '') : null;
-        if (isset($validated['inventory_quantity'])) {
-            $product->inventory_quantity = $validated['inventory_quantity'];
-        }
-        if ($request->has('is_in_stock')) {
-            $product->is_in_stock = (bool)$request->input('is_in_stock');
-        } elseif (isset($validated['inventory_quantity'])) {
-            $product->is_in_stock = $validated['inventory_quantity'] > 0;
-        }
-        
-        $resolvedTier = in_array(strtolower($validated['package_tier'] ?? $product->package_tier ?? 'bike'), ['keke', 'bulky'], true) ? 'keke' : 'bike';
-        $product->package_tier = $resolvedTier;
-
-        if (isset($validated['description'])) {
-            $product->description = strip_tags(trim($validated['description']));
-        }
-
-        if ($request->filled('video_url')) {
-            $product->youtube_video_id = Product::extractYoutubeVideoId($request->input('video_url'));
-        }
-
-        if ($request->hasFile('image') && $request->file('image')->isValid()) {
-            $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('image'), 'products', ['max_dimension' => 1600, 'quality' => 84]);
-            $product->thumbnail = '/' . $opt['path'];
-            $product->primary_image = '/' . $opt['path'];
-        }
-
-        $product->save();
-
-        return redirect()->to(route('vendor.dashboard') . '#products-catalog')->with('status', "Product '{$product->name}' updated successfully!");
+        abort(410, 'Direct supplier product modification has been retired under the Victorious MARKET single-retailer model. All supplier submissions must be managed exclusively through the private catalog.');
     }
 
     public function vendorUpdateBank(Request $request)
@@ -4354,28 +4072,28 @@ class PortalController extends Controller
         }, 3);
     }
 
-    public function vendorRefreshProductFreshness(Request $request, int $id)
+        public function vendorRefreshProductFreshness(Request $request, int $id)
     {
-        $vendor = $this->resolveVendorProfile();
-        // Multi-Tenant Isolation Guard: Product must belong to authenticated vendor
-        $product = Product::where('vendor_id', $vendor->id)->findOrFail($id);
-        $product->listing_confirmed_at = Carbon::now();
-        $product->listing_status = 'listed';
-        $product->is_in_stock = true;
-        $product->save();
-
-        return redirect()->to(route('vendor.dashboard') . '#products-catalog')->with('status', "Freshness clock extended by 7 days for '{$product->name}'!");
+        if ($request->wantsJson()) {
+            return response()->json([
+                'status' => false,
+                'code' => 'LEGACY_ROUTE_RETIRED',
+                'message' => 'Direct product freshness renewal has been retired under the Victorious MARKET single-retailer model.',
+            ], 410);
+        }
+        abort(410, 'Direct product freshness renewal has been retired under the Victorious MARKET single-retailer model.');
     }
 
     public function vendorToggleProductStock(Request $request, int $id)
     {
-        $vendor = $this->resolveVendorProfile();
-        $product = Product::where('vendor_id', $vendor->id)->findOrFail($id);
-        $product->is_in_stock = !$product->is_in_stock;
-        $product->save();
-
-        $statusText = $product->is_in_stock ? 'In Stock' : 'Out of Stock';
-        return redirect()->to(route('vendor.dashboard') . '#products-catalog')->with('status', "'{$product->name}' is now marked {$statusText}!");
+        if ($request->wantsJson()) {
+            return response()->json([
+                'status' => false,
+                'code' => 'LEGACY_ROUTE_RETIRED',
+                'message' => 'Direct product stock toggling has been retired under the Victorious MARKET single-retailer model.',
+            ], 410);
+        }
+        abort(410, 'Direct product stock toggling has been retired under the Victorious MARKET single-retailer model.');
     }
 
     public function vendorStoreShop(Request $request)

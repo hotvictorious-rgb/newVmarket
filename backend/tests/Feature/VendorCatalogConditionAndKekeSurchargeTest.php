@@ -149,26 +149,33 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
     {
         Sanctum::actingAs($this->vendorUser, ['*']);
 
-        // Explicit test: user specified ONLY brand_new and uk_used are allowed, NOT others
-        $response = $this->postJson('/api/v1/vendor/products', [
+        // Legacy direct product creation is retired under single-retailer model (Finding 6)
+        $legacyResponse = $this->postJson('/api/v1/vendor/products', [
             'name' => 'Used Generator',
             'category_id' => $this->category->id,
             'unit_price' => 50000.00,
             'inventory_quantity' => 1,
             'condition' => 'others',
         ]);
+        $legacyResponse->assertStatus(410)
+            ->assertJsonPath('code', 'LEGACY_ROUTE_RETIRED');
 
+        // Private supplier catalog validates condition strictly
+        $response = $this->postJson('/api/v1/vendor/private-catalog', [
+            'product_name' => 'Used Generator',
+            'source_price' => 45000.00,
+            'is_in_stock' => true,
+            'condition' => 'others',
+        ]);
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['condition']);
 
-        $responseUsed = $this->postJson('/api/v1/vendor/products', [
-            'name' => 'Used Generator 2',
-            'category_id' => $this->category->id,
-            'unit_price' => 50000.00,
-            'inventory_quantity' => 1,
+        $responseUsed = $this->postJson('/api/v1/vendor/private-catalog', [
+            'product_name' => 'Used Generator 2',
+            'source_price' => 45000.00,
+            'is_in_stock' => true,
             'condition' => 'refurbished',
         ]);
-
         $responseUsed->assertStatus(422)
             ->assertJsonValidationErrors(['condition']);
     }
@@ -177,14 +184,24 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
     {
         Sanctum::actingAs($this->vendorUser, ['*']);
 
-        $response = $this->postJson('/api/v1/vendor/products', [
+        // Legacy direct product creation is retired
+        $legacyResponse = $this->postJson('/api/v1/vendor/products', [
             'name' => 'Heavy Cargo Crate',
             'category_id' => $this->category->id,
             'unit_price' => 50000.00,
             'inventory_quantity' => 1,
             'package_tier' => 'truck_container',
         ]);
+        $legacyResponse->assertStatus(410)
+            ->assertJsonPath('code', 'LEGACY_ROUTE_RETIRED');
 
+        // Private supplier catalog validates package_tier strictly
+        $response = $this->postJson('/api/v1/vendor/private-catalog', [
+            'product_name' => 'Heavy Cargo Crate',
+            'source_price' => 45000.00,
+            'is_in_stock' => true,
+            'package_tier' => 'truck_container',
+        ]);
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['package_tier']);
     }
@@ -193,16 +210,26 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
     {
         Sanctum::actingAs($this->vendorUser, ['*']);
 
-        $response = $this->postJson('/api/v1/vendor/products', [
+        // Suppliers cannot directly submit retail unit_price or slash_price
+        $legacyResponse = $this->postJson('/api/v1/vendor/products', [
             'name' => 'Wireless Earbuds',
             'category_id' => $this->category->id,
             'unit_price' => 20000.00,
-            'slash_price' => 15000.00, // Invalid: slash price lower than selling price
+            'slash_price' => 15000.00,
             'inventory_quantity' => 5,
         ]);
+        $legacyResponse->assertStatus(410)
+            ->assertJsonPath('code', 'LEGACY_ROUTE_RETIRED');
 
+        // Private catalog confines suppliers to wholesale source_price only and rejects retail price/quantity overrides
+        $response = $this->postJson('/api/v1/vendor/private-catalog', [
+            'product_name' => 'Wireless Earbuds',
+            'source_price' => 12000.00,
+            'is_in_stock' => true,
+            'quantity' => 5, // Protected field
+        ]);
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['slash_price']);
+            ->assertJsonValidationErrors(['quantity']);
     }
 
     public function test_multi_item_order_adds_bulky_surcharge_for_each_bulky_unit(): void

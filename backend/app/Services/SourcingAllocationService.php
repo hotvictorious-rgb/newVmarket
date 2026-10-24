@@ -413,6 +413,24 @@ class SourcingAllocationService
      * Bind supplier sourcing only after the order's payment has been authoritatively
      * verified. Call from payment settlement; checkout may only run a non-binding
      * feasibility check.
+     *
+     * Sourcing State Clarity (Retailer Model Canonical Invariant — Audit Finding P2):
+     *
+     * Initial records created by this method in status 'awaiting_supplier_confirmation'
+     * are strictly PROVISIONAL SOURCING ATTEMPTS, NOT confirmed allocations, merchant
+     * payables, or binding disbursement obligations.
+     *
+     * Sourcing & Payable Lifecycle:
+     * 1. Provisional Sourcing Attempt: allocateVerifiedPaidOrder() creates an initial candidate
+     *    assignment and records cost snapshots with sourcing_status = 'awaiting_supplier_confirmation'.
+     *    No payable is created, and physical collection/handover remains strictly blocked.
+     * 2. Order-Specific Supplier Confirmation: The supplier must explicitly verify and accept the exact
+     *    order-specific quantity via confirmOrderAvailability(). If the supplier rejects or times out,
+     *    the provisional assignment is cancelled (supplier_rejected / timed_out) and reassigned or refunded,
+     *    generating ZERO supplier payables.
+     * 3. Handover & Delivery: Only confirmed orders proceed to pickup and doorstep delivery.
+     * 4. Settlement Eligibility: Only delivered orders whose post-delivery inspection window has cleared
+     *    without active dispute or return become eligible for RetailerSupplierPayoutService.
      */
     public function allocateVerifiedPaidOrder(Order $order): array
     {
@@ -549,6 +567,13 @@ class SourcingAllocationService
                 );
             }
 
+            // CANONICAL BUSINESS RULE & AUDIT POLICY:
+            // Initial 'awaiting_supplier_confirmation' assignment records represent provisional sourcing attempts,
+            // NOT confirmed payables. Payout eligibility and financial liabilities are only created after:
+            // 1) Supplier explicitly confirms acceptance and hands over the merchandise,
+            // 2) Sourcing status advances to 'supplier_confirmed',
+            // 3) Logistics confirms collection/delivery.
+            // Under no circumstances do provisional 'awaiting_supplier_confirmation' records create an unconditional payable.
             foreach ($groups as $group) {
                 OrderSupplierAssignment::firstOrCreate(
                     [

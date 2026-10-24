@@ -54,4 +54,9 @@ class TreasuryBankCreditBatch extends Model
     {
         return $this->hasMany(RetailerSupplierPayoutRequest::class, 'treasury_bank_credit_batch_id');
     }
+
+    public function logisticsPayouts()
+    {
+        return $this->hasMany(LogisticsPayoutRequest::class, 'treasury_bank_credit_batch_id');
+    }
 }

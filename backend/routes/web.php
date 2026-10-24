@@ -77,6 +77,12 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/manual-bank-transfers/{id}/approve', [ManualBankTransferController::class, 'approve'])->whereNumber('id')->name('admin.manual-bank-transfers.approve');
     Route::post('/manual-bank-transfers/{id}/reject', [ManualBankTransferController::class, 'reject'])->whereNumber('id')->name('admin.manual-bank-transfers.reject');
     Route::get('/manual-bank-transfers/{id}/evidence', [ManualBankTransferController::class, 'evidence'])->whereNumber('id')->name('admin.manual-bank-transfers.evidence');
+    Route::post('/manual-bank-transfers/{id}/request-replacement', [ManualBankTransferController::class, 'requestReplacementEvidence'])->whereNumber('id')->name('admin.manual-bank-transfers.request-replacement');
+    Route::post('/manual-bank-transfers/refunds/{id}/approve', [ManualBankTransferController::class, 'approveRefund'])->whereNumber('id')->name('admin.manual-bank-transfers.refunds.approve');
+    Route::post('/manual-bank-transfers/refunds/{id}/dispatch', [ManualBankTransferController::class, 'dispatchRefund'])->whereNumber('id')->name('admin.manual-bank-transfers.refunds.dispatch');
+    Route::post('/manual-bank-transfers/refunds/{id}/reconcile', [ManualBankTransferController::class, 'reconcileRefund'])->whereNumber('id')->name('admin.manual-bank-transfers.refunds.reconcile');
+    Route::post('/manual-bank-transfers/refunds/{id}/reject', [ManualBankTransferController::class, 'rejectRefund'])->whereNumber('id')->name('admin.manual-bank-transfers.refunds.reject');
+    Route::get('/manual-bank-transfers/refunds/{id}/proof', [ManualBankTransferController::class, 'refundProof'])->whereNumber('id')->name('admin.manual-bank-transfers.refunds.proof');
 
     Route::get('/', [PortalController::class, 'adminDashboard'])->name('admin.dashboard');
     Route::get('/delivery-lanes', [PortalController::class, 'adminDeliveryLanesPage'])->name('admin.delivery_lanes.index');
@@ -92,6 +98,8 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::post('/retailer-supplier-payouts/{id}/disburse', [AdminRetailerSupplierPayoutController::class, 'disburse'])->whereNumber('id')->name('admin.retailer-supplier-payouts.disburse');
     Route::post('/retailer-supplier-payouts/{id}/reconcile', [AdminRetailerSupplierPayoutController::class, 'reconcile'])->whereNumber('id')->name('admin.retailer-supplier-payouts.reconcile');
     Route::post('/retailer-supplier-payouts/{id}/reject', [AdminRetailerSupplierPayoutController::class, 'reject'])->whereNumber('id')->name('admin.retailer-supplier-payouts.reject');
+    Route::post('/retailer-supplier-payouts/{id}/mark-failed', [AdminRetailerSupplierPayoutController::class, 'markFailed'])->whereNumber('id')->name('admin.retailer-supplier-payouts.mark-failed');
+    Route::get('/retailer-supplier-payouts/{id}/proof', [AdminRetailerSupplierPayoutController::class, 'proof'])->whereNumber('id')->name('admin.retailer-supplier-payouts.proof');
         Route::get('/announcements', [PortalController::class, 'adminAnnouncementsPage'])->name('admin.announcements.index');
     Route::get('/banners', [PortalController::class, 'adminBannersPage'])->name('admin.banners.index');
     Route::post('/banners', [PortalController::class, 'adminStoreBanner'])->name('admin.banners.store');

@@ -26,12 +26,16 @@ class RetailerSupplierPayoutService
      * creation or gateway transfer call. The batch row is locked to serialize competing
      * payout workers; pending/processing/uncertain/paid requests all consume capacity.
      */
-    public function reserveTreasuryBankCreditBatch(int $payoutId): array
+    public function reserveTreasuryBankCreditBatch(int|RetailerSupplierPayoutRequest|\App\Models\LogisticsPayoutRequest $payoutTarget): array
     {
-        return DB::transaction(function () use ($payoutId) {
-            $payout = RetailerSupplierPayoutRequest::whereKey($payoutId)->lockForUpdate()->first();
+        return DB::transaction(function () use ($payoutTarget) {
+            if ($payoutTarget instanceof RetailerSupplierPayoutRequest || $payoutTarget instanceof \App\Models\LogisticsPayoutRequest) {
+                $payout = $payoutTarget::whereKey($payoutTarget->id)->lockForUpdate()->first();
+            } else {
+                $payout = RetailerSupplierPayoutRequest::whereKey((int) $payoutTarget)->lockForUpdate()->first();
+            }
             if (!$payout) {
-                return ['success' => false, 'message' => 'Supplier payout request was not found.'];
+                return ['success' => false, 'message' => 'Payout request was not found.'];
             }
             if ($payout->status !== 'pending') {
                 return ['success' => false, 'message' => 'Only a pending payout can reserve treasury bank-credit evidence.'];
@@ -82,7 +86,7 @@ class RetailerSupplierPayoutService
             // silently introduce rounding in financial capacity checks.
             $reservedPayouts = RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)
                 ->whereIn('status', ['pending', 'processing', 'uncertain', 'paid'])
-                ->where('id', '!=', $payout->id)
+                ->when($payout instanceof RetailerSupplierPayoutRequest, fn ($q) => $q->where('id', '!=', $payout->id))
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get(['amount']);
@@ -91,11 +95,21 @@ class RetailerSupplierPayoutService
                 $usedKobo += (int) bcmul((string) $reservedPayout->amount, '100', 0);
             }
 
+            $reservedLogistics = \App\Models\LogisticsPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)
+                ->whereIn('status', ['pending', 'processing', 'approved', 'completed'])
+                ->when($payout instanceof \App\Models\LogisticsPayoutRequest, fn ($q) => $q->where('id', '!=', $payout->id))
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get(['amount']);
+            foreach ($reservedLogistics as $rl) {
+                $usedKobo += (int) bcmul((string) $rl->amount, '100', 0);
+            }
+
             $amountKobo = (int) bcmul((string) $payout->amount, '100', 0);
             if ($usedKobo + $amountKobo > (int) $batch->net_credit_amount_kobo) {
                 return [
                     'success' => false,
-                    'message' => 'Supplier payout blocked: the reconciled corporate bank-credit batch does not have enough unreserved net credited funds.',
+                    'message' => 'Payout blocked: the reconciled corporate bank-credit batch does not have enough unreserved net credited funds.',
                     'available_kobo' => max(0, (int) $batch->net_credit_amount_kobo - $usedKobo),
                 ];
             }
@@ -106,8 +120,8 @@ class RetailerSupplierPayoutService
 
             AdminAuditLog::create([
                 'user_id' => null,
-                'action' => 'supplier_payout_treasury_bank_credit_reserved',
-                'target_type' => RetailerSupplierPayoutRequest::class,
+                'action' => ($payout instanceof \App\Models\LogisticsPayoutRequest ? 'logistics' : 'supplier') . '_payout_treasury_bank_credit_reserved',
+                'target_type' => get_class($payout),
                 'target_id' => $payout->id,
                 'old_values' => ['treasury_bank_credit_batch_id' => null],
                 'new_values' => [
@@ -609,7 +623,7 @@ class RetailerSupplierPayoutService
                 return ['success' => true, 'idempotent' => true, 'payout' => $payout];
             }
             if (!in_array($payout->status, ['processing', 'uncertain'], true)
-                || trim((string) $payout->recipient_code) === ''
+                || (trim((string) $payout->recipient_code) === '' && trim((string) $payout->bank_transaction_reference) === '')
                 || $payout->transfer_reference !== $transferReference
                 || BcMathService::comp((string) $payout->amount, $verifiedAmount) !== 0) {
                 return ['success' => false, 'protected' => true, 'message' => 'Supplier payout finalization does not match the active request, reference, and amount.'];

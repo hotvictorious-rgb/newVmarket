@@ -8,6 +8,7 @@ class LogisticsPayoutRequest extends Model
 {
     protected $fillable = [
         'logistics_company_id',
+        'treasury_bank_credit_batch_id',
         'amount',
         'status',
         'bank_name',
@@ -40,5 +41,10 @@ class LogisticsPayoutRequest extends Model
     public function approvedByAdmin()
     {
         return $this->belongsTo(User::class, 'approved_by_admin_id');
+    }
+
+    public function treasuryBankCreditBatch()
+    {
+        return $this->belongsTo(TreasuryBankCreditBatch::class, 'treasury_bank_credit_batch_id');
     }
 }

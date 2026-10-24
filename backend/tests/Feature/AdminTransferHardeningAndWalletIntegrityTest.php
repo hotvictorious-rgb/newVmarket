@@ -24,8 +24,13 @@ use App\Models\VendorRecoveryLedger;
 use App\Services\FinancialReconciliationEngine;
 use App\Services\PaystackService;
 use App\Services\RetailerSupplierPayoutService;
+use App\Models\TreasuryBankCreditBatch;
+use App\Models\TreasuryBankCreditBatchAllocation;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Mockery;
 use Tests\TestCase;
@@ -838,7 +843,7 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
     /**
      * P0 regression: an uncertain logistics transfer response must remain on reconciliation hold.
      */
-    public function test_logistics_payout_initiation_timeout_keeps_reconciliation_hold(): void
+    public function test_logistics_payout_disbursement_enforces_manual_settlement_workflow_and_treasury(): void
     {
         $payout = LogisticsPayoutRequest::create([
             'logistics_company_id' => $this->company->id,
@@ -850,32 +855,21 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             'account_name' => $this->company->account_name,
         ]);
 
-        $mock = Mockery::mock(PaystackService::class);
-        $mock->shouldReceive('createTransferRecipient')->once()->andReturn([
-            'success' => true,
-            'recipient_code' => 'RCP_FLEET_TIMEOUT',
-        ]);
-        $mock->shouldReceive('initiateTransfer')->once()->andReturn([
-            'success' => false,
-            'code' => 'UNCERTAIN_TIMEOUT',
-            'is_definitive' => false,
-            'message' => 'Connection timed out after submitting transfer request.',
-        ]);
-        $this->app->instance(PaystackService::class, $mock);
-
-        $response = $this->actingAs($this->superAdmin)->post(route('admin.disburse.logistics_payout'), [
+        // 1. Missing bank reference or proof is rejected by validation
+        $invalidResponse = $this->actingAs($this->superAdmin)->post(route('admin.disburse.logistics_payout'), [
             'payout_id' => $payout->id,
-            'notes' => 'Regression test for uncertain gateway outcome',
         ]);
+        $invalidResponse->assertSessionHasErrors(['bank_transaction_reference', 'settlement_proof']);
 
-        $response->assertSessionHas('error');
-        $this->assertStringContainsString('HOLD_TIMEOUT_RECONCILIATION', session('error'));
-
-        $payout->refresh();
-        $this->assertEquals('pending', $payout->status);
-        $this->assertEquals('HOLD_TIMEOUT_RECONCILIATION', $payout->processing_token);
-        $this->assertEquals('processing', $payout->gateway_status);
-        $this->assertNotNull($payout->transfer_reference);
+        // 2. Disbursing without reconciled treasury bank credit batch is blocked
+        $blockedResponse = $this->actingAs($this->superAdmin)->post(route('admin.disburse.logistics_payout'), [
+            'payout_id' => $payout->id,
+            'bank_transaction_reference' => 'FLEET-MANUAL-TXN-001',
+            'settlement_proof' => \Illuminate\Http\UploadedFile::fake()->create('proof.pdf', 150),
+        ]);
+        $blockedResponse->assertSessionHas('error');
+        $this->assertStringContainsString('No dual-reviewed corporate bank-credit batch is available', session('error'));
+        $this->assertSame('pending', $payout->fresh()->status);
     }
 
     public function test_logistics_payout_disbursement_blocked_if_company_or_user_suspended()
@@ -894,6 +888,8 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
 
         $response = $this->actingAs($this->superAdmin)->post(route('admin.disburse.logistics_payout'), [
             'payout_id' => $payout->id,
+            'bank_transaction_reference' => 'FLEET-SUSPENDED-TXN-001',
+            'settlement_proof' => \Illuminate\Http\UploadedFile::fake()->create('proof.png', 100),
         ]);
 
         $response->assertSessionHas('error');
@@ -1049,6 +1045,8 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
 
         $logisticsResponse = $this->actingAs($this->superAdmin)->post(route('admin.disburse.logistics_payout'), [
             'payout_id' => $logisticsPayout->id,
+            'bank_transaction_reference' => 'FLEET-STALE-CLAIM-REF-001',
+            'settlement_proof' => \Illuminate\Http\UploadedFile::fake()->create('proof.png', 100),
         ]);
         $logisticsResponse->assertSessionHas('error');
         $this->assertEquals('pending', $logisticsPayout->fresh()->status);
@@ -1325,5 +1323,103 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $responseSuccess->assertSessionHas('error');
         $this->assertStringContainsString('between ₦5,000 and ₦500,000', session('error'));
         $this->assertEquals('pending', $payout->fresh()->status);
+    }
+
+    public function test_retailer_supplier_payout_manual_bank_settlement_workflow(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-24 12:00:00')); // Saturday
+        Storage::fake('local');
+
+        [$order, $item] = $this->createSupplierPayableOrderItem('8000.00');
+        $service = app(RetailerSupplierPayoutService::class);
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
+        $this->assertTrue($requested['success']);
+        $payout = $requested['payout'];
+
+        // 1. Disbursement fails if treasury batch is missing
+        $file = UploadedFile::fake()->image('transfer_receipt.jpg');
+        $disburseAttempt = $this->actingAs($this->superAdmin)->post(
+            route('admin.retailer-supplier-payouts.disburse', $payout->id),
+            [
+                'bank_transaction_reference' => 'TXN-BANK-REF-998877',
+                'settlement_proof' => $file,
+            ]
+        );
+        $disburseAttempt->assertSessionHas('error');
+        $this->assertSame('pending', $payout->fresh()->status);
+
+        // 2. Fund treasury batch
+        $treasuryOrder = $this->createTestOrder([
+            'payment_method' => 'paystack',
+            'payment_reference' => 'PAY-TREASURY-' . uniqid(),
+            'paystack_transaction_id' => 'TX-TREASURY-' . uniqid(),
+            'grand_total' => '50000.00',
+            'merchandise_subtotal' => '50000.00',
+        ]);
+        $orderKobo = 5000000;
+        $batch = TreasuryBankCreditBatch::create([
+            'gateway_provider' => 'paystack',
+            'gateway_settlement_reference' => 'SETTLE-' . uniqid(),
+            'bank_credit_reference' => 'BANK-CREDIT-' . uniqid(),
+            'corporate_account_last4' => '4321',
+            'gross_collection_amount_kobo' => $orderKobo,
+            'provider_fee_amount_kobo' => 0,
+            'net_credit_amount_kobo' => $orderKobo,
+            'currency' => 'NGN',
+            'statement_value_date' => now()->toDateString(),
+            'statement_evidence_reference' => 'paystack settlement page 1',
+            'reconciliation_notes' => 'Settlement and corporate bank credit matched.',
+            'status' => 'reconciled',
+            'prepared_by_admin_id' => $this->regularAdmin->id,
+            'confirmed_by_admin_id' => $this->superAdmin->id,
+            'prepared_at' => now()->subMinute(),
+            'confirmed_at' => now(),
+            'idempotency_key' => 'TREASURY-' . uniqid(),
+        ]);
+        TreasuryBankCreditBatchAllocation::create([
+            'treasury_bank_credit_batch_id' => $batch->id,
+            'order_id' => $treasuryOrder->id,
+            'gateway_transaction_id' => $treasuryOrder->paystack_transaction_id,
+            'payment_reference' => $treasuryOrder->payment_reference,
+            'amount_kobo' => $orderKobo,
+            'currency' => 'NGN',
+            'idempotency_key' => 'TREASURY-ALLOC-' . uniqid(),
+            'added_by_admin_id' => $this->superAdmin->id,
+            'added_at' => now(),
+        ]);
+
+        // 3. Disbursement succeeds with treasury batch, unique ref, and proof
+        $file2 = UploadedFile::fake()->image('supplier_settlement_proof.jpg');
+        $disburse = $this->actingAs($this->superAdmin)->post(
+            route('admin.retailer-supplier-payouts.disburse', $payout->id),
+            [
+                'bank_transaction_reference' => 'TXN-BANK-REF-998877',
+                'settlement_proof' => $file2,
+            ]
+        );
+        $disburse->assertRedirect(route('admin.retailer-supplier-payouts.index'));
+        $payout->refresh();
+        $this->assertSame('processing', $payout->status);
+        $this->assertSame('TXN-BANK-REF-998877', $payout->bank_transaction_reference);
+        $this->assertNotEmpty($payout->settlement_proof_path);
+        $this->assertSame($batch->id, $payout->treasury_bank_credit_batch_id);
+
+        // 4. Proof can be downloaded securely
+        $proofDownload = $this->actingAs($this->superAdmin)->get(
+            route('admin.retailer-supplier-payouts.proof', $payout->id)
+        );
+        $proofDownload->assertOk();
+
+        // 5. Reconcile after verifying corporate bank debit
+        $reconcile = $this->actingAs($this->superAdmin)->post(
+            route('admin.retailer-supplier-payouts.reconcile', $payout->id)
+        );
+        $reconcile->assertRedirect(route('admin.retailer-supplier-payouts.index'));
+        $payout->refresh();
+        $this->assertSame('paid', $payout->status);
+        $this->assertSame('reconciled_cleared', $payout->gateway_status);
+        $this->assertSame('settled', $payout->allocations()->first()->fresh()->status);
+
+        Carbon::setTestNow();
     }
 }

@@ -4,19 +4,23 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdminAuditLog;
+use App\Models\LogisticsPayoutRequest;
+use App\Models\ManualBankTransferPayment;
+use App\Models\ManualBankTransferRefundCase;
 use App\Models\RetailerSupplierPayoutRequest;
-use App\Services\BcMathService;
-use App\Services\PaystackService;
 use App\Services\RetailerSupplierPayoutService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class AdminRetailerSupplierPayoutController extends Controller
 {
     public function index(Request $request)
     {
         $this->authorizeSuperAdmin($request);
-        $payouts = RetailerSupplierPayoutRequest::with('supplier', 'allocations')
+        $payouts = RetailerSupplierPayoutRequest::with(['supplier', 'allocations', 'treasuryBankCreditBatch'])
             ->latest('id')
             ->paginate(25);
 
@@ -26,14 +30,32 @@ class AdminRetailerSupplierPayoutController extends Controller
     public function disburse(Request $request, int $id)
     {
         $this->authorizeSuperAdmin($request);
+
+        if (now()->isSunday()) {
+            return back()->with('error', 'Disbursements occur Monday through Saturday only. Outbound transfers are blocked on Sundays.');
+        }
+
+        $validated = $request->validate([
+            'bank_transaction_reference' => ['required', 'string', 'min:3', 'max:150', 'regex:/^[A-Za-z0-9._\/-]+$/'],
+            'settlement_proof' => ['required', 'file', 'mimes:jpeg,jpg,png,pdf,webp', 'max:10240'],
+            'admin_notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
         $payout = RetailerSupplierPayoutRequest::whereKey($id)->firstOrFail();
-        $this->audit($request, 'retailer_supplier_payout_disburse_attempted', $payout, [
-            'status' => $payout->status,
-            'amount' => (string) $payout->amount,
-            'transfer_reference' => $payout->transfer_reference,
-        ], ['action' => 'disburse_attempted']);
         if ($payout->status !== 'pending') {
-            return back()->with('error', 'Only a pending supplier payout can be submitted.');
+            return back()->with('error', 'Only a pending supplier payout can be disbursed.');
+        }
+
+        $bankRef = trim($validated['bank_transaction_reference']);
+
+        // Prevent duplicate bank transaction references across all system rails
+        if (RetailerSupplierPayoutRequest::where('bank_transaction_reference', $bankRef)->where('id', '!=', $payout->id)->exists()
+            || LogisticsPayoutRequest::where('bank_transaction_reference', $bankRef)->exists()
+            || ManualBankTransferPayment::where('bank_transaction_reference', $bankRef)->exists()
+            || ManualBankTransferRefundCase::where('manual_dispatch_reference', $bankRef)->exists()) {
+            throw ValidationException::withMessages([
+                'bank_transaction_reference' => 'This bank transaction reference has already been recorded in the system and cannot be reused.',
+            ]);
         }
 
         $treasuryReservation = app(RetailerSupplierPayoutService::class)->reserveTreasuryBankCreditBatch($payout->id);
@@ -43,130 +65,112 @@ class AdminRetailerSupplierPayoutController extends Controller
                 'amount' => (string) $payout->amount,
             ], [
                 'reason' => $treasuryReservation['message'] ?? 'No reconciled bank-credit batch available.',
-                'action' => 'transfer_blocked_before_gateway_recipient_or_transfer',
+                'action' => 'transfer_blocked_before_disbursement',
             ]);
             return back()->with('error', $treasuryReservation['message']
                 ?? 'Supplier payout blocked until treasury bank-credit evidence is reconciled.');
         }
 
-        $paystack = app(PaystackService::class);
-        $recipient = $paystack->createTransferRecipient(
-            $payout->account_name,
-            $payout->account_number,
-            $payout->bank_code ?: $payout->bank_name
+        $file = $request->file('settlement_proof');
+        $ext = strtolower((string) $file->extension());
+        $proofPath = $file->storeAs(
+            'settlement-proofs/supplier',
+            $payout->id . '_' . Str::uuid() . '.' . $ext,
+            'local'
         );
-        if (!$recipient['success']) {
-            $reversal = app(RetailerSupplierPayoutService::class)->reverse(
-                $payout->id,
-                'not_submitted',
-                'Recipient resolution failed before transfer submission: ' . ($recipient['message'] ?? 'Unknown recipient error')
-            );
-            return back()->with('error', $reversal['success']
-                ? ('Supplier payout released before transfer: ' . ($recipient['message'] ?? 'Recipient resolution failed.'))
-                : ($reversal['message'] ?? 'Supplier payout held for finance reconciliation.'));
+
+        if (!$proofPath) {
+            return back()->with('error', 'Failed to securely store outgoing settlement proof.');
         }
 
-        if (empty($recipient['is_simulated'])) {
-            $details = is_array(data_get($recipient, 'data.details')) ? data_get($recipient, 'data.details') : [];
-            $verifiedAccountName = trim((string) ($details['account_name'] ?? ''));
-            $verifiedAccountNumber = preg_replace('/[^0-9]/', '', (string) ($details['account_number'] ?? ''));
-            $verifiedBankCode = trim((string) ($details['bank_code'] ?? ''));
-            $normalizeName = static fn (string $name): string => preg_replace('/[^A-Z0-9]/', '', strtoupper($name));
-            $accountNameMatches = $verifiedAccountName !== ''
-                && $normalizeName($verifiedAccountName) === $normalizeName((string) $payout->account_name);
-            $accountNumberMatches = $verifiedAccountNumber !== ''
-                && $verifiedAccountNumber === preg_replace('/[^0-9]/', '', (string) $payout->account_number);
-            $bankCodeMatches = $verifiedBankCode !== ''
-                && $verifiedBankCode === (string) $payout->bank_code;
-            if (!$accountNameMatches || !$accountNumberMatches || !$bankCodeMatches) {
-                $reason = 'Paystack recipient details are missing or do not match the supplier payout bank snapshot.';
-                $this->audit($request, 'retailer_supplier_payout_recipient_details_mismatch', $payout, [
-                    'account_name' => $payout->account_name,
-                    'account_number_last4' => substr((string) $payout->account_number, -4),
-                    'bank_code' => $payout->bank_code,
-                ], [
-                    'verified_account_name' => $verifiedAccountName ?: null,
-                    'verified_account_number_last4' => $verifiedAccountNumber !== '' ? substr($verifiedAccountNumber, -4) : null,
-                    'verified_bank_code' => $verifiedBankCode ?: null,
-                    'action' => 'transfer_blocked_before_submission',
-                ]);
-                $released = app(RetailerSupplierPayoutService::class)->reverse($payout->id, 'not_submitted', $reason);
-                return back()->with('error', $released['success']
-                    ? 'Transfer blocked: the verified bank-account name did not match the supplier. Review bank details and wait through the cooldown.'
-                    : ($released['message'] ?? 'Transfer blocked; supplier payout remains held for finance reconciliation.'));
-            }
-        }
+        $transferRef = $payout->transfer_reference ?: ('SUPPAYOUT-' . Str::upper(Str::random(24)));
 
         $processing = app(RetailerSupplierPayoutService::class)->markProcessing(
             $payout->id,
             (int) $request->user()->id,
-            (string) ($recipient['recipient_code'] ?? ''),
-            'SUPPAYOUT-' . Str::upper(Str::random(24))
+            'MANUAL_BANK_TRANSFER',
+            $transferRef
         );
+
         if (!$processing['success']) {
             return back()->with('error', $processing['message'] ?? 'Supplier payout could not enter processing.');
         }
 
-        $payout = $processing['payout'];
-        $transfer = $paystack->initiateTransfer(
-            (string) $recipient['recipient_code'],
-            (string) $payout->amount,
-            'Retailer supplier payable payout for supplier #' . $payout->supplier_vendor_id,
-            (string) $payout->transfer_reference
-        );
-
-        if (!$transfer['success']) {
-            $isUncertain = !in_array($transfer['code'] ?? '', ['DEFINITIVE_REJECTION', 'CONFIG_MISSING', 'AMOUNT_BELOW_MINIMUM'], true);
-            if ($isUncertain) {
-                app(RetailerSupplierPayoutService::class)->markUncertain(
-                    $payout->id,
-                    $transfer['message'] ?? 'Transfer submission outcome is uncertain.',
-                    $transfer['code'] ?? 'uncertain'
-                );
-                return back()->with('error', 'Supplier payout is held for gateway reconciliation. Do not retry it.');
-            }
-
-            $result = app(RetailerSupplierPayoutService::class)->reverse(
-                $payout->id,
-                'failed',
-                $transfer['message'] ?? 'Paystack definitively rejected the transfer.'
-            );
-            return back()->with($result['success'] ? 'error' : 'error',
-                $result['message'] ?? ($transfer['message'] ?? 'Supplier payout failed and requires reconciliation.'));
-        }
+        $adminNoteSuffix = !empty($validated['admin_notes']) ? ' | ' . $validated['admin_notes'] : '';
+        $notes = trim(($payout->admin_notes ? $payout->admin_notes . "\n" : '') . 'Disbursed via manual bank transfer. Ref: ' . $bankRef . $adminNoteSuffix);
 
         RetailerSupplierPayoutRequest::whereKey($payout->id)->update([
-            'paystack_transfer_code' => $transfer['transfer_code'] ?? null,
-            'gateway_status' => 'submission_acknowledged',
+            'bank_transaction_reference' => $bankRef,
+            'settlement_proof_path' => $proofPath,
+            'gateway_status' => 'manual_transfer_dispatched',
+            'disbursed_at' => now(),
+            'admin_notes' => $notes,
         ]);
 
-        return $this->verifyAndFinalize($payout->fresh(), $paystack, 'Supplier payout submitted; reconciliation result: ');
+        $this->audit($request, 'retailer_supplier_payout_manual_disbursed', $payout->fresh(), [
+            'status' => 'pending',
+            'amount' => (string) $payout->amount,
+        ], [
+            'status' => 'processing',
+            'gateway_status' => 'manual_transfer_dispatched',
+            'bank_transaction_reference' => $bankRef,
+            'settlement_proof_path' => $proofPath,
+        ]);
+
+        return redirect()->route('admin.retailer-supplier-payouts.index')
+            ->with('status', 'Manual bank transfer recorded successfully. Verify corporate bank debit before reconciling to paid.');
     }
 
     public function reconcile(Request $request, int $id)
     {
         $this->authorizeSuperAdmin($request);
         $payout = RetailerSupplierPayoutRequest::whereKey($id)->firstOrFail();
+
         $this->audit($request, 'retailer_supplier_payout_reconciliation_attempted', $payout, [
             'status' => $payout->status,
             'gateway_status' => $payout->gateway_status,
+            'bank_transaction_reference' => $payout->bank_transaction_reference,
             'transfer_reference' => $payout->transfer_reference,
         ], ['action' => 'reconciliation_attempted']);
+
         if (!in_array($payout->status, ['processing', 'uncertain'], true)) {
             return back()->with('error', 'Only a processing or uncertain supplier payout can be reconciled.');
         }
-        if ($payout->status === 'processing'
-            && $payout->gateway_status === 'processing'
-            && empty($payout->paystack_transfer_code)) {
+
+        if (empty($payout->bank_transaction_reference) || in_array($payout->gateway_status, ['not_submitted', 'submission_outcome_unknown'], true)) {
             app(RetailerSupplierPayoutService::class)->markUncertain(
                 $payout->id,
-                'Treasury reconciliation was requested before a transfer submission response was persisted. The original transfer may still be in flight.',
+                'Supplier payout submission outcome is unknown; payout remains held.',
                 'submission_outcome_unknown'
             );
-            return back()->with('error', 'Transfer submission outcome is not yet persisted. The payout is now held; do not release or retry it. Verify again after the original submission outcome is resolved.');
+            return back()->with('error', 'Cannot reconcile payout: manual bank transaction reference is missing or submission outcome is unknown.');
         }
 
-        return $this->verifyAndFinalize($payout, app(PaystackService::class), 'Supplier payout reconciliation: ');
+        $finalized = app(RetailerSupplierPayoutService::class)->finalizeSuccess(
+            $payout->id,
+            (string) $payout->transfer_reference,
+            null,
+            (string) $payout->amount
+        );
+
+        if (!$finalized['success']) {
+            return back()->with('error', $finalized['message'] ?? 'Supplier payout reconciliation could not be finalized.');
+        }
+
+        RetailerSupplierPayoutRequest::whereKey($payout->id)->update([
+            'gateway_status' => 'reconciled_cleared',
+        ]);
+
+        $this->audit($request, 'retailer_supplier_payout_manual_reconciled', $payout->fresh(), [
+            'status' => $payout->status,
+        ], [
+            'status' => 'paid',
+            'gateway_status' => 'reconciled_cleared',
+            'reconciled_by_admin_id' => $request->user()->id,
+        ]);
+
+        return redirect()->route('admin.retailer-supplier-payouts.index')
+            ->with('status', 'Supplier settlement confirmed, marked paid, and double-entry balanced in the financial journal.');
     }
 
     public function reject(Request $request, int $id)
@@ -174,76 +178,58 @@ class AdminRetailerSupplierPayoutController extends Controller
         $this->authorizeSuperAdmin($request);
         $validated = $request->validate(['rejection_reason' => ['required', 'string', 'min:5', 'max:1000']]);
         $payout = RetailerSupplierPayoutRequest::whereKey($id)->firstOrFail();
+
         $this->audit($request, 'retailer_supplier_payout_rejection_attempted', $payout, [
             'status' => $payout->status,
             'gateway_status' => $payout->gateway_status,
             'transfer_reference' => $payout->transfer_reference,
         ], ['action' => 'rejection_attempted', 'reason' => $validated['rejection_reason']]);
-        if ($payout->status !== 'pending' || $payout->processing_token || $payout->gateway_status !== 'not_submitted') {
-            return back()->with('error', 'This supplier payout may have reached the gateway. Reconcile it instead of rejecting it.');
+
+        if ($payout->status !== 'pending' || $payout->processing_token || !in_array($payout->gateway_status, ['not_submitted', null], true)) {
+            return back()->with('error', 'This supplier payout has already been dispatched. Reconcile or mark it failed instead of rejecting.');
         }
 
         $result = app(RetailerSupplierPayoutService::class)->reverse($payout->id, 'not_submitted', $validated['rejection_reason']);
         return back()->with($result['success'] ? 'status' : 'error', $result['message'] ?? 'Supplier payout rejection was processed.');
     }
 
-    private function verifyAndFinalize(RetailerSupplierPayoutRequest $payout, PaystackService $paystack, string $prefix)
+    public function markFailed(Request $request, int $id)
     {
-        $verification = $paystack->verifyTransfer((string) $payout->transfer_reference);
-        if (!$verification['success']) {
-            app(RetailerSupplierPayoutService::class)->markUncertain(
-                $payout->id,
-                $verification['message'] ?? 'Paystack verification did not return an authoritative result.',
-                'verification_unknown'
-            );
-            return back()->with('error', $prefix . 'gateway status is unknown; payout remains held.');
+        $this->authorizeSuperAdmin($request);
+        $validated = $request->validate(['failure_reason' => ['required', 'string', 'min:5', 'max:1000']]);
+        $payout = RetailerSupplierPayoutRequest::whereKey($id)->firstOrFail();
+
+        if (!in_array($payout->status, ['processing', 'uncertain'], true)) {
+            return back()->with('error', 'Only a processing or uncertain payout can be marked failed.');
         }
 
-        $gatewayStatus = strtolower((string) ($verification['status'] ?? ''));
-        $data = $verification['data'] ?? [];
-        if (empty($verification['is_simulated'])) {
-            $expectedKobo = bcmul((string) $payout->amount, '100', 0);
-            if (($data['reference'] ?? null) !== $payout->transfer_reference
-                || (string) ($data['amount'] ?? '') !== $expectedKobo
-                || strtoupper((string) ($data['currency'] ?? '')) !== 'NGN') {
-                app(RetailerSupplierPayoutService::class)->markUncertain(
-                    $payout->id,
-                    'Paystack verification reference, amount, or currency does not match the supplier payout request.',
-                    'verification_mismatch'
-                );
-                return back()->with('error', $prefix . 'verification evidence does not match; payout remains held.');
-            }
+        $result = app(RetailerSupplierPayoutService::class)->reverse($payout->id, 'failed', $validated['failure_reason']);
+        return back()->with($result['success'] ? 'status' : 'error', $result['message'] ?? 'Supplier payout marked failed and allocations released.');
+    }
+
+    public function proof(Request $request, int $id)
+    {
+        $this->authorizeSuperAdmin($request);
+        $payout = RetailerSupplierPayoutRequest::whereKey($id)->firstOrFail();
+
+        if (empty($payout->settlement_proof_path)) {
+            abort(404, 'No settlement proof attached.');
         }
 
-        if ($gatewayStatus === 'success') {
-            $result = app(RetailerSupplierPayoutService::class)->finalizeSuccess(
-                $payout->id,
-                (string) $payout->transfer_reference,
-                $data['transfer_code'] ?? $payout->paystack_transfer_code,
-                (string) $payout->amount
-            );
-            return back()->with($result['success'] ? 'status' : 'error',
-                $result['success'] ? ($prefix . 'paid and journaled.') : ($result['message'] ?? 'Supplier payout finalization is held.'));
-        }
+        $disk = Storage::disk('local');
+        abort_unless($disk->exists($payout->settlement_proof_path), 404);
 
-        if ($gatewayStatus === 'failed') {
-            $result = app(RetailerSupplierPayoutService::class)->reverse($payout->id, 'failed', 'Paystack verified transfer failure.');
-            return back()->with($result['success'] ? 'error' : 'error',
-                $result['message'] ?? ($prefix . 'failed transfer reservation released.'));
-        }
+        $mime = $disk->mimeType($payout->settlement_proof_path) ?: 'application/octet-stream';
+        $path = $disk->path($payout->settlement_proof_path);
 
-        if ($gatewayStatus === 'reversed') {
-            $result = app(RetailerSupplierPayoutService::class)->reverse($payout->id, 'reversed', 'Paystack verified transfer reversal.');
-            return back()->with($result['success'] ? 'error' : 'error',
-                $result['message'] ?? ($prefix . 'gateway reversal recorded.'));
-        }
-
-        app(RetailerSupplierPayoutService::class)->markUncertain(
-            $payout->id,
-            'Paystack reports transfer status: ' . ($gatewayStatus ?: 'unknown'),
-            $gatewayStatus ?: 'unknown'
-        );
-        return back()->with('error', $prefix . 'status remains ' . ($gatewayStatus ?: 'unknown') . '; do not retry.');
+        return response()->file($path, [
+            'Content-Type' => $mime,
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'Pragma' => 'no-cache',
+            'Content-Security-Policy' => "default-src 'none'; sandbox",
+            'X-Frame-Options' => 'DENY',
+        ]);
     }
 
     private function audit(Request $request, string $action, RetailerSupplierPayoutRequest $payout, array $oldValues, array $newValues): void
@@ -255,17 +241,9 @@ class AdminRetailerSupplierPayoutController extends Controller
             'target_id' => $payout->id,
             'old_values' => $oldValues,
             'new_values' => $newValues,
-            'ip_address' => $request->ip(),
-            'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => substr((string) ($request->userAgent() ?? 'Admin'), 0, 1000),
         ]);
-    }
-
-    private function authorizeAdmin(Request $request): void
-    {
-        $user = $request->user();
-        if (!$user || !in_array($user->user_type, ['super_admin', 'admin', 'admin_employee'], true)) {
-            abort(403, 'Admin access required.');
-        }
     }
 
     private function authorizeSuperAdmin(Request $request): void

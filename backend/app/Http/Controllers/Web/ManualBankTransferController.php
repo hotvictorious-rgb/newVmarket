@@ -4,10 +4,15 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdminAuditLog;
+use App\Models\FinancialJournalEntry;
+use App\Models\LogisticsPayoutRequest;
 use App\Models\ManualBankTransferPayment;
 use App\Models\ManualBankTransferRefundCase;
 use App\Models\Order;
+use App\Models\RetailerSupplierPayoutRequest;
+use App\Models\ReturnCase;
 use App\Models\SystemSetting;
+use App\Models\User;
 use App\Services\CheckoutExecutionService;
 use App\Services\OrderSettlementService;
 use Illuminate\Database\QueryException;
@@ -22,7 +27,8 @@ use Symfony\Component\HttpFoundation\Response;
 class ManualBankTransferController extends Controller
 {
     /**
-     * Customer submits one private receipt for a manual-transfer order.
+     * Customer submits a private receipt for a manual-transfer order.
+     * While review remains open, an audited replacement receipt may be submitted.
      * A rejected submission is terminal: customer must place a new order to retry.
      */
     public function submitEvidence(Request $request, string $orderNumber)
@@ -91,12 +97,6 @@ class ManualBankTransferController extends Controller
                     ]);
                 }
 
-                if (ManualBankTransferPayment::where('order_id', $lockedOrder->id)->exists()) {
-                    throw ValidationException::withMessages([
-                        'payment_screenshot' => 'A receipt has already been submitted for this order. This order accepts one payment submission only.',
-                    ]);
-                }
-
                 $mime = (string) $file->getMimeType();
                 if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) {
                     throw ValidationException::withMessages([
@@ -104,19 +104,75 @@ class ManualBankTransferController extends Controller
                     ]);
                 }
 
+                $existingPayment = ManualBankTransferPayment::where('order_id', $lockedOrder->id)->lockForUpdate()->first();
+                if ($existingPayment) {
+                    if ($existingPayment->status === 'approved') {
+                        throw ValidationException::withMessages([
+                            'payment_screenshot' => 'This order is already verified and marked paid.',
+                        ]);
+                    }
+                    if ($existingPayment->status === 'rejected') {
+                        throw ValidationException::withMessages([
+                            'payment_screenshot' => 'Payment evidence for this order was rejected. Resubmission is closed.',
+                        ]);
+                    }
+
+                    // Review is open (pending_review or evidence_requested): customer is replacing evidence
+                    $history = is_array($existingPayment->evidence_history) ? $existingPayment->evidence_history : [];
+                    $history[] = [
+                        'action' => 'replaced',
+                        'previous_path' => $existingPayment->evidence_path,
+                        'evidence_path' => $existingPayment->evidence_path,
+                        'previous_sha256' => $existingPayment->evidence_sha256,
+                        'previous_submitted_at' => $existingPayment->submitted_at?->toIso8601String(),
+                        'replaced_at' => now()->toIso8601String(),
+                    ];
+
+                    $newSha256 = hash_file('sha256', Storage::disk('local')->path($relativePath));
+
+                    $existingPayment->update([
+                        'evidence_path' => $relativePath,
+                        'evidence_mime' => $mime,
+                        'evidence_size_bytes' => (int) $file->getSize(),
+                        'evidence_sha256' => $newSha256,
+                        'status' => 'pending_review',
+                        'submitted_at' => now(),
+                        'evidence_history' => $history,
+                    ]);
+
+                    AdminAuditLog::create([
+                        'user_id' => $user?->id,
+                        'action' => 'manual_bank_transfer_evidence_replaced',
+                        'target_type' => ManualBankTransferPayment::class,
+                        'target_id' => $existingPayment->id,
+                        'old_values' => ['status' => $existingPayment->getOriginal('status')],
+                        'new_values' => [
+                            'order_id' => $lockedOrder->id,
+                            'status' => 'pending_review',
+                            'evidence_sha256' => $newSha256,
+                            'evidence_size_bytes' => (int) $file->getSize(),
+                        ],
+                        'ip_address' => $request->ip() ?? '127.0.0.1',
+                        'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+                    ]);
+
+                    return;
+                }
+
+                $newSha256 = hash_file('sha256', Storage::disk('local')->path($relativePath));
                 $payment = ManualBankTransferPayment::create([
                     'order_id' => $lockedOrder->id,
                     'customer_id' => $lockedOrder->customer_id,
                     'evidence_path' => $relativePath,
                     'evidence_mime' => $mime,
                     'evidence_size_bytes' => (int) $file->getSize(),
-                    'evidence_sha256' => hash_file('sha256', Storage::disk('local')->path($relativePath)),
+                    'evidence_sha256' => $newSha256,
                     'status' => 'pending_review',
                     'currency' => 'NGN',
                     'submitted_at' => now(),
                     'evidence_history' => [[
                         'action' => 'submitted',
-                        'sha256' => hash_file('sha256', Storage::disk('local')->path($relativePath)),
+                        'sha256' => $newSha256,
                         'submitted_at' => now()->toIso8601String(),
                     ]],
                 ]);
@@ -168,12 +224,12 @@ class ManualBankTransferController extends Controller
         $activePaymentMethod = $paymentConfig['active_method'];
         $bankAccount = $paymentConfig['manual_bank_transfer_account'];
         $refundCases = ManualBankTransferRefundCase::with(['order', 'payment', 'reviewer'])
-            ->orderByRaw("CASE WHEN status = 'pending_admin_review' THEN 0 ELSE 1 END")
+            ->orderByRaw("CASE WHEN status = 'pending_admin_review' THEN 0 WHEN status = 'approved_for_dispatch' THEN 1 WHEN status = 'dispatched_awaiting_reconciliation' THEN 2 ELSE 3 END")
             ->orderBy('created_at')
             ->paginate(25, ['*'], 'refund_page');
         $payments = ManualBankTransferPayment::with(['order.customer', 'customer', 'reviewer'])
-            ->whereIn('status', ['pending_review', 'approved', 'rejected'])
-            ->orderByRaw("CASE WHEN status = 'pending_review' THEN 0 ELSE 1 END")
+            ->whereIn('status', ['pending_review', 'evidence_requested', 'approved', 'rejected'])
+            ->orderByRaw("CASE WHEN status = 'pending_review' THEN 0 WHEN status = 'evidence_requested' THEN 1 ELSE 2 END")
             ->orderBy('submitted_at')
             ->paginate(25);
 
@@ -182,8 +238,6 @@ class ManualBankTransferController extends Controller
 
     public function saveSettings(Request $request)
     {
-        // Support both boolean switches (paystack_enabled & manual_bank_transfer_enabled)
-        // and legacy active_payment_method selection for seamless backwards compatibility.
         $hasExplicitBooleans = $request->has('paystack_enabled') || $request->has('manual_bank_transfer_enabled');
 
         if ($hasExplicitBooleans) {
@@ -268,7 +322,7 @@ class ManualBankTransferController extends Controller
                 $payment = ManualBankTransferPayment::whereKey($id)->lockForUpdate()->firstOrFail();
                 $order = Order::whereKey($payment->order_id)->lockForUpdate()->firstOrFail();
 
-                if ($payment->status !== 'pending_review') {
+                if (!in_array($payment->status, ['pending_review', 'evidence_requested'], true)) {
                     throw ValidationException::withMessages(['payment' => 'This payment submission has already been decided and cannot be reviewed again.']);
                 }
                 if ($order->payment_method !== 'manual_bank_transfer') {
@@ -283,8 +337,11 @@ class ManualBankTransferController extends Controller
                 if (empty($order->payment_reference)) {
                     throw ValidationException::withMessages(['payment' => 'The order has no immutable internal payment reference; approval is blocked.']);
                 }
-                if (ManualBankTransferPayment::where('bank_transaction_reference', $bankReference)->where('id', '!=', $payment->id)->exists()) {
-                    throw ValidationException::withMessages(['bank_transaction_reference' => 'This bank transaction reference has already been assigned to another order.']);
+                if (ManualBankTransferPayment::where('bank_transaction_reference', $bankReference)->where('id', '!=', $payment->id)->exists()
+                    || RetailerSupplierPayoutRequest::where('bank_transaction_reference', $bankReference)->exists()
+                    || LogisticsPayoutRequest::where('bank_transaction_reference', $bankReference)->exists()
+                    || ManualBankTransferRefundCase::where('manual_dispatch_reference', $bankReference)->exists()) {
+                    throw ValidationException::withMessages(['bank_transaction_reference' => 'This bank transaction reference has already been assigned in the system.']);
                 }
                 if (Order::where('payment_reference', $bankReference)->orWhere('paystack_transaction_id', $bankReference)->exists()) {
                     throw ValidationException::withMessages(['bank_transaction_reference' => 'This reference is already used by an order/payment identity and cannot be reused as a manual bank transaction.']);
@@ -295,8 +352,6 @@ class ManualBankTransferController extends Controller
                     throw ValidationException::withMessages(['credited_amount' => 'The credited amount must exactly match this order total. The payment remains unapproved.']);
                 }
 
-                // This method executes the same audited settlement core while explicitly
-                // retaining the manual tender identity and never creating a Paystack ID.
                 $settlement = $settlementService->settleManualBankTransferOrder(
                     $order,
                     $bankReference,
@@ -322,7 +377,7 @@ class ManualBankTransferController extends Controller
                     'action' => 'manual_bank_transfer_payment_approved',
                     'target_type' => ManualBankTransferPayment::class,
                     'target_id' => $payment->id,
-                    'old_values' => ['status' => 'pending_review'],
+                    'old_values' => ['status' => $payment->getOriginal('status')],
                     'new_values' => [
                         'status' => 'approved',
                         'order_id' => $order->id,
@@ -339,8 +394,6 @@ class ManualBankTransferController extends Controller
                 return $settlement;
             });
         } catch (QueryException $e) {
-            // A concurrent approval using the same bank reference is rejected by the DB
-            // unique constraint even if both requests passed the pre-check.
             report($e);
             return back()->withErrors(['payment' => 'This bank transaction reference may already be in use. The payment was not approved.']);
         }
@@ -355,14 +408,19 @@ class ManualBankTransferController extends Controller
     public function reject(Request $request, int $id)
     {
         $validated = $request->validate([
-            'decision_reason' => ['required', 'string', 'min:5', 'max:2000'],
+            'decision_reason' => ['nullable', 'string', 'min:5', 'max:2000'],
+            'rejection_reason' => ['nullable', 'string', 'min:5', 'max:2000'],
         ]);
+        $reason = trim((string) ($validated['decision_reason'] ?? $validated['rejection_reason'] ?? ''));
+        if (strlen($reason) < 5) {
+            throw ValidationException::withMessages(['decision_reason' => 'A valid decision reason is required (at least 5 characters).']);
+        }
 
-        DB::transaction(function () use ($id, $validated, $request) {
+        DB::transaction(function () use ($id, $reason, $request) {
             $payment = ManualBankTransferPayment::whereKey($id)->lockForUpdate()->firstOrFail();
             $order = Order::whereKey($payment->order_id)->lockForUpdate()->firstOrFail();
 
-            if ($payment->status !== 'pending_review') {
+            if (!in_array($payment->status, ['pending_review', 'evidence_requested'], true)) {
                 throw ValidationException::withMessages(['payment' => 'This payment submission has already been decided.']);
             }
             if ($order->payment_status === 'paid' || $order->paid_at) {
@@ -372,7 +430,7 @@ class ManualBankTransferController extends Controller
             $payment->status = 'rejected';
             $payment->reviewed_by_admin_id = $request->user()->id;
             $payment->reviewed_at = now();
-            $payment->decision_reason = trim($validated['decision_reason']);
+            $payment->decision_reason = $reason;
             $payment->save();
 
             $order->payment_status = 'failed';
@@ -385,7 +443,7 @@ class ManualBankTransferController extends Controller
                 'action' => 'manual_bank_transfer_payment_rejected',
                 'target_type' => ManualBankTransferPayment::class,
                 'target_id' => $payment->id,
-                'old_values' => ['status' => 'pending_review', 'order_payment_status' => 'pending'],
+                'old_values' => ['status' => $payment->getOriginal('status'), 'order_payment_status' => 'pending'],
                 'new_values' => [
                     'status' => 'rejected',
                     'order_id' => $order->id,
@@ -400,6 +458,42 @@ class ManualBankTransferController extends Controller
 
         return redirect()->route('admin.manual-bank-transfers.index')
             ->with('status', 'Payment evidence rejected. The order remains unpaid and cannot receive another payment submission.');
+    }
+
+    public function requestReplacementEvidence(Request $request, int $id)
+    {
+        $this->authorizeAdmin($request);
+        $reason = (string) ($request->input('reason') ?: $request->input('request_reason'));
+        if (strlen(trim($reason)) < 3) {
+            return back()->withErrors(['reason' => 'A valid reason is required (at least 3 characters).']);
+        }
+
+        $payment = ManualBankTransferPayment::whereKey($id)->firstOrFail();
+        if ($payment->status !== 'pending_review') {
+            return back()->with('error', 'Only a payment with pending review can request replacement evidence.');
+        }
+
+        $payment->status = 'evidence_requested';
+        $payment->decision_reason = $reason;
+        $payment->reviewed_by_admin_id = $request->user()->id;
+        $payment->save();
+
+        AdminAuditLog::create([
+            'user_id' => $request->user()->id,
+            'action' => 'manual_bank_transfer_replacement_requested',
+            'target_type' => ManualBankTransferPayment::class,
+            'target_id' => $payment->id,
+            'old_values' => ['status' => 'pending_review'],
+            'new_values' => [
+                'status' => 'evidence_requested',
+                'reason' => $reason,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+        ]);
+
+        return redirect()->route('admin.manual-bank-transfers.index')
+            ->with('status', 'Replacement evidence requested. The customer may upload replacement receipt while review is open.');
     }
 
     public function evidence(int $id)
@@ -420,5 +514,275 @@ class ManualBankTransferController extends Controller
             'Content-Security-Policy' => "default-src 'none'; sandbox",
             'X-Frame-Options' => 'DENY',
         ]);
+    }
+
+    // =========================================================================
+    // MANUAL BANK TRANSFER REFUND RESOLUTION WORKFLOW
+    // =========================================================================
+
+
+    public function approveRefund(Request $request, int $id)
+    {
+        $this->authorizeSuperAdmin($request);
+        $validated = $request->validate([
+            'decision_notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $refundCase = ManualBankTransferRefundCase::whereKey($id)->firstOrFail();
+        if ($refundCase->status !== 'pending_admin_review') {
+            return back()->with('error', 'Only a pending manual refund case can be approved for dispatch.');
+        }
+
+        $refundCase->update([
+            'status' => 'approved_for_dispatch',
+            'reviewed_by_admin_id' => $request->user()->id,
+            'reviewed_at' => now(),
+            'decision_notes' => $validated['decision_notes'] ?? null,
+        ]);
+
+        AdminAuditLog::create([
+            'user_id' => $request->user()->id,
+            'action' => 'manual_bank_transfer_refund_approved',
+            'target_type' => ManualBankTransferRefundCase::class,
+            'target_id' => $refundCase->id,
+            'old_values' => ['status' => 'pending_admin_review'],
+            'new_values' => [
+                'status' => 'approved_for_dispatch',
+                'reviewed_by_admin_id' => $request->user()->id,
+                'decision_notes' => $refundCase->decision_notes,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+        ]);
+
+        return redirect()->route('admin.manual-bank-transfers.index')
+            ->with('status', 'Manual refund approved for wire dispatch. Execute external bank transfer to customer.');
+    }
+
+    public function dispatchRefund(Request $request, int $id)
+    {
+        $this->authorizeSuperAdmin($request);
+
+        if (now()->isSunday()) {
+            return back()->with('error', 'Refund disbursements occur Monday through Saturday only.');
+        }
+
+        $validated = $request->validate([
+            'manual_dispatch_reference' => ['required', 'string', 'min:3', 'max:150', 'regex:/^[A-Za-z0-9._\/-]+$/'],
+            'dispatch_proof' => ['required', 'file', 'mimes:jpeg,jpg,png,pdf,webp', 'max:10240'],
+            'decision_notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $refundCase = ManualBankTransferRefundCase::whereKey($id)->firstOrFail();
+        if (!in_array($refundCase->status, ['approved_for_dispatch', 'pending_admin_review'], true)) {
+            return back()->with('error', 'Only an approved or pending manual refund case can be dispatched.');
+        }
+
+        $dispatchRef = trim($validated['manual_dispatch_reference']);
+
+        // Prevent duplicate dispatch reference across all payment/settlement records
+        if (ManualBankTransferRefundCase::where('manual_dispatch_reference', $dispatchRef)->where('id', '!=', $refundCase->id)->exists()
+            || RetailerSupplierPayoutRequest::where('bank_transaction_reference', $dispatchRef)->exists()
+            || LogisticsPayoutRequest::where('bank_transaction_reference', $dispatchRef)->exists()
+            || ManualBankTransferPayment::where('bank_transaction_reference', $dispatchRef)->exists()) {
+            throw ValidationException::withMessages([
+                'manual_dispatch_reference' => 'This bank reference has already been used in the system and cannot be reused.',
+            ]);
+        }
+
+        $file = $request->file('dispatch_proof');
+        $ext = strtolower((string) $file->extension());
+        $proofPath = $file->storeAs(
+            'settlement-proofs/refunds',
+            $refundCase->id . '_' . Str::uuid() . '.' . $ext,
+            'local'
+        );
+
+        if (!$proofPath) {
+            return back()->with('error', 'Failed to securely store outgoing refund dispatch proof.');
+        }
+
+        $refundCase->update([
+            'status' => 'dispatched_awaiting_reconciliation',
+            'manual_dispatch_reference' => $dispatchRef,
+            'manual_dispatch_proof_path' => $proofPath,
+            'reviewed_by_admin_id' => $request->user()->id,
+            'reviewed_at' => now(),
+            'decision_notes' => trim(($refundCase->decision_notes ? $refundCase->decision_notes . "\n" : '') . ($validated['decision_notes'] ?? '')),
+        ]);
+
+        AdminAuditLog::create([
+            'user_id' => $request->user()->id,
+            'action' => 'manual_bank_transfer_refund_dispatched',
+            'target_type' => ManualBankTransferRefundCase::class,
+            'target_id' => $refundCase->id,
+            'old_values' => ['status' => $refundCase->getOriginal('status')],
+            'new_values' => [
+                'status' => 'dispatched_awaiting_reconciliation',
+                'manual_dispatch_reference' => $dispatchRef,
+                'manual_dispatch_proof_path' => $proofPath,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+        ]);
+
+        return redirect()->route('admin.manual-bank-transfers.index')
+            ->with('status', 'Manual bank refund dispatched successfully. Reconcile with corporate bank statement debit once cleared.');
+    }
+
+    public function reconcileRefund(Request $request, int $id)
+    {
+        $this->authorizeSuperAdmin($request);
+
+        $refundCase = ManualBankTransferRefundCase::with(['order', 'payment'])->whereKey($id)->firstOrFail();
+        if ($refundCase->status !== 'dispatched_awaiting_reconciliation') {
+            return back()->with('error', 'Only a dispatched refund case awaiting reconciliation can be reconciled.');
+        }
+
+        DB::transaction(function () use ($refundCase, $request) {
+            $order = Order::whereKey($refundCase->order_id)->lockForUpdate()->firstOrFail();
+
+            $nairaAmount = bcdiv((string) $refundCase->amount_kobo, '100', 2);
+            $eventId = 'EVT-MANUAL-REFUND-' . $refundCase->id;
+
+            FinancialJournalEntry::firstOrCreate([
+                'order_id' => $order->id,
+                'transaction_reference' => $refundCase->manual_dispatch_reference,
+                'event_id' => $eventId,
+                'idempotency_key' => 'MANUAL-REFUND-' . $refundCase->id . '-DR',
+            ], [
+                'beneficiary_type' => User::class,
+                'beneficiary_id' => $order->customer_id,
+                'account_name' => 'escrow_holding',
+                'entry_type' => 'debit',
+                'amount' => $nairaAmount,
+                'currency' => $refundCase->currency,
+                'description' => 'Reversal of customer escrow holding upon confirmed manual bank refund.',
+            ]);
+
+            FinancialJournalEntry::firstOrCreate([
+                'order_id' => $order->id,
+                'transaction_reference' => $refundCase->manual_dispatch_reference,
+                'event_id' => $eventId,
+                'idempotency_key' => 'MANUAL-REFUND-' . $refundCase->id . '-CR',
+            ], [
+                'beneficiary_type' => User::class,
+                'beneficiary_id' => $order->customer_id,
+                'account_name' => 'cash_in_escrow',
+                'entry_type' => 'credit',
+                'amount' => $nairaAmount,
+                'currency' => $refundCase->currency,
+                'description' => 'Outflow of customer funds via confirmed manual corporate bank refund.',
+            ]);
+
+            $order->payment_status = 'refunded';
+            $order->save();
+
+            $returnCase = ReturnCase::where('order_id', $order->id)->whereIn('status', ['approved', 'under_review'])->first();
+            if ($returnCase) {
+                $returnCase->status = 'refunded';
+                $returnCase->save();
+            }
+
+            $refundCase->update([
+                'status' => 'completed',
+                'manual_dispatch_confirmed_at' => now(),
+            ]);
+
+            AdminAuditLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'manual_bank_transfer_refund_reconciled',
+                'target_type' => ManualBankTransferRefundCase::class,
+                'target_id' => $refundCase->id,
+                'old_values' => ['status' => 'dispatched_awaiting_reconciliation'],
+                'new_values' => [
+                    'status' => 'completed',
+                    'manual_dispatch_confirmed_at' => now()->toIso8601String(),
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+            ]);
+        });
+
+        return redirect()->route('admin.manual-bank-transfers.index')
+            ->with('status', 'Manual bank refund reconciled, marked completed, and balanced in the double-entry financial journal.');
+    }
+
+    public function rejectRefund(Request $request, int $id)
+    {
+        $this->authorizeSuperAdmin($request);
+        $validated = $request->validate([
+            'rejection_reason' => ['required', 'string', 'min:5', 'max:1000'],
+        ]);
+
+        $refundCase = ManualBankTransferRefundCase::whereKey($id)->firstOrFail();
+        if (in_array($refundCase->status, ['completed', 'dispatched_awaiting_reconciliation'], true)) {
+            return back()->with('error', 'Cannot reject a dispatched or completed refund case.');
+        }
+
+        $refundCase->update([
+            'status' => 'rejected',
+            'reviewed_by_admin_id' => $request->user()->id,
+            'reviewed_at' => now(),
+            'decision_notes' => $validated['rejection_reason'],
+        ]);
+
+        AdminAuditLog::create([
+            'user_id' => $request->user()->id,
+            'action' => 'manual_bank_transfer_refund_rejected',
+            'target_type' => ManualBankTransferRefundCase::class,
+            'target_id' => $refundCase->id,
+            'old_values' => ['status' => $refundCase->getOriginal('status')],
+            'new_values' => [
+                'status' => 'rejected',
+                'reason' => $validated['rejection_reason'],
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+        ]);
+
+        return redirect()->route('admin.manual-bank-transfers.index')
+            ->with('status', 'Manual refund case rejected.');
+    }
+
+    public function refundProof(Request $request, int $id)
+    {
+        $this->authorizeSuperAdmin($request);
+        $refundCase = ManualBankTransferRefundCase::whereKey($id)->firstOrFail();
+
+        if (empty($refundCase->manual_dispatch_proof_path)) {
+            abort(404, 'No refund dispatch proof attached.');
+        }
+
+        $disk = Storage::disk('local');
+        abort_unless($disk->exists($refundCase->manual_dispatch_proof_path), 404);
+
+        $path = $disk->path($refundCase->manual_dispatch_proof_path);
+        $mime = $disk->mimeType($refundCase->manual_dispatch_proof_path) ?: 'application/octet-stream';
+
+        return response()->file($path, [
+            'Content-Type' => $mime,
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'Pragma' => 'no-cache',
+            'Content-Security-Policy' => "default-src 'none'; sandbox",
+            'X-Frame-Options' => 'DENY',
+        ]);
+    }
+
+    private function authorizeAdmin(Request $request): void
+    {
+        $user = $request->user();
+        if (!$user || !in_array($user->user_type, ['super_admin', 'admin', 'admin_employee'], true)) {
+            abort(403, 'Admin access required.');
+        }
+    }
+
+    private function authorizeSuperAdmin(Request $request): void
+    {
+        $user = $request->user();
+        if (!$user || !$user->isSuperAdmin() || $user->status !== 'active') {
+            abort(403, 'An active Super Admin account is required for this operation.');
+        }
     }
 }
