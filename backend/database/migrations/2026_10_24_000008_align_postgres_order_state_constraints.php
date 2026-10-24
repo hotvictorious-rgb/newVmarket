@@ -25,7 +25,7 @@ return new class extends Migration
                 CHECK (order_status IN (
                     'pending', 'confirmed', 'processing', 'ready_for_dispatch',
                     'ready_for_pickup', 'ready_for_counter_pickup', 'out_for_delivery',
-                    'delivered', 'picked_up', 'disputed', 'returned', 'cancelled',
+                    'delivered', 'picked_up', 'paid_stock_unavailable', 'disputed', 'returned', 'cancelled',
                     'canceled', 'failed'
                 ))
             ");
@@ -41,7 +41,7 @@ return new class extends Migration
                     'pending', 'processing', 'paid', 'failed', 'reversed',
                     'cancelled', 'canceled', 'approved', 'rejected',
                     'on_hold', 'payout_pending', 'awaiting_admin_approval',
-                    'refund_pending', 'not_required', 'paid_out'
+                    'refund_pending', 'settlement_frozen_dispute', 'not_required', 'paid_out'
                 ))
             ");
         }
