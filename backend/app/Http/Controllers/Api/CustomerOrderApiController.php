@@ -179,7 +179,7 @@ class CustomerOrderApiController extends Controller
                 'manual_bank_transfer' => $order->payment_method === 'manual_bank_transfer' ? [
                     'account' => $order->manual_bank_transfer_account_snapshot,
                     'order_code_for_narration' => $order->order_number,
-                    'receipt_upload_url' => route('order.status', ['order_number' => $order->order_number]),
+                    'receipt_upload_url' => route('api.customer.orders.manual-bank-transfer-evidence', ['order_number' => $order->order_number]),
                     'admin_verification_required' => true,
                 ] : null,
                 'order' => $this->formatOrderFull($order),
