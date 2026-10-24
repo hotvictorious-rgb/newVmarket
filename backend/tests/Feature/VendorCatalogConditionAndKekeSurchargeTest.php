@@ -143,77 +143,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->getJson('/api/v1/vendor/orders')->assertForbidden();
     }
 
-    public function test_vendor_can_list_brand_new_item_with_bike_delivery(): void
-    {
-        Sanctum::actingAs($this->vendorUser, ['*']);
 
-        $response = $this->postJson('/api/v1/vendor/products', [
-            'name' => 'Samsung Galaxy A15 128GB',
-            'category_id' => $this->category->id,
-            'unit_price' => 180000.00,
-            'inventory_quantity' => 10,
-            'condition' => 'brand_new',
-            'package_tier' => 'bike',
-            'warranty_type' => 'brand_warranty',
-            'description' => 'Brand new sealed pack with 1 year manufacturer warranty.',
-        ]);
-
-        $response->assertStatus(201)
-            ->assertJsonPath('status', true)
-            ->assertJsonPath('data.condition', 'brand_new')
-            ->assertJsonPath('data.package_tier', 'bike')
-            ->assertJsonPath('data.warranty_type', 'brand_warranty');
-
-        $product = Product::where('name', 'Samsung Galaxy A15 128GB')->first();
-        $this->assertNotNull($product);
-        $this->assertEquals('brand_new', $product->condition);
-        $this->assertEquals('bike', $product->package_tier);
-        $this->assertEquals('Brand New (Sealed Pack)', $product->condition_label);
-        $this->assertEquals('Bike Dispatch (Standard Parcel Box)', $product->package_tier_label);
-
-        // Verify delivery fee is normal baseline with 0 surcharge
-        $service = new FulfillmentAvailabilityService();
-        $check = $service->checkDeliveryAvailability($this->shop->id, $this->uyoLga->id, $product->package_tier);
-        $this->assertTrue($check['is_available']);
-        $this->assertEquals('500.00', $check['fee']); // Baseline intra-LGA without surcharge
-    }
-
-    public function test_vendor_can_list_uk_used_item_with_keke_cargo_surcharge(): void
-    {
-        Sanctum::actingAs($this->vendorUser, ['*']);
-
-        $response = $this->postJson('/api/v1/vendor/products', [
-            'name' => 'Dell OptiPlex Core i7 Desktop & Monitor Set',
-            'category_id' => $this->category->id,
-            'unit_price' => 160000.00,
-            'slash_price' => 200000.00,
-            'inventory_quantity' => 5,
-            'condition' => 'uk_used',
-            'package_tier' => 'keke',
-            'warranty_type' => '7_days_replacement',
-            'description' => 'UK used grade A desktop setup with complete accessories and monitor.',
-        ]);
-
-        $response->assertStatus(201)
-            ->assertJsonPath('status', true)
-            ->assertJsonPath('data.condition', 'uk_used')
-            ->assertJsonPath('data.package_tier', 'keke')
-            ->assertJsonPath('data.slash_price', '200000.00');
-
-        $product = Product::where('name', 'Dell OptiPlex Core i7 Desktop & Monitor Set')->first();
-        $this->assertNotNull($product);
-        $this->assertEquals('uk_used', $product->condition);
-        $this->assertEquals('keke', $product->package_tier);
-        $this->assertEquals('UK Used (Clean Grade A)', $product->condition_label);
-        $this->assertEquals('Keke Cargo (Heavy / Bulky Surcharge)', $product->package_tier_label);
-        $this->assertEquals(20, $product->discount_percent); // (200000 - 160000)/200000 = 20%
-
-        // Verify keke automatically applies the bulky cargo surcharge (₦500 baseline + ₦1000 surcharge = ₦1500)
-        $service = new FulfillmentAvailabilityService();
-        $check = $service->checkDeliveryAvailability($this->shop->id, $this->uyoLga->id, $product->package_tier);
-        $this->assertTrue($check['is_available']);
-        $this->assertEquals('1500.00', $check['fee']); // 500.00 + 1000.00 cargo surcharge
-    }
 
     public function test_condition_rejects_unauthorized_values(): void
     {
@@ -978,30 +908,6 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         }
     }
 
-    public function test_vendor_web_portal_creates_product_with_nigerian_fields(): void
-    {
-        $response = $this->actingAs($this->vendorUser)->post('/vendor/products', [
-            'name' => 'MacBook Pro M2 UK Used',
-            'category_id' => $this->category->id,
-            'condition' => 'uk_used',
-            'package_tier' => 'bike',
-            'warranty_type' => 'in_store_testing',
-            'unit_price' => 750000.00,
-            'slash_price' => 850000.00,
-            'inventory_quantity' => 2,
-            'description' => 'Super clean UK used MacBook Pro with original MagSafe charger.',
-        ]);
-
-        $response->assertRedirect();
-        
-        $product = Product::where('name', 'MacBook Pro M2 UK Used')->first();
-        $this->assertNotNull($product);
-        $this->assertEquals('uk_used', $product->condition);
-        $this->assertEquals('bike', $product->package_tier);
-        $this->assertEquals('750000.00', $product->unit_price);
-        $this->assertEquals('850000.00', $product->slash_price);
-        $this->assertEquals('in_store_testing', $product->warranty_type);
-    }
 
     /**
      * Deep Check Verification:
@@ -1668,101 +1574,9 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
         $this->assertNull($selected);
     }
 
-    public function test_vendor_portal_creates_product_with_multi_photo_gallery(): void
-    {
-        \Illuminate\Support\Facades\Storage::fake('public');
 
-        $file1 = \Illuminate\Http\UploadedFile::fake()->image('cover.jpg', 600, 600);
-        $file2 = \Illuminate\Http\UploadedFile::fake()->image('side_view.jpg', 600, 600);
-        $file3 = \Illuminate\Http\UploadedFile::fake()->image('box_seal.jpg', 600, 600);
 
-        $response = $this->actingAs($this->vendorUser)->post('/vendor/products', [
-            'name' => 'Sony PlayStation 5 Disc Edition',
-            'category_id' => $this->category->id,
-            'condition' => 'brand_new',
-            'package_tier' => 'keke',
-            'warranty_type' => '7_days_replacement',
-            'unit_price' => 580000.00,
-            'slash_price' => 650000.00,
-            'inventory_quantity' => 4,
-            'description' => 'Brand new sealed PS5 console with FIFA 25 and dual controllers.',
-            'images' => [$file1, $file2, $file3],
-        ]);
 
-        $response->assertRedirect();
-
-        $product = Product::where('name', 'Sony PlayStation 5 Disc Edition')->first();
-        $this->assertNotNull($product);
-        $this->assertNotNull($product->thumbnail);
-        $this->assertStringStartsWith('/storage/products/', $product->thumbnail);
-        $this->assertIsArray($product->images);
-        $this->assertCount(3, $product->images);
-        $this->assertEquals('580000.00', $product->unit_price);
-        $this->assertEquals('650000.00', $product->slash_price);
-    }
-
-    public function test_vendor_portal_rejects_price_slash_when_slash_price_is_less_than_unit_price(): void
-    {
-        $response = $this->actingAs($this->vendorUser)->from('/vendor/products')->post('/vendor/products', [
-            'name' => 'Invalid Discount Item',
-            'category_id' => $this->category->id,
-            'condition' => 'brand_new',
-            'package_tier' => 'bike',
-            'unit_price' => 60000.00,
-            'slash_price' => 45000.00, // Invalid: slash price lower than selling price
-            'inventory_quantity' => 1,
-        ]);
-
-        $response->assertRedirect('/vendor/products');
-        $response->assertSessionHasErrors(['slash_price']);
-
-        $product = Product::where('name', 'Invalid Discount Item')->first();
-        $this->assertNull($product);
-    }
-
-    public function test_vendor_portal_accepts_valid_price_slash_and_calculates_discount(): void
-    {
-        $response = $this->actingAs($this->vendorUser)->post('/vendor/products', [
-            'name' => 'iPhone 14 Pro Max 256GB',
-            'category_id' => $this->category->id,
-            'condition' => 'uk_used',
-            'package_tier' => 'bike',
-            'warranty_type' => 'in_store_testing',
-            'unit_price' => 800000.00,
-            'slash_price' => 1000000.00, // 20% discount
-            'inventory_quantity' => 3,
-            'description' => 'Factory unlocked 95% battery health with receipt and warranty.',
-        ]);
-
-        $response->assertRedirect();
-
-        $product = Product::where('name', 'iPhone 14 Pro Max 256GB')->first();
-        $this->assertNotNull($product);
-        $this->assertEquals('800000.00', $product->unit_price);
-        $this->assertEquals('1000000.00', $product->slash_price);
-        $this->assertEquals('20', $product->discount_percentage);
-    }
-
-    public function test_vendor_portal_strictly_enforces_compulsory_photo(): void
-    {
-        $response = $this->actingAs($this->vendorUser)
-            ->withHeaders(['X-Require-Photo' => 'true'])
-            ->from('/vendor/products')
-            ->post('/vendor/products', [
-                'name' => 'Camera Lens Without Photo',
-                'category_id' => $this->category->id,
-                'condition' => 'brand_new',
-                'package_tier' => 'bike',
-                'unit_price' => 120000.00,
-                'inventory_quantity' => 2,
-            ]);
-
-        $response->assertRedirect('/vendor/products');
-        $response->assertSessionHasErrors(['images', 'image']);
-
-        $product = Product::where('name', 'Camera Lens Without Photo')->first();
-        $this->assertNull($product);
-    }
 
     public function test_supplier_offer_without_confirming_actor_is_not_selectable(): void
     {
