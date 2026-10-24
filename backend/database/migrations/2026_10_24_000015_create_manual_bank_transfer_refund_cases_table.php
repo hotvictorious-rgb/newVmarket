@@ -14,8 +14,14 @@ return new class extends Migration
 
         Schema::create('manual_bank_transfer_refund_cases', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('order_id')->unique()->constrained('orders')->restrictOnDelete();
-            $table->foreignId('manual_bank_transfer_payment_id')->unique()->constrained('manual_bank_transfer_payments')->restrictOnDelete();
+            $table->unsignedBigInteger('order_id');
+            $table->unique('order_id', 'mbt_refund_order_unique');
+            $table->foreign('order_id', 'mbt_refund_order_fk')->references('id')->on('orders')->restrictOnDelete();
+            $table->unsignedBigInteger('manual_bank_transfer_payment_id');
+            // Short explicit names avoid PostgreSQL's 63-byte identifier truncation
+            // causing the unique constraint and foreign key names to collide.
+            $table->unique('manual_bank_transfer_payment_id', 'mbt_refund_payment_unique');
+            $table->foreign('manual_bank_transfer_payment_id', 'mbt_refund_payment_fk')->references('id')->on('manual_bank_transfer_payments')->restrictOnDelete();
             $table->string('idempotency_key', 150)->unique();
             $table->unsignedBigInteger('amount_kobo');
             $table->string('currency', 3)->default('NGN');
