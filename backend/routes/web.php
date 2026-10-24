@@ -77,6 +77,7 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/retailer-supplier-payouts', [AdminRetailerSupplierPayoutController::class, 'index'])->name('admin.retailer-supplier-payouts.index');
     Route::get('/treasury-bank-credit-batches', [AdminTreasuryBankCreditBatchController::class, 'index'])->name('admin.treasury-bank-credit-batches.index');
     Route::post('/treasury-bank-credit-batches', [AdminTreasuryBankCreditBatchController::class, 'prepare'])->name('admin.treasury-bank-credit-batches.prepare');
+    Route::post('/treasury-bank-credit-batches/{id}/allocations', [AdminTreasuryBankCreditBatchController::class, 'addAllocation'])->whereNumber('id')->name('admin.treasury-bank-credit-batches.allocations.store');
     Route::post('/treasury-bank-credit-batches/{id}/confirm', [AdminTreasuryBankCreditBatchController::class, 'confirm'])->whereNumber('id')->name('admin.treasury-bank-credit-batches.confirm');
     Route::get('/payment-capture-exceptions', [AdminPaymentCaptureExceptionController::class, 'index'])->name('admin.payment-capture-exceptions.index');
     Route::post('/payment-capture-exceptions/{id}/prepare', [AdminPaymentCaptureExceptionController::class, 'prepare'])->whereNumber('id')->name('admin.payment-capture-exceptions.prepare');
