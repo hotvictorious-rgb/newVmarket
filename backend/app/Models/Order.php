@@ -7,6 +7,21 @@ use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
+    protected static function booted(): void
+    {
+        static::updating(function (Order $order): void {
+            // The selected tender and the receiving-account instructions are immutable
+            // after order creation. A retry/reset must use a separate audited workflow,
+            // never silently rewrite an order from Paystack to manual transfer or back.
+            if ($order->isDirty('payment_method')) {
+                throw new \LogicException('An order payment method is immutable after creation.');
+            }
+            if ($order->isDirty('manual_bank_transfer_account_snapshot')) {
+                throw new \LogicException('The receiving-account snapshot is immutable after order creation.');
+            }
+        });
+    }
+
     protected $fillable = [
         'order_number',
         'checkout_idempotency_key',
