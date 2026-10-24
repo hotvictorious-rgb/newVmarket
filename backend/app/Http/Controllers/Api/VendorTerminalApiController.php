@@ -541,6 +541,7 @@ class VendorTerminalApiController extends Controller
             $assignment->supplier_response_notes = $validated['notes'] ?? null;
             $assignment->confirmed_order_items = $confirmedItems;
             $assignment->confirmation_snapshot_hash = $confirmationHash;
+            $assignment->supplier_confirmed_by_user_id = $ctx['user']->id;
             $assignment->save();
 
             $hasPending = OrderSupplierAssignment::where('order_id', $order->id)
