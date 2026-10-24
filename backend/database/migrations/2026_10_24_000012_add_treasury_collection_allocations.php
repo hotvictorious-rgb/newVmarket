@@ -41,6 +41,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
+            // The parent treasury migration removes the referenced batch table;
+            // SQLite cannot drop the named foreign key/column independently.
+            Schema::dropIfExists('treasury_bank_credit_batch_allocations');
+            return;
+        }
         Schema::dropIfExists('treasury_bank_credit_batch_allocations');
         if (Schema::hasTable('treasury_bank_credit_batches')) {
             Schema::table('treasury_bank_credit_batches', function (Blueprint $table) {
