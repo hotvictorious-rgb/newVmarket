@@ -31,14 +31,23 @@ class SupplierReassignmentRecoveryService
         int $newVendorId,
         int $newShopId,
         array $orderItemIds,
-        User $admin,
+        ?User $admin,
         string $reason,
         string $idempotencyKey
     ): array {
-        if ($admin->user_type !== 'super_admin' || $admin->status !== 'active') {
+        $isAutomatic = $admin === null;
+        if ($isAutomatic) {
+            // Null actor is reserved for the internal bounded failover entry point.
+            // It is never accepted as an administrator override.
+            if (!str_starts_with($idempotencyKey, 'auto-failover-')
+                || !str_starts_with(trim($reason), 'Automatic supplier failover:')) {
+                throw new InvalidArgumentException('System recovery requires the explicit automatic-failover identity and reason.');
+            }
+        } elseif ($admin->user_type !== 'super_admin' || $admin->status !== 'active') {
             throw new InvalidArgumentException('Only an active super administrator may resolve a paid supplier rejection.');
         }
 
+        $auditAction = $isAutomatic ? 'automatic_supplier_failover_applied' : 'admin_recover_rejected_supplier_items';
         $reason = trim($reason);
         $idempotencyKey = trim($idempotencyKey);
         if ($reason === '' || mb_strlen($reason) > 2000) {
@@ -65,7 +74,7 @@ class SupplierReassignmentRecoveryService
 
         return DB::transaction(function () use (
             $orderId, $rejectedAssignmentId, $newVendorId, $newShopId,
-            $itemIds, $admin, $reason, $idempotencyKey, $requestHash
+            $itemIds, $admin, $reason, $idempotencyKey, $requestHash, $isAutomatic, $auditAction
         ) {
             $order = Order::whereKey($orderId)->lockForUpdate()->firstOrFail();
 
@@ -73,7 +82,7 @@ class SupplierReassignmentRecoveryService
             // idempotency audit lookup and all journal/assignment mutations.
             $prior = AdminAuditLog::where('target_type', Order::class)
                 ->where('target_id', $order->id)
-                ->where('action', 'admin_recover_rejected_supplier_items')
+                ->where('action', $auditAction)
                 ->latest('id')
                 ->get()
                 ->first(fn (AdminAuditLog $log) => ($log->new_values['idempotency_key'] ?? null) === $idempotencyKey);
@@ -248,8 +257,8 @@ class SupplierReassignmentRecoveryService
                     'supplier_shop_id' => $newShop->id,
                     'status' => 'awaiting_supplier_confirmation',
                     'assigned_at' => Carbon::now(),
-                    'admin_override_by' => $admin->id,
-                    'admin_override_reason' => $reason,
+                    'admin_override_by' => $admin?->id,
+                    'admin_override_reason' => $isAutomatic ? null : $reason,
                 ]);
             } elseif ($replacementAssignment->status === 'admin_reassigned') {
                 $replacementAssignment->status = 'awaiting_supplier_confirmation';
@@ -260,14 +269,14 @@ class SupplierReassignmentRecoveryService
                 $replacementAssignment->supplier_pickup_code = null;
                 $replacementAssignment->handover_ready_at = null;
                 $replacementAssignment->collected_at = null;
-                $replacementAssignment->admin_override_by = $admin->id;
-                $replacementAssignment->admin_override_reason = $reason;
+                $replacementAssignment->admin_override_by = $admin?->id;
+                $replacementAssignment->admin_override_reason = $isAutomatic ? null : $reason;
                 $replacementAssignment->save();
             } elseif ($replacementAssignment->status !== 'awaiting_supplier_confirmation') {
                 throw new InvalidArgumentException('Replacement supplier already has an assignment in a state that cannot safely absorb these items.');
             } else {
-                $replacementAssignment->admin_override_by = $admin->id;
-                $replacementAssignment->admin_override_reason = $reason;
+                $replacementAssignment->admin_override_by = $admin?->id;
+                $replacementAssignment->admin_override_reason = $isAutomatic ? null : $reason;
                 $replacementAssignment->save();
             }
 
@@ -330,8 +339,8 @@ class SupplierReassignmentRecoveryService
             $order->save();
 
             AdminAuditLog::create([
-                'user_id' => $admin->id,
-                'action' => 'admin_recover_rejected_supplier_items',
+                'user_id' => $admin?->id,
+                'action' => $auditAction,
                 'target_type' => Order::class,
                 'target_id' => $order->id,
                 'old_values' => [
