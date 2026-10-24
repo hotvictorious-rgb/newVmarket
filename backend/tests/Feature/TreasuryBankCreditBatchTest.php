@@ -2,7 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Country;
+use App\Models\Lga;
+use App\Models\Order;
 use App\Models\RetailerSupplierPayoutRequest;
+use App\Models\State;
 use App\Models\TreasuryBankCreditBatch;
 use App\Models\User;
 use App\Models\VendorProfile;
@@ -17,6 +21,8 @@ class TreasuryBankCreditBatchTest extends TestCase
     private User $adminOne;
     private User $adminTwo;
     private VendorProfile $supplier;
+    private User $customer;
+    private Lga $uyoLga;
 
     protected function setUp(): void
     {
@@ -24,6 +30,10 @@ class TreasuryBankCreditBatchTest extends TestCase
 
         $this->adminOne = User::factory()->create(['user_type' => 'super_admin', 'status' => 'active']);
         $this->adminTwo = User::factory()->create(['user_type' => 'super_admin', 'status' => 'active']);
+        $country = Country::firstOrCreate(['iso_code' => 'NG'], ['name' => 'Nigeria', 'phone_code' => '+234', 'currency_code' => 'NGN', 'is_active' => true]);
+        $state = State::firstOrCreate(['name' => 'Akwa Ibom'], ['country_id' => $country->id, 'state_code' => 'AK', 'is_active' => true]);
+        $this->uyoLga = Lga::firstOrCreate(['name' => 'Uyo', 'state_id' => $state->id], ['is_active' => true]);
+        $this->customer = User::factory()->create(['user_type' => 'customer', 'status' => 'active']);
         $supplierUser = User::factory()->create(['user_type' => 'vendor', 'status' => 'active']);
         $this->supplier = VendorProfile::create([
             'user_id' => $supplierUser->id,
@@ -111,7 +121,9 @@ class TreasuryBankCreditBatchTest extends TestCase
             'gateway_settlement_reference' => 'SETTLE-TEST-DUAL-001',
             'bank_credit_reference' => 'BANK-TEST-DUAL-001',
             'corporate_account_last4' => '4321',
-            'net_credit_amount_kobo' => 5000000,
+            'gross_collection_amount_kobo' => 5000000,
+            'provider_fee_amount_kobo' => 50000,
+            'net_credit_amount_kobo' => 4950000,
             'currency' => 'NGN',
             'statement_value_date' => now()->toDateString(),
             'statement_evidence_reference' => 'Bank statement page 2 row 17',
@@ -125,6 +137,34 @@ class TreasuryBankCreditBatchTest extends TestCase
             'confirmation_notes' => 'Same preparer must not be allowed to approve this batch.',
         ])->assertSessionHasErrors('confirmation_notes');
         $this->assertSame('pending_second_review', $batch->fresh()->status);
+
+        $order = Order::create([
+            'order_number' => 'VM-TREASURY-' . uniqid(),
+            'customer_id' => $this->customer->id,
+            'vendor_id' => null,
+            'shop_id' => null,
+            'origin_lga_id' => $this->uyoLga->id,
+            'destination_lga_id' => $this->uyoLga->id,
+            'retailer_model_order' => true,
+            'order_status' => 'confirmed',
+            'payment_status' => 'paid',
+            'sourcing_status' => 'awaiting_supplier_confirmation',
+            'fulfillment_type' => 'doorstep_delivery',
+            'delivery_fee' => '0.00',
+            'merchandise_subtotal' => '50000.00',
+            'grand_total' => '50000.00',
+            'vendor_net_90' => '0.00',
+            'customer_cashback_5' => '0.00',
+            'platform_margin_5' => '0.00',
+            'payment_reference' => 'PAY-TREASURY-001',
+            'paystack_transaction_id' => 'TX-TREASURY-001',
+        ]);
+        $this->actingAs($this->adminOne)->post(route('admin.treasury-bank-credit-batches.allocations.store', $batch->id), [
+            'order_id' => $order->id,
+            'gateway_transaction_id' => 'TX-TREASURY-001',
+            'payment_reference' => 'PAY-TREASURY-001',
+            'amount_kobo' => 5000000,
+        ])->assertRedirect()->assertSessionHas('success');
 
         $this->actingAs($this->adminTwo)->post(route('admin.treasury-bank-credit-batches.confirm', $batch->id), [
             'confirmation_notes' => 'Independent review confirms the bank credit and settlement references match.',
