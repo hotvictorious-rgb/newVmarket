@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AdminAuditLog;
 use App\Models\ManualBankTransferPayment;
 use App\Models\Order;
+use App\Models\SystemSetting;
 use App\Services\OrderSettlementService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -146,13 +147,62 @@ class ManualBankTransferController extends Controller
 
     public function index()
     {
+        $activePaymentMethod = SystemSetting::get('checkout.active_payment_method', 'paystack');
+        $bankAccount = SystemSetting::get('manual_bank_transfer.account', []);
         $payments = ManualBankTransferPayment::with(['order.customer', 'customer', 'reviewer'])
             ->whereIn('status', ['pending_review', 'approved', 'rejected'])
             ->orderByRaw("CASE WHEN status = 'pending_review' THEN 0 ELSE 1 END")
             ->orderBy('submitted_at')
             ->paginate(25);
 
-        return view('admin.manual-bank-transfers.index', compact('payments'));
+        return view('admin.manual-bank-transfers.index', compact('payments', 'activePaymentMethod', 'bankAccount'));
+    }
+
+    public function saveSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'active_payment_method' => ['required', 'in:paystack,manual_bank_transfer,disabled'],
+            'bank_name' => ['required_if:active_payment_method,manual_bank_transfer', 'nullable', 'string', 'max:100'],
+            'account_name' => ['required_if:active_payment_method,manual_bank_transfer', 'nullable', 'string', 'max:150'],
+            'account_number' => ['required_if:active_payment_method,manual_bank_transfer', 'nullable', 'regex:/^[0-9]{10}$/'],
+            'customer_instructions' => ['required_if:active_payment_method,manual_bank_transfer', 'nullable', 'string', 'max:2000'],
+        ]);
+
+        $oldMethod = SystemSetting::get('checkout.active_payment_method', 'paystack');
+        $oldAccount = SystemSetting::get('manual_bank_transfer.account', []);
+        $account = [
+            'bank_name' => trim((string) ($validated['bank_name'] ?? '')),
+            'account_name' => trim((string) ($validated['account_name'] ?? '')),
+            'account_number' => trim((string) ($validated['account_number'] ?? '')),
+            'customer_instructions' => trim((string) ($validated['customer_instructions'] ?? '')),
+            'updated_at' => now()->toIso8601String(),
+        ];
+
+        DB::transaction(function () use ($validated, $account, $oldMethod, $oldAccount, $request) {
+            // A single persisted enum value makes dual activation impossible by design.
+            SystemSetting::set('manual_bank_transfer.account', $account, 'payments');
+            SystemSetting::set('checkout.active_payment_method', $validated['active_payment_method'], 'payments');
+
+            AdminAuditLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'payment_method_configuration_changed',
+                'target_type' => SystemSetting::class,
+                'target_id' => null,
+                'old_values' => [
+                    'active_payment_method' => $oldMethod,
+                    'manual_bank_transfer_account' => $oldAccount,
+                ],
+                'new_values' => [
+                    'active_payment_method' => $validated['active_payment_method'],
+                    'manual_bank_transfer_account' => $account,
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => substr((string) $request->userAgent(), 0, 1000),
+            ]);
+        });
+
+        return redirect()->route('admin.manual-bank-transfers.index')
+            ->with('status', 'Payment configuration saved. Exactly one payment method is active, or checkout is disabled.');
     }
 
     public function approve(Request $request, int $id, OrderSettlementService $settlementService)
