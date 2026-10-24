@@ -212,6 +212,10 @@ class Product extends Model
                     ->where('availability_confirmed_at', '<=', $now)
                     ->whereNotNull('availability_expires_at')
                     ->where('availability_expires_at', '>', $now)
+                    ->where(function (Builder $cooldown) use ($now) {
+                        $cooldown->whereNull('unavailability_penalty_expires_at')
+                            ->orWhere('unavailability_penalty_expires_at', '<=', $now);
+                    })
                     ->whereNull('deleted_at')
                     ->where(function (Builder $catalogLink) {
                         $catalogLink->whereNull('supplier_catalog_product_id')
@@ -230,6 +234,7 @@ class Product extends Model
                             ->where('marketplace_status', 'active')
                             ->where('kyc_status', 'verified')
                             ->whereRaw('(select count(*) from shops as active_supplier_shops where active_supplier_shops.vendor_id = vendor_profiles.id and active_supplier_shops.deleted_at is null and active_supplier_shops.is_active = 1) = 1')
+                            ->whereRaw('(select count(*) from order_supplier_assignments as pending_assignments where pending_assignments.supplier_vendor_id = vendor_profiles.id and pending_assignments.status in (\'awaiting_supplier_confirmation\', \'supplier_confirmed\', \'ready_for_collection\')) < 5')
                             ->whereHas('user', function ($user) {
                                 $user->where('status', 'active');
                             });
