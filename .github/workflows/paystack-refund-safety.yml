@@ -138,4 +138,5 @@ jobs:
             tests/Feature/PaystackWebhookInboxRecoveryTest.php \
             tests/Feature/AutomatedSupplierSourcingTest.php \
             tests/Feature/SupplierPrivateCatalogPolicyTest.php \
+            tests/Feature/PaymentCaptureExceptionResolutionTest.php \
             --display-warnings
