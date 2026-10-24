@@ -122,19 +122,363 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
         ]);
     }
 
+    /**
+     * PROOF 1: No shop can exist without a vendor.
+     * Enforced by database NOT NULL constraint and foreign key on shops.vendor_id.
+     */
+    public function test_no_shop_can_exist_without_a_vendor(): void
+    {
+        // Case A: Attempting to insert a shop with null vendor_id MUST trigger database QueryException
+        $this->expectException(QueryException::class);
 
+        Shop::create([
+            'vendor_id' => null, // Strictly forbidden!
+            'name' => 'Orphan Shop',
+            'slug' => 'orphan-shop',
+            'address' => 'No Vendor Street',
+            'country_id' => $this->country->id,
+            'state_id' => $this->state->id,
+            'lga_id' => $this->lga->id,
+        ]);
+    }
+
+    /**
+     * PROOF 1B: No shop can reference a non-existent vendor.
+     */
+    public function test_no_shop_can_reference_non_existent_vendor(): void
+    {
+        $this->expectException(QueryException::class);
+
+        Shop::create([
+            'vendor_id' => 999999, // Foreign key violation!
+            'name' => 'Ghost Vendor Shop',
+            'slug' => 'ghost-vendor-shop',
+            'address' => 'Ghost Street',
+            'country_id' => $this->country->id,
+            'state_id' => $this->state->id,
+            'lga_id' => $this->lga->id,
+        ]);
+    }
+
+    /**
+     * PROOF 2: No order can exist without a shop.
+     * Enforced by database NOT NULL constraint and foreign key on orders.shop_id.
+     */
     
-
+    /**
+     * PROOF 3: No order can exist without a vendor.
+     * Enforced by database NOT NULL constraint and foreign key on orders.vendor_id.
+     */
     
-
+            /**
+     * PROOF 5: No vendor can sell without being active.
+     * If a merchant is suspended or a shop branch is inactive, checkout is strictly rejected.
+     */
     
+    /**
+     * PROOF 6A: Delivery is strictly HALTED if the Rider is inactive at the point of delivery.
+     */
+    public function test_delivery_halted_if_rider_is_inactive_at_point_of_delivery(): void
+    {
+        $order = Order::create([
+            'order_number' => 'VM-HALT-RIDER-01',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'rider_id' => $this->rider->id,
+            'origin_lga_id' => $this->lga->id,
+            'destination_lga_id' => $this->lga->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'out_for_delivery',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '20000.00',
+            'delivery_fee' => '1500.00',
+            'grand_total' => '21500.00',
+            'vendor_net_90' => '18000.00',
+            'customer_cashback_5' => '1000.00',
+            'platform_margin_5' => '1000.00',
+            'logistics_fee_retained' => '1350.00',
+            'platform_delivery_fee' => '150.00',
+            'verification_code' => '112233',
+        ]);
 
+        // Deactivate the rider profile
+        $this->rider->is_active = false;
+        $this->rider->save();
+
+        $settlementService = app(OrderSettlementService::class);
+        $result = $settlementService->verifyCustomerDeliveryOtp($order, '112233', $this->rider);
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('Unauthorized: Delivery confirmation requires the assigned active rider linked exclusively to the order active logistics company.', $result['message']);
+        $this->assertEquals('out_for_delivery', $order->fresh()->order_status, 'Order status must remain out_for_delivery');
+    }
+
+        /**
+     * PROOF 6C: Delivery is strictly HALTED if the Vendor is suspended at point of delivery.
+     */
     
-
+    /**
+     * PROOF 6D: Delivery is strictly HALTED if the Shop branch is inactive at point of delivery.
+     */
     
+        /**
+     * PROOF 8A: Database Engine Foreign Key Protection & SoftDelete Audit Preservation:
+     * A shop CANNOT be hard-deleted when orders reference it (throws QueryException).
+     * Soft-deleting preserves historical relationship access for order receipts.
+     */
+    public function test_shop_cannot_be_deleted_at_database_level_when_orders_exist(): void
+    {
+        $order = Order::create([
+            'order_number' => 'VM-TEST-SHOP-DEL-GUARD',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'origin_lga_id' => $this->lga->id,
+            'destination_lga_id' => $this->lga->id,
+            'merchandise_subtotal' => '10000.00',
+            'delivery_fee' => '500.00',
+            'grand_total' => '10500.00',
+            'vendor_net_90' => '9000.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '500.00',
+        ]);
 
+        // Attempting to hard-delete (forceDelete) MUST trigger database QueryException (FK RESTRICT)
+        $this->expectException(QueryException::class);
+        $this->shop->forceDelete();
+    }
+
+    /**
+     * PROOF 8B: Application Deletion Guard:
+     * Validates whether a shop can be safely deleted or if financial transactions block it.
+     */
+    public function test_shop_deletion_guard_validates_transaction_and_reservation_history(): void
+    {
+        // 1. With an active order
+        $order = Order::create([
+            'order_number' => 'VM-TEST-DEL-GUARD-02',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'origin_lga_id' => $this->lga->id,
+            'destination_lga_id' => $this->lga->id,
+            'merchandise_subtotal' => '10000.00',
+            'delivery_fee' => '500.00',
+            'grand_total' => '10500.00',
+            'vendor_net_90' => '9000.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '500.00',
+        ]);
+
+        $reason = null;
+        $this->assertFalse($this->shop->canBeSafelyDeleted($reason));
+        $this->assertStringContainsString('Shop branch cannot be deleted because permanent historical transaction records', $reason);
+
+        // 2. Fresh shop with NO orders and NO reservations CAN be safely deleted
+        $freshShop = Shop::create([
+            'vendor_id' => $this->vendor->id,
+            'name' => 'Empty Clean Shop',
+            'slug' => 'empty-clean-shop',
+            'address' => '55 Empty Way',
+            'country_id' => $this->country->id,
+            'state_id' => $this->state->id,
+            'lga_id' => $this->lga->id,
+            'is_active' => true,
+        ]);
+
+        $this->assertTrue($freshShop->canBeSafelyDeleted($reason));
+        $this->assertTrue($freshShop->delete());
+    }
+
+    /**
+     * PROOF 8C: Shop Closure / Deactivation Guard:
+     * Prevents vendors from closing/deactivating a branch while customer orders are in-flight or held in escrow.
+     */
+    public function test_shop_closure_guard_blocks_deactivation_during_in_flight_orders_or_escrow(): void
+    {
+        // 1. Order is in-flight (processing)
+        $order = Order::create([
+            'order_number' => 'VM-INFLIGHT-01',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'origin_lga_id' => $this->lga->id,
+            'destination_lga_id' => $this->lga->id,
+            'order_status' => 'processing',
+            'vendor_settlement_status' => 'held',
+            'merchandise_subtotal' => '10000.00',
+            'delivery_fee' => '500.00',
+            'grand_total' => '10500.00',
+            'vendor_net_90' => '9000.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '500.00',
+        ]);
+
+        $reason = null;
+        $this->assertTrue($this->shop->hasInFlightOrders());
+        $this->assertFalse($this->shop->canBeClosedOrDeactivated($reason));
+        $this->assertStringContainsString('active in-flight customer orders', $reason);
+
+        // 2. Order is delivered, but still in held escrow (within 24h return window)
+        $order->order_status = 'delivered';
+        $order->vendor_settlement_status = 'held';
+        $order->save();
+
+        $this->assertFalse($this->shop->hasInFlightOrders());
+        $this->assertTrue($this->shop->hasPendingEscrow());
+        $this->assertFalse($this->shop->canBeClosedOrDeactivated($reason));
+        $this->assertStringContainsString('pending escrow settlement balances', $reason);
+
+        // 3. Order is settled (cleared out)
+        $order->vendor_settlement_status = 'settled';
+        $order->save();
+
+        $this->assertFalse($this->shop->hasInFlightOrders());
+        $this->assertFalse($this->shop->hasPendingEscrow());
+        $this->assertTrue($this->shop->canBeClosedOrDeactivated($reason));
+    }
+
+    /**
+     * PROOF 9: SoftDeletes preserves historical order relationship access.
+     */
+    public function test_soft_deleted_shop_preserves_historical_order_relationship_and_details(): void
+    {
+        $order = Order::create([
+            'order_number' => 'VM-TEST-SOFT-DEL-RECEIPT',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'origin_lga_id' => $this->lga->id,
+            'destination_lga_id' => $this->lga->id,
+            'order_status' => 'delivered',
+            'vendor_settlement_status' => 'settled',
+            'merchandise_subtotal' => '10000.00',
+            'delivery_fee' => '500.00',
+            'grand_total' => '10500.00',
+            'vendor_net_90' => '9000.00',
+            'customer_cashback_5' => '500.00',
+            'platform_margin_5' => '500.00',
+        ]);
+
+        // Soft-delete the shop
+        $this->shop->delete();
+        $this->assertTrue($this->shop->trashed());
+
+        // Regular query hides soft-deleted shop
+        $this->assertNull(Shop::find($this->shop->id));
+
+        // Order relationship STILL loads the historical shop flawlessly via withTrashed()
+        $freshOrder = Order::with('shop')->find($order->id);
+        $this->assertNotNull($freshOrder->shop);
+        $this->assertEquals($this->shop->id, $freshOrder->shop->id);
+        $this->assertEquals('Apex Plaza Branch', $freshOrder->shop->name);
+    }
+
+    /**
+     * PROOF 10: Primary branch protection & atomic branch promotion.
+     */
     
+    /**
+     * PROOF 11: Bulk inventory reassignment between branches.
+     */
+    
+    /**
+     * PROOF 12: Rider custody clearance blocks deactivation during transit.
+     */
+    public function test_rider_custody_clearance_blocks_deactivation_during_transit(): void
+    {
+        $order = Order::create([
+            'order_number' => 'VM-CUSTODY-01',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'rider_id' => $this->rider->id,
+            'origin_lga_id' => $this->lga->id,
+            'destination_lga_id' => $this->lga->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'out_for_delivery',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '20000.00',
+            'delivery_fee' => '1500.00',
+            'grand_total' => '21500.00',
+            'vendor_net_90' => '18000.00',
+            'customer_cashback_5' => '1000.00',
+            'platform_margin_5' => '1000.00',
+            'logistics_fee_retained' => '1350.00',
+            'platform_delivery_fee' => '150.00',
+        ]);
 
+        $reason = null;
+        $this->assertTrue($this->rider->hasActiveCustodyOrders());
+        $this->assertFalse($this->rider->canBeDeactivated($reason));
+        $this->assertStringContainsString('Courier has active customer parcels in physical custody', $reason);
+
+        // Once order reaches terminal state (delivered), courier can be safely deactivated
+        $order->order_status = 'delivered';
+        $order->save();
+
+        $this->assertFalse($this->rider->hasActiveCustodyOrders());
+        $this->assertTrue($this->rider->canBeDeactivated($reason));
+    }
+
+    /**
+     * PROOF 13: Delivery halt incident persists reason on order and logs AdminAuditLog.
+     */
+    public function test_delivery_halt_incident_persists_reason_and_logs_audit_trail(): void
+    {
+        $order = Order::create([
+            'order_number' => 'VM-HALT-AUDIT-01',
+            'customer_id' => $this->customer->id,
+            'vendor_id' => $this->vendor->id,
+            'shop_id' => $this->shop->id,
+            'rider_id' => $this->rider->id,
+            'origin_lga_id' => $this->lga->id,
+            'destination_lga_id' => $this->lga->id,
+            'fulfillment_type' => 'doorstep_delivery',
+            'order_status' => 'out_for_delivery',
+            'payment_status' => 'paid',
+            'merchandise_subtotal' => '20000.00',
+            'delivery_fee' => '1500.00',
+            'grand_total' => '21500.00',
+            'vendor_net_90' => '18000.00',
+            'customer_cashback_5' => '1000.00',
+            'platform_margin_5' => '1000.00',
+            'logistics_fee_retained' => '1350.00',
+            'platform_delivery_fee' => '150.00',
+            'verification_code' => '556677',
+        ]);
+
+        // Suspend merchant while out for delivery
+        $this->vendor->marketplace_status = 'suspended';
+        $this->vendor->save();
+
+        $settlementService = app(\App\Services\OrderSettlementService::class);
+        $result = $settlementService->verifyCustomerDeliveryOtp($order, '556677', $this->rider);
+
+        $this->assertFalse($result['success']);
+
+        // Verification 1: Order has delivery_halted_reason stamped
+        $freshOrder = $order->fresh();
+        $this->assertNotNull($freshOrder->delivery_halted_at);
+        $this->assertStringContainsString('Unauthorized: Delivery confirmation requires the assigned active rider linked exclusively to the order active logistics company.', $freshOrder->delivery_halted_reason);
+
+        // Verification 2: AdminAuditLog entry was automatically generated
+        $auditLog = \App\Models\AdminAuditLog::where('target_id', $order->id)
+            ->where('action', 'delivery_handshake_halted_entity_inactive')
+            ->first();
+
+        $this->assertNotNull($auditLog, 'Admin audit log must be recorded for delivery halt incident');
+        $this->assertEquals($order->id, $auditLog->target_id);
+    }
+
+    /**
+     * PROOF 14: Order placement is strictly rejected if Vendor is deactivated, suspended, or soft-deleted.
+     */
+    
+    /**
+     * PROOF 15: Order placement is strictly rejected if Shop is inactive or soft-deleted.
+     */
     
             /**
      * PROOF 18: Recommended Hardening - Customer account and Product marketplace freshness guards.
