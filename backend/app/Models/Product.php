@@ -90,14 +90,15 @@ class Product extends Model
             return 0;
         }
 
-        if (isset($this->attributes['inventory_quantity']) && (int) $this->attributes['inventory_quantity'] > 0) {
-            return (int) $this->attributes['inventory_quantity'];
+        // Centrally managed canonical listings do not track supplier quantities,
+        // even if a stale legacy inventory counter happens to contain a value.
+        if (($this->attributes['vendor_id'] ?? null) === null
+            && ($this->attributes['shop_id'] ?? null) === null) {
+            return null;
         }
 
-        if (($this->attributes['vendor_id'] ?? null) === null
-            && ($this->attributes['shop_id'] ?? null) === null
-            && (int) ($this->attributes['inventory_quantity'] ?? 0) === 0) {
-            return null;
+        if (isset($this->attributes['inventory_quantity']) && (int) $this->attributes['inventory_quantity'] > 0) {
+            return (int) $this->attributes['inventory_quantity'];
         }
 
         return 999;
