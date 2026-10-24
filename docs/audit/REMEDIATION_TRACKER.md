@@ -622,3 +622,31 @@ The following findings were confirmed during source review and hardened on `docs
 **Operational requirement:** Run the migration, then have an authorized Super Admin configure and verify both company tariff fields on every enabled delivery corridor before enabling checkout there. Existing orders with missing tariffs require explicit assignment and audited override reconciliation; do not bulk-fill them from the customer delivery fee.
 
 **Verification status:** Changes and regression tests are committed to the working branch. The application test suite has not been executed in this session; the latest queried commit status returned no CI status entries. Do not mark this finding fully verified until the migration, PHP syntax checks, targeted feature tests and relevant CI pass on the target environment. No merge or deployment is claimed.
+
+
+## VM-AUD-132 — Settlement capture identity, webhook verification, atomic refund obligation, and journal idempotency (24 October 2026)
+
+**Severity:** Critical — payment correctness and financial-ledger durability.
+
+**Evidence found:** The paid-order guard returned ALREADY_PAID before checking the incoming successful transaction identity; charge.success settled directly from the signed webhook body instead of requiring server-to-server verification; fractional-kobo values could be truncated by integer casts; a late-payment refund liability could commit while pending-operation creation was attempted afterward and its exception swallowed; journal writers did not consistently populate the database-unique idempotency key.
+
+**Changes committed on docs/retailer-central-fulfilment-model:**
+- Added payment_capture_exceptions and PaymentCaptureException to durably record a distinct successful capture or unproven capture identity for admin review. Repeated detection uses a stable unique idempotency key. No automatic refund is dispatched.
+- Paid-order settlement now validates status, NGN currency, reference and integer-kobo amount before returning a replay result. A distinct transaction ID creates one admin-review exception and does not post new supplier payable, cashback or settlement effects.
+- charge.success now performs server-to-server Paystack verification and compares webhook transaction ID, status, currency, amount and reference against the verified response. Uncertain verification leaves the order unpaid and the inbox event retryable; mismatched evidence is durably recorded and settlement is blocked.
+- Late-payment refund liability and its pending admin-review FinancialOperation are now created within the same database transaction. If the operation cannot be recorded, settlement rolls back rather than committing an orphan liability. This does not authorize or dispatch an outflow.
+- Settlement and Paystack verification reject malformed fractional-kobo amounts before casting.
+- FinancialJournalEntry generates a stable idempotency key for model-created journal legs when a caller does not supply one, activating the existing database unique constraint for ordinary journal writers.
+- Added regressions for distinct successful captures, repeated capture-event delivery, webhook/server-verification transaction mismatch, fractional-kobo amounts, and automatic journal-key generation.
+
+**Verification:** Latest queried working-branch run 40050739926 passed on commit 227f4946aee6020ce3558ffe1a7e5d50fb4f38b2: **240 tests passed / 1,600 assertions**, plus the supplier bank-update regression (1 test / 9 assertions) and PHP syntax scan. This is branch CI evidence, not production PostgreSQL concurrency or live Paystack sandbox proof.
+
+**Still open:** A raw unique index on orders.payment_reference is intentionally not added: the legacy parent/child settlement model can share one payment reference across related order rows. Reference uniqueness must be enforced at the payment-intent/root-capture boundary, not by incorrectly constraining every order row. Production-equivalent PostgreSQL crash/concurrency proof, corporate-bank settlement reconciliation before supplier payout, and live Paystack verification remain launch gates.
+
+## VM-AUD-133 — Retailer supplier payout selection and cap contradict active policy (24 October 2026)
+
+**Severity:** High — payout policy enforcement.
+
+**Evidence found:** RetailerSupplierPayoutService still has a ₦500,000 cap and automatically selects eligible order-item payables in FIFO order. Active business policy requires a ₦1,000,000 maximum per transaction and explicitly prohibits FIFO; eligible payable selection must be an explicit, auditable choice.
+
+**Required correction:** Replace automatic FIFO allocation with explicit selected order-item IDs validated against current eligible net supplier-payable balances; reject empty, ineligible, duplicate, or cross-supplier selections; enforce ₦5,000 minimum and ₦1,000,000 maximum without silently splitting a request. Update supplier web/API inputs, admin audit evidence, and regression tests. **Status: OPEN — do not treat supplier payout selection as policy-aligned until implemented and verified.**
