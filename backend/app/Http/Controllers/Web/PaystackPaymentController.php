@@ -1168,7 +1168,7 @@ class PaystackPaymentController extends Controller
                     'sha256',
                     $order->id . '|' . (string) $processedEvent->event_id . '|' . $verificationCode
                 );
-                $verificationException = \\App\\Models\\PaymentCaptureException::firstOrCreate(
+                $verificationException = \App\Models\PaymentCaptureException::firstOrCreate(
                     ['idempotency_key' => $exceptionKey],
                     [
                         'order_id' => $order->id,
@@ -1194,7 +1194,7 @@ class PaystackPaymentController extends Controller
                 );
 
                 if ($verificationException->wasRecentlyCreated) {
-                    \\App\\Models\\AdminAuditLog::create([
+                    \App\Models\AdminAuditLog::create([
                         'user_id' => null,
                         'action' => 'paystack_server_verification_rejected_charge',
                         'target_type' => Order::class,
