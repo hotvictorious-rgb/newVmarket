@@ -227,7 +227,15 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
         $this->assertNull($offer->availability_confirmed_by);
         $this->assertNull($offer->availability_expires_at);
 
-        $restoredSignal = $this->patchJson("/api/v1/vendor/private-catalog/{$record->id}", [
+        $this->actingAs($this->admin)
+            ->post("/admin/supplier-offers/{$offer->id}/confirm-availability", [
+                'availability_expires_at' => Carbon::now()->addHours(2)->format('Y-m-d\\TH:i'),
+                'notes' => 'Must not confirm an out-of-stock private record.',
+            ])
+            ->assertSessionHasErrors('supplier_offer');
+
+        $restoredSignal = $this->actingAs($this->supplierUser)
+            ->patchJson("/api/v1/vendor/private-catalog/{$record->id}", [
             'is_in_stock' => true,
         ]);
         $restoredSignal->assertOk()->assertJsonPath('data.stock_status', 'in_stock');
