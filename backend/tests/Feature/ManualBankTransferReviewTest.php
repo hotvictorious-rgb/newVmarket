@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\ManualBankTransferPayment;
 use App\Models\Order;
+use App\Models\SystemSetting;
+use App\Services\OrderSettlementService;
 use App\Models\Shop;
 use App\Models\User;
 use App\Models\VendorProfile;
@@ -217,6 +219,58 @@ class ManualBankTransferReviewTest extends TestCase
         $this->expectException(\LogicException::class);
         $order->payment_method = 'paystack';
         $order->save();
+    }
+
+    public function test_paystack_settlement_cannot_settle_a_manual_transfer_order(): void
+    {
+        $order = $this->manualOrder();
+
+        $result = app(OrderSettlementService::class)->settlePaystackOrder($order, [
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => 1250050,
+            'reference' => $order->payment_reference,
+            'id' => 'FAKE-PAYSTACK-CAPTURE',
+            'channel' => 'card',
+            'customer' => ['email' => $this->customer->email],
+        ]);
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('PAYMENT_METHOD_MISMATCH', $result['status']);
+        $this->assertSame('pending', $order->fresh()->payment_status);
+        $this->assertNull($order->fresh()->paystack_transaction_id);
+    }
+
+    public function test_admin_payment_configuration_selects_one_method_or_disables_checkout(): void
+    {
+        SystemSetting::set('checkout.payment_configuration', [
+            'active_method' => 'paystack',
+            'manual_bank_transfer_account' => [],
+        ], 'payments');
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.manual-bank-transfers.settings'), [
+                'active_payment_method' => 'manual_bank_transfer',
+                'bank_name' => 'Test Bank',
+                'account_name' => 'Victorious MARKET',
+                'account_number' => '0123456789',
+                'customer_instructions' => 'Copy the order code into narration.',
+            ])
+            ->assertRedirect(route('admin.manual-bank-transfers.index'));
+
+        $config = SystemSetting::getFresh('checkout.payment_configuration');
+        $this->assertSame('manual_bank_transfer', $config['active_method']);
+        $this->assertSame('0123456789', $config['manual_bank_transfer_account']['account_number']);
+        $this->assertArrayNotHasKey('paystack_enabled', $config);
+        $this->assertArrayNotHasKey('manual_bank_transfer_enabled', $config);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.manual-bank-transfers.settings'), [
+                'active_payment_method' => 'disabled',
+            ])
+            ->assertRedirect(route('admin.manual-bank-transfers.index'));
+
+        $this->assertSame('disabled', SystemSetting::getFresh('checkout.payment_configuration')['active_method']);
     }
 
     public function test_paystack_order_cannot_accept_manual_transfer_receipt(): void
