@@ -7,7 +7,8 @@ on:
       - "backend/app/Http/Controllers/Web/PaystackPaymentController.php"
       - "backend/app/Services/FinancialReconciliationEngine.php"
       - "backend/tests/Feature/FinancialAuditRemediationProofTest.php"
-      - "backend/tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ManualBankTransferReviewTest.php"
+      - "backend/tests/Feature/PaystackPaymentHardeningTest.php"
+      - "backend/tests/Feature/ManualBankTransferReviewTest.php"
       - "backend/**"
       - ".github/workflows/paystack-refund-safety.yml"
   push:
@@ -22,11 +23,30 @@ permissions:
 jobs:
   refund-safety:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: mysql
+          MYSQL_DATABASE: newvmarket_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pmysql"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     defaults:
       run:
         working-directory: backend
     env:
       APP_KEY: "base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI="
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: newvmarket_test
+      DB_USERNAME: root
+      DB_PASSWORD: mysql
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -35,7 +55,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.3"
-          extensions: bcmath, curl, dom, fileinfo, mbstring, pdo_sqlite, sqlite3, xml
+          extensions: bcmath, curl, dom, fileinfo, mbstring, pdo_mysql, pdo_sqlite, sqlite3, xml
           coverage: none
 
       - name: Prepare test environment
@@ -84,42 +104,41 @@ jobs:
         run: |
           php artisan test tests/Feature/SecurityHardeningAndAuditTest.php --filter='vendor_bank_update_activates_48h_cooldown_and_validates_10_digit_nuban' --display-warnings
 
-  postgres-settlement-proof:
+  mysql-settlement-proof:
     runs-on: ubuntu-latest
     services:
-      postgres:
-        image: postgres:16
+      mysql:
+        image: mysql:8.4
         env:
-          POSTGRES_DB: newvmarket_test
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          MYSQL_ROOT_PASSWORD: mysql
+          MYSQL_DATABASE: newvmarket_test
         ports:
-          - 5432:5432
+          - 3306:3306
         options: >-
-          --health-cmd "pg_isready -U postgres -d newvmarket_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pmysql"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     defaults:
       run:
         working-directory: backend
     env:
       APP_KEY: "base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI="
-      DB_CONNECTION: pgsql
+      DB_CONNECTION: mysql
       DB_HOST: 127.0.0.1
-      DB_PORT: 5432
+      DB_PORT: 3306
       DB_DATABASE: newvmarket_test
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
+      DB_USERNAME: root
+      DB_PASSWORD: mysql
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up PHP with PostgreSQL driver
+      - name: Set up PHP with MySQL driver
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.3"
-          extensions: bcmath, curl, dom, fileinfo, mbstring, pdo_pgsql, pgsql, xml
+          extensions: bcmath, curl, dom, fileinfo, mbstring, pdo_mysql, xml
           coverage: none
 
       - name: Prepare test environment
@@ -128,7 +147,7 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Run financial settlement proof tests on PostgreSQL
+      - name: Run financial settlement proof tests on MySQL/InnoDB
         run: |
           php artisan test \
             tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ManualBankTransferReviewTest.php \

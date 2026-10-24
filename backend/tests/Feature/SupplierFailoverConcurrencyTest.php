@@ -19,20 +19,20 @@ use App\Models\VendorProfile;
 use App\Services\CheckoutExecutionService;
 use App\Services\OrderSettlementService;
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class SupplierFailoverConcurrencyTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
 
 
     public function test_two_processes_competing_for_one_failed_assignment_create_one_recovery_only(): void
     {
-        if (DB::connection()->getDriverName() !== 'pgsql') {
-            $this->markTestSkipped('True simultaneous failover row-lock proof runs against PostgreSQL only.');
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('True simultaneous failover row-lock proof runs against MySQL/InnoDB only.');
         }
 
         $country = Country::firstOrCreate(['iso_code' => 'NG'], ['name' => 'Nigeria', 'phone_code' => '+234', 'currency_code' => 'NGN', 'is_active' => true]);

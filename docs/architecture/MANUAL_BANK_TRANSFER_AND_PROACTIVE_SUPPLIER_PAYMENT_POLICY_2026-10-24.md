@@ -73,7 +73,7 @@ Before enabling this mode in production, verify all active checkout, payment, we
 - unmatched/underpaid/overpaid/reversed bank credit and bank statement reconciliation;
 - proactive payable queue, no supplier request prerequisite, exact eligible payable amount, non-FIFO explicit selection, duplicate-transfer prevention, uncertain outcome hold and verified bank debit before paid status;
 - no Paystack API call for manual-mode customer orders or manual supplier payouts;
-- migration compatibility on SQLite and PostgreSQL, including rollback and unique-index behavior.
+- migration compatibility and rollback on the target MySQL/InnoDB database, including unique-index behavior; SQLite may be used for fast unit tests but is not a substitute for MySQL concurrency proof.
 
 Documentation changes alone do not certify implementation. Do not enable manual mode until the code and tests prove these invariants on the target commit.
 
