@@ -380,8 +380,8 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
         $order = Order::create([
             'order_number' => 'VM-UNBOUND-' . strtoupper(uniqid()),
             'customer_id' => $this->customer->id,
-            'vendor_id' => $this->supplierA->id,
-            'shop_id' => $this->shopA->id,
+            'vendor_id' => null,
+            'shop_id' => null,
             'origin_lga_id' => $this->uyoLga->id,
             'destination_lga_id' => $this->uyoLga->id,
             'retailer_model_order' => true,
@@ -791,7 +791,7 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
      * Settle Order A succeeds -> inventory becomes 0.
      * Settle Order B detects depleted stock -> routes to stockout_revalidation_hold without double deduction or automated refund.
      */
-    public function test_concurrent_payment_settlement_on_last_inventory_unit_routes_to_hold_without_double_deduction(): void
+    public function test_supplier_backed_orders_do_not_consume_legacy_inventory_quantity(): void
     {
         $category = \App\Models\Category::first();
         $singleUnitProduct = Product::create([
@@ -831,7 +831,7 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
             'platform_margin_5' => '0.00',
             'merchandise_subtotal' => '250000.00',
             'grand_total' => '251500.00',
-            'supplier_cost_total_snapshot' => '220000.00',
+            'supplier_cost_total_snapshot' => null,
             'payment_reference' => 'REF-RACE-01',
         ]);
 
@@ -842,18 +842,7 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
             'quantity' => 1,
             'unit_price' => '250000.00',
             'line_total' => '250000.00',
-            'supplier_offer_id' => $offer->id,
-            'supplier_vendor_id' => $this->supplierA->id,
-            'supplier_shop_id' => $this->shopA->id,
-            'supplier_cost_snapshot' => '220000.00',
             'package_tier' => 'bulky',
-        ]);
-
-        OrderSupplierAssignment::create([
-            'order_id' => $order1->id,
-            'supplier_vendor_id' => $this->supplierA->id,
-            'supplier_shop_id' => $this->shopA->id,
-            'status' => 'awaiting_payment',
         ]);
 
         // Order 2 for the same unit
@@ -875,7 +864,7 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
             'platform_margin_5' => '0.00',
             'merchandise_subtotal' => '250000.00',
             'grand_total' => '251500.00',
-            'supplier_cost_total_snapshot' => '220000.00',
+            'supplier_cost_total_snapshot' => null,
             'payment_reference' => 'REF-RACE-02',
         ]);
 
@@ -886,18 +875,7 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
             'quantity' => 1,
             'unit_price' => '250000.00',
             'line_total' => '250000.00',
-            'supplier_offer_id' => $offer->id,
-            'supplier_vendor_id' => $this->supplierA->id,
-            'supplier_shop_id' => $this->shopA->id,
-            'supplier_cost_snapshot' => '220000.00',
             'package_tier' => 'bulky',
-        ]);
-
-        OrderSupplierAssignment::create([
-            'order_id' => $order2->id,
-            'supplier_vendor_id' => $this->supplierA->id,
-            'supplier_shop_id' => $this->shopA->id,
-            'status' => 'awaiting_payment',
         ]);
 
         $settlementService = app(OrderSettlementService::class);
@@ -920,9 +898,10 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
         $this->assertSame('paid', $order1->payment_status);
         $this->assertSame('awaiting_supplier_confirmation', $order1->sourcing_status);
 
-        // Stock quantity should now be 0 (depleted)
+        // Supplier stock is binary until post-payment exact-quantity confirmation.
+        // The legacy inventory counter must not be consumed by a retailer order.
         $singleUnitProduct->refresh();
-        $this->assertSame(0, (int) $singleUnitProduct->inventory_quantity);
+        $this->assertSame(1, (int) $singleUnitProduct->inventory_quantity);
 
         // Step B: Payment for Order 2 arrives for the same depleted SKU
         $result2 = $settlementService->settlePaystackOrder(
@@ -940,18 +919,20 @@ class WholeOrderConsolidatedSourcingAndFleetDispatchTest extends TestCase
         $this->assertTrue($result2['success']);
         $order2->refresh();
 
-        // Order 2 is paid, but caught by post-payment revalidation -> routes to hold
+        // Both paid orders enter supplier quantity confirmation; legacy inventory is not authoritative.
         $this->assertSame('paid', $order2->payment_status);
-        $this->assertSame('stockout_revalidation_hold', $order2->sourcing_status);
+        $this->assertSame('awaiting_supplier_confirmation', $order2->sourcing_status);
 
-        // Inventory must NEVER become negative
+        // No fake stock depletion is recorded; the supplier must confirm each order's exact quantity.
         $singleUnitProduct->refresh();
-        $this->assertSame(0, (int) $singleUnitProduct->inventory_quantity);
-
-        // An audit log was written for Order 2 hold
-        $audit = AdminAuditLog::where('target_id', $order2->id)
-            ->where('action', 'supplier_stockout_revalidation_hold')
-            ->first();
-        $this->assertNotNull($audit);
+        $this->assertSame(1, (int) $singleUnitProduct->inventory_quantity);
+        $this->assertDatabaseHas('order_supplier_assignments', [
+            'order_id' => $order1->id,
+            'supplier_vendor_id' => $this->supplierA->id,
+        ]);
+        $this->assertDatabaseHas('order_supplier_assignments', [
+            'order_id' => $order2->id,
+            'supplier_vendor_id' => $this->supplierA->id,
+        ]);
     }
 }
