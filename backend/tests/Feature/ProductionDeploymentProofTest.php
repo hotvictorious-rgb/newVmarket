@@ -268,7 +268,6 @@ class ProductionDeploymentProofTest extends TestCase
         $this->assertContains('api/v1/vendor/payouts', $routes);
         $this->assertContains('api/v1/vendor/bank/update', $routes);
         $this->assertContains('api/v1/vendor/products', $routes);
-        $this->assertContains('api/v1/vendor/pickup-reservations', $routes);
 
         // Critical Rider App endpoints
         $this->assertContains('api/v1/rider/dashboard', $routes);

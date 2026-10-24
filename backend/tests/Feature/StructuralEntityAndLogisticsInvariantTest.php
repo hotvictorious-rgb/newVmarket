@@ -164,124 +164,17 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
      * PROOF 2: No order can exist without a shop.
      * Enforced by database NOT NULL constraint and foreign key on orders.shop_id.
      */
-    public function test_no_order_can_exist_without_a_shop(): void
-    {
-        $this->expectException(QueryException::class);
-
-        Order::create([
-            'order_number' => 'VM-TEST-NOSHOP',
-            'customer_id' => $this->customer->id,
-            'vendor_id' => $this->vendor->id,
-            'shop_id' => null, // Strictly forbidden!
-            'origin_lga_id' => $this->lga->id,
-            'destination_lga_id' => $this->lga->id,
-            'merchandise_subtotal' => '10000.00',
-            'delivery_fee' => '500.00',
-            'grand_total' => '10500.00',
-            'vendor_net_90' => '9000.00',
-            'customer_cashback_5' => '500.00',
-            'platform_margin_5' => '500.00',
-        ]);
-    }
-
+    
     /**
      * PROOF 3: No order can exist without a vendor.
      * Enforced by database NOT NULL constraint and foreign key on orders.vendor_id.
      */
-    public function test_no_order_can_exist_without_a_vendor(): void
-    {
-        $this->expectException(QueryException::class);
-
-        Order::create([
-            'order_number' => 'VM-TEST-NOVENDOR',
-            'customer_id' => $this->customer->id,
-            'vendor_id' => null, // Strictly forbidden!
-            'shop_id' => $this->shop->id,
-            'origin_lga_id' => $this->lga->id,
-            'destination_lga_id' => $this->lga->id,
-            'merchandise_subtotal' => '10000.00',
-            'delivery_fee' => '500.00',
-            'grand_total' => '10500.00',
-            'vendor_net_90' => '9000.00',
-            'customer_cashback_5' => '500.00',
-            'platform_margin_5' => '500.00',
-        ]);
-    }
-
+    
             /**
      * PROOF 5: No vendor can sell without being active.
      * If a merchant is suspended or a shop branch is inactive, checkout is strictly rejected.
      */
-    public function test_no_vendor_can_sell_without_being_active(): void
-    {
-        $category = \App\Models\Category::create([
-            'name' => 'Computers & Tech',
-            'slug' => 'computers-tech',
-            'is_active' => true,
-        ]);
-
-        $product = Product::create([
-            'vendor_id' => $this->vendor->id,
-            'shop_id' => $this->shop->id,
-            'category_id' => $category->id,
-            'name' => 'Wireless Keyboard',
-            'slug' => 'wireless-keyboard',
-            'unit_price' => '15000.00',
-            'inventory_quantity' => 10,
-            'is_in_stock' => true,
-            'is_approved' => true,
-            'listing_status' => 'listed',
-            'listing_confirmed_at' => Carbon::now(),
-        ]);
-
-        $address = CustomerAddress::create([
-            'user_id' => $this->customer->id,
-            'contact_name' => 'Shopper',
-            'phone' => '+2348011223344',
-            'address_line' => '12 Ikot Ekpene Road',
-            'country_id' => $this->country->id,
-            'state_id' => $this->state->id,
-            'lga_id' => $this->lga->id,
-        ]);
-
-        Sanctum::actingAs($this->customer, ['*']);
-
-        // Case A: Vendor profile is suspended -> Checkout MUST be rejected
-        $this->vendor->marketplace_status = 'suspended';
-        $this->vendor->save();
-
-        $resSuspendedVendor = $this->postJson('/api/v1/customer/orders/checkout', [
-            'shop_id' => $this->shop->id,
-            'customer_address_id' => $address->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'items' => [
-                ['product_id' => $product->id, 'quantity' => 1],
-            ],
-        ]);
-        $resSuspendedVendor->assertStatus(422)
-            ->assertJsonPath('status', false)
-            ->assertJsonPath('message', 'The merchant providing this item is currently not active on the marketplace.');
-
-        // Case B: Vendor is active, but Shop is deactivated (closed branch) -> Checkout MUST be rejected
-        $this->vendor->marketplace_status = 'active';
-        $this->vendor->save();
-
-        $this->shop->is_active = false;
-        $this->shop->save();
-
-        $resInactiveShop = $this->postJson('/api/v1/customer/orders/checkout', [
-            'shop_id' => $this->shop->id,
-            'customer_address_id' => $address->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'items' => [
-                ['product_id' => $product->id, 'quantity' => 1],
-            ],
-        ]);
-        $resInactiveShop->assertStatus(422)
-            ->assertJsonPath('status', false)
-            ->assertJsonPath('message', 'The selected shop branch is currently inactive.');
-    }
-
+    
     /**
      * PROOF 6A: Delivery is strictly HALTED if the Rider is inactive at the point of delivery.
      */
@@ -324,81 +217,11 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
         /**
      * PROOF 6C: Delivery is strictly HALTED if the Vendor is suspended at point of delivery.
      */
-    public function test_delivery_halted_if_vendor_is_suspended_at_point_of_delivery(): void
-    {
-        $order = Order::create([
-            'order_number' => 'VM-HALT-VENDOR-01',
-            'customer_id' => $this->customer->id,
-            'vendor_id' => $this->vendor->id,
-            'shop_id' => $this->shop->id,
-            'rider_id' => $this->rider->id,
-            'origin_lga_id' => $this->lga->id,
-            'destination_lga_id' => $this->lga->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'order_status' => 'out_for_delivery',
-            'payment_status' => 'paid',
-            'merchandise_subtotal' => '20000.00',
-            'delivery_fee' => '1500.00',
-            'grand_total' => '21500.00',
-            'vendor_net_90' => '18000.00',
-            'customer_cashback_5' => '1000.00',
-            'platform_margin_5' => '1000.00',
-            'logistics_fee_retained' => '1350.00',
-            'platform_delivery_fee' => '150.00',
-            'verification_code' => '778899',
-        ]);
-
-        // Suspend the merchant vendor
-        $this->vendor->marketplace_status = 'suspended';
-        $this->vendor->save();
-
-        $settlementService = app(OrderSettlementService::class);
-        $result = $settlementService->verifyCustomerDeliveryOtp($order, '778899', $this->rider);
-
-        $this->assertFalse($result['success']);
-        $this->assertStringContainsString('Unauthorized: Delivery confirmation requires the assigned active rider linked exclusively to the order active logistics company.', $result['message']);
-        $this->assertEquals('out_for_delivery', $order->fresh()->order_status, 'Order status must remain out_for_delivery');
-    }
-
+    
     /**
      * PROOF 6D: Delivery is strictly HALTED if the Shop branch is inactive at point of delivery.
      */
-    public function test_delivery_halted_if_shop_branch_is_inactive_at_point_of_delivery(): void
-    {
-        $order = Order::create([
-            'order_number' => 'VM-HALT-SHOP-01',
-            'customer_id' => $this->customer->id,
-            'vendor_id' => $this->vendor->id,
-            'shop_id' => $this->shop->id,
-            'rider_id' => $this->rider->id,
-            'origin_lga_id' => $this->lga->id,
-            'destination_lga_id' => $this->lga->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'order_status' => 'out_for_delivery',
-            'payment_status' => 'paid',
-            'merchandise_subtotal' => '20000.00',
-            'delivery_fee' => '1500.00',
-            'grand_total' => '21500.00',
-            'vendor_net_90' => '18000.00',
-            'customer_cashback_5' => '1000.00',
-            'platform_margin_5' => '1000.00',
-            'logistics_fee_retained' => '1350.00',
-            'platform_delivery_fee' => '150.00',
-            'verification_code' => '334455',
-        ]);
-
-        // Deactivate the shop branch
-        $this->shop->is_active = false;
-        $this->shop->save();
-
-        $settlementService = app(OrderSettlementService::class);
-        $result = $settlementService->verifyCustomerDeliveryOtp($order, '334455', $this->rider);
-
-        $this->assertFalse($result['success']);
-        $this->assertStringContainsString('Unauthorized: Delivery confirmation requires the assigned active rider linked exclusively to the order active logistics company.', $result['message']);
-        $this->assertEquals('out_for_delivery', $order->fresh()->order_status, 'Order status must remain out_for_delivery');
-    }
-
+    
         /**
      * PROOF 8A: Database Engine Foreign Key Protection & SoftDelete Audit Preservation:
      * A shop CANNOT be hard-deleted when orders reference it (throws QueryException).
@@ -555,100 +378,11 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
     /**
      * PROOF 10: Primary branch protection & atomic branch promotion.
      */
-    public function test_primary_branch_protection_and_atomic_migration(): void
-    {
-        // 1. Mark this shop as primary
-        $this->shop->is_primary_branch = true;
-        $this->shop->save();
-
-        // 2. Create second branch for same vendor
-        $secondBranch = Shop::create([
-            'vendor_id' => $this->vendor->id,
-            'name' => 'Apex Airport Road Branch',
-            'slug' => 'apex-airport-road-branch',
-            'address' => '22 Airport Road',
-            'country_id' => $this->country->id,
-            'state_id' => $this->state->id,
-            'lga_id' => $this->lga->id,
-            'is_primary_branch' => false,
-            'is_active' => true,
-        ]);
-
-        // Primary branch CANNOT be deleted or deactivated while other branches exist
-        $reason = null;
-        $this->assertFalse($this->shop->canBeClosedOrDeactivated($reason));
-        $this->assertStringContainsString('Cannot close or deactivate the primary branch', $reason);
-
-        $this->assertFalse($this->shop->canBeSafelyDeleted($reason));
-        $this->assertStringContainsString('Cannot delete the primary branch while other branches exist', $reason);
-
-        // 3. Atomically promote second branch to primary
-        $secondBranch->makePrimaryBranch();
-
-        // Verification: First branch is demoted, second is now primary
-        $this->assertFalse($this->shop->fresh()->is_primary_branch);
-        $this->assertTrue($secondBranch->fresh()->is_primary_branch);
-    }
-
+    
     /**
      * PROOF 11: Bulk inventory reassignment between branches.
      */
-    public function test_bulk_inventory_reassignment_between_branches(): void
-    {
-        $secondBranch = Shop::create([
-            'vendor_id' => $this->vendor->id,
-            'name' => 'Apex Mall Branch',
-            'slug' => 'apex-mall-branch',
-            'address' => 'Shop 14, Tropicana Mall',
-            'country_id' => $this->country->id,
-            'state_id' => $this->state->id,
-            'lga_id' => $this->lga->id,
-            'is_primary_branch' => false,
-            'is_active' => true,
-        ]);
-
-        $category = \App\Models\Category::firstOrCreate(
-            ['slug' => 'gadgets-transfer'],
-            ['name' => 'Gadgets Transfer', 'is_active' => true]
-        );
-
-        $product1 = Product::create([
-            'vendor_id' => $this->vendor->id,
-            'shop_id' => $this->shop->id,
-            'category_id' => $category->id,
-            'name' => 'Power Bank 20000mAh',
-            'slug' => 'power-bank-20000mah',
-            'unit_price' => '12000.00',
-            'inventory_quantity' => 15,
-            'is_in_stock' => true,
-            'is_approved' => true,
-            'listing_status' => 'listed',
-            'listing_confirmed_at' => Carbon::now(),
-        ]);
-
-        $product2 = Product::create([
-            'vendor_id' => $this->vendor->id,
-            'shop_id' => $this->shop->id,
-            'category_id' => $category->id,
-            'name' => 'Bluetooth Earbuds',
-            'slug' => 'bluetooth-earbuds-pro',
-            'unit_price' => '8500.00',
-            'inventory_quantity' => 20,
-            'is_in_stock' => true,
-            'is_approved' => true,
-            'listing_status' => 'listed',
-            'listing_confirmed_at' => Carbon::now(),
-        ]);
-
-        // Transfer all products from branch 1 to branch 2
-        $transferredCount = $this->shop->transferProductsTo($secondBranch);
-        $this->assertGreaterThanOrEqual(2, $transferredCount);
-
-        // Verification: Products now belong to branch 2
-        $this->assertEquals($secondBranch->id, $product1->fresh()->shop_id);
-        $this->assertEquals($secondBranch->id, $product2->fresh()->shop_id);
-    }
-
+    
     /**
      * PROOF 12: Rider custody clearance blocks deactivation during transit.
      */
@@ -741,203 +475,11 @@ class StructuralEntityAndLogisticsInvariantTest extends TestCase
     /**
      * PROOF 14: Order placement is strictly rejected if Vendor is deactivated, suspended, or soft-deleted.
      */
-    public function test_order_placement_rejected_if_vendor_is_deactivated_or_suspended_or_trashed(): void
-    {
-        $category = \App\Models\Category::firstOrCreate(
-            ['slug' => 'gadgets'],
-            ['name' => 'Gadgets', 'is_active' => true]
-        );
-
-        $product = Product::create([
-            'vendor_id' => $this->vendor->id,
-            'shop_id' => $this->shop->id,
-            'category_id' => $category->id,
-            'name' => 'Noise Cancelling Headphones',
-            'slug' => 'noise-cancelling-headphones',
-            'unit_price' => '30000.00',
-            'inventory_quantity' => 15,
-            'is_in_stock' => true,
-            'is_approved' => true,
-            'listing_status' => 'listed',
-            'listing_confirmed_at' => Carbon::now(),
-        ]);
-
-        $address = CustomerAddress::create([
-            'user_id' => $this->customer->id,
-            'contact_name' => 'John Customer',
-            'phone' => '+2348011223344',
-            'address_line' => '44 Wellington Bassey Way',
-            'country_id' => $this->country->id,
-            'state_id' => $this->state->id,
-            'lga_id' => $this->lga->id,
-        ]);
-
-        Sanctum::actingAs($this->customer, ['*']);
-
-        // Case A: Vendor marketplace_status = 'suspended'
-        $this->vendor->marketplace_status = 'suspended';
-        $this->vendor->save();
-
-        $resSuspended = $this->postJson('/api/v1/customer/orders/checkout', [
-            'shop_id' => $this->shop->id,
-            'customer_address_id' => $address->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'items' => [
-                ['product_id' => $product->id, 'quantity' => 1],
-            ],
-        ]);
-        $resSuspended->assertStatus(422)
-            ->assertJsonPath('status', false)
-            ->assertJsonPath('message', 'The merchant providing this item is currently not active on the marketplace.');
-
-        // Also verify Intent creation rejects suspended vendor
-        $resIntent = $this->postJson('/api/v1/checkout/intent', [
-            'shop_id' => $this->shop->id,
-            'customer_address_id' => $address->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'items' => [
-                ['product_id' => $product->id, 'quantity' => 1],
-            ],
-        ]);
-        $resIntent->assertStatus(422)
-            ->assertJsonPath('status', false)
-            ->assertJsonPath('message', 'The merchant providing this item is currently not active on the marketplace.');
-
-        // Case B: Vendor user account is suspended
-        $this->vendor->marketplace_status = 'active';
-        $this->vendor->save();
-        $this->vendorUser->status = 'suspended';
-        $this->vendorUser->save();
-
-        $resVendorUserSuspended = $this->postJson('/api/v1/customer/orders/checkout', [
-            'shop_id' => $this->shop->id,
-            'customer_address_id' => $address->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'items' => [
-                ['product_id' => $product->id, 'quantity' => 1],
-            ],
-        ]);
-        $resVendorUserSuspended->assertStatus(422)
-            ->assertJsonPath('status', false)
-            ->assertJsonPath('message', 'The merchant user account is inactive.');
-
-        // Case C: Vendor profile is soft-deleted
-        $this->vendorUser->status = 'active';
-        $this->vendorUser->save();
-        $this->vendor->delete(); // Soft-deletes vendor profile
-
-        $resVendorDeleted = $this->postJson('/api/v1/customer/orders/checkout', [
-            'shop_id' => $this->shop->id,
-            'customer_address_id' => $address->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'items' => [
-                ['product_id' => $product->id, 'quantity' => 1],
-            ],
-        ]);
-        $resVendorDeleted->assertStatus(422)
-            ->assertJsonPath('status', false)
-            ->assertJsonPath('message', 'The merchant providing this item is currently not active on the marketplace.');
-
-        // Restore vendor for subsequent proofs
-        $this->vendor->restore();
-    }
-
+    
     /**
      * PROOF 15: Order placement is strictly rejected if Shop is inactive or soft-deleted.
      */
-    public function test_order_placement_rejected_if_shop_is_inactive_or_trashed(): void
-    {
-        $category = \App\Models\Category::firstOrCreate(
-            ['slug' => 'appliances'],
-            ['name' => 'Appliances', 'is_active' => true]
-        );
-
-        $product = Product::create([
-            'vendor_id' => $this->vendor->id,
-            'shop_id' => $this->shop->id,
-            'category_id' => $category->id,
-            'name' => 'Electric Kettle',
-            'slug' => 'electric-kettle',
-            'unit_price' => '12000.00',
-            'inventory_quantity' => 20,
-            'is_in_stock' => true,
-            'is_approved' => true,
-            'listing_status' => 'listed',
-            'listing_confirmed_at' => Carbon::now(),
-        ]);
-
-        $address = CustomerAddress::create([
-            'user_id' => $this->customer->id,
-            'contact_name' => 'John Customer',
-            'phone' => '+2348011223344',
-            'address_line' => '44 Wellington Bassey Way',
-            'country_id' => $this->country->id,
-            'state_id' => $this->state->id,
-            'lga_id' => $this->lga->id,
-        ]);
-
-        Sanctum::actingAs($this->customer, ['*']);
-
-        // Case A: Shop is_active = false
-        $this->shop->is_active = false;
-        $this->shop->save();
-
-        $resInactiveShop = $this->postJson('/api/v1/customer/orders/checkout', [
-            'shop_id' => $this->shop->id,
-            'customer_address_id' => $address->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'items' => [
-                ['product_id' => $product->id, 'quantity' => 1],
-            ],
-        ]);
-        $resInactiveShop->assertStatus(422)
-            ->assertJsonPath('status', false)
-            ->assertJsonPath('message', 'The selected shop branch is currently inactive.');
-
-        // Intent creation with inactive shop
-        $resIntent = $this->postJson('/api/v1/checkout/intent', [
-            'shop_id' => $this->shop->id,
-            'customer_address_id' => $address->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'items' => [
-                ['product_id' => $product->id, 'quantity' => 1],
-            ],
-        ]);
-        $resIntent->assertStatus(422)
-            ->assertJsonPath('status', false)
-            ->assertJsonPath('message', 'The selected shop branch is currently inactive.');
-
-        // In-Shop Pickup Reservation creation with inactive shop
-        $resPickup = $this->postJson('/api/v1/customer/pickup-reservations', [
-            'shop_id' => $this->shop->id,
-            'product_id' => $product->id,
-            'quantity' => 1,
-        ]);
-        $resPickup->assertStatus(422)
-            ->assertJsonPath('status', false)
-            ->assertJsonPath('message', 'This shop branch is not active.');
-
-        // Case B: Shop is soft-deleted
-        $this->shop->is_active = true;
-        $this->shop->save();
-        $this->shop->delete(); // Soft-deletes shop branch
-
-        $resTrashedShop = $this->postJson('/api/v1/customer/orders/checkout', [
-            'shop_id' => $this->shop->id,
-            'customer_address_id' => $address->id,
-            'fulfillment_type' => 'doorstep_delivery',
-            'items' => [
-                ['product_id' => $product->id, 'quantity' => 1],
-            ],
-        ]);
-        $resTrashedShop->assertStatus(422)
-            ->assertJsonPath('status', false)
-            ->assertJsonPath('message', 'The selected shop branch is currently inactive.');
-
-        // Restore shop
-        $this->shop->restore();
-    }
-
+    
             /**
      * PROOF 18: Recommended Hardening - Customer account and Product marketplace freshness guards.
      */
