@@ -55,16 +55,16 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
             ['name' => 'Nigeria', 'phone_code' => '+234', 'currency_code' => 'NGN', 'is_active' => true]
         );
         $state = State::firstOrCreate(
-            ['code' => 'AK'],
+            ['state_code' => 'AK'],
             ['country_id' => $country->id, 'name' => 'Akwa Ibom', 'is_active' => true]
         );
         $this->uyoLga = Lga::firstOrCreate(
-            ['code' => 'UYO'],
-            ['state_id' => $state->id, 'name' => 'Uyo', 'is_active' => true]
+            ['state_id' => $state->id, 'name' => 'Uyo'],
+            ['is_active' => true]
         );
         $this->eketLga = Lga::firstOrCreate(
-            ['code' => 'EKT'],
-            ['state_id' => $state->id, 'name' => 'Eket', 'is_active' => true]
+            ['state_id' => $state->id, 'name' => 'Eket'],
+            ['is_active' => true]
         );
 
         // Admins
