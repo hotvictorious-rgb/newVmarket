@@ -10,6 +10,7 @@ use App\Models\OrderSupplierAssignment;
 use App\Models\PickupReservation;
 use App\Models\Product;
 use App\Models\Shop;
+use App\Models\SupplierOffer;
 use App\Models\VendorEmployeeProfile;
 use App\Models\VendorProfile;
 use App\Services\OrderSettlementService;
@@ -467,16 +468,75 @@ class VendorTerminalApiController extends Controller
             if ($order->retailer_model_order && $order->sourcing_status === 'supplier_rejected') {
                 return ['success' => false, 'status_code' => 409, 'message' => 'This order is on administrative sourcing hold after a supplier rejection. Do not confirm or prepare further packages until an administrator resolves it.'];
             }
+            // The confirmation is an order-specific statement that this supplier
+            // can fulfil every assigned line in its entirety. It is not catalog stock
+            // quantity and must be persisted against the paid order lines.
+            $assignedItems = \App\Models\OrderItem::where('order_id', $order->id)
+                ->where('fulfillment_supplier_vendor_id', $vendor->id)
+                ->where('fulfillment_supplier_shop_id', $assignment->supplier_shop_id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($assignedItems->isEmpty()) {
+                return ['success' => false, 'status_code' => 409, 'message' => 'This assignment has no current order lines. Admin reconciliation is required.'];
+            }
+
+            $confirmedItems = [];
+            $checkedAt = Carbon::now();
+            foreach ($assignedItems as $item) {
+                if ((int) $item->quantity < 1 || !$item->fulfillment_supplier_offer_id) {
+                    return ['success' => false, 'status_code' => 409, 'message' => 'An assigned line has no valid quantity or supplier offer. Admin reconciliation is required.'];
+                }
+
+                $product = Product::whereKey($item->product_id)->lockForUpdate()->first();
+                $offer = SupplierOffer::whereKey($item->fulfillment_supplier_offer_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$product || !$offer
+                    || (int) $offer->product_id !== (int) $item->product_id
+                    || (int) $offer->vendor_id !== (int) $vendor->id
+                    || (int) $offer->shop_id !== (int) $assignment->supplier_shop_id
+                    || !$offer->is_available
+                    || !$offer->availability_confirmed_at
+                    || !$offer->availability_confirmed_by
+                    || !$offer->availability_expires_at
+                    || $offer->availability_expires_at->lte($checkedAt)
+                    || ($offer->unavailability_penalty_expires_at && $offer->unavailability_penalty_expires_at->gt($checkedAt))
+                    || BcMathService::comp((string) $offer->wholesale_cost, '0.00') <= 0
+                    || BcMathService::comp((string) $offer->wholesale_cost, (string) $product->unit_price) >= 0
+                ) {
+                    return ['success' => false, 'status_code' => 409, 'message' => 'A supplier offer is no longer eligible. The order remains blocked for safe sourcing recovery.'];
+                }
+
+                $confirmedItems[] = [
+                    'order_item_id' => (int) $item->id,
+                    'product_id' => (int) $item->product_id,
+                    'product_name_snapshot' => (string) $item->product_name,
+                    'requested_quantity' => (int) $item->quantity,
+                    'supplier_offer_id' => (int) $offer->id,
+                    'confirmed_at' => $checkedAt->toISOString(),
+                ];
+            }
+
+            $confirmationHash = hash('sha256', json_encode($confirmedItems, JSON_UNESCAPED_SLASHES));
             if ($assignment->status === 'supplier_confirmed') {
-                return ['success' => true, 'message' => 'Your supplier assignment was already confirmed.', 'order' => $order];
+                if (!$assignment->confirmation_snapshot_hash
+                    || !hash_equals((string) $assignment->confirmation_snapshot_hash, $confirmationHash)) {
+                    return ['success' => false, 'status_code' => 409, 'message' => 'The current order lines differ from the saved supplier confirmation. Admin reconciliation is required.'];
+                }
+                return ['success' => true, 'message' => 'Your supplier assignment was already confirmed for the saved order-line quantities.', 'order' => $order];
             }
             if ($assignment->status !== 'awaiting_supplier_confirmation') {
                 return ['success' => false, 'status_code' => 422, 'message' => 'This supplier assignment is not awaiting confirmation.'];
             }
 
             $assignment->status = 'supplier_confirmed';
-            $assignment->supplier_confirmed_at = Carbon::now();
+            $assignment->supplier_confirmed_at = $checkedAt;
             $assignment->supplier_response_notes = $validated['notes'] ?? null;
+            $assignment->confirmed_order_items = $confirmedItems;
+            $assignment->confirmation_snapshot_hash = $confirmationHash;
             $assignment->save();
 
             $hasPending = OrderSupplierAssignment::where('order_id', $order->id)
