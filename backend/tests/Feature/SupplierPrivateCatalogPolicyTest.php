@@ -102,6 +102,14 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
         $this->assertFalse(Schema::hasColumn('supplier_catalog_products', 'inventory_quantity'));
 
         Sanctum::actingAs($this->supplierUser, ['*']);
+        $quantityAttempt = $this->postJson('/api/v1/vendor/private-catalog', [
+            'product_name' => 'Must Reject Quantity Payload',
+            'source_price' => '100.00',
+            'is_in_stock' => true,
+            'quantity' => 3,
+        ]);
+        $quantityAttempt->assertStatus(422)->assertJsonValidationErrors('quantity');
+
         $created = $this->postJson('/api/v1/vendor/private-catalog', [
             'product_name' => 'Solar Power Bank 20000mAh',
             'description' => 'Supplier private source record.',
@@ -147,6 +155,13 @@ class SupplierPrivateCatalogPolicyTest extends TestCase
             'condition' => 'brand_new',
             'package_tier' => 'bike',
         ]);
+
+        Sanctum::actingAs($this->supplierUser, ['*']);
+        $selfLinkAttempt = $this->patchJson("/api/v1/vendor/private-catalog/{$recordId}", [
+            'canonical_product_id' => $canonical->id,
+        ]);
+        $selfLinkAttempt->assertStatus(422)->assertJsonValidationErrors('canonical_product_id');
+        $this->assertNull($record->fresh()->canonical_product_id);
 
         $this->actingAs($this->admin);
         $linked = $this->post(route('admin.supplier-catalog.private-products.link', $recordId), [
