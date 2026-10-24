@@ -30,8 +30,8 @@ return new class extends Migration
             $table->text('resolution_notes')->nullable();
             $table->timestamps();
 
-            $table->index(['gateway_provider', 'gateway_transaction_id']);
-            $table->index(['order_id', 'status']);
+            $table->index(['gateway_provider', 'gateway_transaction_id'], 'pce_gw_provider_tx_idx');
+            $table->index(['order_id', 'status'], 'pce_order_status_idx');
         });
     }
 
