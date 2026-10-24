@@ -43,7 +43,7 @@ class CheckoutExecutionService
     {
         // Single authoritative global selector: Paystack OR manual transfer OR disabled.
         // There is no dual-enabled state to race or accidentally expose at checkout.
-        $paymentConfig = SystemSetting::get('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
+        $paymentConfig = SystemSetting::getFresh('checkout.payment_configuration', ['active_method' => 'paystack', 'manual_bank_transfer_account' => []]);
         $activePaymentMethod = is_array($paymentConfig) ? (string) ($paymentConfig['active_method'] ?? 'paystack') : 'paystack';
         if (!in_array($activePaymentMethod, ['paystack', 'manual_bank_transfer'], true)) {
             return ['success' => false, 'status_code' => 503, 'message' => 'Checkout payments are temporarily disabled. Please contact Victorious MARKET support.'];
