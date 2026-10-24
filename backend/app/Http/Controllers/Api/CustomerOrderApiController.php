@@ -175,7 +175,13 @@ class CustomerOrderApiController extends Controller
                 'payment_method' => $order->payment_method,
                 'payment_status' => $order->payment_status,
                 'wallet_credit_applied' => $order->wallet_credit_applied,
-                'paystack' => $result['paystack'],
+                'paystack' => $result['paystack'] ?? null,
+                'manual_bank_transfer' => $order->payment_method === 'manual_bank_transfer' ? [
+                    'account' => $order->manual_bank_transfer_account_snapshot,
+                    'order_code_for_narration' => $order->order_number,
+                    'receipt_upload_url' => route('order.status', ['order_number' => $order->order_number]),
+                    'admin_verification_required' => true,
+                ] : null,
                 'order' => $this->formatOrderFull($order),
             ],
         ], $result['http_status'] ?? 201);
