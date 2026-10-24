@@ -544,6 +544,9 @@ class PaystackPaymentHardeningTest extends TestCase
         $this->assertTrue($second['requires_admin_review']);
         $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
         $this->assertSame($cashbackCount, CustomerCashbackLedger::where('order_id', $order->id)->count());
+        $this->assertSame(0, \\App\\Models\\FinancialOperation::where('operation_type', 'customer_refund')
+            ->whereJsonContains('metadata->order_id', $order->id)->count(),
+            'A duplicate-capture exception must not automatically create or dispatch a refund.');
         $this->assertDatabaseHas('payment_capture_exceptions', [
             'order_id' => $order->id,
             'gateway_transaction_id' => '112234',
