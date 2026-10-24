@@ -1,4 +1,16 @@
 # Victorious MARKET — Active Business Rules and Documentation Source of Truth
+
+## Owner-confirmed policy alignment — 24 October 2026
+
+This section supersedes conflicting older supplier-settlement wording. It records policy decisions and does not certify implementation.
+
+- Supplier settlement minimum: ₦1. Maximum: ₦1,000,000 per individual settlement transaction/request. No FIFO/oldest-first selection and no silent splitting.
+- The initiating authorized admin may complete supplier-settlement reconciliation; a second administrator is not mandatory for that outgoing-settlement reconciliation. Audit, transaction uniqueness, idempotency, cleared funds, destination validation, ledger balancing and actual bank-outcome evidence remain mandatory.
+- Admin-uploaded outgoing-transfer evidence applies to supplier settlements. Customer-uploaded incoming-transfer screenshots are separate supporting evidence for manual customer-payment review; they are never proof of actual incoming credit by themselves.
+- Supplier settlements may proceed only against eligible reconciled supplier payables and cleared/reconciled platform funds, regardless of whether customer money originated through Paystack or the separately isolated manual-transfer method. Do not fabricate Paystack identities for manual transfers.
+- Preserve Monday–Friday operating days, but do not make Paystack settlement a prerequisite when cleared funds came through the separately approved manual-transfer collection path.
+- Legacy vendor-wallet/vendor-payout caps and FIFO rules do not govern new retailer-model supplier payables. No automated refunds or transfers are permitted.
+
 **Decision date:** 22 October 2026  
 **Scope:** Business policy and documentation only. This document does not certify code implementation.
 
