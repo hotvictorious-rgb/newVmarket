@@ -18,15 +18,16 @@ use Illuminate\Support\Str;
 class RetailerSupplierPayoutService
 {
     private const MINIMUM_AMOUNT = '5000.00';
-    private const MAXIMUM_AMOUNT = '500000.00';
+    private const MAXIMUM_AMOUNT = '1000000.00';
 
     /**
-     * Reserve whole, reconciled supplier item payables in FIFO order. This method
-     * never uses legacy order-level vendor earnings for retailer-model orders.
+     * Reserve only the supplier's explicitly selected, reconciled item payables.
+     * Selection is never inferred from order age or FIFO. The selected item set is
+     * revalidated under locks and must fit within one allowed payout transaction.
      */
-    public function requestPayout(VendorProfile $supplier): array
+    public function requestPayout(VendorProfile $supplier, array $selectedOrderItemIds = []): array
     {
-        return DB::transaction(function () use ($supplier) {
+        return DB::transaction(function () use ($supplier, $selectedOrderItemIds) {
             $lockedSupplier = VendorProfile::whereKey($supplier->id)->lockForUpdate()->first();
             if (!$lockedSupplier || $lockedSupplier->marketplace_status !== 'active'
                 || !$lockedSupplier->user()->where('status', 'active')->exists()) {
@@ -64,7 +65,17 @@ class RetailerSupplierPayoutService
                 return ['success' => false, 'message' => 'A supplier payout is already pending or requires reconciliation.'];
             }
 
+            if (!$selectedOrderItemIds) {
+                return ['success' => false, 'message' => 'Select the specific eligible order items to include in this payout. Automatic FIFO selection is disabled.'];
+            }
+            $selectedOrderItemIds = array_values(array_map('intval', $selectedOrderItemIds));
+            if (count($selectedOrderItemIds) !== count(array_unique($selectedOrderItemIds))
+                || min($selectedOrderItemIds) < 1) {
+                return ['success' => false, 'message' => 'Selected order-item IDs must be positive and unique.'];
+            }
+
             $candidateItems = OrderItem::with('order')
+                ->whereIn('id', $selectedOrderItemIds)
                 ->where('fulfillment_supplier_vendor_id', $lockedSupplier->id)
                 ->whereHas('order', function ($query) {
                     $query->where('retailer_model_order', true)
@@ -83,8 +94,8 @@ class RetailerSupplierPayoutService
                 ->orderBy('id')
                 ->get();
 
-            if ($candidateItems->isEmpty()) {
-                return ['success' => false, 'message' => 'No delivered, reconciled supplier item payables are currently eligible for payout.'];
+            if ($candidateItems->isEmpty() || $candidateItems->count() !== count($selectedOrderItemIds)) {
+                return ['success' => false, 'protected' => true, 'message' => 'One or more selected items are not eligible delivered payables for this supplier. No payout was reserved.'];
             }
 
             $orderIds = $candidateItems->pluck('order_id')->unique()->sort()->values()->all();
@@ -100,12 +111,15 @@ class RetailerSupplierPayoutService
                     return ['success' => false, 'protected' => true, 'message' => "Order #{$lockedOrder->id} changed eligibility while supplier payout was being prepared."];
                 }
             }
-            $items = OrderItem::whereIn('order_id', $orderIds)
+            $items = OrderItem::whereIn('id', $selectedOrderItemIds)
+                ->whereIn('order_id', $orderIds)
                 ->where('fulfillment_supplier_vendor_id', $lockedSupplier->id)
-                ->orderBy('order_id')
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
+            if ($items->count() !== count($selectedOrderItemIds)) {
+                return ['success' => false, 'protected' => true, 'message' => 'The selected supplier items changed while the payout was being prepared. No payout was reserved.'];
+            }
 
             $audit = app(FinancialReconciliationEngine::class);
             foreach ($orderIds as $orderId) {
@@ -158,32 +172,21 @@ class RetailerSupplierPayoutService
                 ];
             }
 
-            usort($eligible, function ($a, $b) {
-                $orderCompare = $a['order_id'] <=> $b['order_id'];
-                return $orderCompare !== 0 ? $orderCompare : ($a['item']->id <=> $b['item']->id);
-            });
-
-            if (!$eligible) {
-                return ['success' => false, 'message' => 'No unreserved supplier-payable journal balances are eligible for payout.'];
+            if (!$eligible || count($eligible) !== count($selectedOrderItemIds)) {
+                return ['success' => false, 'protected' => true, 'message' => 'One or more selected items have no positive, unreconciled supplier-payable balance. No payout was reserved.'];
             }
 
-            $allocations = [];
+            $allocations = $eligible;
             $total = '0.00';
-            foreach ($eligible as $candidate) {
-                if (BcMathService::comp($candidate['amount'], self::MAXIMUM_AMOUNT) > 0 && !$allocations) {
-                    return [
-                        'success' => false,
-                        'protected' => true,
-                        'message' => "Supplier item #{$candidate['item']->id} exceeds the ₦500,000 launch payout cap and requires finance review.",
-                    ];
-                }
-
-                $nextTotal = BcMathService::add($total, $candidate['amount']);
-                if (BcMathService::comp($nextTotal, self::MAXIMUM_AMOUNT) > 0) {
-                    break;
-                }
-                $allocations[] = $candidate;
-                $total = $nextTotal;
+            foreach ($allocations as $candidate) {
+                $total = BcMathService::add($total, $candidate['amount']);
+            }
+            if (BcMathService::comp($total, self::MAXIMUM_AMOUNT) > 0) {
+                return [
+                    'success' => false,
+                    'protected' => true,
+                    'message' => 'Selected supplier payables exceed the ₦1,000,000 maximum per payout. Select a smaller explicit set of items; the request will not be silently split.',
+                ];
             }
 
             if (BcMathService::comp($total, self::MINIMUM_AMOUNT) < 0) {
