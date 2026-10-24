@@ -36,6 +36,34 @@
         </div>
     @endif
     
+    @if($order->payment_method === 'manual_bank_transfer')
+        <section style="background:#fff;border:1px solid #cbd5e1;border-radius:14px;padding:20px;margin-bottom:24px">
+            <h2 style="font-size:18px;font-weight:800;margin:0 0 8px;color:#0f172a">Manual Bank Transfer Receipt</h2>
+            @if($order->manualBankTransferPayment)
+                @if($order->manualBankTransferPayment->status === 'pending_review')
+                    <p style="margin:0;color:#92400e">Your receipt has been received and is awaiting admin review. Your order is not yet paid. Sourcing will start only after the admin verifies the actual bank credit.</p>
+                @elseif($order->manualBankTransferPayment->status === 'approved')
+                    <p style="margin:0;color:#065f46">Your bank transfer has been verified and approved. Your order has entered the post-payment process.</p>
+                @else
+                    <p style="margin:0;color:#991b1b">Your payment submission was rejected. This order cannot accept another payment submission. Contact Victorious MARKET support before making another transfer.</p>
+                @endif
+            @elseif(in_array($order->payment_status, ['pending', 'unpaid'], true) && !$order->paid_at)
+                <p style="margin:0 0 12px;color:#475569">Upload a clear screenshot or image of the transfer receipt for this order. This image is supporting evidence only. An admin will independently verify the actual credit in the official receiving bank account.</p>
+                <p style="margin:0 0 14px;font-weight:800;color:#0f172a">Order amount: ₦{{ number_format((float)$order->grand_total, 2) }}</p>
+                <form method="POST" action="{{ route('customer.manual-bank-transfer.submit', ['order_number' => $order->order_number]) }}" enctype="multipart/form-data">
+                    @csrf
+                    @if(request()->query('token'))
+                        <input type="hidden" name="token" value="{{ request()->query('token') }}">
+                    @endif
+                    <label for="payment_screenshot" style="display:block;font-weight:700;margin-bottom:6px">Transfer screenshot / receipt (JPEG, PNG or WebP, max 5 MB)</label>
+                    <input id="payment_screenshot" type="file" name="payment_screenshot" accept="image/jpeg,image/png,image/webp" required style="display:block;width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin-bottom:12px">
+                    <button type="submit" style="border:0;border-radius:8px;padding:11px 16px;background:#1d4ed8;color:#fff;font-weight:800" onclick="return confirm('Submit this receipt for admin verification? You can submit only once for this order.')">Upload receipt for review</button>
+                </form>
+                <p style="font-size:12px;color:#64748b;margin:10px 0 0">Never upload a receipt for a different order. Do not make a second transfer for this order. If you are unsure whether the first transfer succeeded, contact support before taking further action.</p>
+            @endif
+        </section>
+    @endif
+
     <!-- ========================================== -->
     <!-- 1. ORDER CONFIRMATION BANNER (SCREEN 13) -->
     <!-- ========================================== -->
