@@ -508,6 +508,57 @@ class PaystackPaymentHardeningTest extends TestCase
     }
 
     /**
+     * A distinct successful gateway transaction against an already-paid order is
+     * not an ordinary webhook replay. It creates one durable admin-review case
+     * and cannot repeat any settlement-side financial effects.
+     */
+    public function test_distinct_successful_capture_on_paid_order_is_recorded_once_for_admin_review(): void
+    {
+        $order = $this->createTestOrder(['grand_total' => '8000.00']);
+        $service = app(OrderSettlementService::class);
+
+        $originalCapture = [
+            'id' => 112233,
+            'status' => 'success',
+            'currency' => 'NGN',
+            'amount' => 800000,
+            'reference' => $order->payment_reference,
+            'channel' => 'bank_transfer',
+            'customer' => ['email' => $this->customer->email],
+        ];
+
+        $first = $service->settlePaystackOrder($order, $originalCapture);
+        $this->assertTrue($first['success']);
+        $this->assertSame('PAID', $first['status']);
+
+        $journalCount = FinancialJournalEntry::where('order_id', $order->id)->count();
+        $cashbackCount = CustomerCashbackLedger::where('order_id', $order->id)->count();
+
+        $secondCapture = $originalCapture;
+        $secondCapture['id'] = 112234;
+        $second = $service->settlePaystackOrder($order->fresh(), $secondCapture);
+
+        $this->assertTrue($second['success']);
+        $this->assertSame('DUPLICATE_CAPTURE_REQUIRES_REVIEW', $second['status']);
+        $this->assertTrue($second['requires_admin_review']);
+        $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
+        $this->assertSame($cashbackCount, CustomerCashbackLedger::where('order_id', $order->id)->count());
+        $this->assertDatabaseHas('payment_capture_exceptions', [
+            'order_id' => $order->id,
+            'gateway_transaction_id' => '112234',
+            'exception_type' => 'distinct_successful_capture',
+            'status' => 'pending_admin_review',
+        ]);
+
+        // Re-delivery of that second capture is idempotent: one case and one audit record.
+        $again = $service->settlePaystackOrder($order->fresh(), $secondCapture);
+        $this->assertSame('DUPLICATE_CAPTURE_REQUIRES_REVIEW', $again['status']);
+        $this->assertSame(1, \App\Models\PaymentCaptureException::where('order_id', $order->id)->count());
+        $this->assertSame(1, AdminAuditLog::where('target_id', $order->id)
+            ->where('action', 'paystack_duplicate_capture_review_required')->count());
+    }
+
+    /**
      * PROOF 11: Mobile / SPA Authenticated Payment Verification Endpoint
      * Verifies server-to-server with Paystack and settles order atomically.
      */
