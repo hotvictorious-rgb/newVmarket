@@ -687,21 +687,35 @@ The following findings were confirmed during source review and hardened on `docs
 **Status: OPEN — exceptions are recorded and visible, but full resolution and exact-capture refund workflow remain incomplete.**
 
 
-## VM-AUD-136 — Supplier confirmation did not persist the exact paid order quantities (24 October 2026)
 
-**Severity:** High — order fulfilment correctness and supplier-response auditability.
+## VM-AUD-136 — Supplier catalog and exact-order confirmation alignment (24 October 2026)
 
-**Evidence found:** The supplier confirmation endpoint previously accepted a generic confirmation and changed the assignment status, but did not persist the exact order lines/quantities the supplier had accepted or identify the confirming user. A later order-line edit or stale assignment state could therefore make it difficult to prove what the supplier actually confirmed.
+**Severity:** High — order fulfilment correctness, supplier-data integrity and sourcing auditability.
+
+**Original gap:** Supplier confirmation changed an assignment status but did not persist the exact paid order lines/quantities accepted or identify the confirming supplier user. The catalog was also tied directly to canonical public products, the binary stock signal could be confused with quantity, and admin disablement shared the same flag as supplier stock.
 
 **Changes committed on `docs/retailer-central-fulfilment-model`:**
-- Added nullable `confirmed_order_items` JSON, `confirmation_snapshot_hash`, and `supplier_confirmed_by_user_id` to `order_supplier_assignments`.
-- Supplier confirmation now locks the order and assigned lines, verifies each line's offer still belongs to the assigned supplier/shop, is currently available with fresh confirmation, is outside cooldown, and retains positive margin.
-- Stores an order-scoped snapshot of exact line IDs, product IDs/names, requested quantities, offer IDs and confirmation timestamps, together with a deterministic hash and the confirming user ID.
-- A duplicate confirmation is accepted only when the currently assigned lines match the saved snapshot hash; changed or invalid state fails closed for admin reconciliation.
-- Added regression assertions for exact line/quantity persistence, confirming actor, and idempotent duplicate confirmation.
+- Added `confirmed_order_items`, a deterministic `confirmation_snapshot_hash`, and `supplier_confirmed_by_user_id` to supplier assignments. Confirmation locks the paid order and its assigned lines, revalidates each linked offer and positive margin, records exact line IDs/product IDs/names/quantities/offer IDs, and rejects changed snapshots on replay.
+- Added `supplier_catalog_products` as a private supplier-owned catalog with product details, source price, specs/photo path, and binary `is_in_stock`; the table intentionally has no `quantity` or `inventory_quantity` column.
+- Added supplier-owner API endpoints to list/create/update private catalog records. Requests that submit quantity fields or try to set canonical matching/ownership are rejected. Stock transitions invalidate prior availability confirmation and cannot override an admin-disabled offer.
+- Added a Super Admin private-record workflow to create a record, review an exact canonical match, link it to one canonical product, and create/synchronize the corresponding supplier offer. Direct offer creation without a private source record has been removed from the admin route/UI.
+- Added a unique offer-to-private-record relationship, protected hard-delete references, audited source-price corrections, and an explicit admin re-enable action requiring a reason and fresh confirmation.
+- Separated `is_admin_disabled` from the supplier's stock signal. Selection, public product eligibility, recovery, confirmation and supplier stock updates all respect admin disablement.
+- Removed the fake `available_quantity = 999` inference for centrally managed canonical products. Their supplier availability remains binary; requested quantity is confirmed only against a paid order line.
+- Added automatic failover after supplier rejection and the existing SLA timeout. The service reuses the transactional recovery path, deterministic idempotency keys, immutable capture snapshots and compensating supplier-payable journals. It applies the SKU cooldown first and moves to the next eligible whole-order plan. If no safe complete plan remains, the order stays held for Super Admin resolution; no automatic refund or transfer is triggered.
+- Public listing eligibility now hides products when all offers are stale, disabled, out of stock, cooldown-blocked, non-positive-margin or at the supplier pending-handover limit.
+- Added integration/regression tests for exact quantity snapshots, duplicate confirmation, successful paid-order failover with three units and balanced supplier payables, private catalog ownership, no quantity field, one-record/one-canonical matching, stock confirmation invalidation, admin disable protection, and cooldown-driven public listing hiding.
 
-**Impact:** Victorious MARKET can prove which quantities a supplier accepted for a specific paid order, instead of treating the supplier catalog's binary stock flag as a quantity promise. The confirmation endpoint also refuses to accept an offer that has become stale, unavailable, cooldown-blocked or non-positive-margin.
+**Verification evidence:** The refund-safety GitHub Actions job passed at commit `579027e4774b55a4038165766b1bf1b8841814fd`: **246 tests passed (1,722 assertions)**, the supplier bank-update regression passed (**1 test, 9 assertions**), and the PHP syntax scan passed. This verified the private catalog test suite and automatic rejection failover test. Subsequent schema/SQL hardening commits for PostgreSQL compatibility and the admin-disabled confirmation guard were still running through CI when this tracker was updated.
 
-**Verification status:** Code and tests are committed, but this change has not yet been verified by a completed branch CI run in this session. Migration execution, targeted tests and full regression results remain pending.
+**PostgreSQL verification caveat:** Earlier PostgreSQL proof runs failed because the active schema lacked `states.code` and `financial_operations.gateway_reference`. Compatibility migrations and fresh-schema definitions have since been added, but a successful PostgreSQL proof run is still required before claiming cross-driver CI is green.
 
-**Still open / launch-critical:** This does **not** implement automatic supplier failover. The current rejection/timeout paths place the paid order on an admin-managed sourcing hold; they do not yet automatically walk the next eligible supplier candidates and execute a balanced, idempotent reassignment. Automatic failover must reuse the existing immutable snapshot and compensating-journal safeguards, be bounded and concurrency-safe, and stop in the admin exception queue only after eligible candidates are exhausted. Do not claim the approved workflow is fully implemented until that behavior and its failure/concurrency tests pass.
+**Still open / launch-critical:**
+1. Verify latest complete SQLite/refund-safety and PostgreSQL CI after all current commits.
+2. Add explicit concurrent-worker/replay tests for two failover workers competing on the same rejected assignment, plus SLA-timeout failover tests and multi-supplier grouped recovery partial-failure recovery.
+3. Complete an audited unmatch/rematch workflow for an incorrectly linked private catalog record; current linking correctly refuses a second canonical match but does not yet offer a guided correction path.
+4. Safely migrate or retire legacy supplier offers that have no private catalog record. They remain eligible for backward compatibility during transition, even though new admin offer creation now requires a private record.
+5. Finish cross-path stock reconciliation for checkout, settlement, expiry/restoration, cancellation/refund and concurrent payment events. Do not remove legacy guards without those tests.
+6. Complete corporate-bank settlement/bank-credit proof before supplier payouts (VM-AUD-134) and the payment-capture exception resolution workflow (VM-AUD-135).
+
+**Status:** The approved private catalog, exact-order confirmation and automatic rejection/timeout failover are implemented on the working branch with passing main-suite evidence. The entire sourcing/settlement system is **not yet launch-certified**; PostgreSQL CI and the remaining financial/stock gates must pass. No merge or deployment was performed.
