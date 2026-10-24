@@ -1538,7 +1538,15 @@ class PortalController extends Controller
             ->take(20)
             ->get();
 
-        return view('vendor.payout', compact('vendor', 'vendorMetrics', 'payoutRequests', 'retailerSupplierPayoutRequests'));
+        $eligibleRetailerSupplierItems = app(RetailerSupplierPayoutService::class)->previewEligibleItems($vendor);
+
+        return view('vendor.payout', compact(
+            'vendor',
+            'vendorMetrics',
+            'payoutRequests',
+            'retailerSupplierPayoutRequests',
+            'eligibleRetailerSupplierItems'
+        ));
     }
 
     /**
@@ -1551,7 +1559,11 @@ class PortalController extends Controller
             abort(403, 'Only the supplier account owner can request supplier-payable payouts.');
         }
 
-        $result = $service->requestPayout($vendor);
+        $validated = $request->validate([
+            'order_item_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'order_item_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+        ]);
+        $result = $service->requestPayout($vendor, $validated['order_item_ids']);
         if (!$result['success']) {
             return back()->with('error', $result['message'] ?? 'Supplier payable payout request could not be created.');
         }
