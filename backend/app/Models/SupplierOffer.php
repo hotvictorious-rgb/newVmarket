@@ -11,6 +11,7 @@ class SupplierOffer extends Model
 
     protected $fillable = [
         'product_id',
+        'supplier_catalog_product_id',
         'vendor_id',
         'shop_id',
         'wholesale_cost',
@@ -42,6 +43,11 @@ class SupplierOffer extends Model
     public function availabilityConfirmer()
     {
         return $this->belongsTo(User::class, 'availability_confirmed_by');
+    }
+
+    public function supplierCatalogProduct()
+    {
+        return $this->belongsTo(SupplierCatalogProduct::class, 'supplier_catalog_product_id')->withTrashed();
     }
 
     public function product()
