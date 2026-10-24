@@ -98,6 +98,8 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
         ->name('admin.orders.supplier_assignments.recover');
     Route::get('/products', [PortalController::class, 'adminProductsPage'])->name('admin.products.index');
     Route::get('/supplier-catalog', [AdminSupplierCatalogController::class, 'index'])->name('admin.supplier-catalog.index');
+    Route::post('/supplier-catalog/private-products', [AdminSupplierCatalogController::class, 'storeSupplierCatalogProduct'])->name('admin.supplier-catalog.private-products.store');
+    Route::post('/supplier-catalog/private-products/{catalogProductId}/link', [AdminSupplierCatalogController::class, 'linkSupplierCatalogProduct'])->whereNumber('catalogProductId')->name('admin.supplier-catalog.private-products.link');
     Route::post('/supplier-catalog/products', [AdminSupplierCatalogController::class, 'storeProduct'])->name('admin.supplier-catalog.products.store');
     Route::post('/supplier-catalog/products/{productId}/listing', [AdminSupplierCatalogController::class, 'setListing'])->whereNumber('productId')->name('admin.supplier-catalog.products.listing');
     Route::post('/supplier-catalog/products/{productId}/offers', [AdminSupplierCatalogController::class, 'storeOffer'])->whereNumber('productId')->name('admin.supplier-catalog.offers.store');
