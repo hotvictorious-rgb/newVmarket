@@ -267,3 +267,7 @@ The [Approved Exception and Reverse-Logistics Policies](docs/architecture/APPROV
 ## Owner-approved Order State, Custody and Recovery Policy — 23 October 2026
 
 The [Order State, Custody and Recovery Policy](docs/architecture/ORDER_STATE_CUSTODY_AND_RECOVERY_POLICY_2026-10-23.md) is a binding cross-cutting design constraint for lifecycle separation, verified-payment recovery, concurrency safety, custody evidence, exception ownership and reconciliation. It supplements but does not override the Active Business Rules or specific approved exception/refund outcomes. Preserve one logistics company/rider per normal order, independent logistics tariffs, item-level partial fulfilment, distinct absence/rejection/defect paths and the Zero-Automated-Outflow Law. Policy approval is not implementation proof; schema, code, admin flows and recovery tests must be audited separately.
+
+
+### Payment-method exclusivity invariant
+Only one of Paystack and Manual Bank Transfer may be active globally at a time; an authorized admin may activate either one or deactivate both. The server must enforce this atomically and reject dual activation. Each order is permanently bound to one method and cannot mix, top up, verify, settle or refund through the other. Disabling a method does not alter existing payment attempts. Pending or uncertain attempts must be reconciled before an audited reset. See [Manual Bank Transfer and Payment-Provider Policy](docs/architecture/MANUAL_BANK_TRANSFER_AND_PAYMENT_PROVIDER_POLICY_2026-10-24.md).
