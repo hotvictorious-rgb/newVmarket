@@ -744,6 +744,26 @@ class AutomatedSupplierSourcingTest extends TestCase
             'target_id' => $order->id,
             'action' => 'automatic_supplier_failover_applied',
         ]);
+
+        // Replaying the timeout/rejection recovery after the assignment has
+        // transitioned must be a no-op: no second payable reversal, replacement
+        // payable, assignment, or audit success may be created.
+        $journalCountBeforeReplay = \App\Models\FinancialJournalEntry::where('order_id', $order->id)->count();
+        $assignmentCountBeforeReplay = OrderSupplierAssignment::where('order_id', $order->id)->count();
+        $replay = app(\App\Services\SupplierReassignmentRecoveryService::class)
+            ->attemptAutomaticFailover($order->id, $failedAssignment->id);
+
+        $this->assertFalse($replay['success'] ?? false);
+        $this->assertSame(
+            $journalCountBeforeReplay,
+            \App\Models\FinancialJournalEntry::where('order_id', $order->id)->count(),
+            'A replay must not duplicate any financial journal entry.'
+        );
+        $this->assertSame(
+            $assignmentCountBeforeReplay,
+            OrderSupplierAssignment::where('order_id', $order->id)->count(),
+            'A replay must not create another supplier assignment.'
+        );
     }
 
 }
