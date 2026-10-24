@@ -130,3 +130,16 @@ At minimum, tests must prove:
 - existing Paystack, refund, webhook recovery, settlement and ledger safety tests remain passing.
 
 Policy alignment is not evidence of implementation. Code, database constraints, admin permissions, operational bank-verification procedure and tests must be reviewed separately before release.
+
+
+## Owner-confirmed superseding clarification — 24 October 2026
+
+This clarification supersedes conflicting earlier statements in this addendum, including the earlier global mutual-exclusion rule and any terminal-on-first-submission wording that prevents replacement evidence during an open review.
+
+- **Paystack and direct Manual Bank Transfer may coexist.** Both may be enabled and offered to customers simultaneously. If neither is enabled, checkout is disabled. Each order is bound to exactly one method and uses that method's own verification path. No cross-method verification, switching after an attempt starts, mixed payment or fabricated provider reference is allowed. Pending/unknown/disputed attempts must be reconciled before an explicitly audited reset.
+- **One order, one accepted payment.** Each Paystack reference or incoming bank transaction is unique and may be applied to at most one order. Exact order/amount/currency binding, persistent uniqueness, atomic transitions, idempotency and concurrency safety are mandatory.
+- **Manual receipt evidence:** while review remains open, an authorized admin may request replacement evidence; retain the old version and audit trail. A final rejection ends ordinary receipt resubmission and does not allow a second payment on that order. A claim that money was actually credited despite rejection opens a separate support investigation; reconcile the actual bank credit and resolve only through an explicit audited exception, without silent order reactivation.
+- **Outgoing settlements:** both supplier and logistics-company settlements are manual bank transfers made outside the website and recorded/reconciled in it. Each individual request/transfer has a ₦1 minimum and ₦1,000,000 maximum, no FIFO/oldest-first requirement and no silent splitting. The initiating authorized admin may reconcile without a second admin, but separate audit events, unique bank reference, idempotency and actual bank-outcome verification remain mandatory. Admin-uploaded transfer evidence applies to both payee types and is not proof of completion by itself.
+- Both settlement types require an eligible payable and cleared/reconciled platform funds. Preserve the Monday–Friday operating schedule. Pending, uncertain, failed or reversed transfers are not settled; reconcile before retry. No automated bank outflow. Keep supplier and logistics payables separate and balanced in the ledger; old vendor-wallet payout rules do not govern retailer-model payables.
+- Manual-transfer refunds remain a separately authorized manual process; do not use Paystack's refund API for a direct bank transfer or mark a refund complete before its actual outgoing bank outcome is reconciled. Existing Paystack-specific cashback eligibility is unchanged unless separately amended by the owner.
+- This policy is not implementation proof; code, database constraints, permissions and acceptance tests require separate verification.
