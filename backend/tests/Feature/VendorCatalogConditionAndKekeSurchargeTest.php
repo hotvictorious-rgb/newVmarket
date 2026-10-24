@@ -519,6 +519,7 @@ class VendorCatalogConditionAndKekeSurchargeTest extends TestCase
             ->firstOrFail();
         $this->assertNotEmpty($assignmentB->confirmed_order_items);
         $this->assertNotEmpty($assignmentB->confirmation_snapshot_hash);
+        $this->assertSame($supplierUserB->id, $assignmentB->supplier_confirmed_by_user_id);
         $expectedSupplierBItems = OrderItem::where('order_id', $orderTwoBulky->id)
             ->where('fulfillment_supplier_vendor_id', $supplierB->id)
             ->where('fulfillment_supplier_shop_id', $shopB->id)
