@@ -6,6 +6,7 @@ use App\Http\Controllers\Web\AdminOrderSupplierAssignmentController;
 use App\Http\Controllers\Web\AdminSupplierRecoveryController;
 use App\Http\Controllers\Web\AdminRetailerSupplierPayoutController;
 use App\Http\Controllers\Web\AdminPaymentCaptureExceptionController;
+use App\Http\Controllers\Web\AdminTreasuryBankCreditBatchController;
 use App\Http\Controllers\Web\PaystackPaymentController;
 use App\Http\Controllers\Web\PortalController;
 use App\Http\Controllers\Web\WebAuthController;
@@ -74,6 +75,9 @@ Route::middleware(['role:super_admin'])->prefix('admin')->group(function () {
     Route::get('/delivery-lanes', [PortalController::class, 'adminDeliveryLanesPage'])->name('admin.delivery_lanes.index');
     Route::get('/settlements', [PortalController::class, 'adminSettlementsPage'])->name('admin.settlements.index');
     Route::get('/retailer-supplier-payouts', [AdminRetailerSupplierPayoutController::class, 'index'])->name('admin.retailer-supplier-payouts.index');
+    Route::get('/treasury-bank-credit-batches', [AdminTreasuryBankCreditBatchController::class, 'index'])->name('admin.treasury-bank-credit-batches.index');
+    Route::post('/treasury-bank-credit-batches', [AdminTreasuryBankCreditBatchController::class, 'prepare'])->name('admin.treasury-bank-credit-batches.prepare');
+    Route::post('/treasury-bank-credit-batches/{id}/confirm', [AdminTreasuryBankCreditBatchController::class, 'confirm'])->whereNumber('id')->name('admin.treasury-bank-credit-batches.confirm');
     Route::get('/payment-capture-exceptions', [AdminPaymentCaptureExceptionController::class, 'index'])->name('admin.payment-capture-exceptions.index');
     Route::post('/payment-capture-exceptions/{id}/prepare', [AdminPaymentCaptureExceptionController::class, 'prepare'])->whereNumber('id')->name('admin.payment-capture-exceptions.prepare');
     Route::post('/payment-capture-exception-resolutions/{id}/confirm-manual-refund', [AdminPaymentCaptureExceptionController::class, 'confirmManualRefund'])->whereNumber('id')->name('admin.payment-capture-exceptions.confirm-manual-refund');
