@@ -272,6 +272,9 @@ class SupplierReassignmentRecoveryService
                 $replacementAssignment->supplier_confirmed_at = null;
                 $replacementAssignment->supplier_rejected_at = null;
                 $replacementAssignment->supplier_response_notes = null;
+                $replacementAssignment->confirmed_order_items = null;
+                $replacementAssignment->confirmation_snapshot_hash = null;
+                $replacementAssignment->supplier_confirmed_by_user_id = null;
                 $replacementAssignment->supplier_pickup_code = null;
                 $replacementAssignment->handover_ready_at = null;
                 $replacementAssignment->collected_at = null;
