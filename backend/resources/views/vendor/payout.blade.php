@@ -69,7 +69,7 @@
             <div>
                 <h2 style="margin: 0 0 6px; font-size: 18px; font-weight: 800;">Retailer Supplier Payables</h2>
                 <p class="page-header-subtitle" style="max-width: 760px;">
-                    Separate from legacy merchant sales payouts. This requests eligible item-level supplier costs from Victorious MARKET orders after verified payment, delivery, refund-window expiry, and finance reconciliation.
+                    Separate from legacy merchant sales payouts. Eligible item-level supplier costs become payable after verified customer acceptance of delivery and financial reconciliation. The 24-hour customer return window remains active; specific unresolved cases or financial holds can block the affected payable.
                 </p>
             </div>
             <form method="POST" action="{{ route('vendor.supplier-payout.request') }}" style="min-width: 280px; max-width: 520px;">
@@ -86,7 +86,7 @@
                             </span>
                         </label>
                     @empty
-                        <span style="font-size:12px; color:var(--adm-muted, #666);">No delivered supplier items are currently eligible after refund-window and finance reconciliation checks.</span>
+                        <span style="font-size:12px; color:var(--adm-muted, #666);">No delivered supplier items are currently eligible after customer-acceptance and finance-reconciliation checks.</span>
                     @endforelse
                 </div>
                 <button type="submit" class="btn-dash btn-dash-primary"
@@ -122,7 +122,7 @@
                 </tbody>
             </table>
         </div>
-        <small>Launch controls: minimum ₦1 and maximum ₦1,000,000 per request. Select exact items explicitly; the system does not allocate supplier payables by FIFO or silently split an over-cap request. Supplier KYC and bank details must remain valid.</small>
+        <small>Settlement controls: minimum ₦1 and maximum ₦1,000,000 per request. Select exact items explicitly; the system does not allocate supplier payables by FIFO or silently split an over-cap request. Supplier KYC, verified bank details, customer acceptance, and financial reconciliation checks remain mandatory.</small>
     </section>
 
     <!-- 4 Financial Stats Cards: Clarifying Lifetime Earnings vs Withdrawable Balance -->
