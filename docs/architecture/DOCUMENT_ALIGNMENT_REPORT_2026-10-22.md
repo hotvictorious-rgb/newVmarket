@@ -17,7 +17,7 @@ This pass aligns documentation to [Active Business Rules](ACTIVE_BUSINESS_RULES_
 - Any bulky item requires a dedicated exclusive Keke/tricycle trip. Bike batching is limited to qualifying small orders in the same corridor.
 - Supplier pickup OTP/photo and customer doorstep OTP/geo-tagged photo are mandatory.
 - Customer delivery charge is per order plus configured bulky-unit surcharges. Logistics-company payable is separately configured by company/corridor plus company-specific bulky-unit surcharges. The former 90%-of-customer-delivery-fee rule is retired.
-- Supplier payables use immutable wholesale-cost snapshots and are eligible only after verified completion/authorized exception plus reconciliation. Supplier-payable disbursements are ₦1 minimum and ₦1,000,000 maximum per request/time; FIFO is prohibited, and selection must be authorized, auditable and non-FIFO.
+- Supplier payables use immutable wholesale-cost snapshots and become settlement-eligible after verified customer acceptance plus financial reconciliation; the 24-hour customer return/claim window is not a blanket payout hold, but specific unresolved disputes/returns/recovery or reconciliation exceptions block affected payables. Settlement limits are ₦1 minimum and ₦1,000,000 maximum per request; no FIFO, with authorized auditable non-FIFO selection.
 - Cashback remains a separate 5% eligible merchandise benefit under existing caps, maturity, validity and reversal rules.
 - Allocation failure is admin-managed, not an automatic refund. Refund completion requires provider confirmation. Changed product/terms require customer consent; transitions are audited and idempotent.
 - Support-managed pickup is exceptional, not a public reservation or pre-payment stock hold.
