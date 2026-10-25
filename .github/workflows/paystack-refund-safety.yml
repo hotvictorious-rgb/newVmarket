@@ -18,6 +18,7 @@ on:
     branches:
       - main
       - docs/retailer-central-fulfilment-model
+      - audit/policy-runtime-remediation
   workflow_dispatch:
 
 permissions:
