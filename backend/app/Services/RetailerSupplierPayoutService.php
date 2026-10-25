@@ -179,10 +179,10 @@ class RetailerSupplierPayoutService
                         'message' => "Order #{$order->id} is not yet delivered; payout funding blocked until delivery is confirmed.",
                     ];
                 }
-                if (!$order->refund_window_expires_at || $order->refund_window_expires_at->gt(now())) {
+                if (!$order->refund_window_expires_at) {
                     return [
                         'success' => false,
-                        'message' => "Order #{$order->id} return/claim window remains active; payout funding held.",
+                        'message' => "Order #{$order->id} is missing its verified delivery/claim-window timestamp; payout funding held.",
                     ];
                 }
                 if ($order->dispute()->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled'])->exists()
@@ -223,7 +223,6 @@ class RetailerSupplierPayoutService
                     ->where('payment_status', 'paid')
                     ->where('order_status', 'delivered')
                     ->whereNotNull('refund_window_expires_at')
-                    ->where('refund_window_expires_at', '<=', now())
                     ->whereDoesntHave('dispute', function ($dispute) {
                         $dispute->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled']);
                     })
@@ -355,7 +354,6 @@ class RetailerSupplierPayoutService
                         ->where('payment_status', 'paid')
                         ->where('order_status', 'delivered')
                         ->whereNotNull('refund_window_expires_at')
-                        ->where('refund_window_expires_at', '<=', now())
                         ->whereDoesntHave('dispute', function ($dispute) {
                             $dispute->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled']);
                         })
@@ -378,7 +376,6 @@ class RetailerSupplierPayoutService
                     || $lockedOrder->payment_status !== 'paid'
                     || $lockedOrder->order_status !== 'delivered'
                     || !$lockedOrder->refund_window_expires_at
-                    || $lockedOrder->refund_window_expires_at->gt(now())
                     || $lockedOrder->dispute()->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled'])->exists()
                     || $lockedOrder->returnCases()->whereNotIn('status', ['rejected', 'closed', 'refunded', 'resolved', 'replacement_completed'])->exists()) {
                     return ['success' => false, 'protected' => true, 'message' => "Order #{$lockedOrder->id} changed eligibility while supplier payout was being prepared."];
@@ -727,7 +724,6 @@ class RetailerSupplierPayoutService
                     || $orderIdentity->payment_status !== 'paid'
                     || $orderIdentity->order_status !== 'delivered'
                     || !$orderIdentity->refund_window_expires_at
-                    || $orderIdentity->refund_window_expires_at->gt(now())
                     || $orderIdentity->dispute()->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled'])->exists()
                     || $orderIdentity->returnCases()->whereNotIn('status', ['rejected', 'closed', 'refunded', 'resolved', 'replacement_completed'])->exists()) {
                     return ['success' => false, 'protected' => true, 'message' => 'Supplier payout no longer matches its delivered, eligible order item or a financial hold is active; finance reconciliation is required.'];
