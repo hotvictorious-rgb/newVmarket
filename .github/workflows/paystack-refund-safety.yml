@@ -2,13 +2,16 @@ name: Paystack refund safety tests
 
 on:
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - fix/mysql-production-test-alignment
     paths:
       - "backend/app/Http/Controllers/Web/PaystackPaymentController.php"
       - "backend/app/Services/FinancialReconciliationEngine.php"
       - "backend/tests/Feature/FinancialAuditRemediationProofTest.php"
       - "backend/tests/Feature/PaystackPaymentHardeningTest.php"
       - "backend/tests/Feature/ManualBankTransferReviewTest.php"
+      - "backend/tests/Feature/AuditorDiscrepancyAlignmentTest.php"
       - "backend/**"
       - ".github/workflows/paystack-refund-safety.yml"
   push:
@@ -98,7 +101,7 @@ jobs:
             xargs -0 -r -n1 php -l
 
       - name: Run financial audit and payment hardening proof tests
-        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php tests/Feature/FinancialJournalIdempotencySchemaTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ManualBankTransferReviewTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/AuditHardeningAndSecurityProofTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/SupplierPrivateCatalogPolicyTest.php tests/Feature/AutomatedSupplierSourcingTest.php tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php tests/Feature/PaymentTruthDurabilityTest.php tests/Feature/PaystackWebhookInboxRecoveryTest.php tests/Feature/PaymentCaptureExceptionResolutionTest.php tests/Feature/TreasuryBankCreditBatchTest.php tests/Feature/TreasuryBankCreditConcurrencyTest.php tests/Feature/SupplierFailoverConcurrencyTest.php tests/Feature/WholeOrderConsolidatedSourcingAndFleetDispatchTest.php tests/Feature/WebhookArchivalTest.php --display-warnings
+        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php tests/Feature/FinancialJournalIdempotencySchemaTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ManualBankTransferReviewTest.php tests/Feature/AuditorDiscrepancyAlignmentTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/AuditHardeningAndSecurityProofTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/SupplierPrivateCatalogPolicyTest.php tests/Feature/AutomatedSupplierSourcingTest.php tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php tests/Feature/PaymentTruthDurabilityTest.php tests/Feature/PaystackWebhookInboxRecoveryTest.php tests/Feature/PaymentCaptureExceptionResolutionTest.php tests/Feature/TreasuryBankCreditBatchTest.php tests/Feature/TreasuryBankCreditConcurrencyTest.php tests/Feature/SupplierFailoverConcurrencyTest.php tests/Feature/WholeOrderConsolidatedSourcingAndFleetDispatchTest.php tests/Feature/WebhookArchivalTest.php --display-warnings
 
       - name: Run supplier bank update regression tests
         run: |
@@ -160,5 +163,6 @@ jobs:
             tests/Feature/PaymentCaptureExceptionResolutionTest.php \
             tests/Feature/TreasuryBankCreditBatchTest.php \
             tests/Feature/TreasuryBankCreditConcurrencyTest.php tests/Feature/SupplierFailoverConcurrencyTest.php \
+            tests/Feature/AuditorDiscrepancyAlignmentTest.php \
             --display-warnings
 

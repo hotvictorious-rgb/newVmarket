@@ -431,4 +431,75 @@ class AuditorDiscrepancyAlignmentTest extends TestCase
         $this->assertStringNotContainsString('12:30 PM (ETA)', $content);
         $this->assertStringNotContainsString('(ETA)', $content);
     }
+
+    public function test_concurrent_refund_claim_prevents_duplicate_disbursement(): void
+    {
+        $order = $this->createOrder();
+
+        ManualBankTransferPayment::create([
+            'order_id' => $order->id,
+            'customer_id' => $this->customer->id,
+            'amount_kobo' => 1050000,
+            'currency' => 'NGN',
+            'status' => 'approved',
+            'bank_transaction_reference' => 'IN-BANK-REF-CONCUR',
+            'receiving_bank_name' => 'Zenith Bank',
+            'receiving_account_number' => '1012345678',
+            'evidence_path' => 'evidence/test.png',
+            'evidence_mime' => 'image/png',
+            'evidence_size_bytes' => 1024,
+            'evidence_sha256' => hash('sha256', 'dummy-proof-concur'),
+            'submitted_at' => now(),
+            'approved_by_admin_id' => $this->superAdmin->id,
+            'approved_at' => now(),
+            'idempotency_key' => 'IN-KEY-CONCUR',
+        ]);
+
+        $returnCase = ReturnCase::create([
+            'case_number' => 'RET-CONCUR-' . uniqid(),
+            'order_id' => $order->id,
+            'customer_id' => $this->customer->id,
+            'status' => 'refund_pending',
+            'resolution_type' => 'refund',
+            'admin_ruling' => 'uphold_customer_claim',
+            'total_refundable_amount' => '10000.00',
+            'reviewed_by_admin_id' => $this->superAdmin->id,
+            'admin_ruled_at' => now(),
+            'reason' => 'Customer claim',
+            // Active concurrency claim token placed by another worker
+            'refund_claim_token' => 'CLAIM-ACTIVE-123',
+            'refund_claimed_at' => Carbon::now()->subMinutes(1),
+        ]);
+
+        $service = app(ReturnAndRefundService::class);
+        $result = $service->adminDisburseRefund(
+            $this->superAdmin,
+            $returnCase,
+            'OUT-BANK-REF-CONCUR',
+            'settlement-proofs/test.png'
+        );
+
+        // Must reject disbursement because another worker holds the claim lock
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('currently being processed by another worker', $result['message']);
+        $this->assertSame('refund_pending', $returnCase->fresh()->status);
+        $this->assertNull(ManualBankTransferRefundCase::where('order_id', $order->id)->first());
+    }
+
+    public function test_vendor_settlement_status_forward_only_migration_preserves_runtime_statuses(): void
+    {
+        $order = $this->createOrder([
+            'vendor_settlement_status' => 'refund_pending',
+        ]);
+
+        $this->assertSame('refund_pending', $order->fresh()->vendor_settlement_status);
+
+        // Execute down() on the migration to verify forward-only safety
+        $migration = require database_path('migrations/2026_10_24_000019_expand_vendor_settlement_status_on_orders_table.php');
+        $migration->down();
+
+        // The column must remain VARCHAR(50) and retain the runtime status without data truncation
+        $this->assertSame('refund_pending', $order->fresh()->vendor_settlement_status);
+    }
 }
+
