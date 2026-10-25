@@ -606,7 +606,6 @@ class RetailerSupplierPayoutService
                     || $order->payment_status !== 'paid'
                     || $order->order_status !== 'delivered'
                     || !$order->refund_window_expires_at
-                    || $order->refund_window_expires_at->gt(now())
                     || $order->dispute()->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled'])->exists()
                     || $order->returnCases()->whereNotIn('status', ['rejected', 'closed', 'refunded', 'resolved', 'replacement_completed'])->exists()) {
                     return ['success' => false, 'protected' => true, 'message' => "Order/item eligibility changed for supplier payout allocation #{$allocation->id}; payout remains reserved."];
