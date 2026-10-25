@@ -157,3 +157,14 @@ This section supersedes any conflicting earlier wording in this document. It rec
 ### Financial separation
 - Keep customer receipts and tender type, Paystack transactions, verified manual bank credits, refunds, supplier payables, logistics-company payables, outgoing bank transfers, delivery revenue/cost, cashback and reconciliation adjustments as distinct auditable records. Only verified and reconciled funds count as cleared funds. Cashback applies to both Paystack-funded and verified manual-bank-transfer orders, with the funding source explicitly noted (`source`: `paystack` or `manual_bank_transfer`). Regardless of payment method, the system must always remain reconcilable, traceable, auditable, and balanced (`debits == credits`).
 - Policy documentation is not proof of implementation. Code, schema constraints, permissions, bank-verification operations and acceptance tests must be reviewed independently before release.
+
+
+## 10. Return, refund and reverse-logistics chain of custody — 25 October 2026
+
+The binding return handover requirements are specified in [Return, Refund and Reverse-Logistics Chain-of-Custody Policy](RETURN_REFUND_REVERSE_LOGISTICS_CHAIN_OF_CUSTODY_POLICY_2026-10-25.md). Apply that policy alongside the existing 24-hour return window, non-returnable categories, admin adjudication, original-payment-rail isolation, no-automated-outflow rule, Uyo-only sourcing/logistics and bulky-contagion dispatch requirements.
+
+At every physical return handover that actually occurs—customer release, authorized collection, inspection-point receipt, supplier receipt where the item is returned to the supplier, and replacement delivery—require the correct order/return case and item to be captured, event-specific server-verified single-use OTP acknowledgement by the appropriate authorized participant, mandatory condition/identity photo evidence, timestamp, accountable releasing/receiving parties and an auditable custody transition. A handover attempt that fails OTP, item matching, authorization or mandatory evidence checks must remain failed/exceptional; it must not be recorded as a successful handover.
+
+OTP acknowledgement and photos are evidence, not automatic adjudication. They do not by themselves establish fault, approve a refund, create a supplier debt, or prove that a bank transfer completed. Admin decisions, the original order's pinned payment rail, separate refund-dispatch/reconciliation states, ledger balancing and the prohibition on automated financial outflows remain mandatory. Missing or conflicting proof must be escalated, and the last verified custodian must remain identifiable.
+
+The policy is an acceptance specification only. It does not certify that the current code already enforces these controls. Implementation must be mapped to routes, authorization, storage, database constraints, state transitions and MySQL/InnoDB tests before merge or launch.
