@@ -66,6 +66,13 @@ return new class extends Migration
         });
 
         Schema::table('order_items', function (Blueprint $table) {
+            // MySQL/InnoDB Error 1553: Cannot drop index needed in a foreign key constraint.
+            // idx_order_items_order_delivery_status starts with order_id and satisfies the
+            // order_items_order_id_foreign constraint. Provide a standalone replacement index on
+            // order_id first so MySQL permits dropping the composite index cleanly.
+            if (\Illuminate\Support\Facades\DB::getDriverName() === 'mysql') {
+                $table->index('order_id', 'order_items_order_id_foreign_idx');
+            }
             $table->dropIndex('idx_order_items_order_delivery_status');
         });
 

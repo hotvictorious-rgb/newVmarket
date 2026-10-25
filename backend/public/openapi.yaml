@@ -250,7 +250,7 @@ paths:
                       product_id: { type: integer }
                       quantity: { type: integer, minimum: 1, maximum: 1000 }
                 redeem_cashback: { type: boolean }
-                payment_method: { type: string, enum: [paystack], default: paystack }
+                payment_method: { type: string, enum: [paystack, manual_bank_transfer], default: paystack, description: "Payment method: paystack for online/card checkout, or manual_bank_transfer for corporate direct bank deposit." }
       responses:
         '200':
           description: Existing order replayed for an idempotent retry

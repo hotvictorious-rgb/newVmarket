@@ -556,13 +556,22 @@ class ReturnAndRefundService
                     'message' => 'This bank transaction reference has already been recorded in the system and cannot be reused.',
                 ];
             }
+
+            // Fail closed: Ensure the original manual payment record exists
+            $manualPaymentCheck = \App\Models\ManualBankTransferPayment::where('order_id', $orderPreview->id)->first();
+            if (!$manualPaymentCheck) {
+                return [
+                    'success' => false,
+                    'message' => 'Cannot disburse manual bank refund: No ManualBankTransferPayment record exists for this order.',
+                ];
+            }
         } else {
-            // Paystack order: cannot accept manual bank reference
+            // Paystack order: cannot accept manual bank reference or wallet disburse
             if ($bankReference !== null && trim($bankReference) !== '') {
                 return [
                     'success' => false,
-                    'status' => 'cross_rail_blocked',
-                    'message' => 'A manual bank reference cannot be used to refund an order paid via Paystack. Use the authorized Paystack gateway refund workflow.',
+                    'status' => 'disabled',
+                    'message' => 'Manual bank and wallet refunds are disabled at launch. Use the authorized Paystack refund workflow for the original payment.',
                 ];
             }
         }
@@ -906,12 +915,11 @@ class ReturnAndRefundService
             }
         }
 
-        // Launch policy disables manual bank and wallet refunds. Therefore this
-        // settlement branch is reachable only after FinancialOperationService has
-        // confirmed the Paystack refund and posted its gateway journal. Never fall
-        // through to synthetic cash-out/refund entries when dispatch was skipped,
-        // pending, or otherwise unconfirmed.
-        if (!$gatewayJournalAlreadyPosted) {
+        // Launch policy disables synthetic wallet refunds. Therefore for Paystack orders,
+        // this settlement branch is reachable only after FinancialOperationService has
+        // confirmed the Paystack refund and posted its gateway journal. For manual bank
+        // transfer orders, verified bank reference and dispatch proof serve as settlement evidence.
+        if (!$gatewayJournalAlreadyPosted && empty($bankReference)) {
             ReturnCase::where('id', $caseId)->where('refund_claim_token', $claimToken)->update([
                 'refund_claim_token' => null,
                 'refund_claimed_at' => null,
@@ -1277,6 +1285,50 @@ class ReturnAndRefundService
             $lockedCase->save();
 
             ReturnItem::where('return_case_id', $lockedCase->id)->update(['status' => 'refunded']);
+
+            // If manual bank transfer order, create/update ManualBankTransferRefundCase in dispatched status
+            if (!empty($bankReference) && $order->payment_method === 'manual_bank_transfer') {
+                $manualPayment = \App\Models\ManualBankTransferPayment::where('order_id', $order->id)->lockForUpdate()->first();
+                if (!$manualPayment) {
+                    throw new \RuntimeException("Manual bank transfer refund requires an existing ManualBankTransferPayment record for Order #{$order->order_number}.");
+                }
+
+                $amountKobo = (int) \App\Services\BcMathService::mul((string) $totalCashRefund, '100', 0);
+                $existingRefundCase = \App\Models\ManualBankTransferRefundCase::where('order_id', $order->id)->lockForUpdate()->first();
+
+                if ($existingRefundCase) {
+                    if (in_array($existingRefundCase->status, ['completed', 'reconciled'], true)
+                        && $existingRefundCase->manual_dispatch_reference !== $bankReference) {
+                        throw new \RuntimeException("A manual bank transfer refund case for Order #{$order->order_number} has already been completed with reference {$existingRefundCase->manual_dispatch_reference}.");
+                    }
+                    $existingRefundCase->update([
+                        'amount_kobo' => $amountKobo,
+                        'status' => 'dispatched_awaiting_reconciliation',
+                        'reason' => "Refund disbursement for Return Case #{$lockedCase->case_number}",
+                        'reviewed_by_admin_id' => $adminUser->id,
+                        'reviewed_at' => Carbon::now(),
+                        'decision_notes' => 'Disbursed directly via manual bank transfer: ' . $bankReference,
+                        'manual_dispatch_reference' => $bankReference,
+                        'manual_dispatch_proof_path' => $proofPath,
+                    ]);
+                } else {
+                    \App\Models\ManualBankTransferRefundCase::create([
+                        'order_id' => $order->id,
+                        'manual_bank_transfer_payment_id' => $manualPayment->id,
+                        'idempotency_key' => 'MBT-REFUND-' . $lockedCase->case_number . '-' . $manualPayment->id,
+                        'amount_kobo' => $amountKobo,
+                        'currency' => 'NGN',
+                        'status' => 'dispatched_awaiting_reconciliation',
+                        'reason' => "Refund disbursement for Return Case #{$lockedCase->case_number}",
+                        'created_by_admin_id' => $adminUser->id,
+                        'reviewed_by_admin_id' => $adminUser->id,
+                        'reviewed_at' => Carbon::now(),
+                        'decision_notes' => 'Disbursed directly via manual bank transfer: ' . $bankReference,
+                        'manual_dispatch_reference' => $bankReference,
+                        'manual_dispatch_proof_path' => $proofPath,
+                    ]);
+                }
+            }
 
             // Automatically revoke customer reviews for all items in this refunded case
             foreach ($lockedCase->items()->get() as $rItem) {

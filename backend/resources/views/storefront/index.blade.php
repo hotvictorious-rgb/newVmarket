@@ -83,7 +83,7 @@
                         : collect([
                             (object)[
                                 'title' => 'Seamless Shopping, Swift Logistics',
-                                'subtitle' => "Akwa Ibom's Premier Platform • Physical In-Shop Inspection • Escrow Protected",
+                                'subtitle' => "Akwa Ibom's Premier Retail Store • Guaranteed Doorstep Delivery • Escrow Protected",
                                 'badge_text' => 'VERIFIED OMNICHANNEL MARKET',
                                 'bg_gradient' => 'linear-gradient(135deg, #FAF5FF 0%, #FFFFFF 100%)',
                                 'text_color' => '#0F172A',

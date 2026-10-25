@@ -524,12 +524,13 @@ class RetailerSupplierPayoutService
     {
         // Fail closed even when this service is called outside the current admin
         // controller. These values identify the authorized transfer attempt.
-                $isManual = ($channel === 'manual_bank_transfer' || $recipientCode === 'MANUAL_BANK_TRANSFER' || empty($recipientCode));
+        $isManual = ($channel === 'manual_bank_transfer' && ($recipientCode === null || $recipientCode === 'MANUAL_BANK_TRANSFER'));
+
         if ($adminId < 1 || !preg_match('/^[A-Za-z0-9._:-]{12,100}$/', trim($processingToken))) {
-            return ['success' => false, 'protected' => true, 'message' => 'A valid administrator and unique processing token are required.'];
+            return ['success' => false, 'protected' => true, 'message' => 'A valid administrator, verified transfer recipient, and unique processing token are required.'];
         }
         if (!$isManual && (trim((string) $recipientCode) === '' || mb_strlen((string) $recipientCode) > 200)) {
-            return ['success' => false, 'protected' => true, 'message' => 'A verified transfer recipient is required for gateway transfers.'];
+            return ['success' => false, 'protected' => true, 'message' => 'A valid administrator, verified transfer recipient, and unique processing token are required.'];
         }
 
         $recipientCode = $isManual ? null : trim((string) $recipientCode);
