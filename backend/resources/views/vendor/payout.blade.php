@@ -122,7 +122,7 @@
                 </tbody>
             </table>
         </div>
-        <small>Launch controls: minimum ₦5,000 and maximum ₦1,000,000 per request. Select exact items explicitly; the system does not allocate supplier payables by FIFO or silently split an over-cap request. Supplier KYC and bank details must remain valid.</small>
+        <small>Launch controls: minimum ₦1 and maximum ₦1,000,000 per request. Select exact items explicitly; the system does not allocate supplier payables by FIFO or silently split an over-cap request. Supplier KYC and bank details must remain valid.</small>
     </section>
 
     <!-- 4 Financial Stats Cards: Clarifying Lifetime Earnings vs Withdrawable Balance -->

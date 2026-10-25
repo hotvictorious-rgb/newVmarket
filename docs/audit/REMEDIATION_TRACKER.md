@@ -650,7 +650,7 @@ The following findings were confirmed during source review and hardened on `docs
 **Evidence found:** RetailerSupplierPayoutService still has a ₦500,000 cap and automatically selects eligible order-item payables in FIFO order. Active business policy requires a ₦1,000,000 maximum per transaction and explicitly prohibits FIFO; eligible payable selection must be an explicit, auditable choice.
 
 **Changes committed on docs/retailer-central-fulfilment-model:**
-- Raised the retailer supplier payout cap to ₦1,000,000 while retaining the ₦5,000 minimum.
+- Raised the retailer supplier payout cap to ₦1,000,000 with a ₦1 minimum per transfer.
 - Removed automatic FIFO selection. The supplier must explicitly select order-item IDs; the service rechecks supplier ownership, delivery/refund-window/dispute/return eligibility, reconciliation, reservations and the exact net payable under database locks.
 - Rejects empty, duplicate, foreign/ineligible, or no-longer-eligible selections. It reserves only selected items and rejects a selection above the cap instead of silently splitting it.
 - Added a read-only eligible-payables preview to the supplier page, explicit checkbox selection, and web/API validation for selected item IDs.

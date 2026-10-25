@@ -115,7 +115,7 @@ Required business states: `reserved`, `pending_maturation`, `matured/spendable`,
 
 ## 8. Legacy vendor earning, settlement and payout lifecycle — historical compatibility only
 
-> **Scope warning (22 October 2026):** This section describes the legacy public-marketplace/vendor-earning model and its historical records. Its FIFO, ₦5,000–₦500,000 vendor-payout rules, vendor delivery earnings and child-order settlement concepts do **not** govern new Victorious MARKET retailer-model supplier payables. For new supplier payments, follow [Active Business Rules](../architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md): ₦5,000 minimum, ₦1,000,000 maximum per request/disbursement, no FIFO/oldest-first selection, and authorized auditable non-FIFO selection. Do not change historical records merely to make them resemble the new policy.
+> **Scope warning (22 October 2026):** This section describes the legacy public-marketplace/vendor-earning model and its historical records. Its FIFO, ₦5,000–₦500,000 vendor-payout rules, vendor delivery earnings and child-order settlement concepts do **not** govern new Victorious MARKET retailer-model supplier payables. For new supplier payments, follow [Active Business Rules](../architecture/ACTIVE_BUSINESS_RULES_2026-10-22.md): ₦1 minimum, ₦1,000,000 maximum per request/disbursement, no FIFO/oldest-first selection, and authorized auditable non-FIFO selection. Do not change historical records merely to make them resemble the new policy.
 
 ### Earning/settlement (legacy vendor earnings only)
 Required concepts: `held -> eligible -> reserved_for_payout -> paid_out`; exceptions/holds remain separately represented (dispute, return, security, reconciliation). Never turn eligibility directly into transfer success.

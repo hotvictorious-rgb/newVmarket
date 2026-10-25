@@ -141,7 +141,7 @@ If the company payable exceeds the customer delivery revenue collected, the diff
 
 Supplier payables are based on immutable wholesale-cost snapshots for the actual items sourced for an order.
 
-- Each supplier-payable payment request/disbursement must be at least ₦5,000 and no more than ₦1,000,000 at a time.
+- Each supplier-payable payment request/disbursement must be at least ₦1 and no more than ₦1,000,000 at a time.
 - FIFO/oldest-first selection of eligible payables is prohibited. Use an authorized, auditable non-FIFO selection process; do not introduce an automatic alternative ranking without owner approval.
 - Do not silently split a request above ₦1,000,000 into multiple transfers. Requests and payments require approval, reconciliation, idempotency and provider-confirmed completion.
 
