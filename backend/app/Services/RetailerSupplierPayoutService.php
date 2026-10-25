@@ -296,7 +296,7 @@ class RetailerSupplierPayoutService
      * Reserve only the supplier's explicitly selected, reconciled item payables.
      * Selection is never inferred from order age or FIFO. The selected item set is
      * revalidated under locks. The payout amount is the exact eligible balance of the
-     * explicitly selected items, enforcing a ₦1 minimum and ₦1,000,000 maximum per transfer; no silent splitting.
+     * explicitly selected items, enforcing a ₦1 minimum and ₦1,000,000 maximum per transfer; no silent splitting and no FIFO.
      */
     public function requestPayout(VendorProfile $supplier, array $selectedOrderItemIds = []): array
     {

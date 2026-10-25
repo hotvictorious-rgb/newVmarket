@@ -31,10 +31,7 @@ class SupplierFailoverConcurrencyTest extends TestCase
     protected function runDatabaseMigrations()
     {
         if (in_array(DB::connection()->getDriverName(), ['mysql', 'pgsql'], true)) {
-            $this->artisan('migrate:fresh');
-            $this->beforeApplicationDestroyed(function () {
-                $this->artisan('migrate:rollback');
-            });
+            $this->artisan('migrate');
         }
     }
 

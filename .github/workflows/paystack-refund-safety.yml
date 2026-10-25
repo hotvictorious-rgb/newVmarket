@@ -101,6 +101,9 @@ jobs:
           find app bootstrap config database routes tests -type f -name '*.php' -print0 |
             xargs -0 -r -n1 php -l
 
+      - name: Migrate database schema
+        run: php artisan migrate:fresh --force
+
       - name: Run financial audit and payment hardening proof tests
         run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php tests/Feature/FinancialJournalIdempotencySchemaTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ManualBankTransferReviewTest.php tests/Feature/AuditorDiscrepancyAlignmentTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/ReverseLogisticsChainOfCustodyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/AuditHardeningAndSecurityProofTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/SupplierPrivateCatalogPolicyTest.php tests/Feature/AutomatedSupplierSourcingTest.php tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php tests/Feature/PaymentTruthDurabilityTest.php tests/Feature/PaystackWebhookInboxRecoveryTest.php tests/Feature/PaymentCaptureExceptionResolutionTest.php tests/Feature/TreasuryBankCreditBatchTest.php tests/Feature/TreasuryBankCreditConcurrencyTest.php tests/Feature/SupplierFailoverConcurrencyTest.php tests/Feature/WholeOrderConsolidatedSourcingAndFleetDispatchTest.php tests/Feature/WebhookArchivalTest.php --display-warnings
 
@@ -150,6 +153,9 @@ jobs:
 
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Migrate database schema
+        run: php artisan migrate:fresh --force
 
       - name: Run financial settlement proof tests on MySQL/InnoDB
         run: |
