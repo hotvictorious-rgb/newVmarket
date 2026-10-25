@@ -35,7 +35,7 @@ Every scenario must verify:
 5. **Authorization:** customer, vendor, vendor employee, rider and admin cannot act outside their ownership, role, branch or assigned job.
 6. **Evidence:** required OTPs, uploaded proof, provider verification and human approvals are verified server-side—not trusted from client claims.
 7. **Auditability:** rejected transitions and accepted financial actions leave accurate, non-duplicated audit/idempotency records without leaking OTPs or secrets.
-8. **Race safety:** concurrent operations serialize or fail safely. Run database race tests against PostgreSQL before launch; SQLite/unit tests alone do not prove row-lock correctness.
+8. **Race safety:** concurrent operations serialize or fail safely. Run database race tests against MySQL/InnoDB before launch; SQLite/unit tests alone do not prove row-lock correctness.
 9. **Recovery:** timeout or ambiguous provider response stays in an uncertain/reconciliation state; it is never assumed to mean success or failure.
 10. **Customer rights:** operational timers never silently remove statutory rights or delay an approved customer refund while vendor recovery is pending.
 
@@ -123,7 +123,7 @@ Every scenario must verify:
 ### S16 — Concurrent inventory and multi-vendor settlement
 - Arrange: two customers buy the last item simultaneously; then simulate parent/child totals, fees and refunds that differ by one kobo.
 - Expected: inventory cannot oversell under the actual production database; child totals reconcile exactly to parent; each vendor's fulfillment, fee and refund remains isolated.
-- Verify: PostgreSQL race run, uniqueness/constraints, decimal/kobo conservation and parent/child refund ceilings. Multi-vendor checkout must remain disabled until these invariants pass.
+- Verify: MySQL/InnoDB race run, uniqueness/constraints, decimal/kobo conservation and parent/child refund ceilings. Multi-vendor checkout must remain disabled until these invariants pass.
 
 ### S17 — Queue outage, retry storm and partial database failure
 - Arrange: fail a job before commit, after provider response, and during retry; kill worker and replay.
@@ -136,7 +136,7 @@ For each scenario:
 1. Link the scenario to a specific event and state-transition table.
 2. Create deterministic feature tests with explicit setup, action, and assertions on both success and forbidden transitions.
 3. Include retry/duplicate and authorization variants.
-4. Where concurrency matters, run independent transactions/processes against PostgreSQL and assert final invariants.
+4. Where concurrency matters, run independent transactions/processes against MySQL/InnoDB and assert final invariants.
 5. Run focused tests, then the full financial/payment suite.
 6. Record finding ID, test name, commit, CI run, result, unresolved limitations and owner decision in the audit tracker.
 7. Do not call a scenario resolved just because a test passes: confirm the test reaches the real service/controller path and checks financial side effects.
@@ -146,5 +146,5 @@ For each scenario:
 
 P0: S01–S07, S10–S13, S16 (money, state integrity, proof and race conditions).
 P1: S08–S09, S14–S15, S17.
-Provider sandbox tests and PostgreSQL concurrency are separate required gates; mocks and SQLite are not substitutes.
+Provider sandbox tests and MySQL/InnoDB concurrency are separate required gates; mocks and SQLite are not substitutes.
 \n\n### Newly discovered VM-AUD-065 — duplicate order execution\n- Arrange: send the same authenticated checkout request twice (and concurrently) with the same logical attempt.\n- Expected: one order and one Paystack initialization; subsequent calls replay that order result. Uncertain provider initialization must be reconciled, not blindly reinitialized.\n- Verify: order count, cashback reservations, inventory reservations, payment references, Paystack initialization count and journal entries.\n

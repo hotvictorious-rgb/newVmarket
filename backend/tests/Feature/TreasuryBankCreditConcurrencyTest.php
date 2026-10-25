@@ -32,8 +32,8 @@ class TreasuryBankCreditConcurrencyTest extends TestCase
 
     public function test_two_processes_cannot_overreserve_one_treasury_bank_credit_batch(): void
     {
-        if (!in_array(DB::connection()->getDriverName(), ['mysql', 'pgsql'], true)) {
-            $this->markTestSkipped('True multi-process row-lock proof runs against MySQL or PostgreSQL only.');
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('True multi-process row-lock proof runs against MySQL/InnoDB only.');
         }
 
         $adminOne = User::factory()->create(['user_type' => 'super_admin', 'status' => 'active']);
@@ -135,12 +135,9 @@ class TreasuryBankCreditConcurrencyTest extends TestCase
 
         $reservedCount = RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)->count();
         $this->assertSame(1, $reservedCount, 'Two simultaneous ₦6,000 reservations must not overreserve a ₦10,000 reconciled bank-credit batch.');
-        $reservedAmountKobo = 0;
-        foreach (RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)
+        $reservedAmountKobo = (int) RetailerSupplierPayoutRequest::where('treasury_bank_credit_batch_id', $batch->id)
             ->whereIn('status', ['pending', 'processing', 'uncertain', 'paid'])
-            ->get(['amount']) as $reservedReq) {
-            $reservedAmountKobo += (int) bcmul((string) $reservedReq->amount, '100', 0);
-        }
+            ->sum(DB::raw('CAST(amount * 100 AS SIGNED)'));
         $this->assertSame(600000, $reservedAmountKobo);
 
         // This class uses committed fixtures so child processes can see them.

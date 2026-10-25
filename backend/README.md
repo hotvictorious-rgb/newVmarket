@@ -9,6 +9,8 @@
 
 Built for the approved Uyo LGA, Akwa Ibom operating area, Victorious MARKET is one centrally managed retailer supported by private, approved suppliers and logistics companies. Suppliers may use one admin-approved shop or pickup location anywhere within Uyo; Plaza is not mandatory.
 
+**Database target:** MySQL with InnoDB is the target for local, CI, staging and production verification. Fast SQLite tests are not evidence of MySQL locking, transaction, unique-constraint or concurrency behaviour. Financial and multi-process race tests must run against MySQL/InnoDB before launch.
+
 The active business rules require:
 
 0. **Supplier administration:** supplier registration, activation and suspension are admin-only; self-registration is not allowed. Suspension blocks new allocation and requires admin review of paid/in-flight orders.

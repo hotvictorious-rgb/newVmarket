@@ -40,8 +40,8 @@ class SupplierFailoverConcurrencyTest extends TestCase
 
     public function test_two_processes_competing_for_one_failed_assignment_create_one_recovery_only(): void
     {
-        if (!in_array(DB::connection()->getDriverName(), ['mysql', 'pgsql'], true)) {
-            $this->markTestSkipped('True simultaneous failover row-lock proof runs against MySQL or PostgreSQL only.');
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('True simultaneous failover row-lock proof runs against MySQL/InnoDB only.');
         }
 
         $country = Country::firstOrCreate(['iso_code' => 'NG'], ['name' => 'Nigeria', 'phone_code' => '+234', 'currency_code' => 'NGN', 'is_active' => true]);
