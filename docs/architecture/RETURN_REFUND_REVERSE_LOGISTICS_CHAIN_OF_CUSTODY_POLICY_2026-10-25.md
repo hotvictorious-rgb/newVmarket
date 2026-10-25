@@ -40,7 +40,7 @@ The collector must not accept an unrelated or mismatched item merely because an 
 
 After verified collection, assign the returned item to a named/identified authorized logistics actor and record the custody state. Every later handover must close the prior custody responsibility and open the next one atomically. The same return item must not be simultaneously marked as held by two parties. Failed, delayed, lost or disputed transit must remain in an exception state and alert authorized operations staff.
 
-Apply existing Uyo-only logistics rules. If any return shipment contains an item classified as bulky, apply the active bulky-contagion dispatch rule: the whole return trip requires the approved dedicated bulky-capable vehicle and must not be combined with another customer's order where the rule prohibits batching.
+Apply existing Uyo-only logistics rules. Reverse logistics must not create an additional customer delivery fee or a separate return-pickup charge. Admin should first consider assigning an already-active rider/delivery person or logistics vehicle that is travelling along a suitable route to collect the approved return and carry it to the designated supplier location or back to Victorious MARKET's approved receiving point, as directed by admin. This is route-based reassignment of existing delivery capacity, not a new customer delivery. Record the assignment, route/dispatch decision, custodian and custody events. Do not create a duplicate logistics-company payable or rider payment merely because the return is collected; any legitimate logistics-company cost remains governed by the configured company/corridor payable policy and must be separately authorized and auditable. If an item is bulky, the existing bulky-contagion and vehicle-capability rules still apply: do not send an unsuitable motorcycle or improperly combine a bulky return with another load. If no compatible rider/route is available, admin schedules an appropriate return movement without charging the customer a new delivery fee.
 
 ### 3.3 Receipt at an inspection/receiving point
 
@@ -137,6 +137,28 @@ Run against the production-target MySQL 8.4/InnoDB configuration, in addition to
 15. Crash/restart, transaction rollback, duplicate uploads and concurrent admin decisions preserve custody uniqueness and financial ledger balance.
 16. Photo access controls, upload validation, evidence integrity, retention and audit history are verified.
 
-## 9. Rollout rule
+
+## 10. No additional customer delivery fee for returns; route-based collection
+
+**Binding rule:** An approved return pickup and movement must not incur a new customer delivery fee or a separate return-pickup charge. The customer has already paid the applicable order delivery fee under the original order. Reverse logistics is coordinated internally by Victorious MARKET.
+
+- Admin may assign a rider/delivery person or logistics vehicle already travelling a suitable route to collect the return from the customer and carry it to the approved supplier location, or back to Victorious MARKET's designated receiving/inspection point, as appropriate to the case.
+- Route suitability, capacity, item safety, timing, custody accountability and Uyo-only constraints must be checked before assignment. The assigned person must be explicitly linked to the return case and custody task; being on a nearby route alone does not authorize collection.
+- The rider must capture the required customer-release OTP and item/condition photos. At the destination, the authorized receiver must complete the distinct receipt verification and photos. Until destination receipt is verified, the item remains in transit under the assigned custodian.
+- The destination is case-specific: return to the supplier when authorized and appropriate, or to Victorious MARKET's approved receiving/inspection point when admin directs it. Do not assume every return must go directly to a supplier.
+- Do not add a customer charge, duplicate the original delivery fee, or automatically create an extra logistics payable/rider payment from the return assignment. Any company payable, if legitimately applicable, remains governed by the existing configured logistics-company/corridor tariff and requires auditable authorization; never calculate it as a percentage of the customer's delivery fee.
+- If the item is bulky, existing bulky-contagion and vehicle-capability rules still apply. Use an appropriate bulky-capable vehicle and comply with the exclusive-trip restriction where required; no fee rule permits an unsafe or incompatible route assignment.
+- If no suitable existing route/capacity is available, admin arranges a suitable movement under the same no-additional-customer-fee rule. Record any exception and operational cost transparently without charging the customer a new delivery fee.
+- Failed collection or destination handover must be recorded as failed/attempted, not completed. The last verified custodian remains accountable, and the return remains in an exception/in-transit state until resolved.
+
+## 11. Required additional acceptance tests
+
+17. An approved return can be assigned to an already travelling eligible rider/vehicle and linked to the return case without creating a customer fee or duplicate delivery fee.
+18. The return can be directed to the approved supplier location or Victorious MARKET receiving point, with distinct destination receipt proof.
+19. A return assignment does not automatically create a rider payout or duplicate logistics-company payable; any applicable company payable follows the configured authorized tariff.
+20. A route-incompatible or capacity-incompatible rider cannot be assigned; bulky returns enforce vehicle capability and the existing bulky-trip rule.
+21. If no suitable route exists, admin can arrange return transport without adding a customer delivery charge.
+
+## 12. Rollout rule
 
 This document is a policy specification, not proof that the application implements it. Before production enablement, map every requirement to concrete Laravel routes/controllers/services, database constraints, authorization policies, storage configuration, UI and automated tests. Run migrations and tests on MySQL 8.4/InnoDB, inspect the actual CI run for the exact commit, and document any remaining gaps. Do not merge or deploy on the strength of documentation alone.
