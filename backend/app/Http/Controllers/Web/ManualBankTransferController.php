@@ -681,9 +681,12 @@ class ManualBankTransferController extends Controller
             $order->payment_status = 'refunded';
             $order->save();
 
-            $returnCase = ReturnCase::where('order_id', $order->id)->whereIn('status', ['approved', 'under_review'])->first();
+            $returnCase = ReturnCase::where('order_id', $order->id)
+                ->whereIn('status', ['refund_dispatched_awaiting_reconciliation', 'approved', 'under_review'])
+                ->first();
             if ($returnCase) {
                 $returnCase->status = 'refunded';
+                $returnCase->refunded_at = now();
                 $returnCase->save();
             }
 

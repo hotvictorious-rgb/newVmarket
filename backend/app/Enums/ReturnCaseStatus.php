@@ -11,6 +11,7 @@ enum ReturnCaseStatus: string
     case Inspected = 'inspected';
     case ApprovedForReturn = 'approved_for_return';
     case RefundPending = 'refund_pending';
+    case RefundDispatchedAwaitingReconciliation = 'refund_dispatched_awaiting_reconciliation';
     case Refunded = 'refunded';
     case Rejected = 'rejected';
     case Closed = 'closed';

@@ -164,7 +164,9 @@ class AuditorDiscrepancyAlignmentTest extends TestCase
         );
 
         $this->assertTrue($result['success'] ?? false, $result['message'] ?? 'Disbursement failed.');
-        $this->assertSame('refunded', $returnCase->fresh()->status);
+        // Customer-facing status is refund_dispatched_awaiting_reconciliation until corporate bank debit is reconciled!
+        $this->assertSame('refund_dispatched_awaiting_reconciliation', $returnCase->fresh()->status);
+        $this->assertNull($returnCase->fresh()->refunded_at);
         $this->assertSame(0, bccomp('10000.00', (string) $returnCase->fresh()->refunded_amount, 2));
         $this->assertSame($bankDispatchRef, $returnCase->fresh()->refund_reference);
 
@@ -184,6 +186,17 @@ class AuditorDiscrepancyAlignmentTest extends TestCase
             ->first();
         $this->assertNotNull($creditEntry);
         $this->assertSame(0, bccomp('10000.00', (string) $creditEntry->amount, 2));
+
+        // Reconcile corporate bank statement: transitions ReturnCase to refunded and RefundCase to completed
+        $reconcileResponse = $this->actingAs($this->superAdmin)->post(
+            route('admin.manual-bank-transfers.refunds.reconcile', $refundCase->id)
+        );
+        $reconcileResponse->assertRedirect(route('admin.manual-bank-transfers.index'));
+
+        $this->assertSame('refunded', $returnCase->fresh()->status);
+        $this->assertNotNull($returnCase->fresh()->refunded_at);
+        $this->assertSame('completed', $refundCase->fresh()->status);
+        $this->assertNotNull($refundCase->fresh()->manual_dispatch_confirmed_at);
     }
 
     public function test_manual_bank_transfer_refund_fails_closed_when_manual_payment_missing(): void
@@ -455,6 +468,15 @@ class AuditorDiscrepancyAlignmentTest extends TestCase
             'idempotency_key' => 'IN-KEY-CONCUR',
         ]);
 
+        \App\Models\CustomerCashbackLedger::create([
+            'customer_id' => $this->customer->id,
+            'order_id' => $order->id,
+            'amount' => '500.00',
+            'status' => 'pending_maturation',
+            'funding_source' => 'manual_bank_transfer',
+            'matures_at' => now()->addDays(7),
+        ]);
+
         $returnCase = ReturnCase::create([
             'case_number' => 'RET-CONCUR-' . uniqid(),
             'order_id' => $order->id,
@@ -484,6 +506,22 @@ class AuditorDiscrepancyAlignmentTest extends TestCase
         $this->assertStringContainsString('currently being processed by another worker', $result['message']);
         $this->assertSame('refund_pending', $returnCase->fresh()->status);
         $this->assertNull(ManualBankTransferRefundCase::where('order_id', $order->id)->first());
+
+        // Concurrency Recovery: Simulate the claiming worker crashed and 6 minutes elapsed (> 5 min timeout)
+        $returnCase->update([
+            'refund_claimed_at' => Carbon::now()->subMinutes(6),
+        ]);
+
+        $recoveryResult = $service->adminDisburseRefund(
+            $this->superAdmin,
+            $returnCase,
+            'OUT-BANK-REF-RECOVER',
+            'settlement-proofs/test.png'
+        );
+
+        $this->assertTrue($recoveryResult['success'] ?? false, $recoveryResult['message'] ?? 'Claim recovery failed.');
+        $this->assertSame('refund_dispatched_awaiting_reconciliation', $returnCase->fresh()->status);
+        $this->assertNotNull(ManualBankTransferRefundCase::where('order_id', $order->id)->first());
     }
 
     public function test_vendor_settlement_status_forward_only_migration_preserves_runtime_statuses(): void
@@ -494,12 +532,33 @@ class AuditorDiscrepancyAlignmentTest extends TestCase
 
         $this->assertSame('refund_pending', $order->fresh()->vendor_settlement_status);
 
+        // Verify runtime dispute status is also preserved
+        $order->vendor_settlement_status = 'settlement_frozen_dispute';
+        $order->save();
+        $this->assertSame('settlement_frozen_dispute', $order->fresh()->vendor_settlement_status);
+
+        // Verify column type: on MySQL, inspect information_schema; on SQLite, inspect Schema facade
+        $driver = \Illuminate\Support\Facades\DB::connection()->getDriverName();
+        if ($driver === 'mysql') {
+            $col = \Illuminate\Support\Facades\DB::selectOne("
+                SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'orders'
+                  AND COLUMN_NAME = 'vendor_settlement_status'
+            ");
+            $this->assertSame('varchar', strtolower($col->DATA_TYPE));
+            $this->assertEquals(50, $col->CHARACTER_MAXIMUM_LENGTH);
+        } else {
+            $this->assertContains(\Illuminate\Support\Facades\Schema::getColumnType('orders', 'vendor_settlement_status'), ['string', 'varchar']);
+        }
+
         // Execute down() on the migration to verify forward-only safety
         $migration = require database_path('migrations/2026_10_24_000019_expand_vendor_settlement_status_on_orders_table.php');
         $migration->down();
 
         // The column must remain VARCHAR(50) and retain the runtime status without data truncation
-        $this->assertSame('refund_pending', $order->fresh()->vendor_settlement_status);
+        $this->assertSame('settlement_frozen_dispute', $order->fresh()->vendor_settlement_status);
     }
 }
 

@@ -1272,7 +1272,9 @@ class ReturnAndRefundService
             }
 
             // 3. Update Return Case State
-            $lockedCase->status = 'refunded';
+            // Manual bank transfers require corporate bank debit reconciliation before final 'refunded' completion.
+            $isManualBankRefund = (!empty($bankReference) && $order->payment_method === 'manual_bank_transfer');
+            $lockedCase->status = $isManualBankRefund ? 'refund_dispatched_awaiting_reconciliation' : 'refunded';
             $lockedCase->refunded_amount = $totalCashRefund;
             $lockedCase->refund_delivery_fee = $refundDeliveryFee;
             $lockedCase->delivery_fee_refunded = $deliveryFeeRefund;
@@ -1281,7 +1283,7 @@ class ReturnAndRefundService
             $lockedCase->refund_claimed_at = null;
             $lockedCase->bank_reference = $refToStore;
             $lockedCase->refund_proof_path = $proofPath;
-            $lockedCase->refunded_at = Carbon::now();
+            $lockedCase->refunded_at = $isManualBankRefund ? null : Carbon::now();
             $lockedCase->save();
 
             ReturnItem::where('return_case_id', $lockedCase->id)->update(['status' => 'refunded']);
