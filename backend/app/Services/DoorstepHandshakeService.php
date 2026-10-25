@@ -651,15 +651,21 @@ class DoorstepHandshakeService
                 }
             }
 
-            if (trim((string)$lockedCase->vendor_return_otp) !== trim((string)$otp)) {
+            if (empty($returnPhotoPath) || trim($returnPhotoPath) === '') {
+                return ['success' => false, 'message' => 'Mandatory counter return photo proof is required to verify vendor handover.'];
+            }
+
+            if (empty($lockedCase->vendor_return_otp) || trim((string)$lockedCase->vendor_return_otp) !== trim((string)$otp)) {
                 return ['success' => false, 'message' => 'Invalid Vendor Return OTP. Vendor shop custody verification failed.'];
             }
 
+            // Invalidate OTP after single use to prevent replay
+            $lockedCase->vendor_return_otp = null;
             $lockedCase->status = 'returned_to_vendor';
             $lockedCase->returned_to_vendor_at = Carbon::now();
-            if ($returnPhotoPath) {
-                $lockedCase->vendor_return_photo_path = $returnPhotoPath;
-            }
+            $lockedCase->vendor_return_photo_path = $returnPhotoPath;
+            $lockedCase->supplier_handover_failed_reason = null;
+            $lockedCase->supplier_handover_failed_at = null;
             $lockedCase->save();
 
             // Trigger sovereign return accepted notification
@@ -692,6 +698,63 @@ class DoorstepHandshakeService
             ];
         });
     }
+
+    /**
+     * Record a failed supplier handover attempt (supplier unavailable, refused receipt, or identity disputed).
+     * Preserves custody under the rider without falsely advancing to returned_to_vendor.
+     */
+    public function recordFailedVendorHandover(
+        ReturnCase $case,
+        RiderProfile $rider,
+        string $reason
+    ): array {
+        return DB::transaction(function () use ($case, $rider, $reason) {
+            $lockedCase = ReturnCase::where('id', $case->id)->lockForUpdate()->first();
+
+            if (!$lockedCase) {
+                return ['success' => false, 'message' => 'Return case not found.'];
+            }
+
+            if ((int) $lockedCase->returned_by_rider_id !== (int) $rider->user_id) {
+                return ['success' => false, 'message' => 'This return case is not assigned to the authenticated rider.'];
+            }
+
+            if (!in_array($lockedCase->status, ['in_transit_back_to_vendor', 'in_transit', 'supplier_handover_failed'], true)) {
+                return ['success' => false, 'message' => "Cannot record failed supplier handover for case in status '{$lockedCase->status}'."];
+            }
+
+            if (empty(trim($reason))) {
+                return ['success' => false, 'message' => 'A valid failure reason (e.g. supplier unavailable, refused receipt, condition disputed) is required.'];
+            }
+
+            $lockedCase->status = 'supplier_handover_failed';
+            $lockedCase->supplier_handover_failed_reason = trim($reason);
+            $lockedCase->supplier_handover_failed_at = Carbon::now();
+            $lockedCase->save();
+
+            AdminAuditLog::create([
+                'user_id' => $rider->user_id,
+                'action' => 'supplier_return_handover_failed',
+                'target_type' => ReturnCase::class,
+                'target_id' => $lockedCase->id,
+                'old_values' => ['status' => $case->status],
+                'new_values' => [
+                    'status' => 'supplier_handover_failed',
+                    'supplier_handover_failed_reason' => trim($reason),
+                    'supplier_handover_failed_at' => $lockedCase->supplier_handover_failed_at,
+                ],
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent(),
+            ]);
+
+            return [
+                'success' => true,
+                'message' => 'Supplier handover failure recorded. Custody remains with rider; admin alerted.',
+                'case' => $lockedCase,
+            ];
+        });
+    }
+
 
     /**
      * Handshake 3 Dispute: Vendor inspects returned parcel at counter and flags discrepancy.

@@ -150,7 +150,11 @@ Route::prefix('v1')->group(function () {
             Route::post('orders/doorstep-handover', [RiderTerminalApiController::class, 'doorstepHandover']);
             Route::post('orders/verify-vendor-return-otp', [RiderTerminalApiController::class, 'verifyVendorReturnOtp']);
             Route::post('returns/verify-vendor-otp', [RiderTerminalApiController::class, 'verifyVendorReturnOtp']);
+            Route::post('returns/verify-customer-collection', [RiderTerminalApiController::class, 'verifyCustomerReturnCollection']);
+            Route::post('returns/record-customer-collection-failed', [RiderTerminalApiController::class, 'recordCustomerCollectionFailed']);
+            Route::post('returns/record-supplier-handover-failed', [RiderTerminalApiController::class, 'recordSupplierHandoverFailed']);
         });
+
 
         // Sovereign Vendor App Terminal
         Route::prefix('vendor')->group(function () {

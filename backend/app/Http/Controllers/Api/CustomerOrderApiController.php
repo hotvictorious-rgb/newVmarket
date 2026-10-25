@@ -635,8 +635,10 @@ class CustomerOrderApiController extends Controller
             'items.*.order_item_id' => 'required|integer|exists:order_items,id',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.item_condition' => 'nullable|string|in:unopened_sealed,opened_tested,damaged_defective,used_worn,missing_parts',
-            'evidence' => 'nullable|array',
+            'evidence' => 'required|array|min:1',
+            'evidence.*' => 'required|string|max:500',
         ]);
+
 
         $user = $request->user();
         $order = Order::findOrFail($validated['order_id']);

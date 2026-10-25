@@ -284,7 +284,9 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
                     'item_condition' => 'damaged_defective',
                 ],
             ],
+            'evidence' => ['evidence/photo.jpg'],
         ]);
+
 
         $response->assertStatus(201);
         $response->assertJson([
@@ -334,7 +336,9 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
                     'item_condition' => 'unopened_sealed',
                 ],
             ],
+            'evidence' => ['evidence/photo.jpg'],
         ]);
+
 
         $response->assertStatus(422);
         $response->assertJson([
@@ -404,7 +408,9 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
                     'item_condition' => 'damaged_defective',
                 ],
             ],
+            'evidence' => ['evidence/photo.jpg'],
         ]);
+
 
         $response->assertStatus(403);
         $this->assertEquals(0, ReturnCase::count());
@@ -435,7 +441,9 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
                     'item_condition' => 'damaged_defective',
                 ],
             ],
+            'evidence' => ['evidence/photo.jpg'],
         ]);
+
 
         $response->assertStatus(422);
         $response->assertJsonFragment([
@@ -466,9 +474,11 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             ]],
             'defective_product',
             'Headband cracked upon inspection',
-            null
+            null,
+            ['evidence/defect_photo.jpg']
         );
         $this->assertTrue($createRes['success']);
+
         $case = $createRes['case'];
 
         $refundRes = $service->adminDisburseRefund(
@@ -876,9 +886,11 @@ class ReturnsRefundsAndPaystackSafetyTest extends TestCase
             ],
             'defective_product',
             'Vendor A item has issue',
-            null
+            null,
+            ['evidence/vendor_a_issue.jpg']
         );
         $this->assertTrue($createRes['success']);
+
         $caseA = $createRes['case'];
 
         $manualRefund = $service->adminDisburseRefund($this->superAdmin, $caseA, 'REF-VEND-A-1234');

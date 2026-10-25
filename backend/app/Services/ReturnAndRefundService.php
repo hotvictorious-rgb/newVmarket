@@ -15,6 +15,7 @@ use App\Models\ReturnEvidence;
 use App\Models\ReturnInspection;
 use App\Models\ReturnItem;
 use App\Models\RetailerSupplierPayoutAllocation;
+use App\Models\RiderProfile;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\VendorProfile;
@@ -102,6 +103,39 @@ class ReturnAndRefundService
 
             if (empty($itemsData)) {
                 return ['success' => false, 'message' => 'At least one order item must be selected for return.'];
+            }
+
+            // Mandatory Photo Evidence Guard (Policy Section 2)
+            // Customer return intake strictly requires clear photo proof of the item/defect.
+            $validEvidenceItems = [];
+            foreach ($evidencePaths as $ev) {
+                $rawPath = is_array($ev) ? ($ev['path'] ?? '') : (string)$ev;
+                if (empty($rawPath) || str_contains($rawPath, '..') || str_starts_with($rawPath, '/') || str_starts_with($rawPath, '\\')) {
+                    continue;
+                }
+                $allowedPrefixes = ['evidence/', 'returns/', 'photos/', 'storage/'];
+                $isAllowedPrefix = false;
+                foreach ($allowedPrefixes as $prefix) {
+                    if (str_starts_with($rawPath, $prefix)) {
+                        $isAllowedPrefix = true;
+                        break;
+                    }
+                }
+                if ($isAllowedPrefix) {
+                    $validEvidenceItems[] = [
+                        'file_path' => $rawPath,
+                        'evidence_type' => is_array($ev) ? ($ev['type'] ?? 'photo') : 'photo',
+                        'caption' => is_array($ev) ? ($ev['caption'] ?? null) : null,
+                    ];
+                }
+            }
+
+            if (empty($validEvidenceItems) && !$isAuthorizedLateOverride) {
+                return [
+                    'success' => false,
+                    'code' => 'PHOTO_EVIDENCE_REQUIRED',
+                    'message' => 'Mandatory photo evidence of the item, defect, or packaging is required to open a return request.',
+                ];
             }
 
             $totalRefundableAmount = '0.00';
@@ -202,6 +236,8 @@ class ReturnAndRefundService
                 'customer_description' => $customerDescription,
                 'status' => 'requested',
                 'source' => ($windowExpiresAt && Carbon::now()->gt($windowExpiresAt) && $isAuthorizedLateOverride) ? 'admin_late_override' : 'post_delivery_claim',
+                'customer_return_otp' => (string) random_int(100000, 999999),
+                'return_delivery_fee_charged' => '0.00',
                 'admin_notes' => ($windowExpiresAt && Carbon::now()->gt($windowExpiresAt) && $isAuthorizedLateOverride) ? trim($adminOverrideReason) : null,
                 'resolution_type' => 'refund',
                 'total_refundable_amount' => $totalRefundableAmount,
@@ -227,32 +263,14 @@ class ReturnAndRefundService
             }
 
             // 7. Attach Evidence
-            foreach ($evidencePaths as $ev) {
-                $rawPath = is_array($ev) ? ($ev['path'] ?? '') : (string)$ev;
-                if (empty($rawPath) || str_contains($rawPath, '..') || str_starts_with($rawPath, '/') || str_starts_with($rawPath, '\\')) {
-                    continue; // Skip directory traversal / local paths
-                }
-
-                // Enforce allowed upload directory prefix
-                $allowedPrefixes = ['evidence/', 'returns/', 'photos/', 'storage/'];
-                $isAllowedPrefix = false;
-                foreach ($allowedPrefixes as $prefix) {
-                    if (str_starts_with($rawPath, $prefix)) {
-                        $isAllowedPrefix = true;
-                        break;
-                    }
-                }
-                if (!$isAllowedPrefix) {
-                    continue;
-                }
-
+            foreach ($validEvidenceItems as $evItem) {
                 ReturnEvidence::create([
                     'return_case_id' => $returnCase->id,
                     'uploaded_by_id' => $customer->id,
                     'uploaded_by_role' => 'customer',
-                    'file_path' => $rawPath,
-                    'evidence_type' => is_array($ev) ? ($ev['type'] ?? 'photo') : 'photo',
-                    'caption' => is_array($ev) ? ($ev['caption'] ?? null) : null,
+                    'file_path' => $evItem['file_path'],
+                    'evidence_type' => $evItem['evidence_type'],
+                    'caption' => $evItem['caption'],
                 ]);
             }
 
@@ -302,6 +320,290 @@ class ReturnAndRefundService
     }
 
     /**
+     * Admin assigns an available rider travelling a suitable route to collect an approved return.
+     * Enforces route assignment, bulky-vehicle validation, and strict zero-fee return rule (Policy Section 10 & 11).
+     */
+    public function assignReturnCollectionRider(
+        User $adminUser,
+        ReturnCase $case,
+        RiderProfile $rider,
+        string $destinationType = 'hub',
+        ?string $routeNotes = null
+    ): array {
+        return DB::transaction(function () use ($adminUser, $case, $rider, $destinationType, $routeNotes) {
+            $lockedCase = ReturnCase::where('id', $case->id)->lockForUpdate()->first();
+            if (!$lockedCase) {
+                return ['success' => false, 'message' => 'Return case not found.'];
+            }
+
+            if ($adminUser->status !== 'active' || (!$adminUser->isSuperAdmin() && $adminUser->user_type !== 'admin_employee')) {
+                return ['success' => false, 'message' => 'Unauthorized: Only administrative staff can assign return collection riders.'];
+            }
+
+            $assignableStatuses = ['requested', 'under_review', 'approved_for_return', 'collection_failed'];
+            if (!in_array($lockedCase->status, $assignableStatuses, true)) {
+                return ['success' => false, 'message' => "Cannot assign rider to return case in '{$lockedCase->status}' status."];
+            }
+
+            if (!$rider->is_active || ($rider->user && $rider->user->status !== 'active')) {
+                return ['success' => false, 'message' => 'The selected rider is inactive or suspended.'];
+            }
+
+            if ($rider->logisticsCompany && ($rider->logisticsCompany->status !== 'active' || ($rider->logisticsCompany->user && $rider->logisticsCompany->user->status !== 'active'))) {
+                return ['success' => false, 'message' => 'The selected rider logistics company is inactive or suspended.'];
+            }
+
+            // Bulky check (Policy Section 10 & 11, Rule 20)
+            $hasBulkyItem = false;
+            $lockedCase->loadMissing('items.product');
+            foreach ($lockedCase->items as $rItem) {
+                $product = $rItem->product;
+                if ($product && in_array($product->package_tier, ['keke', 'bulky'], true)) {
+                    $hasBulkyItem = true;
+                    break;
+                }
+            }
+
+            $bulkyCapableVehicles = ['keke', 'cargo', 'truck', 'van', 'tricycle'];
+            $riderVehicle = strtolower(trim((string) $rider->vehicle_type));
+
+            if ($hasBulkyItem && !in_array($riderVehicle, $bulkyCapableVehicles, true)) {
+                return [
+                    'success' => false,
+                    'code' => 'INCOMPATIBLE_VEHICLE_FOR_BULKY_RETURN',
+                    'message' => "Bulky return items require a dedicated bulky-capable vehicle (keke/cargo/truck/van). Rider vehicle '{$rider->vehicle_type}' cannot be assigned.",
+                ];
+            }
+
+            if (!in_array($destinationType, ['hub', 'supplier'], true)) {
+                return ['success' => false, 'message' => "Invalid destination type '{$destinationType}'. Must be 'hub' or 'supplier'."];
+            }
+
+            if (empty($lockedCase->customer_return_otp)) {
+                $lockedCase->customer_return_otp = (string) random_int(100000, 999999);
+            }
+
+            $lockedCase->returned_by_rider_id = $rider->user_id;
+            $lockedCase->destination_type = $destinationType;
+            $lockedCase->assigned_logistics_route_notes = $routeNotes;
+            $lockedCase->status = 'approved_for_return';
+            $lockedCase->return_delivery_fee_charged = '0.00';
+            $lockedCase->save();
+
+            AdminAuditLog::create([
+                'user_id' => $adminUser->id,
+                'action' => 'return_collection_rider_assigned',
+                'target_type' => ReturnCase::class,
+                'target_id' => $lockedCase->id,
+                'old_values' => ['status' => $case->status, 'returned_by_rider_id' => $case->returned_by_rider_id],
+                'new_values' => [
+                    'status' => 'approved_for_return',
+                    'returned_by_rider_id' => $rider->user_id,
+                    'rider_id' => $rider->id,
+                    'destination_type' => $destinationType,
+                    'vehicle_type' => $rider->vehicle_type,
+                    'route_notes' => $routeNotes,
+                    'return_delivery_fee_charged' => '0.00',
+                ],
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent(),
+            ]);
+
+            return [
+                'success' => true,
+                'message' => "Rider #{$rider->id} successfully assigned for return collection. No customer delivery fee charged.",
+                'case' => $lockedCase,
+            ];
+        });
+    }
+
+    /**
+     * Assigned rider verifies collection from customer using customer release OTP and mandatory photos.
+     * Enforces single-use OTP replay prevention, atomic custody handover, and fail-closed validation.
+     */
+    public function verifyCustomerReturnCollection(
+        ReturnCase $case,
+        RiderProfile $rider,
+        string $otp,
+        string $photoPath
+    ): array {
+        return DB::transaction(function () use ($case, $rider, $otp, $photoPath) {
+            $lockedCase = ReturnCase::where('id', $case->id)->lockForUpdate()->first();
+            if (!$lockedCase) {
+                return ['success' => false, 'message' => 'Return case not found.'];
+            }
+
+            if ((int) $lockedCase->returned_by_rider_id !== (int) $rider->user_id) {
+                return ['success' => false, 'message' => 'This return case is not assigned to the authenticated rider.'];
+            }
+
+            if (!in_array($lockedCase->status, ['approved_for_return', 'collection_failed'], true)) {
+                return ['success' => false, 'message' => "Return case is not awaiting collection (current status: {$lockedCase->status})."];
+            }
+
+            if (empty(trim($photoPath))) {
+                return ['success' => false, 'message' => 'Mandatory photo proof of the item condition at collection is required.'];
+            }
+
+            if ($lockedCase->status === 'in_transit' || $lockedCase->customer_collected_at !== null) {
+                return ['success' => false, 'message' => 'Customer return collection was already confirmed and sealed.'];
+            }
+
+            $expectedOtp = trim((string) $lockedCase->customer_return_otp);
+            $providedOtp = trim((string) $otp);
+
+            if (empty($expectedOtp) || !hash_equals($expectedOtp, $providedOtp)) {
+                return ['success' => false, 'message' => 'Invalid customer return-release OTP. Collection verification failed.'];
+            }
+
+            // Invalidate OTP after single use to prevent replay
+            $lockedCase->customer_return_otp = null;
+            $lockedCase->status = 'in_transit';
+            $lockedCase->customer_collected_at = Carbon::now();
+            $lockedCase->customer_collection_photo_path = $photoPath;
+            $lockedCase->collection_failed_reason = null;
+            $lockedCase->collection_failed_at = null;
+            $lockedCase->save();
+
+            AdminAuditLog::create([
+                'user_id' => $rider->user_id,
+                'action' => 'customer_return_collection_verified',
+                'target_type' => ReturnCase::class,
+                'target_id' => $lockedCase->id,
+                'old_values' => ['status' => $case->status],
+                'new_values' => [
+                    'status' => 'in_transit',
+                    'customer_collected_at' => $lockedCase->customer_collected_at,
+                    'customer_collection_photo_path' => $photoPath,
+                    'returned_by_rider_id' => $rider->user_id,
+                ],
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent(),
+            ]);
+
+            return [
+                'success' => true,
+                'message' => 'Customer return collection successfully verified. Item is now in transit under rider custody.',
+                'case' => $lockedCase,
+            ];
+        });
+    }
+
+    /**
+     * Record a failed customer collection attempt (customer absent, refusal, or item mismatch).
+     * Preserves customer custody without advancing state.
+     */
+    public function recordFailedCustomerCollection(
+        ReturnCase $case,
+        RiderProfile $rider,
+        string $reason
+    ): array {
+        return DB::transaction(function () use ($case, $rider, $reason) {
+            $lockedCase = ReturnCase::where('id', $case->id)->lockForUpdate()->first();
+            if (!$lockedCase) {
+                return ['success' => false, 'message' => 'Return case not found.'];
+            }
+
+            if ((int) $lockedCase->returned_by_rider_id !== (int) $rider->user_id) {
+                return ['success' => false, 'message' => 'This return case is not assigned to the authenticated rider.'];
+            }
+
+            if (!in_array($lockedCase->status, ['approved_for_return', 'collection_failed'], true)) {
+                return ['success' => false, 'message' => "Cannot record failed collection for case in status '{$lockedCase->status}'."];
+            }
+
+            if (empty(trim($reason))) {
+                return ['success' => false, 'message' => 'A valid failure reason (e.g. customer absent, customer refused, item mismatch) is required.'];
+            }
+
+            $lockedCase->status = 'collection_failed';
+            $lockedCase->collection_failed_reason = trim($reason);
+            $lockedCase->collection_failed_at = Carbon::now();
+            $lockedCase->save();
+
+            AdminAuditLog::create([
+                'user_id' => $rider->user_id,
+                'action' => 'customer_return_collection_failed',
+                'target_type' => ReturnCase::class,
+                'target_id' => $lockedCase->id,
+                'old_values' => ['status' => $case->status],
+                'new_values' => [
+                    'status' => 'collection_failed',
+                    'collection_failed_reason' => trim($reason),
+                    'collection_failed_at' => $lockedCase->collection_failed_at,
+                ],
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent(),
+            ]);
+
+            return [
+                'success' => true,
+                'message' => 'Failed customer collection attempt recorded. Custody remains with the customer.',
+                'case' => $lockedCase,
+            ];
+        });
+    }
+
+    /**
+     * Verified receipt of returned item at Victorious MARKET collection/inspection hub.
+     * Requires mandatory arrival photo proof and accredited collection point.
+     */
+    public function verifyHubReturnReceipt(
+        User $receiverUser,
+        ReturnCase $case,
+        int $collectionPointId,
+        string $arrivalPhotoPath
+    ): array {
+        return DB::transaction(function () use ($receiverUser, $case, $collectionPointId, $arrivalPhotoPath) {
+            $lockedCase = ReturnCase::where('id', $case->id)->lockForUpdate()->first();
+            if (!$lockedCase) {
+                return ['success' => false, 'message' => 'Return case not found.'];
+            }
+
+            if ($lockedCase->status !== 'in_transit') {
+                return ['success' => false, 'message' => "Return case is not in transit (current status: {$lockedCase->status})."];
+            }
+
+            if (empty(trim($arrivalPhotoPath))) {
+                return ['success' => false, 'message' => 'Mandatory arrival photo proof is required to verify hub receipt.'];
+            }
+
+            $cp = LogisticsCollectionPoint::where('id', $collectionPointId)->where('is_active', true)->first();
+            if (!$cp) {
+                return ['success' => false, 'message' => 'Designated receiving collection point is invalid or inactive.'];
+            }
+
+            $lockedCase->status = 'received_at_hub';
+            $lockedCase->collection_point_id = $collectionPointId;
+            $lockedCase->hub_received_at = Carbon::now();
+            $lockedCase->hub_received_photo_path = $arrivalPhotoPath;
+            $lockedCase->save();
+
+            AdminAuditLog::create([
+                'user_id' => $receiverUser->id,
+                'action' => 'return_parcel_received_at_hub',
+                'target_type' => ReturnCase::class,
+                'target_id' => $lockedCase->id,
+                'old_values' => ['status' => 'in_transit'],
+                'new_values' => [
+                    'status' => 'received_at_hub',
+                    'collection_point_id' => $collectionPointId,
+                    'hub_received_at' => $lockedCase->hub_received_at,
+                    'hub_received_photo_path' => $arrivalPhotoPath,
+                ],
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent(),
+            ]);
+
+            return [
+                'success' => true,
+                'message' => 'Return parcel received at hub. Prior rider custody closed; inspection pending.',
+                'case' => $lockedCase,
+            ];
+        });
+    }
+
+    /**
      * Hub Staff Records Physical Inspection at Accredited Collection Point.
      */
     public function recordHubInspection(
@@ -322,13 +624,14 @@ class ReturnAndRefundService
             }
 
             // Whitelist allowed initial statuses for inspection (Finding 4)
-            $allowedInspectionStatuses = ['requested', 'pending', 'in_transit', 'in_transit_back_to_vendor'];
+            $allowedInspectionStatuses = ['requested', 'pending', 'approved_for_return', 'in_transit', 'in_transit_back_to_vendor', 'received_at_hub'];
             if (!in_array($lockedCase->status, $allowedInspectionStatuses)) {
                 return [
                     'success' => false,
                     'message' => "Return case #{$lockedCase->case_number} cannot be inspected because it is already in '{$lockedCase->status}' status.",
                 ];
             }
+
 
             $inspection = ReturnInspection::create([
                 'return_case_id' => $lockedCase->id,

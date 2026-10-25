@@ -300,8 +300,12 @@ class AuditHardeningAndSecurityProofTest extends TestCase
                 ['order_item_id' => $item->id, 'quantity' => 1],
                 ['order_item_id' => $item->id, 'quantity' => 1],
             ],
-            'defective_product'
+            'defective_product',
+            null,
+            null,
+            ['evidence/photo.jpg']
         );
+
 
         $this->assertFalse($result['success']);
         $this->assertStringContainsString('Cannot return 2 units', $result['message']);
@@ -520,8 +524,12 @@ class AuditHardeningAndSecurityProofTest extends TestCase
             $this->customer,
             $order,
             [['order_item_id' => $item->id, 'quantity' => 1]],
-            'defective_product'
+            'defective_product',
+            null,
+            null,
+            ['evidence/photo.jpg']
         );
+
 
         $this->assertTrue($result['success']);
         $case = $result['case'];

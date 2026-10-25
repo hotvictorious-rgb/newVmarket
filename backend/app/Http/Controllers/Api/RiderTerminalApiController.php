@@ -624,7 +624,110 @@ class RiderTerminalApiController extends Controller
     }
 
     /**
-     * Active return cases assigned to this rider awaiting dropoff at vendor shop.
+     * Handshake: Rider verifies customer return collection using customer OTP and mandatory photo proof.
+     */
+    public function verifyCustomerReturnCollection(Request $request, \App\Services\ReturnAndRefundService $returnService): JsonResponse
+    {
+        $validated = $request->validate([
+            'return_case_id' => 'required|integer|exists:return_cases,id',
+            'otp' => ['required', 'string', 'size:6'],
+            'proof_photo' => 'required|file|image|mimes:jpeg,png,jpg|max:5120',
+        ], [
+            'proof_photo.required' => 'Mandatory photo proof of the item condition at customer collection is required.',
+        ]);
+
+        if ($error = $this->guardRiderWithLogistics($request)) {
+            return $error;
+        }
+
+        $rider = $request->user()->riderProfile;
+        $case = \App\Models\ReturnCase::findOrFail($validated['return_case_id']);
+
+        if ((int) $case->returned_by_rider_id !== (int) $rider->user_id) {
+            return response()->json(['status' => false, 'message' => 'This return case is not assigned to the authenticated rider.'], 403);
+        }
+
+        $photoPath = null;
+        if ($request->hasFile('proof_photo')) {
+            $opt = app(\App\Services\ImageOptimizationService::class)->optimizeAndStoreProof($request->file('proof_photo'), 'returns');
+            $photoPath = $opt['path'];
+        }
+
+        $result = $returnService->verifyCustomerReturnCollection($case, $rider, $validated['otp'], $photoPath);
+
+        $updatedCase = $result['case'] ?? null;
+        return response()->json([
+            'status' => $result['success'],
+            'message' => $result['message'],
+            'data' => $result['success'] && $updatedCase instanceof ReturnCase ? [
+                'id' => $updatedCase->id,
+                'case_number' => $updatedCase->case_number,
+                'status' => $updatedCase->status,
+                'customer_collected_at' => $updatedCase->customer_collected_at?->toIso8601String(),
+            ] : null,
+        ], $result['success'] ? 200 : 422);
+    }
+
+    /**
+     * Rider records failed customer collection attempt (customer absent, refusal, or item mismatch).
+     */
+    public function recordCustomerCollectionFailed(Request $request, \App\Services\ReturnAndRefundService $returnService): JsonResponse
+    {
+        $validated = $request->validate([
+            'return_case_id' => 'required|integer|exists:return_cases,id',
+            'reason' => 'required|string|min:3|max:500',
+        ]);
+
+        if ($error = $this->guardRiderWithLogistics($request)) {
+            return $error;
+        }
+
+        $rider = $request->user()->riderProfile;
+        $case = \App\Models\ReturnCase::findOrFail($validated['return_case_id']);
+
+        if ((int) $case->returned_by_rider_id !== (int) $rider->user_id) {
+            return response()->json(['status' => false, 'message' => 'This return case is not assigned to the authenticated rider.'], 403);
+        }
+
+        $result = $returnService->recordFailedCustomerCollection($case, $rider, $validated['reason']);
+
+        return response()->json([
+            'status' => $result['success'],
+            'message' => $result['message'],
+        ], $result['success'] ? 200 : 422);
+    }
+
+    /**
+     * Rider records failed supplier return handover (shop closed, supplier unavailable, refused receipt).
+     */
+    public function recordSupplierHandoverFailed(Request $request, \App\Services\DoorstepHandshakeService $handshakeService): JsonResponse
+    {
+        $validated = $request->validate([
+            'return_case_id' => 'required|integer|exists:return_cases,id',
+            'reason' => 'required|string|min:3|max:500',
+        ]);
+
+        if ($error = $this->guardRiderWithLogistics($request)) {
+            return $error;
+        }
+
+        $rider = $request->user()->riderProfile;
+        $case = \App\Models\ReturnCase::findOrFail($validated['return_case_id']);
+
+        if ((int) $case->returned_by_rider_id !== (int) $rider->user_id) {
+            return response()->json(['status' => false, 'message' => 'This return case is not assigned to the authenticated rider.'], 403);
+        }
+
+        $result = $handshakeService->recordFailedVendorHandover($case, $rider, $validated['reason']);
+
+        return response()->json([
+            'status' => $result['success'],
+            'message' => $result['message'],
+        ], $result['success'] ? 200 : 422);
+    }
+
+    /**
+     * Active return cases assigned to this rider awaiting customer collection or dropoff.
      */
     public function activeReturns(Request $request): JsonResponse
     {
@@ -637,7 +740,15 @@ class RiderTerminalApiController extends Controller
                 $q->where('returned_by_rider_id', $rider->user_id)
                   ->orWhereHas('order', fn ($oq) => $oq->where('rider_id', $rider->id));
             })
-            ->whereIn('status', ['in_transit_back_to_vendor', 'pending_supplier_assignment'])
+            ->whereIn('status', [
+                'in_transit_back_to_vendor',
+                'pending_supplier_assignment',
+                'approved_for_return',
+                'collection_failed',
+                'in_transit',
+                'supplier_handover_failed',
+            ])
+
             ->with([
                 'order.shop',
                 'order.customer',
