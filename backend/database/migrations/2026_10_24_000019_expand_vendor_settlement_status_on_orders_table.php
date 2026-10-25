@@ -32,10 +32,17 @@ return new class extends Migration
 
     /**
      * Reverse the migrations.
+     *
+     * Forward-Only Reversibility Rationale:
+     * Restoring MySQL's legacy 5-value ENUM ('held', 'eligible', 'settled', 'disputed', 'refunded')
+     * during rollback would trigger strict-mode Data Truncation (Error 1265) on any live or
+     * historical orders bearing valid runtime statuses ('refund_pending', 'settlement_frozen_dispute',
+     * etc.). Following the architectural precedent in 2026_10_19_000041 (order_status) and
+     * 2026_10_24_000008 (Postgres state constraints), this column remains VARCHAR(50) on rollback
+     * to preserve data integrity and prevent unrecoverable schema downgrade errors.
      */
     public function down(): void
     {
-        // Reverting to the original 5-value ENUM would truncate valid runtime statuses
-        // written by the application state machine. Leave VARCHAR column in place.
+        // Intentionally forward-only to prevent MySQL Error 1265 data truncation on valid order statuses.
     }
 };
