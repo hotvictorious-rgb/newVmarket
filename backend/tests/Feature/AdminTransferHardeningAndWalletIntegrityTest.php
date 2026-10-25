@@ -335,6 +335,27 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         $this->assertSame($journalCount, FinancialJournalEntry::where('order_id', $order->id)->count());
     }
 
+    public function test_supplier_payout_is_eligible_after_customer_acceptance_before_return_window_expires(): void
+    {
+        [$order, $item] = $this->createSupplierPayableOrderItem('7000.00');
+        $order->update(['refund_window_expires_at' => Carbon::now()->addHours(12)]);
+        $this->assertTrue($order->fresh()->refund_window_expires_at->isFuture());
+
+        $service = app(RetailerSupplierPayoutService::class);
+        $preview = $service->previewEligibleItems($this->vendor);
+        $this->assertContains((int) $item->id, array_column($preview, 'order_item_id'));
+
+        $requested = $service->requestPayout($this->vendor, [$item->id]);
+        $this->assertTrue($requested['success'], $requested['message'] ?? 'Payout should not be blocked solely by the active customer return window.');
+        $payout = $requested['payout'];
+
+        $processing = $service->markProcessing($payout->id, $this->superAdmin->id, 'RCP_ACCEPTANCE_TEST', 'SUPPAYOUT-ACCEPTANCE-TEST');
+        $this->assertTrue($processing['success'], $processing['message'] ?? 'Supplier payout processing claim failed.');
+        $finalized = $service->finalizeSuccess($payout->id, $payout->transfer_reference, 'TRF_ACCEPTANCE_TEST', '7000.00');
+        $this->assertTrue($finalized['success'], $finalized['message'] ?? 'A payout with verified customer acceptance should finalize before the ordinary return window expires.');
+        $this->assertSame('paid', $payout->fresh()->status);
+    }
+
     public function test_supplier_payout_uses_only_explicitly_selected_items_and_never_fifo_allocates(): void
     {
         [, $olderItem] = $this->createSupplierPayableOrderItem('6000.00');
