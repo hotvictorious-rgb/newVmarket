@@ -385,6 +385,36 @@ class AdminTransferHardeningAndWalletIntegrityTest extends TestCase
         );
     }
 
+    public function test_supplier_payout_rejects_selected_items_exceeding_one_million_naira_maximum(): void
+    {
+        [, $item] = $this->createSupplierPayableOrderItem('1000000.01');
+        $service = app(RetailerSupplierPayoutService::class);
+
+        $result = $service->requestPayout($this->vendor, [$item->id]);
+
+        $this->assertFalse($result['success']);
+        $this->assertTrue($result['protected'] ?? false);
+        $this->assertStringContainsString('₦1,000,000 maximum per payout', $result['message']);
+        $this->assertSame(0, RetailerSupplierPayoutRequest::where('supplier_vendor_id', $this->vendor->id)->count());
+    }
+
+    public function test_supplier_payout_allows_one_naira_minimum_and_rejects_below_one_naira(): void
+    {
+        [, $oneNairaItem] = $this->createSupplierPayableOrderItem('1.00');
+        $service = app(RetailerSupplierPayoutService::class);
+
+        $result = $service->requestPayout($this->vendor, [$oneNairaItem->id]);
+
+        $this->assertTrue($result['success'], $result['message'] ?? '₦1 minimum payout failed.');
+        $this->assertSame('1.00', (string) $result['payout']->amount);
+
+        // Sub-₦1 item (e.g. 0.50)
+        [, $subNairaItem] = $this->createSupplierPayableOrderItem('0.50');
+        $subResult = $service->requestPayout($this->vendor, [$subNairaItem->id]);
+        $this->assertFalse($subResult['success']);
+        $this->assertStringContainsString('below the ₦1 minimum payout', $subResult['message']);
+    }
+
     public function test_retailer_supplier_payout_reversal_restores_item_payable_once(): void
     {
         [$order, $item] = $this->createSupplierPayableOrderItem('9000.00');

@@ -105,7 +105,16 @@ jobs:
         run: php artisan migrate:fresh --force
 
       - name: Run financial audit and payment hardening proof tests
-        run: php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php tests/Feature/FinancialJournalIdempotencySchemaTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ManualBankTransferReviewTest.php tests/Feature/AuditorDiscrepancyAlignmentTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/ReverseLogisticsChainOfCustodyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/AuditHardeningAndSecurityProofTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/SupplierPrivateCatalogPolicyTest.php tests/Feature/AutomatedSupplierSourcingTest.php tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php tests/Feature/PaymentTruthDurabilityTest.php tests/Feature/PaystackWebhookInboxRecoveryTest.php tests/Feature/PaymentCaptureExceptionResolutionTest.php tests/Feature/TreasuryBankCreditBatchTest.php tests/Feature/TreasuryBankCreditConcurrencyTest.php tests/Feature/SupplierFailoverConcurrencyTest.php tests/Feature/WholeOrderConsolidatedSourcingAndFleetDispatchTest.php tests/Feature/WebhookArchivalTest.php --display-warnings
+        run: |
+          set -o pipefail
+          php artisan test tests/Feature/FinancialAuditRemediationProofTest.php tests/Feature/AdminTransferHardeningAndWalletIntegrityTest.php tests/Feature/FinancialJournalIdempotencySchemaTest.php tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ManualBankTransferReviewTest.php tests/Feature/AuditorDiscrepancyAlignmentTest.php tests/Feature/ReturnsRefundsAndPaystackSafetyTest.php tests/Feature/ReverseLogisticsChainOfCustodyTest.php tests/Feature/FinancialLedgerAndCashbackLifecycleTest.php tests/Feature/AuditHardeningAndChildOrderSettlementTest.php tests/Feature/AuditHardeningAndSecurityProofTest.php tests/Feature/WebCheckoutIdempotencyAndStateTransitionTest.php tests/Feature/AdminLogisticsAndRiderManagementTest.php tests/Feature/AdminSupplierOnboardingTest.php tests/Feature/SupplierSourcingSnapshotSchemaTest.php tests/Feature/SupplierOfferSelectionServiceTest.php tests/Feature/SupplierPrivateCatalogPolicyTest.php tests/Feature/AutomatedSupplierSourcingTest.php tests/Feature/VendorCatalogConditionAndKekeSurchargeTest.php tests/Feature/PaymentTruthDurabilityTest.php tests/Feature/PaystackWebhookInboxRecoveryTest.php tests/Feature/PaymentCaptureExceptionResolutionTest.php tests/Feature/TreasuryBankCreditBatchTest.php tests/Feature/TreasuryBankCreditConcurrencyTest.php tests/Feature/SupplierFailoverConcurrencyTest.php tests/Feature/WholeOrderConsolidatedSourcingAndFleetDispatchTest.php tests/Feature/WebhookArchivalTest.php --display-warnings 2>&1 | tee test-output.log || {
+            STATUS=$?
+            echo "## Test Failure (refund-safety)" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 150 test-output.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit $STATUS
+          }
 
       - name: Run supplier bank update regression tests
         run: |
@@ -159,6 +168,7 @@ jobs:
 
       - name: Run financial settlement proof tests on MySQL/InnoDB
         run: |
+          set -o pipefail
           php artisan test \
             tests/Feature/PaystackPaymentHardeningTest.php tests/Feature/ManualBankTransferReviewTest.php \
             tests/Feature/FinancialAuditRemediationProofTest.php \
@@ -172,5 +182,12 @@ jobs:
             tests/Feature/TreasuryBankCreditConcurrencyTest.php tests/Feature/SupplierFailoverConcurrencyTest.php \
             tests/Feature/AuditorDiscrepancyAlignmentTest.php \
             tests/Feature/ReverseLogisticsChainOfCustodyTest.php \
-            --display-warnings
+            --display-warnings 2>&1 | tee mysql-test-output.log || {
+            STATUS=$?
+            echo "## Test Failure (mysql-settlement-proof)" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 150 mysql-test-output.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit $STATUS
+          }
 
